@@ -88,7 +88,7 @@ public:
 class Scene_layers
 {
 public:
-    Scene_layers(erhe::scene::Scene& scene);
+    explicit Scene_layers(erhe::scene::Scene& scene);
 
     [[nodiscard]] auto brush       () const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto content     () const -> erhe::scene::Mesh_layer*;

@@ -3,12 +3,12 @@
 #include "editor_scenes.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
-#include "windows/viewport_windows.hpp"
+#include "scene/viewport_windows.hpp"
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/render_graph.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -19,7 +19,7 @@ namespace editor
 {
 
 Editor_view_client::Editor_view_client()
-    : Component{c_label}
+    : Component{c_type_name}
 {
 }
 
@@ -41,7 +41,7 @@ void Editor_view_client::post_initialize()
 {
     m_imgui_windows    = get<erhe::application::Imgui_windows >();
     m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
-    m_render_graph     = get<erhe::application::Render_graph  >();
+    m_render_graph     = get<erhe::application::Rendergraph  >();
     m_editor_rendering = get<Editor_rendering>();
     m_viewport_windows = get<Viewport_windows>();
 }

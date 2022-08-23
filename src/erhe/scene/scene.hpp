@@ -45,7 +45,6 @@ public:
 
     std::vector<std::shared_ptr<Light>> lights;
     glm::vec4                           ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
-    float                               exposure{1.0f};
     std::string                         name;
 };
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/application/imgui_viewport.hpp"
+#include "erhe/application/imgui/imgui_viewport.hpp"
 
 #include <string_view>
 
@@ -34,13 +34,37 @@ public:
     );
     virtual ~Rendertarget_imgui_viewport() noexcept;
 
-    // Implements Imgui_vewport
+    // Implements Imgui_viewport
     [[nodiscard]] auto rendertarget_node() -> Rendertarget_node*;
     [[nodiscard]] auto begin_imgui_frame() -> bool override;
     void end_imgui_frame() override;
 
-    // Implements Render_graph_node
-    void execute_render_graph_node() override;
+    // Implements Rendergraph_node
+    void execute_rendergraph_node() override;
+
+    [[nodiscard]] auto get_consumer_input_texture(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+
+    [[nodiscard]] auto get_consumer_input_framebuffer(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+
+    [[nodiscard]] auto get_consumer_input_viewport(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> erhe::scene::Viewport override;
+
+    [[nodiscard]] auto get_producer_output_viewport(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> erhe::scene::Viewport override;
 
 private:
     Rendertarget_node*                                 m_rendertarget_node;

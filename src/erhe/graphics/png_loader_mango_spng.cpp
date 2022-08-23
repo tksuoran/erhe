@@ -1,8 +1,9 @@
 #include "erhe/graphics/png_loader_mango_spng.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe/toolkit/defer.hpp"
 #include "erhe/toolkit/filesystem.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include "spng.h"
 
@@ -109,6 +110,10 @@ auto PNG_loader::open(
         .color_type = SPNG_COLOR_TYPE_GRAYSCALE
     };
     result = ::spng_get_ihdr(m_image_decoder, &ihdr);
+    if (result != 0)
+    {
+        return false;
+    }
 
     std::size_t image_size{};
     result = ::spng_decoded_image_size(m_image_decoder, SPNG_FMT_RGBA8, &image_size);
@@ -135,10 +140,12 @@ auto PNG_loader::load(gsl::span<std::byte> transfer_buffer) -> bool
 
 PNG_writer::PNG_writer()
 {
+    m_image_encoder = ::spng_ctx_new(SPNG_CTX_ENCODER);
 }
 
 PNG_writer::~PNG_writer() noexcept
 {
+    ::spng_ctx_free(m_image_encoder);
 }
 
 int spng_rw(spng_ctx* ctx, void* user, void* dst_src, ::size_t length)
@@ -160,7 +167,6 @@ auto PNG_writer::write(
     gsl::span<std::byte> data
 ) -> bool
 {
-    m_image_encoder = ::spng_ctx_new(SPNG_CTX_ENCODER);
     if (m_image_encoder == nullptr)
     {
         return false;
@@ -170,11 +176,14 @@ auto PNG_writer::write(
     result = ::spng_set_option(m_image_encoder, SPNG_ENCODE_TO_BUFFER, 0);
     if (result != 0)
     {
-        ::spng_ctx_free(m_image_encoder);
         return false;
     }
 
     result = ::spng_set_png_stream(m_image_encoder, spng_rw, this);
+    if (result != 0)
+    {
+        return false;
+    }
 
     /* Specify image dimensions, PNG format */
     struct ::spng_ihdr ihdr =
@@ -188,7 +197,6 @@ auto PNG_writer::write(
     result = ::spng_set_ihdr(m_image_encoder, &ihdr);
     if (result != 0)
     {
-        ::spng_ctx_free(m_image_encoder);
         return false;
     }
 

@@ -5,11 +5,12 @@
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
+#include "windows/imgui_viewport_window.hpp"
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/windows/log_window.hpp"
@@ -65,40 +66,37 @@ void Fly_camera_turn_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    auto* viewport_window = as_viewport_window(context.get_window());
-    if (
-        (state() != erhe::application::State::Inactive) ||
-        (viewport_window == nullptr)
-    )
-    {
-        return;
-    }
-
-    if (
-        viewport_window->get_hover(Hover_entry::tool_slot).valid ||
-        viewport_window->get_hover(Hover_entry::rendertarget_slot).valid
-    )
-    {
-        return;
-    }
-
-    if (m_fly_camera_tool.try_ready(*viewport_window))
+    if (m_fly_camera_tool.try_ready())
     {
         set_ready(context);
     }
 }
 
-auto Fly_camera_tool::try_ready(Viewport_window& viewport_window) -> bool
+auto Fly_camera_tool::try_ready() -> bool
 {
-    // Exclude safe border near viewport edges from mouse interaction
-    // to filter out viewport window resizing for example.
-    if (!viewport_window.position_in_viewport().has_value())
+    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
     {
         return false;
     }
-    constexpr float   border   = 32.0f;
-    const glm::vec2   position = viewport_window.position_in_viewport().value();
-    const erhe::scene::Viewport viewport = viewport_window.viewport();
+
+    if (
+        viewport_window->get_hover(Hover_entry::tool_slot        ).valid ||
+        viewport_window->get_hover(Hover_entry::rendertarget_slot).valid
+    )
+    {
+        return false;
+    }
+
+    // Exclude safe border near viewport edges from mouse interaction
+    // to filter out viewport window resizing for example.
+    if (!viewport_window->position_in_viewport().has_value())
+    {
+        return false;
+    }
+    constexpr float border   = 32.0f;
+    const glm::vec2 position = viewport_window->position_in_viewport().value();
+    const erhe::scene::Viewport viewport = viewport_window->projection_viewport();
     if (
         (position.x <  border) ||
         (position.y <  border) ||
@@ -116,18 +114,16 @@ auto Fly_camera_turn_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
+    if (m_fly_camera_tool.viewport_window() == nullptr)
+    {
+        return false;
+    }
     if (state() == erhe::application::State::Ready)
     {
         set_active(context);
     }
 
     if (state() != erhe::application::State::Active)
-    {
-        return false;
-    }
-
-    auto* viewport_window = as_viewport_window(context.get_window());
-    if (viewport_window == nullptr)
     {
         return false;
     }
@@ -147,8 +143,8 @@ auto Fly_camera_move_command::try_call(
 }
 
 Fly_camera_tool::Fly_camera_tool()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
 #if defined(_WIN32) && 0
     , m_space_mouse_listener         {*this}
     , m_space_mouse_controller       {m_space_mouse_listener}
@@ -248,7 +244,7 @@ void Fly_camera_tool::update_camera()
     }
 }
 
-void Fly_camera_tool::set_camera(erhe::scene::Camera* camera)
+void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera)
 {
     // attach() below requires world from node matrix, which
     // might not be valid due to transform hierarchy.
@@ -349,9 +345,20 @@ auto Fly_camera_tool::try_move(
     return true;
 }
 
-void Fly_camera_tool::turn_relative(const double dx, const double dy)
+auto Fly_camera_tool::viewport_window() const -> Viewport_window*
+{
+    return m_viewport_windows->hover_window();
+}
+
+auto Fly_camera_tool::turn_relative(const double dx, const double dy) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+
+    auto* viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return false;
+    }
 
     if (dx != 0.0f)
     {
@@ -364,6 +371,8 @@ void Fly_camera_tool::turn_relative(const double dx, const double dy)
         const float value = static_cast<float>(m_sensitivity * dy * m_rotate_scale_y);
         m_camera_controller->rotate_x.adjust(value);
     }
+
+    return true;
 }
 
 void Fly_camera_tool::update_fixed_step(

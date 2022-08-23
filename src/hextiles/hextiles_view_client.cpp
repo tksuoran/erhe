@@ -2,7 +2,7 @@
 #include "map_window.hpp"
 #include "tile_renderer.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 
@@ -10,7 +10,7 @@ namespace hextiles
 {
 
 Hextiles_view_client::Hextiles_view_client()
-    : Component{c_label}
+    : Component{c_type_name}
 {
 }
 

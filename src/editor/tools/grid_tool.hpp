@@ -2,7 +2,7 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <glm/glm.hpp>
@@ -21,15 +21,15 @@ class Grid_tool
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_label{"Grid_tool"};
+    static constexpr std::string_view c_type_name{"Grid_tool"};
     static constexpr std::string_view c_title{"Grid"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Grid_tool ();
     ~Grid_tool() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
@@ -42,6 +42,7 @@ public:
     void imgui() override;
 
     // Public API
+    void viewport_toolbar();
     [[nodiscard]] auto snap(const glm::vec3 v) const -> glm::vec3;
     void set_major_color(const glm::vec4 color);
     void set_minor_color(const glm::vec4 color);

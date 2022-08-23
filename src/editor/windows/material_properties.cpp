@@ -2,7 +2,7 @@
 #include "scene/material_library.hpp"
 #include "windows/materials_window.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/primitive/material.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -14,8 +14,8 @@ namespace editor
 {
 
 Material_properties::Material_properties()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
 {
 }
 

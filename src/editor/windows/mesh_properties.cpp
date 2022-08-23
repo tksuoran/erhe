@@ -6,7 +6,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/scene/camera.hpp"
@@ -30,8 +30,8 @@ using erhe::geometry::Point_id;
 using erhe::geometry::Polygon_id;
 
 Mesh_properties::Mesh_properties()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 

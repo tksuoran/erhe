@@ -1,5 +1,5 @@
 #include "erhe/xr/xr.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe/xr/xr_log.hpp"
 
 #include <openxr/openxr_reflection.h>
 
@@ -18,12 +18,6 @@
     }                                           \
 
 namespace erhe::xr {
-
-using Category      = erhe::log::Category;
-using Console_color = erhe::log::Console_color;
-using Level         = erhe::log::Level;
-
-Category log_xr{1.0f, 0.7f, 0.6f, Console_color::YELLOW, Level::LEVEL_INFO};
 
 GEN_C_STR(XrActionType           )
 GEN_C_STR(XrEnvironmentBlendMode )
@@ -117,15 +111,14 @@ auto to_string_message_type(XrDebugUtilsMessageTypeFlagsEXT type_flags) -> std::
     return ss.str();
 }
 
-auto check(XrResult result, const int log_level) -> bool
+auto check(XrResult result, const spdlog::level::level_enum log_level) -> bool
 {
     if (result != XR_SUCCESS)
     {
-        log_xr.write(
-            true,
+        log_xr->log(
             log_level,
-            "OpenXR returned error {}\n",
-            fmt::make_format_args(c_str(result))
+            "OpenXR returned error {}",
+            c_str(result)
         );
         return false;
     }
@@ -138,7 +131,7 @@ void check_gl_context_in_current_in_this_thread()
 
     if (xr_gl_thread_id != std::this_thread::get_id())
     {
-        log_xr.error("XR GL thread error");
+        log_xr->error("XR GL thread error");
     }
 }
 

@@ -8,7 +8,7 @@ namespace erhe::graphics
 {
 
 OpenGL_state_tracker::OpenGL_state_tracker()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

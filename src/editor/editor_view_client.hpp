@@ -6,7 +6,7 @@
 namespace erhe::application
 {
     class Imgui_renderer;
-    class Render_graph;
+    class Rendergraph;
 }
 
 namespace editor
@@ -22,14 +22,14 @@ class Editor_view_client
     , public erhe::components::IUpdate_fixed_step
 {
 public:
-    static constexpr std::string_view c_label{"editor::View_client"};
-    static constexpr uint32_t         hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"editor::View_client"};
+    static constexpr uint32_t         c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Editor_view_client ();
     ~Editor_view_client() noexcept override;
 
     // Implements erhe::components::Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
@@ -50,7 +50,7 @@ public:
 private:
     std::shared_ptr<erhe::application::Imgui_windows > m_imgui_windows;
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<erhe::application::Render_graph  > m_render_graph;
+    std::shared_ptr<erhe::application::Rendergraph  > m_render_graph;
 
     std::shared_ptr<Editor_rendering> m_editor_rendering;
     std::shared_ptr<Editor_scenes   > m_editor_scenes;

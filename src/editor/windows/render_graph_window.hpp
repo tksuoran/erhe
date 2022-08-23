@@ -1,13 +1,13 @@
 #pragma once
 
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <memory>
 
 namespace erhe::application
 {
-    class Render_graph;
+    class Rendergraph;
 }
 
 namespace editor
@@ -15,17 +15,17 @@ namespace editor
 
 class Editor_scenes;
 
-class Render_graph_window
+class Rendergraph_window
     : public erhe::components::Component
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_label{"Render_graph"};
+    static constexpr std::string_view c_label{"Rendergraph"};
     static constexpr std::string_view c_title{"Render Graph"};
     static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
 
-    Render_graph_window ();
-    ~Render_graph_window() noexcept override;
+    Rendergraph_window ();
+    ~Rendergraph_window() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
@@ -39,7 +39,7 @@ public:
 private:
     // Component dependencies
     std::shared_ptr<Editor_scenes>                   m_editor_scenes;
-    std::shared_ptr<erhe::application::Render_graph> m_render_graph;
+    std::shared_ptr<erhe::application::Rendergraph> m_render_graph;
 };
 
 } // namespace editor

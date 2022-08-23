@@ -11,8 +11,6 @@
 namespace erhe::graphics
 {
 
-using std::string;
-
 namespace
 {
 
@@ -364,13 +362,13 @@ template <typename T>
     Gl_shader gl_shader{shader.type};
     const auto gl_name = gl_shader.gl_name();
 
-    const string source = create_info.final_source(shader);
+    const std::string source{create_info.final_source(shader)};
     ERHE_VERIFY(source.length() > 0);
     const char* const c_source = source.c_str();
     std::array<const char* , 1> sources{ c_source };
 
     log_glsl->trace(
-        "Shader_stage source:{}\n",
+        "Shader_stage source:\n{}\n",
         format(create_info.final_source(shader))
     );
 
@@ -385,9 +383,9 @@ template <typename T>
     {
         int length{0};
         gl::get_shader_iv(gl_name, gl::Shader_parameter_name::info_log_length, &length);
-        string log(static_cast<size_t>(length) + 1, 0);
+        std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
         gl::get_shader_info_log(gl_name, length, nullptr, &log[0]);
-        string f_source = format(sources[0]);
+        const std::string f_source = format(sources[0]);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
         log_glsl->error("{}", f_source);
@@ -469,13 +467,13 @@ Shader_stages::Prototype::Prototype(
 
     if (link_status != GL_TRUE)
     {
-        string log(static_cast<size_t>(info_log_length) + 1, 0);
+        std::string log(static_cast<std::size_t>(info_log_length) + 1, 0);
         gl::get_program_info_log(gl_name, info_log_length, nullptr, &log[0]);
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
         for (const auto& s : create_info.shaders)
         {
-            const string f_source = format(create_info.final_source(s));
+            const std::string f_source = format(create_info.final_source(s));
             log_glsl->error("\n{}", f_source);
         }
         log_program->error("Shader_stages linking failed:");
@@ -487,7 +485,7 @@ Shader_stages::Prototype::Prototype(
         log_program->trace("Shader_stages linking succeeded:");
         for (const auto& s : create_info.shaders)
         {
-            const string f_source = format(create_info.final_source(s));
+            const std::string f_source = format(create_info.final_source(s));
             log_glsl->trace("\n{}", f_source);
         }
         m_link_succeeded = true;
@@ -497,14 +495,14 @@ Shader_stages::Prototype::Prototype(
         }
         if (create_info.dump_interface)
         {
-            const string f_source = format(create_info.interface_source());
+            const std::string f_source = format(create_info.interface_source());
             log_glsl->info("\n{}", f_source);
         }
         if (create_info.dump_final_source)
         {
             for (const auto& s : create_info.shaders)
             {
-                const string f_source = format(create_info.final_source(s));
+                const std::string f_source = format(create_info.final_source(s));
                 log_glsl->info("\n{}", f_source);
             }
         }
@@ -711,7 +709,7 @@ void Shader_stages::Prototype::dump_reflection() const
                                 &name_length,
                                 name_buffer.data()
                             );
-                            name = std::string(name_buffer.data(), name_length);
+                            name = std::string{name_buffer.data(), static_cast<size_t>(name_length)};
                             if (is_array_and_nonzero(name))
                             {
                                 skipped = true;
@@ -776,7 +774,7 @@ void Shader_stages::Prototype::dump_reflection() const
     if (transform_feedback_varyings > 0)
     {
         ERHE_VERIFY(transform_feedback_varying_max_length > 0);
-        string             buffer_(static_cast<size_t>(transform_feedback_varying_max_length) + 1, 0);
+        std::string        buffer_(static_cast<size_t>(transform_feedback_varying_max_length) + 1, 0);
         GLsizei            length {0};
         GLsizei            size2  {0};
         gl::Attribute_type type2;

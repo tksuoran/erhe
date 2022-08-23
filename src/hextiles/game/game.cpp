@@ -29,7 +29,7 @@ auto Select_unit_command::try_call(erhe::application::Command_context&) -> bool
 }
 
 Game::Game()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_move_unit_n_command {*this, direction_north     }
     , m_move_unit_ne_command{*this, direction_north_east}
     , m_move_unit_se_command{*this, direction_south_east}

@@ -8,8 +8,8 @@
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 
 #include <gsl/assert>
 
@@ -17,8 +17,8 @@ namespace hextiles
 {
 
 Map_tool_window::Map_tool_window()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 

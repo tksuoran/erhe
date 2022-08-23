@@ -9,8 +9,8 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
+#include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
-#include "windows/viewport_window.hpp"
 
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
@@ -30,7 +30,7 @@ using glm::vec3;
 using glm::vec4;
 
 Debug_visualizations::Debug_visualizations()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 
@@ -47,8 +47,6 @@ void Debug_visualizations::declare_required_components()
 void Debug_visualizations::initialize_component()
 {
     get<Tools>()->register_tool(this);
-
-    const auto view = get<erhe::application::View>();
 }
 
 void Debug_visualizations::post_initialize()
@@ -171,13 +169,19 @@ void Debug_visualizations::directional_light_visualization(
     Light_visualization_context& context
 )
 {
+    const auto shadow_renderer    = get<Shadow_renderer>();
+    const auto shadow_render_node = shadow_renderer->get_node_for_viewport(context.render_context.window);
+    if (!shadow_render_node)
+    {
+        return;
+    }
+
     auto& line_renderer = m_line_renderer_set->hidden;
 
     using Camera                       = erhe::scene::Camera;
     using Camera_projection_transforms = erhe::scene::Camera_projection_transforms;
 
-    const auto               shadow_renderer              = get<Shadow_renderer>();
-    const Light_projections& light_projections            = shadow_renderer->light_projections();
+    const Light_projections& light_projections            = shadow_render_node->light_projections();
     const auto*              light                        = context.light;
     const auto               light_projection_transforms  = light_projections.get_light_projection_transforms_for_light(light);
 

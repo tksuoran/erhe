@@ -1,4 +1,4 @@
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
@@ -49,8 +49,8 @@ auto Redo_command::try_call(
 }
 
 Operation_stack::Operation_stack()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
     , m_undo_command                 {*this}
     , m_redo_command                 {*this}
 {

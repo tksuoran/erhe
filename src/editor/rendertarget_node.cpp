@@ -10,8 +10,8 @@
 //#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/helpers.hpp"
+#include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
-#include "windows/viewport_window.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/view.hpp"

@@ -6,12 +6,14 @@
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -24,8 +26,8 @@ namespace editor
 {
 
 Operations::Operations()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 
@@ -256,21 +258,16 @@ void Operations::imgui()
             )
         );
     }
-    ///// if (make_button("GUI Quad", erhe::application::Item_mode::normal, button_size))
-    ///// {
-    /////     auto rendertarget = get<erhe::application::Imgui_windows>()->create_rendertarget(
-    /////         "Gui Quad",
-    /////         2048,
-    /////         1024,
-    /////         200.0
-    /////     );
-    /////     const auto placement = erhe::toolkit::create_look_at(
-    /////         glm::vec3{0.0f, 1.0f, 0.0f},
-    /////         glm::vec3{0.0f, 1.0f, 1.0f},
-    /////         glm::vec3{0.0f, 1.0f, 0.0f}
-    /////     );
-    /////     rendertarget->mesh_node()->set_parent_from_node(placement);
-    ///// }
+    if (make_button("GUI Quad", erhe::application::Item_mode::normal, button_size))
+    {
+        Scene_builder* scene_builder = get<Scene_builder>().get();
+
+        m_imgui_renderer->at_end_of_frame(
+            [scene_builder](){
+                scene_builder->add_rendertarget_viewports();
+            }
+        );
+    }
 #endif
 }
 

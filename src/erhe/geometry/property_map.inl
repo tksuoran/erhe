@@ -190,7 +190,7 @@ Property_map<Key_type, Value_type>::interpolate(
         for (auto j : old_keys)
         {
             const Key_type old_key = j.second;
-            SPDLOG_LOGGER_TRACE(log_interpolate, "\t\told key {} weight {}\n", static_cast<unsigned int>(old_key), static_cast<float>(j.first));
+            SPDLOG_LOGGER_TRACE(log_interpolate, "\t\told key {} weight {}", static_cast<unsigned int>(old_key), static_cast<float>(j.first));
             if (has(old_key))
             {
                 sum_weights += j.first;

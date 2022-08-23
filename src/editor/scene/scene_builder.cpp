@@ -2,6 +2,8 @@
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
+#include "rendertarget_node.hpp"
+#include "rendertarget_imgui_viewport.hpp"
 #include "task_queue.hpp"
 
 #include "parsers/gltf.hpp"
@@ -16,17 +18,23 @@
 #include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/fly_camera_tool.hpp"
+#include "tools/grid_tool.hpp"
+#include "tools/trs_tool.hpp"
 #include "windows/brushes.hpp"
 #include "windows/debug_view_window.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
+#include "windows/imgui_viewport_window.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/render_graph.hpp"
-#include "erhe/application/render_graph_node.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/window_imgui_viewport.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
+#include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
@@ -36,6 +44,7 @@
 #include "erhe/geometry/shapes/regular_polyhedron.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
@@ -83,7 +92,7 @@ using glm::vec3;
 using glm::vec4;
 
 Scene_builder::Scene_builder()
-    : Component{c_label}
+    : Component{c_type_name}
 {
 }
 
@@ -95,7 +104,8 @@ void Scene_builder::declare_required_components()
 {
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Render_graph       >();
+    require<erhe::application::Imgui_windows      >();
+    require<erhe::application::Rendergraph        >();
     require<Debug_view_window>();
     require<Editor_rendering >();
     require<Editor_scenes    >();
@@ -123,6 +133,110 @@ void Scene_builder::initialize_component()
 
     const auto& editor_scenes = get<Editor_scenes>();
     editor_scenes->register_scene_root(m_scene_root);
+}
+
+void Scene_builder::add_rendertarget_viewports()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    const auto& rendergraph             = get<erhe::application::Rendergraph  >();
+    const auto& imgui_windows           = get<erhe::application::Imgui_windows>();
+    const auto& primary_viewport_window = get_primary_viewport_window();
+    const auto& test_scene_root         = get_scene_root();
+
+    auto rendertarget_node_1 = test_scene_root->create_rendertarget_node(
+        *m_components,
+        *primary_viewport_window.get(),
+        1920,
+        1080,
+        320.0
+    );
+
+    test_scene_root->scene().add_to_mesh_layer(
+        *test_scene_root->layers().rendertarget(),
+        rendertarget_node_1
+    );
+
+    rendertarget_node_1->set_world_from_node(
+        erhe::toolkit::create_look_at(
+            glm::vec3{-3.0f, 2.0f, -4.0f},
+            glm::vec3{-4.0f, 2.0f, -6.0f},
+            glm::vec3{ 0.0f, 1.0f,  0.0f}
+        )
+    );
+
+    auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_viewport>(
+        rendertarget_node_1.get(),
+        "Rendertarget ImGui Viewport 1",
+        *m_components
+    );
+
+    // true means we have imgui windows lock - assume we come from operations with imgui scoped context
+    imgui_windows->register_imgui_viewport(imgui_viewport_1);
+
+    const auto& grid_tool = get<editor::Grid_tool>();
+    grid_tool->set_viewport(imgui_viewport_1.get());
+    grid_tool->show();
+
+    const auto camera_b = make_camera(
+        "Camera B",
+        glm::vec3{-7.0f, 1.0f, 0.0f},
+        glm::vec3{ 0.0f, 0.5f, 0.0f}
+    );
+    camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
+
+    const auto& viewport_windows = get<editor::Viewport_windows>();
+    auto secondary_viewport_window = viewport_windows->create_window(
+        "Secondary Viewport",
+        test_scene_root,
+        camera_b.get()
+        //false // TODO no post processing
+    );
+    auto secondary_imgui_viewport_window = viewport_windows->create_imgui_viewport_window(
+        secondary_viewport_window
+    );
+    //secondary_viewport_window->set_post_processing_enable(false); // TODO Post processing currently only handles one viewport
+
+    auto rendertarget_node_2 = test_scene_root->create_rendertarget_node(
+        *m_components,
+        *primary_viewport_window.get(),
+        1920,
+        1080,
+        320.0
+    );
+
+    test_scene_root->scene().add_to_mesh_layer(
+        *test_scene_root->layers().rendertarget(),
+        rendertarget_node_2
+    );
+
+    rendertarget_node_2->set_world_from_node(
+        erhe::toolkit::create_look_at(
+            glm::vec3{3.0f, 2.0f, -4.0f},
+            glm::vec3{4.0f, 2.0f, -6.0f},
+            glm::vec3{0.0f, 1.0f,  0.0f}
+        )
+    );
+
+    auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_viewport>(
+        rendertarget_node_2.get(),
+        "Rendertarget ImGui Viewport 2",
+        *m_components
+    );
+    imgui_windows->register_imgui_viewport(imgui_viewport_2);
+
+    secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
+    secondary_imgui_viewport_window->show();
+
+    // const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
+
+    rendergraph->connect(
+        erhe::application::Rendergraph_node_key::window,
+        secondary_imgui_viewport_window,
+        imgui_viewport_2
+    );
+
+    //secondary_viewport_window->show();
+#endif
 }
 
 auto Scene_builder::make_camera(
@@ -173,19 +287,49 @@ void Scene_builder::setup_cameras()
         camera_a.get()
     );
 
-    const auto& shadow_renderer = get<Shadow_renderer>();
-    const auto& render_graph    = get<erhe::application::Render_graph>();
-    auto shadow_render_node = std::make_shared<Shadow_render_node>(
-        *shadow_renderer.get(),
+    //auto primary_imgui_viewport_window =
+    viewport_windows->create_imgui_viewport_window(
         m_primary_viewport_window
     );
+
+    const auto& shadow_renderer = get<Shadow_renderer>();
+    const auto& render_graph    = get<erhe::application::Rendergraph>();
+
+    const auto shadow_render_node = shadow_renderer->create_node_for_viewport(m_primary_viewport_window);
     render_graph->register_node(shadow_render_node);
-    m_primary_viewport_window->add_dependency(shadow_render_node.get());
+    render_graph->connect(
+        erhe::application::Rendergraph_node_key::shadow_maps,
+        shadow_render_node,
+        m_primary_viewport_window
+    );
 
     const auto& debug_view_window = get<Debug_view_window>();
-    auto debug_view_render_node = std::make_shared<Debug_view_render_graph_node>(debug_view_window);
-    debug_view_render_node->add_dependency(shadow_render_node.get());
-    render_graph->register_node(debug_view_render_node);
+    auto depth_to_color_node = std::make_shared<Depth_to_color_rendergraph_node>(
+        *m_components
+    );
+    render_graph->register_node(depth_to_color_node);
+    render_graph->connect(
+        erhe::application::Rendergraph_node_key::shadow_maps,
+        shadow_render_node,
+        depth_to_color_node
+    );
+    render_graph->connect(
+        erhe::application::Rendergraph_node_key::depth_visualization,
+        depth_to_color_node,
+        debug_view_window
+    );
+    render_graph->register_node(debug_view_window);
+
+    const auto& imgui_windows         = get<erhe::application::Imgui_windows>();
+    const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
+    //render_graph->register_node(window_imgui_viewport);
+
+    render_graph->connect(
+        erhe::application::Rendergraph_node_key::window,
+        debug_view_window,
+        window_imgui_viewport
+    );
+
     // TODO debug_view_window should also depend on debug_view_render_node
 }
 
@@ -812,15 +956,14 @@ void Scene_builder::make_mesh_nodes()
         }
     }
 
-    rbp::SkylineBinPack packer;
-    int group_width = 2;
-    int group_depth = 2;
-
-    const     float gap          = config.instance_gap;
     constexpr float bottom_y_pos = 0.01f;
 
     glm::ivec2 max_corner;
     {
+        rbp::SkylineBinPack packer;
+        const float gap = config.instance_gap;
+        int group_width = 2;
+        int group_depth = 2;
         ERHE_PROFILE_SCOPE("pack");
         for (;;)
         {

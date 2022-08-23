@@ -5,18 +5,18 @@
 #include "rendertarget_imgui_viewport.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/post_processing.hpp"
+#include "rendergraph/post_processing.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/viewport_config.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
 #endif
@@ -24,13 +24,13 @@
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui_viewport.hpp"
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_viewport.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/window.hpp"
-#include "erhe/application/window_imgui_viewport.hpp"
+#include "erhe/application/imgui/window_imgui_viewport.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/windows/log_window.hpp"
@@ -55,7 +55,7 @@ auto Capture_frame_command::try_call(erhe::application::Command_context& context
 }
 
 Editor_rendering::Editor_rendering()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_capture_frame_command    {*this}
 {
 }
@@ -488,6 +488,10 @@ void Editor_rendering::render_viewport_main(
 {
     ERHE_PROFILE_FUNCTION
 
+    gl::enable(gl::Enable_cap::scissor_test);
+    gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
+    context.window->clear();
+
     if (m_forward_renderer)
     {
         static constexpr std::string_view c_id_main{"Main"};
@@ -519,6 +523,8 @@ void Editor_rendering::render_viewport_main(
     {
         m_text_renderer->render(context.viewport);
     }
+
+    gl::disable(gl::Enable_cap::scissor_test);
 }
 
 void Editor_rendering::render_viewport_overlay(
@@ -627,17 +633,16 @@ void Editor_rendering::render_content(const Render_context& context)
         }
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
+                .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes, layers.controller()->meshes },
+                .light_projections = context.window->get_light_projections(),
                 .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes, layers.controller()->meshes },
                 .passes            = { &renderpass },
+                .shadow_texture    = context.window->get_shadow_texture(),
+                .viewport          = context.viewport,
                 .visibility_filter = content_not_selected_filter,
-                .ambient_light     = layers.light()->ambient_light
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -654,15 +659,11 @@ void Editor_rendering::render_content(const Render_context& context)
         primitive_settings.constant_size  = render_style.line_width;
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes },
-                .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &m_rp_edge_lines },
+                .viewport          = context.viewport,
                 .visibility_filter = content_not_selected_filter
             }
         );
@@ -677,15 +678,11 @@ void Editor_rendering::render_content(const Render_context& context)
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes },
-                .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &m_rp_polygon_centroids },
+                .viewport          = context.viewport,
                 .visibility_filter = content_not_selected_filter
             }
         );
@@ -699,15 +696,11 @@ void Editor_rendering::render_content(const Render_context& context)
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes },
-                .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &m_rp_corner_points },
+                .viewport          = context.viewport,
                 .visibility_filter = content_not_selected_filter
             }
         );
@@ -750,13 +743,11 @@ void Editor_rendering::render_rendertarget_nodes(
 
     m_forward_renderer->render(
         Forward_renderer::Render_parameters{
-            .viewport          = context.viewport,
             .camera            = context.camera,
-            .mesh_spans        = { layers.rendertarget()->meshes },
-            .lights            = { },
-            .light_projections = { },
             .materials         = { materials },
+            .mesh_spans        = { layers.rendertarget()->meshes },
             .passes            = { &m_rp_rendertarget_nodes },
+            .viewport          = context.viewport,
             .visibility_filter =
             {
                 .require_all_bits_set = (
@@ -771,9 +762,9 @@ void Editor_rendering::render_rendertarget_nodes(
 void Editor_rendering::render_selection(const Render_context& context)
 {
     if (
-        (context.camera == nullptr) ||
+        (context.camera          == nullptr) ||
         (context.viewport_config == nullptr) ||
-        (context.window == nullptr)
+        (context.window          == nullptr)
     )
     {
         return;
@@ -818,17 +809,16 @@ void Editor_rendering::render_selection(const Render_context& context)
 
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
+                .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes },
+                .light_projections = context.window->get_light_projections(),
                 .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &renderpass },
-                .visibility_filter = content_selected_filter,
-                .ambient_light     = layers.light()->ambient_light
+                .shadow_texture    = context.window->get_shadow_texture(),
+                .viewport          = context.viewport,
+                .visibility_filter = content_selected_filter
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -847,15 +837,11 @@ void Editor_rendering::render_selection(const Render_context& context)
         primitive_settings.constant_size  = render_style.line_width;
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes },
-                .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
+                .viewport          = context.viewport,
                 .visibility_filter = content_selected_filter
             }
         );
@@ -873,15 +859,11 @@ void Editor_rendering::render_selection(const Render_context& context)
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes },
-                .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &m_rp_polygon_centroids },
+                .viewport          = context.viewport,
                 .visibility_filter = content_selected_filter
             }
         );
@@ -896,15 +878,11 @@ void Editor_rendering::render_selection(const Render_context& context)
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .viewport          = context.viewport,
                 .camera            = context.camera,
-                .mesh_spans        = { layers.content()->meshes },
-                .lights            = layers.light()->lights,
-                .light_projections = m_shadow_renderer
-                    ? m_shadow_renderer->light_projections()
-                    : Light_projections{},
                 .materials         = materials,
+                .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &m_rp_corner_points },
+                .viewport          = context.viewport,
                 .visibility_filter = content_selected_filter
             }
         );
@@ -941,14 +919,10 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
 
     m_forward_renderer->render(
         {
-            .viewport          = context.viewport,
             .camera            = context.camera,
-            .mesh_spans        = { layers.tool()->meshes },
             .lights            = {},
-            .light_projections = m_shadow_renderer
-                ? m_shadow_renderer->light_projections()
-                : Light_projections{},
             .materials         = materials,
+            .mesh_spans        = { layers.tool()->meshes },
             .passes            =
             {
                 &m_rp_tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
@@ -958,6 +932,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
                 &m_rp_tool5_visible_color,    // require_stencil_tag_depth_visible
                 &m_rp_tool6_hidden_color      // require_stencil_tag_depth_hidden_and_blend,
             },
+            .viewport          = context.viewport,
             .visibility_filter =
             {
                 .require_all_bits_set =
@@ -992,22 +967,19 @@ void Editor_rendering::render_brush(const Render_context& context)
 
     m_forward_renderer->render(
         {
-            .viewport          = context.viewport,
+            .ambient_light     = layers.light()->ambient_light,
             .camera            = context.camera,
-            .mesh_spans        = { layers.brush()->meshes },
             .lights            = layers.light()->lights,
-            .light_projections = m_shadow_renderer
-                ? m_shadow_renderer->light_projections()
-                : Light_projections{},
             .materials         = materials,
+            .mesh_spans        = { layers.brush()->meshes },
             .passes            = { &m_rp_brush_back, &m_rp_brush_front },
+            .viewport          = context.viewport,
             .visibility_filter =
             {
                 .require_all_bits_set =
                     erhe::scene::Node_visibility::visible |
                     erhe::scene::Node_visibility::brush
-            },
-            .ambient_light     = layers.light()->ambient_light
+            }
         }
     );
 }

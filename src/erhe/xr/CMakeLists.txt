@@ -8,6 +8,8 @@ erhe_target_sources_grouped(
     headset.hpp
     xr_instance.cpp
     xr_instance.hpp
+    xr_log.cpp
+    xr_log.hpp
     xr_session.cpp
     xr_session.hpp
     xr_swapchain_image.cpp
@@ -24,6 +26,7 @@ target_link_libraries(${_target}
         erhe::toolkit
         glm::glm
     PRIVATE
+        erhe::log
         fmt::fmt
         Microsoft.GSL::GSL
         optional_lite

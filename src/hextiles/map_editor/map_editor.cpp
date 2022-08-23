@@ -54,7 +54,7 @@ auto Map_hover_command::try_call(erhe::application::Command_context& context) ->
 }
 
 Map_editor::Map_editor()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_map_hover_command        {*this}
     , m_map_primary_brush_command{*this}
 {

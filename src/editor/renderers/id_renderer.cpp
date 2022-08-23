@@ -100,7 +100,7 @@ auto Id_renderer::Id_frame_resources::operator=(Id_frame_resources&& other) noex
 }
 
 Id_renderer::Id_renderer()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

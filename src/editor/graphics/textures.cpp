@@ -14,7 +14,7 @@ using erhe::graphics::PNG_loader;
 using std::shared_ptr;
 
 Textures::Textures()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

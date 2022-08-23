@@ -1,10 +1,10 @@
 #include "xr/headset_view_resources.hpp"
-#include "xr/headset_renderer.hpp"
-#include "log.hpp"
-#include "rendering.hpp"
-
+#include "editor_rendering.hpp"
+#include "editor_log.hpp"
 #include "scene/scene_root.hpp"
+#include "xr/headset_renderer.hpp"
 
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/camera.hpp"
@@ -20,7 +20,7 @@ using erhe::graphics::Texture;
 Headset_view_resources::Headset_view_resources(
     erhe::xr::Render_view& render_view,
     Headset_renderer&      headset_renderer,
-    Editor_rendering&      rendering,
+    Scene_root&            scene_root,
     const std::size_t      slot
 )
 {
@@ -69,7 +69,7 @@ Headset_view_resources::Headset_view_resources(
 
     if (!framebuffer->check_status())
     {
-        log_headset.warn("Invalid framebuffer for headset - disabling headset");
+        log_headset->warn("Invalid framebuffer for headset - disabling headset");
         return;
     }
 
@@ -81,10 +81,7 @@ Headset_view_resources::Headset_view_resources(
         fmt::format("Headset Camera slot {}", slot)
     );
 
-    const auto scene_root = rendering.get<Scene_root>();
-    scene_root->scene().cameras.push_back(camera);
-    scene_root->scene().nodes.emplace_back(camera);
-    scene_root->scene().nodes_sorted = false;
+    scene_root.scene().add(camera);
     headset_renderer.root_camera()->attach(camera);
 
     is_valid = true;

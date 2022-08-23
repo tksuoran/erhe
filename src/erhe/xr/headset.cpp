@@ -33,32 +33,37 @@ auto Headset::controller_pose() const -> Pose
 
 auto Headset::get_hand_tracking_joint(const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint
 {
-    return m_xr_session->get_hand_tracking_joint(hand, joint);
+    return m_xr_session
+        ? m_xr_session->get_hand_tracking_joint(hand, joint)
+        : Hand_tracking_joint{
+            .location = {
+                .locationFlags = 0
+            },
+            .velocity = {
+                .velocityFlags = 0
+            }
+        };
 }
 
 auto Headset::get_hand_tracking_active(const XrHandEXT hand) const -> bool
 {
-    return m_xr_session->get_hand_tracking_active(hand);
+    return m_xr_session
+        ? m_xr_session->get_hand_tracking_active(hand)
+        : false;
 }
 
 auto Headset::trigger_value() const -> float
 {
-    if (!m_xr_instance)
-    {
-        return 0.0f;
-    }
-
-    return m_xr_instance->actions.trigger_value_state.currentState;
+    return m_xr_instance
+        ? m_xr_instance->actions.trigger_value_state.currentState
+        : 0.0f;
 }
 
 auto Headset::squeeze_click() const -> bool
 {
-    if (!m_xr_instance)
-    {
-        return false;
-    }
-
-    return m_xr_instance->actions.squeeze_click_state.currentState == XR_TRUE;
+    return m_xr_instance
+        ? (m_xr_instance->actions.squeeze_click_state.currentState == XR_TRUE)
+        : false;
 }
 
 auto Headset::begin_frame() -> Frame_timing

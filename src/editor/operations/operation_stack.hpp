@@ -3,7 +3,7 @@
 #include "tools/tool.hpp"
 
 #include "erhe/application/commands/command.hpp"
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 
 #include "erhe/components/components.hpp"
 
@@ -52,15 +52,15 @@ class Operation_stack
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_label{"Operation_stack"};
+    static constexpr std::string_view c_type_name{"Operation_stack"};
     static constexpr std::string_view c_title{"Operation Stack"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Operation_stack ();
     ~Operation_stack() noexcept override;
 
     // Implements Component
-    auto get_type_hash              () const -> uint32_t override { return hash; }
+    auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
 

@@ -8,8 +8,8 @@
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/windows/log_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
@@ -46,8 +46,8 @@ void Node_properties::Value_edit_state::combine(
 }
 
 Node_properties::Node_properties()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 
@@ -205,9 +205,26 @@ void Node_properties::icamera_properties(erhe::scene::Camera& camera) const
     )
     {
         float exposure = camera.get_exposure();
-        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
+        const auto avail = ImGui::GetContentRegionAvail().x;
+        const auto label_size = std::max(
+            ImGui::CalcTextSize("Exposure").x,
+            ImGui::CalcTextSize("Shadow Range").x
+        );
+        const auto width = avail - label_size;
         {
-            camera.set_exposure(exposure);
+            ImGui::SetNextItemWidth(width);
+            if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
+            {
+                camera.set_exposure(exposure);
+            }
+        }
+        float shadow_range = camera.get_shadow_range();
+        {
+            ImGui::SetNextItemWidth(width);
+            if (ImGui::SliderFloat("Shadow Range", &shadow_range, 1.00f, 1000.0f, "%.3f", logarithmic))
+            {
+                camera.set_shadow_range(shadow_range);
+            }
         }
         ImGui::TreePop();
     }

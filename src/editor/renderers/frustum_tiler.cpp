@@ -230,11 +230,10 @@ auto convex_hull_o(const std::array<glm::vec2, 8>& points) -> std::vector<glm::v
     }
 
     std::size_t p = left_most_index;
-    std::size_t q;
     do
     {
         result.push_back(points[p]);
-        q = (p + 1) % 8;
+        std::size_t q = (p + 1) % 8;
         for (std::size_t i = 0; i < 8; i++)
         {
             if (orientation(points[p], points[i], points[q]) == 2)
@@ -505,11 +504,6 @@ void Frustum_tiler::update(
 
     using vec2 = glm::vec2;
     using vec3 = glm::vec3;
-
-    const erhe::graphics::Tile_size tile_size = m_texture.get_sparse_tile_size();
-
-    // Starting tile
-    Tile tile = point_to_tile(m_frustum_hull_points.front());
 
     glm::vec2 min_corner_point = m_frustum_hull_points.front();
     glm::vec2 max_corner_point = m_frustum_hull_points.front();

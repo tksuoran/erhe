@@ -5,7 +5,7 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -17,7 +17,7 @@
 namespace editor {
 
 Icon_set::Icon_set()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

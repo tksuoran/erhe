@@ -3,13 +3,13 @@
 #include "rendertarget_imgui_viewport.hpp"
 #include "editor_log.hpp"
 #include "rendertarget_node.hpp"
-#include "windows/viewport_window.hpp"
+#include "scene/viewport_window.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/scoped_imgui_context.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/scoped_imgui_context.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 
@@ -31,19 +31,18 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
         components.get<erhe::application::Imgui_renderer>()->get_font_atlas()
     }
     , m_rendertarget_node{rendertarget_node}
+    , m_imgui_renderer   {components.get<erhe::application::Imgui_renderer>()}
+    , m_imgui_windows    {components.get<erhe::application::Imgui_windows>()}
     , m_view             {components.get<erhe::application::View>()}
     , m_name             {name}
+    , m_imgui_ini_path   {fmt::format("imgui_{}.ini", name)}
 {
-    m_imgui_renderer = components.get<erhe::application::Imgui_renderer>();
-    m_imgui_windows  = components.get<erhe::application::Imgui_windows>();
-
-    m_imgui_ini_path = fmt::format("imgui_{}.ini", name);
-
     m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
     ImGuiIO& io = m_imgui_context->IO;
     io.MouseDrawCursor = true;
     io.IniFilename = m_imgui_ini_path.c_str();
+    io.FontDefault = m_imgui_renderer->vr_primary_font();
 
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");
 
@@ -119,7 +118,6 @@ template <typename T>
 
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
-    ImGui::PushFont(m_imgui_renderer->vr_primary_font());
 
     // TODO
     //// ImGui::ShowDemoWindow();
@@ -133,14 +131,13 @@ void Rendertarget_imgui_viewport::end_imgui_frame()
 {
     SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::end_imgui_frame()");
 
-    ImGui::PopFont();
     ImGui::EndFrame();
     ImGui::Render();
 }
 
-void Rendertarget_imgui_viewport::execute_render_graph_node()
+void Rendertarget_imgui_viewport::execute_rendergraph_node()
 {
-    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::execute_render_graph_node()");
+    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::execute_rendergraph_node()");
 
     erhe::application::Imgui_windows&  imgui_windows  = *m_imgui_windows.get();
     erhe::application::Imgui_viewport& imgui_viewport = *this;
@@ -151,6 +148,66 @@ void Rendertarget_imgui_viewport::execute_render_graph_node()
     m_rendertarget_node->clear(glm::vec4{0.0f, 0.0f, 0.0f, 0.8f});
     m_imgui_renderer->render_draw_data();
     m_rendertarget_node->render_done();
+}
+
+auto Rendertarget_imgui_viewport::get_consumer_input_texture(
+    const erhe::application::Resource_routing resource_routing,
+    const int                                 key,
+    const int                                 depth
+) const -> std::shared_ptr<erhe::graphics::Texture>
+{
+    static_cast<void>(resource_routing); // TODO Validate
+    static_cast<void>(key); // TODO Validate
+    static_cast<void>(depth);
+    return m_rendertarget_node->texture();
+}
+
+auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
+    const erhe::application::Resource_routing resource_routing,
+    const int                                 key,
+    const int                                 depth
+) const -> std::shared_ptr<erhe::graphics::Framebuffer>
+{
+    static_cast<void>(resource_routing); // TODO Validate
+    static_cast<void>(key); // TODO Validate
+    static_cast<void>(depth);
+    return m_rendertarget_node->framebuffer();
+}
+
+auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
+    const erhe::application::Resource_routing resource_routing,
+    const int                                 key,
+    const int                                 depth
+) const -> erhe::scene::Viewport
+{
+    static_cast<void>(resource_routing); // TODO Validate
+    static_cast<void>(key); // TODO Validate
+    static_cast<void>(depth);
+    return erhe::scene::Viewport{
+        .x      = 0,
+        .y      = 0,
+        .width  = static_cast<int>(m_rendertarget_node->width()),
+        .height = static_cast<int>(m_rendertarget_node->height())
+        // .reverse_depth = false // unused
+    };
+}
+
+auto Rendertarget_imgui_viewport::get_producer_output_viewport(
+    const erhe::application::Resource_routing resource_routing,
+    const int                                 key,
+    const int                                 depth
+) const -> erhe::scene::Viewport
+{
+    static_cast<void>(resource_routing); // TODO Validate
+    static_cast<void>(key); // TODO Validate
+    static_cast<void>(depth);
+    return erhe::scene::Viewport{
+        .x      = 0,
+        .y      = 0,
+        .width  = static_cast<int>(m_rendertarget_node->width()),
+        .height = static_cast<int>(m_rendertarget_node->height())
+        // .reverse_depth = false // unused
+    };
 }
 
 }  // namespace editor

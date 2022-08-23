@@ -26,8 +26,8 @@ class OpenGL_state_tracker
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_label{"erhe::graphics::OpenGL_state_tracker"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"erhe::graphics::OpenGL_state_tracker"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     OpenGL_state_tracker ();
     ~OpenGL_state_tracker() noexcept override;
@@ -35,7 +35,7 @@ public:
     void operator=       (const OpenGL_state_tracker&) = delete;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
 
     void on_thread_exit () override;
     void on_thread_enter() override;

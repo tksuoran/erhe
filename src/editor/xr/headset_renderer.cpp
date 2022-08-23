@@ -1,24 +1,30 @@
 #include "xr/headset_renderer.hpp"
 
-#include "application.hpp"
-#include "configuration.hpp"
-#include "editor_imgui_windows.hpp"
-#include "editor_tools.hpp"
-#include "log.hpp"
-#include "rendering.hpp"
-#include "window.hpp"
-
-#include "renderers/line_renderer.hpp"
+#include "editor_log.hpp"
+#include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/text_renderer.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
-#include "windows/log_window.hpp"
+#include "tools/tools.hpp"
+#include "windows/viewport_config.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
 
-#include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/application/application.hpp"
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/window.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/windows/log_window.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -43,33 +49,31 @@ Headset_renderer::Headset_renderer()
 
 Headset_renderer::~Headset_renderer() = default;
 
-void Headset_renderer::connect()
+void Headset_renderer::declare_required_components()
 {
-    m_application       = get    <Application      >();
-    m_editor_rendering  = get    <Editor_rendering >();
-    m_editor_tools      = get    <Editor_tools     >();
-    m_hand_tracker      = get    <Hand_tracker     >();
-    m_line_renderer_set = get    <Line_renderer_set>();
-    m_scene_root        = require<Scene_root       >();
-
-    require<Configuration>();
-    require<Editor_imgui_windows>();
-    require<Window>();
+    m_configuration = require<erhe::application::Configuration>();
+    require<erhe::application::Imgui_windows>();
+    require<erhe::application::Window>();
+    require<Scene_builder>();
+    require<Mesh_memory>();
 }
 
 void Headset_renderer::initialize_component()
 {
-    get<Editor_imgui_windows>()->register_imgui_window(this);
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+
+    const auto scene_builder = get<Scene_builder>();
+    m_scene_root = scene_builder->get_scene_root();
 
     setup_root_camera();
 
-    if (!get<Configuration>()->openxr)
+    if (!get<erhe::application::Configuration>()->headset.openxr)
     {
         return;
     }
 
     m_headset = std::make_unique<erhe::xr::Headset>(
-        get<Window>()->get_context_window()
+        get<erhe::application::Window>()->get_context_window()
     );
 
     const auto mesh_memory = get<Mesh_memory>();
@@ -78,6 +82,19 @@ void Headset_renderer::initialize_component()
         *m_scene_root,
         m_root_camera.get()
     );
+
+    hide();
+}
+
+void Headset_renderer::post_initialize()
+{
+    m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
+    m_text_renderer          = get<erhe::application::Text_renderer    >();
+    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+
+    m_editor_rendering  = get<Editor_rendering>();
+    m_hand_tracker      = get<Hand_tracker    >();
+    m_tools             = get<Tools           >();
 }
 
 auto Headset_renderer::get_headset_view_resources(
@@ -93,10 +110,10 @@ auto Headset_renderer::get_headset_view_resources(
     if (i == m_view_resources.end())
     {
         auto& j = m_view_resources.emplace_back(
-            render_view,
-            *this,
-            *m_editor_rendering,
-            m_view_resources.size()
+            render_view,            // erhe::xr::Render_view& render_view,
+            *this,                  // Headset_renderer&      headset_renderer,
+            *m_scene_root,          // Scene_root&            scene_root,
+            m_view_resources.size() // const std::size_t      slot
         );
         return j;
     }
@@ -121,16 +138,16 @@ void Headset_renderer::render()
         struct Context
         {
             erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker;
-            Configuration*                        configuration;
-            Line_renderer_set*                    line_renderer_set;
-            Text_renderer*                        text_renderer;
+            erhe::application::Configuration*     configuration;
+            erhe::application::Line_renderer_set* line_renderer_set;
+            erhe::application::Text_renderer*     text_renderer;
         };
         Context context
         {
-            .pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>().get(),
-            .configuration          = get<Configuration    >().get(),
-            .line_renderer_set      = get<Line_renderer_set>().get(),
-            .text_renderer          = get<Text_renderer    >().get()
+            .pipeline_state_tracker = m_pipeline_state_tracker.get(),
+            .configuration          = m_configuration.get(),
+            .line_renderer_set      = m_line_renderer_set.get(),
+            .text_renderer          = m_text_renderer.get()
         };
 
         auto callback = [this, &context](erhe::xr::Render_view& render_view) -> bool
@@ -149,7 +166,7 @@ void Headset_renderer::render()
             auto status = gl::check_named_framebuffer_status(framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
             if (status != gl::Framebuffer_status::framebuffer_complete)
             {
-                log_headset.error("view framebuffer status = {}\n", c_str(status));
+                log_headset->error("view framebuffer status = {}", gl::c_str(status));
             }
 
             const erhe::scene::Viewport viewport
@@ -158,7 +175,7 @@ void Headset_renderer::render()
                 .y             = 0,
                 .width         = static_cast<int>(render_view.width),
                 .height        = static_cast<int>(render_view.height),
-                .reverse_depth = get<Configuration>()->reverse_depth
+                .reverse_depth = m_configuration->graphics.reverse_depth
             };
             gl::viewport(0, 0, render_view.width, render_view.height);
 
@@ -194,12 +211,12 @@ void Headset_renderer::render()
                 Render_context render_context {
                     .window          = nullptr,
                     .viewport_config = &viewport_config,
-                    .camera          = as_icamera(view_resources.camera.get()),
+                    .camera          = as_camera(view_resources.camera.get()),
                     .viewport        = viewport
                 };
 
                 m_editor_rendering->render_content(render_context);
-                m_editor_tools->render_tools(render_context);
+                m_tools->render_tools(render_context);
 
                 if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)
                 {
@@ -232,10 +249,12 @@ void Headset_renderer::setup_root_camera()
     projection.z_near          = 0.03f;
     projection.z_far           = 200.0f;
 
-    const auto scene_root = get<Scene_root>();
-    scene_root->scene().cameras.push_back(m_root_camera);
-    scene_root->scene().nodes.emplace_back(m_root_camera);
-    scene_root->scene().nodes_sorted = false;
+    m_scene_root->scene().add(m_root_camera);
+}
+
+auto Headset_renderer::scene_root() -> std::shared_ptr<Scene_root>
+{
+    return m_scene_root;
 }
 
 auto Headset_renderer::root_camera() -> std::shared_ptr<erhe::scene::Camera>

@@ -10,11 +10,11 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
@@ -232,7 +232,7 @@ auto Selection_tool::range_selection() -> Range_selection&
 }
 
 Selection_tool::Selection_tool()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_select_command           {*this}
     , m_delete_command           {*this}
     , m_range_selection          {*this}

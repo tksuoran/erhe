@@ -5,13 +5,13 @@
 #include "editor_scenes.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
@@ -130,7 +130,7 @@ void Physics_tool_force_command::on_inactive(
 /////////
 
 Physics_tool::Physics_tool()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_drag_command             {*this}
     , m_force_command            {*this}
 {
@@ -274,7 +274,6 @@ void Physics_tool::release_target()
 {
     log_physics->info("Physics_tool: Target released");
 
-    m_target_mesh.reset();
     if (m_target_constraint)
     {
         if (m_target_node_physics)
@@ -294,6 +293,7 @@ void Physics_tool::release_target()
         }
         m_target_constraint.reset();
     }
+    m_target_mesh.reset();
 }
 
 void Physics_tool::begin_point_to_point_constraint()

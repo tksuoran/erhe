@@ -96,7 +96,7 @@ Text_renderer::Frame_resources::Frame_resources(
 }
 
 Text_renderer::Text_renderer()
-    : Component{c_label}
+    : Component{c_type_name}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",

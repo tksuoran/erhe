@@ -135,7 +135,7 @@ Light_projections::Light_projections(
 
 auto Light_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-    const Light_projections&                                    light_projections,
+    const Light_projections*                                    light_projections,
     const glm::vec3&                                            ambient_light
 ) -> erhe::application::Buffer_range
 {
@@ -159,10 +159,9 @@ auto Light_buffer::update(
     const uint32_t uint32_zero            {0u};
     const uint32_t uvec2_zero[2]          {0u, 0u};
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
-    const uint32_t shadow_map_texture_handle_uvec2[2] =
-    {
-        static_cast<uint32_t>((light_projections.shadow_map_texture_handle & 0xffffffffu)),
-        static_cast<uint32_t>(light_projections.shadow_map_texture_handle >> 32u)
+    const uint32_t shadow_map_texture_handle_uvec2[2] = {
+        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle & 0xffffffffu)) : 0,
+        light_projections ? static_cast<uint32_t>(light_projections->shadow_map_texture_handle >> 32u) : 0
     };
 
     using erhe::graphics::as_span;
@@ -199,20 +198,29 @@ auto Light_buffer::update(
         //ERHE_VERIFY(camera != nullptr);
         using vec3 = glm::vec3;
         using vec4 = glm::vec4;
+        using mat4 = glm::mat4;
 
-        auto* light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light.get());
+        auto* light_projection_transforms = (light_projections != nullptr)
+            ? light_projections->get_light_projection_transforms_for_light(light.get())
+            : nullptr;
         if (light_projection_transforms == nullptr)
         {
-            log_render->warn(
-                "light {} has no light projection transforms",
-                light->name()
-            );
+            //// log_render->warn(
+            ////     "light {} has no light projection transforms",
+            ////     light->name()
+            //// );
             continue;
         }
 
-        const auto& texture_from_world   = light_projection_transforms->texture_from_world;
+        using Transform = erhe::scene::Transform;
+        const mat4 texture_from_world    = (light_projection_transforms != nullptr)
+            ? light_projection_transforms->texture_from_world.matrix()
+            : mat4{1.0f};
         const vec3  direction            = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-        const vec3  position             = vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+        const vec3  position             = (light_projection_transforms != nullptr)
+            ? vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}}
+            : vec3{light->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+
         const vec4  radiance             = vec4{light->intensity * light->color, light->range};
         const auto  inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
         const auto  outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
@@ -231,7 +239,7 @@ auto Light_buffer::update(
         //);
 
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.matrix()));
-        write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world.matrix()));
+        write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
         write(light_gpu_data, light_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, light_offset + offsets.light.radiance_and_range,           as_span(radiance));

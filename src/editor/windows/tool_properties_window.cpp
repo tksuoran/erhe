@@ -3,7 +3,7 @@
 #include "tools/tool.hpp"
 #include "windows/operations.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <gsl/gsl>
@@ -16,8 +16,8 @@ namespace editor
 {
 
 Tool_properties_window::Tool_properties_window()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
 {
 }
 

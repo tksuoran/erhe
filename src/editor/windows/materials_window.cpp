@@ -4,8 +4,8 @@
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -18,8 +18,8 @@ namespace editor
 {
 
 Materials_window::Materials_window()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 
@@ -54,6 +54,7 @@ void Materials_window::imgui()
     ERHE_PROFILE_FUNCTION
 
     const ImGuiTreeNodeFlags parent_flags{
+        ImGuiTreeNodeFlags_DefaultOpen       |
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |
         ImGuiTreeNodeFlags_SpanFullWidth

@@ -258,35 +258,6 @@ Texture::~Texture() noexcept
     );
 }
 
-Texture::Texture(Texture&& other) noexcept
-    : m_handle         {std::move(other.m_handle)}
-    , m_debug_label    {std::move(other.m_debug_label)}
-    , m_target         {other.m_target}
-    , m_internal_format{other.m_internal_format}
-    , m_sample_count   {other.m_sample_count}
-    , m_level_count    {other.m_level_count}
-    , m_width          {other.m_width}
-    , m_height         {other.m_height}
-    , m_depth          {other.m_depth}
-    , m_buffer         {other.m_buffer}
-{
-}
-
-auto Texture::operator=(Texture&& other) noexcept -> Texture&
-{
-    m_handle          = std::move(other.m_handle);
-    m_debug_label     = other.m_debug_label;
-    m_target          = other.m_target;
-    m_internal_format = other.m_internal_format;
-    m_sample_count    = other.m_sample_count;
-    m_level_count     = other.m_level_count;
-    m_width           = other.m_width;
-    m_height          = other.m_height;
-    m_depth           = other.m_depth;
-    m_buffer          = other.m_buffer;
-    return *this;
-}
-
 auto Texture::gl_name() const -> GLuint
 {
     return m_handle.gl_name();
@@ -795,6 +766,11 @@ auto Texture::depth() const -> int
     return m_depth;
 }
 
+auto Texture::internal_format() const -> gl::Internal_format
+{
+    return m_internal_format;
+}
+
 auto Texture::sample_count() const -> int
 {
     return m_sample_count;
@@ -841,6 +817,10 @@ auto create_dummy_texture() -> std::shared_ptr<Texture>
     );
 
     return texture;
+}
+
+Texture_unit_cache::Texture_unit_cache()
+{
 }
 
 void Texture_unit_cache::reset(unsigned int base_texture_unit)

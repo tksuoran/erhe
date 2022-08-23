@@ -87,7 +87,7 @@ public:
 
     auto update(
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-        const Light_projections&                                    light_projections,
+        const Light_projections*                                    light_projections,
         const glm::vec3&                                            ambient_light
     ) -> erhe::application::Buffer_range;
 

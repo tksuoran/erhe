@@ -10,11 +10,11 @@ class Time
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_label{"Editor_time"};
-    static constexpr uint32_t         hash{
+    static constexpr std::string_view c_type_name{"Editor_time"};
+    static constexpr uint32_t         c_type_hash{
         compiletime_xxhash::xxh32(
-            c_label.data(),
-            c_label.size(),
+            c_type_name.data(),
+            c_type_name.size(),
             {}
         )
     };
@@ -23,7 +23,7 @@ public:
     ~Time() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
 
     // Public API
     [[nodiscard]] auto time() const -> double;

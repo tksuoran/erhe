@@ -607,7 +607,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                     float dot_product = glm::dot(primary_attributes.bitangent.value(), secondary_attributes.bitangent.value());
                     if (dot_product < weld_settings.min_normal_dot_product)
                     {
-                        //log_weld.trace("bitangent dot product too small for span {:2} point {:2} - {} vs. {}, dot product {}\n",
+                        //log_weld.trace("bitangent dot product too small for span {:2} point {:2} - {} vs. {}, dot product {}",
                         //               span_start, new_point_id, reference.bitangent.value(), current.bitangent.value(), dot_product);
                         continue;
                     }
@@ -617,7 +617,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                     float distance = glm::distance(primary_attributes.texcoord.value(), secondary_attributes.texcoord.value());
                     if (distance > weld_settings.max_texcoord_distance)
                     {
-                        //log_weld.trace("texcoord distance {} too large\n", distance);
+                        //log_weld.trace("texcoord distance {} too large", distance);
                         continue;
                     }
                 }

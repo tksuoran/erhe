@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"

@@ -92,17 +92,17 @@ auto load_png(const fs::path& path) -> Image
     {
 #if defined(ERHE_PNG_LIBRARY_NONE)
         log_image->error(
-            "Unable to load image '{}' due to ERHE_PNG_LIBRARY_NONE build configuration. Exiting program.\n",
+            "Unable to load image '{}' due to ERHE_PNG_LIBRARY_NONE build configuration. Exiting program.",
             path.string()
         );
 #elif !defined(ERHE_PNG_LIBRARY_MANGO)
         log_image->error(
-            "Unable to load image '{}', check ERHE_PNG_LIBRARY build configuration. Exiting program.\n",
+            "Unable to load image '{}', check ERHE_PNG_LIBRARY build configuration. Exiting program.",
             path.string()
         );
 #else
         log_image->error(
-            "Unable to load image '{}', check program working directory. Exiting program.\n",
+            "Unable to load image '{}', check program working directory. Exiting program.",
             path.string()
         );
 #endif
@@ -116,7 +116,7 @@ auto load_png(const fs::path& path) -> Image
     loader.close();
     if (!ok)
     {
-        log_image->error("File PNG load error {}\n", path.string());
+        log_image->error("File PNG load error {}", path.string());
         return {};
     }
     return image;
@@ -129,7 +129,7 @@ auto load_texture(
     const Image image = load_png(path);
     if (image.data.size() == 0)
     {
-        log_image->error("Image empty {}\n", path.string());
+        log_image->error("Image empty {}", path.string());
         return {};
     }
     erhe::graphics::Texture_create_info texture_create_info{
@@ -212,7 +212,7 @@ void apply_mask()
     if (mask_in == nullptr)
     {
         const char *const error_message = SDL_GetError();
-        fmt::print(stderr, "IMG_Load() failed: {}\n", (error_message != nullptr) ? error_message : "");
+        fmt::print(stderr, "IMG_Load() failed: {}", (error_message != nullptr) ? error_message : "");
         std::fflush(stderr);
         std::exit(EXIT_FAILURE);
     }
@@ -220,7 +220,7 @@ void apply_mask()
     if (surface_in == nullptr)
     {
         const char *const error_message = SDL_GetError();
-        fmt::print(stderr, "IMG_Load() failed: {}\n", (error_message != nullptr) ? error_message : "");
+        fmt::print(stderr, "IMG_Load() failed: {}", (error_message != nullptr) ? error_message : "");
         std::fflush(stderr);
         std::exit(EXIT_FAILURE);
     }
@@ -264,7 +264,7 @@ void apply_mask()
     if (IMG_SavePNG(surface_out, "data/graphics/hex_.png") < 0)
     {
         const char *const error_message = SDL_GetError();
-        fmt::print(stderr, "IMG_SavePNG() failed: {}\n", (error_message != nullptr) ? error_message : "");
+        fmt::print(stderr, "IMG_SavePNG() failed: {}", (error_message != nullptr) ? error_message : "");
         std::fflush(stderr);
         std::exit(EXIT_FAILURE);
     }
@@ -277,7 +277,7 @@ void apply_mask()
     if (mask_in == nullptr)
     {
         const char *const error_message = SDL_GetError();
-        fmt::print(stderr, "IMG_Load() failed: {}\n", (error_message != nullptr) ? error_message : "");
+        fmt::print(stderr, "IMG_Load() failed: {}", (error_message != nullptr) ? error_message : "");
         std::fflush(stderr);
         std::exit(EXIT_FAILURE);
     }
@@ -295,7 +295,7 @@ void apply_mask()
     if (IMG_SavePNG(unit, "data/graphics/unit_.png") < 0)
     {
         const char *error_message = SDL_GetError();
-        fmt::print(stderr, "IMG_SavePNG() failed: {}\n", (error_message != nullptr) ? error_message : "");
+        fmt::print(stderr, "IMG_SavePNG() failed: {}", (error_message != nullptr) ? error_message : "");
         std::fflush(stderr);
         std::exit(EXIT_FAILURE);
     }
@@ -311,7 +311,7 @@ auto get_mask_bits() -> tile_mask_t
     if (mask_in == nullptr)
     {
         const char *const error_message = SDL_GetError();
-        fmt::print(stderr, "IMG_Load() failed: {}\n", (error_message != nullptr) ? error_message : "");
+        fmt::print(stderr, "IMG_Load() failed: {}", (error_message != nullptr) ? error_message : "");
         std::fflush(stderr);
         std::exit(EXIT_FAILURE);
     }

@@ -3,6 +3,7 @@
 #include <openxr/openxr_reflection.h>
 
 #include "erhe/gl/gl.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/log/log.hpp"
 
 #include <glm/glm.hpp>
@@ -59,7 +60,7 @@ inline auto to_glm(const XrPosef& p) -> glm::mat4
 auto to_string_message_severity(XrDebugUtilsMessageSeverityFlagsEXT severity_flags) -> std::string;
 auto to_string_message_type    (XrDebugUtilsMessageTypeFlagsEXT     type_flags)     -> std::string;
 
-auto check(XrResult result, const int log_level = erhe::log::Level::LEVEL_ERROR) -> bool;
+auto check(XrResult result, spdlog::level::level_enum log_level = spdlog::level::level_enum::err) -> bool;
 
 #define ERHE_XR_CHECK(xr_result) if (!check(xr_result)) { return false; }
 
@@ -71,8 +72,6 @@ public:
     XrHandJointLocationEXT location;
     XrHandJointVelocityEXT velocity;
 };
-
-extern erhe::log::Category log_xr;
 
 extern const char* c_str(::XrActionType            e) noexcept;
 extern const char* c_str(::XrEnvironmentBlendMode  e) noexcept;

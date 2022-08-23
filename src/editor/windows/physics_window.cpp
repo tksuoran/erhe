@@ -8,12 +8,12 @@
 #include "scene/debug_draw.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
@@ -31,8 +31,8 @@ namespace editor
 {
 
 Physics_window::Physics_window()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
 {
 }
 

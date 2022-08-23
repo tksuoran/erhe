@@ -14,7 +14,7 @@
 namespace editor {
 
 Mesh_memory::Mesh_memory()
-    : Component{c_label}
+    : Component{c_type_name}
 {
 }
 

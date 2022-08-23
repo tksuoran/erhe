@@ -191,7 +191,15 @@ template<typename T>
     const std::shared_ptr<T> component = try_get<T>();
     if (!component)
     {
-        ERHE_FATAL("component was not declared required");
+        auto get_result = m_components->get<T>();
+        if (get_result)
+        {
+            ERHE_FATAL("component was not declared required");
+        }
+        else
+        {
+            ERHE_FATAL("component was not registered to Components");
+        }
     }
 
     return component;
@@ -206,7 +214,7 @@ template<typename T>
         {
             for (const auto& component : m_initialized_dependencies)
             {
-                if (component->get_type_hash() == T::hash)
+                if (component->get_type_hash() == T::c_type_hash)
                 {
                     return std::dynamic_pointer_cast<T>(component);
                 }
@@ -254,7 +262,7 @@ template<typename T>
 {
     for (const auto& component : m_components)
     {
-        if (component->get_type_hash() == T::hash)
+        if (component->get_type_hash() == T::c_type_hash)
         {
             return std::dynamic_pointer_cast<T>(component);
         }

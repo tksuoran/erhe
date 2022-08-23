@@ -1,12 +1,12 @@
 #pragma once
 
-#include "erhe/application/tools/tool.hpp"
-#include "erhe/application/windows/imgui_window.hpp"
+#include "tools/tool.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
-#include <miniaudio.h>
+//// #include <miniaudio.h>
 
 #include <chrono>
 #include <memory>
@@ -36,16 +36,16 @@ class Scene_root;
 
 class Theremin
     : public erhe::components::Component
-    , public erhe::application::Tool
-    , public Rendertarget_imgui_window
+    , public erhe::application::Imgui_window
+    , public Tool
 {
 public:
-    static constexpr std::string_view c_name       {"Theremin_tool"};
+    static constexpr std::string_view c_type_name  {"Theremin_tool"};
     static constexpr std::string_view c_description{"Theremin tool"};
-    static constexpr uint32_t hash{
+    static constexpr uint32_t c_type_hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_type_name.data(),
+            c_type_name.size(),
             {}
         )
     };
@@ -54,23 +54,24 @@ public:
     ~Theremin() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
-    void tool_render(const erhe::application::Render_context& context) override;
+    void tool_render(const Render_context& context) override;
 
     // Implements Imgui_window
     void imgui() override;
 
-    void audio_data_callback(
-        ma_device*  pDevice,
-        void*       pOutput,
-        const void* pInput,
-        ma_uint32   frameCount
-    );
+    //// void audio_data_callback(
+    ////     ma_device*  pDevice,
+    ////     void*       pOutput,
+    ////     const void* pInput,
+    ////     ma_uint32   frameCount
+    //// );
 
     void generate(
         float*         output,
@@ -82,7 +83,6 @@ public:
     void set_antenna_distance(const float distance);
 
 private:
-    void create_gui_quad();
     void update_grid_color() const;
     auto normalized_finger_distance() const -> float;
 
@@ -103,8 +103,8 @@ private:
     bool                    m_snap_to_note         {true}; // snap frequency to nearest note
     float                   m_phase                {0.0f};
     bool                    m_audio_ok             {false};
-    ma_device_config        m_audio_config;
-    ma_device               m_audio_device;
+    //// ma_device_config        m_audio_config;
+    //// ma_device               m_audio_device;
     std::vector<float>      m_wavetable; // for visualization
 
     nonstd::optional<

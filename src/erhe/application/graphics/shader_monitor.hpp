@@ -19,14 +19,14 @@ class Shader_monitor
     , public erhe::components::IUpdate_once_per_frame
 {
 public:
-    static constexpr std::string_view c_label{"Shader_monitor"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"Shader_monitor"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Shader_monitor ();
     ~Shader_monitor() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
 

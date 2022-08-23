@@ -6,8 +6,8 @@
 #include "tile_renderer.hpp"
 #include "tile_shape.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/graphics/texture.hpp"
 
@@ -18,7 +18,7 @@ namespace hextiles
 {
 
 Type_editor::Type_editor()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

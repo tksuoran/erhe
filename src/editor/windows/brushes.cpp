@@ -12,17 +12,17 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/materials_window.hpp"
 #include "windows/operations.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/geometry/operation/clone.hpp"
@@ -91,8 +91,8 @@ auto Brush_tool_insert_command::try_call(
 }
 
 Brushes::Brushes()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
     , m_preview_command          {*this}
     , m_insert_command           {*this}
 {

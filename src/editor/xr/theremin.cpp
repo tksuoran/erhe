@@ -1,19 +1,20 @@
 #include "theremin.hpp"
 
-#include "log.hpp"
-#include "rendering.hpp"
+#include "editor_log.hpp"
+#include "editor_rendering.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
+#include "tools/tools.hpp"
 
-#include "xr/gradients.hpp"
+#include "graphics/gradients.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/headset_renderer.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/tools.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <fmt/core.h>
@@ -134,33 +135,33 @@ auto frequency_to_midi_note(const float f) -> int
     return static_cast<int>(rp);
 }
 
-void miniaudio_data_callback(
-    ma_device*  pDevice,
-    void*       pOutput,
-    const void* pInput,
-    ma_uint32   frameCount
-)
-{
-    auto* theremin = reinterpret_cast<Theremin*>(pDevice->pUserData);
-    if (theremin != nullptr)
-    {
-        theremin->audio_data_callback(pDevice, pOutput, pInput, frameCount);
-    }
-}
+//// void miniaudio_data_callback(
+////     ma_device*  pDevice,
+////     void*       pOutput,
+////     const void* pInput,
+////     ma_uint32   frameCount
+//// )
+//// {
+////     auto* theremin = reinterpret_cast<Theremin*>(pDevice->pUserData);
+////     if (theremin != nullptr)
+////     {
+////         theremin->audio_data_callback(pDevice, pOutput, pInput, frameCount);
+////     }
+//// }
 
 } // anonymous namespace
 
 Theremin::Theremin()
-    : erhe::components::Component{c_name}
-    , Rendertarget_imgui_window  {c_description}
-    , m_audio_config             {}
-    , m_audio_device             {}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_description}
+    //// , m_audio_config             {}
+    //// , m_audio_device             {}
 {
 }
 
 Theremin::~Theremin()
 {
-    ma_device_uninit(&m_audio_device);
+    //// ma_device_uninit(&m_audio_device);
 }
 
 auto Theremin::description() -> const char*
@@ -168,37 +169,31 @@ auto Theremin::description() -> const char*
     return c_description.data();
 }
 
-void Theremin::connect()
+void Theremin::declare_required_components()
 {
-    m_hand_tracker      = require<Hand_tracker                        >();
-    m_headset_renderer  = get    <Headset_renderer                    >();
-    m_line_renderer_set = get    <erhe::application::Line_renderer_set>();
-    require<erhe::application::Imgui_windows>();
-    require<erhe::application::Tools>();
-    require<erhe::application::Gl_context_provider>();
-    require<Mesh_memory>();
-    require<Programs>();
+    m_hand_tracker = require<Hand_tracker>();
     require<Grid_tool>();
+    require<Tools>();
 }
 
 void Theremin::initialize_component()
 {
-    m_audio_config = ma_device_config_init(ma_device_type_playback);
-    m_audio_config.playback.format   = ma_format_f32;
-    m_audio_config.playback.channels = 1;
-    m_audio_config.sampleRate        = 48000;
-    m_audio_config.dataCallback      = miniaudio_data_callback;
-    m_audio_config.pUserData         = this;
-
-    if (ma_device_init(nullptr, &m_audio_config, &m_audio_device) == MA_SUCCESS)
-    {
-        m_audio_ok = true;
-    }
-
-    if (m_enable_audio && m_audio_ok)
-    {
-        ma_device_start(&m_audio_device);
-    }
+    //// m_audio_config = ma_device_config_init(ma_device_type_playback);
+    //// m_audio_config.playback.format   = ma_format_f32;
+    //// m_audio_config.playback.channels = 1;
+    //// m_audio_config.sampleRate        = 48000;
+    //// m_audio_config.dataCallback      = miniaudio_data_callback;
+    //// m_audio_config.pUserData         = this;
+    ////
+    //// if (ma_device_init(nullptr, &m_audio_config, &m_audio_device) == MA_SUCCESS)
+    //// {
+    ////     m_audio_ok = true;
+    //// }
+    ////
+    //// if (m_enable_audio && m_audio_ok)
+    //// {
+    ////     ma_device_start(&m_audio_device);
+    //// }
 
     update_grid_color();
 
@@ -208,29 +203,14 @@ void Theremin::initialize_component()
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
 
-    //create_gui_quad();
-
-    get<Editor_tools>()->register_background_tool(this);
+    get<Tools>()->register_background_tool(this);
 }
 
-void Theremin::create_gui_quad()
+void Theremin::post_initialize()
 {
-    const Scoped_gl_context gl_context{Component::get<erhe::application::Gl_context_provider>()};
-
-    auto rendertarget = get<erhe::application::Imgui_windows>()->create_rendertarget(
-        "Theremin",
-        1000,
-        1000,
-        1000.0
-    );
-    const auto placement = erhe::toolkit::create_look_at(
-        glm::vec3{0.5f, 1.0f, 1.0f},
-        glm::vec3{0.0f, 1.0f, 0.0f},
-        glm::vec3{0.0f, 1.0f, 0.0f}
-    );
-    rendertarget->mesh_node()->set_parent_from_node(placement);
-
-    rendertarget->register_imgui_window(this);
+    m_hand_tracker      = get<Hand_tracker                        >();
+    m_headset_renderer  = get<Headset_renderer                    >();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
 }
 
 void Theremin::set_antenna_distance(const float distance)
@@ -244,20 +224,20 @@ void Theremin::set_antenna_distance(const float distance)
     }
 }
 
-void Theremin::audio_data_callback(
-    ma_device*  pDevice,
-    void*       pOutput,
-    const void* pInput,
-    ma_uint32   frameCount
-)
-{
-    static_cast<void>(pDevice);
-    static_cast<void>(pInput);
-    auto* audio_out = reinterpret_cast<float*>(pOutput);
-    const float waveform_length_in_samples = static_cast<float>(m_audio_config.sampleRate) / m_frequency;
-    generate(audio_out, frameCount, waveform_length_in_samples, m_phase);
-    m_phase += static_cast<float>(frameCount) / waveform_length_in_samples;
-}
+//// void Theremin::audio_data_callback(
+////     ma_device*  pDevice,
+////     void*       pOutput,
+////     const void* pInput,
+////     ma_uint32   frameCount
+//// )
+//// {
+////     static_cast<void>(pDevice);
+////     static_cast<void>(pInput);
+////     auto* audio_out = reinterpret_cast<float*>(pOutput);
+////     const float waveform_length_in_samples = static_cast<float>(m_audio_config.sampleRate) / m_frequency;
+////     generate(audio_out, frameCount, waveform_length_in_samples, m_phase);
+////     m_phase += static_cast<float>(frameCount) / waveform_length_in_samples;
+//// }
 
 auto Theremin::normalized_finger_distance() const -> float
 {
@@ -313,7 +293,7 @@ void Theremin::update_grid_color() const
     }
 }
 
-void Theremin::tool_render(const erhe::application::Render_context& context)
+void Theremin::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 
@@ -340,7 +320,8 @@ void Theremin::tool_render(const erhe::application::Render_context& context)
     const glm::vec3 antenna_p0{0.0f, 0.0f, 0.0f};
     const glm::vec3 antenna_p1{0.0f, 2.0f, 0.0f};
     line_renderer.set_line_color(green);
-    line_renderer.add_lines( { { antenna_p0, antenna_p1 } }, 10.0f );
+    line_renderer.set_thickness(10.0f);
+    line_renderer.add_lines( { { antenna_p0, antenna_p1 } });
 
     m_left_finger_distance = left_hand.distance(
         XR_HAND_JOINT_THUMB_TIP_EXT,
@@ -419,7 +400,8 @@ void Theremin::tool_render(const erhe::application::Render_context& context)
             const auto  Q = closest_points.Q;
             const float d = glm::distance(P, Q);
             line_renderer.set_line_color(half_green);
-            line_renderer.add_lines( { { P, Q } }, 2.0f );
+            line_renderer.set_thickness(2.0f);
+            line_renderer.add_lines( { { P, Q } } );
             set_antenna_distance(d);
             for (
                 std::size_t i = Finger_name::thumb;
@@ -469,11 +451,11 @@ void Theremin::imgui()
         {
             if (m_enable_audio && m_audio_ok)
             {
-                ma_device_start(&m_audio_device);
+                //// ma_device_start(&m_audio_device);
             }
             else
             {
-                ma_device_stop(&m_audio_device);
+                //// ma_device_stop(&m_audio_device);
             }
         }
 

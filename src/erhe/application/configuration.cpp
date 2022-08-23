@@ -93,7 +93,7 @@ void ini_get(
 }
 
 Configuration::Configuration(int argc, char** argv)
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
     mINI::INIFile file("erhe.ini");
     mINI::INIStructure ini;

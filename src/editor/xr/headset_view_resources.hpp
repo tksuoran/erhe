@@ -22,6 +22,7 @@ namespace editor
 
 class Editor_rendering;
 class Headset_renderer;
+class Scene_root;
 
 class Headset_view_resources
 {
@@ -29,7 +30,7 @@ public:
     Headset_view_resources(
         erhe::xr::Render_view& render_view,
         Headset_renderer&      headset_renderer,
-        Editor_rendering&      rendering,
+        Scene_root&            scene_root,
         const std::size_t      slot
     );
 

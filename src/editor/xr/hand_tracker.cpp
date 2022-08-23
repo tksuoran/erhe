@@ -1,9 +1,8 @@
 #include "xr/hand_tracker.hpp"
-
-#include "renderers/line_renderer.hpp"
 #include "xr/headset_renderer.hpp"
+#include "tools/tools.hpp"
 
-#include "erhe/application/tools.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -300,7 +299,7 @@ void Hand::draw_joint_line_strip(
         line_renderer.add_lines(
             transform,
             {
-                {
+                erhe::application::Line4{
                     glm::vec4{
                         joint_a.location.pose.position.x,
                         joint_a.location.pose.position.y,
@@ -320,7 +319,7 @@ void Hand::draw_joint_line_strip(
 }
 
 Hand_tracker::Hand_tracker()
-    : erhe::components::Component{c_name}
+    : erhe::components::Component{c_type_name}
     , m_left_hand                {XR_HAND_LEFT_EXT}
     , m_right_hand               {XR_HAND_RIGHT_EXT}
 {
@@ -331,16 +330,20 @@ auto Hand_tracker::description() -> const char*
     return c_description.data();
 }
 
-void Hand_tracker::connect()
+void Hand_tracker::declare_required_components()
 {
-    m_headset_renderer  = get<Headset_renderer >();
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    require<erhe::application:Tools>();
+    require<Tools>();
 }
 
 void Hand_tracker::initialize_component()
 {
-    get<erhe::application::Tools>()->register_background_tool(this);
+    get<Tools>()->register_background_tool(this);
+}
+
+void Hand_tracker::post_initialize()
+{
+    m_headset_renderer  = get<Headset_renderer >();
+    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
 }
 
 void Hand_tracker::update(erhe::xr::Headset& headset)
@@ -378,7 +381,7 @@ void Hand_tracker::set_color(
     get_hand(hand_name).set_color(finger_name, color);
 }
 
-void Hand_tracker::tool_render(const erhe::application::Render_context& context)
+void Hand_tracker::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 

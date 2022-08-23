@@ -15,7 +15,7 @@
 #include "type_editors/terrain_replacement_rule_editor_window.hpp"
 #include "type_editors/unit_editor_window.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 
 #include <imgui.h>
@@ -25,8 +25,8 @@ namespace hextiles
 {
 
 Menu_window::Menu_window()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 

@@ -4,7 +4,7 @@
 namespace erhe::application {
 
 Application::Application()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

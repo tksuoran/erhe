@@ -72,7 +72,7 @@ void Component::depends_on(const std::shared_ptr<Component>& dependency)
     if (!dependency->is_registered())
     {
         log_components->error(
-            "Component {} dependency {} has not been registered as a Component\n",
+            "Component {} dependency {} has not been registered as a Component",
             name(),
             dependency->name()
         );
@@ -166,7 +166,7 @@ auto Component::is_ready_to_initialize(
     if (m_state != Component_state::Initialization_requirements_declared)
     {
         log_components->trace(
-            "{} is not ready to initialize: state {} is not Connected\n",
+            "{} is not ready to initialize: state {} is not Connected",
             name(),
             c_str(m_state)
         );
@@ -183,14 +183,14 @@ auto Component::is_ready_to_initialize(
     if (!is_ready)
     {
         log_components->trace(
-            "{} is not ready: requires main thread = {}, dependencies:\n",
+            "{} is not ready: requires main thread = {}, dependencies:",
             name(),
             processing_requires_main_thread()
         );
         for (const auto& component : m_dependencies)
         {
             log_components->trace(
-                "    {}: {}\n",
+                "    {}: {}",
                 component->name(),
                 c_str(component->get_state())
             );
@@ -204,7 +204,7 @@ auto Component::is_ready_to_deinitialize() const -> bool
     if (m_state != Component_state::Ready)
     {
         log_components->trace(
-            "{} is not ready to initialize: state {} is not Ready\n",
+            "{} is not ready to initialize: state {} is not Ready",
             name(),
             c_str(m_state)
         );

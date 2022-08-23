@@ -10,11 +10,11 @@ class Application
     , public std::enable_shared_from_this<Application>
 {
 public:
-    static constexpr std::string_view c_label{"Application"};
-    static constexpr uint32_t hash{
+    static constexpr std::string_view c_type_name{"Application"};
+    static constexpr uint32_t c_type_hash{
         compiletime_xxhash::xxh32(
-            c_label.data(),
-            c_label.size(),
+            c_type_name.data(),
+            c_type_name.size(),
             {}
         )
     };
@@ -23,7 +23,7 @@ public:
     ~Application() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
 
     auto initialize_components(int argc, char** argv) -> bool;
     void run();

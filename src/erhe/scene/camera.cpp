@@ -84,6 +84,16 @@ void Camera::set_exposure(const float value)
     m_exposure = value;
 }
 
+auto Camera::get_shadow_range() const -> float
+{
+    return m_shadow_range;
+}
+
+void Camera::set_shadow_range(const float value)
+{
+    m_shadow_range = value;
+}
+
 auto Camera::projection() -> Projection*
 {
     return &m_projection;

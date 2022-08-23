@@ -6,7 +6,7 @@ namespace editor
 {
 
 Editor_scenes::Editor_scenes()
-    : Component{c_label}
+    : Component{c_type_name}
 {
 }
 

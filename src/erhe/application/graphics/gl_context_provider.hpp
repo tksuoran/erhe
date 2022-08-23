@@ -35,8 +35,8 @@ class Gl_context_provider
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_label{"Gl_context_provider"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"Gl_context_provider"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Gl_context_provider ();
     ~Gl_context_provider() noexcept override;
@@ -46,7 +46,7 @@ public:
     void operator=      (Gl_context_provider&&)      = delete;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
 
     // Public API
     [[nodiscard]] auto acquire_gl_context() -> Gl_worker_context;

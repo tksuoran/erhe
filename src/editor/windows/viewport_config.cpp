@@ -3,8 +3,8 @@
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -15,8 +15,8 @@ namespace editor
 {
 
 Viewport_config::Viewport_config()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
 {
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     render_style_not_selected.edge_lines = false;

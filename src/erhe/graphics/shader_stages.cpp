@@ -20,7 +20,7 @@ auto Shader_stages::format(const string& source) -> string
     const char* head = source.c_str();
 
     std::stringstream sb;
-    sb << fmt::format("{:>3}", line);
+    sb << fmt::format("{:>3}: ", line);
 
     for (;;)
     {

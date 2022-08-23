@@ -1,6 +1,7 @@
 #include "erhe/xr/xr_instance.hpp"
 #include "erhe/xr/xr_session.hpp"
 #include "erhe/xr/xr.hpp"
+#include "erhe/xr/xr_log.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #ifdef _WIN32
@@ -88,8 +89,8 @@ auto Xr_instance::debug_utils_messenger_callback(
     const XrDebugUtilsMessengerCallbackDataEXT* callbackData
 ) const -> XrBool32
 {
-    log_xr.info(
-        "XR: S:{} T:{} I:{} M:{}\n",
+    log_xr->info(
+        "XR: S:{} T:{} I:{} M:{}",
         to_string_message_severity(messageSeverity),
         to_string_message_type(messageTypes),
         callbackData->messageId,
@@ -98,12 +99,12 @@ auto Xr_instance::debug_utils_messenger_callback(
 
     if (callbackData->objectCount > 0)
     {
-        log_xr.info("Objects:\n");
-        const erhe::log::Indenter scope_indent;
+        log_xr->info("Objects:");
+        //const erhe::log::Indenter scope_indent;
         for (uint32_t i = 0; i < callbackData->objectCount; ++i)
         {
-            log_xr.info(
-                "{} {} {}\n",
+            log_xr->info(
+                "{} {} {}",
                 c_str(callbackData->objects[i].objectType),
                 callbackData->objects[i].objectHandle,
                 callbackData->objects[i].objectName
@@ -113,11 +114,10 @@ auto Xr_instance::debug_utils_messenger_callback(
 
     if (callbackData->sessionLabelCount > 0)
     {
-        log_xr.info("Session labels:\n");
-        const erhe::log::Indenter scope_indent;
+        log_xr->info("Session labels:");
         for (uint32_t i = 0; i < callbackData->sessionLabelCount; ++i)
         {
-            log_xr.info("{}\n", callbackData->sessionLabels[i].labelName);
+            log_xr->info("    {}", callbackData->sessionLabels[i].labelName);
         }
     }
 
@@ -128,7 +128,7 @@ auto Xr_instance::create_instance() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     const char* const required_extensions[] = {
         XR_EXT_DEBUG_UTILS_EXTENSION_NAME,
@@ -261,7 +261,7 @@ auto Xr_instance::enumerate_layers() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     uint32_t count{0};
     ERHE_XR_CHECK(xrEnumerateApiLayerProperties(0, &count, nullptr));
@@ -279,11 +279,11 @@ auto Xr_instance::enumerate_layers() -> bool
     }
     ERHE_XR_CHECK(xrEnumerateApiLayerProperties(count, &count, m_xr_api_layer_properties.data()));
 
-    log_xr.info("OpenXR API Layer Properties:\n");
+    log_xr->info("OpenXR API Layer Properties:");
     for (const auto& api_layer : m_xr_api_layer_properties)
     {
-        log_xr.info(
-            "    {} layer version {} spec version\n",
+        log_xr->info(
+            "    {} layer version {} spec version",
             api_layer.layerName,
             api_layer.layerVersion,
             api_layer.specVersion
@@ -296,7 +296,7 @@ auto Xr_instance::enumerate_extensions() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     uint32_t instance_extension_count{0};
     //const auto res = xrEnumerateInstanceExtensionProperties(nullptr,
@@ -335,10 +335,10 @@ auto Xr_instance::enumerate_extensions() -> bool
         )
     );
 
-    log_xr.info("Supported extensions:\n");
+    log_xr->info("Supported extensions:");
     for (const auto& extension : m_xr_extensions)
     {
-        log_xr.info("    {}, {}\n", extension.extensionName, extension.extensionVersion);
+        log_xr->info("    {}, {}", extension.extensionName, extension.extensionVersion);
     }
 
     return true;
@@ -348,7 +348,7 @@ auto Xr_instance::get_system_info() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     m_xr_system_info.type       = XR_TYPE_SYSTEM_GET_INFO;
     m_xr_system_info.next       = nullptr;
@@ -371,14 +371,14 @@ auto Xr_instance::get_system_info() -> bool
 
     if (system_hand_tracking_properties.supportsHandTracking)
     {
-        log_xr.info("Hand tracking is supported\n");
+        log_xr->info("Hand tracking is supported");
         xrCreateHandTrackerEXT  = reinterpret_cast<PFN_xrCreateHandTrackerEXT >(get_proc_addr("xrCreateHandTrackerEXT" ));
         xrDestroyHandTrackerEXT = reinterpret_cast<PFN_xrDestroyHandTrackerEXT>(get_proc_addr("xrDestroyHandTrackerEXT"));
         xrLocateHandJointsEXT   = reinterpret_cast<PFN_xrLocateHandJointsEXT  >(get_proc_addr("xrLocateHandJointsEXT"  ));
     }
     else
     {
-        log_xr.info("Hand tracking is not supported\n");
+        log_xr->info("Hand tracking is not supported");
     }
 
     return true;
@@ -425,7 +425,7 @@ auto Xr_instance::enumerate_blend_modes() -> bool
     );
     if (environment_blend_mode_count == 0)
     {
-        log_xr.error("xrEnumerateEnvironmentBlendModes() returned 0 environment blend modes\n");
+        log_xr->error("xrEnumerateEnvironmentBlendModes() returned 0 environment blend modes");
         return false;
     }
 
@@ -453,7 +453,7 @@ auto Xr_instance::enumerate_blend_modes() -> bool
         }
     }
 
-    log_xr.info("Selected environment blend mode: {}\n", c_str(m_xr_environment_blend_mode));
+    log_xr->info("Selected environment blend mode: {}", c_str(m_xr_environment_blend_mode));
     return true;
 }
 
@@ -461,7 +461,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     uint32_t view_configuration_type_count;
     ERHE_XR_CHECK(
@@ -490,7 +490,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
         )
     );
 
-    log_xr.info("View configuration types:\n");
+    log_xr->info("View configuration types:");
     int best_score{0};
     m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
     //bool primary_stereo_supported{false};
@@ -510,11 +510,11 @@ auto Xr_instance::enumerate_view_configurations() -> bool
         );
         if (result != XR_SUCCESS)
         {
-            log_xr.info("    {} is not ok\n", c_str(view_configuration_type));
+            log_xr->info("    {} is not ok", c_str(view_configuration_type));
             continue;
         }
 
-        log_xr.info("    {}\n", c_str(view_configuration_type));
+        log_xr->info("    {}", c_str(view_configuration_type));
         const int type_score = score(view_configuration_type);
         if (type_score > best_score)
         {
@@ -532,14 +532,14 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     }
     if (best_score == 0)
     {
-        log_xr.error("No working view configuration types found\n");
+        log_xr->error("No working view configuration types found");
         return false;
     }
     //if (primary_stereo_supported)
     //{
     //    m_xr_view_configuration_type = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     //}
-    log_xr.info("Selected view configuration type: {}\n", c_str(m_xr_view_configuration_type));
+    log_xr->info("Selected view configuration type: {}", c_str(m_xr_view_configuration_type));
 
     uint32_t view_count{0};
 
@@ -555,7 +555,7 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     );
     if (view_count == 0)
     {
-        log_xr.error("xrEnumerateViewConfigurationViews() returned 0 views\n");
+        log_xr->error("xrEnumerateViewConfigurationViews() returned 0 views");
         return false;
     }
 
@@ -584,12 +584,12 @@ auto Xr_instance::enumerate_view_configurations() -> bool
         )
     );
 
-    log_xr.info("View configuration views:\n");
+    log_xr->info("View configuration views:");
     std::size_t index = 0;
     for (const auto& view_configuration_view : m_xr_view_configuration_views)
     {
-        log_xr.info(
-            "    View {}: Size recommended = {} x {}, Max = {} x {}, sample count = {}, image count recommended = {}, max = {}\n",
+        log_xr->info(
+            "    View {}: Size recommended = {} x {}, Max = {} x {}, sample count = {}, image count recommended = {}, max = {}",
             index++,
             view_configuration_view.recommendedImageRectWidth,
             view_configuration_view.recommendedImageRectHeight,
@@ -1051,7 +1051,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
 
             default:
             {
-                log_xr.error("xrSyncActions() returned error {}\n", c_str(result));
+                log_xr->error("xrSyncActions() returned error {}", c_str(result));
                 return false;
             }
         }
@@ -1164,7 +1164,7 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 
     if (interation_profile_state.interactionProfile == XR_NULL_PATH)
     {
-        log_xr.info("Current interaction profile: <nothing>");
+        log_xr->info("Current interaction profile: <nothing>");
         return true;
     }
 
@@ -1180,7 +1180,7 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
         )
     );
 
-    log_xr.info("Current interaction profile: {}", profile_name.data());
+    log_xr->info("Current interaction profile: {}", profile_name.data());
     return true;
 }
 
@@ -1194,7 +1194,7 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
         const auto result = xrPollEvent(m_xr_instance, &buffer);
         if (result == XR_SUCCESS)
         {
-            log_xr.trace("XR event {}\n", c_str(buffer.type));
+            log_xr->trace("XR event {}", c_str(buffer.type));
 
             if (buffer.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED)
             {
@@ -1212,7 +1212,7 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
             break;
         }
 
-        log_xr.error("xrPollEvent() returned error {}\n", result);
+        log_xr->error("xrPollEvent() returned error {}", c_str(result));
         return false;
     }
 

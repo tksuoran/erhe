@@ -92,6 +92,14 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+FetchContent_Declare(
+    glslang
+    GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+    GIT_TAG        origin/master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
 #FetchContent_Declare(
 #    glTF-SDK
 #    GIT_REPOSITORY https://github.com/microsoft/glTF-SDK.git
@@ -187,7 +195,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     OpenXR-SDK
     GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
-    GIT_TAG        origin/master
+    GIT_TAG        origin/main
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

@@ -12,15 +12,15 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
@@ -149,8 +149,8 @@ void Trs_tool_hover_command::on_inactive(
 }
 
 Trs_tool::Trs_tool()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
     , m_drag_command             {*this}
     , m_hover_command            {*this}
     , m_visualization            {*this}
@@ -596,6 +596,89 @@ void Trs_tool::Visualization::initialize(
     update_visibility(false);
 }
 
+void Trs_tool::set_local(const bool local)
+{
+    m_local = local;
+    m_visualization.local = local;
+}
+
+void Trs_tool::viewport_toolbar()
+{
+    ImGui::SameLine();
+    const auto local_pressed = erhe::application::make_button(
+        "L",
+        m_local
+            ? erhe::application::Item_mode::active
+            : erhe::application::Item_mode::normal
+    );
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Transform in Local space");
+    }
+    if (local_pressed)
+    {
+        set_local(true);
+    }
+
+    ImGui::SameLine();
+    const auto global_pressed = erhe::application::make_button(
+        "W",
+        (!m_local)
+            ? erhe::application::Item_mode::active
+            : erhe::application::Item_mode::normal
+    );
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Transform in World space");
+    }
+    if (global_pressed)
+    {
+        set_local(false);
+    }
+
+    ImGui::SameLine();
+    const auto translate_pressed = erhe::application::make_button(
+        "T",
+        (m_visualization.show_translate)
+            ? erhe::application::Item_mode::active
+            : erhe::application::Item_mode::normal
+    );
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(
+            m_visualization.show_translate
+                ? "Hide Translate Tool"
+                : "Show Translate Tool"
+        );
+    }
+    if (translate_pressed)
+    {
+        m_visualization.show_translate = !m_visualization.show_translate;
+        update_visibility();
+    }
+
+    ImGui::SameLine();
+    const auto rotate_pressed = erhe::application::make_button(
+        "R",
+        (m_visualization.show_rotate)
+            ? erhe::application::Item_mode::active
+            : erhe::application::Item_mode::normal
+    );
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(
+            m_visualization.show_rotate
+                ? "Hide Rotate Tool"
+                : "Show Rotate Tool"
+        );
+    }
+    if (rotate_pressed)
+    {
+        m_visualization.show_rotate = !m_visualization.show_rotate;
+        update_visibility();
+    }
+}
+
 void Trs_tool::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -611,10 +694,9 @@ void Trs_tool::imgui()
                 : erhe::application::Item_mode::normal,
             button_size
         )
-        )
+    )
     {
-        m_local = true;
-        m_visualization.local = true;
+        set_local(true);
     }
     if (
         erhe::application::make_button(
@@ -626,8 +708,7 @@ void Trs_tool::imgui()
         )
     )
     {
-        m_local = false;
-        m_visualization.local = false;
+        set_local(false);
     }
 
     ImGui::SliderFloat("Scale", &m_visualization.scale, 1.0f, 10.0f);

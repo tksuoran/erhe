@@ -5,6 +5,7 @@
 #include "erhe/toolkit/window.hpp"
 #include "erhe/xr/xr_instance.hpp"
 #include "erhe/xr/xr.hpp"
+#include "erhe/xr/xr_log.hpp"
 #include "erhe/xr/xr_swapchain_image.hpp"
 
 #ifdef _WIN32
@@ -63,11 +64,11 @@ Xr_session::Xr_session(
 {
     ERHE_PROFILE_FUNCTION
 
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     if (instance.get_xr_instance() == XR_NULL_HANDLE)
     {
-        log_xr.error("No XR Instance\n");
+        log_xr->error("No XR Instance");
         return;
     }
 
@@ -111,7 +112,7 @@ auto Xr_session::create_session() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     const auto xr_instance = m_instance.get_xr_instance();
     ERHE_VERIFY(xr_instance != XR_NULL_HANDLE);
@@ -132,7 +133,7 @@ auto Xr_session::create_session() -> bool
     GLFWwindow* const glfw_window = m_context_window.get_glfw_window();
     if (glfw_window == nullptr)
     {
-        log_xr.error("No GLFW window\n");
+        log_xr->error("No GLFW window");
         return false;
     }
 
@@ -162,7 +163,7 @@ auto Xr_session::create_session() -> bool
 
     if (m_xr_session == XR_NULL_HANDLE)
     {
-        log_xr.error("xrCreateSession() created XR_NULL_HANDLE session\n");
+        log_xr->error("xrCreateSession() created XR_NULL_HANDLE session");
         return false;
     }
 
@@ -171,7 +172,7 @@ auto Xr_session::create_session() -> bool
 
 Xr_session::~Xr_session()
 {
-    log_xr.trace("{}\n", __func__);
+    log_xr->trace("{}", __func__);
 
     if (m_instance.xrDestroyHandTrackerEXT != nullptr)
     {
@@ -251,13 +252,13 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
         )
     );
 
-    log_xr.info("Swapchain formats:\n");
+    log_xr->info("Swapchain formats:");
     int best_color_format_score{0};
     m_swapchain_color_format = gl::Internal_format::srgb8_alpha8;
     for (const auto swapchain_format : swapchain_formats)
     {
         const auto gl_internal_format = static_cast<gl::Internal_format>(swapchain_format);
-        log_xr.info("    {}\n", gl::c_str(gl_internal_format));
+        log_xr->info("    {}", gl::c_str(gl_internal_format));
         const int color_score = color_format_score(gl_internal_format);
         if (color_score > best_color_format_score)
         {
@@ -265,7 +266,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
             m_swapchain_color_format = gl_internal_format;
         }
     }
-    log_xr.info("Selected swapchain color format {}\n", gl::c_str(m_swapchain_color_format));
+    log_xr->info("Selected swapchain color format {}", gl::c_str(m_swapchain_color_format));
 
     return true;
 }
@@ -298,10 +299,10 @@ auto Xr_session::enumerate_reference_spaces() -> bool
             m_xr_reference_space_types.data()
         )
     );
-    log_xr.info("Reference space types:\n");
+    log_xr->info("Reference space types:");
     for (const auto reference_space_type : m_xr_reference_space_types)
     {
-        log_xr.info("    {}\n", c_str(reference_space_type));
+        log_xr->info("    {}", c_str(reference_space_type));
     }
 
     return true;
@@ -564,19 +565,22 @@ void Xr_session::update_hand_tracking()
     m_instance.xrLocateHandJointsEXT(m_hand_tracker_left.hand_tracker, &leftHandJointsLocateInfo, &leftHandLocations);
     m_instance.xrLocateHandJointsEXT(m_hand_tracker_right.hand_tracker, &leftHandJointsLocateInfo/*rightHandJointsLocateInfo*/, &rightHandLocations);
 
-    if (leftHandLocations.isActive) {
-        printf("Left hand is active\n");
-        printf("Left hand wrist position tracked=%s, rotation tracked=%s\n",
+    if (leftHandLocations.isActive)
+    {
+        log_xr->trace("Left hand is active");
+        log_xr->trace("Left hand wrist position tracked=%s, rotation tracked=%s",
             (leftHandLocation[XR_HAND_JOINT_WRIST_EXT].locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT ? "true" : "false"),
             (leftHandLocation[XR_HAND_JOINT_WRIST_EXT].locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT ? "true" : "false"));
-        printf(
-            "Left hand wrist position = %f, %f, %f\n",
+        log_xr->trace(
+            "Left hand wrist position = %f, %f, %f",
             leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.x,
             leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.y,
             leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.z
         );
-    } else {
-        printf("Left hand *Not* tracked\n");
+    }
+    else
+    {
+        log_xr->trace("Left hand *Not* tracked");
     }
 
 #endif
@@ -649,15 +653,15 @@ auto Xr_session::begin_frame() -> bool
         }
         if (result == XR_SESSION_LOSS_PENDING)
         {
-            log_xr.error("TODO Handle XR_SESSION_LOSS_PENDING\n");
+            log_xr->error("TODO Handle XR_SESSION_LOSS_PENDING");
             return false;
         }
         if (result == XR_FRAME_DISCARDED)
         {
-            log_xr.warn("TODO Handle XR_FRAME_DISCARDED\n");
+            log_xr->warn("TODO Handle XR_FRAME_DISCARDED");
             return true;
         }
-        log_xr.error("xrBeginFrame() returned error {}\n", c_str(result));
+        log_xr->error("xrBeginFrame() returned error {}", c_str(result));
         return false;
     }
 }
@@ -691,12 +695,12 @@ auto Xr_session::wait_frame() -> XrFrameState*
         }
         else if (result == XR_SESSION_LOSS_PENDING)
         {
-            log_xr.error("TODO Handle XR_SESSION_LOSS_PENDING\n");
+            log_xr->error("TODO Handle XR_SESSION_LOSS_PENDING");
             return nullptr;
         }
         else
         {
-            log_xr.error("xrWaitFrame() returned error {}\n", c_str(result));
+            log_xr->error("xrWaitFrame() returned error {}", c_str(result));
             return nullptr;
         }
     }

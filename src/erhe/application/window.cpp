@@ -17,18 +17,13 @@
 #   include <GLFW/glfw3.h>
 #endif
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include <openxr/openxr.h>
-#endif
-
-
 namespace erhe::application {
 
 using std::shared_ptr;
 using View = erhe::toolkit::View;
 
 Window::Window()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

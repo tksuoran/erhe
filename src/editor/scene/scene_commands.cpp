@@ -36,7 +36,7 @@ auto Create_new_light_command::try_call(
 }
 
 Scene_commands::Scene_commands()
-    : erhe::components::Component    {c_label}
+    : erhe::components::Component    {c_type_name}
     , m_create_new_camera_command    {*this}
     , m_create_new_empty_node_command{*this}
     , m_create_new_light_command     {*this}

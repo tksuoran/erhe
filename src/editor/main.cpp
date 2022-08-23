@@ -8,13 +8,16 @@
 #include "erhe/geometry/geometry_log.hpp"
 #include "erhe/gl/gl_log.hpp"
 #include "erhe/graphics/graphics_log.hpp"
+#include "erhe/log/log.hpp"
 #include "erhe/physics/physics_log.hpp"
 #include "erhe/primitive/primitive_log.hpp"
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/toolkit/toolkit_log.hpp"
 #include "erhe/ui/ui_log.hpp"
-#include "erhe/log/log.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#include "erhe/xr/xr_log.hpp"
+#endif
 
 
 #if defined(ERHE_PROFILE_LIBRARY_SUPERLUMINAL) && defined(_WIN32)
@@ -58,6 +61,9 @@ auto main(int argc, char** argv) -> int
     erhe::scene::initialize_logging();
     erhe::toolkit::initialize_logging();
     erhe::ui::initialize_logging();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::xr::initialize_logging();
+#endif
 
     editor::initialize_logging();
 

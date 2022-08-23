@@ -16,6 +16,7 @@ std::shared_ptr<spdlog::logger> log_node_properties;
 std::shared_ptr<spdlog::logger> log_parsers;
 std::shared_ptr<spdlog::logger> log_physics;
 std::shared_ptr<spdlog::logger> log_pointer;
+std::shared_ptr<spdlog::logger> log_post_processing;
 std::shared_ptr<spdlog::logger> log_programs;
 std::shared_ptr<spdlog::logger> log_raytrace;
 std::shared_ptr<spdlog::logger> log_render;
@@ -25,6 +26,7 @@ std::shared_ptr<spdlog::logger> log_svg;
 std::shared_ptr<spdlog::logger> log_textures;
 std::shared_ptr<spdlog::logger> log_trs_tool;
 std::shared_ptr<spdlog::logger> log_rendertarget_imgui_windows;
+std::shared_ptr<spdlog::logger> log_xr;
 
 void initialize_logging()
 {
@@ -41,6 +43,7 @@ void initialize_logging()
     log_parsers                    = erhe::log::make_logger("editor::parsers"                   , spdlog::level::info);
     log_physics                    = erhe::log::make_logger("editor::physics"                   , spdlog::level::info);
     log_pointer                    = erhe::log::make_logger("editor::pointer"                   , spdlog::level::info, false);
+    log_post_processing            = erhe::log::make_logger("editor::post_processing"           , spdlog::level::info, false);
     log_programs                   = erhe::log::make_logger("editor::programs"                  , spdlog::level::info);
     log_raytrace                   = erhe::log::make_logger("editor::raytrace"                  , spdlog::level::warn);
     log_render                     = erhe::log::make_logger("editor::render"                    , spdlog::level::info, false);
@@ -50,6 +53,7 @@ void initialize_logging()
     log_textures                   = erhe::log::make_logger("editor::textures"                  , spdlog::level::info);
     log_trs_tool                   = erhe::log::make_logger("editor::trs_tool"                  , spdlog::level::info);
     log_rendertarget_imgui_windows = erhe::log::make_logger("editor::rendertarget_imgui_windows", spdlog::level::info, false);
+    log_xr                         = erhe::log::make_logger("editor::xr"                        , spdlog::level::info);
 }
 
 }

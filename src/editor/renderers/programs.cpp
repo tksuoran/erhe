@@ -20,7 +20,7 @@ namespace editor {
 using erhe::graphics::Shader_stages;
 
 Programs::Programs()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

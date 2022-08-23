@@ -53,10 +53,6 @@ public:
 
     explicit Texture(const Create_info& create_info);
     ~Texture        () noexcept;
-    Texture         (const Texture&) = delete;
-    void operator=  (const Texture&) = delete;
-    Texture         (Texture&& other) noexcept;
-    auto operator=  (Texture&& other) noexcept -> Texture&;
 
     void upload(
         const gl::Internal_format internal_format,
@@ -95,6 +91,7 @@ public:
     [[nodiscard]] auto debug_label         () const -> const std::string&;
     [[nodiscard]] auto width               () const -> int;
     [[nodiscard]] auto height              () const -> int;
+    [[nodiscard]] auto internal_format     () const -> gl::Internal_format;
     [[nodiscard]] auto depth               () const -> int;
     [[nodiscard]] auto sample_count        () const -> int;
     [[nodiscard]] auto target              () const -> gl::Texture_target;
@@ -160,6 +157,8 @@ public:
 class Texture_unit_cache
 {
 public:
+    Texture_unit_cache();
+
     void reset(unsigned int base_texture_unit);
     auto allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>;
 

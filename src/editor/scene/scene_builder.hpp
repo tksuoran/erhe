@@ -55,18 +55,19 @@ class Scene_builder
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_label{"Scene_builder"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"Scene_builder"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Scene_builder ();
     ~Scene_builder() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
 
     // Public API
+    void add_rendertarget_viewports();
     [[nodiscard]] auto get_scene_root             () const -> std::shared_ptr<Scene_root>;
     [[nodiscard]] auto get_primary_viewport_window() const -> std::shared_ptr<Viewport_window>;
 

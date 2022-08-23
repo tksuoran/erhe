@@ -36,10 +36,13 @@ public:
     [[nodiscard]] auto projection_transforms(const Viewport& viewport) const -> Camera_projection_transforms;
     [[nodiscard]] auto get_exposure         () const -> float;
     void set_exposure(const float value);
+    [[nodiscard]] auto get_shadow_range     () const -> float;
+    void set_shadow_range(const float value);
 
 private:
     Projection m_projection;
-    float      m_exposure{1.0f};
+    float      m_exposure    {1.0f};
+    float      m_shadow_range{30.0f};
 };
 
 [[nodiscard]] auto is_camera(const Node* const node) -> bool;

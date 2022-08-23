@@ -57,8 +57,6 @@ erhe_target_sources_grouped(
     renderers/material_buffer.hpp
     renderers/mesh_memory.cpp
     renderers/mesh_memory.hpp
-    renderers/post_processing.cpp
-    renderers/post_processing.hpp
     renderers/primitive_buffer.cpp
     renderers/primitive_buffer.hpp
     renderers/program_interface.cpp
@@ -67,6 +65,9 @@ erhe_target_sources_grouped(
     renderers/programs.hpp
     renderers/shadow_renderer.cpp
     renderers/shadow_renderer.hpp
+
+    rendergraph/post_processing.cpp
+    rendergraph/post_processing.hpp
 
     scene/brush.cpp
     scene/brush.hpp
@@ -88,6 +89,10 @@ erhe_target_sources_grouped(
     scene/scene_commands.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
+    scene/viewport_window.cpp
+    scene/viewport_window.hpp
+    scene/viewport_windows.cpp
+    scene/viewport_windows.hpp
 
     tools/debug_visualizations.cpp
     tools/debug_visualizations.hpp
@@ -114,6 +119,8 @@ erhe_target_sources_grouped(
     windows/brushes.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
+    windows/imgui_viewport_window.cpp
+    windows/imgui_viewport_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
     windows/materials_window.cpp
@@ -128,18 +135,18 @@ erhe_target_sources_grouped(
     windows/node_tree_window.hpp
     windows/operations.cpp
     windows/operations.hpp
+    windows/post_processing_window.cpp
+    windows/post_processing_window.hpp
     windows/physics_window.cpp
     windows/physics_window.hpp
-    windows/render_graph_window.cpp
-    windows/render_graph_window.hpp
+    windows/rendergraph_window.cpp
+    windows/rendergraph_window.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
     windows/viewport_config.cpp
     windows/viewport_config.hpp
-    windows/viewport_window.cpp
-    windows/viewport_window.hpp
-    windows/viewport_windows.cpp
-    windows/viewport_windows.hpp
+    # windows/viewport_windows.cpp
+    # windows/viewport_windows.hpp
 
     editor_log.cpp
     editor_log.hpp
@@ -210,7 +217,7 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
 endif ()
 
 
-if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
+if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
         xr/controller_visualization.cpp
@@ -260,7 +267,7 @@ if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
 endif ()
 
-if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
+if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
 

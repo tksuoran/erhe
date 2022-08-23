@@ -2,7 +2,7 @@
 
 #include "coordinate.hpp"
 
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <string>
@@ -20,15 +20,15 @@ class Map_tool_window
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_label{"Map_tool"};
+    static constexpr std::string_view c_type_name{"Map_tool"};
     static constexpr std::string_view c_title{"Map Tool"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Map_tool_window ();
     ~Map_tool_window() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;

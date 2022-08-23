@@ -11,7 +11,7 @@ class Gl_texture final
 {
 public:
     explicit Gl_texture(gl::Texture_target target);
-    explicit Gl_texture(gl::Texture_target target, GLuint wrap_name);
+    Gl_texture(gl::Texture_target target, GLuint wrap_name);
     ~Gl_texture        () noexcept;
     Gl_texture         (const Gl_texture&) = delete;
     void operator=     (const Gl_texture&) = delete;

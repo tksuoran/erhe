@@ -8,11 +8,11 @@
 #include "tile_renderer.hpp"
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -103,8 +103,8 @@ auto Map_grid_cycle_command::try_call(erhe::application::Command_context& contex
 
 
 Map_window::Map_window()
-    : erhe::components::Component{c_label}
-    , Framebuffer_window         {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Framebuffer_window         {c_title, c_type_name}
     , m_free_zoom_command        {*this}
     , m_mouse_scroll_command     {*this}
     , m_scroll_left_command      {*this, -4.0f,  0.0f }

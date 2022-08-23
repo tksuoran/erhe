@@ -9,6 +9,8 @@
 // Result at Compiler Explorer
 // https://godbolt.org/z/bGv7Mh
 
+#pragma once
+
 #include <cstdio>  // printf()
 #include <cstdint> // uint8_t, uint32_t
 #include <limits.h>

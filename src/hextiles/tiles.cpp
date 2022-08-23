@@ -16,7 +16,7 @@ namespace hextiles
 {
 
 Tiles::Tiles()
-    : Component{c_label}
+    : Component{c_type_name}
 {
 }
 

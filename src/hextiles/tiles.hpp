@@ -17,14 +17,14 @@ class Tiles
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_label{"Tiles"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"Tiles"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Tiles ();
     ~Tiles() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void initialize_component() override;
 
     // Public API

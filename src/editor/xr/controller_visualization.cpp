@@ -1,4 +1,5 @@
 #include "xr/controller_visualization.hpp"
+#include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 #include "renderers/mesh_memory.hpp"
 
@@ -18,7 +19,7 @@ Controller_visualization::Controller_visualization(
     erhe::scene::Node* view_root
 )
 {
-    auto controller_material = scene_root.make_material("Controller", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
+    auto controller_material = scene_root.material_library()->make_material("Controller", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
     //constexpr float length = 0.05f;
     //constexpr float radius = 0.02f;
     auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 22, 8);
@@ -39,7 +40,7 @@ Controller_visualization::Controller_visualization(
     view_root->attach(m_controller_mesh);
     scene_root.add(
         m_controller_mesh,
-        scene_root.controller_layer()
+        scene_root.layers().controller()
     );
 }
 

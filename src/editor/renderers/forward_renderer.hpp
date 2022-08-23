@@ -55,14 +55,14 @@ class Forward_renderer
 public:
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
-    static constexpr std::string_view c_label{"Forward_renderer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"Forward_renderer"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Forward_renderer ();
     ~Forward_renderer() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
@@ -71,17 +71,18 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::scene::Viewport&                                       viewport;
+        const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};
+        const Light_projections*                                           light_projections{nullptr};
+        const gsl::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
+        const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
         const std::initializer_list<
             const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
-        const gsl::span<const std::shared_ptr<erhe::scene::Light>>&        lights;
-        const Light_projections&                                           light_projections;
-        const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
         const std::initializer_list<Renderpass* const>                     passes;
+        const erhe::graphics::Texture*                                     shadow_texture   {nullptr};
+        const erhe::scene::Viewport&                                       viewport;
         const erhe::scene::Visibility_filter                               visibility_filter{};
-        const glm::vec3                                                    ambient_light    {0.0f};
     };
 
     void render(const Render_parameters& parameters);

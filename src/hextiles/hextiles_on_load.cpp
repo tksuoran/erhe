@@ -20,14 +20,14 @@
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/render_graph.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/windows/log_window.hpp"
@@ -72,7 +72,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<erhe::application::Imgui_renderer    >());
         m_components.add(make_shared<erhe::application::Performance_window>());
         m_components.add(make_shared<erhe::application::Pipelines         >());
-        m_components.add(make_shared<erhe::application::Render_graph      >());
+        m_components.add(make_shared<erhe::application::Rendergraph      >());
         m_components.add(make_shared<erhe::application::Shader_monitor    >());
         m_components.add(make_shared<erhe::application::Text_renderer     >());
         m_components.add(make_shared<erhe::graphics::OpenGL_state_tracker >());

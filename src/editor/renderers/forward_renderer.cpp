@@ -42,7 +42,7 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 Forward_renderer::Forward_renderer()
-    : Component{c_label}
+    : Component{c_type_name}
 {
 }
 
@@ -112,18 +112,22 @@ void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto&    viewport              = parameters.viewport;
-    const auto*    camera                = parameters.camera;
-    const auto&    mesh_spans            = parameters.mesh_spans;
-    const auto&    lights                = parameters.lights;
-    const auto&    materials             = parameters.materials;
-    const auto&    passes                = parameters.passes;
-    const auto&    visibility_filter     = parameters.visibility_filter;
-    const bool     enable_shadows        = m_shadow_renderer && (!lights.empty());
+    const auto& viewport          = parameters.viewport;
+    const auto* camera            = parameters.camera;
+    const auto& mesh_spans        = parameters.mesh_spans;
+    const auto& lights            = parameters.lights;
+    const auto& materials         = parameters.materials;
+    const auto& passes            = parameters.passes;
+    const auto& visibility_filter = parameters.visibility_filter;
+    const bool  enable_shadows    =
+        m_shadow_renderer &&
+        (!lights.empty()) &&
+        (parameters.shadow_texture != nullptr);
+
     const uint64_t shadow_texture_handle = enable_shadows
         ?
             erhe::graphics::get_handle(
-                *m_shadow_renderer->texture(),
+                *parameters.shadow_texture,
                 *m_programs->nearest_sampler.get()
             )
         : 0;
@@ -149,7 +153,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     if (!lights.empty())
     {
-        m_light_buffers->update(lights, parameters.light_projections, parameters.ambient_light);
+        m_light_buffers->update(
+            lights,
+            parameters.light_projections,
+            parameters.ambient_light
+        );
         m_light_buffers->bind_light_buffer();
     }
 
@@ -170,8 +178,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
     {
         ERHE_PROFILE_SCOPE("bind texture units");
 
-        gl::bind_texture_unit(m_programs->shadow_texture_unit, m_shadow_renderer->texture()->gl_name());
-        gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+        if (enable_shadows)
+        {
+            gl::bind_texture_unit(m_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+        }
 
         erhe::graphics::s_texture_unit_cache.bind(fallback_texture_handle);
     }
@@ -252,15 +263,19 @@ void Forward_renderer::render_fullscreen(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto&    viewport              = parameters.viewport;
-    const auto*    camera                = parameters.camera;
-    const auto&    lights                = parameters.lights;
-    const auto&    passes                = parameters.passes;
-    const bool     enable_shadows        = m_shadow_renderer && (!lights.empty());
+    const auto& viewport       = parameters.viewport;
+    const auto* camera         = parameters.camera;
+    const auto& lights         = parameters.lights;
+    const auto& passes         = parameters.passes;
+    const bool  enable_shadows =
+        m_shadow_renderer &&
+        (!lights.empty()) &&
+        (parameters.shadow_texture != nullptr);
+
     const uint64_t shadow_texture_handle = enable_shadows
         ?
             erhe::graphics::get_handle(
-                *m_shadow_renderer->texture(),
+                *parameters.shadow_texture,
                 *m_programs->nearest_sampler.get()
             )
         : 0;
@@ -276,7 +291,7 @@ void Forward_renderer::render_fullscreen(
 
     if (light != nullptr)
     {
-        const auto* light_projection_transforms = parameters.light_projections.get_light_projection_transforms_for_light(light);
+        const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
         if (light_projection_transforms != nullptr)
         {
             m_light_buffers->update_control(light_projection_transforms->index);
@@ -284,7 +299,7 @@ void Forward_renderer::render_fullscreen(
         }
         else
         {
-            log_render->warn("Light {} has no light projection transforms", light->name());
+            //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
     if (!lights.empty())
@@ -293,14 +308,17 @@ void Forward_renderer::render_fullscreen(
         m_light_buffers->bind_light_buffer();
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
+    if (enable_shadows)
     {
-        gl::make_texture_handle_resident_arb(shadow_texture_handle);
-    }
-    else
-    {
-        gl::bind_texture_unit(m_programs->shadow_texture_unit, m_shadow_renderer->texture()->gl_name());
-        gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+        if (erhe::graphics::Instance::info.use_bindless_texture)
+        {
+            gl::make_texture_handle_resident_arb(shadow_texture_handle);
+        }
+        else
+        {
+            gl::bind_texture_unit(m_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+        }
     }
 
     for (auto& pass : passes)
@@ -327,9 +345,12 @@ void Forward_renderer::render_fullscreen(
         }
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
+    if (enable_shadows)
     {
-        gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+        if (erhe::graphics::Instance::info.use_bindless_texture)
+        {
+            gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
+        }
     }
 }
 

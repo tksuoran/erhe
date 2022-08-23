@@ -13,7 +13,7 @@ namespace erhe::application
 using std::string;
 
 Shader_monitor::Shader_monitor()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_run                      {false}
 {
 }

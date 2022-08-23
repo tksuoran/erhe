@@ -12,7 +12,7 @@ namespace editor
 {
 
 Debug_draw::Debug_draw()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_debug_mode{0}
 {
 

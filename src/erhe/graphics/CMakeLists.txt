@@ -93,6 +93,7 @@ target_link_libraries(${_target}
         fmt::fmt
         ghc_filesystem
         glm::glm
+        #### glslang
         optional_lite
         Microsoft.GSL::GSL
     PRIVATE

@@ -3,7 +3,8 @@
 #include "editor_rendering.hpp"
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -18,8 +19,8 @@ namespace editor
 using glm::vec3;
 
 Grid_tool::Grid_tool()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
 {
 }
 
@@ -132,6 +133,31 @@ void Grid_tool::tool_render(
             }
         }
     );
+}
+
+
+void Grid_tool::viewport_toolbar()
+{
+    ImGui::SameLine();
+    const bool grid_pressed =erhe::application::make_button(
+        "G",
+        (m_enable)
+            ? erhe::application::Item_mode::active
+            : erhe::application::Item_mode::normal
+    );
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(
+            m_enable
+                ? "Toggle grid on -> off"
+                : "Toggle grid off -> on"
+        );
+    };
+
+    if (grid_pressed)
+    {
+        m_enable = !m_enable;
+    }
 }
 
 void Grid_tool::imgui()

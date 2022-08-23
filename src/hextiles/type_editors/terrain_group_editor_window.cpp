@@ -3,7 +3,7 @@
 #include "menu_window.hpp"
 #include "tiles.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 
 #include <imgui.h>
 
@@ -12,8 +12,8 @@ namespace hextiles
 
 
 Terrain_group_editor_window::Terrain_group_editor_window()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 

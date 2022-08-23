@@ -33,7 +33,7 @@ class Light_projection_transforms
 {
 public:
     const Light* light{nullptr};
-    std::size_t  index; // index in lights block shader resource
+    std::size_t  index{0}; // index in lights block shader resource
     Transform    world_from_light_camera;
     Transform    clip_from_light_camera;
     Transform    clip_from_world;

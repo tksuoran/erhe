@@ -40,6 +40,10 @@ class Scene_root;
 class Viewport_config;
 class Viewport_window;
 
+/// <summary>
+/// A textured quad mesh and framebuffer for rendering into
+/// </summary>
+/// TODO Should this be a Rendergraph_node?
 class Rendertarget_node
     : public erhe::scene::Mesh
 {

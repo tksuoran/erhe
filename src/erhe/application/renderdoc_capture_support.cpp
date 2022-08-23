@@ -31,7 +31,7 @@ namespace erhe::application {
 RENDERDOC_API_1_5_0* renderdoc_api{nullptr};
 
 Renderdoc_capture_support::Renderdoc_capture_support()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

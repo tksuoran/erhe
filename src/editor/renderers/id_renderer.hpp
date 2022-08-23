@@ -53,14 +53,14 @@ public:
         bool                               valid               {false};
     };
 
-    static constexpr std::string_view c_label{"Id_renderer"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr std::string_view c_type_name{"Id_renderer"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Id_renderer ();
     ~Id_renderer() noexcept override;
 
     // Implements Component
-    auto get_type_hash              () const -> uint32_t override { return hash; }
+    auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;

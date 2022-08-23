@@ -37,12 +37,12 @@ public:
     ~Headset        () noexcept;
 
     // TODO [[nodiscard]]
-    auto begin_frame            () -> Frame_timing;
-    auto render                 (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame              () -> bool;
-    auto trigger_value          () const -> float;
-    auto squeeze_click          () const -> bool;
-    auto controller_pose        () const -> Pose;
+    auto begin_frame    () -> Frame_timing;
+    auto render         (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    auto end_frame      () -> bool;
+    auto trigger_value  () const -> float;
+    auto squeeze_click  () const -> bool;
+    auto controller_pose() const -> Pose;
     [[nodiscard]] auto get_hand_tracking_joint (const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint;
     [[nodiscard]] auto get_hand_tracking_active(const XrHandEXT hand) const -> bool;
 

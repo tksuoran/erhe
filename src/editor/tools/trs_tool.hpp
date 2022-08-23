@@ -4,7 +4,7 @@
 #include "tools/tool.hpp"
 
 #include "erhe/application/commands/command.hpp"
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/node.hpp"
@@ -120,12 +120,12 @@ public:
     };
 
     static constexpr int              c_priority{1};
-    static constexpr std::string_view c_label   {"Trs_tool"};
+    static constexpr std::string_view c_type_name   {"Trs_tool"};
     static constexpr std::string_view c_title   {"Transform"};
-    static constexpr uint32_t         hash{
+    static constexpr uint32_t         c_type_hash{
         compiletime_xxhash::xxh32(
-            c_label.data(),
-            c_label.size(),
+            c_type_name.data(),
+            c_type_name.size(),
             {}
         )
     };
@@ -134,7 +134,7 @@ public:
     ~Trs_tool() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
@@ -152,8 +152,9 @@ public:
     void imgui() override;
 
     // Public API
-    void set_translate(const bool enabled);
-    void set_rotate   (const bool enabled);
+    void viewport_toolbar();
+    void set_translate   (const bool enabled);
+    void set_rotate      (const bool enabled);
 
     // Commands
     auto on_drag_ready() -> bool;
@@ -318,6 +319,7 @@ private:
     [[nodiscard]] auto get_axis_color          (Handle handle) const -> uint32_t;
     [[nodiscard]] auto get_target_node         () const -> std::shared_ptr<erhe::scene::Node>;
 
+    void set_local                  (bool local);
     void set_node                   (const std::shared_ptr<erhe::scene::Node>& node);
     void update_axis_translate      ();
     void update_axis_translate_final(const glm::dvec3 drag_position);

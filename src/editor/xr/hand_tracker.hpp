@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/application/tools/tool.hpp"
+#include "tools/tool.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -69,14 +69,14 @@ public:
     auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> nonstd::optional<float>;
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
-    void draw     (Line_renderer& line_renderer, const glm::mat4 transform);
+    void draw     (erhe::application::Line_renderer& line_renderer, const glm::mat4 transform);
     void set_color(const std::size_t finger, const ImVec4 color);
 
 private:
     void draw_joint_line_strip(
         const glm::mat4                    transform,
         const std::vector<XrHandJointEXT>& joint_names,
-        Line_renderer&                     line_renderer
+        erhe::application::Line_renderer&  line_renderer
     ) const;
 
     XrHandEXT                                                          m_hand;
@@ -87,15 +87,15 @@ private:
 
 class Hand_tracker
     : public erhe::components::Component
-    , public erhe::application::Tool
+    , public Tool
 {
 public:
-    static constexpr std::string_view c_name       {"Hand_tracker"};
+    static constexpr std::string_view c_type_name  {"Hand_tracker"};
     static constexpr std::string_view c_description{"Hand_tracker"};
-    static constexpr uint32_t hash{
+    static constexpr uint32_t c_type_hash{
         compiletime_xxhash::xxh32(
-            c_name.data(),
-            c_name.size(),
+            c_type_name.data(),
+            c_type_name.size(),
             {}
         )
     };
@@ -103,13 +103,14 @@ public:
     Hand_tracker();
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
-    void connect             () override;
-    void initialize_component() override;
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void post_initialize            () override;
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
-    void tool_render(const erhe::application::Render_context& context) override;
+    void tool_render(const Render_context& context) override;
 
     // Public API
     void update   (erhe::xr::Headset& headset);
@@ -123,8 +124,8 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Headset_renderer>  m_headset_renderer;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<Headset_renderer>                     m_headset_renderer;
 
     Hand m_left_hand;
     Hand m_right_hand;

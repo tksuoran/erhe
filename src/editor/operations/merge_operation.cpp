@@ -215,8 +215,11 @@ void Merge_operation::execute(const Operation_context&)
         return;
     }
 
-    auto* scene_root = reinterpret_cast<Scene_root*>(m_source_entries.front().mesh->node_data.host);
-    ERHE_VERIFY(scene_root != nullptr);
+    auto* const scene_root = reinterpret_cast<Scene_root*>(m_source_entries.front().mesh->node_data.host);
+    if (scene_root == nullptr)
+    {
+        return;
+    }
     auto& scene         = scene_root->scene();
     auto& physics_world = scene_root->physics_world();
 
@@ -268,8 +271,11 @@ void Merge_operation::undo(const Operation_context&)
         return;
     }
 
-    auto* scene_root = reinterpret_cast<Scene_root*>(m_source_entries.front().mesh->node_data.host);
-    ERHE_VERIFY(scene_root != nullptr);
+    auto* const scene_root = reinterpret_cast<Scene_root*>(m_source_entries.front().mesh->node_data.host);
+    if (scene_root == nullptr)
+    {
+        return;
+    }
     auto& scene         = scene_root->scene();
     auto& physics_world = scene_root->physics_world();
 

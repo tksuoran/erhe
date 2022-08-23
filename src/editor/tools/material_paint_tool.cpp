@@ -5,13 +5,13 @@
 
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 
 #include "erhe/application/commands/command_context.hpp"
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/scene/mesh.hpp"
 
@@ -98,7 +98,7 @@ auto Material_pick_command::try_call(
 /////////
 
 Material_paint_tool::Material_paint_tool()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_paint_command            {*this}
     , m_pick_command             {*this}
 {

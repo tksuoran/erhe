@@ -4,14 +4,14 @@
 #include "tile_shape.hpp"
 
 #include "erhe/graphics/texture.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 
 #include <fmt/format.h>
 
 namespace hextiles {
 
 Rendering::Rendering()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

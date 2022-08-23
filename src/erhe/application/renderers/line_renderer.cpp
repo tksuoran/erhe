@@ -110,7 +110,7 @@ Line_renderer_pipeline::Line_renderer_pipeline()
 }
 
 Line_renderer_set::Line_renderer_set()
-    : Component{c_label  }
+    : Component{c_type_name  }
     , visible  {"visible"}
     , hidden   {"hidden" }
 {
@@ -557,7 +557,7 @@ void Line_renderer::add_sphere(
     const glm::vec3 axis_x{radius, 0.0f, 0.0f};
     const glm::vec3 axis_y{0.0f, radius, 0.0f};
     const glm::vec3 axis_z{0.0f, 0.0f, radius};
-    int step_count = 32;
+    int step_count = 40;
     for (int i = 0; i < step_count; ++i)
     {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);

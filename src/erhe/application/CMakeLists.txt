@@ -39,10 +39,21 @@ erhe_target_sources_grouped(
     renderers/text_renderer.cpp
     renderers/text_renderer.hpp
 
+    rendergraph/multisample_resolve.cpp
+    rendergraph/multisample_resolve.hpp
+    rendergraph/rendergraph.cpp
+    rendergraph/rendergraph.hpp
+    rendergraph/rendergraph_node.cpp
+    rendergraph/rendergraph_node.hpp
+    rendergraph/resource_routing.cpp
+    rendergraph/resource_routing.hpp
+    rendergraph/sink_rendergraph_node.cpp
+    rendergraph/sink_rendergraph_node.hpp
+    rendergraph/texture_rendergraph_node.cpp
+    rendergraph/texture_rendergraph_node.hpp
+
     windows/framebuffer_window.cpp
     windows/framebuffer_window.hpp
-    windows/imgui_window.cpp
-    windows/imgui_window.hpp
     windows/log_window.cpp
     windows/log_window.hpp
     windows/performance_window.cpp
@@ -58,37 +69,39 @@ erhe_target_sources_grouped(
     configuration.hpp
     controller.cpp
     controller.hpp
-    imgui_viewport.cpp
-    imgui_viewport.hpp
-    imgui_windows.cpp
-    imgui_windows.hpp
-    render_graph.cpp
-    render_graph.hpp
-    render_graph_node.cpp
-    render_graph_node.hpp
     renderdoc_capture_support.cpp
     renderdoc_capture_support.hpp
-    scoped_imgui_context.cpp
-    scoped_imgui_context.hpp
     time.cpp
     time.hpp
     view.cpp
     view.hpp
     window.cpp
     window.hpp
-    window_imgui_viewport.cpp
-    window_imgui_viewport.hpp
 )
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        renderers/imgui_renderer.cpp
-        renderers/imgui_renderer.hpp
+        imgui/imgui_helpers.cpp
+        imgui/imgui_helpers.hpp
+        imgui/imgui_renderer.cpp
+        imgui/imgui_renderer.hpp
+        imgui/imgui_viewport.cpp
+        imgui/imgui_viewport.hpp
+        imgui/imgui_window.cpp
+        imgui/imgui_window.hpp
+        imgui/imgui_windows.cpp
+        imgui/imgui_windows.hpp
+        imgui/scoped_imgui_context.cpp
+        imgui/scoped_imgui_context.hpp
+        imgui/window_imgui_viewport.cpp
+        imgui/window_imgui_viewport.hpp
+        imgui/ImNodes.cpp
+        imgui/ImNodes.h
+        imgui/ImNodesEz.cpp
+        imgui/ImNodesEz.h
         windows/imgui_demo_window.cpp
         windows/imgui_demo_window.hpp
-        imgui_helpers.cpp
-        imgui_helpers.hpp
     )
     target_link_libraries(${_target}
     PUBLIC

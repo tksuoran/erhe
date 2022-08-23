@@ -15,10 +15,10 @@
 #endif
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/post_processing.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
+#include "rendergraph/post_processing.hpp"
 
 #include "tools/debug_visualizations.hpp"
 #include "tools/fly_camera_tool.hpp"
@@ -32,6 +32,7 @@
 
 #include "windows/brushes.hpp"
 #include "windows/debug_view_window.hpp"
+#include "windows/imgui_viewport_window.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/material_properties.hpp"
 #include "windows/materials_window.hpp"
@@ -39,30 +40,31 @@
 #include "windows/node_properties.hpp"
 #include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
+#include "windows/post_processing_window.hpp"
 #include "windows/physics_window.hpp"
-#include "windows/render_graph_window.hpp"
+#include "windows/rendergraph_window.hpp"
 #include "windows/tool_properties_window.hpp"
 #include "windows/viewport_config.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
 
 #include "scene/debug_draw.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/render_graph.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include "erhe/application/renderers/imgui_renderer.hpp"
+#   include "erhe/application/imgui/imgui_renderer.hpp"
 #endif
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
@@ -119,7 +121,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 #endif
         m_components.add(make_shared<erhe::application::Performance_window>());
         m_components.add(make_shared<erhe::application::Pipelines         >());
-        m_components.add(make_shared<erhe::application::Render_graph      >());
+        m_components.add(make_shared<erhe::application::Rendergraph       >());
         m_components.add(make_shared<erhe::application::Shader_monitor    >());
         m_components.add(make_shared<erhe::application::Text_renderer     >());
         m_components.add(make_shared<erhe::application::Line_renderer_set >());
@@ -155,7 +157,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Physics_tool          >());
         m_components.add(make_shared<editor::Physics_window        >());
         m_components.add(make_shared<editor::Post_processing       >());
-        m_components.add(make_shared<editor::Render_graph_window   >());
+        m_components.add(make_shared<editor::Post_processing_window>());
+        m_components.add(make_shared<editor::Rendergraph_window    >());
         m_components.add(make_shared<editor::Scene_builder         >());
         m_components.add(make_shared<editor::Scene_commands        >());
         m_components.add(make_shared<editor::Selection_tool        >());
@@ -167,9 +170,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Viewport_windows      >());
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_components.add(make_shared<Hand_tracker    >());
-        m_components.add(make_shared<Headset_renderer>());
-        m_components.add(make_shared<Theremin        >());
+        m_components.add(make_shared<editor::Hand_tracker    >());
+        m_components.add(make_shared<editor::Headset_renderer>());
+        m_components.add(make_shared<editor::Theremin        >());
 #endif
     }
 
@@ -223,8 +226,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     if (m_components.get<editor::Operation_stack       >() && !config.operation_stack    ) m_components.get<editor::Operation_stack       >()->hide();
     if (m_components.get<editor::Operations            >() && !config.operations         ) m_components.get<editor::Operations            >()->hide();
     if (m_components.get<editor::Physics_window        >() && !config.physics            ) m_components.get<editor::Physics_window        >()->hide();
-    if (m_components.get<editor::Post_processing       >() && !config.post_processing    ) m_components.get<editor::Post_processing       >()->hide();
-    if (m_components.get<editor::Render_graph_window   >() && !config.render_graph       ) m_components.get<editor::Render_graph_window   >()->hide();
+    if (m_components.get<editor::Post_processing_window>() && !config.post_processing    ) m_components.get<editor::Post_processing_window>()->hide();
+    if (m_components.get<editor::Rendergraph_window    >() && !config.render_graph       ) m_components.get<editor::Rendergraph_window    >()->hide();
     if (m_components.get<editor::Trs_tool              >() && !config.trs                ) m_components.get<editor::Trs_tool              >()->hide();
     if (m_components.get<editor::Tool_properties_window>() && !config.tool_properties    ) m_components.get<editor::Tool_properties_window>()->hide();
     if (m_components.get<editor::Viewport_config       >() && !config.viewport_config    ) m_components.get<editor::Viewport_config       >()->hide();
@@ -236,94 +239,22 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         test_scene_root->physics_world().enable_physics_updates();
     }
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    if (m_components.get<erhe::application::Imgui_demo_window>())
+    ///{
+    ///    const auto& debug_window = m_components.get<editor::Debug_view_window>();
+    ///    const auto& rendergraph  = m_components.get<erhe::application::Rendergraph>();
+    ///
+    ///    rendergraph->register_node(debug_window);
+    ///}
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (configuration->headset.openxr)
     {
-        const auto& imgui_windows           = m_components.get<erhe::application::Imgui_windows>();
-        const auto& scene_builder           = m_components.get<editor::Scene_builder   >();
-        const auto& primary_viewport_window = scene_builder->get_primary_viewport_window();
-        const auto& test_scene_root         = scene_builder->get_scene_root();
-
-        auto rendertarget_node_1 = test_scene_root->create_rendertarget_node(
-            m_components,
-            *primary_viewport_window.get(),
-            1920,
-            1080,
-            320.0
-        );
-
-        test_scene_root->scene().add_to_mesh_layer(
-            *test_scene_root->layers().rendertarget(),
-            rendertarget_node_1
-        );
-
-        rendertarget_node_1->set_world_from_node(
-            erhe::toolkit::create_look_at(
-                glm::vec3{-3.0f, 2.0f,  0.0f},
-                glm::vec3{-4.0f, 2.0f, -2.0f},
-                glm::vec3{ 0.0f, 1.0f,  0.0f}
-            )
-        );
-
-        auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_viewport>(
-            rendertarget_node_1.get(),
-            "Rendertarget ImGui Viewport 1",
-            m_components
-        );
-
-        imgui_windows->register_imgui_viewport(imgui_viewport_1);
-
-        const auto& grid_tool = m_components.get<editor::Grid_tool       >();
-        grid_tool->set_viewport(imgui_viewport_1.get()); grid_tool->show();
-
-#if 1
-        const auto camera_b = scene_builder->make_camera(
-            "Camera B",
-            glm::vec3{-7.0f, 1.0f, 0.0f},
-            glm::vec3{ 0.0f, 0.5f, 0.0f}
-        );
-        camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
-
-        const auto& viewport_windows = m_components.get<editor::Viewport_windows>();
-        auto secondary_viewport_window = viewport_windows->create_window(
-            "Secondary Viewport",
-            test_scene_root,
-            camera_b.get()
-        );
-        secondary_viewport_window->set_post_processing_enable(false); // TODO Post processing currently only handles one viewport
-#endif
-
-#if 1
-        auto rendertarget_node_2 = test_scene_root->create_rendertarget_node(
-            m_components,
-            *primary_viewport_window.get(),
-            1920,
-            1080,
-            320.0
-        );
-
-        test_scene_root->scene().add_to_mesh_layer(
-            *test_scene_root->layers().rendertarget(),
-            rendertarget_node_2
-        );
-
-        rendertarget_node_2->set_world_from_node(
-            erhe::toolkit::create_look_at(
-                glm::vec3{3.0f, 2.0f,  0.0f},
-                glm::vec3{4.0f, 2.0f, -2.0f},
-                glm::vec3{0.0f, 1.0f,  0.0f}
-            )
-        );
-
-        auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_viewport>(
-            rendertarget_node_2.get(),
-            "Rendertarget ImGui Viewport 2",
-            m_components
-        );
-        imgui_windows->register_imgui_viewport(imgui_viewport_2);
-
-        secondary_viewport_window->set_viewport(imgui_viewport_2.get()); secondary_viewport_window->show();
-#endif
+        //// const auto& viewport_windows = m_components.get<editor::Viewport_windows>();
+        //// const auto& headset_renderer = m_components.get<editor::Headset_renderer>();
+        //// const auto& scene_root       = headset_renderer->scene_root();
+        //// auto* const headset_camera   = headset_renderer->root_camera().get();
+        //// const auto  viewport_window  = viewport_windows->create_window("Headset Camera", scene_root, headset_camera);
+        //// viewport_window->set_post_processing_enable(false);
     }
 #endif
 

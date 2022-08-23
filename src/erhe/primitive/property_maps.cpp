@@ -21,7 +21,7 @@ Property_maps::Property_maps(
     ERHE_PROFILE_FUNCTION
 
     log_primitive_builder->trace(
-        "Property_maps::Property_maps() for geometry = {}\n",
+        "Property_maps::Property_maps() for geometry = {}",
         geometry.name
     );
     //const erhe::log::Indenter indenter;
@@ -104,7 +104,7 @@ Property_maps::Property_maps(
                         }
                         else
                         {
-                            //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons\n", __func__);
+                            //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons", __func__);
                             const auto& polygon = geometry.polygons[polygon_id];
                             const vec3  normal  = polygon.compute_normal(geometry, *point_locations);
                             normal_sum += normal;

@@ -4,11 +4,8 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/render_graph.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/window.hpp"
-
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/commands/key_binding.hpp"
@@ -16,7 +13,9 @@
 #include "erhe/application/commands/mouse_drag_binding.hpp"
 #include "erhe/application/commands/mouse_motion_binding.hpp"
 #include "erhe/application/commands/mouse_wheel_binding.hpp"
-#include "erhe/application/renderers/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -36,8 +35,8 @@
 namespace erhe::application {
 
 View::View()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 
@@ -48,7 +47,7 @@ View::~View() noexcept
 void View::declare_required_components()
 {
     m_imgui_windows = require<Imgui_windows>();
-    m_render_graph  = require<Render_graph >();
+    m_render_graph  = require<Rendergraph >();
     m_window        = require<Window       >();
 }
 

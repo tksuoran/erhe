@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "hover_tool.hpp"
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
@@ -8,14 +10,14 @@
 #include "tools/hover_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
-#include "windows/viewport_window.hpp"
-#include "windows/viewport_windows.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 
 #include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
@@ -45,8 +47,7 @@ auto Hover_tool_hover_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    auto* viewport_window = as_viewport_window(context.get_window());
-    if (viewport_window == nullptr)
+    if (m_hover_tool.viewport_window() == nullptr)
     {
         set_inactive(context);
         return false;
@@ -56,7 +57,7 @@ auto Hover_tool_hover_command::try_call(
 }
 
 Hover_tool::Hover_tool()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
     , m_hover_command{*this}
 {
 }
@@ -253,6 +254,11 @@ void Hover_tool::tool_render(
         }
 #endif
     }
+}
+
+[[nodiscard]] auto Hover_tool::viewport_window() const -> Viewport_window*
+{
+    return m_viewport_windows->hover_window();
 }
 
 void Hover_tool::deselect()

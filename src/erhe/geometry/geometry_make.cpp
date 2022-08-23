@@ -176,8 +176,13 @@ void Geometry::sort_point_corners()
     std::vector<Point_corner_info> point_corner_infos;
     point_corner_infos.reserve(20);
 
+    bool failures{false};
     for_each_point([&](auto& i)
     {
+        if (i.point.corner_count < 2)
+        {
+            return;
+        }
         point_corner_infos.clear();
         i.point.for_each_corner(*this, [&](auto& j)
         {
@@ -216,15 +221,32 @@ void Geometry::sort_point_corners()
             );
         });
 
+        // log_geometry->info("sort: point_id = {}", i.point_id);
         for (uint32_t j = 0, end = static_cast<uint32_t>(point_corner_infos.size()); j < end; ++j)
         {
             const uint32_t     next_j = (j + 1) % end;
             Point_corner_info& head   = point_corner_infos[j];
             Point_corner_info& next   = point_corner_infos[next_j];
             bool found{false};
+            // log_geometry->info(
+            //     "    j = {}, next_j = {}, head.point_corner_id = {}, head.prev_point_id = {}, head.next_point_id = {}",
+            //     j,
+            //     next_j,
+            //     head.point_corner_id,
+            //     head.prev_point_id,
+            //     head.next_point_id
+            // );
             for (uint32_t k = 0; k < end; ++k)
             {
                 Point_corner_info& node = point_corner_infos[k];
+                // log_geometry->info(
+                //     "    k = node.point_corner_id = {}, node.next_point_id = {}, prev_point_id = {}, used = {}",
+                //     k,
+                //     node.point_corner_id,
+                //     node.next_point_id,
+                //     node.prev_point_id,
+                //     node.used
+                // );
                 if (node.used)
                 {
                     continue;
@@ -242,12 +264,24 @@ void Geometry::sort_point_corners()
             }
             if (!found)
             {
-                log_geometry->warn("Could not sort point corners");
+                // log_geometry->warn(
+                //     "Could not sort point corners for point_id = {} head.prev_point_id = {}",
+                //     i.point_id,
+                //     head.prev_point_id
+                // );
+                failures = true;
             }
             const Point_corner_id point_corner_id = i.point.first_point_corner_id + j;
             point_corners[point_corner_id] = head.corner_id;
         }
     });
+
+    ///// TODO
+    if (failures)
+    {
+        log_geometry->warn("Could not sort point corners");
+        debug_trace();
+    }
 }
 
 // Allocates new edge polygon.

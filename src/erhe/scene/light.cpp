@@ -49,8 +49,9 @@ auto Light::stable_directional_light_projection(
     using glm::vec3;
     using glm::mat4;
 
-    // View distance is radius of the view camera bounding volume
-    const float r = parameters.view_camera->projection()->z_far;
+    //// // View distance is radius of the view camera bounding volume
+    //// const float r = parameters.view_camera->projection()->z_far;
+    const float r = parameters.view_camera->get_shadow_range();
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
     return Projection
@@ -129,8 +130,9 @@ auto Light::stable_directional_light_projection_transforms(
 
     const Light* light = this;
 
-    // View distance is used as radius of the view camera bounding volume
-    const float r = parameters.view_camera->projection()->z_far;
+    //// // View distance is used as radius of the view camera bounding volume
+    //// const float r = parameters.view_camera->projection()->z_far;
+    const float r = parameters.view_camera->get_shadow_range();
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
     const Projection light_projection = projection(parameters);

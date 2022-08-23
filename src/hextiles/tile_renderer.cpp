@@ -95,7 +95,7 @@ Tile_renderer::Frame_resources::Frame_resources(
 }
 
 Tile_renderer::Tile_renderer()
-    : Component{c_label}
+    : Component{c_type_name}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -1039,7 +1039,7 @@ void Tile_renderer::blit_tile(
                 const glm::vec4 color = m_tileset_image.get_pixel(x0 + s, y0 + i);
                 player_colors.shades[s] = color;
                 log_tiles.info(
-                    "Player {} Shader {} Color: {}, {}, {}, {}\n",
+                    "Player {} Shader {} Color: {}, {}, {}, {}",
                     i, s,
                     color.r, color.g, color.b, color.a
                 );

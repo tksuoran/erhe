@@ -3,13 +3,13 @@
 #include "scene/scene_root.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 
 namespace editor {
 
 Tools::Tools()
-    : erhe::components::Component{c_label}
+    : erhe::components::Component{c_type_name}
 {
 }
 

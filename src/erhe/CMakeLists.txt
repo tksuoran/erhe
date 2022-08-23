@@ -18,6 +18,6 @@ add_subdirectory(scene)
 add_subdirectory(toolkit)
 add_subdirectory(ui)
 
-if (${ERHE_XR_LIBRARY} STREQUAL "OpenXR")
+if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     add_subdirectory(xr)
 endif ()

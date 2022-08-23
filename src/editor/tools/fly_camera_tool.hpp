@@ -5,7 +5,7 @@
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/windows/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/view.hpp" // keycode
 
@@ -102,15 +102,15 @@ class Fly_camera_tool
 {
 public:
     static constexpr int              c_priority{5};
-    static constexpr std::string_view c_label   {"Fly_camera_tool"};
+    static constexpr std::string_view c_type_name   {"Fly_camera_tool"};
     static constexpr std::string_view c_title   {"Fly Camera"};
-    static constexpr uint32_t hash = compiletime_xxhash::xxh32(c_label.data(), c_label.size(), {});
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Fly_camera_tool ();
     ~Fly_camera_tool() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return hash; }
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
@@ -131,22 +131,22 @@ public:
     // Public API
 
     [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
-    void set_camera (erhe::scene::Camera* camera);
-    void translation(const int tx, const int ty, const int tz);
-    void rotation   (const int rx, const int ry, const int rz);
+    void set_camera (erhe::scene::Camera* const camera);
+    void translation(int tx, int ty, int tz);
+    void rotation   (int rx, int ry, int rz);
 
     // Commands
-    auto try_ready(Viewport_window& viewport_window) -> bool;
+    auto try_ready() -> bool;
     auto try_move(
-        const Control                            control,
-        const erhe::application::Controller_item item,
-        const bool                               active
+        Control                            control,
+        erhe::application::Controller_item item,
+        bool                               active
     ) -> bool;
-    void turn_relative(const double dx, const double dy);
+    [[nodiscard]] auto viewport_window() const -> Viewport_window*;
+    auto turn_relative(double dx, double dy) -> bool;
 
 private:
-    void update_camera   ();
-    //auto can_use_keyboard() const -> bool;
+    void update_camera();
 
     Fly_camera_turn_command           m_turn_command;
     Fly_camera_move_command           m_move_up_active_command;

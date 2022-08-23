@@ -10,7 +10,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/scene.hpp"
@@ -32,8 +32,8 @@ namespace editor
 using Light_type = erhe::scene::Light_type;
 
 Node_tree_window::Node_tree_window()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title, c_type_name}
 {
 }
 

@@ -1,14 +1,14 @@
 #include "map_editor/terrain_palette_window.hpp"
 #include "map_editor/map_editor.hpp"
 
-#include "erhe/application/imgui_windows.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 
 namespace hextiles
 {
 
 Terrain_palette_window::Terrain_palette_window()
-    : erhe::components::Component{c_label}
-    , Imgui_window               {c_title, c_label}
+    : erhe::components::Component{c_type_name}
+    , Imgui_window               {c_title, c_type_name}
 {
 }
 
