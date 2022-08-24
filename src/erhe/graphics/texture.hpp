@@ -3,12 +3,11 @@
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/gl_objects.hpp"
 
-#include <glm/glm.hpp>
-
 #include <gsl/span>
 
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace erhe::graphics
 {

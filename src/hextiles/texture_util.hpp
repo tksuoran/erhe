@@ -5,6 +5,8 @@
 
 #include <glm/glm.hpp>
 
+#include <vector>
+
 namespace erhe::graphics
 {
     class Texture;

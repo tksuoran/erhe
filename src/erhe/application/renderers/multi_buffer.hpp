@@ -4,6 +4,7 @@
 #include "erhe/graphics/buffer.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace erhe::application
 {

@@ -1,5 +1,6 @@
 #include "erhe/graphics/pipeline.hpp"
 
+#include <algorithm>
 #include <vector>
 
 namespace erhe::graphics
