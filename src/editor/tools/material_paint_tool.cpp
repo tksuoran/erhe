@@ -180,6 +180,11 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
 
+    if (m_material == nullptr)
+    {
+        return false;
+    }
+
     Viewport_window* viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {

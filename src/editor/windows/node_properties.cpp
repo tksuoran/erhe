@@ -307,7 +307,14 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 )
                 {
                     material_library->material_combo("Material", primitive.material);
-                    ImGui::Text("Material Index: %zu", primitive.material->index);
+                    if (primitive.material)
+                    {
+                        ImGui::Text("Material Index: %zu", primitive.material->index);
+                    }
+                    else
+                    {
+                        ImGui::Text("Null material");
+                    }
                     int point_count   = geometry->get_point_count();
                     int polygon_count = geometry->get_polygon_count();
                     int edge_count    = geometry->get_edge_count();
