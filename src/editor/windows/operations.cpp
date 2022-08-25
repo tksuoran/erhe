@@ -100,14 +100,22 @@ void Operations::imgui()
                 : erhe::application::Item_mode::normal,
             button_size
         );
-        if (button_pressed && (m_current_active_tool != tool))
+        if (button_pressed)
         {
-            if (m_current_active_tool != nullptr)
+            if (m_current_active_tool != tool)
+            {
+                if (m_current_active_tool != nullptr)
+                {
+                    m_current_active_tool->set_enable_state(false);
+                }
+                m_current_active_tool = tool;
+                m_current_active_tool->set_enable_state(true);
+            }
+            else
             {
                 m_current_active_tool->set_enable_state(false);
+                m_current_active_tool = nullptr;
             }
-            m_current_active_tool = tool;
-            m_current_active_tool->set_enable_state(true);
         }
     }
 
