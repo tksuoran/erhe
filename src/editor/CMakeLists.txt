@@ -250,7 +250,6 @@ target_link_libraries(
     erhe::ui
     ghc_filesystem
     optional_lite
-    nlohmann_json::nlohmann_json
     RectangleBinPack
     rapidjson
 )
