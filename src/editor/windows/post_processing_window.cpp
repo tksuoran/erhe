@@ -1,7 +1,10 @@
 #include "windows/post_processing_window.hpp"
 #include "rendergraph/post_processing.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -29,7 +32,7 @@ void Post_processing_window::initialize_component()
 
 void Post_processing_window::post_initialize()
 {
-    m_post_processing = get<Post_processing>();
+    m_viewport_windows = get<Viewport_windows>();
 }
 
 void Post_processing_window::imgui()
@@ -71,33 +74,38 @@ void Post_processing_window::imgui()
     //        ImGui::TreePop();
     //    }
     //}
-    const auto& nodes = m_post_processing->get_nodes();
-    if (nodes.empty())
+
+    const auto viewport_window = m_viewport_windows->last_window();
+    if (!viewport_window)
     {
         return;
     }
-    //// const auto post_processing = nodes.front();
-    //// const auto downsample_nodes =
-    ////
-    //// ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-    //// for (auto& node : m_nodes)
-    //// {
-    ////     if (
-    ////         !node.texture                ||
-    ////         (node.texture->width () < 1) ||
-    ////         (node.texture->height() < 1)
-    ////     )
-    ////     {
-    ////         continue;
-    ////     }
-    ////
-    ////     image(
-    ////         node.texture,
-    ////         node.texture->width (),
-    ////         node.texture->height()
-    ////     );
-    //// }
-    //// ImGui::PopStyleVar();
+    const auto  post_processing_node = viewport_window->get_post_processing_node();
+    const auto& downsample_nodes    = post_processing_node->get_downsample_nodes();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+    for (auto& node : downsample_nodes)
+    {
+        if (
+            !node.texture                ||
+            (node.texture->width () < 1) ||
+            (node.texture->height() < 1)
+        )
+        {
+            continue;
+        }
+
+        if (node.axis == 0)
+        {
+            ImGui::SameLine();
+        }
+        image(
+            node.texture,
+            node.texture->width (),
+            node.texture->height()
+        );
+    }
+    ImGui::PopStyleVar();
 #endif
 }
 

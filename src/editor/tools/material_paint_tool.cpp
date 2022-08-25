@@ -148,8 +148,8 @@ auto Material_paint_tool::on_paint_ready() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }
@@ -164,7 +164,7 @@ auto Material_paint_tool::on_pick_ready() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return false;
@@ -185,7 +185,7 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return false;
@@ -210,7 +210,7 @@ auto Material_paint_tool::on_pick() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return false;

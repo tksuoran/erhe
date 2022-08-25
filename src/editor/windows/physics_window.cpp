@@ -97,8 +97,8 @@ void Physics_window::imgui()
         return;
     }
 
-    Viewport_window* const viewport_window = m_viewport_windows->last_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->last_window();
+    if (!viewport_window)
     {
         return;
     }

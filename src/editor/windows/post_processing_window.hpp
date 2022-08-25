@@ -8,7 +8,7 @@
 namespace editor
 {
 
-class Post_processing;
+class Viewport_windows;
 
 /// <summary>
 /// ImGui window for showing downsample steps for a Post_processing node
@@ -35,7 +35,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Post_processing> m_post_processing;
+    std::shared_ptr<Viewport_windows> m_viewport_windows;
 };
 
 } // namespace editor

@@ -204,8 +204,8 @@ auto Physics_tool::description() -> const char*
 
 auto Physics_tool::acquire_target() -> bool
 {
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }
@@ -367,8 +367,8 @@ auto Physics_tool::on_drag() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }
@@ -411,8 +411,8 @@ auto Physics_tool::on_force() -> bool
         return false;
     }
 
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }

@@ -245,8 +245,8 @@ Selection_tool::~Selection_tool() noexcept
 
 void Selection_tool::declare_required_components()
 {
+    require<erhe::application::View>();
     require<Tools>();
-    require<erhe::application::View >();
 }
 
 void Selection_tool::initialize_component()
@@ -340,8 +340,8 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
 
 auto Selection_tool::mouse_select_try_ready() -> bool
 {
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }

@@ -74,7 +74,7 @@ void Fly_camera_turn_command::try_ready(
 
 auto Fly_camera_tool::try_ready() -> bool
 {
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return false;
@@ -234,9 +234,9 @@ void Fly_camera_tool::update_camera()
         return;
     }
 
-    auto* window = m_viewport_windows->hover_window();
-    auto* camera = (window != nullptr)
-        ? window->camera()
+    const auto viewport_window = m_viewport_windows->hover_window();
+    auto* camera = (viewport_window)
+        ? viewport_window->camera()
         : nullptr;
     if (m_camera_controller->get_node() != camera)
     {
@@ -345,7 +345,7 @@ auto Fly_camera_tool::try_move(
     return true;
 }
 
-auto Fly_camera_tool::viewport_window() const -> Viewport_window*
+auto Fly_camera_tool::viewport_window() const -> std::shared_ptr<Viewport_window>
 {
     return m_viewport_windows->hover_window();
 }
@@ -354,8 +354,8 @@ auto Fly_camera_tool::turn_relative(const double dx, const double dy) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    auto* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }

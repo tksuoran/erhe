@@ -766,6 +766,11 @@ void Viewport_window::link_to(std::weak_ptr<Post_processing_node> node)
     m_post_processing_node = node;
 }
 
+auto Viewport_window::get_post_processing_node() -> std::shared_ptr<Post_processing_node>
+{
+    return m_post_processing_node.lock();
+}
+
 void Viewport_window::set_final_output(
     std::weak_ptr<erhe::application::Rendergraph_node> node
 )

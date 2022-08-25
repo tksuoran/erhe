@@ -128,8 +128,8 @@ public:
     /// <returns>Pointer to the Viewport_window instance which is currently
     /// under pointer (mouse cursor), or nullptr if pointer (mouse cursor)
     /// is not currently over any Viewport_window</returns>
-    auto hover_window() -> Viewport_window*;
-    auto last_window () -> Viewport_window*;
+    auto hover_window() -> std::shared_ptr<Viewport_window>;
+    auto last_window () -> std::shared_ptr<Viewport_window>;
 
     // Pointer_context(s) API
     void update_keyboard(
@@ -170,8 +170,8 @@ private:
     std::mutex                                          m_mutex;
     std::vector<std::shared_ptr<Imgui_viewport_window>> m_imgui_viewport_windows;
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
-    std::vector<Viewport_window*>                       m_hover_stack;
-    Viewport_window*                                    m_last_window {nullptr};
+    std::vector<std::weak_ptr<Viewport_window>>         m_hover_stack;
+    std::weak_ptr<Viewport_window>                      m_last_window;
 
     class Mouse_button
     {

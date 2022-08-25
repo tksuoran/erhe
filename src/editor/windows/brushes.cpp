@@ -286,8 +286,8 @@ void Brushes::on_enable_state_changed()
 
 void Brushes::on_motion()
 {
-    const Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return;
     }

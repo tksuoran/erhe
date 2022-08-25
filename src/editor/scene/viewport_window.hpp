@@ -158,10 +158,11 @@ public:
 
     // TODO Consider if these links are a good thing, or if they should
     //      be discovered from the graph instead.
-    void link_to         (std::weak_ptr<erhe::application::Multisample_resolve_node> node);
-    void link_to         (std::weak_ptr<Post_processing_node> node);
-    void set_final_output(std::weak_ptr<Rendergraph_node> node);
-    auto get_final_output() -> std::weak_ptr<Rendergraph_node>;
+    void link_to                 (std::weak_ptr<erhe::application::Multisample_resolve_node> node);
+    void link_to                 (std::weak_ptr<Post_processing_node> node);
+    auto get_post_processing_node() -> std::shared_ptr<Post_processing_node>;
+    void set_final_output        (std::weak_ptr<Rendergraph_node> node);
+    auto get_final_output        () -> std::weak_ptr<Rendergraph_node>;
 
     void clear() const;
 

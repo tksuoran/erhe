@@ -177,7 +177,7 @@ auto Viewport_windows::create_imgui_viewport_window(
 
     auto imgui_viewport_window = std::make_shared<Imgui_viewport_window>(
         fmt::format("Imgui_viewport_window for '{}'", viewport_window->name()),
-        viewport_window.get()
+        viewport_window
     );
     m_imgui_viewport_windows.push_back(imgui_viewport_window);
     m_imgui_windows->register_imgui_window(imgui_viewport_window.get());
@@ -304,8 +304,8 @@ void Viewport_windows::update_hover_from_imgui_windows(erhe::application::Imgui_
             continue;
         }
 
-        auto* viewport_window = imgui_viewport_window->viewport_window();
-        if (viewport_window == nullptr)
+        const auto viewport_window = imgui_viewport_window->viewport_window();
+        if (!viewport_window)
         {
             continue;
         }
@@ -339,18 +339,18 @@ void Viewport_windows::update_hover_from_imgui_windows(erhe::application::Imgui_
     }
 }
 
-auto Viewport_windows::hover_window() -> Viewport_window*
+auto Viewport_windows::hover_window() -> std::shared_ptr<Viewport_window>
 {
     if (m_hover_stack.empty())
     {
-        return nullptr;
+        return {};
     }
-    return m_hover_stack.back();
+    return m_hover_stack.back().lock();
 }
 
-auto Viewport_windows::last_window() -> Viewport_window*
+auto Viewport_windows::last_window() -> std::shared_ptr<Viewport_window>
 {
-    return m_last_window;
+    return m_last_window.lock();
 }
 
 void Viewport_windows::update_keyboard(

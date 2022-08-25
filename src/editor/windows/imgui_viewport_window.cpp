@@ -64,8 +64,8 @@ Imgui_viewport_window::Imgui_viewport_window()
 
 // TODO Only really needed when there is no post processing and no MSAA
 Imgui_viewport_window::Imgui_viewport_window(
-    const std::string_view name,
-    Viewport_window*       viewport_window
+    const std::string_view                  name,
+    const std::shared_ptr<Viewport_window>& viewport_window
 )
     : erhe::application::Imgui_window            {name, name}
     , erhe::application::Texture_rendergraph_node{
@@ -103,9 +103,9 @@ Imgui_viewport_window::Imgui_viewport_window(
     );
 }
 
-[[nodiscard]] auto Imgui_viewport_window::viewport_window() const -> Viewport_window*
+[[nodiscard]] auto Imgui_viewport_window::viewport_window() const -> std::shared_ptr<Viewport_window>
 {
-    return m_viewport_window;
+    return m_viewport_window.lock();
 }
 
 [[nodiscard]] auto Imgui_viewport_window::is_hovered() const -> bool
@@ -170,7 +170,12 @@ void Imgui_viewport_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    m_viewport_window->imgui_toolbar();
+    const auto viewport_window = m_viewport_window.lock();
+    if (!viewport_window)
+    {
+        return;
+    }
+    viewport_window->imgui_toolbar();
 
     const auto size = ImGui::GetContentRegionAvail();
 
@@ -206,7 +211,7 @@ void Imgui_viewport_window::imgui()
             ERHE_VERIFY(m_viewport.width  == static_cast<int>(rect_max.x - rect_min.x));
             ERHE_VERIFY(m_viewport.height == static_cast<int>(rect_max.y - rect_min.y));
 
-            m_viewport_window->set_window_viewport(
+            viewport_window->set_window_viewport(
                 static_cast<int>(rect_min.x),
                 static_cast<int>(rect_min.y),
                 m_viewport.width,
@@ -218,7 +223,7 @@ void Imgui_viewport_window::imgui()
     else
     {
         m_is_hovered = false;
-        m_viewport_window->set_window_viewport(
+        viewport_window->set_window_viewport(
             0,
             0,
             0,

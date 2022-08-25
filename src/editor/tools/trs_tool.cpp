@@ -770,8 +770,8 @@ void Trs_tool::imgui()
 
 auto Trs_tool::on_hover() -> bool
 {
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }
@@ -826,8 +826,8 @@ auto Trs_tool::on_drag() -> bool
 
 auto Trs_tool::on_drag_ready() -> bool
 {
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }
@@ -933,8 +933,8 @@ void Trs_tool::update_axis_translate()
 {
     ERHE_PROFILE_FUNCTION
 
-    const Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return;
     }
@@ -1126,8 +1126,8 @@ void Trs_tool::update_plane_translate()
 {
     ERHE_PROFILE_FUNCTION
 
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return;
     }
@@ -1197,8 +1197,8 @@ auto Trs_tool::project_to_offset_plane(
 
 auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> nonstd::optional<dvec3>
 {
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return {};
     }
@@ -1235,8 +1235,8 @@ void Trs_tool::update_rotate()
         return;
     }
 
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return;
     }
@@ -1283,8 +1283,8 @@ auto Trs_tool::update_rotate_circle_around() -> bool
 
 auto Trs_tool::update_rotate_parallel() -> bool
 {
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }
@@ -1341,8 +1341,8 @@ void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
 
 void Trs_tool::update_once_per_frame(const erhe::components::Time_context&)
 {
-    Viewport_window* const viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return;
     }

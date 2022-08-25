@@ -81,7 +81,7 @@ public:
     void tool_render(const Render_context& context) override;
 
     // Public API
-    [[nodiscard]] auto viewport_window() const -> Viewport_window*;
+    [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
 
     // Command
     void on_inactive();

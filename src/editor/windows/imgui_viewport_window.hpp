@@ -41,8 +41,8 @@ public:
     Imgui_viewport_window();
 
     Imgui_viewport_window(
-        const std::string_view name,
-        Viewport_window*       viewport_window
+        const std::string_view                  name,
+        const std::shared_ptr<Viewport_window>& viewport_window
     );
 
     // Implements Imgui_window
@@ -68,13 +68,13 @@ public:
     ) const -> erhe::scene::Viewport override;
 
     // Public API
-    [[nodiscard]] auto viewport_window() const -> Viewport_window*;
+    [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
     [[nodiscard]] auto is_hovered     () const -> bool;
 
 private:
-    Viewport_window*      m_viewport_window{nullptr};
-    bool                  m_is_hovered     {false};
-    erhe::scene::Viewport m_viewport;
+    std::weak_ptr<Viewport_window> m_viewport_window;
+    bool                           m_is_hovered     {false};
+    erhe::scene::Viewport          m_viewport;
 };
 
 inline auto is_imgui_viewport_window(erhe::application::Imgui_window* window) -> bool

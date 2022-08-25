@@ -111,8 +111,8 @@ void Hover_tool::on_inactive()
 
 auto Hover_tool::try_call() -> bool
 {
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return false;
     }
@@ -256,7 +256,7 @@ void Hover_tool::tool_render(
     }
 }
 
-[[nodiscard]] auto Hover_tool::viewport_window() const -> Viewport_window*
+[[nodiscard]] auto Hover_tool::viewport_window() const -> std::shared_ptr<Viewport_window>
 {
     return m_viewport_windows->hover_window();
 }
@@ -283,8 +283,8 @@ void Hover_tool::select()
 {
     ERHE_PROFILE_FUNCTION
 
-    Viewport_window* viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
     {
         return;
     }
