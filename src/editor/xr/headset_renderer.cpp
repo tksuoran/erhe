@@ -216,12 +216,14 @@ void Headset_renderer::render()
                 };
 
                 m_editor_rendering->render_content(render_context);
-                m_tools->render_tools(render_context);
 
                 if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)
                 {
                     ERHE_PROFILE_GPU_SCOPE(c_id_headset_render_content)
+                    m_line_renderer_set->begin();
+                    m_tools->render_tools(render_context);
                     m_line_renderer_set->render(viewport, *render_context.camera);
+                    m_line_renderer_set->end();
                 }
             }
 

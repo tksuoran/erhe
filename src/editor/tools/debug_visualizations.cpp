@@ -507,6 +507,11 @@ void Debug_visualizations::tool_render(
     }
 
 
+    if (context.window == nullptr)
+    {
+        return;
+    }
+
     const Scene_root* scene_root = context.window->scene_root();
     for (const auto& light : scene_root->layers().light()->lights)
     {
