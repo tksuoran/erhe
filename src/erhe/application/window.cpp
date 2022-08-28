@@ -72,7 +72,7 @@ auto Window::create_gl_window() -> bool
             .use_finish        = configuration.window.use_finish,
             .width             = configuration.window.width,
             .height            = configuration.window.height,
-            .msaa_sample_count = (configuration.imgui.enabled || configuration.graphics.post_processing)
+            .msaa_sample_count = (configuration.imgui.window_viewport || configuration.graphics.post_processing)
                 ? 0
                 : configuration.graphics.msaa_sample_count,
             .swap_interval     = configuration.window.swap_interval,

@@ -6,6 +6,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     commands/command.cpp
     commands/command.hpp
+    commands/commands.cpp
+    commands/commands.hpp
     commands/command_binding.cpp
     commands/command_binding.hpp
     commands/command_context.cpp

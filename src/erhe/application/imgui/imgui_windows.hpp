@@ -5,12 +5,12 @@
 namespace erhe::application
 {
 
+class Commands;
 class Imgui_renderer;
 class Imgui_viewport;
 class Imgui_window;
 class Imgui_windows;
 class Rendergraph;
-class View;
 class Window_imgui_viewport;
 
 /// <summary>
@@ -64,7 +64,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<View>                        m_view;
+    std::shared_ptr<Commands>                    m_commands;
     std::shared_ptr<Imgui_renderer>              m_imgui_renderer;
     std::shared_ptr<Rendergraph>                 m_render_graph;
 

@@ -16,13 +16,14 @@
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
 
+#include "erhe/application/commands/commands.hpp"
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
-#include "erhe/scene/mesh.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
@@ -245,7 +246,7 @@ Selection_tool::~Selection_tool() noexcept
 
 void Selection_tool::declare_required_components()
 {
-    require<erhe::application::View>();
+    require<erhe::application::Commands>();
     require<Tools>();
 }
 
@@ -253,12 +254,12 @@ void Selection_tool::initialize_component()
 {
     get<Tools>()->register_tool(this);
 
-    const auto view = get<erhe::application::View>();
+    const auto commands = get<erhe::application::Commands>();
 
-    view->register_command           (&m_select_command);
-    view->register_command           (&m_delete_command);
-    view->bind_command_to_mouse_click(&m_select_command, erhe::toolkit::Mouse_button_left);
-    view->bind_command_to_key        (&m_delete_command, erhe::toolkit::Key_delete, true);
+    commands->register_command           (&m_select_command);
+    commands->register_command           (&m_delete_command);
+    commands->bind_command_to_mouse_click(&m_select_command, erhe::toolkit::Mouse_button_left);
+    commands->bind_command_to_key        (&m_delete_command, erhe::toolkit::Key_delete, true);
 }
 
 void Selection_tool::post_initialize()

@@ -1,15 +1,15 @@
 #include "editor_rendering.hpp"
 
 #include "editor_log.hpp"
-#include "rendertarget_node.hpp"
-#include "rendertarget_imgui_viewport.hpp"
 #include "renderers/forward_renderer.hpp"
-#include "renderers/mesh_memory.hpp"
-#include "rendergraph/post_processing.hpp"
-#include "renderers/programs.hpp"
 #include "renderers/id_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
+#include "rendergraph/post_processing.hpp"
+#include "rendertarget_imgui_viewport.hpp"
+#include "rendertarget_node.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -20,19 +20,19 @@
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
 #endif
-#include "rendertarget_imgui_viewport.hpp"
 
 #include "erhe/application/application.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/time.hpp"
-#include "erhe/application/view.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/window.hpp"
 #include "erhe/application/imgui/window_imgui_viewport.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/time.hpp"
+#include "erhe/application/view.hpp"
+#include "erhe/application/window.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -69,16 +69,16 @@ void Editor_rendering::declare_required_components()
     require<Programs   >();
     require<Mesh_memory>();
     require<erhe::application::Gl_context_provider>();
-    require<erhe::application::View               >();
+    require<erhe::application::Commands           >();
     m_configuration = require<erhe::application::Configuration>();
 }
 
 void Editor_rendering::initialize_component()
 {
-    const auto& view = get<erhe::application::View>();
+    const auto& commands = get<erhe::application::Commands>();
 
-    view->register_command(&m_capture_frame_command);
-    view->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+    commands->register_command(&m_capture_frame_command);
+    commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
 
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()

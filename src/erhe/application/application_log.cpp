@@ -37,9 +37,9 @@ void initialize_logging()
     log_tools                    = erhe::log::make_logger("erhe::application::tools",                    spdlog::level::info);
     log_windows                  = erhe::log::make_logger("erhe::application::windows",                  spdlog::level::info);
     log_shader_monitor           = erhe::log::make_logger("erhe::application::shader_monitor",           spdlog::level::info);
-    log_imgui                    = erhe::log::make_logger("erhe::application::imgui",                    spdlog::level::trace);
-    log_frame                    = erhe::log::make_logger("erhe::application::frame",                    spdlog::level::trace, false);
-    log_imnodes                  = erhe::log::make_logger("imnodes",                                     spdlog::level::trace);
+    log_imgui                    = erhe::log::make_logger("erhe::application::imgui",                    spdlog::level::info);
+    log_frame                    = erhe::log::make_logger("erhe::application::frame",                    spdlog::level::info, false);
+    log_imnodes                  = erhe::log::make_logger("imnodes",                                     spdlog::level::info);
 }
 
 }

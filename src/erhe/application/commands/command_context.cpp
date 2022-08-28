@@ -1,17 +1,18 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/commands/command.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/view.hpp"
 
 namespace erhe::application
 {
 
 Command_context::Command_context(
-    View&         view,
+    Commands&     commands,
     Imgui_window* window,
     glm::dvec2    vec2_absolute_value,
     glm::dvec2    vec2_relative_value
 )
-    : m_view               {view}
+    : m_commands           {commands}
     , m_window             {window}
     , m_vec2_absolute_value{vec2_absolute_value}
     , m_vec2_relative_value{vec2_relative_value}
@@ -35,12 +36,12 @@ auto Command_context::get_vec2_relative_value() -> glm::dvec2
 
 auto Command_context::accept_mouse_command(Command* command) -> bool
 {
-    return m_view.accept_mouse_command(command);
+    return m_commands.accept_mouse_command(command);
 }
 
-auto Command_context::view() const -> View&
+auto Command_context::commands() const -> Commands&
 {
-    return m_view;
+    return m_commands;
 }
 
 } // namespace erhe::application

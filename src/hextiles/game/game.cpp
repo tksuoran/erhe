@@ -8,7 +8,7 @@
 #include "game/game_window.hpp"
 
 #include "erhe/application/time.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/commands/commands.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
@@ -47,30 +47,30 @@ Game::~Game() noexcept
 
 void Game::declare_required_components()
 {
-    require<erhe::application::View>();
+    require<erhe::application::Commands>();
 }
 
 void Game::initialize_component()
 {
-    const auto view = get<erhe::application::View>();
+    const auto commands = get<erhe::application::Commands>();
 
-    view->register_command(&m_move_unit_n_command );
-    view->register_command(&m_move_unit_ne_command);
-    view->register_command(&m_move_unit_se_command);
-    view->register_command(&m_move_unit_s_command );
-    view->register_command(&m_move_unit_sw_command);
-    view->register_command(&m_move_unit_nw_command);
-    view->register_command(&m_select_previous_unit_command);
-    view->register_command(&m_select_next_unit_command);
+    commands->register_command(&m_move_unit_n_command );
+    commands->register_command(&m_move_unit_ne_command);
+    commands->register_command(&m_move_unit_se_command);
+    commands->register_command(&m_move_unit_s_command );
+    commands->register_command(&m_move_unit_sw_command);
+    commands->register_command(&m_move_unit_nw_command);
+    commands->register_command(&m_select_previous_unit_command);
+    commands->register_command(&m_select_next_unit_command);
 
-    view->bind_command_to_key(&m_move_unit_n_command ,         erhe::toolkit::Key_home,      false);
-    view->bind_command_to_key(&m_move_unit_ne_command,         erhe::toolkit::Key_page_up,   false);
-    view->bind_command_to_key(&m_move_unit_se_command,         erhe::toolkit::Key_page_down, false);
-    view->bind_command_to_key(&m_move_unit_s_command ,         erhe::toolkit::Key_end,       false);
-    view->bind_command_to_key(&m_move_unit_sw_command,         erhe::toolkit::Key_delete,    false);
-    view->bind_command_to_key(&m_move_unit_nw_command,         erhe::toolkit::Key_insert,    false);
-    view->bind_command_to_key(&m_select_previous_unit_command, erhe::toolkit::Key_left,      false);
-    view->bind_command_to_key(&m_select_next_unit_command    , erhe::toolkit::Key_right,     false);
+    commands->bind_command_to_key(&m_move_unit_n_command ,         erhe::toolkit::Key_home,      false);
+    commands->bind_command_to_key(&m_move_unit_ne_command,         erhe::toolkit::Key_page_up,   false);
+    commands->bind_command_to_key(&m_move_unit_se_command,         erhe::toolkit::Key_page_down, false);
+    commands->bind_command_to_key(&m_move_unit_s_command ,         erhe::toolkit::Key_end,       false);
+    commands->bind_command_to_key(&m_move_unit_sw_command,         erhe::toolkit::Key_delete,    false);
+    commands->bind_command_to_key(&m_move_unit_nw_command,         erhe::toolkit::Key_insert,    false);
+    commands->bind_command_to_key(&m_select_previous_unit_command, erhe::toolkit::Key_left,      false);
+    commands->bind_command_to_key(&m_select_next_unit_command    , erhe::toolkit::Key_right,     false);
 }
 
 void Game::post_initialize()

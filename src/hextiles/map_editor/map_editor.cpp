@@ -4,7 +4,7 @@
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe/application/view.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_context.hpp"
 
 #include <imgui.h>
@@ -26,8 +26,7 @@ auto Map_primary_brush_command::try_call(erhe::application::Command_context& con
         return false;
     }
 
-    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
-    m_map_editor.primary_brush(window_position);
+    m_map_editor.primary_brush(context.get_vec2_absolute_value());
     return true;
 }
 
@@ -40,16 +39,12 @@ void Map_primary_brush_command::try_ready(erhe::application::Command_context& co
 
     // TODO only set ready when hovering over map
     set_ready(context);
-    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
-    m_map_editor.primary_brush(window_position);
+    m_map_editor.primary_brush(context.get_vec2_absolute_value());
 }
 
 auto Map_hover_command::try_call(erhe::application::Command_context& context) -> bool
 {
-    const auto window_position = context.view().to_window_top_left(context.get_vec2_absolute_value());
-    m_map_editor.hover(
-        window_position
-    );
+    m_map_editor.hover(context.get_vec2_absolute_value());
     return false;
 }
 
@@ -66,7 +61,7 @@ Map_editor::~Map_editor() noexcept
 
 void Map_editor::declare_required_components()
 {
-    require<erhe::application::View>();
+    require<erhe::application::Commands>();
     m_map_window = require<Map_window>();
 }
 
@@ -79,12 +74,12 @@ void Map_editor::initialize_component()
     File_read_stream file{"res/hextiles/map_new"};
     m_map->read(file);
 
-    const auto view = get<erhe::application::View>();
-    view->register_command(&m_map_hover_command);
-    view->register_command(&m_map_primary_brush_command);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_map_hover_command);
+    commands->register_command(&m_map_primary_brush_command);
 
-    view->bind_command_to_mouse_motion(&m_map_hover_command);
-    view->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
+    commands->bind_command_to_mouse_motion(&m_map_hover_command);
+    commands->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
 }
 
 void Map_editor::post_initialize()
@@ -98,8 +93,10 @@ auto Map_editor::get_map() -> std::shared_ptr<Map>
     return m_map;
 }
 
-void Map_editor::hover(glm::vec2 window_position)
+void Map_editor::hover(glm::vec2 position_in_root)
 {
+    const glm::vec2 window_position = m_map_window->to_content(position_in_root);
+
     m_hover_window_position = window_position;
 
     Pixel_coordinate hover_pixel_position{
@@ -110,8 +107,9 @@ void Map_editor::hover(glm::vec2 window_position)
     m_hover_tile_position = m_map_window->pixel_to_tile(hover_pixel_position);
 }
 
-void Map_editor::primary_brush(glm::vec2 mouse_position)
+void Map_editor::primary_brush(glm::vec2 position_in_root)
 {
+    const glm::vec2 mouse_position = m_map_window->to_content(position_in_root);
     const auto pixel_position = Pixel_coordinate{
         static_cast<pixel_t>(mouse_position.x),
         static_cast<pixel_t>(mouse_position.y)

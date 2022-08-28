@@ -74,6 +74,7 @@ protected:
     Imgui_viewport*   m_imgui_viewport{nullptr};
 
     bool              m_is_visible{true};
+
     const std::string m_title;
     const std::string m_label;
     float             m_min_size[2]{120.0f, 120.0f};

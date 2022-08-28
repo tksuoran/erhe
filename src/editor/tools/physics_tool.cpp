@@ -11,12 +11,13 @@
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/commands/commands.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/physics/iworld.hpp"
+#include "erhe/application/view.hpp"
 #include "erhe/physics/iconstraint.hpp"
+#include "erhe/physics/iworld.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -168,22 +169,22 @@ Physics_tool::~Physics_tool() noexcept
 
 void Physics_tool::declare_required_components()
 {
-    require<Tools                  >();
-    require<erhe::application::View>();
-    require<Operations             >();
+    require<erhe::application::Commands>();
+    require<Operations>();
+    require<Tools     >();
 }
 
 void Physics_tool::initialize_component()
 {
     get<Tools>()->register_tool(this);
 
-    const auto view = get<erhe::application::View>();
-    view->register_command(&m_drag_command);
-    view->register_command(&m_force_command);
-    view->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
-    view->bind_command_to_mouse_drag(&m_force_command, erhe::toolkit::Mouse_button_right);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_drag_command);
+    commands->register_command(&m_force_command);
+    commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
+    commands->bind_command_to_mouse_drag(&m_force_command, erhe::toolkit::Mouse_button_right);
 
-    erhe::application::Command_context context{*view.get()};
+    erhe::application::Command_context context{*commands.get()};
     set_active_command(c_command_drag);
 
     get<Operations>()->register_active_tool(this);
@@ -513,7 +514,7 @@ void Physics_tool::set_active_command(const int command)
 {
     m_active_command = command;
     erhe::application::Command_context context{
-        *get<erhe::application::View>().get()
+        *get<erhe::application::Commands>().get()
     };
 
     switch (command)

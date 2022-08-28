@@ -31,14 +31,8 @@ void Icon_set::declare_required_components()
 void Icon_set::initialize_component()
 {
     const auto& config = get<erhe::application::Configuration>();
-    if (!config->imgui.enabled)
-    {
-        return;
-    }
-
-    m_icon_width  = config->imgui.icon_size;
-    m_icon_height = config->imgui.icon_size;
-
+    m_icon_width   = config->imgui.icon_size;
+    m_icon_height  = config->imgui.icon_size;
     m_row_count    = 16;
     m_column_count = 16;
     m_row          = 0;

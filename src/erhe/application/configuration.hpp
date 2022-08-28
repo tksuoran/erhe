@@ -30,13 +30,13 @@ public:
     class Imgui
     {
     public:
-        bool        enabled     {true};
-        std::string primary_font{"res/fonts/SourceSansPro-Regular.otf"};
-        std::string mono_font   {"res/fonts/SourceCodePro-Semibold.otf"};
-        float       font_size   {17.0f};
-        int         icon_size   {16};
-        float       padding     {2.0f};
-        float       rounding    {3.0f};
+        bool        window_viewport{true};
+        std::string primary_font   {"res/fonts/SourceSansPro-Regular.otf"};
+        std::string mono_font      {"res/fonts/SourceCodePro-Semibold.otf"};
+        float       font_size      {17.0f};
+        int         icon_size      {16};
+        float       padding        {2.0f};
+        float       rounding       {3.0f};
     };
     Imgui imgui;
 

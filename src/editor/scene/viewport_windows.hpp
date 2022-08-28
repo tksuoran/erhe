@@ -155,7 +155,6 @@ private:
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
     std::shared_ptr<erhe::application::Rendergraph>       m_render_graph;
-    std::shared_ptr<erhe::application::View>              m_editor_view;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
     std::shared_ptr<Id_renderer>                          m_id_renderer;

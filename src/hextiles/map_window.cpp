@@ -10,6 +10,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
@@ -124,12 +125,12 @@ Map_window::~Map_window() noexcept
 #pragma region Component
 void Map_window::declare_required_components()
 {
-    require<erhe::application::Imgui_windows      >();
+    require<erhe::application::Commands           >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_renderer     >(); // required for Imgui_window
+    require<erhe::application::Imgui_windows      >();
 
-    m_editor_view = require<erhe::application::View>();
-    m_tiles       = require<Tiles>();
+    m_tiles = require<Tiles>();
 }
 
 void Map_window::initialize_component()
@@ -140,28 +141,28 @@ void Map_window::initialize_component()
 
     m_pixel_lookup = std::make_unique<Pixel_lookup>();
 
-    const auto view = get<erhe::application::View>();
-    view->register_command(&m_free_zoom_command);
-    view->register_command(&m_mouse_scroll_command);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_free_zoom_command);
+    commands->register_command(&m_mouse_scroll_command);
 
-    view->register_command(&m_scroll_left_command);
-    view->register_command(&m_scroll_right_command);
-    view->register_command(&m_scroll_up_command);
-    view->register_command(&m_scroll_down_command);
-    view->register_command(&m_zoom_in_command);
-    view->register_command(&m_zoom_out_command);
-    view->register_command(&m_grid_cycle_command);
+    commands->register_command(&m_scroll_left_command);
+    commands->register_command(&m_scroll_right_command);
+    commands->register_command(&m_scroll_up_command);
+    commands->register_command(&m_scroll_down_command);
+    commands->register_command(&m_zoom_in_command);
+    commands->register_command(&m_zoom_out_command);
+    commands->register_command(&m_grid_cycle_command);
 
-    view->bind_command_to_mouse_wheel(&m_free_zoom_command);
-    view->bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right);
+    commands->bind_command_to_mouse_wheel(&m_free_zoom_command);
+    commands->bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right);
 
-    view->bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_w, false);
-    view->bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);
-    view->bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_s, false);
-    view->bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_d, false);
-    view->bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_period, false);
-    view->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_comma,  false);
-    view->bind_command_to_key(&m_grid_cycle_command,   erhe::toolkit::Key_g,  false);
+    commands->bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_w, false);
+    commands->bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);
+    commands->bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_s, false);
+    commands->bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_d, false);
+    commands->bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_period, false);
+    commands->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_comma,  false);
+    commands->bind_command_to_key(&m_grid_cycle_command,   erhe::toolkit::Key_g,  false);
 }
 
 void Map_window::post_initialize()

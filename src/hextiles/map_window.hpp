@@ -190,7 +190,6 @@ private:
     std::shared_ptr<Tile_renderer>                    m_tile_renderer;
     std::shared_ptr<erhe::application::Text_renderer> m_text_renderer;
     std::shared_ptr<Tiles>                            m_tiles;
-    std::shared_ptr<erhe::application::View>          m_editor_view;
 
     // Commands
     Map_free_zoom_command         m_free_zoom_command;

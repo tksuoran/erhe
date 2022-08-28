@@ -64,15 +64,9 @@ void Editor_view_client::update()
         // animate_lights(time_context.time);
     }
     m_editor_rendering->begin_frame();
-
-    if (erhe::components::Component::get<erhe::application::Configuration>()->imgui.enabled)
-    {
-        m_imgui_windows->imgui_windows();
-    }
-
-    m_render_graph  ->execute();
-    m_imgui_renderer->next_frame();
-
+    m_imgui_windows   ->imgui_windows();
+    m_render_graph    ->execute();
+    m_imgui_renderer  ->next_frame();
     m_editor_rendering->end_frame();
 }
 

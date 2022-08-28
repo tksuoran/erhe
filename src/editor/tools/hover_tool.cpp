@@ -7,20 +7,21 @@
 #include "renderers/render_context.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
 
-#include "erhe/application/view.hpp"
 #include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/commands/commands.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/view.hpp"
 #include "erhe/log/log_glm.hpp"
-#include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -73,10 +74,10 @@ auto Hover_tool::description() -> const char*
 
 void Hover_tool::declare_required_components()
 {
+    require<erhe::application::Commands>();
+    require<erhe::application::Imgui_windows>();
     m_editor_scenes = require<Editor_scenes>();
     require<Tools>();
-    require<erhe::application::View>();
-    require<erhe::application::Imgui_windows>();
 }
 
 void Hover_tool::initialize_component()
@@ -88,9 +89,9 @@ void Hover_tool::initialize_component()
     m_hover_material->visible = false;
     get<Tools>()->register_background_tool(this);
 
-    const auto view = get<erhe::application::View>();
-    view->register_command(&m_hover_command);
-    view->bind_command_to_mouse_motion(&m_hover_command);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_hover_command);
+    commands->bind_command_to_mouse_motion(&m_hover_command);
 }
 
 void Hover_tool::post_initialize()

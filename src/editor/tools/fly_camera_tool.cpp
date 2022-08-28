@@ -9,10 +9,11 @@
 #include "scene/viewport_windows.hpp"
 #include "windows/imgui_viewport_window.hpp"
 
+#include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
@@ -176,9 +177,9 @@ void Fly_camera_tool::declare_required_components()
 {
     m_editor_tools = require<Tools>();
 
+    require<erhe::application::Commands>();
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
-    require<erhe::application::View>();
 }
 
 void Fly_camera_tool::initialize_component()
@@ -190,25 +191,25 @@ void Fly_camera_tool::initialize_component()
     m_editor_tools->register_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto& config = get<erhe::application::Configuration>()->camera_controls;
-    const auto& view   = get<erhe::application::View>();
+    const auto& commands = get<erhe::application::Commands>();
+    const auto& config   = get<erhe::application::Configuration>()->camera_controls;
 
     // TODO these commands should be registered
-    view->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_e, true );
-    view->bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_e, false);
-    view->bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_q, true );
-    view->bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_q, false);
-    view->bind_command_to_key(&m_move_left_active_command,       erhe::toolkit::Key_a, true );
-    view->bind_command_to_key(&m_move_left_inactive_command,     erhe::toolkit::Key_a, false);
-    view->bind_command_to_key(&m_move_right_active_command,      erhe::toolkit::Key_d, true );
-    view->bind_command_to_key(&m_move_right_inactive_command,    erhe::toolkit::Key_d, false);
-    view->bind_command_to_key(&m_move_forward_active_command,    erhe::toolkit::Key_w, true );
-    view->bind_command_to_key(&m_move_forward_inactive_command,  erhe::toolkit::Key_w, false);
-    view->bind_command_to_key(&m_move_backward_active_command,   erhe::toolkit::Key_s, true );
-    view->bind_command_to_key(&m_move_backward_inactive_command, erhe::toolkit::Key_s, false);
+    commands->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_e, true );
+    commands->bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_e, false);
+    commands->bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_q, true );
+    commands->bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_q, false);
+    commands->bind_command_to_key(&m_move_left_active_command,       erhe::toolkit::Key_a, true );
+    commands->bind_command_to_key(&m_move_left_inactive_command,     erhe::toolkit::Key_a, false);
+    commands->bind_command_to_key(&m_move_right_active_command,      erhe::toolkit::Key_d, true );
+    commands->bind_command_to_key(&m_move_right_inactive_command,    erhe::toolkit::Key_d, false);
+    commands->bind_command_to_key(&m_move_forward_active_command,    erhe::toolkit::Key_w, true );
+    commands->bind_command_to_key(&m_move_forward_inactive_command,  erhe::toolkit::Key_w, false);
+    commands->bind_command_to_key(&m_move_backward_active_command,   erhe::toolkit::Key_s, true );
+    commands->bind_command_to_key(&m_move_backward_inactive_command, erhe::toolkit::Key_s, false);
 
-    view->register_command(&m_turn_command);
-    view->bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
+    commands->register_command(&m_turn_command);
+    commands->bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
 
     m_camera_controller = std::make_shared<Frame_controller>();
 

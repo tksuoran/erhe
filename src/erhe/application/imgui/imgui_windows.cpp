@@ -1,12 +1,13 @@
 ﻿#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/application_log.hpp"
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/imgui/scoped_imgui_context.hpp"
 #include "erhe/application/imgui/window_imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -24,25 +25,34 @@ Imgui_windows::~Imgui_windows() noexcept
 
 void Imgui_windows::declare_required_components()
 {
+    require<Configuration>();
     m_imgui_renderer = require<Imgui_renderer>();
     m_render_graph   = require<Rendergraph>();
 }
 
 void Imgui_windows::initialize_component()
 {
-    m_window_imgui_viewport = std::make_shared<Window_imgui_viewport>(
-        "window_imgui_viewport",
-        *m_components
-    );
+    const auto& configuration = get<Configuration>();
 
-    register_imgui_viewport(m_window_imgui_viewport);
+    if (configuration->imgui.window_viewport)
+    {
+        m_window_imgui_viewport = std::make_shared<Window_imgui_viewport>(
+            "window_imgui_viewport",
+            *m_components
+        );
+
+        register_imgui_viewport(m_window_imgui_viewport);
+    }
 }
 
 void Imgui_windows::post_initialize()
 {
-    m_view = get<View>();
+    m_commands = get<Commands>();
 
-    m_window_imgui_viewport->post_initialize(*m_components);
+    if (m_window_imgui_viewport)
+    {
+        m_window_imgui_viewport->post_initialize(*m_components);
+    }
 }
 
 [[nodiscard]] auto Imgui_windows::get_mutex() -> std::mutex&
@@ -153,7 +163,7 @@ void Imgui_windows::imgui_windows()
                     )
                     {
                         any_mouse_input_sink = true;
-                        m_view->set_mouse_input_sink(imgui_window);
+                        m_commands->set_mouse_input_sink(imgui_window);
                     }
                     imgui_window->end();
                     ImGui::PopID();
@@ -166,7 +176,7 @@ void Imgui_windows::imgui_windows()
 
     if (!any_mouse_input_sink)
     {
-        m_view->set_mouse_input_sink(nullptr);
+        m_commands->set_mouse_input_sink(nullptr);
     }
 }
 
@@ -218,11 +228,18 @@ void Imgui_windows::window_menu()
 
 [[nodiscard]] auto Imgui_windows::want_capture_mouse() const -> bool
 {
-    return m_window_imgui_viewport->want_capture_mouse();
+    return m_window_imgui_viewport
+        ? m_window_imgui_viewport->want_capture_mouse()
+        : false;
 }
 
 void Imgui_windows::on_focus(int focused)
 {
+    if (!m_window_imgui_viewport)
+    {
+        return;
+    }
+
     Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_focus(focused);
@@ -230,6 +247,11 @@ void Imgui_windows::on_focus(int focused)
 
 void Imgui_windows::on_cursor_enter(int entered)
 {
+    if (!m_window_imgui_viewport)
+    {
+        return;
+    }
+
     Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_cursor_enter(entered);
@@ -240,6 +262,11 @@ void Imgui_windows::on_mouse_move(
     const double y
 )
 {
+    if (!m_window_imgui_viewport)
+    {
+        return;
+    }
+
     Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_mouse_move(x, y);

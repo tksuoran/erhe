@@ -18,26 +18,27 @@
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/view.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/physics/irigid_body.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -168,9 +169,9 @@ auto Trs_tool::description() -> const char*
 
 void Trs_tool::declare_required_components()
 {
+    require<erhe::application::Commands           >();
     require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Imgui_windows>();
-    require<erhe::application::View>();
+    require<erhe::application::Imgui_windows      >();
     m_editor_scenes  = require<Editor_scenes >();
     m_mesh_memory    = require<Mesh_memory   >();
     m_selection_tool = require<Selection_tool>();
@@ -221,11 +222,11 @@ void Trs_tool::initialize_component()
     get<Tools>()->register_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto view = get<erhe::application::View>();
-    view->register_command(&m_drag_command);
-    view->register_command(&m_hover_command);
-    view->bind_command_to_mouse_drag  (&m_drag_command, erhe::toolkit::Mouse_button_left);
-    view->bind_command_to_mouse_motion(&m_hover_command);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_drag_command);
+    commands->register_command(&m_hover_command);
+    commands->bind_command_to_mouse_drag  (&m_drag_command, erhe::toolkit::Mouse_button_left);
+    commands->bind_command_to_mouse_motion(&m_hover_command);
 }
 
 void Trs_tool::post_initialize()

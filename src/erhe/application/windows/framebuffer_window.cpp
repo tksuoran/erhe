@@ -56,6 +56,17 @@ auto Framebuffer_window::get_size(glm::vec2 available_size) const -> glm::vec2
     return glm::vec2{256.0f, 256.0f};
 }
 
+auto Framebuffer_window::to_content(const glm::vec2 position_in_root) const -> glm::vec2
+{
+    const float content_x = static_cast<float>(position_in_root.x) - m_content_rect_x;
+    const float content_y = static_cast<float>(position_in_root.y) - m_content_rect_y;
+    //const float content_flip_y = m_content_rect_height - content_y;
+    return {
+        content_x,
+        content_y
+    };
+}
+
 void Framebuffer_window::bind_framebuffer()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
@@ -162,6 +173,12 @@ void Framebuffer_window::imgui()
             m_viewport.height
         );
         m_is_hovered = ImGui::IsItemHovered();
+        const ImVec2 rect_min = ImGui::GetItemRectMin();
+        const ImVec2 rect_max = ImGui::GetItemRectMax();
+        m_content_rect_x      = rect_min.x;
+        m_content_rect_y      = rect_min.y;
+        m_content_rect_width  = rect_max.x - rect_min.x;
+        m_content_rect_height = rect_max.y - rect_min.y;
         ImGui::PopStyleVar();
     }
     update_framebuffer();

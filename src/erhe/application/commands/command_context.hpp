@@ -5,6 +5,7 @@
 namespace erhe::application {
 
 class Command;
+class Commands;
 class Imgui_window;
 class View;
 
@@ -12,7 +13,7 @@ class Command_context
 {
 public:
     explicit Command_context(
-        View&         view,
+        Commands&     commands,
         Imgui_window* window              = nullptr,
         glm::dvec2    vec2_absolute_value = glm::dvec2{0.0f, 0.0},
         glm::dvec2    vec2_relative_value = glm::dvec2{0.0f, 0.0}
@@ -23,10 +24,11 @@ public:
     [[nodiscard]] auto get_vec2_relative_value() -> glm::dvec2;
 
     [[nodiscard]] auto accept_mouse_command(Command* const command) -> bool;
-    [[nodiscard]] auto view                () const -> View&;
+    [[nodiscard]] auto commands            () const -> Commands&;
+    //// [[nodiscard]] auto view                () const -> View&;
 
 private:
-    View&         m_view;
+    Commands&     m_commands;
     Imgui_window* m_window             {nullptr};
     glm::dvec2    m_vec2_absolute_value{0.0f, 0.0};
     glm::dvec2    m_vec2_relative_value{0.0f, 0.0};

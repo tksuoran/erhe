@@ -3,7 +3,7 @@
 
 #include "editor_scenes.hpp"
 
-#include "erhe/application/view.hpp"
+#include "erhe/application/commands/commands.hpp"
 
 namespace editor
 {
@@ -49,19 +49,19 @@ Scene_commands::~Scene_commands() noexcept
 
 void Scene_commands::declare_required_components()
 {
-    require<erhe::application::View>();
+    require<erhe::application::Commands>();
 }
 
 void Scene_commands::initialize_component()
 {
-    auto view = get<erhe::application::View>();
+    const auto commands = get<erhe::application::Commands>();
 
-    view->register_command   (&m_create_new_camera_command);
-    view->register_command   (&m_create_new_empty_node_command);
-    view->register_command   (&m_create_new_light_command);
-    view->bind_command_to_key(&m_create_new_camera_command,     erhe::toolkit::Key_f2, true);
-    view->bind_command_to_key(&m_create_new_empty_node_command, erhe::toolkit::Key_f3, true);
-    view->bind_command_to_key(&m_create_new_light_command,      erhe::toolkit::Key_f4, true);
+    commands->register_command   (&m_create_new_camera_command);
+    commands->register_command   (&m_create_new_empty_node_command);
+    commands->register_command   (&m_create_new_light_command);
+    commands->bind_command_to_key(&m_create_new_camera_command,     erhe::toolkit::Key_f2, true);
+    commands->bind_command_to_key(&m_create_new_empty_node_command, erhe::toolkit::Key_f3, true);
+    commands->bind_command_to_key(&m_create_new_light_command,      erhe::toolkit::Key_f4, true);
 }
 
 void Scene_commands::post_initialize()

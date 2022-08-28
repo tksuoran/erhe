@@ -1,5 +1,5 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
 
@@ -62,7 +62,7 @@ Operation_stack::~Operation_stack() noexcept
 
 void Operation_stack::declare_required_components()
 {
-    require<erhe::application::View         >();
+    require<erhe::application::Commands     >();
     require<erhe::application::Imgui_windows>();
 }
 
@@ -70,11 +70,11 @@ void Operation_stack::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto view = get<erhe::application::View>();
-    view->register_command(&m_undo_command);
-    view->register_command(&m_redo_command);
-    view->bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
-    view->bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_undo_command);
+    commands->register_command(&m_redo_command);
+    commands->bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
+    commands->bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
 }
 
 auto Operation_stack::description() -> const char*

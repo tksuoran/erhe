@@ -1,7 +1,7 @@
 #include "erhe/application/windows/log_window.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/application_log.hpp"
 
 #include "erhe/toolkit/profile.hpp"
@@ -38,7 +38,7 @@ Log_window::~Log_window() noexcept
 void Log_window::declare_required_components()
 {
     require<Imgui_windows>();
-    require<View         >();
+    require<Commands     >();
 }
 
 void Log_window::initialize_component()
@@ -47,9 +47,9 @@ void Log_window::initialize_component()
     m_min_size[0] = 220.0f;
     m_min_size[1] = 120.0f;
 
-    const auto view = get<View>();
-    view->register_command   (&m_toggle_pause_command);
-    view->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
+    const auto commands = get<Commands>();
+    commands->register_command   (&m_toggle_pause_command);
+    commands->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
 }
 
 void Log_window::toggle_pause()

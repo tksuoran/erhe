@@ -16,14 +16,15 @@
 #include "tools/tools.hpp"
 #include "windows/imgui_viewport_window.hpp"
 
-#include "erhe/application/windows/log_window.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/imgui/window_imgui_viewport.hpp"
 #include "erhe/application/rendergraph/multisample_resolve.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/view.hpp"
-#include "erhe/application/imgui/window_imgui_viewport.hpp"
+#include "erhe/application/windows/log_window.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -34,8 +35,8 @@
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -75,18 +76,19 @@ Viewport_windows::~Viewport_windows() noexcept
 
 void Viewport_windows::declare_required_components()
 {
+    require<erhe::application::Commands>();
     m_configuration   = require<erhe::application::Configuration>();
     m_imgui_windows   = require<erhe::application::Imgui_windows>();
     m_render_graph    = require<erhe::application::Rendergraph  >();
-    m_editor_view     = require<erhe::application::View         >();
     m_post_processing = require<Post_processing>();
     m_shadow_renderer = require<Shadow_renderer >();
 }
 
 void Viewport_windows::initialize_component()
 {
-    m_editor_view->register_command   (&m_open_new_viewport_window_command);
-    m_editor_view->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command   (&m_open_new_viewport_window_command);
+    commands->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
 }
 
 void Viewport_windows::post_initialize()
@@ -169,10 +171,6 @@ auto Viewport_windows::create_imgui_viewport_window(
     const std::shared_ptr<Viewport_window>& viewport_window
 ) -> std::shared_ptr<Imgui_viewport_window>
 {
-    if (!m_configuration->imgui.enabled)
-    {
-        return {};
-    }
     const auto& window_imgui_viewport = m_imgui_windows->get_window_viewport();
 
     auto imgui_viewport_window = std::make_shared<Imgui_viewport_window>(
@@ -289,10 +287,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_configuration->imgui.enabled)
-    {
-        update_hover_from_imgui_windows(imgui_viewport);
-    }
+    update_hover_from_imgui_windows(imgui_viewport);
 }
 
 void Viewport_windows::update_hover_from_imgui_windows(erhe::application::Imgui_viewport* imgui_viewport)
@@ -325,7 +320,7 @@ void Viewport_windows::update_hover_from_imgui_windows(erhe::application::Imgui_
                 "mouse {}, {} hovers viewport {} @ {}",
                 m_mouse_x,
                 m_mouse_y,
-                window->name(),
+                viewport_window->name(),
                 viewport_position
             );
             viewport_window->update_pointer_context(

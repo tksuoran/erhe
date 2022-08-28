@@ -4,8 +4,8 @@
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
-#include "operations/operation_stack.hpp"
 #include "operations/insert_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/brush.hpp"
 #include "scene/helpers.hpp"
 #include "scene/material_library.hpp"
@@ -20,13 +20,14 @@
 #include "windows/materials_window.hpp"
 #include "windows/operations.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/commands/commands.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/geometry/operation/clone.hpp"
+#include "erhe/application/view.hpp"
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/geometry/operation/clone.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -104,8 +105,8 @@ Brushes::~Brushes() noexcept
 
 void Brushes::declare_required_components()
 {
+    require<erhe::application::Commands     >();
     require<erhe::application::Imgui_windows>();
-    require<erhe::application::View         >();
     require<Operations                      >();
     require<Tools                           >();
 }
@@ -117,11 +118,11 @@ void Brushes::initialize_component()
     get<Tools>()->register_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto view = get<erhe::application::View>();
-    view->register_command(&m_preview_command);
-    view->register_command(&m_insert_command);
-    view->bind_command_to_mouse_motion(&m_preview_command);
-    view->bind_command_to_mouse_click (&m_insert_command, erhe::toolkit::Mouse_button_right);
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_preview_command);
+    commands->register_command(&m_insert_command);
+    commands->bind_command_to_mouse_motion(&m_preview_command);
+    commands->bind_command_to_mouse_click (&m_insert_command, erhe::toolkit::Mouse_button_right);
 
     get<Operations>()->register_active_tool(this);
 }
@@ -259,9 +260,9 @@ auto Brushes::try_insert() -> bool
 
 void Brushes::on_enable_state_changed()
 {
-    const auto& view = get<erhe::application::View>();
+    const auto& commands = get<erhe::application::Commands>();
     erhe::application::Command_context command_context{
-        *view.get()
+        *commands.get()
     };
 
     if (is_enabled())

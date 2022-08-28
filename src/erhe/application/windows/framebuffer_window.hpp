@@ -43,6 +43,8 @@ public:
     // Implements Framebuffer window
     virtual auto get_size(glm::vec2 available_size) const -> glm::vec2;
 
+    [[nodiscard]] auto to_content(const glm::vec2 position_in_root) const -> glm::vec2;
+
     // Public API
     virtual void update_framebuffer();
 
@@ -50,8 +52,12 @@ public:
 
 protected:
     std::string                                         m_debug_label;
-    bool                                                m_is_hovered{false};
-    erhe::scene::Viewport                               m_viewport{0, 0, 0, 0, true};
+    bool                                                m_is_hovered         {false};
+    erhe::scene::Viewport                               m_viewport           {0, 0, 0, 0, true};
+    float                                               m_content_rect_x     {0.0f};
+    float                                               m_content_rect_y     {0.0f};
+    float                                               m_content_rect_width {0.0f};
+    float                                               m_content_rect_height{0.0f};
     erhe::graphics::Vertex_attribute_mappings           m_empty_attribute_mappings;
     erhe::graphics::Vertex_format                       m_empty_vertex_format;
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;

@@ -102,13 +102,13 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("imgui"))
         {
             const auto& section = ini["imgui"];
-            ini_get(section, "enabled",      imgui.enabled);
-            ini_get(section, "primary_font", imgui.primary_font);
-            ini_get(section, "mono_font",    imgui.mono_font);
-            ini_get(section, "font_size",    imgui.font_size);
-            ini_get(section, "icon_size",    imgui.icon_size);
-            ini_get(section, "padding",      imgui.padding);
-            ini_get(section, "rounding",     imgui.rounding);
+            ini_get(section, "window_viewport", imgui.window_viewport);
+            ini_get(section, "primary_font",    imgui.primary_font);
+            ini_get(section, "mono_font",       imgui.mono_font);
+            ini_get(section, "font_size",       imgui.font_size);
+            ini_get(section, "icon_size",       imgui.icon_size);
+            ini_get(section, "padding",         imgui.padding);
+            ini_get(section, "rounding",        imgui.rounding);
         }
         if (ini.has("headset"))
         {
@@ -289,8 +289,8 @@ Configuration::Configuration(int argc, char** argv)
     cxxopts::Options options("Editor", "Erhe Editor (C) 2022 Timo Suoranta");
 
     options.add_options()
-        ("gui",                        "Enable ImGui hosted viewports",         cxxopts::value<bool>()->default_value(str( imgui.enabled)))
-        ("no-gui",                     "Disable ImGui hosted viewports",        cxxopts::value<bool>()->default_value(str(!imgui.enabled)))
+        ("window-imgui-viewport",      "Enable hosting ImGui windows in window viewport",  cxxopts::value<bool>()->default_value(str( imgui.window_viewport)))
+        ("no-window-imgui-viewport",   "Disable hosting ImGui windows in window viewport", cxxopts::value<bool>()->default_value(str(!imgui.window_viewport)))
         ("openxr",                     "Enable OpenXR HMD support",             cxxopts::value<bool>()->default_value(str( headset.openxr)))
         ("no-openxr",                  "Disable OpenXR HMD support",            cxxopts::value<bool>()->default_value(str(!headset.openxr)))
         ("parallel-initialization",    "Use parallel component initialization", cxxopts::value<bool>()->default_value(str( threading.parallel_initialization)))
@@ -302,7 +302,7 @@ Configuration::Configuration(int argc, char** argv)
     {
         auto arguments = options.parse(argc, argv);
 
-        imgui.enabled                     = arguments["gui"                    ].as<bool>() && !arguments["no-gui"                    ].as<bool>();
+        imgui.window_viewport             = arguments["window-imgui-viewport"  ].as<bool>() && !arguments["no-window-imgui-viewport"  ].as<bool>();
         headset.openxr                    = arguments["openxr"                 ].as<bool>() && !arguments["no-openxr"                 ].as<bool>();
         threading.parallel_initialization = arguments["parallel-initialization"].as<bool>() && !arguments["no-parallel-initialization"].as<bool>();
         graphics.reverse_depth            = arguments["reverse-depth"          ].as<bool>() && !arguments["no-reverse-depth"          ].as<bool>();

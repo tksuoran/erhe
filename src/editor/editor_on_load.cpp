@@ -54,25 +54,26 @@
 #include "scene/viewport_windows.hpp"
 
 #include "erhe/application/application.hpp"
-#include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/time.hpp"
-#include "erhe/application/view.hpp"
-#include "erhe/application/window.hpp"
+#include "erhe/application/commands/commands.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include "erhe/application/imgui/imgui_renderer.hpp"
 #endif
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/renderdoc_capture_support.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
+#include "erhe/application/time.hpp"
+#include "erhe/application/view.hpp"
+#include "erhe/application/window.hpp"
 #include "erhe/application/windows/imgui_demo_window.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/windows/pipelines.hpp"
-#include "erhe/application/renderdoc_capture_support.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -111,6 +112,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(window);
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
+        m_components.add(make_shared<erhe::application::Commands          >());
         m_components.add(make_shared<erhe::application::Imgui_windows     >());
         m_components.add(make_shared<erhe::application::Time              >());
         m_components.add(make_shared<erhe::application::View              >());

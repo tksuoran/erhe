@@ -1,6 +1,6 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/application_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -44,7 +44,7 @@ void Command::set_inactive(Command_context& context)
     );
     on_inactive(context);
     m_state = State::Inactive;
-    context.view().command_inactivated(this);
+    context.commands().command_inactivated(this);
 };
 
 void Command::disable(Command_context& context)
