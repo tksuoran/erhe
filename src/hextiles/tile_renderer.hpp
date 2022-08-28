@@ -35,6 +35,7 @@ namespace erhe::graphics
     class Buffer;
     class OpenGL_state_tracker;
     class Sampler;
+    class Shader_resource;
     class Shader_stages;
     class Texture;
 }
@@ -180,6 +181,7 @@ private:
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Tiles>                                m_tiles;
 
+    erhe::graphics::Shader_resource                  m_default_uniform_block; // containing sampler uniforms for non bindless textures
     erhe::graphics::Fragment_outputs                 m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings        m_attribute_mappings;
     erhe::graphics::Vertex_format                    m_vertex_format;

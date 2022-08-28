@@ -206,7 +206,7 @@ void Vertex_input_state::update()
             gl_name(),
             attribute.layout_location,
             attribute.vertex_buffer->gl_name(),
-            intptr_t{0},
+            intptr_t{attribute.offset},
             attribute.stride
         );
 
@@ -231,7 +231,7 @@ void Vertex_input_state::update()
                     attribute.layout_location,
                     attribute.dimension,
                     static_cast<gl::Vertex_attrib_i_type>(attribute.data_type),
-                    attribute.offset
+                    0
                 );
                 break;
             }
@@ -256,7 +256,7 @@ void Vertex_input_state::update()
                     attribute.dimension,
                     attribute.data_type,
                     attribute.normalized ? GL_TRUE : GL_FALSE,
-                    attribute.offset
+                    0
                 );
                 break;
             }
@@ -281,7 +281,7 @@ void Vertex_input_state::update()
                     attribute.layout_location,
                     attribute.dimension,
                     static_cast<gl::Vertex_attrib_l_type>(attribute.data_type),
-                    attribute.offset
+                    0
                 );
                 break;
             }

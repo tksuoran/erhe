@@ -2,7 +2,9 @@
 #include "map_window.hpp"
 #include "tile_renderer.hpp"
 #include "erhe/application/view.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 
@@ -30,7 +32,9 @@ void Hextiles_view_client::initialize_component()
 
 void Hextiles_view_client::post_initialize()
 {
-    m_imgui_windows          = get<erhe::application::Imgui_windows    >();
+    m_imgui_renderer         = get<erhe::application::Imgui_renderer>();
+    m_imgui_windows          = get<erhe::application::Imgui_windows >();
+    m_rendergraph            = get<erhe::application::Rendergraph   >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 
     m_tile_renderer = get<Tile_renderer>();
@@ -39,9 +43,12 @@ void Hextiles_view_client::post_initialize()
 
 void Hextiles_view_client::update()
 {
-    // TODO Use render graph?
-    m_map_window->render();
-    m_tile_renderer->next_frame();
+    // TODO Use more render graph
+    m_map_window    ->render();
+    m_imgui_windows ->imgui_windows();
+    m_rendergraph   ->execute();
+    m_imgui_renderer->next_frame();
+    m_tile_renderer ->next_frame();
 }
 
 void Hextiles_view_client::update_keyboard(

@@ -287,6 +287,16 @@ void Text_renderer::initialize_component()
         }
 
         Shader_stages::Prototype prototype{create_info};
+        if (
+            !prototype.is_valid()
+            //prototype.m_handle.gl_name() == 0 ||
+            //prototype.m_attached_shaders.empty()
+        )
+        {
+            log_startup->error("Text renderer shader compilation failed");
+            return;
+        }
+
         m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
     }
 

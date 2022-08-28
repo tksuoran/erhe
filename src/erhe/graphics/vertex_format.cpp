@@ -40,7 +40,7 @@ void Vertex_format::add_attribute(
     );
 
     const std::size_t attribute_stride = attribute.data_type.dimension * gl_helpers::size_of_type(attribute.data_type.type);
-    align_to(attribute_stride);
+    // Note: Vertex attributes have no alignment requirements - do *not* align attribute offsets
     auto& new_attribute = m_attributes.emplace_back(attribute);
     new_attribute.offset = m_stride;
     m_stride += attribute_stride;

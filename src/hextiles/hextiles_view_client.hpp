@@ -3,6 +3,14 @@
 #include "erhe/application/view.hpp"
 #include "erhe/components/components.hpp"
 
+namespace erhe::application {
+
+class Imgui_renderer;
+class Imgui_windows;
+class Rendergraph;
+
+}
+
 namespace erhe::graphics
 {
     class OpenGL_state_tracker;
@@ -42,7 +50,9 @@ public:
     void update_mouse(const double x, const double y) override;
 
 private:
+    std::shared_ptr<erhe::application::Imgui_renderer>    m_imgui_renderer;
     std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
+    std::shared_ptr<erhe::application::Rendergraph>       m_rendergraph;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Tile_renderer> m_tile_renderer;
     std::shared_ptr<Map_window  > m_map_window;

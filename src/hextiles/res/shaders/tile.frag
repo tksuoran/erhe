@@ -5,8 +5,10 @@ in flat uvec2 v_texture;
 
 void main(void)
 {
+#if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
-    //sampler2DArray s_texture = sampler2DArray(v_texture);
+#endif
+
     vec4      t_color   = texture(s_texture, v_texcoord);
 
     out_color = v_color * t_color;

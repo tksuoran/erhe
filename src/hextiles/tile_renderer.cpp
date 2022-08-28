@@ -268,12 +268,6 @@ void Tile_renderer::initialize_component()
     const fs::path fs_path = shader_path / fs::path("tile.frag");
     Shader_stages::Create_info create_info{
         .name                      = "tile",
-        .extensions                = {
-            {
-                .shader_stage = gl::Shader_type::fragment_shader,
-                .extension    = "GL_ARB_bindless_texture"
-            }
-        },
         .interface_blocks          = { m_projection_block.get() },
         .vertex_attribute_mappings = &m_attribute_mappings,
         .fragment_outputs          = &m_fragment_outputs,
@@ -282,6 +276,22 @@ void Tile_renderer::initialize_component()
             { gl::Shader_type::fragment_shader, fs_path }
         }
     };
+
+    if (erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+    }
+    else
+    {
+        m_default_uniform_block.add_sampler(
+            "s_texture",
+            gl::Uniform_type::sampler_2d,
+            0
+        );
+        create_info.default_uniform_block = &m_default_uniform_block;
+    }
+
     Shader_stages::Prototype prototype{create_info};
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
     get<erhe::application::Shader_monitor>()->add(create_info, m_shader_stages.get());
@@ -796,7 +806,6 @@ void Tile_renderer::blit(
     const float    u1    = static_cast<float>(src_x + width ) / static_cast<float>(m_tileset_texture->width());
     const float    v1    = static_cast<float>(src_y + height) / static_cast<float>(m_tileset_texture->height());
 
-    //const uint32_t color = 0xffffffffu;
     const float&   x0    = dst_x0;
     const float&   y0    = dst_y0;
     const float&   x1    = dst_x1;
@@ -825,6 +834,7 @@ void Tile_renderer::blit(
     m_gpu_uint_data [m_word_offset++] = color;
     m_gpu_float_data[m_word_offset++] = u0;
     m_gpu_float_data[m_word_offset++] = v1;
+
     m_index_count += 5;
 }
 
@@ -849,7 +859,10 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
 
     erhe::graphics::Scoped_debug_group pass_scope{c_tile_renderer_render};
 
-    const auto handle = erhe::graphics::get_handle(*m_tileset_texture.get(), *m_nearest_sampler.get());
+    const auto handle = erhe::graphics::get_handle(
+        *m_tileset_texture.get(),
+        *m_nearest_sampler.get()
+    );
     //m_tileset_texture->get_handle();
 
     m_projection_writer.begin(current_frame_resources().projection_buffer.target());
@@ -902,14 +915,28 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
         static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
     );
 
-    gl::make_texture_handle_resident_arb(handle);
+    if (erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        gl::make_texture_handle_resident_arb(handle);
+    }
+    else
+    {
+        gl::bind_texture_unit(0, m_tileset_texture->gl_name());
+        gl::bind_sampler     (0, m_nearest_sampler->gl_name());
+    }
+
     gl::draw_elements(
         pipeline.data.input_assembly.primitive_topology,
         static_cast<GLsizei>(m_index_count),
         gl::Draw_elements_type::unsigned_int,
         reinterpret_cast<const void*>(m_index_range_first * 4)
     );
-    gl::make_texture_handle_non_resident_arb(handle);
+
+    if (erhe::graphics::Instance::info.use_bindless_texture)
+    {
+        gl::make_texture_handle_non_resident_arb(handle);
+    }
+
     gl::disable(gl::Enable_cap::primitive_restart_fixed_index);
 
     m_index_range_first += m_index_count;

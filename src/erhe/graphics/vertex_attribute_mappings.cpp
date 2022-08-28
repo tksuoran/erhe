@@ -60,7 +60,7 @@ void Vertex_attribute_mappings::collect_attributes(
                 attribute->usage.index
             );
 
-                if (attribute == nullptr)
+            if (attribute == nullptr)
             {
                 log_vertex_attribute_mappings->error("bad vertex input state: attribute == nullptr");
                 continue;
