@@ -137,16 +137,15 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     // and size of the input node for the post processing
     // render graph node.
     //
-    // Output texture *should* be multisample resolved
-    const auto& texture = get_producer_output_texture(
+    // Output *should* be multisample resolved
+    const auto viewport = get_producer_output_viewport(
         erhe::application::Resource_routing::Resource_provided_by_consumer,
         erhe::application::Rendergraph_node_key::viewport
     );
 
     if (
-        texture &&
-        (m_width  == texture->width ()) &&
-        (m_height == texture->height())
+        (m_width  == viewport.width) &&
+        (m_height == viewport.height)
     )
     {
         return downsample_nodes_unchanged; // post processing nodes are
@@ -154,15 +153,8 @@ auto Post_processing_node::update_downsample_nodes() -> bool
 
     m_downsample_nodes.clear();
 
-    if (!texture)
-    {
-        m_width  = 0;
-        m_height = 0;
-        return downsample_nodes_changed;
-    }
-
-    m_width  = texture->width ();
-    m_height = texture->height();
+    m_width  = viewport.width;
+    m_height = viewport.height;
 
     int width  = m_width;
     int height = m_height;
@@ -633,6 +625,8 @@ void Post_processing::compose(Post_processing_node& node)
 {
     static constexpr std::string_view c_compose{"Post_processing::compose"};
 
+    erhe::graphics::Scoped_debug_group downsample_scope{"Compose"};
+
     ERHE_PROFILE_FUNCTION
     ERHE_PROFILE_GPU_SCOPE(c_compose)
 
@@ -705,7 +699,7 @@ void Post_processing::compose(Post_processing_node& node)
     parameter_writer.write_offset += m_parameter_block.size_bytes();
     parameter_writer.end();
 
-    const auto& output_texture = node.get_producer_output_texture(
+    const auto viewport = node.get_producer_output_viewport(
         erhe::application::Resource_routing::Resource_provided_by_consumer,
         erhe::application::Rendergraph_node_key::viewport
     );
@@ -714,21 +708,22 @@ void Post_processing::compose(Post_processing_node& node)
         erhe::application::Resource_routing::Resource_provided_by_consumer,
         erhe::application::Rendergraph_node_key::viewport
     );
+    const GLuint framebuffer_name = output_framebuffer ? output_framebuffer->gl_name() : 0;
 
     gl::bind_framebuffer(
         gl::Framebuffer_target::draw_framebuffer,
-        output_framebuffer->gl_name()
+        framebuffer_name
     );
 
     // TODO Add destination viewport Rendergraph_node
     gl::viewport(
-        0,
-        0,
-        output_texture->width(),
-        output_texture->height()
+        viewport.x,
+        viewport.y,
+        viewport.width,
+        viewport.height
     );
 
-    gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+    gl::clear_color(1.0f, 1.0f, 0.0f, 0.0f);
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 
     const auto& pipeline = m_compose_pipeline;

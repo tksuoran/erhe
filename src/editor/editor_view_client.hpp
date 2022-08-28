@@ -50,7 +50,7 @@ public:
 private:
     std::shared_ptr<erhe::application::Imgui_windows > m_imgui_windows;
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<erhe::application::Rendergraph  > m_render_graph;
+    std::shared_ptr<erhe::application::Rendergraph  >  m_render_graph;
 
     std::shared_ptr<Editor_rendering> m_editor_rendering;
     std::shared_ptr<Editor_scenes   > m_editor_scenes;

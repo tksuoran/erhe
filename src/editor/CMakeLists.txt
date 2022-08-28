@@ -66,6 +66,8 @@ erhe_target_sources_grouped(
     renderers/shadow_renderer.cpp
     renderers/shadow_renderer.hpp
 
+    rendergraph/basic_viewport_window.cpp
+    rendergraph/basic_viewport_window.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
 

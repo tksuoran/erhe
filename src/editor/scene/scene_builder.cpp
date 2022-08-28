@@ -280,6 +280,8 @@ void Scene_builder::setup_cameras()
     //);
     //camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
+    const auto& configuration = get<erhe::application::Configuration>();
+
     const auto& viewport_windows = get<Viewport_windows>();
     m_primary_viewport_window = viewport_windows->create_window(
         "Primary Viewport",
@@ -287,10 +289,19 @@ void Scene_builder::setup_cameras()
         camera_a.get()
     );
 
-    //auto primary_imgui_viewport_window =
-    viewport_windows->create_imgui_viewport_window(
-        m_primary_viewport_window
-    );
+    if (configuration->imgui.window_viewport)
+    {
+        //auto primary_imgui_viewport_window =
+        viewport_windows->create_imgui_viewport_window(
+            m_primary_viewport_window
+        );
+    }
+    else
+    {
+        viewport_windows->create_basic_viewport_window(
+            m_primary_viewport_window
+        );
+    }
 
     const auto& shadow_renderer = get<Shadow_renderer>();
     const auto& render_graph    = get<erhe::application::Rendergraph>();
@@ -324,11 +335,14 @@ void Scene_builder::setup_cameras()
     const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
     //render_graph->register_node(window_imgui_viewport);
 
-    render_graph->connect(
-        erhe::application::Rendergraph_node_key::window,
-        debug_view_window,
-        window_imgui_viewport
-    );
+    if (window_imgui_viewport)
+    {
+        render_graph->connect(
+            erhe::application::Rendergraph_node_key::window,
+            debug_view_window,
+            window_imgui_viewport
+        );
+    }
 
     // TODO debug_view_window should also depend on debug_view_render_node
 }

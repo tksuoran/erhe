@@ -117,7 +117,8 @@ public:
     void execute_rendergraph_node() override;
 
     // Public API
-    void set_window_viewport(int x, int y, int width, int height, bool is_hovered);
+    void set_window_viewport(int x, int y, int width, int height);
+    void set_is_hovered     (bool is_hovered);
     void set_camera         (erhe::scene::Camera* camera);
 
     [[nodiscard]] auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;

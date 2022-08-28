@@ -22,6 +22,7 @@ namespace erhe::application
     class Imgui_windows;
     class Rendergraph;
     class View;
+    class Window;
 }
 
 namespace erhe::graphics
@@ -32,6 +33,7 @@ namespace erhe::graphics
 namespace editor
 {
 
+class Basic_viewport_window;
 class Editor_rendering;
 class Id_renderer;
 class Imgui_viewport_window;
@@ -109,6 +111,10 @@ public:
         bool                               enable_post_processing = true
     ) -> std::shared_ptr<Viewport_window>;
 
+    auto create_basic_viewport_window(
+        const std::shared_ptr<Viewport_window>& viewport_window
+    ) -> std::shared_ptr<Basic_viewport_window>;
+
     auto create_imgui_viewport_window(
         const std::shared_ptr<Viewport_window>& viewport_window
     ) -> std::shared_ptr<Imgui_viewport_window>;
@@ -131,7 +137,6 @@ public:
     auto hover_window() -> std::shared_ptr<Viewport_window>;
     auto last_window () -> std::shared_ptr<Viewport_window>;
 
-    // Pointer_context(s) API
     void update_keyboard(
         bool                   pressed,
         erhe::toolkit::Keycode code,
@@ -149,12 +154,14 @@ public:
     [[nodiscard]] auto mouse_y              () const -> double;
 
 private:
-    void update_hover_from_imgui_windows(erhe::application::Imgui_viewport* imgui_viewport);
+    void update_hover_from_imgui_viewport_windows(erhe::application::Imgui_viewport* imgui_viewport);
+    void update_hover_from_basic_viewport_windows();
 
     // Component dependencies
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
-    std::shared_ptr<erhe::application::Rendergraph>       m_render_graph;
+    std::shared_ptr<erhe::application::Rendergraph>       m_rendergraph;
+    std::shared_ptr<erhe::application::Window>            m_window;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
     std::shared_ptr<Id_renderer>                          m_id_renderer;
@@ -167,6 +174,7 @@ private:
     Open_new_viewport_window_command m_open_new_viewport_window_command;
 
     std::mutex                                          m_mutex;
+    std::vector<std::shared_ptr<Basic_viewport_window>> m_basic_viewport_windows;
     std::vector<std::shared_ptr<Imgui_viewport_window>> m_imgui_viewport_windows;
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
     std::vector<std::weak_ptr<Viewport_window>>         m_hover_stack;

@@ -1,0 +1,85 @@
+#pragma once
+
+#include "erhe/application/rendergraph/sink_rendergraph_node.hpp"
+
+#include <glm/glm.hpp>
+
+#include <memory>
+
+namespace editor
+{
+
+class Viewport_window;
+class Window;
+
+class Basic_viewport_window
+    : public erhe::application::Sink_rendergraph_node
+{
+public:
+    static constexpr std::string_view c_type_name{"Basic_viewport_window"};
+    static constexpr uint32_t c_type_hash{
+        compiletime_xxhash::xxh32(
+            c_type_name.data(),
+            c_type_name.size(),
+            {}
+        )
+    };
+
+    Basic_viewport_window();
+
+    Basic_viewport_window(
+        const std::string_view                  name,
+        const std::shared_ptr<Viewport_window>& viewport_window
+    );
+
+    // Implements Rendergraph_node
+    [[nodiscard]] auto get_consumer_input_viewport(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> erhe::scene::Viewport override;
+
+    // Overridden to source viewport size from ImGui window
+    [[nodiscard]] auto get_producer_output_viewport(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> erhe::scene::Viewport override;
+
+    [[nodiscard]] auto get_consumer_input_texture(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+
+    [[nodiscard]] auto get_producer_output_texture(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+
+    [[nodiscard]] auto get_consumer_input_framebuffer(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+
+    [[nodiscard]] auto get_producer_output_framebuffer(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
+
+    // Public API
+    [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
+    [[nodiscard]] auto get_viewport   () const -> const erhe::scene::Viewport&;
+    void set_viewport  (erhe::scene::Viewport viewport);
+    void set_is_hovered(bool is_hovered);
+
+private:
+    std::weak_ptr<Viewport_window> m_viewport_window;
+    bool                           m_is_hovered     {false};
+    erhe::scene::Viewport          m_viewport;
+};
+
+} // namespace editor

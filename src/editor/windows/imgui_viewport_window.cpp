@@ -215,22 +215,16 @@ void Imgui_viewport_window::imgui()
                 static_cast<int>(rect_min.x),
                 static_cast<int>(rect_min.y),
                 m_viewport.width,
-                m_viewport.height,
-                m_is_hovered
+                m_viewport.height
             );
         }
     }
     else
     {
         m_is_hovered = false;
-        viewport_window->set_window_viewport(
-            0,
-            0,
-            0,
-            0,
-            m_is_hovered
-        );
+        viewport_window->set_window_viewport(0, 0, 0, 0);
     }
+    viewport_window->set_is_hovered(m_is_hovered);
 
     //m_viewport_config.imgui();
 

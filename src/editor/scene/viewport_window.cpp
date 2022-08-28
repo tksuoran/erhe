@@ -182,11 +182,10 @@ void Viewport_window::clear() const
 }
 
 void Viewport_window::set_window_viewport(
-    const int  x,
-    const int  y,
-    const int  width,
-    const int  height,
-    const bool is_hovered
+    const int x,
+    const int y,
+    const int width,
+    const int height
 )
 {
     m_window_viewport.x      = x;
@@ -197,6 +196,10 @@ void Viewport_window::set_window_viewport(
     m_projection_viewport.y      = 0;
     m_projection_viewport.width  = width;
     m_projection_viewport.height = height;
+}
+
+void Viewport_window::set_is_hovered(const bool is_hovered)
+{
     m_is_hovered = is_hovered;
 }
 
