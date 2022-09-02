@@ -2,11 +2,12 @@
 
 #include "windows/debug_view_window.hpp"
 #include "editor_log.hpp"
-#include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
+#include "rendergraph/shadow_render_node.hpp"
+#include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"

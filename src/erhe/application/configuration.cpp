@@ -140,6 +140,7 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("window"))
         {
             const auto& section = ini["window"];
+            ini_get(section, "show",          window.show);
             ini_get(section, "fullscreen",    window.fullscreen);
             ini_get(section, "use_finish",    window.use_finish);
             ini_get(section, "sleep_time",    window.sleep_time);

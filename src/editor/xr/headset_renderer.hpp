@@ -47,6 +47,7 @@ class Tools;
 class Headset_renderer
     : public erhe::components::Component
     , public erhe::application::Imgui_window
+    , public erhe::application::Rendergraph_node
 {
 public:
     static constexpr std::string_view c_name       {"Headset_renderer"};
@@ -55,6 +56,9 @@ public:
 
     Headset_renderer ();
     ~Headset_renderer() noexcept override;
+
+    // Implements Rendergraph_node
+    void execute_rendergraph_node() override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash                  () const -> uint32_t override { return c_type_hash; }
@@ -68,14 +72,13 @@ public:
 
     // Public API
     void begin_frame();
-    void render     ();
     auto scene_root () -> std::shared_ptr<Scene_root>;
     auto root_camera() -> std::shared_ptr<erhe::scene::Camera>;
 
 private:
     [[nodiscard]] auto get_headset_view_resources(
         erhe::xr::Render_view& render_view
-    ) -> Headset_view_resources&;
+    ) -> std::shared_ptr<Headset_view_resources>;
 
     void setup_root_camera();
 
@@ -88,12 +91,12 @@ private:
     std::shared_ptr<Hand_tracker>                         m_hand_tracker;
     std::shared_ptr<Tools>                                m_tools;
 
-    std::shared_ptr<Scene_root>               m_scene_root;
-    std::unique_ptr<erhe::xr::Headset>        m_headset;
-    std::shared_ptr<erhe::scene::Camera>      m_root_camera;
-    std::vector<Headset_view_resources>       m_view_resources;
-    std::unique_ptr<Controller_visualization> m_controller_visualization;
-    std::array<float, 4>                      m_clear_color{0.0f, 0.0f, 0.0f, 0.95f};
+    std::shared_ptr<Scene_root>                          m_scene_root;
+    std::unique_ptr<erhe::xr::Headset>                   m_headset;
+    std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
+    std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
+    std::unique_ptr<Controller_visualization>            m_controller_visualization;
+    std::array<float, 4>                                 m_clear_color{0.0f, 0.0f, 0.0f, 0.95f};
 };
 
 } // namespace editor

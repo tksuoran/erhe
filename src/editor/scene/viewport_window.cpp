@@ -5,11 +5,13 @@
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/id_renderer.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -88,6 +90,14 @@ Viewport_window::Viewport_window(
         "viewport",
         erhe::application::Rendergraph_node_key::viewport
     );
+}
+
+Viewport_window::~Viewport_window()
+{
+    if (m_viewport_windows)
+    {
+        m_viewport_windows->erase(this);
+    }
 }
 
 auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shader_stages*
@@ -172,13 +182,24 @@ void Viewport_window::clear() const
         m_viewport_config->clear_color[2],
         m_viewport_config->clear_color[3]
     );
+    gl::clear_color(
+        0.0f,
+        0.0f,
+        0.0f,
+        0.4f
+    );
     gl::clear_stencil(0);
     gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
     gl::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
-        gl::Clear_buffer_mask::depth_buffer_bit |
-        gl::Clear_buffer_mask::stencil_buffer_bit
+        gl::Clear_buffer_mask::depth_buffer_bit
+        //// TODO gl::Clear_buffer_mask::stencil_buffer_bit
     );
+}
+
+void Viewport_window::connect(Viewport_windows* viewport_windows)
+{
+    m_viewport_windows = viewport_windows;
 }
 
 void Viewport_window::set_window_viewport(

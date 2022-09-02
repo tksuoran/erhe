@@ -104,10 +104,11 @@ public:
     /// <param name="scene_root">Scene to be shown</param>
     /// <param name="camera">Initial camera to be used</param>
     /// <returns>The newly created Viewport_window</returns>
-    auto create_window(
+    auto create_viewport_window(
         const std::string_view             name,
         const std::shared_ptr<Scene_root>& scene_root,
         erhe::scene::Camera*               camera,
+        int                                msaa_sample_count,
         bool                               enable_post_processing = true
     ) -> std::shared_ptr<Viewport_window>;
 
@@ -118,6 +119,9 @@ public:
     auto create_imgui_viewport_window(
         const std::shared_ptr<Viewport_window>& viewport_window
     ) -> std::shared_ptr<Imgui_viewport_window>;
+
+    void erase(Viewport_window* viewport_window);
+    void erase(Basic_viewport_window* basic_viewport_window);
 
     auto open_new_viewport_window(
         const std::shared_ptr<Scene_root>& scene_root = {}
@@ -156,6 +160,7 @@ public:
 private:
     void update_hover_from_imgui_viewport_windows(erhe::application::Imgui_viewport* imgui_viewport);
     void update_hover_from_basic_viewport_windows();
+    void layout_basic_viewport_windows();
 
     // Component dependencies
     std::shared_ptr<erhe::application::Configuration>     m_configuration;

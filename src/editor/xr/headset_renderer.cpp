@@ -7,6 +7,8 @@
 #include "renderers/render_context.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 #include "windows/viewport_config.hpp"
 #include "xr/controller_visualization.hpp"
@@ -16,6 +18,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/window.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/windows/log_window.hpp"
@@ -42,20 +45,23 @@ namespace editor
 using erhe::graphics::Color_blend_state;
 
 Headset_renderer::Headset_renderer()
-    : erhe::components::Component{c_name}
-    , Imgui_window               {c_description}
+    : erhe::components::Component        {c_name}
+    , erhe::application::Imgui_window    {c_description}
+    , erhe::application::Rendergraph_node{c_description}
 {
 }
 
-Headset_renderer::~Headset_renderer() = default;
+Headset_renderer::~Headset_renderer()
+{
+}
 
 void Headset_renderer::declare_required_components()
 {
     m_configuration = require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
     require<erhe::application::Window>();
-    require<Scene_builder>();
     require<Mesh_memory>();
+    require<Scene_builder>();
 }
 
 void Headset_renderer::initialize_component()
@@ -99,23 +105,40 @@ void Headset_renderer::post_initialize()
 
 auto Headset_renderer::get_headset_view_resources(
     erhe::xr::Render_view& render_view
-) -> Headset_view_resources&
+) -> std::shared_ptr<Headset_view_resources>
 {
     auto match_color_texture = [&render_view](const auto& i)
     {
-        return i.color_texture->gl_name() == render_view.color_texture;
+        return i->color_texture->gl_name() == render_view.color_texture;
     };
 
-    const auto i = std::find_if(m_view_resources.begin(), m_view_resources.end(), match_color_texture);
+    const auto i = std::find_if(
+        m_view_resources.begin(),
+        m_view_resources.end(),
+        match_color_texture
+    );
+
     if (i == m_view_resources.end())
     {
-        auto& j = m_view_resources.emplace_back(
-            render_view,            // erhe::xr::Render_view& render_view,
-            *this,                  // Headset_renderer&      headset_renderer,
-            *m_scene_root,          // Scene_root&            scene_root,
-            m_view_resources.size() // const std::size_t      slot
+        auto resource = std::make_shared<Headset_view_resources>(
+            render_view,                               // erhe::xr::Render_view& render_view,
+            *this,                                     // Headset_renderer&      headset_renderer,
+            m_scene_root,                              // Scene_root&            scene_root,
+            static_cast<std::size_t>(render_view.slot) // const std::size_t      slot
         );
-        return j;
+        const std::string label = fmt::format(
+            "Headset Viewport_window slot {} color texture {}",
+            render_view.slot,
+            render_view.color_texture
+        );
+        resource->viewport_window = std::make_shared<Viewport_window>(
+            label,
+            *m_components,
+            m_scene_root,
+            resource->camera.get()
+        );
+        m_view_resources.push_back(resource);
+        return resource;
     }
     return *i;
 }
@@ -123,7 +146,7 @@ auto Headset_renderer::get_headset_view_resources(
 static constexpr std::string_view c_id_headset_clear{"HS clear"};
 static constexpr std::string_view c_id_headset_render_content{"HS render content"};
 
-void Headset_renderer::render()
+void Headset_renderer::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -152,15 +175,15 @@ void Headset_renderer::render()
 
         auto callback = [this, &context](erhe::xr::Render_view& render_view) -> bool
         {
-            auto& view_resources = get_headset_view_resources(render_view);
-            if (!view_resources.is_valid)
+            const auto& view_resources = get_headset_view_resources(render_view);
+            if (!view_resources->is_valid)
             {
                 return false;
             }
 
-            view_resources.update(render_view);
+            view_resources->update(render_view);
 
-            auto* framebuffer = view_resources.framebuffer.get();
+            auto* framebuffer = view_resources->framebuffer.get();
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
 
             auto status = gl::check_named_framebuffer_status(framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
@@ -209,13 +232,14 @@ void Headset_renderer::render()
             {
                 Viewport_config viewport_config;
                 Render_context render_context {
-                    .window          = nullptr,
+                    .window          = view_resources->viewport_window.get(),
                     .viewport_config = &viewport_config,
-                    .camera          = as_camera(view_resources.camera.get()),
+                    .camera          = as_camera(view_resources->camera.get()),
                     .viewport        = viewport
                 };
 
                 m_editor_rendering->render_content(render_context);
+                m_editor_rendering->render_rendertarget_nodes(render_context);
 
                 if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)
                 {
@@ -274,7 +298,6 @@ void Headset_renderer::begin_frame()
     {
         m_hand_tracker->update(*m_headset.get());
     }
-
 }
 
 void Headset_renderer::imgui()

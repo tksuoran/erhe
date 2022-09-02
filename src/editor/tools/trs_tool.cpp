@@ -1602,6 +1602,11 @@ void Trs_tool::update_transforms()
         return;
     }
     auto* scene_root = reinterpret_cast<Scene_root*>(m_target_node->node_data.host);
+    if (scene_root == nullptr)
+    {
+        log_trs_tool->error("Node '{}' has no scene root");
+        return;
+    }
     const auto serial = scene_root->scene().transform_update_serial();
     root()->update_transform(serial);
     //if (m_node_physics)

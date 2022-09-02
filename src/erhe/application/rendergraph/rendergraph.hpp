@@ -38,11 +38,18 @@ public:
 
     // Public API
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Rendergraph_node>>&;
-    void sort         ();
-    void execute      ();
-    void register_node(const std::shared_ptr<Rendergraph_node>& node);
+    void sort           ();
+    void execute        ();
+    void register_node  (const std::shared_ptr<Rendergraph_node>& node);
+    void unregister_node(Rendergraph_node* node);
 
     auto connect(
+        int                             key,
+        std::weak_ptr<Rendergraph_node> source_node,
+        std::weak_ptr<Rendergraph_node> sink_node
+    ) -> bool;
+
+    auto disconnect(
         int                             key,
         std::weak_ptr<Rendergraph_node> source_node,
         std::weak_ptr<Rendergraph_node> sink_node

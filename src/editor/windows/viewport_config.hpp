@@ -78,7 +78,7 @@ public:
 
     Render_style render_style_not_selected;
     Render_style render_style_selected;
-    glm::vec4    clear_color{0.18f, 0.41f, 0.58f, 1.0f};
+    glm::vec4    clear_color{0.18f, 0.41f, 0.58f, 0.4f};
     bool         post_processing_enable{true};
     //glm::vec4    clear_color{0.02f, 0.02f, 0.02f, 1.0f};
 

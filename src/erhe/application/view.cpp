@@ -71,14 +71,15 @@ void View::on_refresh()
     }
     if (!m_ready)
     {
-        gl::clear_color(0.3f, 0.3f, 0.3f, 1.0f);
-        gl::clear(
-            gl::Clear_buffer_mask::color_buffer_bit |
-            gl::Clear_buffer_mask::depth_buffer_bit |
-            gl::Clear_buffer_mask::stencil_buffer_bit
-        );
+        gl::clear_color(0.3f, 0.3f, 0.3f, 0.4f);
+        gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
         m_window->get_context_window()->swap_buffers();
         return;
+    }
+    else
+    {
+        gl::clear_color(0.0f, 0.0f, 0.0f, 0.4f);
+        gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
     }
 
     // TODO execute render graph?

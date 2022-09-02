@@ -9,6 +9,7 @@
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "rendergraph/basic_viewport_window.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -102,11 +103,44 @@ void Viewport_windows::post_initialize()
     m_viewport_config        = get<Viewport_config >();
 }
 
-auto Viewport_windows::create_window(
+void Viewport_windows::erase(Viewport_window* viewport_window)
+{
+    const auto i = std::remove_if(
+        m_viewport_windows.begin(),
+        m_viewport_windows.end(),
+        [viewport_window](const auto& entry)
+        {
+            return entry.get() == viewport_window;
+        }
+    );
+    //// const auto count = std::distance(i, m_viewport_windows.end());
+    m_viewport_windows.erase(i, m_viewport_windows.end());
+}
+
+void Viewport_windows::erase(Basic_viewport_window* basic_viewport_window)
+{
+    const auto i = std::remove_if(
+        m_basic_viewport_windows.begin(),
+        m_basic_viewport_windows.end(),
+        [basic_viewport_window](const auto& entry)
+        {
+            return entry.get() == basic_viewport_window;
+        }
+    );
+    //// const auto count = std::distance(i, m_basic_viewport_windows.end());
+    m_basic_viewport_windows.erase(i, m_basic_viewport_windows.end());
+    //// if (count == 0)
+    //// {
+    ////     log_windows->warn("nothing deleted");
+    //// }
+}
+
+auto Viewport_windows::create_viewport_window(
     const std::string_view             name,
     const std::shared_ptr<Scene_root>& scene_root,
     erhe::scene::Camera*               camera,
-    bool                               enable_post_processing
+    const int                          msaa_sample_count,
+    const bool                         enable_post_processing
 ) -> std::shared_ptr<Viewport_window>
 {
     const auto new_viewport_window = std::make_shared<Viewport_window>(
@@ -122,30 +156,42 @@ auto Viewport_windows::create_window(
     }
     m_rendergraph->register_node(new_viewport_window);
 
-    const auto& shadow_render_nodes = m_shadow_renderer->get_nodes();
-    if (!shadow_render_nodes.empty())
+    if (m_configuration->shadow_renderer.enabled)
     {
-        auto& shadow_render_node = shadow_render_nodes.front();
-        m_rendergraph->connect(
-            erhe::application::Rendergraph_node_key::shadow_maps,
-            shadow_render_node,
-            new_viewport_window
-        );
+        const auto& shadow_render_nodes = m_shadow_renderer->get_nodes();
+        if (!shadow_render_nodes.empty())
+        {
+            auto& shadow_render_node = shadow_render_nodes.front();
+            m_rendergraph->connect(
+                erhe::application::Rendergraph_node_key::shadow_maps,
+                shadow_render_node,
+                new_viewport_window
+            );
+        }
     }
 
-    auto multisample_resolve_node = std::make_shared<erhe::application::Multisample_resolve_node>(
-        fmt::format("MSAA for {}", name),
-        m_configuration->graphics.msaa_sample_count,
-        "viewport",
-        erhe::application::Rendergraph_node_key::viewport
-    );
-    new_viewport_window->link_to(multisample_resolve_node);
-    m_rendergraph->register_node(multisample_resolve_node);
-    m_rendergraph->connect(
-        erhe::application::Rendergraph_node_key::viewport,
-        new_viewport_window,
-        multisample_resolve_node
-    );
+    std::shared_ptr<erhe::application::Rendergraph_node> previous_node;
+    if (msaa_sample_count > 1)
+    {
+        auto multisample_resolve_node = std::make_shared<erhe::application::Multisample_resolve_node>(
+            fmt::format("MSAA for {}", name),
+            m_configuration->graphics.msaa_sample_count,
+            "viewport",
+            erhe::application::Rendergraph_node_key::viewport
+        );
+        new_viewport_window->link_to(multisample_resolve_node);
+        m_rendergraph->register_node(multisample_resolve_node);
+        m_rendergraph->connect(
+            erhe::application::Rendergraph_node_key::viewport,
+            new_viewport_window,
+            multisample_resolve_node
+        );
+        previous_node = multisample_resolve_node;
+    }
+    else
+    {
+        previous_node = new_viewport_window;
+    }
 
     std::shared_ptr<erhe::application::Rendergraph_node> viewport_producer;
     if (enable_post_processing)
@@ -158,14 +204,14 @@ auto Viewport_windows::create_window(
         m_rendergraph->register_node(post_processing_node);
         m_rendergraph->connect(
             erhe::application::Rendergraph_node_key::viewport,
-            multisample_resolve_node,
+            previous_node,
             post_processing_node
         );
         new_viewport_window->set_final_output(post_processing_node);
     }
     else
     {
-        new_viewport_window->set_final_output(multisample_resolve_node);
+        new_viewport_window->set_final_output(previous_node);
     }
     return new_viewport_window;
 }
@@ -186,6 +232,13 @@ auto Viewport_windows::create_basic_viewport_window(
         new_basic_viewport_window
     );
 
+    layout_basic_viewport_windows();
+
+    return new_basic_viewport_window;
+}
+
+void Viewport_windows::layout_basic_viewport_windows()
+{
     const int count           = static_cast<int>(m_basic_viewport_windows.size());
     const int a               = std::max<int>(1, static_cast<int>(std::sqrt(count)));
     const int b               = count / a;
@@ -214,7 +267,6 @@ auto Viewport_windows::create_basic_viewport_window(
             ++y;
         }
     }
-    return new_basic_viewport_window;
 }
 
 auto Viewport_windows::create_imgui_viewport_window(
@@ -259,7 +311,7 @@ auto Viewport_windows::open_new_viewport_window(
                 if (is_camera(entry))
                 {
                     erhe::scene::Camera* camera = as_camera(entry.get());
-                    create_window(name, scene_root, camera);
+                    create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
                     return true;
                 }
             }
@@ -268,13 +320,13 @@ auto Viewport_windows::open_new_viewport_window(
         if (!m_scene_root->scene().cameras.empty())
         {
             const auto& camera = scene_root->scene().cameras.front();
-            create_window(name, scene_root, camera.get());
+            create_viewport_window(name, scene_root, camera.get(), m_configuration->graphics.msaa_sample_count);
         }
         return true;
     }
 
     // Case for when no cameras found in scene
-    create_window("Viewport", {}, nullptr);
+    create_viewport_window("Viewport", {}, nullptr, m_configuration->graphics.msaa_sample_count);
     return true;
 }
 
@@ -315,6 +367,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
     }
     if (!m_basic_viewport_windows.empty())
     {
+        layout_basic_viewport_windows();
         update_hover_from_basic_viewport_windows();
     }
 }
@@ -369,7 +422,7 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
 {
     for (const auto& basic_viewport_window : m_basic_viewport_windows)
     {
-        const auto viewport_window = basic_viewport_window->viewport_window();
+        const auto viewport_window = basic_viewport_window->get_viewport_window();
         if (!viewport_window)
         {
             continue;

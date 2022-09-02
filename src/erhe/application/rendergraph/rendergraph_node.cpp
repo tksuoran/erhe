@@ -14,6 +14,10 @@ Rendergraph_node::Rendergraph_node(const std::string_view name)
 
 Rendergraph_node::~Rendergraph_node()
 {
+    if (m_rendergraph)
+    {
+        m_rendergraph->unregister_node(this);
+    }
 }
 
 [[nodiscard]] auto Rendergraph_node::get_input(
@@ -74,7 +78,7 @@ Rendergraph_node::~Rendergraph_node()
 
     if (input->producer_nodes.empty())
     {
-        log_rendergraph->error("Node '{}' input for key '{}' is not connected", name(), key);
+        //log_rendergraph->warning("Node '{}' input for key '{}' is not connected", name(), key);
         return std::weak_ptr<Rendergraph_node>{};
     }
 
@@ -224,8 +228,20 @@ auto Rendergraph_node::get_producer_output_viewport(
     return m_inputs;
 }
 
+[[nodiscard]] auto Rendergraph_node::get_inputs(
+) -> std::vector<Rendergraph_consumer_connector>&
+{
+    return m_inputs;
+}
+
 [[nodiscard]] auto Rendergraph_node::get_outputs(
 ) const -> const std::vector<Rendergraph_producer_connector>&
+{
+    return m_outputs;
+}
+
+[[nodiscard]] auto Rendergraph_node::get_outputs(
+) -> std::vector<Rendergraph_producer_connector>&
 {
     return m_outputs;
 }
@@ -233,6 +249,11 @@ auto Rendergraph_node::get_producer_output_viewport(
 [[nodiscard]] auto Rendergraph_node::name() const -> const std::string&
 {
     return m_name;
+}
+
+void Rendergraph_node::connect(Rendergraph* rendergraph)
+{
+    m_rendergraph = rendergraph;
 }
 
 void Rendergraph_node::set_enabled(bool value)
@@ -461,6 +482,101 @@ auto Rendergraph_node::connect_output(
     }
 
     consumer_nodes.push_back(consumer_node);
+    return true;
+}
+
+auto Rendergraph_node::disconnect_input(
+    const int                       key,
+    std::weak_ptr<Rendergraph_node> producer_node
+) -> bool
+{
+    const auto& producer = producer_node.lock();
+    auto i = std::find_if(
+        m_inputs.begin(),
+        m_inputs.end(),
+        [&key](const Rendergraph_consumer_connector& entry)
+        {
+            return entry.key == key;
+        }
+    );
+    if (i == m_inputs.end())
+    {
+        log_rendergraph->error("Node '{}' does not have input '{}' registered", name(), key);
+        return false;
+    }
+
+    auto& producer_nodes = i->producer_nodes;
+
+    auto j = std::remove_if(
+        producer_nodes.begin(),
+        producer_nodes.end(),
+        [&producer](const std::weak_ptr<Rendergraph_node>& entry)
+        {
+            return entry.lock() == producer;
+        }
+    );
+    if (j == producer_nodes.end())
+    {
+        log_rendergraph->error(
+            "Node '{}' input key '{}' producer '{}' not found",
+            name(),
+            key,
+            producer->name()
+        );
+        return false;
+    }
+
+    producer_nodes.erase(j, producer_nodes.end());
+    return true;
+}
+
+auto Rendergraph_node::disconnect_output(
+    const int                       key,
+    std::weak_ptr<Rendergraph_node> consumer_node
+) -> bool
+{
+    const auto& consumer = consumer_node.lock();
+    if (!consumer)
+    {
+        log_rendergraph->error("Node '{}' output key '{}' consumer node is expired or not not set, can not disconnect", name(), key);
+        return false;
+    }
+
+    auto i = std::find_if(
+        m_outputs.begin(),
+        m_outputs.end(),
+        [&key](const Rendergraph_producer_connector& entry)
+        {
+            return entry.key == key;
+        }
+    );
+    if (i == m_outputs.end())
+    {
+        log_rendergraph->error("Node '{}' does not have output '{}' registered", name(), key);
+        return false;
+    }
+
+    auto& consumer_nodes = i->consumer_nodes;
+    auto j = std::remove_if(
+        consumer_nodes.begin(),
+        consumer_nodes.end(),
+        [&consumer](const std::weak_ptr<Rendergraph_node>& entry)
+        {
+            return entry.lock() == consumer;
+        }
+    );
+    if (j == consumer_nodes.end())
+    {
+        log_rendergraph->error(
+            "Node '{}' output key '{}' consumer '{}' not found",
+            name(),
+            key,
+            consumer->name()
+        );
+        return false;
+    }
+
+    consumer_nodes.erase(j, consumer_nodes.end());
     return true;
 }
 

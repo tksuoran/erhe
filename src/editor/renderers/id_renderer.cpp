@@ -125,7 +125,6 @@ void Id_renderer::initialize_component()
     ERHE_PROFILE_FUNCTION
 
     const auto& config = Component::get<erhe::application::Configuration>();
-
     if (!config->id_renderer.enabled)
     {
         log_render->info("Id renderer disabled due to erhe.ini setting");
@@ -193,6 +192,12 @@ auto Id_renderer::current_id_frame_resources() -> Id_frame_resources&
 
 void Id_renderer::next_frame()
 {
+    const auto& config = Component::get<erhe::application::Configuration>();
+    if (!config->id_renderer.enabled)
+    {
+        return;
+    }
+
     m_camera_buffers       ->next_frame();
     m_draw_indirect_buffers->next_frame();
     m_primitive_buffers    ->next_frame();
@@ -203,6 +208,12 @@ void Id_renderer::next_frame()
 void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION
+
+    const auto& config = Component::get<erhe::application::Configuration>();
+    if (!config->id_renderer.enabled)
+    {
+        return;
+    }
 
     ERHE_VERIFY(m_use_renderbuffers != m_use_textures);
 

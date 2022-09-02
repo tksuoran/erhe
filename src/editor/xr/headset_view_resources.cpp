@@ -18,10 +18,10 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
 Headset_view_resources::Headset_view_resources(
-    erhe::xr::Render_view& render_view,
-    Headset_renderer&      headset_renderer,
-    Scene_root&            scene_root,
-    const std::size_t      slot
+    erhe::xr::Render_view&             render_view,
+    Headset_renderer&                  headset_renderer,
+    const std::shared_ptr<Scene_root>& scene_root,
+    const std::size_t                  slot
 )
 {
     // log_headset.trace(
@@ -39,12 +39,15 @@ Headset_view_resources::Headset_view_resources(
     //     render_view.view_pose.position
     // );
 
+    width  = static_cast<int>(render_view.width);
+    height = static_cast<int>(render_view.height);
+
     color_texture = std::make_shared<Texture>(
         Texture::Create_info{
             .target            = gl::Texture_target::texture_2d,
             .internal_format   = render_view.color_format,
-            .width             = static_cast<int>(render_view.width),
-            .height            = static_cast<int>(render_view.height),
+            .width             = width,
+            .height            = height,
             .wrap_texture_name = render_view.color_texture
         }
     );
@@ -54,8 +57,8 @@ Headset_view_resources::Headset_view_resources(
         Texture::Create_info{
             .target            = gl::Texture_target::texture_2d,
             .internal_format   = render_view.depth_format,
-            .width             = static_cast<int>(render_view.width),
-            .height            = static_cast<int>(render_view.height),
+            .width             = width,
+            .height            = height,
             .wrap_texture_name = render_view.depth_texture,
         }
     );
@@ -64,7 +67,7 @@ Headset_view_resources::Headset_view_resources(
     Framebuffer::Create_info create_info;
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, color_texture.get());
     create_info.attach(gl::Framebuffer_attachment::depth_attachment,  depth_texture.get());
-    framebuffer = std::make_unique<Framebuffer>(create_info);
+    framebuffer = std::make_shared<Framebuffer>(create_info);
     framebuffer->set_debug_label(fmt::format("XR {}", slot));
 
     if (!framebuffer->check_status())
@@ -81,7 +84,7 @@ Headset_view_resources::Headset_view_resources(
         fmt::format("Headset Camera slot {}", slot)
     );
 
-    scene_root.scene().add(camera);
+    scene_root->scene().add(camera);
     headset_renderer.root_camera()->attach(camera);
 
     is_valid = true;

@@ -6,10 +6,18 @@
 
 #include <memory>
 
+namespace erhe::application
+{
+
+class Window;
+
+}
+
 namespace editor
 {
 
 class Viewport_window;
+class Viewport_windows;
 class Window;
 
 class Basic_viewport_window
@@ -32,6 +40,8 @@ public:
         const std::shared_ptr<Viewport_window>& viewport_window
     );
 
+    ~Basic_viewport_window();
+
     // Implements Rendergraph_node
     [[nodiscard]] auto get_consumer_input_viewport(
         erhe::application::Resource_routing resource_routing,
@@ -39,7 +49,6 @@ public:
         int                                 depth = 0
     ) const -> erhe::scene::Viewport override;
 
-    // Overridden to source viewport size from ImGui window
     [[nodiscard]] auto get_producer_output_viewport(
         erhe::application::Resource_routing resource_routing,
         int                                 key,
@@ -71,14 +80,18 @@ public:
     ) const -> std::shared_ptr<erhe::graphics::Framebuffer> override;
 
     // Public API
-    [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
-    [[nodiscard]] auto get_viewport   () const -> const erhe::scene::Viewport&;
+    [[nodiscard]] auto get_viewport_window() const -> std::shared_ptr<Viewport_window>;
+    [[nodiscard]] auto get_viewport       () const -> const erhe::scene::Viewport&;
     void set_viewport  (erhe::scene::Viewport viewport);
     void set_is_hovered(bool is_hovered);
+    void connect       (Viewport_windows* viewport_windows);
 
 private:
+    // Does *not* directly point to erhe::application::window,
+    // because layout is done by Viewport_windows.
     std::weak_ptr<Viewport_window> m_viewport_window;
-    bool                           m_is_hovered     {false};
+    Viewport_windows*              m_viewport_windows;
+    bool                           m_is_hovered{false};
     erhe::scene::Viewport          m_viewport;
 };
 

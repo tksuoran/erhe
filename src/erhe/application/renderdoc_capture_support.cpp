@@ -86,7 +86,7 @@ void Renderdoc_capture_support::initialize_component()
     }
 #elif __unix__
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
-    void* renderdoc_so = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD);
+    void* renderdoc_so = dlopen("librenderdoc.so", RTLD_NOW);
     if (renderdoc_so != nullptr)
     {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");

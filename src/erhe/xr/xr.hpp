@@ -24,6 +24,7 @@ public:
 class Render_view
 {
 public:
+    uint32_t            slot;
     Pose                view_pose;
     float               fov_left;
     float               fov_right;

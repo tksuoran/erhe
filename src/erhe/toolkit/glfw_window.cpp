@@ -403,6 +403,7 @@ auto Context_window::open(
     glfwWindowHint(GLFW_RED_BITS,      8);
     glfwWindowHint(GLFW_GREEN_BITS,    8);
     glfwWindowHint(GLFW_BLUE_BITS,     8);
+    glfwWindowHint(GLFW_ALPHA_BITS,    8); // required for transparency
     //glfwWindowHint(GLFW_DEPTH_BITS,            24);
     glfwWindowHint(GLFW_SRGB_CAPABLE,  GLFW_TRUE);
     glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_TRUE); // Fullscreen only
@@ -423,6 +424,7 @@ auto Context_window::open(
     glfwWindowHint(GLFW_CONTEXT_NO_ERROR,      GLFW_TRUE);
 #endif
     glfwWindowHint(GLFW_VISIBLE,               primary ? GLFW_TRUE : GLFW_FALSE);
+    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
 
     GLFWwindow* const share_window = !primary
         ? reinterpret_cast<GLFWwindow*>(configuration.share->get_glfw_window())

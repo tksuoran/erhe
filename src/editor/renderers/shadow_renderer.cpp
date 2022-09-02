@@ -4,6 +4,7 @@
 
 #include "editor_log.hpp"
 
+#include "rendergraph/shadow_render_node.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
@@ -52,140 +53,6 @@ using erhe::graphics::Input_assembly_state;
 using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
-
-Shadow_render_node::Shadow_render_node(
-    Shadow_renderer&                        shadow_renderer,
-    const std::shared_ptr<Viewport_window>& viewport_window,
-    const int                               resolution,
-    const int                               light_count,
-    const bool                              reverse_depth
-)
-    : erhe::application::Rendergraph_node{
-        "shadow_maps" // TODO fmt::format("Shadow render {}", viewport_window->name())
-    }
-    , m_shadow_renderer{shadow_renderer}
-    , m_viewport_window{viewport_window}
-{
-    register_output(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
-        "shadow_maps",
-        erhe::application::Rendergraph_node_key::shadow_maps
-    );
-
-    {
-        ERHE_PROFILE_SCOPE("allocating shadow map array texture");
-
-        m_texture = std::make_shared<Texture>(
-            Texture::Create_info
-            {
-                .target          = gl::Texture_target::texture_2d_array,
-                .internal_format = gl::Internal_format::depth_component32f,
-                //.sparse          = erhe::graphics::Instance::info.use_sparse_texture,
-                .width           = resolution,
-                .height          = resolution,
-                .depth           = light_count
-            }
-        );
-
-#if 0
-        if (erhe::graphics::Instance::info.use_sparse_texture)
-        {
-            // commit the whole texture for now
-            gl::texture_page_commitment_ext(
-                m_texture->gl_name(),
-                0,                  // level
-                0,                  // x offset
-                0,                  // y offset,
-                0,                  // z offset
-                m_texture->width(),
-                m_texture->height(),
-                m_texture->depth(),
-                GL_TRUE
-            );
-        }
-#endif
-
-        m_texture->set_debug_label("Shadowmaps");
-        //float depth_clear_value = erhe::graphics::Instance::depth_clear_value;
-        //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
-    }
-
-    for (int i = 0; i < light_count; ++i)
-    {
-        ERHE_PROFILE_SCOPE("framebuffer creation");
-
-        Framebuffer::Create_info create_info;
-        create_info.attach(gl::Framebuffer_attachment::depth_attachment, m_texture.get(), 0, static_cast<unsigned int>(i));
-        auto framebuffer = std::make_unique<Framebuffer>(create_info);
-        framebuffer->set_debug_label(fmt::format("Shadow {}", i));
-        m_framebuffers.emplace_back(std::move(framebuffer));
-    }
-
-    m_viewport = {
-        .x             = 0,
-        .y             = 0,
-        .width         = m_texture->width(),
-        .height        = m_texture->height(),
-        .reverse_depth = reverse_depth  //// m_configuration->graphics.reverse_depth
-    };
-}
-
-void Shadow_render_node::execute_rendergraph_node()
-{
-    // Render shadow maps
-    auto*       scene_root = m_viewport_window->scene_root();
-    const auto& layers     = scene_root->layers();
-    if (scene_root->layers().content()->meshes.empty())
-    {
-        return;
-    }
-
-    scene_root->sort_lights();
-
-    const erhe::scene::Camera* camera = m_viewport_window->camera();
-    m_shadow_renderer.render(
-        Shadow_renderer::Render_parameters{
-            .scene_root            = scene_root,
-            .view_camera           = camera,
-            .view_camera_viewport  = m_viewport_window->projection_viewport(),
-            .light_camera_viewport = m_viewport,
-            .texture               = *m_texture.get(),
-            .framebuffers          = m_framebuffers,
-            .mesh_spans            = { layers.content()->meshes },
-            .lights                = layers.light()->lights,
-            .light_projections     = m_light_projections
-        }
-    );
-}
-
-[[nodiscard]] auto Shadow_render_node::get_producer_output_texture(
-    const erhe::application::Resource_routing resource_routing,
-    const int                                 key,
-    int                                       depth
-) const -> std::shared_ptr<erhe::graphics::Texture>
-{
-    static_cast<void>(resource_routing);
-    static_cast<void>(key);
-    static_cast<void>(depth);
-    return m_texture;
-}
-
-[[nodiscard]] auto Shadow_render_node::get_producer_output_viewport(
-    const erhe::application::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
-) const -> erhe::scene::Viewport
-{
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(depth);
-    ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::shadow_maps);
-    return m_viewport;
-}
-
-[[nodiscard]] auto Shadow_render_node::inputs_allowed() const -> bool
-{
-    return false;
-}
 
 Shadow_renderer::Shadow_renderer()
     : Component{c_type_name}
@@ -321,6 +188,12 @@ auto Shadow_renderer::get_nodes() const -> const std::vector<std::shared_ptr<Sha
 
 void Shadow_renderer::next_frame()
 {
+    const auto& config = m_configuration->shadow_renderer;
+    if (!config.enabled)
+    {
+        return;
+    }
+
     m_light_buffers        ->next_frame();
     m_draw_indirect_buffers->next_frame();
     m_primitive_buffers    ->next_frame();
@@ -348,6 +221,18 @@ auto Shadow_render_node::viewport() const -> erhe::scene::Viewport
 
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
+    // Also assigns lights slot in uniform block shader resource
+    parameters.light_projections = Light_projections{
+        parameters.lights,
+        parameters.view_camera,
+        parameters.view_camera_viewport,
+        parameters.light_camera_viewport,
+        erhe::graphics::get_handle(
+            parameters.texture,
+            *get<Programs>()->nearest_sampler.get()
+        )
+    };
+
     if (
         !m_configuration->shadow_renderer.enabled ||
         !parameters.scene_root
@@ -381,18 +266,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
-    };
-
-    // Also assigns lights slot in uniform block shader resource
-    parameters.light_projections = Light_projections{
-        lights,
-        parameters.view_camera,
-        parameters.view_camera_viewport,
-        parameters.light_camera_viewport,
-        erhe::graphics::get_handle(
-            parameters.texture,
-            *get<Programs>()->nearest_sampler.get()
-        )
     };
 
     m_light_buffers->update(

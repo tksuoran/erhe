@@ -31,7 +31,7 @@ void initialize_logging()
     log_input_events             = erhe::log::make_logger("erhe::application::input_events",             spdlog::level::info);
     log_multi_buffer             = erhe::log::make_logger("erhe::application::multi_buffer",             spdlog::level::info);
     log_performance              = erhe::log::make_logger("erhe::application::performance",              spdlog::level::info);
-    log_rendergraph              = erhe::log::make_logger("erhe::application::render_graph",             spdlog::level::info);
+    log_rendergraph              = erhe::log::make_logger("erhe::application::rendergraph",              spdlog::level::info);
     log_renderdoc                = erhe::log::make_logger("erhe::application::renderdoc",                spdlog::level::info);
     log_startup                  = erhe::log::make_logger("erhe::application::startup",                  spdlog::level::info);
     log_tools                    = erhe::log::make_logger("erhe::application::tools",                    spdlog::level::info);

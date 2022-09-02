@@ -20,6 +20,7 @@ class Texture;
 
 namespace erhe::application {
 
+class Rendergraph;
 class Rendergraph_node;
 
 class Rendergraph_producer_connector
@@ -65,13 +66,18 @@ public:
     [[nodiscard]] virtual auto type_hash() const -> uint32_t         { return c_type_hash; }
     [[nodiscard]] auto name       () const -> const std::string&;
     [[nodiscard]] auto get_inputs () const -> const std::vector<Rendergraph_consumer_connector>&;
+    [[nodiscard]] auto get_inputs ()       ->       std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_outputs() const -> const std::vector<Rendergraph_producer_connector>&;
+    [[nodiscard]] auto get_outputs()       ->       std::vector<Rendergraph_producer_connector>&;
 
-    void set_enabled    (bool value);
-    auto register_input (Resource_routing resource_routing, const std::string_view label, int key) -> bool;
-    auto register_output(Resource_routing resource_routing, const std::string_view label, int key) -> bool;
-    auto connect_input  (int key, std::weak_ptr<Rendergraph_node> producer_node) -> bool;
-    auto connect_output (int key, std::weak_ptr<Rendergraph_node> consumer_node) -> bool;
+    void connect          (Rendergraph* rendergraph);
+    void set_enabled      (bool value);
+    auto register_input   (Resource_routing resource_routing, const std::string_view label, int key) -> bool;
+    auto register_output  (Resource_routing resource_routing, const std::string_view label, int key) -> bool;
+    auto connect_input    (int key, std::weak_ptr<Rendergraph_node> producer_node) -> bool;
+    auto connect_output   (int key, std::weak_ptr<Rendergraph_node> consumer_node) -> bool;
+    auto disconnect_input (int key, std::weak_ptr<Rendergraph_node> producer_node) -> bool;
+    auto disconnect_output(int key, std::weak_ptr<Rendergraph_node> consumer_node) -> bool;
 
     virtual void execute_rendergraph_node() = 0;
 
@@ -148,14 +154,15 @@ protected:
 
     std::mutex                                  m_mutex;
     std::string                                 m_name;
-    bool                                        m_enabled{true};
+    Rendergraph*                                m_rendergraph{nullptr};
+    bool                                        m_enabled    {true};
     std::vector<Rendergraph_consumer_connector> m_inputs;
     std::vector<Rendergraph_producer_connector> m_outputs;
-    int                                         m_depth{0};
+    int                                         m_depth      {0};
 
     // For GUI
-    glm::vec2                                   m_position{};
-    bool                                        m_selected{false};
+    glm::vec2                                   m_position   {};
+    bool                                        m_selected   {false};
 };
 
 } // namespace erhe::application

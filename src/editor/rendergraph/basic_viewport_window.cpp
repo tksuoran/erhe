@@ -1,6 +1,7 @@
 #include "rendergraph/basic_viewport_window.hpp"
 
 #include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
 
 #include "erhe/application/window.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
@@ -19,7 +20,6 @@ Basic_viewport_window::Basic_viewport_window()
 {
 }
 
-// TODO Only really needed when there is no post processing and no MSAA
 Basic_viewport_window::Basic_viewport_window(
     const std::string_view                  name,
     const std::shared_ptr<Viewport_window>& viewport_window
@@ -29,6 +29,7 @@ Basic_viewport_window::Basic_viewport_window(
     }
     , m_viewport_window{viewport_window}
 {
+    // Initially empty viewport. Layout is done by Viewport_windows
     m_viewport.x      = 0;
     m_viewport.y      = 0;
     m_viewport.width  = 0;
@@ -53,15 +54,18 @@ Basic_viewport_window::Basic_viewport_window(
     );
 }
 
-[[nodiscard]] auto Basic_viewport_window::viewport_window() const -> std::shared_ptr<Viewport_window>
+Basic_viewport_window::~Basic_viewport_window()
+{
+    if (m_viewport_windows)
+    {
+        m_viewport_windows->erase(this);
+    }
+}
+
+[[nodiscard]] auto Basic_viewport_window::get_viewport_window() const -> std::shared_ptr<Viewport_window>
 {
     return m_viewport_window.lock();
 }
-
-//// [[nodiscard]] auto Basic_viewport_window::is_hovered() const -> bool
-//// {
-////     return m_is_hovered;
-//// }
 
 [[nodiscard]] auto Basic_viewport_window::get_consumer_input_viewport(
     const erhe::application::Resource_routing resource_routing,
@@ -73,7 +77,7 @@ Basic_viewport_window::Basic_viewport_window(
     static_cast<void>(depth);
     static_cast<void>(key);
     //ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::window); TODO
-    return m_viewport;
+    return get_viewport();
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_producer_output_viewport(
@@ -86,7 +90,7 @@ Basic_viewport_window::Basic_viewport_window(
     static_cast<void>(depth);
     static_cast<void>(key);
     //ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::window); TODO
-    return m_viewport;
+    return get_viewport();
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_consumer_input_texture(
@@ -161,5 +165,11 @@ void Basic_viewport_window::set_is_hovered(const bool is_hovered)
         viewport_window->set_is_hovered(is_hovered);
     }
 }
+
+void Basic_viewport_window::connect(Viewport_windows* viewport_windows)
+{
+    m_viewport_windows = viewport_windows;
+}
+
 
 } // namespace editor

@@ -53,6 +53,7 @@ class Scene_root;
 class Shadow_render_node;
 class Trs_tool;
 class Viewport_window;
+class Viewport_windows;
 
 class Hover_entry
 {
@@ -110,6 +111,7 @@ public:
         const std::shared_ptr<Scene_root>&  scene_root,
         erhe::scene::Camera*                camera
     );
+    ~Viewport_window();
 
     // Implements Rendergraph_node
     [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
@@ -117,6 +119,7 @@ public:
     void execute_rendergraph_node() override;
 
     // Public API
+    void connect            (Viewport_windows* viewport_windows);
     void set_window_viewport(int x, int y, int width, int height);
     void set_is_hovered     (bool is_hovered);
     void set_camera         (erhe::scene::Camera* camera);
@@ -192,6 +195,7 @@ private:
     std::string                 m_name;
     std::shared_ptr<Scene_root> m_scene_root;
 
+    Viewport_windows*           m_viewport_windows      {nullptr};
     erhe::scene::Viewport       m_window_viewport       {0, 0, 0, 0, true};
     erhe::scene::Viewport       m_projection_viewport   {0, 0, 0, 0, true};
     erhe::scene::Camera*        m_camera                {nullptr};

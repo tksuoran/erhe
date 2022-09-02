@@ -793,6 +793,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         }
 
         Render_view render_view{
+            .slot      = i,
             .view_pose = {
                 .orientation = to_glm(m_xr_views[i].pose.orientation),
                 .position    = to_glm(m_xr_views[i].pose.position),

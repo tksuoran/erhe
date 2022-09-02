@@ -453,13 +453,6 @@ void Editor_rendering::begin_frame()
 
 void Editor_rendering::end_frame()
 {
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_headset_renderer)
-    {
-        m_headset_renderer->render();
-    }
-#endif
-
     if (m_post_processing)
     {
         m_post_processing->next_frame();

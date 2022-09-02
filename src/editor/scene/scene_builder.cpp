@@ -9,6 +9,7 @@
 #include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
@@ -148,7 +149,7 @@ void Scene_builder::add_rendertarget_viewports()
         *primary_viewport_window.get(),
         1920,
         1080,
-        320.0
+        2000.0
     );
 
     test_scene_root->scene().add_to_mesh_layer(
@@ -158,8 +159,8 @@ void Scene_builder::add_rendertarget_viewports()
 
     rendertarget_node_1->set_world_from_node(
         erhe::toolkit::create_look_at(
-            glm::vec3{-3.0f, 2.0f, -4.0f},
-            glm::vec3{-4.0f, 2.0f, -6.0f},
+            glm::vec3{-0.3f, 1.1f, -0.3f},
+            glm::vec3{-2.0f, 0.7f, -2.0f},
             glm::vec3{ 0.0f, 1.0f,  0.0f}
         )
     );
@@ -185,11 +186,11 @@ void Scene_builder::add_rendertarget_viewports()
     camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
     const auto& viewport_windows = get<editor::Viewport_windows>();
-    auto secondary_viewport_window = viewport_windows->create_window(
+    auto secondary_viewport_window = viewport_windows->create_viewport_window(
         "Secondary Viewport",
         test_scene_root,
-        camera_b.get()
-        //false // TODO no post processing
+        camera_b.get(),
+        2 // low MSAA
     );
     auto secondary_imgui_viewport_window = viewport_windows->create_imgui_viewport_window(
         secondary_viewport_window
@@ -201,7 +202,7 @@ void Scene_builder::add_rendertarget_viewports()
         *primary_viewport_window.get(),
         1920,
         1080,
-        320.0
+        2000.0
     );
 
     test_scene_root->scene().add_to_mesh_layer(
@@ -211,8 +212,8 @@ void Scene_builder::add_rendertarget_viewports()
 
     rendertarget_node_2->set_world_from_node(
         erhe::toolkit::create_look_at(
-            glm::vec3{3.0f, 2.0f, -4.0f},
-            glm::vec3{4.0f, 2.0f, -6.0f},
+            glm::vec3{0.3f, 1.1f, -0.3f},
+            glm::vec3{2.0f, 0.7f, -2.0f},
             glm::vec3{0.0f, 1.0f,  0.0f}
         )
     );
@@ -281,67 +282,75 @@ void Scene_builder::setup_cameras()
     //camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
     const auto& configuration = get<erhe::application::Configuration>();
-
-    const auto& viewport_windows = get<Viewport_windows>();
-    m_primary_viewport_window = viewport_windows->create_window(
-        "Primary Viewport",
-        m_scene_root,
-        camera_a.get()
-    );
-
-    if (configuration->imgui.window_viewport)
+    if (configuration->window.show)
     {
-        //auto primary_imgui_viewport_window =
-        viewport_windows->create_imgui_viewport_window(
-            m_primary_viewport_window
+        const auto& viewport_windows = get<Viewport_windows>();
+        m_primary_viewport_window = viewport_windows->create_viewport_window(
+            "Primary Viewport",
+            m_scene_root,
+            camera_a.get(),
+            std::min(2, configuration->graphics.msaa_sample_count), //// TODO Fix rendergraph
+            configuration->graphics.post_processing
         );
-    }
-    else
-    {
-        viewport_windows->create_basic_viewport_window(
-            m_primary_viewport_window
-        );
+
+        if (configuration->imgui.window_viewport)
+        {
+            //auto primary_imgui_viewport_window =
+            viewport_windows->create_imgui_viewport_window(
+                m_primary_viewport_window
+            );
+        }
+        else
+        {
+            viewport_windows->create_basic_viewport_window(
+                m_primary_viewport_window
+            );
+        }
     }
 
     const auto& shadow_renderer = get<Shadow_renderer>();
     const auto& render_graph    = get<erhe::application::Rendergraph>();
 
-    const auto shadow_render_node = shadow_renderer->create_node_for_viewport(m_primary_viewport_window);
-    render_graph->register_node(shadow_render_node);
-    render_graph->connect(
-        erhe::application::Rendergraph_node_key::shadow_maps,
-        shadow_render_node,
-        m_primary_viewport_window
-    );
-
-    const auto& debug_view_window = get<Debug_view_window>();
-    auto depth_to_color_node = std::make_shared<Depth_to_color_rendergraph_node>(
-        *m_components
-    );
-    render_graph->register_node(depth_to_color_node);
-    render_graph->connect(
-        erhe::application::Rendergraph_node_key::shadow_maps,
-        shadow_render_node,
-        depth_to_color_node
-    );
-    render_graph->connect(
-        erhe::application::Rendergraph_node_key::depth_visualization,
-        depth_to_color_node,
-        debug_view_window
-    );
-    render_graph->register_node(debug_view_window);
-
-    const auto& imgui_windows         = get<erhe::application::Imgui_windows>();
-    const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
-    //render_graph->register_node(window_imgui_viewport);
-
-    if (window_imgui_viewport)
+    if (configuration->window.show)
     {
+        const auto shadow_render_node = shadow_renderer->create_node_for_viewport(m_primary_viewport_window);
+        render_graph->register_node(shadow_render_node);
         render_graph->connect(
-            erhe::application::Rendergraph_node_key::window,
-            debug_view_window,
-            window_imgui_viewport
+            erhe::application::Rendergraph_node_key::shadow_maps,
+            shadow_render_node,
+            m_primary_viewport_window
         );
+
+        const auto& debug_view_window = get<Debug_view_window>();
+        auto depth_to_color_node = std::make_shared<Depth_to_color_rendergraph_node>(
+            *m_components
+        );
+        render_graph->register_node(depth_to_color_node);
+        render_graph->connect(
+            erhe::application::Rendergraph_node_key::shadow_maps,
+            shadow_render_node,
+            depth_to_color_node
+        );
+        render_graph->connect(
+            erhe::application::Rendergraph_node_key::depth_visualization,
+            depth_to_color_node,
+            debug_view_window
+        );
+        render_graph->register_node(debug_view_window);
+
+        const auto& imgui_windows         = get<erhe::application::Imgui_windows>();
+        const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
+        //render_graph->register_node(window_imgui_viewport);
+
+        if (window_imgui_viewport)
+        {
+            render_graph->connect(
+                erhe::application::Rendergraph_node_key::window,
+                debug_view_window,
+                window_imgui_viewport
+            );
+        }
+
     }
 
     // TODO debug_view_window should also depend on debug_view_render_node

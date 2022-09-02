@@ -44,10 +44,10 @@ Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& entry : m_entries)
-    {
-        ERHE_VERIFY(entry.key != map->descriptor().name);
-    }
+    //// for (const auto& entry : m_entries)
+    //// {
+    ////     ERHE_VERIFY(entry.key != map->descriptor().name);
+    //// }
     m_entries.emplace_back(map->descriptor().name, map);
     SPDLOG_LOGGER_TRACE(log_attribute_maps, "Added attribute map {}", map->descriptor().name);
 }
@@ -118,10 +118,10 @@ Property_map_collection<Key_type>::create(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& entry : m_entries)
-    {
-        ERHE_VERIFY(entry.key != descriptor.name);
-    }
+    //// for (const auto& entry : m_entries)
+    //// {
+    ////     ERHE_VERIFY(entry.key != descriptor.name);
+    //// }
 
     const auto p = new Property_map<Key_type, Value_type>(descriptor);
     m_entries.emplace_back(descriptor.name, p);

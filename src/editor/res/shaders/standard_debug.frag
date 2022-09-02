@@ -120,11 +120,11 @@ void main()
     float N_dot_L        = dot(N, L);
     float N_dot_V        = dot(N, V);
 
-    out_color.rgb = srgb_to_linear(vec3(N_dot_L));
+    out_color.rgb = srgb_to_linear(vec3(N_dot_V));
 
     // Show material
-    Material material = material.materials[v_material_index];
-    out_color.rgb = srgb_to_linear(material.base_color.rgb);
+    //Material material = material.materials[v_material_index];
+    //out_color.rgb = srgb_to_linear(material.base_color.rgb);
 
 #endif
 

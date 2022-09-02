@@ -1,5 +1,8 @@
 #include "scene/material_library.hpp"
 
+#include "erhe/toolkit/math_util.hpp"
+
+#include <fmt/format.h>
 #include <imgui/imgui.h>
 
 namespace editor
@@ -50,23 +53,22 @@ void Material_library::add_default_materials()
     // Mercury   = e5e4e4 (229, 228, 228)
     // Palladium = ded9d3 (222, 217, 211)
 
-    //for (size_t i = 0, end = 10; i < end; ++i)
-    //{
-    //    const float rel        = static_cast<float>(i) / static_cast<float>(end);
-    //    const float hue        = rel * 360.0f;
-    //    const float saturation = 0.9f;
-    //    const float value      = 0.5f;
-    //    float R, G, B;
-    //    erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
-    //    auto m = m_scene_root->make_material(
-    //        fmt::format("Hue {}", static_cast<int>(hue)),
-    //        glm::vec4{R, G, B, 1.0f},
-    //        0.02f,
-    //        0.00f,
-    //        0.97f
-    //    );
-    //    m->visible = true;
-    //}
+    for (size_t i = 0, end = 10; i < end; ++i)
+    {
+        const float rel        = static_cast<float>(i) / static_cast<float>(end);
+        const float hue        = rel * 360.0f;
+        const float saturation = 0.9f;
+        const float value      = 0.5f;
+        float R, G, B;
+        erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
+        //const std::string label = fmt::format("Hue {}", static_cast<int>(hue));
+        make_material(
+            fmt::format("Hue {}", static_cast<int>(hue)),
+            glm::vec3{R, G, B},
+            glm::vec2{0.02f, 0.02f},
+            0.00f
+        );
+    }
 }
 
 [[nodiscard]] auto Material_library::materials() -> std::vector<std::shared_ptr<erhe::primitive::Material>>&

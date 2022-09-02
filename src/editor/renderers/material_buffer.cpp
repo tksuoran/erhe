@@ -15,7 +15,7 @@ namespace editor
 {
 
 Material_interface::Material_interface(std::size_t max_material_count)
-    : material_block {"material", 0, erhe::graphics::Shader_resource::Type::uniform_block}
+    : material_block {"material", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , material_struct{"Material"}
     , offsets        {
         .roughness    = material_struct.add_vec2 ("roughness"   )->offset_in_parent(),
@@ -36,7 +36,7 @@ Material_buffer::Material_buffer(const Material_interface& material_interface)
     , m_material_interface{material_interface}
 {
     Multi_buffer::allocate(
-        gl::Buffer_target::uniform_buffer,
+        gl::Buffer_target::shader_storage_buffer,
         m_material_interface.material_block.binding_point(),
         m_material_interface.material_block.size_bytes()
     );

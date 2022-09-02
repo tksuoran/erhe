@@ -105,8 +105,6 @@ void Downsample_node::bind_framebuffer() const
     //}
 }
 
-
-/// //////////////////////////////////////////
 /// //////////////////////////////////////////
 
 Post_processing_node::Post_processing_node(
