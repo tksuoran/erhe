@@ -315,6 +315,11 @@ Configuration::Configuration(int argc, char** argv)
             e.what()
         );
     }
+
+    if (headset.openxr)
+    {
+        window.show = false;
+    }
 }
 
 auto Configuration::depth_clear_value_pointer() const -> const float*

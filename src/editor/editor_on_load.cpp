@@ -241,34 +241,15 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         test_scene_root->physics_world().enable_physics_updates();
     }
 
-    ///{
-    ///    const auto& debug_window = m_components.get<editor::Debug_view_window>();
-    ///    const auto& rendergraph  = m_components.get<erhe::application::Rendergraph>();
-    ///
-    ///    rendergraph->register_node(debug_window);
-    ///}
-
-    //if (configuration->headset.openxr)
-    //// {
-    ////     const auto& scene_builder    = m_components.get<editor::Scene_builder   >();
-    ////     scene_builder->add_rendertarget_viewports();
-    //// }
-
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (configuration->headset.openxr)
     {
         const auto& headset_renderer = m_components.get<editor::Headset_renderer>();
         const auto& rendergraph      = m_components.get<erhe::application::Rendergraph>();
-        ////const auto& scene_builder    = m_components.get<editor::Scene_builder   >();
         rendergraph->register_node(headset_renderer);
-        ////scene_builder->add_rendertarget_viewports();
 
-        //// const auto& viewport_windows = m_components.get<editor::Viewport_windows>();
-        //// const auto& headset_renderer = m_components.get<editor::Headset_renderer>();
-        //// const auto& scene_root       = headset_renderer->scene_root();
-        //// auto* const headset_camera   = headset_renderer->root_camera().get();
-        //// const auto  viewport_window  = viewport_windows->create_viewport_window("Headset Camera", scene_root, headset_camera);
-        //// viewport_window->set_post_processing_enable(false);
+        const auto& scene_builder    = m_components.get<editor::Scene_builder   >();
+        scene_builder->add_rendertarget_viewports();
     }
 #endif
 

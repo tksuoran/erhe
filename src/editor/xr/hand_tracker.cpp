@@ -180,6 +180,85 @@ auto Hand::get_closest_point_to_line(
     return result;
 }
 
+auto Hand::get_closest_point_to_plane(
+    const glm::mat4 transform,
+    const glm::vec3 point_on_plane,
+    const glm::vec3 plane_normal
+) const -> nonstd::optional<Closest_finger>
+{
+    if (!m_is_active)
+    {
+        return {};
+    }
+
+    nonstd::optional<Closest_finger> result;
+    float min_distance = std::numeric_limits<float>::max();
+    for (size_t i = 0; i < XR_HAND_JOINT_COUNT_EXT; ++i)
+    {
+        const auto joint = static_cast<XrHandJointEXT>(i);
+        const bool valid = is_valid(joint);
+        if (valid)
+        {
+            const glm::vec3 pos{
+                m_joints[joint].location.pose.position.x,
+                m_joints[joint].location.pose.position.y,
+                m_joints[joint].location.pose.position.z
+            };
+            const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
+            const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
+            if (closest_point.has_value())
+            {
+                const auto  q        = closest_point.value();
+                const float distance = glm::distance(p, q);
+                if (distance < min_distance)
+                {
+                    min_distance = distance;
+                    result = {
+                        .finger = to_finger(joint),
+                        .closest_points = {
+                            .P = p,
+                            .Q = q
+                        }
+                    };
+                }
+            }
+        }
+    }
+    return result;
+}
+
+auto Hand::get_closest_point_to_plane(
+    const XrHandJointEXT joint,
+    const glm::mat4      transform,
+    const glm::vec3      point_on_plane,
+    const glm::vec3      plane_normal
+) const -> nonstd::optional<Closest_finger>
+{
+    const bool valid = is_valid(joint);
+    if (valid)
+    {
+        const glm::vec3 pos{
+            m_joints[joint].location.pose.position.x,
+            m_joints[joint].location.pose.position.y,
+            m_joints[joint].location.pose.position.z
+        };
+        const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
+        const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
+        if (closest_point.has_value())
+        {
+            const auto q = closest_point.value();
+            return Closest_finger{
+                .finger = to_finger(joint),
+                .closest_points = {
+                    .P = p,
+                    .Q = q
+                }
+            };
+        }
+    }
+    return {};
+}
+
 auto Hand::distance(
     const XrHandJointEXT lhs,
     const XrHandJointEXT rhs
@@ -346,7 +425,7 @@ void Hand_tracker::post_initialize()
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
 }
 
-void Hand_tracker::update(erhe::xr::Headset& headset)
+void Hand_tracker::update_hands(erhe::xr::Headset& headset)
 {
     m_left_hand.update(headset);
     m_right_hand.update(headset);

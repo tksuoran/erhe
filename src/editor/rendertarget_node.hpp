@@ -1,6 +1,8 @@
 #pragma once
 
 #include "renderers/renderpass.hpp"
+#include "xr/hand_tracker.hpp"
+
 #include "erhe/scene/mesh.hpp"
 
 #include <glm/glm.hpp>
@@ -35,6 +37,7 @@ namespace editor
 
 class Forward_renderer;
 //// class Node_raytrace;
+class Hand_tracker;
 class Render_context;
 class Scene_root;
 class Viewport_config;
@@ -63,11 +66,15 @@ public:
     [[nodiscard]] auto width      () const -> float;
     [[nodiscard]] auto height     () const -> float;
 
-    [[nodiscard]] auto get_pointer() const -> std::optional<glm::vec2>;
-    auto update_pointer() -> bool;
-    void bind          ();
-    void clear         (glm::vec4 clear_color);
-    void render_done   (); // generates mipmaps, updates lod bias
+    [[nodiscard]] auto get_pointer       () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto get_closest_finger() const -> nonstd::optional<Closest_finger>;
+    [[nodiscard]] auto world_to_window   (glm::vec3 world_position) const -> std::optional<glm::vec2>;
+
+    auto update_pointer     () -> bool;
+    void update_hand_tracker(Hand_tracker& hand_tracker);
+    void bind               ();
+    void clear              (glm::vec4 clear_color);
+    void render_done        (); // generates mipmaps, updates lod bias
 
 private:
     void init_rendertarget(const int width, const int height);
@@ -86,6 +93,8 @@ private:
     std::shared_ptr<erhe::primitive::Material>   m_material;
     std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
     std::optional<glm::vec2>                     m_pointer;
+
+    nonstd::optional<Closest_finger>             m_closest_finger;
 };
 
 [[nodiscard]] auto is_rendertarget(const erhe::scene::Node* const node) -> bool;

@@ -4,6 +4,8 @@
 #include "editor_log.hpp"
 #include "rendertarget_node.hpp"
 #include "scene/viewport_window.hpp"
+#include "xr/hand_tracker.hpp"
+#include "xr/headset_renderer.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/scoped_imgui_context.hpp"
@@ -32,8 +34,10 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     }
     , m_rendertarget_node{rendertarget_node}
     , m_imgui_renderer   {components.get<erhe::application::Imgui_renderer>()}
-    , m_imgui_windows    {components.get<erhe::application::Imgui_windows>()}
-    , m_view             {components.get<erhe::application::View>()}
+    , m_imgui_windows    {components.get<erhe::application::Imgui_windows >()}
+    , m_view             {components.get<erhe::application::View          >()}
+    , m_hand_tracker     {components.get<Hand_tracker    >()}
+    , m_headset_renderer {components.get<Headset_renderer>()}
     , m_name             {name}
     , m_imgui_ini_path   {fmt::format("imgui_{}.ini", name)}
 {
@@ -78,7 +82,10 @@ template <typename T>
 
 [[nodiscard]] auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
 {
-    SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::begin_imgui_frame()");
+    SPDLOG_LOGGER_TRACE(
+        log_rendertarget_imgui_windows,
+        "Rendertarget_imgui_viewport::begin_imgui_frame()"
+    );
 
     const auto pointer = m_rendertarget_node->get_pointer();
     if (pointer.has_value())
@@ -106,6 +113,64 @@ template <typename T>
             m_last_mouse_x = -FLT_MAX;
             m_last_mouse_y = -FLT_MAX;
             on_mouse_move(-FLT_MAX, -FLT_MAX);
+        }
+    }
+
+    if (m_hand_tracker && (m_rendertarget_node != nullptr))
+    {
+        m_rendertarget_node->update_hand_tracker(*m_hand_tracker.get());
+        const auto& closest_finger_opt = m_rendertarget_node->get_closest_finger();
+        if (closest_finger_opt.has_value())
+        {
+            const auto& closest_finger           = closest_finger_opt.value();
+            m_headset_renderer->finger_to_viewport(closest_finger.closest_points);
+            const auto  finger_world_position    = closest_finger.closest_points.P;
+            const auto  projected_world_position = closest_finger.closest_points.Q;
+            const float distance                 = glm::distance(finger_world_position, projected_world_position);
+            const auto  window_position_opt      = m_rendertarget_node->world_to_window(projected_world_position);
+
+            if (window_position_opt.has_value())
+            {
+                if (!has_cursor())
+                {
+                    on_cursor_enter(1);
+                }
+                const auto position = window_position_opt.value();
+                if (
+                    (m_last_mouse_x != position.x) ||
+                    (m_last_mouse_y != position.y)
+                )
+                {
+                    m_last_mouse_x = position.x;
+                    m_last_mouse_y = position.y;
+                    on_mouse_move(position.x, position.y);
+                }
+            }
+            else
+            {
+                if (has_cursor())
+                {
+                    on_cursor_enter(0);
+                    m_last_mouse_x = -FLT_MAX;
+                    m_last_mouse_y = -FLT_MAX;
+                    on_mouse_move(-FLT_MAX, -FLT_MAX);
+                }
+            }
+
+            const float finger_press_threshold = m_headset_renderer->finger_to_viewport_distance_threshold();
+            if ((distance < finger_press_threshold * 0.98f) && (!m_last_mouse_finger))
+            {
+                m_last_mouse_finger = true;
+                ImGuiIO& io = m_imgui_context->IO;
+                io.AddMouseButtonEvent(0, true);
+            }
+            if ((distance > finger_press_threshold * 1.02f) && (m_last_mouse_finger))
+            {
+                m_last_mouse_finger = false;
+                ImGuiIO& io = m_imgui_context->IO;
+                io.AddMouseButtonEvent(0, false);
+            }
+
         }
     }
 

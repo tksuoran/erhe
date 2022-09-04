@@ -1,9 +1,11 @@
 #pragma once
 
+#include "tools/tool.hpp"
 #include "xr/headset_view_resources.hpp"
 
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/toolkit/math_util.hpp"
 
 #include <array>
 
@@ -48,6 +50,7 @@ class Headset_renderer
     : public erhe::components::Component
     , public erhe::application::Imgui_window
     , public erhe::application::Rendergraph_node
+    , public Tool
 {
 public:
     static constexpr std::string_view c_name       {"Headset_renderer"};
@@ -70,10 +73,19 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
+    // Implements Tool
+    [[nodiscard]] auto description() -> const char* override;
+    void tool_render(const Render_context& context) override;
+
     // Public API
     void begin_frame();
     auto scene_root () -> std::shared_ptr<Scene_root>;
     auto root_camera() -> std::shared_ptr<erhe::scene::Camera>;
+
+    void finger_to_viewport(
+        const erhe::toolkit::Closest_points<float>& closest_points
+    );
+    [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
 
 private:
     [[nodiscard]] auto get_headset_view_resources(
@@ -97,6 +109,8 @@ private:
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
     std::array<float, 4>                                 m_clear_color{0.0f, 0.0f, 0.0f, 0.95f};
+    std::vector<erhe::toolkit::Closest_points<float>>    m_finger_to_viewport;
+    float                                                m_finger_to_viewport_distance_threshold{0.1f};
 };
 
 } // namespace editor

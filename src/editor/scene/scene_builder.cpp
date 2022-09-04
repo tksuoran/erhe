@@ -27,6 +27,7 @@
 #include "windows/brushes.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
+#include "xr/headset_renderer.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
@@ -235,6 +236,9 @@ void Scene_builder::add_rendertarget_viewports()
         secondary_imgui_viewport_window,
         imgui_viewport_2
     );
+
+    const auto& headset_renderer = get<editor::Headset_renderer>();
+    headset_renderer->set_viewport(imgui_viewport_2.get());
 
     //secondary_viewport_window->show();
 #endif
@@ -451,7 +455,7 @@ void Scene_builder::make_brushes()
 
     constexpr bool anisotropic_test_object = false;
 
-    constexpr float object_scale = 1.0f;
+    constexpr float object_scale = 0.75f;
 
     if (config.gltf_files)
     {

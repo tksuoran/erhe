@@ -327,6 +327,7 @@ auto Scene_root::camera_combo(
             label,
             &selected_camera_index,
             names.data(),
+            static_cast<int>(names.size()),
             static_cast<int>(names.size())
         ) &&
         (selected_camera != cameras[selected_camera_index]);

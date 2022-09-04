@@ -12,6 +12,7 @@
 #include "scene/helpers.hpp"
 #include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
+#include "xr/hand_tracker.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/view.hpp"
@@ -159,6 +160,20 @@ auto Rendertarget_node::framebuffer() const -> std::shared_ptr<erhe::graphics::F
     return m_framebuffer;
 }
 
+void Rendertarget_node::update_hand_tracker(Hand_tracker& hand_tracker)
+{
+    m_closest_finger = hand_tracker.get_hand(Hand_name::Right).get_closest_point_to_plane(
+        XR_HAND_JOINT_INDEX_TIP_EXT,
+        glm::mat4{1.0f},
+        glm::vec3{this->position_in_world()},
+        glm::vec3{this->direction_in_world()}
+    );
+    if (!m_closest_finger.has_value())
+    {
+        return;
+    }
+}
+
 auto Rendertarget_node::update_pointer() -> bool
 {
     m_pointer.reset();
@@ -233,6 +248,34 @@ auto Rendertarget_node::update_pointer() -> bool
     }
 }
 
+[[nodiscard]] auto Rendertarget_node::world_to_window(
+    glm::vec3 position_in_world
+) const -> std::optional<glm::vec2>
+{
+    const glm::vec3 position_in_mesh = this->transform_point_from_world_to_local(position_in_world);
+    const glm::vec2 a{
+        position_in_mesh.x / m_local_width,
+        position_in_mesh.y / m_local_height
+    };
+    const glm::vec2 b{
+        a.x + 0.5f,
+        0.5f - a.y
+    };
+    if (
+        (b.x < 0.0f) ||
+        (b.y < 0.0f) ||
+        (b.x > 1.0f) ||
+        (b.y > 1.0f)
+    )
+    {
+        return {};
+    }
+    return glm::vec2{
+        m_texture->width() * b.x,
+        m_texture->height() * b.y
+    };
+}
+
 void Rendertarget_node::bind()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
@@ -267,6 +310,11 @@ void Rendertarget_node::render_done()
 [[nodiscard]] auto Rendertarget_node::get_pointer() const -> std::optional<glm::vec2>
 {
     return m_pointer;
+}
+
+[[nodiscard]] auto Rendertarget_node::get_closest_finger() const -> nonstd::optional<Closest_finger>
+{
+    return m_closest_finger;
 }
 
 [[nodiscard]] auto Rendertarget_node::width() const -> float

@@ -60,8 +60,9 @@ void Headset_renderer::declare_required_components()
     m_configuration = require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
     require<erhe::application::Window>();
-    require<Mesh_memory>();
+    require<Mesh_memory  >();
     require<Scene_builder>();
+    require<Tools        >();
 }
 
 void Headset_renderer::initialize_component()
@@ -89,7 +90,9 @@ void Headset_renderer::initialize_component()
         m_root_camera.get()
     );
 
-    hide();
+    get<Tools>()->register_background_tool(this);
+
+    //hide();
 }
 
 void Headset_renderer::post_initialize()
@@ -101,6 +104,41 @@ void Headset_renderer::post_initialize()
     m_editor_rendering  = get<Editor_rendering>();
     m_hand_tracker      = get<Hand_tracker    >();
     m_tools             = get<Tools           >();
+}
+
+auto Headset_renderer::description() -> const char*
+{
+    return c_description.data();
+}
+
+void Headset_renderer::tool_render(const Render_context& context)
+{
+    static_cast<void>(context);
+
+    const auto camera = root_camera();
+    if (!camera)
+    {
+        return;
+    }
+
+    const auto transform     = camera->world_from_node();
+    auto&      line_renderer = m_line_renderer_set->hidden;
+
+    constexpr uint32_t red   = 0xff0000ffu;
+    constexpr uint32_t green = 0xff00ff00u;
+
+    line_renderer.set_thickness(4.0f);
+    for (const auto& finger_to_viewport : m_finger_to_viewport)
+    {
+        const auto&    p        = finger_to_viewport.P;
+        const auto&    q        = finger_to_viewport.Q;
+        const float    distance = glm::distance(p, q);
+        const uint32_t color    = std::abs(distance) < m_finger_to_viewport_distance_threshold
+            ? green
+            : red;
+        line_renderer.set_line_color(color);
+        line_renderer.add_lines({{p, q}});
+    }
 }
 
 auto Headset_renderer::get_headset_view_resources(
@@ -288,15 +326,28 @@ auto Headset_renderer::root_camera() -> std::shared_ptr<erhe::scene::Camera>
     return m_root_camera;
 }
 
+void Headset_renderer::finger_to_viewport(
+    const erhe::toolkit::Closest_points<float>& closest_points
+)
+{
+    m_finger_to_viewport.push_back(closest_points);
+}
+
+[[nodiscard]] auto Headset_renderer::finger_to_viewport_distance_threshold() const -> float
+{
+    return m_finger_to_viewport_distance_threshold;
+}
+
 void Headset_renderer::begin_frame()
 {
+    m_finger_to_viewport.clear();
     if (m_controller_visualization && m_headset)
     {
         m_controller_visualization->update(m_headset->controller_pose());
     }
     if (m_hand_tracker && m_headset)
     {
-        m_hand_tracker->update(*m_headset.get());
+        m_hand_tracker->update_hands(*m_headset.get());
     }
 }
 
@@ -307,6 +358,23 @@ void Headset_renderer::imgui()
         &m_clear_color[0],
         ImGuiColorEditFlags_Float
     );
+
+    ImGui::SliderFloat("Finger Distance", &m_finger_to_viewport_distance_threshold, 0.01f, 0.50f);
+
+    constexpr ImVec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+    constexpr ImVec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+    for (const auto& finger_to_viewport : m_finger_to_viewport)
+    {
+        const auto&  p        = finger_to_viewport.P;
+        const auto&  q        = finger_to_viewport.Q;
+        const float  distance = glm::distance(p, q);
+        const ImVec4 color    = std::abs(distance) < m_finger_to_viewport_distance_threshold
+            ? green
+            : red;
+        const std::string text = fmt::format("{} : {} - {}", distance, p, q);
+        ImGui::TextColored(color, "%s", text.c_str());
+    }
+
 }
 
 }

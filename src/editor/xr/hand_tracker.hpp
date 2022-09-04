@@ -66,6 +66,19 @@ public:
         const glm::vec3 p1
     ) const -> nonstd::optional<Closest_finger>;
 
+    auto get_closest_point_to_plane(
+        const glm::mat4 transform,
+        const glm::vec3 point_on_plane,
+        const glm::vec3 plane_normal
+    ) const -> nonstd::optional<Closest_finger>;
+
+    auto get_closest_point_to_plane(
+        XrHandJointEXT  joint,
+        const glm::mat4 transform,
+        const glm::vec3 point_on_plane,
+        const glm::vec3 plane_normal
+    ) const -> nonstd::optional<Closest_finger>;
+
     auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> nonstd::optional<float>;
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
@@ -113,7 +126,7 @@ public:
     void tool_render(const Render_context& context) override;
 
     // Public API
-    void update   (erhe::xr::Headset& headset);
+    void update_hands(erhe::xr::Headset& headset);
     auto get_hand (const Hand_name hand_name) -> Hand&;
     void set_color(const Hand_name hand_name, const ImVec4 color);
     void set_color(

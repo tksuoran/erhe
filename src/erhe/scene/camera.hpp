@@ -42,7 +42,7 @@ public:
 private:
     Projection m_projection;
     float      m_exposure    {1.0f};
-    float      m_shadow_range{30.0f};
+    float      m_shadow_range{22.0f};
 };
 
 [[nodiscard]] auto is_camera(const Node* const node) -> bool;
