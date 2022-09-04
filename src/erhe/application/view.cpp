@@ -76,14 +76,16 @@ void View::on_refresh()
         m_window->get_context_window()->swap_buffers();
         return;
     }
-    else
-    {
-        gl::clear_color(0.0f, 0.0f, 0.0f, 0.4f);
-        gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-    }
 
-    // TODO execute render graph?
-    m_window->get_context_window()->swap_buffers();
+    if (
+        (m_view_client != nullptr) &&
+        m_configuration->window.show
+    )
+    {
+        m_time->update(); // Also does once per frame updates - moving to next slot in renderers
+        m_view_client->update();
+        m_window->get_context_window()->swap_buffers();
+    }
 }
 
 static constexpr std::string_view c_swap_buffers{"swap_buffers"};

@@ -136,6 +136,8 @@ public:
 
     [[nodiscard]] auto source(int indent_level = 0) const -> std::string;
 
+    static constexpr const std::size_t unsized_array = 0;
+
     auto add_struct(
         const std::string_view              name,
         gsl::not_null<Shader_resource*>     struct_type,

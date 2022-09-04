@@ -50,6 +50,8 @@ Downsample_node::Downsample_node(
 )
     : axis{axis}
 {
+    ERHE_VERIFY(width > 0);
+    ERHE_VERIFY(height > 0);
     using erhe::graphics::Framebuffer;
     using erhe::graphics::Texture;
 
@@ -150,6 +152,27 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     }
 
     m_downsample_nodes.clear();
+
+    if (
+        (viewport.width  < 1) ||
+        (viewport.height < 1)
+    )
+    {
+        log_post_processing->info(
+            "Resizing Post_processing_node '{}' to 0 x 0",
+            name()
+        );
+        if (
+            (m_width  != 0) ||
+            (m_height != 0)
+        )
+        {
+            m_width  = 0;
+            m_height = 0;
+            return downsample_nodes_changed;
+        }
+        return downsample_nodes_unchanged;
+    }
 
     m_width  = viewport.width;
     m_height = viewport.height;

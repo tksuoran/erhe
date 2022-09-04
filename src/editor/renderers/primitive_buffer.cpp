@@ -26,7 +26,7 @@ Primitive_interface::Primitive_interface(std::size_t max_primitive_count)
     },
     max_primitive_count{max_primitive_count}
 {
-    primitive_block.add_struct("primitives", &primitive_struct, max_primitive_count);
+    primitive_block.add_struct("primitives", &primitive_struct, erhe::graphics::Shader_resource::unsized_array);
 }
 
 Primitive_buffer::Primitive_buffer(const Primitive_interface& primitive_interface)
@@ -36,7 +36,7 @@ Primitive_buffer::Primitive_buffer(const Primitive_interface& primitive_interfac
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
         m_primitive_interface.primitive_block.binding_point(),
-        m_primitive_interface.primitive_block.size_bytes()
+        m_primitive_interface.primitive_struct.size_bytes() * m_primitive_interface.max_primitive_count
     );
 }
 

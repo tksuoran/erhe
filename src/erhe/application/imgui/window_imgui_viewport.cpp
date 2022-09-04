@@ -142,6 +142,20 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
 
     menu();
 
+    bool& show_demo = m_imgui_windows->get_show_imgui_demo_window();
+    if (show_demo)
+    {
+        ImGui::ShowDemoWindow(&show_demo);
+    }
+
+    bool& show_style_editor = m_imgui_windows->get_show_imgui_style_editor_window();
+    if (show_style_editor)
+    {
+        ImGui::Begin("Dear ImGui Style Editor", &show_style_editor);
+        ImGui::ShowStyleEditor();
+        ImGui::End();
+    }
+
     return true;
 }
 
@@ -167,7 +181,7 @@ void Window_imgui_viewport::execute_rendergraph_node()
     //// unit state when doing the clear.
     //m_pipeline_state_tracker->shader_stages.reset();
     //m_pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
-    gl::clear_color  (0.0f, 0.0f, 0.2f, 0.1f);
+    gl::clear_color  (0.0f, 0.0f, 0.0f, 0.0f);
     gl::clear        (gl::Clear_buffer_mask::color_buffer_bit);
     m_imgui_renderer->render_draw_data();
 }

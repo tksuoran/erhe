@@ -22,6 +22,7 @@
 
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/configuration.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
@@ -43,6 +44,7 @@
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
+#   include <imgui_internal.h>
 #endif
 
 namespace editor
@@ -181,12 +183,6 @@ void Viewport_window::clear() const
         m_viewport_config->clear_color[1],
         m_viewport_config->clear_color[2],
         m_viewport_config->clear_color[3]
-    );
-    gl::clear_color(
-        0.0f,
-        0.0f,
-        0.0f,
-        0.4f
     );
     gl::clear_stencil(0);
     gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
@@ -758,19 +754,28 @@ void Viewport_window::imgui_toolbar()
         m_grid_tool->viewport_toolbar();
     }
 
+    const float  rounding        {3.0f};
+    const ImVec4 background_color{0.20f, 0.26f, 0.25f, 0.72f};
+
     ImGui::SameLine();
     ImGui::SetNextItemWidth(150.0f);
-    scene_root()->camera_combo("Camera", m_camera);
+    erhe::application::make_text_with_background("Camera:", rounding, background_color);
+    ImGui::SameLine();
+    scene_root()->camera_combo("##Camera", m_camera);
+    ImGui::SameLine();
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(140.0f);
+    erhe::application::make_text_with_background("Shader:", rounding, background_color);
+    ImGui::SameLine();
     ImGui::Combo(
-        "Shader",
+        "##Shader",
         reinterpret_cast<int*>(&m_shader_stages_variant),
         c_shader_stages_variant_strings,
         IM_ARRAYSIZE(c_shader_stages_variant_strings),
         IM_ARRAYSIZE(c_shader_stages_variant_strings)
     );
+    ImGui::SameLine();
 
     const auto& post_processing_node = m_post_processing_node.lock();
     if (post_processing_node)

@@ -144,6 +144,15 @@ auto Imgui_window::consumes_mouse_input() const -> bool
     return false;
 }
 
+auto Imgui_window::has_toolbar() const -> bool
+{
+    return false;
+}
+
+void Imgui_window::toolbar()
+{
+}
+
 auto Imgui_window::get_window_type_hash() const -> uint32_t
 {
     return 0;

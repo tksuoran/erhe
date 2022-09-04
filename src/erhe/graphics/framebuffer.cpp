@@ -193,6 +193,8 @@ void Framebuffer::create()
     {
         if (attachment.texture != nullptr)
         {
+            ERHE_VERIFY(attachment.texture->width() >= 1);
+            ERHE_VERIFY(attachment.texture->height() >= 1);
             if (attachment.texture->is_layered())
             {
                 gl::named_framebuffer_texture_layer(
@@ -215,6 +217,8 @@ void Framebuffer::create()
         }
         else if (attachment.renderbuffer != nullptr)
         {
+            ERHE_VERIFY(attachment.renderbuffer->width() >= 1);
+            ERHE_VERIFY(attachment.renderbuffer->height() >= 1);
             gl::named_framebuffer_renderbuffer(
                 gl_name(),
                 attachment.attachment_point,

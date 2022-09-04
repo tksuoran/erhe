@@ -65,6 +65,16 @@ void Imgui_windows::post_initialize()
     return m_window_imgui_viewport;
 }
 
+[[nodiscard]] auto Imgui_windows::get_show_imgui_demo_window() -> bool&
+{
+    return m_show_imgui_demo_window;
+}
+
+[[nodiscard]] auto Imgui_windows::get_show_imgui_style_editor_window() -> bool&
+{
+    return m_show_imgui_style_editor_window;
+}
+
 void Imgui_windows::register_imgui_viewport(
     const std::shared_ptr<Imgui_viewport>& viewport
 )
@@ -129,19 +139,6 @@ void Imgui_windows::imgui_windows()
 
         if (viewport->begin_imgui_frame())
         {
-            // TODO  menu();
-            //// if (viewport == *m_window_imgui_viewport.get())
-            //// {
-            ////     if (m_show_style_editor)
-            ////     {
-            ////         if (ImGui::Begin("Dear ImGui Style Editor", &m_show_style_editor))
-            ////         {
-            ////             ImGui::ShowStyleEditor();
-            ////         }
-            ////         ImGui::End();
-            ////     }
-            //// }
-
             std::size_t i = 0;
             for (auto& imgui_window : m_imgui_windows)
             {
@@ -151,8 +148,8 @@ void Imgui_windows::imgui_windows()
                 }
                 if (imgui_window->is_visible())
                 {
-                    auto imgui_id = fmt::format("##window-{}", ++i);
-                    ImGui::PushID(imgui_id.c_str());
+                    auto window_id = fmt::format("##window-{}", ++i);
+                    ImGui::PushID(window_id.c_str());
                     if (imgui_window->begin())
                     {
                         imgui_window->imgui();
@@ -165,8 +162,49 @@ void Imgui_windows::imgui_windows()
                         any_mouse_input_sink = true;
                         m_commands->set_mouse_input_sink(imgui_window);
                     }
+                    const auto window_position = ImGui::GetWindowPos();
+                    const auto window_size = ImGui::GetWindowSize();
+                    const auto content_region_min = ImGui::GetWindowContentRegionMin();
+                    const auto content_region_max = ImGui::GetWindowContentRegionMin();
+                    const ImVec2 content_region_size{
+                        content_region_max.x - content_region_min.x,
+                        content_region_max.y - content_region_min.y
+                    };
+                    const ImVec2 toolbar_window_position
+                    {
+                        window_position.x + content_region_min.x,
+                        window_position.y + content_region_min.y
+                    };
+
                     imgui_window->end();
                     ImGui::PopID();
+
+                    if (imgui_window->has_toolbar())
+                    {
+                        auto toolbar_id = fmt::format("##window-{}-toolbar", ++i);
+                        ImGui::SetNextWindowPos(
+                            ImVec2{
+                                window_position.x + content_region_min.x,
+                                window_position.y + content_region_min.y
+                            },
+                            ImGuiCond_Always
+                        );
+                        ImGui::SetNextWindowSize(content_region_size, ImGuiCond_Always);
+                        ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
+                        constexpr ImGuiWindowFlags toolbar_window_flags =
+                            ImGuiWindowFlags_NoDecoration       |
+                            ImGuiWindowFlags_NoDocking          |
+                            ImGuiWindowFlags_AlwaysAutoResize   |
+                            ImGuiWindowFlags_NoSavedSettings    |
+                            ImGuiWindowFlags_NoFocusOnAppearing |
+                            ImGuiWindowFlags_NoNav;
+
+                        if (ImGui::Begin(toolbar_id.c_str(), nullptr, toolbar_window_flags))
+                        {
+                            imgui_window->toolbar();
+                        }
+                        ImGui::End();
+                    }
                 }
             }
 
@@ -203,7 +241,8 @@ void Imgui_windows::window_menu()
                 }
             }
         }
-        ImGui::MenuItem("ImGui Style Editor", "", &m_show_style_editor);
+        ImGui::MenuItem("ImGui Demo", "", &m_show_imgui_demo_window);
+        ImGui::MenuItem("ImGui Style Editor", "", &m_show_imgui_style_editor_window);
 
         ImGui::Separator();
         if (ImGui::MenuItem("Close All"))

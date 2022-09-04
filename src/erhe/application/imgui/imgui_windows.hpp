@@ -43,13 +43,15 @@ public:
     void post_initialize            () override;
 
     // Public API
-    [[nodiscard]] auto get_mutex          () -> std::mutex&;
-    [[nodiscard]] auto get_window_viewport() -> std::shared_ptr<Window_imgui_viewport>;
-    void register_imgui_viewport(const std::shared_ptr<Imgui_viewport>& viewport);
-    void register_imgui_window  (Imgui_window* window);
-    void make_current           (const Imgui_viewport* imgui_viewport);
-    void imgui_windows          ();
-    void window_menu            ();
+    [[nodiscard]] auto get_mutex                         () -> std::mutex&;
+    [[nodiscard]] auto get_window_viewport               () -> std::shared_ptr<Window_imgui_viewport>;
+    [[nodiscard]] auto get_show_imgui_demo_window        () -> bool&;
+    [[nodiscard]] auto get_show_imgui_style_editor_window() -> bool&;
+    void register_imgui_viewport          (const std::shared_ptr<Imgui_viewport>& viewport);
+    void register_imgui_window            (Imgui_window* window);
+    void make_current                     (const Imgui_viewport* imgui_viewport);
+    void imgui_windows                    ();
+    void window_menu                      ();
 
     // NOTE: Same interface as Imgui_viewport
     [[nodiscard]] auto want_capture_mouse() const -> bool;
@@ -74,7 +76,8 @@ private:
     const Imgui_viewport*                        m_current_viewport{nullptr}; // current context
 
     std::shared_ptr<Window_imgui_viewport>       m_window_imgui_viewport;
-    bool                                         m_show_style_editor{false};
+    bool                                         m_show_imgui_demo_window        {false};
+    bool                                         m_show_imgui_style_editor_window{false};
 };
 
 } // namespace erhe::application

@@ -45,6 +45,7 @@ public:
 
     static Color_blend_state color_blend_disabled;
     static Color_blend_state color_blend_premultiplied;
+    static Color_blend_state color_blend_premultiplied_alpha_replace;
     static Color_blend_state color_writes_disabled;
 };
 

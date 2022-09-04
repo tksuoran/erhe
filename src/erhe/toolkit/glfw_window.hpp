@@ -29,16 +29,17 @@ constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
 class Window_configuration
 {
 public:
-    bool            fullscreen       {false};
-    bool            use_finish       {false};
-    int             width            {1920};
-    int             height           {1080};
-    int             msaa_sample_count{0};
-    int             swap_interval    {1};
-    float           sleep_time       {0.0f};
-    float           wait_time        {0.01f};
-    const char*     title            {nullptr};
-    Context_window* share            {nullptr};
+    bool            fullscreen              {false};
+    bool            use_finish              {false};
+    bool            framebuffer_transparency{false};
+    int             width                   {1920};
+    int             height                  {1080};
+    int             msaa_sample_count       {0};
+    int             swap_interval           {1};
+    float           sleep_time              {0.0f};
+    float           wait_time               {0.01f};
+    const char*     title                   {nullptr};
+    Context_window* share                   {nullptr};
 };
 
 class Context_window

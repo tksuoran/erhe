@@ -89,6 +89,27 @@ Color_blend_state Color_blend_state::color_blend_premultiplied {
     }
 };
 
+Color_blend_state Color_blend_state::color_blend_premultiplied_alpha_replace {
+    .enabled = true,
+    .rgb = {
+        .equation_mode      = gl::Blend_equation_mode::func_add,
+        .source_factor      = gl::Blending_factor::one,
+        .destination_factor = gl::Blending_factor::one_minus_src_alpha
+    },
+    .alpha = {
+        .equation_mode      = gl::Blend_equation_mode::func_add,
+        .source_factor      = gl::Blending_factor::one,
+        .destination_factor = gl::Blending_factor::zero
+    },
+    .constant = {0.0f, 0.0f, 0.0f, 0.0f},
+    .write_mask = {
+        .red   = true,
+        .green = true,
+        .blue  = true,
+        .alpha = true
+    }
+};
+
 Color_blend_state Color_blend_state::color_writes_disabled {
     .enabled = false,
     .rgb = {

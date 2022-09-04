@@ -399,14 +399,15 @@ auto Context_window::open(
 
     const bool primary = (configuration.share == nullptr);
 
-    glfwWindowHint(GLFW_CLIENT_API,    GLFW_OPENGL_API);
-    glfwWindowHint(GLFW_RED_BITS,      8);
-    glfwWindowHint(GLFW_GREEN_BITS,    8);
-    glfwWindowHint(GLFW_BLUE_BITS,     8);
-    glfwWindowHint(GLFW_ALPHA_BITS,    8); // required for transparency
-    //glfwWindowHint(GLFW_DEPTH_BITS,            24);
-    glfwWindowHint(GLFW_SRGB_CAPABLE,  GLFW_TRUE);
-    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_TRUE); // Fullscreen only
+    glfwWindowHint(GLFW_CLIENT_API,       GLFW_OPENGL_API);
+    glfwWindowHint(GLFW_RED_BITS,         8);
+    glfwWindowHint(GLFW_GREEN_BITS,       8);
+    glfwWindowHint(GLFW_BLUE_BITS,        8);
+    glfwWindowHint(GLFW_ALPHA_BITS,       8);
+    //glfwWindowHint(GLFW_DEPTH_BITS,     24);
+    glfwWindowHint(GLFW_SRGB_CAPABLE,     GLFW_TRUE);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
+    glfwWindowHint(GLFW_CENTER_CURSOR,    GLFW_TRUE); // Fullscreen only
     if (configuration.msaa_sample_count > 0)
     {
         glfwWindowHint(GLFW_SAMPLES, configuration.msaa_sample_count);
@@ -424,7 +425,7 @@ auto Context_window::open(
     glfwWindowHint(GLFW_CONTEXT_NO_ERROR,      GLFW_TRUE);
 #endif
     glfwWindowHint(GLFW_VISIBLE,               primary ? GLFW_TRUE : GLFW_FALSE);
-    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
+    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, configuration.framebuffer_transparency ? GLFW_TRUE : GLFW_FALSE);
 
     GLFWwindow* const share_window = !primary
         ? reinterpret_cast<GLFWwindow*>(configuration.share->get_glfw_window())
@@ -773,7 +774,7 @@ auto Context_window::get_device_pointer() const -> void*
 #endif
 }
 
-auto Context_window::get_window_handle () const -> void*
+auto Context_window::get_window_handle() const -> void*
 {
 #if defined(_WIN32)
     return glfwGetWin32Window(m_glfw_window);

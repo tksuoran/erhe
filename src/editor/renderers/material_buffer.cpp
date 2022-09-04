@@ -28,7 +28,11 @@ Material_interface::Material_interface(std::size_t max_material_count)
     },
     max_material_count{max_material_count}
 {
-    material_block.add_struct("materials", &material_struct, max_material_count);
+    material_block.add_struct(
+        "materials",
+        &material_struct,
+        erhe::graphics::Shader_resource::unsized_array
+    );
 }
 
 Material_buffer::Material_buffer(const Material_interface& material_interface)
@@ -38,7 +42,7 @@ Material_buffer::Material_buffer(const Material_interface& material_interface)
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
         m_material_interface.material_block.binding_point(),
-        m_material_interface.material_block.size_bytes()
+        m_material_interface.material_struct.size_bytes() * m_material_interface.max_material_count
     );
 }
 

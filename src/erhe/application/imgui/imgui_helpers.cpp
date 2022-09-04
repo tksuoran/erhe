@@ -10,6 +10,17 @@ const ImVec4 c_color_disabled         = ImVec4{0.28f, 0.28f, 0.28f, 1.0f};
 const ImVec4 c_color_disabled_hovered = ImVec4{0.28f, 0.28f, 0.28f, 1.0f};
 const ImVec4 c_color_disabled_active  = ImVec4{0.28f, 0.28f, 0.28f, 1.0f}; // pressed
 
+void make_text_with_background(const char* text, float rounding, const ImVec4 background_color)
+{
+    ImGui::PushStyleVar  (ImGuiStyleVar_FrameRounding, rounding);
+    ImGui::PushStyleColor(ImGuiCol_Button,        background_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, background_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  background_color);
+    ImGui::Button        (text);
+    ImGui::PopStyleColor (3);
+    ImGui::PopStyleVar   ();
+}
+
 bool make_button(
     const char*     label,
     const Item_mode mode,

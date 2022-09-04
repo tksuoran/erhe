@@ -122,12 +122,14 @@ void Imgui_viewport_window::on_begin()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{0.0, 0.0, 0.0, 0.0});
 #endif
 }
 
 void Imgui_viewport_window::on_end()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ImGui::PopStyleColor();
     ImGui::PopStyleVar();
 #endif
 }
@@ -165,6 +167,17 @@ void Imgui_viewport_window::set_viewport(
     return m_viewport;
 }
 
+void Imgui_viewport_window::toolbar()
+{
+    const auto viewport_window = m_viewport_window.lock();
+    if (!viewport_window)
+    {
+        return;
+    }
+
+    viewport_window->imgui_toolbar();
+}
+
 void Imgui_viewport_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -175,7 +188,6 @@ void Imgui_viewport_window::imgui()
     {
         return;
     }
-    viewport_window->imgui_toolbar();
 
     const auto size = ImGui::GetContentRegionAvail();
 

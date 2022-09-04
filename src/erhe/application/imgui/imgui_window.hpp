@@ -65,6 +65,8 @@ public:
     virtual void on_end              ();
     virtual auto flags               () -> ImGuiWindowFlags;
     virtual auto consumes_mouse_input() const -> bool;
+    virtual auto has_toolbar         () const -> bool;
+    virtual void toolbar             ();
 
 protected:
     // Component dependencies

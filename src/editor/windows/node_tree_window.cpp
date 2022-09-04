@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "windows/node_tree_window.hpp"
 #include "graphics/icon_set.hpp"
 #include "editor_log.hpp"
@@ -60,11 +62,21 @@ void Node_tree_window::post_initialize()
 
 void Node_tree_window::clear_selection()
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "clear_selection()"
+    );
+
     m_selection_tool->clear_selection();
 }
 
 void Node_tree_window::select_all()
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "select_all()"
+    );
+
     //log_tools->warn("TODO: select_all");
 }
 
@@ -99,6 +111,11 @@ void Node_tree_window::move_selection_before(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "move_selection_before()"
+    );
+
     static_cast<void>(target_node);
     static_cast<void>(payload_id);
 
@@ -114,6 +131,11 @@ void Node_tree_window::move_selection_after(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "move_selection_after()"
+    );
+
     static_cast<void>(target_node);
     static_cast<void>(payload_id);
 
@@ -130,6 +152,11 @@ void Node_tree_window::try_add_to_attach(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "try_add_to_attach()"
+    );
+
     // Nodes cannot be attached to themselves
     // Ancestors cannot be attached to descendants
     if (
@@ -164,6 +191,11 @@ void Node_tree_window::attach_selection_to(
     const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
 )
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "attach_selection_to()"
+    );
+
     //// log_tools->trace(
     ////     "attach_selection_to(target_node = {}, payload_id = {})",
     ////     target_node->name(),
@@ -197,6 +229,11 @@ void Node_tree_window::drag_and_drop_source(
 )
 {
     ERHE_PROFILE_FUNCTION
+
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "drag_and_drop_source()"
+    );
 
     const auto node_id = node->get_id();
     m_tree_nodes.emplace(node_id, node);
@@ -234,6 +271,11 @@ static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs)
 
 void drag_and_drop_rectangle_preview(const ImRect rect)
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "drag_and_drop_rectangle_preview()"
+    );
+
     const auto* g       = ImGui::GetCurrentContext();
     const auto* window  = g->CurrentWindow;
     const auto& payload = g->DragDropPayload;
@@ -260,6 +302,11 @@ void drag_and_drop_gradient_preview(
     const ImU32 bottom
 )
 {
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "drag_and_drop_gradient_preview()"
+    );
+
     const auto* g       = ImGui::GetCurrentContext();
     const auto* window  = g->CurrentWindow;
     const auto& payload = g->DragDropPayload;
@@ -284,6 +331,11 @@ auto Node_tree_window::drag_and_drop_target(
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION
+
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "drag_and_drop_target()"
+    );
 
     const auto  rect_min = ImGui::GetItemRectMin();
     const auto  rect_max = ImGui::GetItemRectMax();
@@ -361,6 +413,11 @@ void Node_tree_window::imgui_node_update(
 
     if (!m_selection_tool)
     {
+        SPDLOG_LOGGER_TRACE(
+            log_node_properties,
+            "imgui_node_update() - no selection tool"
+        );
+
         return;
     }
 
@@ -384,24 +441,40 @@ void Node_tree_window::imgui_node_update(
             range_selection.reset();
             if (node->is_selected())
             {
-                log_node_properties->trace("click with ctrl down on selected node {} - deselecting", node->name());
+                SPDLOG_LOGGER_TRACE(
+                    log_node_properties,
+                    "click with ctrl down on selected node {} - deselecting",
+                    node->name()
+                );
                 m_selection_tool->remove_from_selection(node);
             }
             else
             {
-                log_node_properties->trace("click with ctrl down on node {} - selecting", node->name());
+                SPDLOG_LOGGER_TRACE(
+                    log_node_properties,
+                    "click with ctrl down on node {} - selecting",
+                    node->name()
+                );
                 m_selection_tool->add_to_selection(node);
                 range_selection.set_terminator(node);
             }
         }
         else if (shift_down)
         {
-            log_node_properties->trace("click with shift down on node {} - range select", node->name());
+            SPDLOG_LOGGER_TRACE(
+                log_node_properties,
+                "click with shift down on node {} - range select",
+                node->name()
+            );
             range_selection.set_terminator(node);
         }
         else
         {
-            log_node_properties->trace("click without modifier keys on node {} - selecting it", node->name());
+            SPDLOG_LOGGER_TRACE(
+                log_node_properties,
+                "click without modifier keys on node {} - selecting it",
+                node->name()
+            );
             const bool was_selected = node->is_selected();
             range_selection.reset();
             m_selection_tool->clear_selection();
@@ -419,7 +492,8 @@ void Node_tree_window::imgui_node_update(
         {
             if (shift_down)
             {
-                log_node_properties->trace(
+                SPDLOG_LOGGER_TRACE(
+                    log_node_properties,
                     "key with shift down on node {} - range select",
                     node->name()
                 );
@@ -427,7 +501,8 @@ void Node_tree_window::imgui_node_update(
             }
             else
             {
-                log_node_properties->trace(
+                SPDLOG_LOGGER_TRACE(
+                    log_node_properties,
                     "key without modifier key on node {} - clearing range select and select",
                     node->name()
                 );
@@ -443,7 +518,10 @@ void Node_tree_window::imgui_node_update(
         const bool a_pressed = ImGui::IsKeyPressed(ImGuiKey_A);
         if (ctrl_down && a_pressed)
         {
-            log_node_properties->trace("ctrl a pressed - select all");
+            SPDLOG_LOGGER_TRACE(
+                log_node_properties,
+                "ctrl a pressed - select all"
+            );
             select_all();
         }
     }
