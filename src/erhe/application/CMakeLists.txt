@@ -26,6 +26,8 @@ erhe_target_sources_grouped(
     commands/mouse_wheel_binding.hpp
     commands/state.cpp
     commands/state.hpp
+    commands/update_binding.cpp
+    commands/update_binding.hpp
 
     graphics/gl_context_provider.cpp
     graphics/gl_context_provider.hpp
