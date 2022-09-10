@@ -1,7 +1,8 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene_log.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -200,7 +201,7 @@ auto Node::get_index_in_parent() const -> std::size_t
     return 0;
 }
 
-auto Node::get_index_of_child(const Node* child) const -> nonstd::optional<std::size_t>
+auto Node::get_index_of_child(const Node* child) const -> std::optional<std::size_t>
 {
     for (
         std::size_t i = 0, end = node_data.children.size();
@@ -787,6 +788,14 @@ auto Node::position_in_world() const -> glm::vec4
 auto Node::direction_in_world() const -> glm::vec4
 {
     return world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f};
+}
+
+[[nodiscard]] auto Node::look_at(const Node& target) const -> glm::mat4
+{
+    const glm::vec3 eye_position    = position_in_world();
+    const glm::vec3 target_position = target.position_in_world();
+    const glm::vec3 up_direction    = world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f};
+    return erhe::toolkit::create_look_at(eye_position, target_position, up_direction);
 }
 
 auto Node::transform_point_from_world_to_local(const glm::vec3 p) const -> glm::vec3

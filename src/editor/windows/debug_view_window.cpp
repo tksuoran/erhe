@@ -124,7 +124,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    const auto& shadow_texture = shadow_render_node->texture();
+    const auto& shadow_texture = shadow_render_node->get_texture();
     if (!shadow_texture)
     {
         SPDLOG_LOGGER_TRACE(
@@ -149,8 +149,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    const auto& viewport_window = shadow_render_node->viewport_window();
-    const auto& scene_root = viewport_window->scene_root();
+    const auto& scene_viewport = shadow_render_node->get_scene_viewport();
+    const auto& scene_root = scene_viewport->get_scene_root();
     if (!scene_root)
     {
         SPDLOG_LOGGER_TRACE(
@@ -160,13 +160,15 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    const auto& light_projections = shadow_render_node->light_projections();
+    const auto& light_projections = shadow_render_node->get_light_projections();
     if (light_projections.light_projection_transforms.empty())
     {
         return;
     }
 
-    if (m_light_index >= light_projections.light_projection_transforms.size())
+    if (
+        static_cast<std::size_t>(m_light_index) >= light_projections.light_projection_transforms.size()
+    )
     {
         SPDLOG_LOGGER_TRACE(
             log_render,
@@ -192,7 +194,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
             .materials         = {},
             .mesh_spans        = {},
             .passes            = { &m_renderpass },
-            .shadow_texture    = shadow_render_node->texture().get(),
+            .shadow_texture    = shadow_render_node->get_texture().get(),
             .viewport          = erhe::scene::Viewport{
                 .x      = 0,
                 .y      = 0,
@@ -337,7 +339,7 @@ void Debug_view_window::imgui()
         return;
     }
 
-    const auto& light_projections           = shadow_render_node->light_projections();
+    const auto& light_projections           = shadow_render_node->get_light_projections();
     const auto& light_projection_transforms = light_projections.light_projection_transforms;
     const int count = static_cast<int>(light_projection_transforms.size());
     int& light_index = input_texture_node->get_light_index();

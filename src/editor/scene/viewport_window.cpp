@@ -63,11 +63,32 @@ using erhe::graphics::Texture;
 
 int Viewport_window::s_serial = 0;
 
+auto Scene_viewport::get_light_projections() const -> Light_projections*
+{
+    auto* shadow_render_node = get_shadow_render_node();
+    if (shadow_render_node == nullptr)
+    {
+        return nullptr;
+    }
+    Light_projections& light_projections = shadow_render_node->get_light_projections();
+    return &light_projections;
+}
+
+auto Scene_viewport::get_shadow_texture() const -> erhe::graphics::Texture*
+{
+    const auto* shadow_render_node = get_shadow_render_node();
+    if (shadow_render_node == nullptr)
+    {
+        return nullptr;
+    }
+    return shadow_render_node->get_texture().get();
+}
+
 Viewport_window::Viewport_window(
-    const std::string_view              name,
-    const erhe::components::Components& components,
-    const std::shared_ptr<Scene_root>&  scene_root,
-    erhe::scene::Camera*                camera
+    const std::string_view                      name,
+    const erhe::components::Components&         components,
+    const std::shared_ptr<Scene_root>&          scene_root,
+    const std::shared_ptr<erhe::scene::Camera>& camera
 )
     : erhe::application::Rendergraph_node{name}
     , m_configuration         {components.get<erhe::application::Configuration    >()}
@@ -146,9 +167,10 @@ void Viewport_window::execute_rendergraph_node()
 
     const Render_context context
     {
-        .window                 = this,
+        .scene_viewport         = this,
+        .viewport_window        = this,
         .viewport_config        = m_viewport_config.get(),
-        .camera                 = m_camera,
+        .camera                 = m_camera.lock().get(),
         .viewport               = output_viewport,
         .override_shader_stages = get_override_shader_stages()
     };
@@ -172,27 +194,6 @@ void Viewport_window::execute_rendergraph_node()
     m_editor_rendering->render_viewport_main(context, m_is_hovered);
 }
 
-void Viewport_window::clear() const
-{
-    ERHE_PROFILE_FUNCTION
-
-    m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
-    gl::clear_color(
-        m_viewport_config->clear_color[0],
-        m_viewport_config->clear_color[1],
-        m_viewport_config->clear_color[2],
-        m_viewport_config->clear_color[3]
-    );
-    gl::clear_stencil(0);
-    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
-    gl::clear(
-        gl::Clear_buffer_mask::color_buffer_bit |
-        gl::Clear_buffer_mask::depth_buffer_bit
-        //// TODO gl::Clear_buffer_mask::stencil_buffer_bit
-    );
-}
-
 void Viewport_window::connect(Viewport_windows* viewport_windows)
 {
     m_viewport_windows = viewport_windows;
@@ -205,10 +206,10 @@ void Viewport_window::set_window_viewport(
     const int height
 )
 {
-    m_window_viewport.x      = x;
-    m_window_viewport.y      = y;
-    m_window_viewport.width  = width;
-    m_window_viewport.height = height;
+    m_window_viewport.x          = x;
+    m_window_viewport.y          = y;
+    m_window_viewport.width      = width;
+    m_window_viewport.height     = height;
     m_projection_viewport.x      = 0;
     m_projection_viewport.y      = 0;
     m_projection_viewport.width  = width;
@@ -220,7 +221,7 @@ void Viewport_window::set_is_hovered(const bool is_hovered)
     m_is_hovered = is_hovered;
 }
 
-void Viewport_window::set_camera(erhe::scene::Camera* camera)
+void Viewport_window::set_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
 {
     // TODO Add validation
     m_camera = camera;
@@ -231,9 +232,9 @@ auto Viewport_window::is_hovered() const -> bool
     return m_is_hovered;
 }
 
-[[nodiscard]] auto Viewport_window::scene_root() const -> Scene_root*
+[[nodiscard]] auto Viewport_window::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
-    return m_scene_root.get();
+    return m_scene_root.lock();
 }
 
 auto Viewport_window::window_viewport() const -> const erhe::scene::Viewport&
@@ -246,9 +247,9 @@ auto Viewport_window::projection_viewport() const -> const erhe::scene::Viewport
     return m_projection_viewport;
 }
 
-auto Viewport_window::camera() const -> erhe::scene::Camera*
+auto Viewport_window::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
-    return m_camera;
+    return m_camera.lock();
 }
 
 auto Viewport_window::to_scene_content(
@@ -266,13 +267,14 @@ auto Viewport_window::to_scene_content(
 
 auto Viewport_window::project_to_viewport(
     const glm::dvec3 position_in_world
-) const -> nonstd::optional<glm::dvec3>
+) const -> std::optional<glm::dvec3>
 {
-    if (m_camera == nullptr)
+    const auto camera = m_camera.lock();
+    if (!camera)
     {
         return {};
     }
-    const auto camera_projection_transforms = m_camera->projection_transforms(m_projection_viewport);
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
     constexpr double depth_range_near = 0.0;
     constexpr double depth_range_far  = 1.0;
     return erhe::toolkit::project_to_screen_space<double>(
@@ -289,13 +291,14 @@ auto Viewport_window::project_to_viewport(
 
 auto Viewport_window::unproject_to_world(
     const glm::dvec3 position_in_window
-) const -> nonstd::optional<glm::dvec3>
+) const -> std::optional<glm::dvec3>
 {
-    if (m_camera == nullptr)
+    const auto camera = m_camera.lock();
+    if (!camera)
     {
         return {};
     }
-    const auto camera_projection_transforms = m_camera->projection_transforms(m_projection_viewport);
+    const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
     constexpr double depth_range_near = 0.0;
     constexpr double depth_range_far  = 1.0;
     return erhe::toolkit::unproject<double>(
@@ -530,7 +533,8 @@ void Viewport_window::update_pointer_context(
     m_near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
     m_far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
 
-    if (m_camera == nullptr)
+    const auto camera = m_camera.lock();
+    if (!camera)
     {
         return;
     }
@@ -626,23 +630,28 @@ void Viewport_window::update_pointer_context(
     {
         m_hover_entries[Hover_entry::rendertarget_slot] = entry;
     }
-    m_scene_root->update_pointer_for_rendertarget_nodes();
+
+    const auto scene_root = m_scene_root.lock();
+    if (scene_root)
+    {
+        scene_root->update_pointer_for_rendertarget_nodes();
+    }
 #endif
 }
 
-auto Viewport_window::near_position_in_world() const -> nonstd::optional<glm::vec3>
+auto Viewport_window::near_position_in_world() const -> std::optional<glm::vec3>
 {
     return m_near_position_in_world;
 }
 
-auto Viewport_window::far_position_in_world() const -> nonstd::optional<glm::vec3>
+auto Viewport_window::far_position_in_world() const -> std::optional<glm::vec3>
 {
     return m_far_position_in_world;
 }
 
 auto Viewport_window::position_in_world_distance(
     const float distance
-) const -> nonstd::optional<glm::vec3>
+) const -> std::optional<glm::vec3>
 {
     if (
         !m_near_position_in_world.has_value() ||
@@ -661,11 +670,12 @@ auto Viewport_window::position_in_world_distance(
 
 auto Viewport_window::position_in_world_viewport_depth(
     const double viewport_depth
-) const -> nonstd::optional<glm::dvec3>
+) const -> std::optional<glm::dvec3>
 {
+    const auto camera = m_camera.lock();
     if (
         !m_position_in_viewport.has_value() ||
-        (m_camera == nullptr)
+        !camera
     )
     {
         return {};
@@ -679,7 +689,7 @@ auto Viewport_window::position_in_world_viewport_depth(
         viewport_depth
     };
     const auto      vp                    = projection_viewport();
-    const auto      projection_transforms = m_camera->projection_transforms(vp);
+    const auto      projection_transforms = camera->projection_transforms(vp);
     const glm::mat4 world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
 
     return erhe::toolkit::unproject(
@@ -694,7 +704,7 @@ auto Viewport_window::position_in_world_viewport_depth(
     );
 }
 
-auto Viewport_window::position_in_viewport() const -> nonstd::optional<glm::vec2>
+auto Viewport_window::position_in_viewport() const -> std::optional<glm::vec2>
 {
     return m_position_in_viewport;
 }
@@ -721,27 +731,6 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
     return shadow_render_node;
 }
 
-auto Viewport_window::get_light_projections() const -> Light_projections*
-{
-    auto* shadow_render_node = get_shadow_render_node();
-    if (shadow_render_node == nullptr)
-    {
-        return nullptr;
-    }
-    Light_projections& light_projections = shadow_render_node->light_projections();
-    return &light_projections;
-}
-
-auto Viewport_window::get_shadow_texture() const -> erhe::graphics::Texture*
-{
-    const auto* shadow_render_node = get_shadow_render_node();
-    if (shadow_render_node == nullptr)
-    {
-        return nullptr;
-    }
-    return shadow_render_node->texture().get();
-}
-
 void Viewport_window::imgui_toolbar()
 {
     if (m_trs_tool)
@@ -761,7 +750,7 @@ void Viewport_window::imgui_toolbar()
     ImGui::SetNextItemWidth(150.0f);
     erhe::application::make_text_with_background("Camera:", rounding, background_color);
     ImGui::SameLine();
-    scene_root()->camera_combo("##Camera", m_camera);
+    get_scene_root()->camera_combo("##Camera", m_camera);
     ImGui::SameLine();
 
     ImGui::SameLine();

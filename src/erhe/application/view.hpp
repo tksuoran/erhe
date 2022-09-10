@@ -69,7 +69,8 @@ public:
     void post_initialize            () override;
 
     void run();
-    auto get_imgui_capture_mouse() const -> bool;
+    auto get_imgui_capture_keyboard() const -> bool;
+    auto get_imgui_capture_mouse   () const -> bool;
 
     // Implements erhe::toolkit::View
     void update         () override;
@@ -104,15 +105,9 @@ private:
     std::shared_ptr<Time>           m_time;
     std::shared_ptr<Window>         m_window;
 
-    View_client* m_view_client{nullptr};
-
-    glm::vec2    m_window_position          {};
-    glm::vec2    m_window_size              {};
-    glm::vec2    m_window_content_region_min{};
-    glm::vec2    m_window_content_region_max{};
-
-    bool         m_ready                    {false};
-    bool         m_close_requested          {false};
+    View_client* m_view_client    {nullptr};
+    bool         m_ready          {false};
+    bool         m_close_requested{false};
 };
 
 } // namespace erhe::application

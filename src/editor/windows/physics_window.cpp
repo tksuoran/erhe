@@ -103,8 +103,8 @@ void Physics_window::imgui()
         return;
     }
 
-    Scene_root* scene_root = viewport_window->scene_root();
-    if (scene_root == nullptr)
+    const auto scene_root = viewport_window->get_scene_root();
+    if (!scene_root)
     {
         return;
     }
@@ -236,11 +236,11 @@ void Physics_window::tool_render(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (context.window == nullptr)
+    if (context.scene_viewport == nullptr)
     {
         return;
     }
-    const auto& scene_root   = context.window->scene_root();
+    const auto& scene_root   = context.scene_viewport->get_scene_root();
     const auto& debug_drawer = get<Debug_draw>();
     if (
         !debug_drawer ||

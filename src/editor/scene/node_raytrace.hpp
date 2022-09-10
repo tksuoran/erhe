@@ -50,7 +50,7 @@ public:
 
     ~Node_raytrace() noexcept override;
 
-	// Implements INode_attachment
+    // Implements INode_attachment
     [[nodiscard]] auto node_attachment_type() const -> const char* override;
     void on_attached_to                 (erhe::scene::Node* node) override;
     void on_node_transform_changed      () override;

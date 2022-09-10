@@ -50,9 +50,9 @@ Font::~Font() noexcept
 
 #if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE) && defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 Font::Font(
-    const fs::path&    path,
-    const unsigned int size,
-    const float        outline_thickness
+    const std::filesystem::path& path,
+    const unsigned int           size,
+    const float                  outline_thickness
 )
     : m_path             {path}
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
@@ -60,7 +60,7 @@ Font::Font(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto current_path = fs::current_path();
+    const auto current_path = std::filesystem::current_path();
     log_font->info("current path = {}", current_path.string());
 
     log_font->info(
@@ -450,7 +450,7 @@ void Font::trace_info() const
     log_font->trace("patents       {}", (FT_Face_CheckTrueTypePatents(face) == 1) ? "yes" : "no");
 }
 #else
-Font::Font(const fs::path&, const unsigned int, const float) {}
+Font::Font(const std::filesystem::path&, const unsigned int, const float) {}
 void Font::validate(const int) {}
 void Font::render(){}
 void Font::trace_info() const {}

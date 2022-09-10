@@ -436,7 +436,7 @@ auto Geometry::compute_tangents(
 
         .m_setTSpaceBasic = nullptr,
 
-	    .m_setTSpace = [](
+        .m_setTSpace = [](
             const SMikkTSpaceContext* pContext,
             const float               fvTangent[],
             const float               fvBiTangent[],
@@ -493,20 +493,20 @@ auto Geometry::compute_tangents(
                 continue;
             }
 
-            std::vector<nonstd::optional<vec4>> tangents;
-            std::vector<nonstd::optional<vec4>> bitangents;
+            std::vector<std::optional<vec4>> tangents;
+            std::vector<std::optional<vec4>> bitangents;
 
             std::optional<uint32_t> selected_tangent_corner_index;
             std::optional<uint32_t> selected_bitangent_corner_index;
             std::optional<uint32_t> selected_fallback_corner_index;
-            nonstd::optional<vec4> tangent_sum;
-            nonstd::optional<vec4> bitangent_sum;
+            std::optional<vec4> tangent_sum;
+            std::optional<vec4> bitangent_sum;
             for (uint32_t i = 0; i < polygon.corner_count; ++i)
             {
                 const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
                 const Corner_id         corner_id         = polygon_corners[polygon_corner_id];
-                nonstd::optional<vec4> tangent;
-                nonstd::optional<vec4> bitangent;
+                std::optional<vec4> tangent;
+                std::optional<vec4> bitangent;
                 if (corner_tangents && g.corner_tangents->has(corner_id))
                 {
                     tangent = g.corner_tangents->get(corner_id);
@@ -571,8 +571,8 @@ auto Geometry::compute_tangents(
                 bitangents.push_back(bitangent);
             }
 
-            nonstd::optional<vec4> tangent;
-            nonstd::optional<vec4> bitangent;
+            std::optional<vec4> tangent;
+            std::optional<vec4> bitangent;
             if (
                 selected_tangent_corner_index.has_value() &&
                 selected_bitangent_corner_index.has_value() &&

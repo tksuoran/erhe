@@ -5,6 +5,7 @@
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/math_util.hpp"
 
 #include <functional>
 #include <memory>
@@ -67,7 +68,8 @@ private:
     };
 
     void mesh_selection_visualization(
-        erhe::scene::Mesh* mesh
+        const Render_context& render_context,
+        erhe::scene::Mesh*    mesh
     );
 
     void light_visualization(
@@ -87,8 +89,9 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Viewport_config> m_viewport_config;
-    std::shared_ptr<Selection_tool>  m_selection_tool;
+    std::shared_ptr<Viewport_config>                      m_viewport_config;
+    std::shared_ptr<Selection_tool>                       m_selection_tool;
+    erhe::toolkit::Bounding_volume_combiner               m_selection_bounding_volume;
 };
 
 } // namespace editor

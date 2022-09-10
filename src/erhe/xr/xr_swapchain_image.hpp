@@ -1,11 +1,10 @@
 #pragma once
 
-#include "erhe/toolkit/optional.hpp"
-
 #include <openxr/openxr.h>
 
 #include <gsl/gsl>
 
+#include <optional>
 #include <vector>
 
 namespace erhe::xr {
@@ -41,7 +40,7 @@ public:
     Swapchain     (Swapchain&& other) noexcept;
     void operator=(Swapchain&& other) noexcept;
 
-    auto acquire         () -> nonstd::optional<Swapchain_image>;
+    auto acquire         () -> std::optional<Swapchain_image>;
     auto release         () -> bool;
     auto wait            () -> bool;
     auto get_gl_texture  (const uint32_t image_index) const -> unsigned int;

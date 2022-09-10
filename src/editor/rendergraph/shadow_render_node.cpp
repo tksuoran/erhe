@@ -19,17 +19,17 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
 Shadow_render_node::Shadow_render_node(
-    Shadow_renderer&                        shadow_renderer,
-    const std::shared_ptr<Viewport_window>& viewport_window,
-    const int                               resolution,
-    const int                               light_count,
-    const bool                              reverse_depth
+    Shadow_renderer&                       shadow_renderer,
+    const std::shared_ptr<Scene_viewport>& scene_viewport,
+    const int                              resolution,
+    const int                              light_count,
+    const bool                             reverse_depth
 )
     : erhe::application::Rendergraph_node{
         "shadow_maps" // TODO fmt::format("Shadow render {}", viewport_window->name())
     }
     , m_shadow_renderer{shadow_renderer}
-    , m_viewport_window{viewport_window}
+    , m_scene_viewport{scene_viewport}
 {
     register_output(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -98,21 +98,26 @@ Shadow_render_node::Shadow_render_node(
 void Shadow_render_node::execute_rendergraph_node()
 {
     // Render shadow maps
-    auto*       scene_root = m_viewport_window->scene_root();
-    const auto& layers     = scene_root->layers();
-    if (scene_root->layers().content()->meshes.empty())
+    const auto& scene_root = m_scene_viewport->get_scene_root();
+    const auto& camera     = m_scene_viewport->get_camera();
+    if (!scene_root || !camera)
+    {
+        return;
+    }
+
+    const auto& layers = scene_root->layers();
+    if (layers.content()->meshes.empty())
     {
         return;
     }
 
     scene_root->sort_lights();
 
-    const erhe::scene::Camera* camera = m_viewport_window->camera();
     m_shadow_renderer.render(
         Shadow_renderer::Render_parameters{
-            .scene_root            = scene_root,
-            .view_camera           = camera,
-            .view_camera_viewport  = m_viewport_window->projection_viewport(),
+            .scene_root            = scene_root.get(),
+            .view_camera           = camera.get(),
+            ////.view_camera_viewport  = m_viewport_window->projection_viewport(),
             .light_camera_viewport = m_viewport,
             .texture               = *m_texture.get(),
             .framebuffers          = m_framebuffers,
@@ -144,6 +149,26 @@ void Shadow_render_node::execute_rendergraph_node()
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
     ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::shadow_maps);
+    return m_viewport;
+}
+
+[[nodiscard]] auto Shadow_render_node::get_scene_viewport() const -> std::shared_ptr<Scene_viewport>
+{
+    return m_scene_viewport;
+}
+
+[[nodiscard]] auto Shadow_render_node::get_light_projections() -> Light_projections&
+{
+    return m_light_projections;
+}
+
+auto Shadow_render_node::get_texture() const -> std::shared_ptr<erhe::graphics::Texture>
+{
+    return m_texture;
+}
+
+auto Shadow_render_node::get_viewport() const -> erhe::scene::Viewport
+{
     return m_viewport;
 }
 

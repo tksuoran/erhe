@@ -3,12 +3,12 @@
 #include "erhe/primitive/buffer_range.hpp"
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/enums.hpp"
-#include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe::graphics

@@ -18,13 +18,13 @@
 #include "erhe/graphics/state/rasterization_state.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/pipeline.hpp"
-#include "erhe/toolkit/optional.hpp"
 
 #include <imgui.h>
 
 #include <deque>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string_view>
 #include <vector>

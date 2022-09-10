@@ -67,7 +67,7 @@ public:
     void initialize_component       () override;
 
     // Public API
-    void add_rendertarget_viewports();
+    void add_rendertarget_viewports(int count);
     [[nodiscard]] auto get_scene_root             () const -> std::shared_ptr<Scene_root>;
     [[nodiscard]] auto get_primary_viewport_window() const -> std::shared_ptr<Viewport_window>;
 

@@ -21,6 +21,8 @@ public:
     auto operator=(const Mouse_wheel_binding&) -> Mouse_wheel_binding& = delete;
     auto operator=(Mouse_wheel_binding&& other) noexcept -> Mouse_wheel_binding&;
 
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse_wheel; }
+
     virtual auto on_wheel(Command_context& context) -> bool;
 };
 

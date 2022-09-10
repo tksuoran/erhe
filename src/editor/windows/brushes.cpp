@@ -121,8 +121,8 @@ void Brushes::initialize_component()
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_preview_command);
     commands->register_command(&m_insert_command);
-    commands->bind_command_to_mouse_motion(&m_preview_command);
-    commands->bind_command_to_mouse_click (&m_insert_command, erhe::toolkit::Mouse_button_right);
+    commands->bind_command_to_update     (&m_preview_command);
+    commands->bind_command_to_mouse_click(&m_insert_command, erhe::toolkit::Mouse_button_right);
 
     get<Operations>()->register_active_tool(this);
 }

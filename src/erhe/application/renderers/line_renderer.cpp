@@ -165,10 +165,10 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
     {
         ERHE_PROFILE_SCOPE("shader");
 
-        const auto shader_path = fs::path("res") / fs::path("shaders");
-        const fs::path vs_path = shader_path / fs::path("line.vert");
-        const fs::path gs_path = shader_path / fs::path("line.geom");
-        const fs::path fs_path = shader_path / fs::path("line.frag");
+        const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
+        const std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
+        const std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
+        const std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
         Shader_stages::Create_info create_info{
             .name                      = "line",
             .defines                   = {
@@ -548,10 +548,11 @@ void Line_renderer::add_cube(
 }
 
 void Line_renderer::add_sphere(
-    const glm::mat4 transform,
-    const uint32_t  color,
-    const glm::vec3 center,
-    const float     radius
+    const glm::mat4                     transform,
+    const uint32_t                      color,
+    const glm::vec3                     center,
+    const float                         radius,
+    const erhe::scene::Transform* const camera_world_from_node
 )
 {
     const glm::vec3 axis_x{radius, 0.0f, 0.0f};
@@ -593,6 +594,45 @@ void Line_renderer::add_sphere(
             }
         );
     }
+
+    if (camera_world_from_node == nullptr)
+    {
+        return;
+    }
+
+    const glm::vec3 camera_position       = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    const glm::vec3 from_camera_to_sphere = glm::normalize(center - camera_position);
+    const glm::vec3 up_direction          = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const glm::vec3 side_direction        = glm::normalize(
+        glm::cross(
+            from_camera_to_sphere,
+            up_direction
+        )
+    );
+
+    const glm::vec3 axis_a = radius * side_direction;
+    const glm::vec3 axis_b = radius * up_direction;
+
+    for (int i = 0; i < step_count; ++i)
+    {
+        const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);
+        const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(step_count);
+        add_lines(
+            transform,
+            color,
+            {
+                {
+                    center +
+                    + std::cos(t0) * axis_a
+                    + std::sin(t0) * axis_b,
+                    center +
+                    + std::cos(t1) * axis_a
+                    + std::sin(t1) * axis_b
+                }
+            }
+        );
+    }
+
 }
 
 static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};

@@ -266,7 +266,7 @@ void Rendergraph::automatic_layout()
     for (const auto& node : m_nodes)
     {
         const int depth = node->get_depth();
-        if (node_count_per_depth.size() < depth + 1)
+        if (node_count_per_depth.size() < static_cast<std::size_t>(depth) + 1)
         {
             node_count_per_depth.resize(depth + 1);
         }

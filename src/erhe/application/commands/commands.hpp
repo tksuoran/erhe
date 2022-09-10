@@ -21,6 +21,7 @@ class Mouse_click_binding;
 class Mouse_drag_binding;
 class Mouse_motion_binding;
 class Mouse_wheel_binding;
+class Update_binding;
 
 class Configuration;
 class Imgui_windows;
@@ -56,11 +57,17 @@ public:
     // Public API
     void register_command(Command* const command);
 
+    [[nodiscard]] auto get_commands            () const -> const std::vector<Command*>&;
+    [[nodiscard]] auto get_key_bindings        () const -> const std::vector<Key_binding>&;
+    [[nodiscard]] auto get_mouse_bindings      () const -> const std::vector<std::unique_ptr<Mouse_binding>>&;
+    [[nodiscard]] auto get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&;
+    [[nodiscard]] auto get_update_bindings     () const -> const std::vector<Update_binding>&;
+
     auto bind_command_to_key(
-        Command* const                   command,
-        const erhe::toolkit::Keycode     code,
-        const bool                       pressed       = true,
-        const nonstd::optional<uint32_t> modifier_mask = {}
+        Command* const                command,
+        const erhe::toolkit::Keycode  code,
+        const bool                    pressed       = true,
+        const std::optional<uint32_t> modifier_mask = {}
     ) -> erhe::toolkit::Unique_id<Key_binding>::id_type;
 
     auto bind_command_to_mouse_click(
@@ -81,6 +88,10 @@ public:
         const erhe::toolkit::Mouse_button button
     ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
 
+    auto bind_command_to_update(
+        Command* const command
+    ) -> erhe::toolkit::Unique_id<Key_binding>::id_type;
+
     void remove_command_binding(const erhe::toolkit::Unique_id<Command_binding>::id_type binding_id);
 
     [[nodiscard]] auto accept_mouse_command(Command* const command) const -> bool
@@ -92,9 +103,10 @@ public:
 
     void command_inactivated(Command* const command);
 
-    [[nodiscard]] auto mouse_input_sink() const -> Imgui_window*;
-    void set_mouse_input_sink(Imgui_window* mouse_input_sink);
+    [[nodiscard]] auto input_sink() const -> Imgui_window*;
+    void set_input_sink(Imgui_window* input_sink);
 
+    [[nodiscard]] auto last_mouse_button_bits   () const -> uint32_t;
     [[nodiscard]] auto last_mouse_position      () const -> glm::dvec2;
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::dvec2;
     [[nodiscard]] auto last_mouse_wheel_delta   () const -> glm::dvec2;
@@ -104,6 +116,7 @@ public:
     void on_mouse_move (const double x, const double y);
     void on_mouse_click(const erhe::toolkit::Mouse_button button, const int count);
     void on_mouse_wheel(const double x, const double y);
+    void on_update     ();
 
 private:
     [[nodiscard]] auto get_command_priority   (Command* const command) const -> int;
@@ -114,12 +127,13 @@ private:
     void update_active_mouse_command(Command* const command);
 
     // Component dependencies
-    std::shared_ptr<Configuration>  m_configuration;
+    std::shared_ptr<Configuration> m_configuration;
 
     std::mutex    m_command_mutex;
     Command*      m_active_mouse_command{nullptr};
-    Imgui_window* m_mouse_input_sink{nullptr};
+    Imgui_window* m_input_sink          {nullptr};
 
+    uint32_t      m_last_mouse_button_bits   {0u};
     glm::dvec2    m_last_mouse_position      {0.0, 0.0};
     glm::dvec2    m_last_mouse_position_delta{0.0, 0.0};
     glm::dvec2    m_last_mouse_wheel_delta   {0.0, 0.0};
@@ -128,6 +142,7 @@ private:
     std::vector<Key_binding>                          m_key_bindings;
     std::vector<std::unique_ptr<Mouse_binding>>       m_mouse_bindings;
     std::vector<std::unique_ptr<Mouse_wheel_binding>> m_mouse_wheel_bindings;
+    std::vector<Update_binding>                       m_update_bindings;
 };
 
 } // namespace erhe::application

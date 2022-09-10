@@ -823,13 +823,15 @@ Texture_unit_cache::Texture_unit_cache()
 {
 }
 
-void Texture_unit_cache::reset(unsigned int base_texture_unit)
+void Texture_unit_cache::reset(const unsigned int base_texture_unit)
 {
     m_base_texture_unit = base_texture_unit;
     m_texture_units.clear();
 }
 
-auto Texture_unit_cache::allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>
+auto Texture_unit_cache::allocate_texture_unit(
+    const uint64_t handle
+) -> std::optional<std::size_t>
 {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
     const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
@@ -865,7 +867,7 @@ auto Texture_unit_cache::allocate_texture_unit(uint64_t handle) -> std::optional
 
 Texture_unit_cache s_texture_unit_cache;
 
-auto Texture_unit_cache::bind(uint64_t fallback_handle) -> size_t
+auto Texture_unit_cache::bind(const uint64_t fallback_handle) -> size_t
 {
     const GLuint fallback_texture_name = erhe::graphics::get_texture_from_handle(fallback_handle);
     const GLuint fallback_sampler_name = erhe::graphics::get_sampler_from_handle(fallback_handle);

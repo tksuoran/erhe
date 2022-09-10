@@ -74,11 +74,11 @@ void Image::put_pixel(size_t x, size_t y, glm::vec4 color)
     data[index + 3] = static_cast<std::byte>(static_cast<uint8_t>(color.a * 255.0f));
 }
 
-auto load_png(const fs::path& path) -> Image
+auto load_png(const std::filesystem::path& path) -> Image
 {
     if (
-        !fs::exists(path) ||
-        fs::is_empty(path)
+        !std::filesystem::exists(path) ||
+        std::filesystem::is_empty(path)
     )
     {
         log_image->error("File `{}` not found (or empty)", path.string());
@@ -123,7 +123,7 @@ auto load_png(const fs::path& path) -> Image
 }
 
 auto load_texture(
-    const fs::path& path
+    const std::filesystem::path& path
 ) -> std::shared_ptr<erhe::graphics::Texture>
 {
     const Image image = load_png(path);

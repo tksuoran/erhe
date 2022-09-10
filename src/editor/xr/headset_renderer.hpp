@@ -1,7 +1,9 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "xr/hand_tracker.hpp"
 #include "xr/headset_view_resources.hpp"
+#include "scene/viewport_window.hpp"
 
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
@@ -39,17 +41,25 @@ namespace editor
 
 class Controller_visualization;
 class Editor_rendering;
-class Hand_tracker;
 class Headset_renderer;
 class Mesh_memory;
 class Scene_builder;
 class Scene_root;
 class Tools;
 
+class Controller_input
+{;
+public:
+    glm::vec3 position     {0.0f, 0.0f, 0.0f};
+    glm::vec3 direction    {0.0f, 0.0f, 0.0f};
+    float     trigger_value{0.0f};
+};
+
 class Headset_renderer
     : public erhe::components::Component
     , public erhe::application::Imgui_window
     , public erhe::application::Rendergraph_node
+    , public Scene_viewport
     , public Tool
 {
 public:
@@ -78,14 +88,19 @@ public:
     void tool_render(const Render_context& context) override;
 
     // Public API
-    void begin_frame();
-    auto scene_root () -> std::shared_ptr<Scene_root>;
-    auto root_camera() -> std::shared_ptr<erhe::scene::Camera>;
+    void begin_frame         ();
+    void connect             (const std::shared_ptr<Shadow_render_node>& shadow_render_node);
+    void add_finger_input    (const Finger_point& finger_point);
+    void add_controller_input(const Controller_input& controller_input);
 
-    void finger_to_viewport(
-        const erhe::toolkit::Closest_points<float>& closest_points
-    );
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
+    [[nodiscard]] auto get_hand_tracker      () const -> Hand_tracker*;
+    [[nodiscard]] auto get_headset           () const -> erhe::xr::Headset*;
+
+    // Implements Scene_viewport
+    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
+    [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
+    [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                  override;
 
 private:
     [[nodiscard]] auto get_headset_view_resources(
@@ -103,14 +118,17 @@ private:
     std::shared_ptr<Hand_tracker>                         m_hand_tracker;
     std::shared_ptr<Tools>                                m_tools;
 
+    std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
     std::shared_ptr<Scene_root>                          m_scene_root;
     std::unique_ptr<erhe::xr::Headset>                   m_headset;
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
     std::array<float, 4>                                 m_clear_color{0.0f, 0.0f, 0.0f, 0.95f};
-    std::vector<erhe::toolkit::Closest_points<float>>    m_finger_to_viewport;
+    std::vector<Finger_point>                            m_finger_inputs;
+    std::vector<Controller_input>                        m_controller_inputs;
     float                                                m_finger_to_viewport_distance_threshold{0.1f};
+    bool                                                 m_mouse_down{false};
 };
 
 } // namespace editor

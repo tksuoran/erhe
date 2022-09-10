@@ -22,17 +22,17 @@ auto sign(glm::vec2 p1, glm::vec2 p2, glm::vec2 p3) -> float
     return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
 }
 
-auto point_in_triangle(glm::vec2 pt, glm::vec2 v1, glm::vec2 v2, glm::vec2 v3) -> bool
-{
-    const float d1 = sign(pt, v1, v2);
-    const float d2 = sign(pt, v2, v3);
-    const float d3 = sign(pt, v3, v1);
-
-    const bool has_neg = (d1 < 0.0f) || (d2 < 0.0f) || (d3 < 0.0f);
-    const bool has_pos = (d1 > 0.0f) || (d2 > 0.0f) || (d3 > 0.0f);
-
-    return !(has_neg && has_pos);
-}
+// auto point_in_triangle(glm::vec2 pt, glm::vec2 v1, glm::vec2 v2, glm::vec2 v3) -> bool
+// {
+//     const float d1 = sign(pt, v1, v2);
+//     const float d2 = sign(pt, v2, v3);
+//     const float d3 = sign(pt, v3, v1);
+// 
+//     const bool has_neg = (d1 < 0.0f) || (d2 < 0.0f) || (d3 < 0.0f);
+//     const bool has_pos = (d1 > 0.0f) || (d2 > 0.0f) || (d3 > 0.0f);
+// 
+//     return !(has_neg && has_pos);
+// }
 
 auto orientation(glm::vec2 p1, glm::vec2 p2, glm::vec2 p3) -> int
 {
@@ -201,52 +201,52 @@ auto convex_hull(std::array<glm::vec2, 8>& p) -> std::vector<glm::vec2>
     return hull;
 }
 
-auto area(const std::array<glm::vec2, 8>& points) -> float
-{
-    float sum = 0.0f;
+// auto area(const std::array<glm::vec2, 8>& points) -> float
+// {
+//     float sum = 0.0f;
+// 
+//     std::size_t j = points.size() - 1;
+//     for (std::size_t i = 0, end = points.size(); i < end; i++)
+//     {
+//         sum += (points[j].x + points[i].x) * (points[j].y - points[i].y);
+//         j = i;
+//     }
+// 
+//     return std::abs(sum / 2.0f);
+// }
 
-    std::size_t j = points.size() - 1;
-    for (std::size_t i = 0, end = points.size(); i < end; i++)
-    {
-        sum += (points[j].x + points[i].x) * (points[j].y - points[i].y);
-        j = i;
-    }
-
-    return std::abs(sum / 2.0f);
-}
-
-auto convex_hull_o(const std::array<glm::vec2, 8>& points) -> std::vector<glm::vec2>
-{
-    std::vector<glm::vec2> result;
-
-    // Find left most point
-    std::size_t left_most_index = 0;
-    for (std::size_t i = 1; i < 8; i++)
-    {
-        if (points[i].x < points[left_most_index].x)
-        {
-            left_most_index = i;
-        }
-    }
-
-    std::size_t p = left_most_index;
-    do
-    {
-        result.push_back(points[p]);
-        std::size_t q = (p + 1) % 8;
-        for (std::size_t i = 0; i < 8; i++)
-        {
-            if (orientation(points[p], points[i], points[q]) == 2)
-            {
-                q = i;
-            }
-            p = q;
-        }
-    }
-    while (p != left_most_index);
-
-    return result;
-}
+// auto convex_hull_o(const std::array<glm::vec2, 8>& points) -> std::vector<glm::vec2>
+// {
+//     std::vector<glm::vec2> result;
+// 
+//     // Find left most point
+//     std::size_t left_most_index = 0;
+//     for (std::size_t i = 1; i < 8; i++)
+//     {
+//         if (points[i].x < points[left_most_index].x)
+//         {
+//             left_most_index = i;
+//         }
+//     }
+// 
+//     std::size_t p = left_most_index;
+//     do
+//     {
+//         result.push_back(points[p]);
+//         std::size_t q = (p + 1) % 8;
+//         for (std::size_t i = 0; i < 8; i++)
+//         {
+//             if (orientation(points[p], points[i], points[q]) == 2)
+//             {
+//                 q = i;
+//             }
+//             p = q;
+//         }
+//     }
+//     while (p != left_most_index);
+// 
+//     return result;
+// }
 
 int point_inside_polygon(const std::vector<glm::vec2>& points, glm::vec2 p)
 {
@@ -501,9 +501,6 @@ void Frustum_tiler::update(
         view_camera,
         view_camera_viewport
     );
-
-    using vec2 = glm::vec2;
-    using vec3 = glm::vec3;
 
     glm::vec2 min_corner_point = m_frustum_hull_points.front();
     glm::vec2 max_corner_point = m_frustum_hull_points.front();

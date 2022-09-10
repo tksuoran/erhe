@@ -7,7 +7,6 @@
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/png_loader.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
 
@@ -16,6 +15,8 @@
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)
 #   include <GLFW/glfw3.h>
 #endif
+
+#include <filesystem>
 
 namespace erhe::application {
 
@@ -85,11 +86,11 @@ auto Window::create_gl_window() -> bool
 #if defined(ERHE_WINDOW_LIBRARY_GLFW)
     erhe::graphics::PNG_loader loader;
     erhe::graphics::Image_info image_info;
-    const fs::path current_path = fs::current_path();
-    const fs::path path         = current_path / "res" / "images" / "gl32w.png";
+    const std::filesystem::path current_path = std::filesystem::current_path();
+    const std::filesystem::path path         = current_path / "res" / "images" / "gl32w.png";
     log_startup->trace("current directory is {}", current_path.string());
-    const bool exists          = fs::exists(path);
-    const bool is_regular_file = fs::is_regular_file(path);
+    const bool exists          = std::filesystem::exists(path);
+    const bool is_regular_file = std::filesystem::is_regular_file(path);
     if (exists && is_regular_file)
     {
         ERHE_PROFILE_SCOPE("icon");

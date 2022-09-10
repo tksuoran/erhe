@@ -5,8 +5,8 @@
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/shader_stages.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 
+#include <filesystem>
 #include <string_view>
 #include <vector>
 
@@ -111,7 +111,7 @@ private:
     // Component dependencies
     std::shared_ptr<Program_interface>                 m_program_interface;
     std::shared_ptr<erhe::application::Shader_monitor> m_shader_monitor;
-    fs::path m_shader_path;
+    std::filesystem::path m_shader_path;
 
     std::unique_ptr<ITask_queue> m_queue;
 };

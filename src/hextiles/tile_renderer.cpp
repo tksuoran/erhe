@@ -263,9 +263,9 @@ void Tile_renderer::initialize_component()
     m_u_texture_size            = texture_handle->size_bytes();
     m_u_texture_offset          = texture_handle->offset_in_parent();
 
-    const auto shader_path = fs::path("res") / fs::path("shaders");
-    const fs::path vs_path = shader_path / fs::path("tile.vert");
-    const fs::path fs_path = shader_path / fs::path("tile.frag");
+    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
+    const std::filesystem::path vs_path = shader_path / std::filesystem::path("tile.vert");
+    const std::filesystem::path fs_path = shader_path / std::filesystem::path("tile.frag");
     Shader_stages::Create_info create_info{
         .name                      = "tile",
         .interface_blocks          = { m_projection_block.get() },
@@ -309,7 +309,10 @@ void Tile_renderer::post_initialize()
 
 void Tile_renderer::compose_tileset_texture()
 {
-    const auto texture_path = fs::path("res") / fs::path("hextiles") / fs::path("hextiles.png");
+    const auto texture_path =
+        std::filesystem::path("res") /
+        std::filesystem::path("hextiles") /
+        std::filesystem::path("hextiles.png");
     m_tileset_image = load_png(texture_path);
 
     // Tile layout:

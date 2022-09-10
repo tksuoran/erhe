@@ -17,6 +17,8 @@ public:
     auto operator=(const Mouse_motion_binding&) -> Mouse_motion_binding& = delete;
     auto operator=(Mouse_motion_binding&& other) noexcept -> Mouse_motion_binding&;
 
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse_motion; }
+
     auto on_motion(Command_context& context) -> bool override;
 };
 

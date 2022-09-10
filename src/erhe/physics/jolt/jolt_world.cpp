@@ -44,8 +44,8 @@ static auto AssertFailedImpl(
         inExpression,
         (inMessage != nullptr) ? inMessage : ""
     );
-	// Breakpoint
-	return true;
+    // Breakpoint
+    return true;
 };
 
 #endif // JPH_ENABLE_ASSERTS
@@ -168,19 +168,19 @@ Jolt_world::Jolt_world()
 {
     // Install callbacks
     JPH::Trace = TraceImpl;
-	JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
+    JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
 
     JPH::Factory::sInstance = new JPH::Factory();
     JPH::RegisterTypes();
 
-	const unsigned int cMaxBodies             = 1024 * 32;
-	const unsigned int cNumBodyMutexes        = 0;
-	const unsigned int cMaxBodyPairs          = 1024 * 8;
-	const unsigned int cMaxContactConstraints = 1024;
+    const unsigned int cMaxBodies             = 1024 * 32;
+    const unsigned int cNumBodyMutexes        = 0;
+    const unsigned int cMaxBodyPairs          = 1024 * 8;
+    const unsigned int cMaxContactConstraints = 1024;
 
     //m_debug_renderer              = std::make_unique<Jolt_debug_renderer             >();
     m_broad_phase_layer_interface = std::make_unique<Broad_phase_layer_interface_impl>();
-	m_physics_system.Init(
+    m_physics_system.Init(
         cMaxBodies,
         cNumBodyMutexes,
         cMaxBodyPairs,
@@ -219,14 +219,14 @@ void Jolt_world::update_fixed_step(const double dt)
         return;
     }
 
-	// If you take larger steps than 1 / 60th of a second you need to do
+    // If you take larger steps than 1 / 60th of a second you need to do
     // multiple collision steps in order to keep the simulation stable.
     // Do 1 collision step per 1 / 60th of a second (round up).
-	const int cCollisionSteps = 1;
+    const int cCollisionSteps = 1;
 
-	// If you want more accurate step results you can do multiple sub steps
+    // If you want more accurate step results you can do multiple sub steps
     // within a collision step. Usually you would set this to 1.
-	const int cIntegrationSubSteps = 1;
+    const int cIntegrationSubSteps = 1;
 
     m_physics_system.Update(
         static_cast<float>(dt),

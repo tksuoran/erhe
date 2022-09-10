@@ -91,13 +91,14 @@ void Debug_draw::draw_contact_point(
     const glm::vec3 normal,
     float           distance,
     int             lifeTime,
-    const glm::vec3 color)
+    const glm::vec3 color
+)
 {
     static_cast<void>(lifeTime);
 
-	draw_line(point, point + normal * distance, color);
+    draw_line(point, point + normal * distance, color);
     glm::vec3 ncolor{0};
-	draw_line(point, point + (normal * 0.01f), ncolor);
+    draw_line(point, point + (normal * 0.01f), ncolor);
 }
 
 void Debug_draw::report_error_warning(const char* warning)

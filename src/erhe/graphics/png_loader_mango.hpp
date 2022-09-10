@@ -1,9 +1,8 @@
 #pragma once
 
-#include "erhe/toolkit/filesystem.hpp"
-
 #include <gsl/span>
 
+#include <filesystem>
 #include <memory>
 
 namespace mango {
@@ -49,7 +48,7 @@ public:
     void operator=(PNG_loader&&)      = delete;
 
     [[nodiscard]] auto open(
-        const fs::path& path,
+        const std::filesystem::path& path,
         Image_info&     image_info
     ) -> bool;
 
@@ -75,7 +74,7 @@ public:
     auto operator=(PNG_writer&&)      = delete;
 
     [[nodiscard]] auto write(
-        const fs::path&      path,
+        const std::filesystem::path&      path,
         const Image_info&    info,
         gsl::span<std::byte> data
     ) -> bool;

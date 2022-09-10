@@ -25,7 +25,7 @@ auto make_static_compound_shape_settings(
     const Compound_shape_create_info& create_info
 ) -> JPH::StaticCompoundShapeSettings
 {
-	JPH::StaticCompoundShapeSettings shape_settings;
+    JPH::StaticCompoundShapeSettings shape_settings;
     for (const auto& entry : create_info.children)
     {
         auto collision_shape = dynamic_pointer_cast<Jolt_collision_shape>(entry.shape);
@@ -46,7 +46,7 @@ Jolt_compound_shape::Jolt_compound_shape(
 )
     : m_shape_settings{make_static_compound_shape_settings(create_info)}
 {
-	auto result = m_shape_settings.Create();
+    const auto result = m_shape_settings.Create();
     ERHE_VERIFY(result.IsValid());
     m_jolt_shape = result.Get();
 }

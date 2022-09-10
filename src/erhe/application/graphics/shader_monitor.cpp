@@ -60,7 +60,7 @@ void Shader_monitor::add(
 {
     for (const auto& shader : create_info.shaders)
     {
-        if (shader.source.empty() && fs::exists(shader.path))
+        if (shader.source.empty() && std::filesystem::exists(shader.path))
         {
             add(shader.path, create_info, shader_stages);
         }
@@ -68,7 +68,7 @@ void Shader_monitor::add(
 }
 
 void Shader_monitor::add(
-    const fs::path&                                   path,
+    const std::filesystem::path&                      path,
     const erhe::graphics::Shader_stages::Create_info& create_info,
     gsl::not_null<erhe::graphics::Shader_stages*>     shader_stages
 )
@@ -84,17 +84,17 @@ void Shader_monitor::add(
 
     auto& f = m_files[path];
 
-    ERHE_VERIFY(fs::exists(path));
+    ERHE_VERIFY(std::filesystem::exists(path));
 
     f.path = path;
 
-    if (!fs::exists(f.path))
+    if (!std::filesystem::exists(f.path))
     {
         f.path.clear();
     }
     else
     {
-        f.last_time = fs::last_write_time(f.path);
+        f.last_time = std::filesystem::last_write_time(f.path);
         f.reload_entries.emplace(create_info, shader_stages);
     }
 }
@@ -118,12 +118,12 @@ void Shader_monitor::poll_thread()
                 try
                 {
                     const bool ok =
-                        fs::exists(f.path)    &&
-                        !fs::is_empty(f.path) &&
-                        fs::is_regular_file(f.path);
+                        std::filesystem::exists(f.path)    &&
+                        !std::filesystem::is_empty(f.path) &&
+                        std::filesystem::is_regular_file(f.path);
                     if (ok)
                     {
-                        const auto time = fs::last_write_time(f.path);
+                        const auto time = std::filesystem::last_write_time(f.path);
                         if (f.last_time != time)
                         {
                             m_reload_list.emplace_back(&f);
@@ -165,7 +165,7 @@ void Shader_monitor::update_once_per_frame(const erhe::components::Time_context&
                 entry.shader_stages->reload(std::move(prototype));
             }
         }
-        f->last_time = fs::last_write_time(f->path);
+        f->last_time = std::filesystem::last_write_time(f->path);
 
     }
     m_reload_list.clear();

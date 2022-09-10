@@ -20,13 +20,13 @@ auto Debug_draw_adapter::getDefaultColors() const -> DefaultColors
     }
     const auto colors = m_debug_draw->get_colors();
     DefaultColors bullet_colors;
-	bullet_colors.m_activeObject               = to_bullet(colors.active_object               );
-	bullet_colors.m_deactivatedObject          = to_bullet(colors.deactivated_object          );
-	bullet_colors.m_wantsDeactivationObject    = to_bullet(colors.wants_deactivation_object   );
-	bullet_colors.m_disabledDeactivationObject = to_bullet(colors.disabled_deactivation_object);
-	bullet_colors.m_disabledSimulationObject   = to_bullet(colors.disabled_simulation_object  );
-	bullet_colors.m_aabb                       = to_bullet(colors.aabb                        );
-	bullet_colors.m_contactPoint               = to_bullet(colors.contact_point               );
+    bullet_colors.m_activeObject               = to_bullet(colors.active_object               );
+    bullet_colors.m_deactivatedObject          = to_bullet(colors.deactivated_object          );
+    bullet_colors.m_wantsDeactivationObject    = to_bullet(colors.wants_deactivation_object   );
+    bullet_colors.m_disabledDeactivationObject = to_bullet(colors.disabled_deactivation_object);
+    bullet_colors.m_disabledSimulationObject   = to_bullet(colors.disabled_simulation_object  );
+    bullet_colors.m_aabb                       = to_bullet(colors.aabb                        );
+    bullet_colors.m_contactPoint               = to_bullet(colors.contact_point               );
 
     return bullet_colors;
 }
@@ -38,13 +38,13 @@ void Debug_draw_adapter::setDefaultColors(const DefaultColors& bullet_colors)
         return;
     }
     IDebug_draw::Colors colors;
-	colors.active_object                = from_bullet(bullet_colors.m_activeObject              );
-	colors.deactivated_object           = from_bullet(bullet_colors.m_deactivatedObject         );
-	colors.wants_deactivation_object    = from_bullet(bullet_colors.m_wantsDeactivationObject   );
-	colors.disabled_deactivation_object = from_bullet(bullet_colors.m_disabledDeactivationObject);
-	colors.disabled_simulation_object   = from_bullet(bullet_colors.m_disabledSimulationObject  );
-	colors.aabb                         = from_bullet(bullet_colors.m_aabb                      );
-	colors.contact_point                = from_bullet(bullet_colors.m_contactPoint              );
+    colors.active_object                = from_bullet(bullet_colors.m_activeObject              );
+    colors.deactivated_object           = from_bullet(bullet_colors.m_deactivatedObject         );
+    colors.wants_deactivation_object    = from_bullet(bullet_colors.m_wantsDeactivationObject   );
+    colors.disabled_deactivation_object = from_bullet(bullet_colors.m_disabledDeactivationObject);
+    colors.disabled_simulation_object   = from_bullet(bullet_colors.m_disabledSimulationObject  );
+    colors.aabb                         = from_bullet(bullet_colors.m_aabb                      );
+    colors.contact_point                = from_bullet(bullet_colors.m_contactPoint              );
     m_debug_draw->set_colors(colors);
 }
 

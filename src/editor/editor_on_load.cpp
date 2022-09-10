@@ -7,6 +7,8 @@
 #include "rendertarget_node.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 
+#include "rendergraph/shadow_render_node.hpp"
+
 #include "renderers/forward_renderer.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_renderer.hpp"
@@ -70,7 +72,7 @@
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/window.hpp"
-#include "erhe/application/windows/imgui_demo_window.hpp"
+#include "erhe/application/windows/commands_window.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/windows/pipelines.hpp"
@@ -113,12 +115,12 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
         m_components.add(make_shared<erhe::application::Commands          >());
+        m_components.add(make_shared<erhe::application::Commands_window   >());
         m_components.add(make_shared<erhe::application::Imgui_windows     >());
         m_components.add(make_shared<erhe::application::Time              >());
         m_components.add(make_shared<erhe::application::View              >());
         m_components.add(make_shared<erhe::application::Log_window        >());
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-        m_components.add(make_shared<erhe::application::Imgui_demo_window >());
         m_components.add(make_shared<erhe::application::Imgui_renderer    >());
 #endif
         m_components.add(make_shared<erhe::application::Performance_window>());
@@ -206,9 +208,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     const auto& config = configuration->windows;
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    if (m_components.get<erhe::application::Imgui_demo_window >()) m_components.get<erhe::application::Imgui_demo_window >()->hide();
-#endif
+    if (m_components.get<erhe::application::Commands_window   >() && !config.commands   ) m_components.get<erhe::application::Commands_window   >()->hide();
     if (m_components.get<erhe::application::Log_window        >() && !config.log        ) m_components.get<erhe::application::Log_window        >()->hide();
     if (m_components.get<erhe::application::Performance_window>() && !config.performance) m_components.get<erhe::application::Performance_window>()->hide();
     if (m_components.get<erhe::application::Pipelines         >() && !config.pipelines  ) m_components.get<erhe::application::Pipelines         >()->hide();
@@ -248,8 +248,14 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         const auto& rendergraph      = m_components.get<erhe::application::Rendergraph>();
         rendergraph->register_node(headset_renderer);
 
-        const auto& scene_builder    = m_components.get<editor::Scene_builder   >();
-        scene_builder->add_rendertarget_viewports();
+        const auto& shadow_renderer = m_components.get<editor::Shadow_renderer>();
+        const auto shadow_render_node = shadow_renderer->create_node_for_viewport(headset_renderer);
+        rendergraph->register_node(shadow_render_node);
+
+        headset_renderer->connect(shadow_render_node);
+
+        const auto& scene_builder    = m_components.get<editor::Scene_builder>();
+        scene_builder->add_rendertarget_viewports(1);
     }
 #endif
 

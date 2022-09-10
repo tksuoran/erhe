@@ -1,7 +1,9 @@
 #pragma once
 
 #include "renderers/renderpass.hpp"
-#include "xr/hand_tracker.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/hand_tracker.hpp"
+#endif
 
 #include "erhe/scene/mesh.hpp"
 
@@ -61,20 +63,25 @@ public:
     );
 
     // Public API
-    [[nodiscard]] auto texture    () const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] auto framebuffer() const -> std::shared_ptr<erhe::graphics::Framebuffer>;
-    [[nodiscard]] auto width      () const -> float;
-    [[nodiscard]] auto height     () const -> float;
+    [[nodiscard]] auto texture        () const -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto framebuffer    () const -> std::shared_ptr<erhe::graphics::Framebuffer>;
+    [[nodiscard]] auto width          () const -> float;
+    [[nodiscard]] auto height         () const -> float;
+    [[nodiscard]] auto get_pointer    () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto world_to_window(glm::vec3 world_position) const -> std::optional<glm::vec2>;
 
-    [[nodiscard]] auto get_pointer       () const -> std::optional<glm::vec2>;
-    [[nodiscard]] auto get_closest_finger() const -> nonstd::optional<Closest_finger>;
-    [[nodiscard]] auto world_to_window   (glm::vec3 world_position) const -> std::optional<glm::vec2>;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    void update_headset(Headset_renderer& headset_renderer);
+    [[nodiscard]] auto get_pointer_finger    () const -> std::optional<Finger_point>;
+    [[nodiscard]] auto get_finger_trigger    () const -> bool;
+    [[nodiscard]] auto get_controller_pose   () const -> const erhe::xr::Pose&;
+    [[nodiscard]] auto get_controller_trigger() const -> float;
+#endif
 
-    auto update_pointer     () -> bool;
-    void update_hand_tracker(Hand_tracker& hand_tracker);
-    void bind               ();
-    void clear              (glm::vec4 clear_color);
-    void render_done        (); // generates mipmaps, updates lod bias
+    auto update_pointer() -> bool;
+    void bind          ();
+    void clear         (glm::vec4 clear_color);
+    void render_done   (); // generates mipmaps, updates lod bias
 
 private:
     void init_rendertarget(const int width, const int height);
@@ -94,7 +101,12 @@ private:
     std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
     std::optional<glm::vec2>                     m_pointer;
 
-    nonstd::optional<Closest_finger>             m_closest_finger;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    std::optional<Finger_point> m_pointer_finger;
+    bool                        m_finger_trigger          {false};
+    erhe::xr::Pose              m_controller_pose         {};
+    float                       m_controller_trigger_value{0.0f};
+#endif
 };
 
 [[nodiscard]] auto is_rendertarget(const erhe::scene::Node* const node) -> bool;

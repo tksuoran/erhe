@@ -236,12 +236,12 @@ void Fly_camera_tool::update_camera()
     }
 
     const auto viewport_window = m_viewport_windows->hover_window();
-    auto* camera = (viewport_window)
-        ? viewport_window->camera()
-        : nullptr;
-    if (m_camera_controller->get_node() != camera)
+    const auto camera = (viewport_window)
+        ? viewport_window->get_camera()
+        : std::shared_ptr<erhe::scene::Camera>{};
+    if (m_camera_controller->get_node() != camera.get())
     {
-        set_camera(camera);
+        set_camera(camera.get());
     }
 }
 
@@ -412,14 +412,14 @@ void Fly_camera_tool::imgui()
     float speed = m_camera_controller->translate_z.max_delta();
 
     auto* camera = get_camera();
-    const auto scene_root = m_editor_scenes->get_scene_root();
+    const auto& scene_root = m_editor_scenes->get_current_scene_root();
     if (!scene_root)
     {
         return;
     }
 
     if (
-        m_editor_scenes->get_scene_root()->camera_combo(
+        scene_root->camera_combo(
             "Camera",
             camera
         ) &&

@@ -21,6 +21,10 @@ public:
     auto operator=(const Mouse_click_binding&) -> Mouse_click_binding& = delete;
     auto operator=(Mouse_click_binding&& other) noexcept -> Mouse_click_binding&;
 
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse_click; }
+
+    [[nodiscard]] auto get_button() const -> erhe::toolkit::Mouse_button;
+
     auto on_button(
         Command_context&                  context,
         const erhe::toolkit::Mouse_button button,

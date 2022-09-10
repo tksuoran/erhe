@@ -12,7 +12,11 @@
 #include "scene/helpers.hpp"
 #include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
-#include "xr/hand_tracker.hpp"
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/hand_tracker.hpp"
+#   include "xr/headset_renderer.hpp"
+#endif
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/view.hpp"
@@ -30,6 +34,10 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
 #include "erhe/toolkit/math_util.hpp"
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "erhe/xr/headset.hpp"
+#endif
 
 //#include <GLFW/glfw3.h> // TODO Fix dependency ?
 
@@ -160,19 +168,89 @@ auto Rendertarget_node::framebuffer() const -> std::shared_ptr<erhe::graphics::F
     return m_framebuffer;
 }
 
-void Rendertarget_node::update_hand_tracker(Hand_tracker& hand_tracker)
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+void Rendertarget_node::update_headset(Headset_renderer& headset_renderer)
 {
-    m_closest_finger = hand_tracker.get_hand(Hand_name::Right).get_closest_point_to_plane(
-        XR_HAND_JOINT_INDEX_TIP_EXT,
-        glm::mat4{1.0f},
-        glm::vec3{this->position_in_world()},
-        glm::vec3{this->direction_in_world()}
-    );
-    if (!m_closest_finger.has_value())
+    const auto* headset = headset_renderer.get_headset();
+    if (headset != nullptr)
+    {
+        m_controller_pose = headset->controller_pose();
+        m_controller_trigger_value = headset->trigger_value();
+        //// if (m_controller_trigger_value > 0.5f)
+        //// {
+        ////     const auto controller_orientation = glm::mat4_cast(m_controller_pose.orientation);
+        ////     const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+        ////     const auto intersection = erhe::toolkit::intersect_plane<float>(
+        ////         glm::vec3{this->direction_in_world()},
+        ////         glm::vec3{this->position_in_world()},
+        ////         m_controller_pose.position,
+        ////         controller_direction
+        ////     );
+        ////     if (!intersection.has_value())
+        ////     {
+        ////         return;
+        ////     }
+        ////     const auto world_position      = m_controller_pose.position + intersection.value() * controller_direction;
+        ////     const auto window_position_opt = world_to_window(world_position);
+        ////     if (window_position_opt.has_value())
+        ////     {
+        ////         m_pointer = window_position_opt;
+        ////         m_pointer_finger = Finger_point{
+        ////             .finger       = static_cast<std::size_t>(XR_HAND_JOINT_INDEX_TIP_EXT),
+        ////             .finger_point = m_controller_pose.position,
+        ////             .point        = world_position
+        ////         };
+        ////     }
+        ////     return;
+        //// }
+    }
+
+    auto* hand_tracker = headset_renderer.get_hand_tracker();
+    if (hand_tracker == nullptr)
     {
         return;
     }
+    const auto thumb_opt  = hand_tracker->get_hand(Hand_name::Right).get_joint(XR_HAND_JOINT_THUMB_TIP_EXT);
+    const auto index_opt  = hand_tracker->get_hand(Hand_name::Right).get_joint(XR_HAND_JOINT_INDEX_TIP_EXT);
+    const auto middle_opt = hand_tracker->get_hand(Hand_name::Right).get_joint(XR_HAND_JOINT_MIDDLE_TIP_EXT);
+    m_pointer_finger.reset();
+    if (!index_opt.has_value())
+    {
+        return;
+    }
+    if (thumb_opt.has_value() && middle_opt.has_value())
+    {
+        const auto thumb    = thumb_opt .value();
+        const auto middle   = middle_opt.value();
+        const auto distance = glm::distance(thumb.position, middle.position);
+        m_finger_trigger = distance < 0.014f;
+    }
+
+    const auto pointer      = index_opt.value();
+    const auto direction    = glm::vec3{pointer.orientation * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+    const auto intersection = erhe::toolkit::intersect_plane<float>(
+        glm::vec3{this->direction_in_world()},
+        glm::vec3{this->position_in_world()},
+        pointer.position,
+        direction
+    );
+    if (!intersection.has_value())
+    {
+        return;
+    }
+    const auto world_position      = pointer.position + intersection.value() * direction;
+    const auto window_position_opt = world_to_window(world_position);
+    if (window_position_opt.has_value())
+    {
+        m_pointer = window_position_opt;
+        m_pointer_finger = Finger_point{
+            .finger       = static_cast<std::size_t>(XR_HAND_JOINT_INDEX_TIP_EXT),
+            .finger_point = pointer.position,
+            .point        = world_position
+        };
+    }
 }
+#endif
 
 auto Rendertarget_node::update_pointer() -> bool
 {
@@ -288,6 +366,10 @@ void Rendertarget_node::clear(glm::vec4 clear_color)
     //m_pipeline_state_tracker->color_blend.execute(
     //    erhe::graphics::Color_blend_state::color_blend_disabled
     //);
+
+    // TODO Should probably restore m_pipeline_state_tracker code above instead
+    gl::color_mask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
     gl::clear_color(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 }
@@ -312,10 +394,27 @@ void Rendertarget_node::render_done()
     return m_pointer;
 }
 
-[[nodiscard]] auto Rendertarget_node::get_closest_finger() const -> nonstd::optional<Closest_finger>
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+[[nodiscard]] auto Rendertarget_node::get_pointer_finger() const -> std::optional<Finger_point>
 {
-    return m_closest_finger;
+    return m_pointer_finger;
 }
+
+[[nodiscard]] auto Rendertarget_node::get_finger_trigger() const -> bool
+{
+    return m_finger_trigger;
+}
+
+[[nodiscard]] auto Rendertarget_node::get_controller_pose() const -> const erhe::xr::Pose&
+{
+    return m_controller_pose;
+}
+
+[[nodiscard]] auto Rendertarget_node::get_controller_trigger() const -> float
+{
+    return m_controller_trigger_value;
+}
+#endif
 
 [[nodiscard]] auto Rendertarget_node::width() const -> float
 {

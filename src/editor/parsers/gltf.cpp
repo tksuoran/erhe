@@ -91,20 +91,20 @@ auto c_str(const cgltf_buffer_view_type value) -> const char*
     }
 };
 
-auto c_str(const cgltf_component_type value) -> const char*
-{
-    switch (value)
-    {
-        case cgltf_component_type::cgltf_component_type_invalid : return "invalid";
-        case cgltf_component_type::cgltf_component_type_r_8     : return "r_8";
-        case cgltf_component_type::cgltf_component_type_r_8u    : return "r_8u";
-        case cgltf_component_type::cgltf_component_type_r_16    : return "r_16";
-        case cgltf_component_type::cgltf_component_type_r_16u   : return "r_16u";
-        case cgltf_component_type::cgltf_component_type_r_32u   : return "r_32u";
-        case cgltf_component_type::cgltf_component_type_r_32f   : return "r_32f";
-        default:                                                  return "?";
-    }
-};
+// auto c_str(const cgltf_component_type value) -> const char*
+// {
+//     switch (value)
+//     {
+//         case cgltf_component_type::cgltf_component_type_invalid : return "invalid";
+//         case cgltf_component_type::cgltf_component_type_r_8     : return "r_8";
+//         case cgltf_component_type::cgltf_component_type_r_8u    : return "r_8u";
+//         case cgltf_component_type::cgltf_component_type_r_16    : return "r_16";
+//         case cgltf_component_type::cgltf_component_type_r_16u   : return "r_16u";
+//         case cgltf_component_type::cgltf_component_type_r_32u   : return "r_32u";
+//         case cgltf_component_type::cgltf_component_type_r_32f   : return "r_32f";
+//         default:                                                  return "?";
+//     }
+// };
 
 auto c_str(const cgltf_type value) -> const char*
 {
@@ -137,51 +137,51 @@ auto c_str(const cgltf_primitive_type value) -> const char*
     }
 };
 
-auto c_str(const cgltf_alpha_mode value) -> const char*
-{
-    switch (value)
-    {
-        case cgltf_alpha_mode::cgltf_alpha_mode_opaque: return "opaque";
-        case cgltf_alpha_mode::cgltf_alpha_mode_mask:   return "blend";
-        case cgltf_alpha_mode::cgltf_alpha_mode_blend:  return "mask";
-        default:                                        return "?";
-    }
-};
+// auto c_str(const cgltf_alpha_mode value) -> const char*
+// {
+//     switch (value)
+//     {
+//         case cgltf_alpha_mode::cgltf_alpha_mode_opaque: return "opaque";
+//         case cgltf_alpha_mode::cgltf_alpha_mode_mask:   return "blend";
+//         case cgltf_alpha_mode::cgltf_alpha_mode_blend:  return "mask";
+//         default:                                        return "?";
+//     }
+// };
 
-auto c_str(const cgltf_animation_path_type value) -> const char*
-{
-    switch (value)
-    {
-        case cgltf_animation_path_type::cgltf_animation_path_type_invalid:     return "invalid";
-        case cgltf_animation_path_type::cgltf_animation_path_type_translation: return "translation";
-        case cgltf_animation_path_type::cgltf_animation_path_type_rotation:    return "rotation";
-        case cgltf_animation_path_type::cgltf_animation_path_type_scale:       return "scale";
-        case cgltf_animation_path_type::cgltf_animation_path_type_weights:     return "weights";
-        default:                 return "?";
-    }
-};
+// auto c_str(const cgltf_animation_path_type value) -> const char*
+// {
+//     switch (value)
+//     {
+//         case cgltf_animation_path_type::cgltf_animation_path_type_invalid:     return "invalid";
+//         case cgltf_animation_path_type::cgltf_animation_path_type_translation: return "translation";
+//         case cgltf_animation_path_type::cgltf_animation_path_type_rotation:    return "rotation";
+//         case cgltf_animation_path_type::cgltf_animation_path_type_scale:       return "scale";
+//         case cgltf_animation_path_type::cgltf_animation_path_type_weights:     return "weights";
+//         default:                 return "?";
+//     }
+// };
 
-auto c_str(const cgltf_interpolation_type value) -> const char*
-{
-    switch (value)
-    {
-        case cgltf_interpolation_type::cgltf_interpolation_type_linear:       return "linear";
-        case cgltf_interpolation_type::cgltf_interpolation_type_step:         return "step";
-        case cgltf_interpolation_type::cgltf_interpolation_type_cubic_spline: return "cubicspline";
-        default:                                                              return "?";
-    }
-};
+// auto c_str(const cgltf_interpolation_type value) -> const char*
+// {
+//     switch (value)
+//     {
+//         case cgltf_interpolation_type::cgltf_interpolation_type_linear:       return "linear";
+//         case cgltf_interpolation_type::cgltf_interpolation_type_step:         return "step";
+//         case cgltf_interpolation_type::cgltf_interpolation_type_cubic_spline: return "cubicspline";
+//         default:                                                              return "?";
+//     }
+// };
 
-auto c_str(const cgltf_camera_type value) -> const char*
-{
-    switch (value)
-    {
-        case cgltf_camera_type::cgltf_camera_type_invalid:      return "invalid";
-        case cgltf_camera_type::cgltf_camera_type_perspective:  return "perspective";
-        case cgltf_camera_type::cgltf_camera_type_orthographic: return "orthographic";
-        default:                                                return "?";
-    }
-};
+// auto c_str(const cgltf_camera_type value) -> const char*
+// {
+//     switch (value)
+//     {
+//         case cgltf_camera_type::cgltf_camera_type_invalid:      return "invalid";
+//         case cgltf_camera_type::cgltf_camera_type_perspective:  return "perspective";
+//         case cgltf_camera_type::cgltf_camera_type_orthographic: return "orthographic";
+//         default:                                                return "?";
+//     }
+// };
 
 auto safe_str(const char* text)
 {
@@ -232,7 +232,7 @@ public:
     Gltf_parser(
         const std::shared_ptr<Scene_root>& scene_root,
         erhe::primitive::Build_info&       build_info,
-        const fs::path&                    path
+        const std::filesystem::path&       path
     )
         : m_scene_root{scene_root}
         , m_build_info{build_info}
@@ -269,7 +269,7 @@ public:
     }
 
 private:
-    auto open(const fs::path& path) -> bool
+    auto open(const std::filesystem::path& path) -> bool
     {
         const cgltf_options parse_options
         {
@@ -1281,7 +1281,7 @@ private:
 void parse_gltf(
     const std::shared_ptr<Scene_root>& scene_root,
     erhe::primitive::Build_info&       build_info,
-    const fs::path&                    path
+    const std::filesystem::path&       path
 )
 {
     Gltf_parser parser{scene_root, build_info, path};

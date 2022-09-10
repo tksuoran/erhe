@@ -108,7 +108,7 @@ namespace mango
             m_offset += bytes;
         }
 
-        void write(const void* data, u64 size)
+        void write(const void* /*data*/, u64 /*size*/)
         {
             MANGO_EXCEPTION("[ConstMemoryStream] Writing into read-only memory.");
         }

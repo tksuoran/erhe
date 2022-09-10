@@ -19,8 +19,8 @@ namespace editor
 using glm::vec3;
 
 Grid_tool::Grid_tool()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title, c_type_name}
+    : erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::components::Component    {c_type_name}
 {
 }
 

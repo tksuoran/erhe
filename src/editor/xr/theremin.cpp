@@ -303,7 +303,7 @@ void Theremin::tool_render(const Render_context& context)
     }
 
     auto&      line_renderer = m_line_renderer_set->hidden;
-    const auto camera        = m_headset_renderer->root_camera();
+    const auto camera        = m_headset_renderer->get_camera();
 
     if (!camera)
     {
@@ -387,18 +387,18 @@ void Theremin::tool_render(const Render_context& context)
 
     if (right_hand.is_active())
     {
-        const auto right_closest_finger = right_hand.get_closest_point_to_line(
+        const auto right_closest_finger_opt = right_hand.get_closest_point_to_line(
             transform,
             antenna_p0,
             antenna_p1
         );
-        if (right_closest_finger.has_value())
+        if (right_closest_finger_opt.has_value())
         {
-            const auto  finger         = right_closest_finger.value().finger;
-            const auto& closest_points = right_closest_finger.value().closest_points;
-            const auto  P = closest_points.P;
-            const auto  Q = closest_points.Q;
-            const float d = glm::distance(P, Q);
+            const auto  closest = right_closest_finger_opt.value();
+            const auto  finger  = closest.finger;
+            const auto  P       = closest.finger_point;
+            const auto  Q       = closest.point;
+            const float d       = glm::distance(P, Q);
             line_renderer.set_line_color(half_green);
             line_renderer.set_thickness(2.0f);
             line_renderer.add_lines( { { P, Q } } );

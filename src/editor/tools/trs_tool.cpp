@@ -225,8 +225,8 @@ void Trs_tool::initialize_component()
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_drag_command);
     commands->register_command(&m_hover_command);
-    commands->bind_command_to_mouse_drag  (&m_drag_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_mouse_motion(&m_hover_command);
+    commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
+    commands->bind_command_to_update    (&m_hover_command);
 }
 
 void Trs_tool::post_initialize()
@@ -850,8 +850,8 @@ auto Trs_tool::on_drag_ready() -> bool
         return false;
     }
 
-    const auto* camera = viewport_window->camera();
-    if (camera == nullptr)
+    const auto camera = viewport_window->get_camera();
+    if (!camera)
     {
         return false;
     }
@@ -1196,7 +1196,7 @@ auto Trs_tool::project_to_offset_plane(
     }
 }
 
-auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> nonstd::optional<dvec3>
+auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> std::optional<dvec3>
 {
     const auto viewport_window = m_viewport_windows->hover_window();
     if (!viewport_window)
@@ -1242,8 +1242,8 @@ void Trs_tool::update_rotate()
         return;
     }
 
-    auto* const camera = viewport_window->camera();
-    if (camera == nullptr)
+    const auto camera = viewport_window->get_camera();
+    if (!camera)
     {
         return;
     }
@@ -1348,8 +1348,8 @@ void Trs_tool::update_once_per_frame(const erhe::components::Time_context&)
         return;
     }
 
-    const erhe::scene::Camera* const camera = viewport_window->camera();
-    if (camera == nullptr)
+    const auto camera = viewport_window->get_camera();
+    if (!camera)
     {
         return;
     }

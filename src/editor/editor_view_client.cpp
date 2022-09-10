@@ -6,6 +6,7 @@
 #include "scene/viewport_windows.hpp"
 
 #include "erhe/application/configuration.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
@@ -39,9 +40,10 @@ void Editor_view_client::initialize_component()
 
 void Editor_view_client::post_initialize()
 {
+    m_commands         = get<erhe::application::Commands      >();
     m_imgui_windows    = get<erhe::application::Imgui_windows >();
     m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
-    m_render_graph     = get<erhe::application::Rendergraph  >();
+    m_render_graph     = get<erhe::application::Rendergraph   >();
     m_editor_rendering = get<Editor_rendering>();
     m_viewport_windows = get<Viewport_windows>();
 }
@@ -63,11 +65,12 @@ void Editor_view_client::update()
         scene_builder->buffer_transfer_queue().flush();
         // animate_lights(time_context.time);
     }
-    m_editor_rendering->begin_frame();
+    m_editor_rendering->begin_frame  ();
     m_imgui_windows   ->imgui_windows();
-    m_render_graph    ->execute();
-    m_imgui_renderer  ->next_frame();
-    m_editor_rendering->end_frame();
+    m_render_graph    ->execute      ();
+    m_imgui_renderer  ->next_frame   ();
+    m_editor_rendering->end_frame    ();
+    m_commands        ->on_update    ();
 }
 
 void Editor_view_client::update_keyboard(

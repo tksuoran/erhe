@@ -138,7 +138,7 @@ Scene_root::Scene_root(const std::string_view& name)
     ///// }
 }
 
-Scene_root::~Scene_root()
+Scene_root::~Scene_root() noexcept
 {
 }
 
@@ -331,6 +331,90 @@ auto Scene_root::camera_combo(
             static_cast<int>(names.size())
         ) &&
         (selected_camera != cameras[selected_camera_index]);
+    if (camera_changed)
+    {
+        selected_camera = cameras[selected_camera_index];
+    }
+    return camera_changed;
+}
+
+auto Scene_root::camera_combo(
+    const char*                           label,
+    std::shared_ptr<erhe::scene::Camera>& selected_camera,
+    const bool                            nullptr_option
+) const -> bool
+{
+    int selected_camera_index = 0;
+    int index = 0;
+    std::vector<const char*> names;
+    std::vector<std::shared_ptr<erhe::scene::Camera>> cameras;
+    if (nullptr_option || (selected_camera == nullptr))
+    {
+        names.push_back("(none)");
+        cameras.push_back(nullptr);
+    }
+    for (const auto& camera : scene().cameras)
+    {
+        names.push_back(camera->name().c_str());
+        cameras.push_back(camera);
+        if (selected_camera == camera)
+        {
+            selected_camera_index = index;
+        }
+        ++index;
+    }
+
+    const bool camera_changed =
+        ImGui::Combo(
+            label,
+            &selected_camera_index,
+            names.data(),
+            static_cast<int>(names.size()),
+            static_cast<int>(names.size())
+        ) &&
+        (selected_camera != cameras[selected_camera_index]);
+    if (camera_changed)
+    {
+        selected_camera = cameras[selected_camera_index];
+    }
+    return camera_changed;
+}
+
+auto Scene_root::camera_combo(
+    const char*                         label,
+    std::weak_ptr<erhe::scene::Camera>& selected_camera,
+    const bool                          nullptr_option
+) const -> bool
+{
+    int selected_camera_index = 0;
+    int index = 0;
+    std::vector<const char*> names;
+    std::vector<std::weak_ptr<erhe::scene::Camera>> cameras;
+    if (nullptr_option || selected_camera.expired())
+    {
+        names.push_back("(none)");
+        cameras.push_back({});
+    }
+    for (const auto& camera : scene().cameras)
+    {
+        names.push_back(camera->name().c_str());
+        cameras.push_back(camera);
+        if (selected_camera.lock() == camera)
+        {
+            selected_camera_index = index;
+        }
+        ++index;
+    }
+
+    const bool camera_changed =
+        ImGui::Combo(
+            label,
+            &selected_camera_index,
+            names.data(),
+            static_cast<int>(names.size()),
+            static_cast<int>(names.size())
+        ) &&
+        (selected_camera.lock() != cameras[selected_camera_index].lock());
     if (camera_changed)
     {
         selected_camera = cameras[selected_camera_index];

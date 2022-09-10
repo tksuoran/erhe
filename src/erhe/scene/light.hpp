@@ -23,7 +23,7 @@ class Light_projection_parameters
 {
 public:
     const Camera* view_camera{nullptr};
-    Viewport      view_camera_viewport;
+    ////Viewport      view_camera_viewport;
     Viewport      shadow_map_viewport;
 };
 
@@ -73,9 +73,9 @@ private:
     [[nodiscard]] auto stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection;
     [[nodiscard]] auto spot_light_projection              (const Light_projection_parameters& parameters) const -> Projection;
 
-    [[nodiscard]] auto tight_directional_light_projection_transforms(
-        const Light_projection_parameters& parameters
-    ) const -> Light_projection_transforms;
+    ////[[nodiscard]] auto tight_directional_light_projection_transforms(
+    ////    const Light_projection_parameters& parameters
+    ////) const -> Light_projection_transforms;
     [[nodiscard]] auto stable_directional_light_projection_transforms(
         const Light_projection_parameters& parameters
     ) const -> Light_projection_transforms;

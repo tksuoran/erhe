@@ -19,10 +19,13 @@ Controller_visualization::Controller_visualization(
     erhe::scene::Node* view_root
 )
 {
-    auto controller_material = scene_root.material_library()->make_material("Controller", glm::vec4{0.1f, 0.1f, 0.2f, 1.0f});
+    auto controller_material = scene_root.material_library()->make_material(
+        "Controller",
+        glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
+    );
     //constexpr float length = 0.05f;
     //constexpr float radius = 0.02f;
-    auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 22, 8);
+    auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 40, 14);
     controller_geometry.transform(erhe::toolkit::mat4_swap_yz);
     controller_geometry.reverse_polygons();
 
@@ -37,10 +40,11 @@ Controller_visualization::Controller_visualization(
         .gl_primitive_geometry = controller_pg
     };
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller", primitive);
+    m_controller_mesh->node_data.visibility_mask |= erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::controller;
     view_root->attach(m_controller_mesh);
     scene_root.add(
         m_controller_mesh,
-        scene_root.layers().controller()
+        scene_root.layers().content() //// controller()
     );
 }
 

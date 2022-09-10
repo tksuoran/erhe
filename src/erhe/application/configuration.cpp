@@ -186,6 +186,7 @@ Configuration::Configuration(int argc, char** argv)
             const auto& section = ini["windows"];
 
             ini_get(section, "brushes",              windows.brushes             );
+            ini_get(section, "commands",             windows.commands            );
             ini_get(section, "debug_view",           windows.debug_view          );
             ini_get(section, "debug_visualizations", windows.debug_visualizations);
             ini_get(section, "fly_camera",           windows.fly_camera          );
@@ -226,6 +227,7 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "floor_size",                  scene.floor_size);
             ini_get(section, "instance_count",              scene.instance_count);
             ini_get(section, "instance_gap",                scene.instance_gap);
+            ini_get(section, "object_scale",                scene.object_scale);
             ini_get(section, "detail",                      scene.detail);
             ini_get(section, "gltf_files",                  scene.gltf_files);
             ini_get(section, "obj_files",                   scene.obj_files);
@@ -314,11 +316,6 @@ Configuration::Configuration(int argc, char** argv)
             "Error parsing command line argumenst: {}",
             e.what()
         );
-    }
-
-    if (headset.openxr)
-    {
-        window.show = false;
     }
 }
 

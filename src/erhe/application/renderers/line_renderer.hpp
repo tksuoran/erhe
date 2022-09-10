@@ -35,6 +35,7 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
+    class Transform;
     class Viewport;
 }
 
@@ -161,10 +162,11 @@ public:
     );
 
     void add_sphere(
-        const glm::mat4 transform,
-        const uint32_t  color,
-        const glm::vec3 center,
-        const float     radius
+        const glm::mat4               transform,
+        uint32_t                      color,
+        const glm::vec3               center,
+        float                         radius,
+        const erhe::scene::Transform* camera_world_from_node = nullptr
     );
 
 private:

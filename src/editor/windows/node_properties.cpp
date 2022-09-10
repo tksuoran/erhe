@@ -319,10 +319,14 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
                     int polygon_count = geometry->get_polygon_count();
                     int edge_count    = geometry->get_edge_count();
                     int corner_count  = geometry->get_corner_count();
-                    ImGui::InputInt("Points",   &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Polygons", &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Edges",    &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Corners",  &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputInt("Points",      &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputInt("Polygons",    &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputInt("Edges",       &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputInt("Corners",     &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
+                    float bbox_volume    = primitive.gl_primitive_geometry.bounding_box.volume();
+                    float bsphere_volume = primitive.gl_primitive_geometry.bounding_sphere.volume();
+                    ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
                     ImGui::TreePop();
                 }
             }

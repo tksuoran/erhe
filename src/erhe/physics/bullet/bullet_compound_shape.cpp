@@ -48,7 +48,7 @@ void Bullet_compound_shape::calculate_principal_axis_transform(
     Transform&                principal_transform,
     glm::vec3&                inertia)
 {
-	/// computes
+    /// computes
     /// - the exact moment of inertia and
     /// - the transform
     /// from
@@ -63,7 +63,7 @@ void Bullet_compound_shape::calculate_principal_axis_transform(
     /// to coincide with the principal axes.
     ///
     /// This also necessitates a correction of the world transform
-	/// of the collision object by the principal transform.
+    /// of the collision object by the principal transform.
     const int child_count = m_compound_shape.getNumChildShapes();
     ERHE_VERIFY(child_masses.size() == static_cast<size_t>(child_count));
 

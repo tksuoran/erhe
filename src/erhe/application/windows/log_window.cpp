@@ -65,7 +65,7 @@ void Log_window::imgui()
     auto& tail  = erhe::log::get_tail_store_log();
     auto& frame = erhe::log::get_frame_store_log();
 
-    if (ImGui::TreeNodeEx("Tail", /*ImGuiTreeNodeFlags_DefaultOpen |*/ ImGuiTreeNodeFlags_Framed))
+    if (ImGui::TreeNodeEx("Tail", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
     {
         ImGui::SetNextItemWidth(100.0f);
 

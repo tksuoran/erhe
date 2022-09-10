@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/xxhash.hpp"
 
@@ -8,6 +7,7 @@
 #include <functional>
 #include <mutex>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string_view>
 #include <vector>

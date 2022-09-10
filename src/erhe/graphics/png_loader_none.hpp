@@ -1,8 +1,8 @@
 #pragma once
 
 #include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 
+#include <filesystem>
 #include <memory>
 
 namespace erhe::graphics
@@ -36,7 +36,7 @@ public:
     auto operator=(PNG_loader&&)      = delete;
 
     [[nodiscard]] auto open(
-        const fs::path& path,
+        const std::filesystem::path& path,
         Image_info&     image_info
     ) -> bool;
 

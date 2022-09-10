@@ -272,7 +272,7 @@ void Operations::imgui()
 
         m_imgui_renderer->at_end_of_frame(
             [scene_builder](){
-                scene_builder->add_rendertarget_viewports();
+                scene_builder->add_rendertarget_viewports(2);
             }
         );
     }

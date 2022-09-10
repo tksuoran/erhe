@@ -26,6 +26,8 @@ Rendergraph_node::~Rendergraph_node()
     const int              depth
 ) const -> const Rendergraph_consumer_connector*
 {
+    static_cast<void>(resource_routing);
+
     SPDLOG_LOGGER_TRACE(
         log_rendergraph,
         "{} Rendergraph_node::get_input(resource_routing = {}, key = {}, depth = {})",
@@ -41,7 +43,7 @@ Rendergraph_node::~Rendergraph_node()
     auto i = std::find_if(
         m_inputs.begin(),
         m_inputs.end(),
-        [&key, resource_routing, depth](
+        [&key](
             const Rendergraph_consumer_connector& entry
         )
         {
@@ -127,6 +129,8 @@ auto Rendergraph_node::get_consumer_input_viewport(
     const int              depth
 ) const -> const Rendergraph_producer_connector*
 {
+    static_cast<void>(resource_routing);
+
     SPDLOG_LOGGER_TRACE(
         log_rendergraph,
         "{} Rendergraph_node::get_output(resource_routing = {}, key = {}, depth = {})",
@@ -142,7 +146,7 @@ auto Rendergraph_node::get_consumer_input_viewport(
     auto i = std::find_if(
         m_outputs.begin(),
         m_outputs.end(),
-        [&key, resource_routing, depth](
+        [&key](
             const Rendergraph_producer_connector& entry
         )
         {
@@ -288,13 +292,12 @@ auto Rendergraph_node::register_input(
         log_rendergraph->error("Node '{}' input key '{}' is already registered", name(), key);
         return false;
     }
-    m_inputs.emplace_back(
-        resource_routing,
-        std::string{label},
-        key,
-        std::vector<
-            std::weak_ptr<Rendergraph_node>
-        >{}
+    m_inputs.push_back(
+        Rendergraph_consumer_connector{
+            .resource_routing = resource_routing,       // Resource_routing
+            .label = std::string{label},
+            .key = key
+        }
     );
     return true;
 }
@@ -326,13 +329,15 @@ auto Rendergraph_node::register_output(
         log_rendergraph->error("Node '{}' output key '{}' is already registered", name(), key);
         return false;
     }
-    m_outputs.emplace_back(
-        resource_routing,
-        std::string{label},
-        key,
-        std::vector<
-            std::weak_ptr<Rendergraph_node>
-        >{}
+    m_outputs.push_back(
+        Rendergraph_producer_connector{
+            resource_routing,
+            std::string{label},
+            key,
+            std::vector<
+                std::weak_ptr<Rendergraph_node>
+            >{}
+        }
     );
     return true;
 }

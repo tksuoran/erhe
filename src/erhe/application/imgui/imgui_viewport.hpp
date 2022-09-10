@@ -39,10 +39,11 @@ public:
     [[nodiscard]] virtual auto begin_imgui_frame() -> bool = 0;
     virtual void end_imgui_frame() = 0;
 
-    [[nodiscard]] auto name              () const -> const std::string&;
-    [[nodiscard]] auto want_capture_mouse() const -> bool;
-    [[nodiscard]] auto has_cursor        () const -> bool;
-    [[nodiscard]] auto imgui_context     () const -> ImGuiContext*;
+    [[nodiscard]] auto name                 () const -> const std::string&;
+    [[nodiscard]] auto want_capture_keyboard() const -> bool;
+    [[nodiscard]] auto want_capture_mouse   () const -> bool;
+    [[nodiscard]] auto has_cursor           () const -> bool;
+    [[nodiscard]] auto imgui_context        () const -> ImGuiContext*;
 
     void on_key         (signed int keycode, uint32_t modifier_mask, bool pressed);
     void on_char        (unsigned int codepoint);

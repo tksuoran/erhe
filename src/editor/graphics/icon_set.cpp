@@ -61,7 +61,7 @@ void Icon_set::initialize_component()
     m_icon_uv_width  = static_cast<float>(m_icon_width ) / static_cast<float>(m_texture->width());
     m_icon_uv_height = static_cast<float>(m_icon_height) / static_cast<float>(m_texture->height());
 
-    const auto icon_directory = fs::path("res") / "icons";
+    const auto icon_directory = std::filesystem::path("res") / "icons";
 
     icons.camera            = load(icon_directory / "camera.svg");
     icons.directional_light = load(icon_directory / "directional_light.svg");
@@ -72,12 +72,12 @@ void Icon_set::initialize_component()
     icons.three_dots        = load(icon_directory / "three_dots.svg");
 }
 
-auto Icon_set::load(const fs::path& path) -> glm::vec2
+auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
 {
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
     Expects(m_row < m_row_count);
 
-    //const auto  current_path = fs::current_path();
+    //const auto  current_path = std::filesystem::current_path();
     const auto document = lunasvg::Document::loadFromFile(path.string());
     if (!document)
     {

@@ -4,6 +4,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtx/norm.hpp>
 
 #include <algorithm>
 #include <array>
@@ -517,9 +518,9 @@ auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
 }
 
 void calculate_bounding_volume(
-    const Point_source& point_source,
-    Bounding_box&       bounding_box,
-    Bounding_sphere&    bounding_sphere
+    const Bounding_volume_source& source,
+    Bounding_box&                 bounding_box,
+    Bounding_sphere&              bounding_sphere
 )
 {
     bounding_box.min = vec3{std::numeric_limits<float>::max()};
@@ -534,86 +535,82 @@ void calculate_bounding_volume(
     glm::vec3 y_max{std::numeric_limits<float>::lowest()};
     glm::vec3 z_max{std::numeric_limits<float>::lowest()};
 
-    if (point_source.point_count() == 0)
+    if (source.get_element_count() == 0)
     {
         bounding_box.min = vec3{0.0f};
         bounding_box.max = vec3{0.0f};
         return;
     }
-    for (size_t i = 0, end = point_source.point_count(); i < end; ++i)
+
+    for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i)
     {
-        const auto point = point_source.get_point(i);
-        if (point.has_value())
+        for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j)
         {
-            const vec3 position = point.value();
-            bounding_box.min = glm::min(bounding_box.min, position);
-            bounding_box.max = glm::max(bounding_box.max, position);
-
-            if (position.x < x_min.x) x_min = position;
-            if (position.x > x_max.x) x_max = position;
-            if (position.y < y_min.y) y_min = position;
-            if (position.y > y_max.y) y_max = position;
-            if (position.z < z_min.z) z_min = position;
-            if (position.z > z_max.z) z_max = position;
-        }
-    }
-
-    // Ritter's bounding sphere
-    // - Pick a point x from P, search a point y in P, which has the largest distance from x;
-    // - Search a point z in P, which has the largest distance from y.
-    //   Set up an initial ball B, with its centre as the midpoint of y and z,
-    //   the radius as half of the distance between y and z;
-    // - If all points in P are within ball B, then we get a bounding sphere.
-    //   Otherwise, let p be a point outside the ball, construct a new ball
-    //   covering both point p and previous ball.
-    //   Repeat this step until all points are covered.
-    const auto x_span_v = x_max - x_min;
-    const auto y_span_v = y_max - y_min;
-    const auto z_span_v = z_max - z_min;
-    const auto x_span   = glm::dot(x_span_v, x_span_v);
-    const auto y_span   = glm::dot(y_span_v, y_span_v);
-    const auto z_span   = glm::dot(z_span_v, z_span_v);
-
-    auto dia_1    = x_min;
-    auto dia_2    = x_max;
-    auto max_span = x_span;
-    if (y_span > max_span)
-    {
-        max_span = y_span;
-        dia_1    = y_min;
-        dia_2    = y_max;
-    }
-    if (z_span > max_span)
-    {
-        dia_1 = z_min;
-        dia_2 = z_max;
-    }
-
-    auto       center = (dia_1 + dia_2) / 2.0f;
-    const auto d0     = dia_2 - center;
-    auto       rad_sq = glm::dot(d0, d0);
-    auto       rad    = std::sqrt(rad_sq);
-
-    for (size_t i = 0, end = point_source.point_count(); i < end; ++i)
-    {
-        const auto point = point_source.get_point(i);
-        if (point.has_value())
-        {
-            const vec3 position    = point.value();
-            const auto d           = position - center;
-            const auto old_to_p_sq = glm::dot(d, d);
-            if (old_to_p_sq > rad_sq)
+            const auto point = source.get_point(i, j);
+            if (point.has_value())
             {
-                const auto old_to_p = std::sqrt(old_to_p_sq);
-                rad    = (rad + old_to_p) / 2.0f;
-                rad_sq = rad * rad;
-                const auto old_to_new = old_to_p - rad;
-                center = (rad * center + old_to_new * position) / old_to_p;
+                const vec3 position = point.value();
+                bounding_box.min = glm::min(bounding_box.min, position);
+                bounding_box.max = glm::max(bounding_box.max, position);
+
+                if (position.x < x_min.x) x_min = position;
+                if (position.x > x_max.x) x_max = position;
+                if (position.y < y_min.y) y_min = position;
+                if (position.y > y_max.y) y_max = position;
+                if (position.z < z_min.z) z_min = position;
+                if (position.z > z_max.z) z_max = position;
             }
         }
     }
-    bounding_sphere.center = center;
-    bounding_sphere.radius = rad;
+
+    const float x_diff = bounding_box.max.x - bounding_box.min.x;
+    const float y_diff = bounding_box.max.y - bounding_box.min.y;
+    const float z_diff = bounding_box.max.z - bounding_box.min.y;
+
+    const glm::vec3 mid = (bounding_box.max + bounding_box.min) * (0.5f);
+
+    const float max_dist = std::max(
+        x_diff,
+        std::max(
+            y_diff,
+            z_diff
+        )
+    );
+
+    glm::vec3 c  = mid;
+    float     r  = max_dist / 2.0f;
+    float     r2 = r * r;
+
+    for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i)
+    {
+        for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j)
+        {
+            const auto point = source.get_point(i, j);
+            if (point.has_value())
+            {
+                const vec3      p         = point.value();
+                const glm::vec3 direction = p - c;
+                const float     dist2     = glm::length2(direction);
+
+                if (dist2 > r2)
+                {
+                    float distance = std::sqrt(dist2);
+                    float diff     = distance - r;
+                    float diameter = 2.0f * r;
+                    diameter += diff;
+                    r = diameter / 2.0f;
+                    r2 = r * r;
+
+                    diff /= 2.0f;
+
+                    c += diff * direction;
+                }
+            }
+        }
+    }
+
+    bounding_sphere.center = c;
+    bounding_sphere.radius = r;
 }
 
 } // namespace erhe::toolkit

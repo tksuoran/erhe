@@ -10,6 +10,7 @@
 namespace editor
 {
 
+class Scene_viewport;
 class Light_projections;
 class Scene_root;
 class Shadow_renderer;
@@ -28,11 +29,11 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Shadow_render_node(
-        Shadow_renderer&                        shadow_renderer,
-        const std::shared_ptr<Viewport_window>& viewport_window,
-        int                                     resolution,
-        int                                     light_count,
-        bool                                    reverse_depth
+        Shadow_renderer&                       shadow_renderer,
+        const std::shared_ptr<Scene_viewport>& scene_viewport,
+        int                                    resolution,
+        int                                    light_count,
+        bool                                   reverse_depth
     );
 
     // Implements Rendergraph_node
@@ -56,20 +57,19 @@ public:
     [[nodiscard]] auto inputs_allowed() const -> bool override;
 
     // Public API
-    auto viewport_window  () const -> std::shared_ptr<Viewport_window>;
-    auto light_projections() -> Light_projections&;
-    [[nodiscard]] auto texture () const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] auto viewport() const -> erhe::scene::Viewport;
+    [[nodiscard]] auto get_scene_viewport   () const -> std::shared_ptr<Scene_viewport>;
+    [[nodiscard]] auto get_light_projections() -> Light_projections&;
+    [[nodiscard]] auto get_texture          () const -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto get_viewport         () const -> erhe::scene::Viewport;
 
 private:
-    Shadow_renderer&                 m_shadow_renderer;
-    std::shared_ptr<Viewport_window> m_viewport_window;
+    Shadow_renderer&                m_shadow_renderer;
+    std::shared_ptr<Scene_viewport> m_scene_viewport;
 
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
     erhe::scene::Viewport                                     m_viewport{0, 0, 0, 0, true};
 
-    Scene_root*       m_shadow_scene{nullptr};
     Light_projections m_light_projections;
 };
 

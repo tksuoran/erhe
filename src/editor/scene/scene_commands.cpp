@@ -71,7 +71,7 @@ void Scene_commands::post_initialize()
 
 auto Scene_commands::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
 {
-    const auto& scene_root = m_editor_scenes->get_scene_root();
+    const auto& scene_root = m_editor_scenes->get_current_scene_root();
     if (!scene_root)
     {
         return {};
@@ -82,7 +82,7 @@ auto Scene_commands::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
 
 auto Scene_commands::create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>
 {
-    const auto& scene_root = m_editor_scenes->get_scene_root();
+    const auto& scene_root = m_editor_scenes->get_current_scene_root();
     if (!scene_root)
     {
         return {};
@@ -93,7 +93,7 @@ auto Scene_commands::create_new_empty_node() -> std::shared_ptr<erhe::scene::Nod
 
 auto Scene_commands::create_new_light() -> std::shared_ptr<erhe::scene::Light>
 {
-    const auto& scene_root = m_editor_scenes->get_scene_root();
+    const auto& scene_root = m_editor_scenes->get_current_scene_root();
     if (!scene_root)
     {
         return {};

@@ -1,9 +1,8 @@
 #pragma once
 
-#include "erhe/toolkit/filesystem.hpp"
-
 #include <gsl/span>
 
+#include <filesystem>
 #include <memory>
 
 extern "C"
@@ -49,8 +48,8 @@ public:
     void operator=(PNG_loader&&)      = delete;
 
     [[nodiscard]] auto open(
-        const fs::path& path,
-        Image_info&     image_info
+        const std::filesystem::path& path,
+        Image_info&                  image_info
     ) -> bool;
 
     [[nodiscard]] auto load(
@@ -76,9 +75,9 @@ public:
     auto operator=(PNG_writer&&)      = delete;
 
     [[nodiscard]] auto write(
-        const fs::path&      path,
-        const Image_info&    info,
-        gsl::span<std::byte> data
+        const std::filesystem::path& path,
+        const Image_info&            info,
+        gsl::span<std::byte>         data
     ) -> bool;
 
     auto stream_op(void* dst_src, std::size_t length) -> int;

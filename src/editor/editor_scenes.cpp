@@ -34,9 +34,17 @@ void Editor_scenes::update_once_per_frame(const erhe::components::Time_context&)
     return m_scene_roots;
 }
 
-[[nodiscard]] auto Editor_scenes::get_scene_root() -> const std::shared_ptr<Scene_root>&
+[[nodiscard]] auto Editor_scenes::get_current_scene_root() -> const std::shared_ptr<Scene_root>&
 {
-    return m_scene_root;
+    if (m_current_scene_root)
+    {
+        return m_current_scene_root;
+    }
+    if (!m_scene_roots.empty())
+    {
+        return m_scene_roots.front();
+    }
+    return m_current_scene_root;
 }
 
 } // namespace hextiles

@@ -105,11 +105,11 @@ public:
     /// <param name="camera">Initial camera to be used</param>
     /// <returns>The newly created Viewport_window</returns>
     auto create_viewport_window(
-        const std::string_view             name,
-        const std::shared_ptr<Scene_root>& scene_root,
-        erhe::scene::Camera*               camera,
-        int                                msaa_sample_count,
-        bool                               enable_post_processing = true
+        const std::string_view                      name,
+        const std::shared_ptr<Scene_root>&          scene_root,
+        const std::shared_ptr<erhe::scene::Camera>& camera,
+        int                                         msaa_sample_count,
+        bool                                        enable_post_processing = true
     ) -> std::shared_ptr<Viewport_window>;
 
     auto create_basic_viewport_window(

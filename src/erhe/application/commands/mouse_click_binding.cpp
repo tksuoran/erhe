@@ -35,6 +35,11 @@ auto Mouse_click_binding::operator=(Mouse_click_binding&& other) noexcept -> Mou
     return *this;
 }
 
+[[nodiscard]] auto Mouse_click_binding::get_button() const -> erhe::toolkit::Mouse_button
+{
+    return m_button;
+}
+
 auto Mouse_click_binding::on_button(
     Command_context&                  context,
     const erhe::toolkit::Mouse_button button,

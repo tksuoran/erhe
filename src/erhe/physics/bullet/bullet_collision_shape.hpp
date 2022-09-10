@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/physics/icollision_shape.hpp"
-#include "erhe/toolkit/optional.hpp"
 
 #include <btBulletCollisionCommon.h>
 #include <BulletCollision/CollisionShapes/btBoxShape.h>
@@ -11,6 +10,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace erhe::physics
 {

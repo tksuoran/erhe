@@ -87,9 +87,10 @@ auto Light::projection_transforms(
     {
         case Light_type::directional:
         {
-            return this->tight_frustum_fit
-                ? tight_directional_light_projection_transforms (parameters)
-                : stable_directional_light_projection_transforms(parameters);
+            return stable_directional_light_projection_transforms(parameters);
+            //return this->tight_frustum_fit
+            //    ? tight_directional_light_projection_transforms (parameters)
+            //    : stable_directional_light_projection_transforms(parameters);
         }
 
         case Light_type::spot:
@@ -109,7 +110,7 @@ auto Light::stable_directional_light_projection_transforms(
 ) const -> Light_projection_transforms
 {
     // Overview of the stable directional light projection transforms algorithm:
-    // 
+    //
     // - Define bounding sphere around view camare, based on view camera
     //   position (as sphere center) and far plane distance (as sphere radius)
     // - Construct cubic orthogonal projection for light, using view camera far
@@ -233,12 +234,13 @@ auto Light::stable_directional_light_projection_transforms(
     };
 }
 
+#if 0
 [[nodiscard]] auto Light::tight_directional_light_projection_transforms(
     const Light_projection_parameters& parameters
 ) const -> Light_projection_transforms
 {
     // WORK IN PROGRESS - NOT YET FUNCTIONAL
-    // 
+    //
     // Overview of the right directional light projection transforms algorithm:
     // - Start with stable directional light projection transforms
     // - Compute view camera frustum corner points in light space
@@ -361,6 +363,7 @@ auto Light::stable_directional_light_projection_transforms(
         .texture_from_world      = texture_from_world
     };
 }
+#endif
 
 [[nodiscard]] auto Light::spot_light_projection_transforms(
     const Light_projection_parameters& parameters

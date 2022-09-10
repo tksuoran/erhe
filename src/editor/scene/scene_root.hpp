@@ -141,6 +141,18 @@ public:
         const bool            nullptr_option = false
     ) const -> bool;
 
+    auto camera_combo(
+        const char*                           label,
+        std::shared_ptr<erhe::scene::Camera>& selected_camera,
+        const bool                            nullptr_option = false
+    ) const -> bool;
+
+    auto camera_combo(
+        const char*                         label,
+        std::weak_ptr<erhe::scene::Camera>& selected_camera,
+        const bool                          nullptr_option = false
+    ) const -> bool;
+
     void sort_lights();
 
     [[nodiscard]] auto create_rendertarget_node(

@@ -31,7 +31,6 @@
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/window.hpp"
-#include "erhe/application/windows/imgui_demo_window.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/windows/pipelines.hpp"
@@ -66,7 +65,6 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(shared_from_this());
         m_components.add(gl_context_provider);
         m_components.add(make_shared<erhe::application::Commands          >());
-        m_components.add(make_shared<erhe::application::Imgui_demo_window >());
         m_components.add(make_shared<erhe::application::Imgui_renderer    >());
         m_components.add(make_shared<erhe::application::Imgui_windows     >());
         m_components.add(make_shared<erhe::application::Log_window        >());
@@ -123,7 +121,6 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     component_initialization_complete(true);
 
     m_components.get<erhe::application::View              >()->hide();
-    m_components.get<erhe::application::Imgui_demo_window >()->hide();
     m_components.get<erhe::application::Log_window        >()->hide();
     m_components.get<erhe::application::Performance_window>()->hide();
     m_components.get<erhe::application::Pipelines         >()->hide();

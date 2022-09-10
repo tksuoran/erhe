@@ -11,7 +11,6 @@ Scoped_imgui_context::Scoped_imgui_context(
     Imgui_viewport& imgui_viewport
 )
     : m_imgui_windows {imgui_windows }
-    , m_imgui_viewport{imgui_viewport}
     , m_lock          {imgui_windows.get_mutex()}
 {
     m_imgui_windows.make_current(&imgui_viewport);

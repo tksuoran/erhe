@@ -70,14 +70,6 @@ auto sign(const float x) -> float
     return x < 0.0f ? -1.0f : 1.0f;
 }
 
-constexpr uint32_t red         = 0xff0000ffu;
-constexpr uint32_t green       = 0xff00ff00u;
-constexpr uint32_t blue        = 0xffff0000u;
-constexpr uint32_t yellow      = 0xff00ffffu;
-constexpr uint32_t half_yellow = 0x88008888u;
-constexpr uint32_t white       = 0xffffffffu;
-
-constexpr mat4 I              { 1.0f};
 constexpr vec3 clip_min_corner{-1.0f, -1.0f, 0.0f};
 constexpr vec3 clip_max_corner{ 1.0f,  1.0f, 1.0f};
 constexpr vec3 O              { 0.0f };
@@ -88,14 +80,15 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 }
 
 void Debug_visualizations::mesh_selection_visualization(
-    erhe::scene::Mesh* mesh
+    const Render_context& render_context,
+    erhe::scene::Mesh*    mesh
 )
 {
-    auto&          line_renderer = m_line_renderer_set->hidden;
+    auto&           line_renderer = m_line_renderer_set->hidden;
     //const uint32_t color         = is_in_selection
     //    ? 0xff00ffffu
     //    : erhe::toolkit::convert_float4_to_uint32(mesh.node_data.wireframe_color);
-    const uint32_t color         = 0xff00ffffu;
+    const uint32_t  color         = 0xff00ffffu;
 
     //const auto& mesh = as_mesh(node);
     for (const auto& primitive : mesh->mesh_data.primitives)
@@ -105,7 +98,21 @@ void Debug_visualizations::mesh_selection_visualization(
             continue;
         }
         const auto& primitive_geometry = primitive.gl_primitive_geometry;
-        if (m_viewport_config->selection_bounding_box)
+
+        const float box_volume             = primitive_geometry.bounding_box.volume();
+        const float sphere_volume          = primitive_geometry.bounding_sphere.volume();
+        const bool  smallest_visualization = !m_viewport_config->selection_bounding_box && !m_viewport_config->selection_bounding_sphere;
+        const bool  box_smaller            = box_volume < sphere_volume;
+
+        if (box_smaller)
+        {
+            m_selection_bounding_volume.add_box(
+                mesh->world_from_node(),
+                primitive_geometry.bounding_box.min,
+                primitive_geometry.bounding_box.max
+            );
+        }
+        if ((box_smaller && smallest_visualization) || m_viewport_config->selection_bounding_box)
         {
             line_renderer.add_cube(
                 mesh->world_from_node(),
@@ -114,13 +121,23 @@ void Debug_visualizations::mesh_selection_visualization(
                 primitive_geometry.bounding_box.max
             );
         }
-        if (m_viewport_config->selection_bounding_sphere)
+        if (!box_smaller)
         {
+            m_selection_bounding_volume.add_sphere(
+                mesh->world_from_node(),
+                primitive_geometry.bounding_sphere.center,
+                primitive_geometry.bounding_sphere.radius
+            );
+        }
+        if ((!box_smaller && smallest_visualization) || m_viewport_config->selection_bounding_sphere)
+        {
+            const erhe::scene::Transform* const camera_world_from_node_transform = &(render_context.camera->world_from_node_transform());
             line_renderer.add_sphere(
                 mesh->world_from_node(),
                 color,
                 primitive_geometry.bounding_sphere.center,
-                primitive_geometry.bounding_sphere.radius
+                primitive_geometry.bounding_sphere.radius,
+                camera_world_from_node_transform
             );
         }
     }
@@ -171,20 +188,16 @@ void Debug_visualizations::directional_light_visualization(
 )
 {
     const auto shadow_renderer    = get<Shadow_renderer>();
-    const auto shadow_render_node = shadow_renderer->get_node_for_viewport(context.render_context.window);
+    const auto shadow_render_node = shadow_renderer->get_node_for_viewport(context.render_context.scene_viewport);
     if (!shadow_render_node)
     {
         return;
     }
 
-    auto& line_renderer = m_line_renderer_set->hidden;
-
-    using Camera                       = erhe::scene::Camera;
-    using Camera_projection_transforms = erhe::scene::Camera_projection_transforms;
-
-    const Light_projections& light_projections            = shadow_render_node->light_projections();
-    const auto*              light                        = context.light;
-    const auto               light_projection_transforms  = light_projections.get_light_projection_transforms_for_light(light);
+    auto&                    line_renderer               = m_line_renderer_set->hidden;
+    const Light_projections& light_projections           = shadow_render_node->get_light_projections();
+    const auto*              light                       = context.light;
+    const auto               light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light);
 
     if (light_projection_transforms == nullptr)
     {
@@ -486,6 +499,7 @@ void Debug_visualizations::tool_render(
         }
     }
 
+    m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
     for (const auto& node : selection)
     {
         //const mat4 m{node->world_from_node()};
@@ -495,7 +509,7 @@ void Debug_visualizations::tool_render(
 
         if (is_mesh(node))
         {
-            mesh_selection_visualization(as_mesh(node).get());
+            mesh_selection_visualization(context, as_mesh(node).get());
         }
 
         if (
@@ -507,13 +521,44 @@ void Debug_visualizations::tool_render(
         }
     }
 
+    if (m_selection_bounding_volume.get_element_count() > 1)
+    {
+        erhe::toolkit::Bounding_box    selection_bounding_box;
+        erhe::toolkit::Bounding_sphere selection_bounding_sphere;
+        erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
+        const float    box_volume    = selection_bounding_box.volume();
+        const float    sphere_volume = selection_bounding_sphere.volume();
+        const uint32_t color         = 0xff0088ffu;
+        if (
+            (box_volume > 0.0f) &&
+            (box_volume < sphere_volume)
+        )
+        {
+            line_renderer.add_cube(glm::mat4{1.0f}, color, selection_bounding_box.min, selection_bounding_box.max);
+        }
+        else if (sphere_volume > 0.0f)
+        {
+            line_renderer.add_sphere(
+                glm::mat4{1.0f},
+                color,
+                selection_bounding_sphere.center,
+                selection_bounding_sphere.radius,
+                &(context.camera->world_from_node_transform())
+            );
+        }
+    }
 
-    if (context.window == nullptr)
+    if (context.scene_viewport == nullptr)
     {
         return;
     }
 
-    const Scene_root* scene_root = context.window->scene_root();
+    const auto scene_root = context.scene_viewport->get_scene_root();
+    if (!scene_root)
+    {
+        return;
+    }
+
     for (const auto& light : scene_root->layers().light()->lights)
     {
         light_visualization(context, selected_camera, light.get());

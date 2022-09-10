@@ -65,14 +65,9 @@ void Imgui_windows::post_initialize()
     return m_window_imgui_viewport;
 }
 
-[[nodiscard]] auto Imgui_windows::get_show_imgui_demo_window() -> bool&
+[[nodiscard]] auto Imgui_windows::get_imgui_builtin_windows() -> Imgui_builtin_windows&
 {
-    return m_show_imgui_demo_window;
-}
-
-[[nodiscard]] auto Imgui_windows::get_show_imgui_style_editor_window() -> bool&
-{
-    return m_show_imgui_style_editor_window;
+    return m_imgui_builtin_windows;
 }
 
 void Imgui_windows::register_imgui_viewport(
@@ -132,7 +127,7 @@ void Imgui_windows::imgui_windows()
 
     //Scoped_imgui_context scoped_context{m_imgui_context};
 
-    bool any_mouse_input_sink{false};
+    bool any_input_sink{false};
     for (const auto& viewport : m_imgui_viewports)
     {
         Scoped_imgui_context imgui_context{*this, *viewport.get()};
@@ -150,7 +145,8 @@ void Imgui_windows::imgui_windows()
                 {
                     auto window_id = fmt::format("##window-{}", ++i);
                     ImGui::PushID(window_id.c_str());
-                    if (imgui_window->begin())
+                    const auto is_window_visible = imgui_window->begin();
+                    if (is_window_visible)
                     {
                         imgui_window->imgui();
                     }
@@ -159,11 +155,10 @@ void Imgui_windows::imgui_windows()
                         ImGui::IsWindowHovered()
                     )
                     {
-                        any_mouse_input_sink = true;
-                        m_commands->set_mouse_input_sink(imgui_window);
+                        any_input_sink = true;
+                        m_commands->set_input_sink(imgui_window);
                     }
-                    const auto window_position = ImGui::GetWindowPos();
-                    const auto window_size = ImGui::GetWindowSize();
+                    const auto window_position    = ImGui::GetWindowPos();
                     const auto content_region_min = ImGui::GetWindowContentRegionMin();
                     const auto content_region_max = ImGui::GetWindowContentRegionMin();
                     const ImVec2 content_region_size{
@@ -179,7 +174,7 @@ void Imgui_windows::imgui_windows()
                     imgui_window->end();
                     ImGui::PopID();
 
-                    if (imgui_window->has_toolbar())
+                    if (is_window_visible && imgui_window->has_toolbar())
                     {
                         auto toolbar_id = fmt::format("##window-{}-toolbar", ++i);
                         ImGui::SetNextWindowPos(
@@ -212,9 +207,9 @@ void Imgui_windows::imgui_windows()
         }
     }
 
-    if (!any_mouse_input_sink)
+    if (!any_input_sink)
     {
-        m_commands->set_mouse_input_sink(nullptr);
+        m_commands->set_input_sink(nullptr);
     }
 }
 
@@ -241,8 +236,17 @@ void Imgui_windows::window_menu()
                 }
             }
         }
-        ImGui::MenuItem("ImGui Demo", "", &m_show_imgui_demo_window);
-        ImGui::MenuItem("ImGui Style Editor", "", &m_show_imgui_style_editor_window);
+
+        ImGui::Separator();
+
+        if (ImGui::BeginMenu("ImGui"))
+        {
+            ImGui::MenuItem("Demo",             "", &m_imgui_builtin_windows.demo);
+            ImGui::MenuItem("Style Editor",     "", &m_imgui_builtin_windows.style_editor);
+            ImGui::MenuItem("Metrics/Debugger", "", &m_imgui_builtin_windows.metrics);
+            ImGui::MenuItem("Stack Tool",       "", &m_imgui_builtin_windows.stack_tool);
+            ImGui::EndMenu();
+        }
 
         ImGui::Separator();
         if (ImGui::MenuItem("Close All"))
@@ -263,6 +267,13 @@ void Imgui_windows::window_menu()
     }
 
     ImGui::PopStyleVar();
+}
+
+[[nodiscard]] auto Imgui_windows::want_capture_keyboard() const -> bool
+{
+    return m_window_imgui_viewport
+        ? m_window_imgui_viewport->want_capture_keyboard()
+        : false;
 }
 
 [[nodiscard]] auto Imgui_windows::want_capture_mouse() const -> bool

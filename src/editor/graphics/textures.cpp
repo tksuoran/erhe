@@ -34,7 +34,7 @@ void Textures::initialize_component()
         Component::get<erhe::application::Gl_context_provider>()
     };
 
-    background = load(fs::path("res") / "images" / "background.png");
+    background = load(std::filesystem::path("res") / "images" / "background.png");
 }
 
 auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
@@ -53,12 +53,12 @@ auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
 }
 
 auto Textures::load(
-    const fs::path& path
+    const std::filesystem::path& path
 ) -> shared_ptr<Texture>
 {
     if (
-        !fs::exists(path) ||
-        fs::is_empty(path)
+        !std::filesystem::exists(path) ||
+        std::filesystem::is_empty(path)
     )
     {
         return {};

@@ -15,8 +15,8 @@ class Motion_state_adapter
 public:
     explicit Motion_state_adapter(IMotion_state* motion_state);
 
-	void getWorldTransform(btTransform& worldTrans) const override;
-	void setWorldTransform(const btTransform& worldTrans) override;
+    void getWorldTransform(btTransform& worldTrans) const override;
+    void setWorldTransform(const btTransform& worldTrans) override;
 
 private:
     IMotion_state* m_motion_state{nullptr};

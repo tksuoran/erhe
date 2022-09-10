@@ -1,12 +1,12 @@
 #pragma once
 
-#include "erhe/toolkit/optional.hpp"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <tuple>
+#include <vector>
 
 namespace erhe::toolkit
 {
@@ -212,7 +212,7 @@ template <typename T>
     const T                              viewport_y,
     const T                              viewport_width,
     const T                              viewport_height
-) -> nonstd::optional<typename vector_types<T>::vec3>
+) -> std::optional<typename vector_types<T>::vec3>
 {
     using vec3 = typename vector_types<T>::vec3;
     using vec4 = typename vector_types<T>::vec4;
@@ -558,7 +558,7 @@ template <typename T>
     const typename vector_types<T>::vec3 P1,
     const typename vector_types<T>::vec3 Q0,
     const typename vector_types<T>::vec3 Q1
-) -> nonstd::optional<
+) -> std::optional<
     Closest_points<T>
 >
 {
@@ -593,7 +593,7 @@ template <typename T>
     const typename vector_types<T>::vec2 P0,
     const typename vector_types<T>::vec2 P1,
     const typename vector_types<T>::vec2 Q
-) -> nonstd::optional<typename vector_types<T>::vec2>
+) -> std::optional<typename vector_types<T>::vec2>
 {
     const auto u = P1 - P0;
     if (glm::dot(u, u) < std::numeric_limits<T>::epsilon())
@@ -609,7 +609,7 @@ template <typename T>
     const typename vector_types<T>::vec3 P0,
     const typename vector_types<T>::vec3 P1,
     const typename vector_types<T>::vec3 Q
-) -> nonstd::optional<typename vector_types<T>::vec3>
+) -> std::optional<typename vector_types<T>::vec3>
 {
     const auto u = P1 - P0;
     if (dot(u, u) < std::numeric_limits<T>::epsilon())
@@ -627,7 +627,7 @@ template <typename T>
     const typename vector_types<T>::vec2 P0,
     const typename vector_types<T>::vec2 P1,
     const typename vector_types<T>::vec2 Q
-) -> nonstd::optional<T>
+) -> std::optional<T>
 {
     typename vector_types<T>::vec2 PC;
     if (!closest_point<T>(P0, P1, Q, PC))
@@ -642,7 +642,7 @@ template <typename T>
     const typename vector_types<T>::vec3 P0,
     const typename vector_types<T>::vec3 P1,
     const typename vector_types<T>::vec3 Q
-) -> nonstd::optional<T>
+) -> std::optional<T>
 {
     typename vector_types<T>::vec3 PC;
     if (!closest_point<T>(P0, P1, Q, PC))
@@ -659,7 +659,7 @@ template <typename T>
     const typename vector_types<T>::vec3 point_on_plane,
     const typename vector_types<T>::vec3 ray_origin,
     const typename vector_types<T>::vec3 ray_direction
-) -> nonstd::optional<T>
+) -> std::optional<T>
 {
     const T denominator = glm::dot(plane_normal, ray_direction);
     if (std::abs(denominator) < std::numeric_limits<T>::epsilon())
@@ -674,7 +674,7 @@ template <typename T>
     const typename vector_types<T>::vec3 plane_normal,
     const typename vector_types<T>::vec3 point_on_plane,
     typename vector_types<T>::vec3       point_to_project
-) -> nonstd::optional<typename vector_types<T>::vec3>
+) -> std::optional<typename vector_types<T>::vec3>
 {
     const auto n = plane_normal;
     const auto p = point_on_plane;
@@ -738,25 +738,104 @@ class Bounding_sphere
 public:
     [[nodiscard]] auto volume() const
     {
-        return (4.0 / 3.0) * glm::pi<float>() * radius * radius * radius;
+        return (4.0f / 3.0f) * glm::pi<float>() * radius * radius * radius;
     }
 
     glm::vec3 center{0.0f};
     float     radius{0.0f};
 };
 
-class Point_source
+class Bounding_volume_source
 {
 public:
-    virtual auto point_count() const -> std::size_t = 0;
-    virtual auto get_point  (std::size_t index) const -> std::optional<glm::vec3> = 0;
+    virtual auto get_element_count      () const -> std::size_t = 0;
+    virtual auto get_element_point_count(std::size_t element_index) const -> std::size_t = 0;
+    virtual auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> = 0;
 };
 
 void calculate_bounding_volume(
-    const Point_source& point_source,
-    Bounding_box&       bounding_box,
-    Bounding_sphere&    bounding_sphere
+    const Bounding_volume_source& source,
+    Bounding_box&                 bounding_box,
+    Bounding_sphere&              bounding_sphere
 );
+
+class Bounding_volume_combiner
+    : public erhe::toolkit::Bounding_volume_source
+{
+public:
+    void add_point(const glm::mat4& transform, const glm::vec3 point)
+    {
+        m_offsets.push_back(m_points.size());
+        m_sizes.push_back(1);
+        m_points.push_back(glm::vec3{transform * glm::vec4{point, 1.0f}});
+    }
+
+    void add_box(const glm::mat4& transform, const glm::vec3 min_corner, const glm::vec3 max_corner)
+    {
+        const glm::vec3 a = glm::vec3{transform * glm::vec4{min_corner, 1.0f}};
+        const glm::vec3 b = glm::vec3{transform * glm::vec4{max_corner, 1.0f}};
+        m_offsets.push_back(m_points.size());
+        m_sizes.push_back(8);
+        m_points.push_back(glm::vec3{a.x, a.y, a.z});
+        m_points.push_back(glm::vec3{a.x, a.y, b.z});
+        m_points.push_back(glm::vec3{a.x, b.y, a.z});
+        m_points.push_back(glm::vec3{a.x, b.y, b.z});
+        m_points.push_back(glm::vec3{b.x, a.y, a.z});
+        m_points.push_back(glm::vec3{b.x, a.y, b.z});
+        m_points.push_back(glm::vec3{b.x, b.y, a.z});
+        m_points.push_back(glm::vec3{b.x, b.y, b.z});
+    }
+
+    void add_sphere(const glm::mat4& transform, const glm::vec3 center, const float radius)
+    {
+        const glm::vec3 o = glm::vec3{transform * glm::vec4{center, 1.0f}};
+        const float     r = radius;
+        const float     k = std::sqrt(3.0f) / 3.0f;
+        const float     c = k * r;
+        const glm::vec3 a = o - glm::vec3{c, c, c};
+        const glm::vec3 b = o + glm::vec3{c, c, c};
+        m_offsets.push_back(m_points.size());
+        m_sizes.push_back(14);
+        m_points.push_back(glm::vec3{o.x, o.y, o.z - r});
+        m_points.push_back(glm::vec3{o.x, o.y, o.z + r});
+        m_points.push_back(glm::vec3{o.x, o.y - r, o.z});
+        m_points.push_back(glm::vec3{o.x, o.y + r, o.z});
+        m_points.push_back(glm::vec3{o.x - r, o.y, o.z});
+        m_points.push_back(glm::vec3{o.x + r, o.y, o.z});
+        m_points.push_back(glm::vec3{a.x, a.y, a.z});
+        m_points.push_back(glm::vec3{a.x, a.y, b.z});
+        m_points.push_back(glm::vec3{a.x, b.y, a.z});
+        m_points.push_back(glm::vec3{a.x, b.y, b.z});
+        m_points.push_back(glm::vec3{b.x, a.y, a.z});
+        m_points.push_back(glm::vec3{b.x, a.y, b.z});
+        m_points.push_back(glm::vec3{b.x, b.y, a.z});
+        m_points.push_back(glm::vec3{b.x, b.y, b.z});
+    }
+
+    // Implements Bounding_volume_source
+    auto get_element_count() const -> std::size_t override
+    {
+        return m_sizes.size();
+    }
+
+    auto get_element_point_count(const std::size_t element_index) const -> std::size_t override
+    {
+        return m_sizes.at(element_index);
+    }
+
+    auto get_point(
+        const std::size_t element_index,
+        const std::size_t point_index
+    ) const -> std::optional<glm::vec3> override
+    {
+        return m_points.at(m_offsets.at(element_index) + point_index);
+    }
+
+private:
+    std::vector<std::size_t> m_sizes;
+    std::vector<std::size_t> m_offsets;
+    std::vector<glm::vec3>   m_points;
+};
 
 static inline auto saturate(float value) -> float
 {

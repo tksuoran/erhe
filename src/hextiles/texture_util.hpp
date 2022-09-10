@@ -27,7 +27,7 @@ public:
 
 auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format;
 
-auto load_png    (const fs::path& path) -> Image;
-auto load_texture(const fs::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
+auto load_png    (const std::filesystem::path& path) -> Image;
+auto load_texture(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
 
 }

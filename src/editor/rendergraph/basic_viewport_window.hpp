@@ -91,7 +91,6 @@ private:
     // because layout is done by Viewport_windows.
     std::weak_ptr<Viewport_window> m_viewport_window;
     Viewport_windows*              m_viewport_windows;
-    bool                           m_is_hovered{false};
     erhe::scene::Viewport          m_viewport;
 };
 

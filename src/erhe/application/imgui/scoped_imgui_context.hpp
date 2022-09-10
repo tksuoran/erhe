@@ -23,7 +23,6 @@ public:
 
 private:
     Imgui_windows&              m_imgui_windows;
-    Imgui_viewport&             m_imgui_viewport;
     std::lock_guard<std::mutex> m_lock;
 };
 

@@ -27,7 +27,9 @@
 #include "windows/brushes.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
-#include "xr/headset_renderer.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_renderer.hpp"
+#endif
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
@@ -137,7 +139,7 @@ void Scene_builder::initialize_component()
     editor_scenes->register_scene_root(m_scene_root);
 }
 
-void Scene_builder::add_rendertarget_viewports()
+void Scene_builder::add_rendertarget_viewports(int count)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto& rendergraph             = get<erhe::application::Rendergraph  >();
@@ -145,100 +147,111 @@ void Scene_builder::add_rendertarget_viewports()
     const auto& primary_viewport_window = get_primary_viewport_window();
     const auto& test_scene_root         = get_scene_root();
 
-    auto rendertarget_node_1 = test_scene_root->create_rendertarget_node(
-        *m_components,
-        *primary_viewport_window.get(),
-        1920,
-        1080,
-        2000.0
-    );
+    if (count >= 1)
+    {
+        auto rendertarget_node_1 = test_scene_root->create_rendertarget_node(
+            *m_components,
+            *primary_viewport_window.get(),
+            1920,
+            1080,
+            2000.0
+        );
 
-    test_scene_root->scene().add_to_mesh_layer(
-        *test_scene_root->layers().rendertarget(),
-        rendertarget_node_1
-    );
+        test_scene_root->scene().add_to_mesh_layer(
+            *test_scene_root->layers().rendertarget(),
+            rendertarget_node_1
+        );
 
-    rendertarget_node_1->set_world_from_node(
-        erhe::toolkit::create_look_at(
-            glm::vec3{-0.3f, 1.1f, -0.3f},
-            glm::vec3{-2.0f, 0.7f, -2.0f},
-            glm::vec3{ 0.0f, 1.0f,  0.0f}
-        )
-    );
+        rendertarget_node_1->set_world_from_node(
+            erhe::toolkit::create_look_at(
+                glm::vec3{-0.3f, 1.1f, -0.3f},
+                glm::vec3{-2.0f, 0.7f, -2.0f},
+                glm::vec3{ 0.0f, 1.0f,  0.0f}
+            )
+        );
 
-    auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_viewport>(
-        rendertarget_node_1.get(),
-        "Rendertarget ImGui Viewport 1",
-        *m_components
-    );
+        auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_viewport>(
+            rendertarget_node_1.get(),
+            "Rendertarget ImGui Viewport 1",
+            *m_components
+        );
 
-    // true means we have imgui windows lock - assume we come from operations with imgui scoped context
-    imgui_windows->register_imgui_viewport(imgui_viewport_1);
+        // true means we have imgui windows lock - assume we come from operations with imgui scoped context
+        imgui_windows->register_imgui_viewport(imgui_viewport_1);
 
-    const auto& grid_tool = get<editor::Grid_tool>();
-    grid_tool->set_viewport(imgui_viewport_1.get());
-    grid_tool->show();
+        const auto& grid_tool = get<editor::Grid_tool>();
+        grid_tool->set_viewport(imgui_viewport_1.get());
+        grid_tool->show();
 
-    const auto camera_b = make_camera(
-        "Camera B",
-        glm::vec3{-7.0f, 1.0f, 0.0f},
-        glm::vec3{ 0.0f, 0.5f, 0.0f}
-    );
-    camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        const auto& headset_renderer = get<editor::Headset_renderer>();
+        if (headset_renderer)
+        {
+            headset_renderer->set_viewport(imgui_viewport_1.get());
+        }
+#endif
+    }
 
-    const auto& viewport_windows = get<editor::Viewport_windows>();
-    auto secondary_viewport_window = viewport_windows->create_viewport_window(
-        "Secondary Viewport",
-        test_scene_root,
-        camera_b.get(),
-        2 // low MSAA
-    );
-    auto secondary_imgui_viewport_window = viewport_windows->create_imgui_viewport_window(
-        secondary_viewport_window
-    );
-    //secondary_viewport_window->set_post_processing_enable(false); // TODO Post processing currently only handles one viewport
+    if (count >= 2)
+    {
+        const auto camera_b = make_camera(
+            "Camera B",
+            glm::vec3{-7.0f, 1.0f, 0.0f},
+            glm::vec3{ 0.0f, 0.5f, 0.0f}
+        );
+        camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
-    auto rendertarget_node_2 = test_scene_root->create_rendertarget_node(
-        *m_components,
-        *primary_viewport_window.get(),
-        1920,
-        1080,
-        2000.0
-    );
+        const auto& viewport_windows = get<editor::Viewport_windows>();
+        auto secondary_viewport_window = viewport_windows->create_viewport_window(
+            "Secondary Viewport",
+            test_scene_root,
+            camera_b,
+            2 // low MSAA
+        );
+        auto secondary_imgui_viewport_window = viewport_windows->create_imgui_viewport_window(
+            secondary_viewport_window
+        );
+        //secondary_viewport_window->set_post_processing_enable(false); // TODO Post processing currently only handles one viewport
 
-    test_scene_root->scene().add_to_mesh_layer(
-        *test_scene_root->layers().rendertarget(),
-        rendertarget_node_2
-    );
+        auto rendertarget_node_2 = test_scene_root->create_rendertarget_node(
+            *m_components,
+            *primary_viewport_window.get(),
+            1920,
+            1080,
+            2000.0
+        );
 
-    rendertarget_node_2->set_world_from_node(
-        erhe::toolkit::create_look_at(
-            glm::vec3{0.3f, 1.1f, -0.3f},
-            glm::vec3{2.0f, 0.7f, -2.0f},
-            glm::vec3{0.0f, 1.0f,  0.0f}
-        )
-    );
+        test_scene_root->scene().add_to_mesh_layer(
+            *test_scene_root->layers().rendertarget(),
+            rendertarget_node_2
+        );
 
-    auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_viewport>(
-        rendertarget_node_2.get(),
-        "Rendertarget ImGui Viewport 2",
-        *m_components
-    );
-    imgui_windows->register_imgui_viewport(imgui_viewport_2);
+        rendertarget_node_2->set_world_from_node(
+            erhe::toolkit::create_look_at(
+                glm::vec3{0.3f, 1.1f, -0.3f},
+                glm::vec3{2.0f, 0.7f, -2.0f},
+                glm::vec3{0.0f, 1.0f,  0.0f}
+            )
+        );
 
-    secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
-    secondary_imgui_viewport_window->show();
+        auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_viewport>(
+            rendertarget_node_2.get(),
+            "Rendertarget ImGui Viewport 2",
+            *m_components
+        );
+        imgui_windows->register_imgui_viewport(imgui_viewport_2);
 
-    // const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
+        secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
+        secondary_imgui_viewport_window->show();
 
-    rendergraph->connect(
-        erhe::application::Rendergraph_node_key::window,
-        secondary_imgui_viewport_window,
-        imgui_viewport_2
-    );
+        // const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
 
-    const auto& headset_renderer = get<editor::Headset_renderer>();
-    headset_renderer->set_viewport(imgui_viewport_2.get());
+        rendergraph->connect(
+            erhe::application::Rendergraph_node_key::window,
+            secondary_imgui_viewport_window,
+            imgui_viewport_2
+        );
+    }
 
     //secondary_viewport_window->show();
 #endif
@@ -292,7 +305,7 @@ void Scene_builder::setup_cameras()
         m_primary_viewport_window = viewport_windows->create_viewport_window(
             "Primary Viewport",
             m_scene_root,
-            camera_a.get(),
+            camera_a,
             std::min(2, configuration->graphics.msaa_sample_count), //// TODO Fix rendergraph
             configuration->graphics.post_processing
         );
@@ -371,7 +384,9 @@ void Scene_builder::make_brushes()
 
     std::unique_ptr<ITask_queue> execution_queue;
 
-    if (get<erhe::application::Configuration>()->threading.parallel_initialization)
+    const auto& configuration = get<erhe::application::Configuration>();
+
+    if (configuration->threading.parallel_initialization)
     {
         const std::size_t thread_count = std::min(
             8U,
@@ -384,8 +399,7 @@ void Scene_builder::make_brushes()
         execution_queue = std::make_unique<Serial_task_queue>();
     }
 
-    const auto& config = get<erhe::application::Configuration>()->scene;
-
+    const auto& config = configuration->scene;
     auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
         0.5f * vec3{config.floor_size, 1.0f, config.floor_size}
     );
@@ -454,8 +468,6 @@ void Scene_builder::make_brushes()
     }
 
     constexpr bool anisotropic_test_object = false;
-
-    constexpr float object_scale = 0.75f;
 
     if (config.gltf_files)
     {
@@ -531,7 +543,7 @@ void Scene_builder::make_brushes()
     if (config.platonic_solids)
     {
         execution_queue->enqueue(
-            [this]()
+            [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
@@ -540,18 +552,19 @@ void Scene_builder::make_brushes()
                     .normal_style = Normal_style::polygon_normals
                 };
                 constexpr bool instantiate = true;
+                const auto scale = config.object_scale;
 
-                make_brush(instantiate, make_dodecahedron (object_scale), context);
-                make_brush(instantiate, make_icosahedron  (object_scale), context);
-                make_brush(instantiate, make_octahedron   (object_scale), context);
-                make_brush(instantiate, make_tetrahedron  (object_scale), context);
-                make_brush(instantiate, make_cuboctahedron(object_scale), context);
+                make_brush(instantiate, make_dodecahedron (scale), context);
+                make_brush(instantiate, make_icosahedron  (scale), context);
+                make_brush(instantiate, make_octahedron   (scale), context);
+                make_brush(instantiate, make_tetrahedron  (scale), context);
+                make_brush(instantiate, make_cuboctahedron(scale), context);
                 make_brush(
                     instantiate,
-                    make_cube(object_scale),
+                    make_cube(scale),
                     context,
                     erhe::physics::ICollision_shape::create_box_shape_shared(
-                        vec3{object_scale * 0.5f}
+                        vec3{scale * 0.5f}
                     )
                 );
             }
@@ -575,12 +588,12 @@ void Scene_builder::make_brushes()
                 make_brush(
                     instantiate,
                     make_sphere(
-                        object_scale,
+                        config.object_scale,
                         8 * std::max(1, config.detail), // slice count
                         6 * std::max(1, config.detail)  // stack count
                     ),
                     context,
-                    erhe::physics::ICollision_shape::create_sphere_shape_shared(object_scale)
+                    erhe::physics::ICollision_shape::create_sphere_shape_shared(config.object_scale)
                 );
             }
         );
@@ -600,15 +613,15 @@ void Scene_builder::make_brushes()
                 };
                 constexpr bool instantiate = true;
 
-                constexpr float major_radius = 1.0f  * object_scale;
-                constexpr float minor_radius = 0.25f * object_scale;
+                const float major_radius = 1.0f  * config.object_scale;
+                const float minor_radius = 0.25f * config.object_scale;
 
                 auto torus_collision_volume_calculator = [=](float scale) -> float
                 {
                     return torus_volume(major_radius * scale, minor_radius * scale);
                 };
 
-                auto torus_collision_shape_generator = [](float scale)
+                auto torus_collision_shape_generator = [major_radius, minor_radius](float scale)
                 -> std::shared_ptr<erhe::physics::ICollision_shape>
                 {
                     ERHE_PROFILE_SCOPE("torus_collision_shape_generator");
@@ -684,10 +697,11 @@ void Scene_builder::make_brushes()
                     .normal_style = Normal_style::corner_normals // Normal_style::polygon_normals
                 };
                 constexpr bool instantiate = true;
+                const float scale = config.object_scale;
                 auto cylinder_geometry = make_cylinder(
-                    -1.0f * object_scale,
-                     1.0f * object_scale,
-                     1.0f * object_scale,
+                    -1.0f * scale,
+                     1.0f * scale,
+                     1.0f * scale,
                     true,
                     true,
                     9 * std::max(1, config.detail),
@@ -701,7 +715,7 @@ void Scene_builder::make_brushes()
                     context,
                     erhe::physics::ICollision_shape::create_cylinder_shape_shared(
                         erhe::physics::Axis::Y,
-                        vec3{object_scale, object_scale, object_scale}
+                        vec3{scale, scale, scale}
                     )
                 );
             }
@@ -721,9 +735,9 @@ void Scene_builder::make_brushes()
                 };
                 constexpr bool instantiate = true;
                 auto cone_geometry = make_cone( // always axis = x
-                    -object_scale,                    // min x
-                    object_scale,                     // max x
-                    object_scale,                     // bottom radius
+                    -config.object_scale,             // min x
+                    config.object_scale,              // max x
+                    config.object_scale,              // bottom radius
                     true,                             // use bottm
                     10 * std::max(1, config.detail),  // slice count
                      5 * std::max(1, config.detail)   // stack count

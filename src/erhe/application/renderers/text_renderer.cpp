@@ -257,9 +257,9 @@ void Text_renderer::initialize_component()
     {
         ERHE_PROFILE_SCOPE("shader");
 
-        const auto shader_path = fs::path("res") / fs::path("shaders");
-        const fs::path vs_path = shader_path / fs::path("text.vert");
-        const fs::path fs_path = shader_path / fs::path("text.frag");
+        const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
+        const std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
+        const std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
         Shader_stages::Create_info create_info{
             .name                      = "text",
             .interface_blocks          = { m_projection_block.get() },

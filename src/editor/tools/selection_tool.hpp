@@ -4,6 +4,7 @@
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/scene/node.hpp"
 
@@ -84,7 +85,8 @@ private:
 };
 
 class Selection_tool
-    : public erhe::components::Component
+    : public erhe::application::Imgui_window
+    , public erhe::components::Component
     , public Tool
 {
 public:
@@ -153,6 +155,9 @@ public:
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
+
+    // Implements Imgui_window
+    void imgui() override;
 
     // Public API
     [[nodiscard]] auto subscribe_selection_change_notification(On_selection_changed callback) -> Subcription;

@@ -2,10 +2,10 @@
 #include "erhe/graphics/log.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 
 #include <mango/mango.hpp>
 
+#include <filesystem>
 #include <fstream>
 
 namespace erhe::graphics
@@ -69,7 +69,7 @@ void PNG_loader::close()
 }
 
 auto PNG_loader::open(
-    const fs::path& path,
+    const std::filesystem::path& path,
     Image_info&     info
 ) -> bool
 {
@@ -118,7 +118,7 @@ PNG_writer::PNG_writer() = default;
 PNG_writer::~PNG_writer() = default;
 
 auto PNG_writer::write(
-    const fs::path&      path,
+    const std::filesystem::path&      path,
     const Image_info&    info,
     gsl::span<std::byte> data
 ) -> bool

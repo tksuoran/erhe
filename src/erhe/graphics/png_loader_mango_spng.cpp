@@ -2,13 +2,13 @@
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/defer.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include "spng.h"
 
 #include <mango/mango.hpp>
 
+#include <filesystem>
 #include <fstream>
 
 namespace erhe::graphics
@@ -74,7 +74,7 @@ void PNG_loader::close()
 }
 
 auto PNG_loader::open(
-    const fs::path& path,
+    const std::filesystem::path& path,
     Image_info&     info
 ) -> bool
 {
@@ -162,9 +162,9 @@ auto PNG_writer::stream_op(void* dst_src, std::size_t length) -> int
 }
 
 auto PNG_writer::write(
-    const fs::path&      path,
-    const Image_info&    info,
-    gsl::span<std::byte> data
+    const std::filesystem::path& path,
+    const Image_info&            info,
+    gsl::span<std::byte>         data
 ) -> bool
 {
     if (m_image_encoder == nullptr)

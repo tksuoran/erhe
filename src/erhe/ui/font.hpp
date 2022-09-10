@@ -3,11 +3,11 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/ui/bitmap.hpp"
 #include "erhe/ui/rectangle.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 
 #include <gsl/pointers>
 #include <gsl/span>
 
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string>
@@ -25,9 +25,9 @@ class Font final
 {
 public:
     Font(
-        const fs::path&    path,
-        const unsigned int size,
-        const float        outline_thickness = 0.0f
+        const std::filesystem::path& path,
+        const unsigned int           size,
+        const float                  outline_thickness = 0.0f
     );
 
     ~Font() noexcept;
@@ -164,9 +164,9 @@ private:
 
     std::map<uint32_t, size_t> m_glyph_to_char;
 
-    ft_char     m_chars_256[256];
-    std::string m_chars;
-    fs::path    m_path;
+    ft_char               m_chars_256[256];
+    std::string           m_chars;
+    std::filesystem::path m_path;
 
     bool         m_hinting          {true};
     unsigned int m_dpi              {96};

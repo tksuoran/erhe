@@ -38,6 +38,14 @@ namespace erhe::graphics
     class OpenGL_state_tracker;
 }
 
+namespace erhe::scene
+{
+    class Camera;
+    class Texture;
+    class Renderbuffer;
+    class OpenGL_state_tracker;
+}
+
 namespace editor
 {
 
@@ -83,10 +91,21 @@ public:
     Node_raytrace*                     raytrace_node{nullptr};
     std::shared_ptr<erhe::scene::Mesh> mesh         {};
     erhe::geometry::Geometry*          geometry     {nullptr};
-    nonstd::optional<glm::vec3>        position     {};
-    nonstd::optional<glm::vec3>        normal       {};
+    std::optional<glm::vec3>           position     {};
+    std::optional<glm::vec3>           normal       {};
     std::size_t                        primitive    {0};
     std::size_t                        local_index  {0};
+};
+
+class Scene_viewport
+{
+public:
+    [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
+    [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
+    [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* = 0;
+
+    [[nodiscard]] auto get_light_projections () const -> Light_projections*;
+    [[nodiscard]] auto get_shadow_texture    () const -> erhe::graphics::Texture*;
 };
 
 /// <summary>
@@ -99,19 +118,24 @@ public:
 /// Inputs:  "shadow_maps"
 /// Outputs: "viewport"
 class Viewport_window
-    : public erhe::application::Rendergraph_node
+    : public Scene_viewport
+    , public erhe::application::Rendergraph_node
 {
 public:
     static constexpr std::string_view c_type_name{"Viewport_window"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Viewport_window(
-        const std::string_view              name,
-        const erhe::components::Components& components,
-        const std::shared_ptr<Scene_root>&  scene_root,
-        erhe::scene::Camera*                camera
+        const std::string_view                      name,
+        const erhe::components::Components&         components,
+        const std::shared_ptr<Scene_root>&          scene_root,
+        const std::shared_ptr<erhe::scene::Camera>& camera
     );
     ~Viewport_window();
+
+    // Implements Scene_viewport
+    [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root> override;
+    [[nodiscard]] auto get_camera    () const -> std::shared_ptr<erhe::scene::Camera> override;
 
     // Implements Rendergraph_node
     [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
@@ -122,16 +146,14 @@ public:
     void connect            (Viewport_windows* viewport_windows);
     void set_window_viewport(int x, int y, int width, int height);
     void set_is_hovered     (bool is_hovered);
-    void set_camera         (erhe::scene::Camera* camera);
+    void set_camera         (const std::shared_ptr<erhe::scene::Camera>& camera);
 
     [[nodiscard]] auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
-    [[nodiscard]] auto project_to_viewport(const glm::dvec3 position_in_world) const -> nonstd::optional<glm::dvec3>;
-    [[nodiscard]] auto unproject_to_world (const glm::dvec3 position_in_window) const -> nonstd::optional<glm::dvec3>;
+    [[nodiscard]] auto project_to_viewport(const glm::dvec3 position_in_world) const -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto unproject_to_world (const glm::dvec3 position_in_window) const -> std::optional<glm::dvec3>;
     [[nodiscard]] auto is_hovered         () const -> bool;
-    [[nodiscard]] auto scene_root         () const -> Scene_root*;
     [[nodiscard]] auto window_viewport    () const -> const erhe::scene::Viewport&;
     [[nodiscard]] auto projection_viewport() const -> const erhe::scene::Viewport&;
-    [[nodiscard]] auto camera             () const -> erhe::scene::Camera*;
 
     // Pointer context API
 #if !defined(ERHE_RAYTRACE_LIBRARY_NONE)
@@ -146,17 +168,15 @@ public:
         glm::vec2    position_in_viewport
     );
 
-    [[nodiscard]] auto position_in_viewport            () const -> nonstd::optional<glm::vec2>;
-    [[nodiscard]] auto position_in_world_viewport_depth(double viewport_depth) const -> nonstd::optional<glm::dvec3>;
-    [[nodiscard]] auto near_position_in_world          () const -> nonstd::optional<glm::vec3>;
-    [[nodiscard]] auto far_position_in_world           () const -> nonstd::optional<glm::vec3>;
-    [[nodiscard]] auto position_in_world_distance      (float distance) const -> nonstd::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_viewport            () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto position_in_world_viewport_depth(double viewport_depth) const -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto near_position_in_world          () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto far_position_in_world           () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_world_distance      (float distance) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_hover                       (std::size_t slot) const -> const Hover_entry&;
     [[nodiscard]] auto get_nearest_hover               () const -> const Hover_entry&;
 
-    auto get_shadow_render_node() const -> Shadow_render_node*;
-    auto get_light_projections () const -> Light_projections*;
-    auto get_shadow_texture    () const -> erhe::graphics::Texture*;
+    auto get_shadow_render_node() const -> Shadow_render_node* override;
 
     void imgui_toolbar();
 
@@ -167,8 +187,6 @@ public:
     auto get_post_processing_node() -> std::shared_ptr<Post_processing_node>;
     void set_final_output        (std::weak_ptr<Rendergraph_node> node);
     auto get_final_output        () -> std::weak_ptr<Rendergraph_node>;
-
-    void clear() const;
 
 private:
     [[nodiscard]] auto get_override_shader_stages() const -> erhe::graphics::Shader_stages*;
@@ -193,20 +211,20 @@ private:
     std::weak_ptr<Rendergraph_node>                            m_final_output;
 
     std::string                 m_name;
-    std::shared_ptr<Scene_root> m_scene_root;
+
+    std::weak_ptr<Scene_root>          m_scene_root;
+    std::weak_ptr<erhe::scene::Camera> m_camera{};
 
     Viewport_windows*           m_viewport_windows      {nullptr};
     erhe::scene::Viewport       m_window_viewport       {0, 0, 0, 0, true};
     erhe::scene::Viewport       m_projection_viewport   {0, 0, 0, 0, true};
-    erhe::scene::Camera*        m_camera                {nullptr};
     Shader_stages_variant       m_shader_stages_variant {Shader_stages_variant::standard};
-    bool                        m_enable_post_processing{true};
     bool                        m_is_hovered            {false};
 
     // Pointer context data
-    nonstd::optional<glm::vec2> m_position_in_viewport;
-    nonstd::optional<glm::vec3> m_near_position_in_world;
-    nonstd::optional<glm::vec3> m_far_position_in_world;
+    std::optional<glm::vec2> m_position_in_viewport;
+    std::optional<glm::vec3> m_near_position_in_world;
+    std::optional<glm::vec3> m_far_position_in_world;
 
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
     std::size_t                                      m_nearest_slot{0};

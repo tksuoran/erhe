@@ -1,24 +1,24 @@
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/toolkit_log.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 
+#include <filesystem>
 #include <fstream>
 
 namespace erhe::toolkit
 {
 
-auto read(const fs::path& path) -> nonstd::optional<std::string>
+auto read(const std::filesystem::path& path) -> std::optional<std::string>
 {
     // Watch out for fio
     try
     {
         if (
-            fs::exists(path) &&
-            fs::is_regular_file(path) &&
-            !fs::is_empty(path)
+            std::filesystem::exists(path) &&
+            std::filesystem::is_regular_file(path) &&
+            !std::filesystem::is_empty(path)
         )
         {
-            const std::size_t file_length = fs::file_size(path);
+            const std::size_t file_length = std::filesystem::file_size(path);
             std::FILE* file =
 #if defined(_WIN32) // _MSC_VER
                 _wfopen(path.c_str(), L"rb");
@@ -49,7 +49,7 @@ auto read(const fs::path& path) -> nonstd::optional<std::string>
 
             std::fclose(file);
 
-            return nonstd::optional<std::string>(result);
+            return std::optional<std::string>(result);
         }
     }
     catch (...)

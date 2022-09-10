@@ -1,10 +1,10 @@
 #pragma once
 
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/filesystem.hpp"
 
 #include "rapidjson/document.h"
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -25,7 +25,7 @@ public:
     };
 
     Json_library();
-    explicit Json_library(const fs::path& path);
+    explicit Json_library(const std::filesystem::path& path);
 
     [[nodiscard]] auto make_geometry(
         const std::string& key_name

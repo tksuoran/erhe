@@ -87,8 +87,14 @@ auto Headset::begin_frame() -> Frame_timing
 
     m_xr_session->update_hand_tracking();
 
-    m_controller_pose.orientation = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.orientation);
-    m_controller_pose.position    = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.position);
+    if ((m_xr_instance->actions.aim_pose_space_location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT)
+    {
+        m_controller_pose.position    = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.position);
+    }
+    if ((m_xr_instance->actions.aim_pose_space_location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) == XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
+    {
+        m_controller_pose.orientation = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.orientation);
+    }
 
     auto* xr_frame_state = m_xr_session->wait_frame();
     if (xr_frame_state == nullptr)

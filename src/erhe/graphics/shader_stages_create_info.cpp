@@ -186,17 +186,17 @@ auto Shader_stages::Create_info::final_source(
     {
         try
         {
-            if (!fs::exists(shader.path))
+            if (!std::filesystem::exists(shader.path))
             {
                 log_program->warn("Cannot load shader from non-existing file '{}'", shader.path.string());
             }
             else
             {
-                if (!fs::is_regular_file(shader.path))
+                if (!std::filesystem::is_regular_file(shader.path))
                 {
                     log_program->warn("Cannot load shader from non-regular file '{}'", shader.path.string());
                 }
-                if (fs::is_empty(shader.path))
+                if (std::filesystem::is_empty(shader.path))
                 {
                     log_program->warn("Cannot load shader from empty path");
                 }

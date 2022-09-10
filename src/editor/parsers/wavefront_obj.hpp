@@ -5,8 +5,7 @@ namespace erhe::geometry
     class Geometry;
 }
 
-#include "erhe/toolkit/filesystem.hpp"
-
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,7 +13,7 @@ namespace erhe::geometry
 namespace editor {
 
 [[nodiscard]] auto parse_obj_geometry(
-    const fs::path& path
+    const std::filesystem::path& path
 ) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>;
 
 }

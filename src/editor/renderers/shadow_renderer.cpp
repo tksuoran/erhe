@@ -138,7 +138,7 @@ void Shadow_renderer::post_initialize()
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
 
 auto Shadow_renderer::create_node_for_viewport(
-    const std::shared_ptr<Viewport_window>& viewport_window
+    const std::shared_ptr<Scene_viewport>& scene_viewport
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& config        = m_configuration->shadow_renderer;
@@ -148,7 +148,7 @@ auto Shadow_renderer::create_node_for_viewport(
 
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
         *this,
-        viewport_window,
+        scene_viewport,
         resolution,
         light_count,
         reverse_depth
@@ -159,19 +159,19 @@ auto Shadow_renderer::create_node_for_viewport(
 }
 
 auto Shadow_renderer::get_node_for_viewport(
-    const Viewport_window* viewport_window
+    const Scene_viewport* scene_viewport
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    if (viewport_window == nullptr)
+    if (scene_viewport== nullptr)
     {
         return {};
     }
     auto i = std::find_if(
         m_nodes.begin(),
         m_nodes.end(),
-        [viewport_window](const auto& entry)
+        [scene_viewport](const auto& entry)
         {
-            return entry->viewport_window().get() == viewport_window;
+            return entry->get_scene_viewport().get() == scene_viewport;
         }
     );
     if (i == m_nodes.end())
@@ -199,33 +199,13 @@ void Shadow_renderer::next_frame()
     m_primitive_buffers    ->next_frame();
 }
 
-auto Shadow_render_node::viewport_window() const -> std::shared_ptr<Viewport_window>
-{
-    return m_viewport_window;
-}
-
-auto Shadow_render_node::light_projections() -> Light_projections&
-{
-    return m_light_projections;
-}
-
-auto Shadow_render_node::texture() const -> std::shared_ptr<erhe::graphics::Texture>
-{
-    return m_texture;
-}
-
-auto Shadow_render_node::viewport() const -> erhe::scene::Viewport
-{
-    return m_viewport;
-}
-
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections = Light_projections{
         parameters.lights,
         parameters.view_camera,
-        parameters.view_camera_viewport,
+        ////parameters.view_camera_viewport,
         parameters.light_camera_viewport,
         erhe::graphics::get_handle(
             parameters.texture,

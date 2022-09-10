@@ -6,6 +6,7 @@
 
 namespace erhe::application
 {
+    class Configuration;
     class Imgui_renderer;
     class Imgui_window;
     class Imgui_windows;
@@ -20,8 +21,10 @@ namespace erhe::components
 namespace editor
 {
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
 class Hand_tracker;
 class Headset_renderer;
+#endif
 class Rendertarget_node;
 class Viewport_window;
 
@@ -70,18 +73,20 @@ public:
 
 private:
     Rendertarget_node*                                 m_rendertarget_node;
+    std::shared_ptr<erhe::application::Configuration>  m_configuration;
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
     std::shared_ptr<erhe::application::Imgui_windows>  m_imgui_windows;
     std::shared_ptr<erhe::application::View>           m_view;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     std::shared_ptr<Hand_tracker>                      m_hand_tracker;
     std::shared_ptr<Headset_renderer>                  m_headset_renderer;
+    bool                                               m_last_mouse_finger{false};
+#endif
     std::string                                        m_name;
     std::string                                        m_imgui_ini_path;
-    bool                                               m_has_focus{false};
     double                                             m_time     {0.0};
     double m_last_mouse_x{0.0};
     double m_last_mouse_y{0.0};
-    bool   m_last_mouse_finger{false};
 };
 
 } // namespace erhe::application

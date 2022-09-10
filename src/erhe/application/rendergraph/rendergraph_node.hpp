@@ -42,7 +42,7 @@ public:
     int              key;
     std::vector<
         std::weak_ptr<Rendergraph_node>
-    >                producer_nodes;
+    >                producer_nodes{};
 };
 
 constexpr int rendergraph_max_depth = 10;

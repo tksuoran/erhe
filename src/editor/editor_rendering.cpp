@@ -483,7 +483,24 @@ void Editor_rendering::render_viewport_main(
 
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
-    context.window->clear();
+
+    m_pipeline_state_tracker->shader_stages.reset();
+    m_pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
+
+    const auto& clear_color = context.viewport_config->clear_color;
+    gl::clear_color(
+        clear_color[0],
+        clear_color[1],
+        clear_color[2],
+        clear_color[3]
+    );
+    gl::clear_stencil(0);
+    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
+    gl::clear(
+        gl::Clear_buffer_mask::color_buffer_bit |
+        gl::Clear_buffer_mask::depth_buffer_bit
+        //// TODO gl::Clear_buffer_mask::stencil_buffer_bit
+    );
 
     if (m_forward_renderer)
     {
@@ -538,21 +555,21 @@ void Editor_rendering::render_id(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        (!m_id_renderer)            ||
-        (context.window == nullptr) ||
-        (context.camera == nullptr)
+        (!m_id_renderer)                    ||
+        (context.scene_viewport == nullptr) ||
+        (context.camera         == nullptr)
     )
     {
         return;
     }
 
-    const auto* scene_root = context.window->scene_root();
-    if (scene_root == nullptr)
+    const auto scene_root = context.scene_viewport->get_scene_root();
+    if (!scene_root)
     {
         return;
     }
 
-    const auto position_opt = context.window->position_in_viewport();
+    const auto position_opt = context.viewport_window->position_in_viewport();
     if (!position_opt.has_value())
     {
         return;
@@ -582,18 +599,19 @@ void Editor_rendering::render_content(const Render_context& context)
 
     if (
         (!m_forward_renderer) ||
-        (context.window == nullptr) ||
-        (context.camera == nullptr) ||
+        (context.scene_viewport  == nullptr) ||
+        (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
     )
     {
+        log_render->error("Missing forward renderer / scene viewport / camera / viewport config - cannot render");
         return;
     }
 
-    const auto* scene_root = context.window->scene_root();
-
-    if (scene_root == nullptr)
+    const auto scene_root = context.scene_viewport->get_scene_root();
+    if (!scene_root)
     {
+        log_render->error("Missing scene root - cannot render");
         return;
     }
 
@@ -606,8 +624,9 @@ void Editor_rendering::render_content(const Render_context& context)
     const auto& materials        = material_library->materials();
 
     constexpr erhe::scene::Visibility_filter content_not_selected_filter{
-        .require_all_bits_set   = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::content,
-        .require_all_bits_clear = erhe::scene::Node_visibility::selected
+        .require_all_bits_set         = erhe::scene::Node_visibility::visible,
+        .require_at_least_one_bit_set = erhe::scene::Node_visibility::content | erhe::scene::Node_visibility::controller,
+        .require_all_bits_clear       = erhe::scene::Node_visibility::selected
     };
 
     if (render_style.polygon_fill)
@@ -628,12 +647,12 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
-                .light_projections = context.window->get_light_projections(),
+                .light_projections = context.scene_viewport->get_light_projections(),
                 .lights            = layers.light()->lights,
                 .materials         = materials,
                 .mesh_spans        = { layers.content()->meshes, layers.controller()->meshes },
                 .passes            = { &renderpass },
-                .shadow_texture    = context.window->get_shadow_texture(),
+                .shadow_texture    = context.scene_viewport->get_shadow_texture(),
                 .viewport          = context.viewport,
                 .visibility_filter = content_not_selected_filter,
             }
@@ -708,17 +727,16 @@ void Editor_rendering::render_rendertarget_nodes(
 
     if (
         (!m_forward_renderer) ||
-        (context.window == nullptr) ||
-        (context.camera == nullptr) ||
+        (context.scene_viewport  == nullptr) ||
+        (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
     )
     {
         return;
     }
 
-    const auto* scene_root = context.window->scene_root();
-
-    if (scene_root == nullptr)
+    const auto scene_root = context.scene_viewport->get_scene_root();
+    if (!scene_root)
     {
         return;
     }
@@ -728,11 +746,6 @@ void Editor_rendering::render_rendertarget_nodes(
     const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->material_library();
     const auto& materials        = material_library->materials();
-
-    constexpr erhe::scene::Visibility_filter content_not_selected_filter{
-        .require_all_bits_set   = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::content,
-        .require_all_bits_clear = erhe::scene::Node_visibility::selected
-    };
 
     m_forward_renderer->render(
         Forward_renderer::Render_parameters{
@@ -757,20 +770,19 @@ void Editor_rendering::render_selection(const Render_context& context)
     if (
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr) ||
-        (context.window          == nullptr)
+        (context.scene_viewport  == nullptr)
     )
     {
         return;
     }
 
-    auto* scene_root = context.window->scene_root();
-    if (scene_root == nullptr)
+    const auto scene_root = context.scene_viewport->get_scene_root();
+    if (!scene_root)
     {
         return;
     }
 
-    const auto& render_style = context.viewport_config->render_style_selected;
-
+    const auto& render_style     = context.viewport_config->render_style_selected;
     const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->material_library();
     const auto& materials        = material_library->materials();
@@ -804,12 +816,12 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
-                .light_projections = context.window->get_light_projections(),
+                .light_projections = context.scene_viewport->get_light_projections(),
                 .lights            = layers.light()->lights,
                 .materials         = materials,
                 .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &renderpass },
-                .shadow_texture    = context.window->get_shadow_texture(),
+                .shadow_texture    = context.scene_viewport->get_shadow_texture(),
                 .viewport          = context.viewport,
                 .visibility_filter = content_selected_filter
             }
@@ -888,8 +900,8 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        (context.camera == nullptr) ||
-        (context.window == nullptr)
+        (context.camera         == nullptr) ||
+        (context.scene_viewport == nullptr)
     )
     {
         return;
@@ -903,7 +915,11 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
 
     const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->material_library();
-    const auto& materials        = material_library->materials();
+    if (!material_library)
+    {
+        return;
+    }
+    const auto& materials = material_library->materials();
 
     if (layers.tool()->meshes.empty())
     {
@@ -941,17 +957,27 @@ void Editor_rendering::render_brush(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        (context.camera == nullptr) ||
-        (context.window == nullptr)
+        (context.camera         == nullptr) ||
+        (context.scene_viewport == nullptr)
     )
     {
         return;
     }
 
-    auto* scene_root = context.window->scene_root();
+    const auto scene_root = context.scene_viewport->get_scene_root();
+    if (!scene_root)
+    {
+        return;
+    }
+
     const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->material_library();
-    const auto& materials        = material_library->materials();
+    if (!material_library)
+    {
+        return;
+    }
+
+    const auto& materials = material_library->materials();
 
     if (layers.brush()->meshes.empty())
     {

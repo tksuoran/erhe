@@ -383,7 +383,7 @@ void Build_context_root::allocate_index_buffer()
 }
 
 class Geometry_point_source
-    : public erhe::toolkit::Point_source
+    : public erhe::toolkit::Bounding_volume_source
 {
 public:
     Geometry_point_source(
@@ -395,7 +395,7 @@ public:
     {
     }
 
-    auto point_count() const -> std::size_t override
+    auto get_element_count() const -> std::size_t override
     {
         if (m_point_locations == nullptr)
         {
@@ -404,9 +404,19 @@ public:
         return m_geometry.get_point_count();
     }
 
-    auto get_point(std::size_t index) const -> std::optional<glm::vec3> override
+    auto get_element_point_count(const std::size_t element_index) const -> std::size_t override
     {
-        const auto point_id = static_cast<erhe::geometry::Point_id>(index);
+        static_cast<void>(element_index);
+        return 1;
+    }
+
+    auto get_point(
+        const std::size_t element_index,
+        const std::size_t point_index
+    ) const -> std::optional<glm::vec3> override
+    {
+        static_cast<void>(point_index);
+        const auto point_id = static_cast<erhe::geometry::Point_id>(element_index);
         if (m_point_locations->has(point_id))
         {
             return m_point_locations->get(point_id);

@@ -104,7 +104,7 @@ void Swapchain::operator=(Swapchain&& other) noexcept
     other.m_xr_swapchain = XR_NULL_HANDLE;
 }
 
-auto Swapchain::acquire() -> nonstd::optional<Swapchain_image>
+auto Swapchain::acquire() -> std::optional<Swapchain_image>
 {
     ERHE_PROFILE_FUNCTION
 

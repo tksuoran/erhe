@@ -21,6 +21,10 @@ public:
     auto operator=(const Mouse_drag_binding&) -> Mouse_drag_binding& = delete;
     auto operator=(Mouse_drag_binding&& other) noexcept -> Mouse_drag_binding&;
 
+    [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse_drag; }
+
+    [[nodiscard]] auto get_button() const -> erhe::toolkit::Mouse_button;
+
     auto on_button(
         Command_context&                  context,
         const erhe::toolkit::Mouse_button button,

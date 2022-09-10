@@ -91,7 +91,7 @@ void Hover_tool::initialize_component()
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_hover_command);
-    commands->bind_command_to_mouse_motion(&m_hover_command);
+    commands->bind_command_to_update(&m_hover_command);
 }
 
 void Hover_tool::post_initialize()
@@ -122,8 +122,8 @@ auto Hover_tool::try_call() -> bool
     const auto& tool    = viewport_window->get_hover(Hover_entry::tool_slot);
     m_hover_content        = content.valid && content.mesh;
     m_hover_tool           = tool   .valid && tool   .mesh;
-    m_hover_position_world = content.valid ? content.position : nonstd::optional<vec3>{};
-    m_hover_normal         = content.valid ? content.normal   : nonstd::optional<vec3>{};
+    m_hover_position_world = content.valid ? content.position : std::optional<vec3>{};
+    m_hover_normal         = content.valid ? content.normal   : std::optional<vec3>{};
     if (
         (content.mesh      != m_hover_mesh           ) ||
         (content.primitive != m_hover_primitive_index)
@@ -166,11 +166,11 @@ void Hover_tool::tool_render(
         }
 
         if (
-            (context.window != nullptr) &&
+            (context.viewport_window != nullptr) &&
             m_hover_position_world.has_value()
         )
         {
-            const auto position_in_viewport_opt = context.window->project_to_viewport(m_hover_position_world.value());
+            const auto position_in_viewport_opt = context.viewport_window->project_to_viewport(m_hover_position_world.value());
             if (position_in_viewport_opt.has_value())
             {
                 const auto position_in_viewport = position_in_viewport_opt.value();

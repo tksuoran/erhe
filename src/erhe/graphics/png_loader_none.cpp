@@ -10,7 +10,7 @@ PNG_loader::~PNG_loader()
     close();
 }
 
-auto PNG_loader::open(const fs::path&, Image_info&) -> bool
+auto PNG_loader::open(const std::filesystem::path&, Image_info&) -> bool
 {
     return false;
 }

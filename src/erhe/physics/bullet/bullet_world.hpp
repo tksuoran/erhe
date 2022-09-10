@@ -23,12 +23,12 @@ public:
     void set_debug_draw(IDebug_draw* debug_draw);
 
     // Implements btIDebugDraw
-	auto getDefaultColors  () const -> DefaultColors                                            override;
-	void setDefaultColors  (const DefaultColors& /*colors*/)                                    override;
-    void drawLine          (const btVector3& from, const btVector3& to, const btVector3& color) override;
-    void draw3dText        (const btVector3& location, const char* textString)                  override;
-    void setDebugMode      (int debugMode)                                                      override;
-    auto getDebugMode      () const -> int                                                      override;
+    auto getDefaultColors() const -> DefaultColors                                            override;
+    void setDefaultColors(const DefaultColors& /*colors*/)                                    override;
+    void drawLine        (const btVector3& from, const btVector3& to, const btVector3& color) override;
+    void draw3dText      (const btVector3& location, const char* textString)                  override;
+    void setDebugMode    (int debugMode)                                                      override;
+    auto getDebugMode    () const -> int                                                      override;
 
     void drawContactPoint(
         const btVector3& PointOnB,

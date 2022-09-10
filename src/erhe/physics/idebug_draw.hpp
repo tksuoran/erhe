@@ -39,8 +39,8 @@ public:
     static constexpr int c_Draw_normals           = (1u << 14u);
     static constexpr int c_Draw_frames            = (1u << 15u);
 
-	virtual auto get_colors          () const -> Colors                                                = 0;
-	virtual void set_colors          (const Colors& colors)                                            = 0;
+    virtual auto get_colors          () const -> Colors                                                = 0;
+    virtual void set_colors          (const Colors& colors)                                            = 0;
     virtual void draw_line           (const glm::vec3 from, const glm::vec3 to, const glm::vec3 color) = 0;
     virtual void draw_3d_text        (const glm::vec3 location, const char* text)                      = 0;
     virtual void set_debug_mode      (int debug_mode)                                                  = 0;

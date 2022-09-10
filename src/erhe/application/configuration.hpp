@@ -139,6 +139,7 @@ public:
         int   floor_div                  {4};
         int   instance_count             {1};
         float instance_gap               {0.4f};
+        float object_scale               {1.0f};
         int   detail                     {2};
         bool  floor                      {true};
         bool  gltf_files                 {false};
@@ -156,6 +157,7 @@ public:
     {
     public:
         bool brushes             {true};
+        bool commands            {false};
         bool debug_view          {false};
         bool debug_visualizations{false};
         bool fly_camera          {false};

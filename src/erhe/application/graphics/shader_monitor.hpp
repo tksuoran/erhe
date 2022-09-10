@@ -50,7 +50,7 @@ private:
     void poll_thread();
 
     void add(
-        const fs::path&                                   path,
+        const std::filesystem::path&                      path,
         const erhe::graphics::Shader_stages::Create_info& create_info,
         gsl::not_null<erhe::graphics::Shader_stages*>     program
     );
@@ -86,12 +86,12 @@ private:
     class File
     {
     public:
-        fs::file_time_type                     last_time;
-        fs::path                               path;
+        std::filesystem::file_time_type        last_time;
+        std::filesystem::path                  path;
         std::set<Reload_entry, Compare_object> reload_entries;
     };
 
-    std::map<fs::path, File> m_files;
+    std::map<std::filesystem::path, File> m_files;
     std::mutex               m_mutex;
     std::thread              m_poll_filesystem_thread;
     std::vector<File*>       m_reload_list;

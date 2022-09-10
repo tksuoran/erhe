@@ -136,11 +136,11 @@ void Viewport_windows::erase(Basic_viewport_window* basic_viewport_window)
 }
 
 auto Viewport_windows::create_viewport_window(
-    const std::string_view             name,
-    const std::shared_ptr<Scene_root>& scene_root,
-    erhe::scene::Camera*               camera,
-    const int                          msaa_sample_count,
-    const bool                         enable_post_processing
+    const std::string_view                      name,
+    const std::shared_ptr<Scene_root>&          scene_root,
+    const std::shared_ptr<erhe::scene::Camera>& camera,
+    const int                                   msaa_sample_count,
+    const bool                                  enable_post_processing
 ) -> std::shared_ptr<Viewport_window>
 {
     const auto new_viewport_window = std::make_shared<Viewport_window>(
@@ -310,7 +310,7 @@ auto Viewport_windows::open_new_viewport_window(
             {
                 if (is_camera(entry))
                 {
-                    erhe::scene::Camera* camera = as_camera(entry.get());
+                    const auto camera = as_camera(entry);
                     create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
                     return true;
                 }
@@ -320,7 +320,7 @@ auto Viewport_windows::open_new_viewport_window(
         if (!m_scene_root->scene().cameras.empty())
         {
             const auto& camera = scene_root->scene().cameras.front();
-            create_viewport_window(name, scene_root, camera.get(), m_configuration->graphics.msaa_sample_count);
+            create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
         }
         return true;
     }

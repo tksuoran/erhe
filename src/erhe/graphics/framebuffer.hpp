@@ -1,11 +1,11 @@
 #pragma once
 
 #include "erhe/graphics/gl_objects.hpp"
-#include "erhe/toolkit/optional.hpp"
 
 #include <gsl/pointers>
 
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -86,10 +86,10 @@ public:
     void set_debug_label(const std::string& label);
 
 private:
-    nonstd::optional<Gl_framebuffer> m_gl_framebuffer;
-    std::vector<Attachment>          m_attachments;
-    std::thread::id                  m_owner_thread;
-    std::string                      m_debug_label;
+    std::optional<Gl_framebuffer> m_gl_framebuffer;
+    std::vector<Attachment>       m_attachments;
+    std::thread::id               m_owner_thread;
+    std::string                   m_debug_label;
 
     static std::mutex                s_mutex;
     static std::vector<Framebuffer*> s_all_framebuffers;

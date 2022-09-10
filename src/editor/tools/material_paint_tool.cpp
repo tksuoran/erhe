@@ -261,7 +261,7 @@ void Material_paint_tool::set_active_command(const int command)
 void Material_paint_tool::tool_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto& scene_root = m_editor_scenes->get_scene_root();
+    const auto& scene_root = m_editor_scenes->get_current_scene_root();
     if (!scene_root)
     {
         return;

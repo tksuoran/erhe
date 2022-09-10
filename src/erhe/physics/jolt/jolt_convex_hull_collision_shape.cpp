@@ -59,7 +59,7 @@ Jolt_convex_hull_collision_shape::Jolt_convex_hull_collision_shape(
         )
     }
 {
-	auto result = m_shape_settings.Create();
+    auto result = m_shape_settings.Create();
     ERHE_VERIFY(result.IsValid());
     m_jolt_shape = result.Get();
 }
@@ -76,7 +76,7 @@ Jolt_convex_hull_collision_shape::Jolt_convex_hull_collision_shape(
 //        pointData += stride / sizeof(float);
 //    }
 //    JPH::ConvexHullShapeSettings shape_settings{points};
-//	auto result = shape_settings.Create();
+//    auto result = shape_settings.Create();
 //    ERHE_VERIFY(result.IsValid());
 //    m_jolt_shape = result.Get();
 //}

@@ -220,12 +220,33 @@ auto get_event_handler(GLFWwindow* glfw_window) -> Event_handler*
     return nullptr;
 }
 
+[[nodiscard]] auto glfw_key_to_modifier(int key) -> int
+{
+    if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL)
+    {
+        return GLFW_MOD_CONTROL;
+    }
+    if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT)
+    {
+        return GLFW_MOD_SHIFT;
+    }
+    if (key == GLFW_KEY_LEFT_ALT || key == GLFW_KEY_RIGHT_ALT)
+    {
+        return GLFW_MOD_ALT;
+    }
+    if (key == GLFW_KEY_LEFT_SUPER || key == GLFW_KEY_RIGHT_SUPER)
+    {
+        return GLFW_MOD_SUPER;
+    }
+    return 0;
+}
+
 void key_event_callback(
     GLFWwindow* glfw_window,
     const int   key,
     const int   scancode,
     const int   action,
-    const int   glfw_modifiers
+    int         glfw_modifiers
 )
 {
     static_cast<void>(scancode);
@@ -238,6 +259,15 @@ void key_event_callback(
             case GLFW_PRESS:
             case GLFW_RELEASE:
             {
+                // Workaround: X11 does not include current pressed/released modifier key
+                // in 'mods' flags. https://github.com/glfw/glfw/issues/1630
+                if (int modifier_from_key = glfw_key_to_modifier(key))
+                {
+                    glfw_modifiers = (action == GLFW_PRESS)
+                        ? (glfw_modifiers | modifier_from_key)
+                        : (glfw_modifiers & ~modifier_from_key);
+                }
+
                 event_handler->on_key(
                     glfw_key_to_erhe(key),
                     glfw_modifiers_to_erhe(glfw_modifiers),

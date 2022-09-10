@@ -10,6 +10,7 @@
 #include "erhe/application/commands/mouse_drag_binding.hpp"
 #include "erhe/application/commands/mouse_motion_binding.hpp"
 #include "erhe/application/commands/mouse_wheel_binding.hpp"
+#include "erhe/application/commands/update_binding.hpp"
 #include "erhe/application/window.hpp"
 
 
@@ -49,11 +50,36 @@ void Commands::register_command(Command* const command)
     m_commands.push_back(command);
 }
 
+[[nodiscard]] auto Commands::get_commands() const -> const std::vector<Command*>&
+{
+    return m_commands;
+}
+
+[[nodiscard]] auto Commands::get_key_bindings() const -> const std::vector<Key_binding>&
+{
+    return m_key_bindings;
+}
+
+[[nodiscard]] auto Commands::get_mouse_bindings() const -> const std::vector<std::unique_ptr<Mouse_binding>>&
+{
+    return m_mouse_bindings;
+}
+
+[[nodiscard]] auto Commands::get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&
+{
+    return m_mouse_wheel_bindings;
+}
+
+[[nodiscard]] auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
+{
+    return m_update_bindings;
+}
+
 auto Commands::bind_command_to_key(
-    Command* const                   command,
-    const erhe::toolkit::Keycode     code,
-    const bool                       pressed,
-    const nonstd::optional<uint32_t> modifier_mask
+    Command* const                command,
+    const erhe::toolkit::Keycode  code,
+    const bool                    pressed,
+    const std::optional<uint32_t> modifier_mask
 ) -> erhe::toolkit::Unique_id<Key_binding>::id_type
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
@@ -112,6 +138,16 @@ auto Commands::bind_command_to_mouse_drag(
     return id;
 }
 
+auto Commands::bind_command_to_update(
+    Command* const                command
+) -> erhe::toolkit::Unique_id<Key_binding>::id_type
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    auto& binding = m_update_bindings.emplace_back(command);
+    return binding.get_id();
+}
+
 void Commands::remove_command_binding(
     const erhe::toolkit::Unique_id<Command_binding>::id_type binding_id
 )
@@ -151,6 +187,17 @@ void Commands::remove_command_binding(
         ),
         m_mouse_wheel_bindings.end()
     );
+    m_update_bindings.erase(
+        std::remove_if(
+            m_update_bindings.begin(),
+            m_update_bindings.end(),
+            [binding_id](const Update_binding& binding)
+            {
+                return binding.get_id() == binding_id;
+            }
+        ),
+        m_update_bindings.end()
+    );
 }
 
 void Commands::command_inactivated(Command* const command)
@@ -163,9 +210,9 @@ void Commands::command_inactivated(Command* const command)
     }
 }
 
-[[nodiscard]] auto Commands::mouse_input_sink() const -> Imgui_window*
+[[nodiscard]] auto Commands::input_sink() const -> Imgui_window*
 {
-    return m_mouse_input_sink;
+    return m_input_sink;
 }
 
 void Commands::on_key(
@@ -178,7 +225,7 @@ void Commands::on_key(
 
     Command_context context{
         *this,
-        m_mouse_input_sink
+        m_input_sink
     };
 
     for (auto& binding : m_key_bindings)
@@ -194,6 +241,48 @@ void Commands::on_key(
         erhe::toolkit::c_str(code),
         pressed ? "press" : "release"
     );
+}
+
+void Commands::on_update()
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    Command_context context{
+        *this,
+        m_input_sink,
+        m_last_mouse_button_bits,
+        m_last_mouse_position,
+        glm::vec2{0.0f, 0.0f}
+    };
+
+    for (auto& binding : m_update_bindings)
+    {
+        binding.on_update(context);
+    }
+
+    // Call mouse drag bindings if buttons are being held down
+    if (
+        (m_last_mouse_button_bits != 0) &&
+        (m_active_mouse_command != nullptr)
+    )
+    {
+        for (auto& binding : m_mouse_bindings)
+        {
+            if (
+                (binding->get_type() == Command_binding::Type::Mouse_drag) &&
+                (binding->get_command()->state() == State::Active)
+            )
+            {
+                auto*          drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
+                const auto     button       = drag_binding->get_button();
+                const uint32_t bit          = (1 << button);
+                if ((m_last_mouse_button_bits & bit) == bit)
+                {
+                    drag_binding->on_motion(context);
+                }
+            }
+        }
+    }
 }
 
 namespace {
@@ -247,7 +336,7 @@ void Commands::inactivate_ready_commands()
 
     Command_context context{
         *this,
-        m_mouse_input_sink
+        m_input_sink
     };
     for (auto* command : m_commands)
     {
@@ -258,27 +347,14 @@ void Commands::inactivate_ready_commands()
     }
 }
 
-void Commands::set_mouse_input_sink(Imgui_window* mouse_input_sink)
+void Commands::set_input_sink(Imgui_window* input_sink)
 {
-    m_mouse_input_sink = mouse_input_sink;
+    m_input_sink = input_sink;
+}
 
-//// #if defined(ERHE_GUI_LIBRARY_IMGUI)
-////     if (
-////         m_configuration->imgui.window_viewport &&
-////         (mouse_input_sink != nullptr)
-////     )
-////     {
-////         m_window_position           = glm::vec2{ImGui::GetWindowPos()};
-////         m_window_size               = glm::vec2{ImGui::GetWindowSize()};
-////         m_window_content_region_min = glm::vec2{ImGui::GetWindowContentRegionMin()};
-////         m_window_content_region_max = glm::vec2{ImGui::GetWindowContentRegionMax()};
-////     }
-////     else
-//// #endif
-////     {
-////         m_window_position = glm::vec2{0.0f, 0.0f};
-////         m_window_size     = glm::vec2{0.0f, 0.0f};
-////     }
+auto Commands::last_mouse_button_bits() const -> uint32_t
+{
+    return m_last_mouse_button_bits;
 }
 
 auto Commands::last_mouse_position() const -> glm::dvec2
@@ -327,14 +403,20 @@ void Commands::on_mouse_click(
 
     sort_mouse_bindings();
 
-////     if (m_active_mouse_command == nullptr)
-////     {
-////         return;
-////     }
+    const uint32_t bit_mask = (1 << button);
+    if (count == 0)
+    {
+        m_last_mouse_button_bits = m_last_mouse_button_bits & ~bit_mask;
+    }
+    else
+    {
+        m_last_mouse_button_bits = m_last_mouse_button_bits | bit_mask;
+    }
 
     Command_context context{
         *this,
-        m_mouse_input_sink,
+        m_input_sink,
+        m_last_mouse_button_bits,
         m_last_mouse_position
     };
     for (const auto& binding : m_mouse_bindings)
@@ -355,17 +437,13 @@ void Commands::on_mouse_wheel(const double x, const double y)
 
     sort_mouse_bindings();
 
-    //// if (m_active_mouse_command == nullptr)
-    //// {
-    ////     return;
-    //// }
-
     m_last_mouse_wheel_delta.x = x;
     m_last_mouse_wheel_delta.y = y;
 
     Command_context context{
         *this,
-        m_mouse_input_sink,
+        m_input_sink,
+        m_last_mouse_button_bits,
         m_last_mouse_position,
         m_last_mouse_wheel_delta
     };
@@ -387,7 +465,8 @@ void Commands::on_mouse_move(const double x, const double y)
     m_last_mouse_position = new_mouse_position;
     Command_context context{
         *this,
-        m_mouse_input_sink,
+        m_input_sink,
+        m_last_mouse_button_bits,
         m_last_mouse_position,
         m_last_mouse_position_delta
     };

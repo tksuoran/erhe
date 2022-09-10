@@ -17,7 +17,7 @@ Json_library::Json_library()
 {
 }
 
-Json_library::Json_library(const fs::path& path)
+Json_library::Json_library(const std::filesystem::path& path)
 {
     ERHE_PROFILE_FUNCTION
 

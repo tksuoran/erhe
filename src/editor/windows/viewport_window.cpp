@@ -349,7 +349,7 @@ auto Viewport_window::to_scene_content(
 
 auto Viewport_window::project_to_viewport(
     const glm::dvec3 position_in_world
-) const -> nonstd::optional<glm::dvec3>
+) const -> std::optional<glm::dvec3>
 {
     if (m_camera == nullptr)
     {
@@ -372,7 +372,7 @@ auto Viewport_window::project_to_viewport(
 
 auto Viewport_window::unproject_to_world(
     const glm::dvec3 position_in_window
-) const -> nonstd::optional<glm::dvec3>
+) const -> std::optional<glm::dvec3>
 {
     if (m_camera == nullptr)
     {
@@ -730,19 +730,19 @@ void Viewport_window::update_pointer_context(
 #endif
 }
 
-auto Viewport_window::near_position_in_world() const -> nonstd::optional<glm::vec3>
+auto Viewport_window::near_position_in_world() const -> std::optional<glm::vec3>
 {
     return m_near_position_in_world;
 }
 
-auto Viewport_window::far_position_in_world() const -> nonstd::optional<glm::vec3>
+auto Viewport_window::far_position_in_world() const -> std::optional<glm::vec3>
 {
     return m_far_position_in_world;
 }
 
 auto Viewport_window::position_in_world_distance(
     const float distance
-) const -> nonstd::optional<glm::vec3>
+) const -> std::optional<glm::vec3>
 {
     if (
         !m_near_position_in_world.has_value() ||
@@ -761,7 +761,7 @@ auto Viewport_window::position_in_world_distance(
 
 auto Viewport_window::position_in_world_viewport_depth(
     const double viewport_depth
-) const -> nonstd::optional<glm::dvec3>
+) const -> std::optional<glm::dvec3>
 {
     if (
         !m_position_in_viewport.has_value() ||
@@ -794,7 +794,7 @@ auto Viewport_window::position_in_world_viewport_depth(
     );
 }
 
-auto Viewport_window::position_in_viewport() const -> nonstd::optional<glm::vec2>
+auto Viewport_window::position_in_viewport() const -> std::optional<glm::vec2>
 {
     return m_position_in_viewport;
 }

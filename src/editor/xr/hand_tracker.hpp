@@ -4,11 +4,12 @@
 
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/optional.hpp"
 #include "erhe/xr/xr.hpp"
 
 #include <glm/glm.hpp>
 #include <imgui.h>
+
+#include <optional>
 
 namespace erhe::xr
 {
@@ -45,11 +46,19 @@ public:
     static const std::size_t count  = 7;
 };
 
-class Closest_finger
+class Finger_point
 {
 public:
-    std::size_t                          finger;
-    erhe::toolkit::Closest_points<float> closest_points;
+    std::size_t finger;
+    glm::vec3   finger_point;
+    glm::vec3   point;
+};
+
+class Joint
+{
+public:
+    glm::vec3 position;
+    glm::mat4 orientation;
 };
 
 class Hand
@@ -60,26 +69,17 @@ public:
     // Public API
     void update(erhe::xr::Headset& headset);
 
-    auto get_closest_point_to_line(
+    [[nodiscard]] auto get_closest_point_to_line(
         const glm::mat4 transform,
         const glm::vec3 p0,
         const glm::vec3 p1
-    ) const -> nonstd::optional<Closest_finger>;
+    ) const -> std::optional<Finger_point>;
 
-    auto get_closest_point_to_plane(
-        const glm::mat4 transform,
-        const glm::vec3 point_on_plane,
-        const glm::vec3 plane_normal
-    ) const -> nonstd::optional<Closest_finger>;
+    [[nodiscard]] auto get_joint(
+        XrHandJointEXT joint
+    ) const -> std::optional<Joint>;
 
-    auto get_closest_point_to_plane(
-        XrHandJointEXT  joint,
-        const glm::mat4 transform,
-        const glm::vec3 point_on_plane,
-        const glm::vec3 plane_normal
-    ) const -> nonstd::optional<Closest_finger>;
-
-    auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> nonstd::optional<float>;
+    auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
     void draw     (erhe::application::Line_renderer& line_renderer, const glm::mat4 transform);

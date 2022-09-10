@@ -16,9 +16,9 @@ namespace editor
 {
 
 class Grid_tool
-    : public erhe::components::Component
+    : public erhe::application::Imgui_window
+    , public erhe::components::Component
     , public Tool
-    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_type_name{"Grid_tool"};

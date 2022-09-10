@@ -90,7 +90,7 @@ void Programs::initialize_component()
         ? nullptr
         : textured_default_uniform_block.get();
 
-    m_shader_path = fs::path("res") / fs::path("shaders");
+    m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
 
     // TODO Make parallel task queue work
     m_queue = std::make_unique<Serial_task_queue>();
@@ -155,15 +155,15 @@ auto Programs::make_program(
     ERHE_PROFILE_FUNCTION
 
     SPDLOG_LOGGER_TRACE(log_programs, "Programs::make_program({})", create_info.name);
-    SPDLOG_LOGGER_TRACE(log_programs, "current directory is {}", fs::current_path().string());
+    SPDLOG_LOGGER_TRACE(log_programs, "current directory is {}", std::filesystem::current_path().string());
 
-    const fs::path vs_path = m_shader_path / fs::path(create_info.name + ".vert");
-    const fs::path gs_path = m_shader_path / fs::path(create_info.name + ".geom");
-    const fs::path fs_path = m_shader_path / fs::path(create_info.name + ".frag");
+    const std::filesystem::path vs_path = m_shader_path / std::filesystem::path(create_info.name + ".vert");
+    const std::filesystem::path gs_path = m_shader_path / std::filesystem::path(create_info.name + ".geom");
+    const std::filesystem::path fs_path = m_shader_path / std::filesystem::path(create_info.name + ".frag");
 
-    const bool vs_exists = fs::exists(vs_path);
-    const bool gs_exists = fs::exists(gs_path);
-    const bool fs_exists = fs::exists(fs_path);
+    const bool vs_exists = std::filesystem::exists(vs_path);
+    const bool gs_exists = std::filesystem::exists(gs_path);
+    const bool fs_exists = std::filesystem::exists(fs_path);
 
     const auto& shader_resources = *m_program_interface->shader_resources.get();
 
@@ -216,7 +216,7 @@ auto Programs::make_program(
     Shader_stages::Prototype prototype{create_info};
     if (!prototype.is_valid())
     {
-        log_programs->error("current directory is {}", fs::current_path().string());
+        log_programs->error("current directory is {}", std::filesystem::current_path().string());
         log_programs->error("Compiling shader program {} failed", create_info.name);
         return {};
     }

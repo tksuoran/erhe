@@ -41,7 +41,7 @@ gl::Program_interface program_interfaces[]
 
 [[nodiscard]] auto member_interface(
     const gl::Program_interface interface
-) -> nonstd::optional<gl::Program_interface>
+) -> std::optional<gl::Program_interface>
 {
     switch (interface)
     {
@@ -357,7 +357,7 @@ template <typename T>
 [[nodiscard]] auto Shader_stages::Prototype::try_compile_shader(
     const Shader_stages::Create_info&               create_info,
     const Shader_stages::Create_info::Shader_stage& shader
-) -> nonstd::optional<Gl_shader>
+) -> std::optional<Gl_shader>
 {
     Gl_shader gl_shader{shader.type};
     const auto gl_name = gl_shader.gl_name();

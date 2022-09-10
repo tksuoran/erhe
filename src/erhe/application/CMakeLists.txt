@@ -54,6 +54,8 @@ erhe_target_sources_grouped(
     rendergraph/texture_rendergraph_node.cpp
     rendergraph/texture_rendergraph_node.hpp
 
+    windows/commands_window.cpp
+    windows/commands_window.hpp
     windows/framebuffer_window.cpp
     windows/framebuffer_window.hpp
     windows/log_window.cpp
@@ -102,8 +104,6 @@ if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
         imgui/ImNodes.h
         imgui/ImNodesEz.cpp
         imgui/ImNodesEz.h
-        windows/imgui_demo_window.cpp
-        windows/imgui_demo_window.hpp
     )
     target_link_libraries(${_target}
     PUBLIC

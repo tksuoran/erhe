@@ -75,14 +75,14 @@ Light_projections::Light_projections()
 Light_projections::Light_projections(
     const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const erhe::scene::Camera*                                  view_camera,
-    const erhe::scene::Viewport&                                view_camera_viewport,
+    ////const erhe::scene::Viewport&                                view_camera_viewport,
     const erhe::scene::Viewport&                                light_texture_viewport,
     uint64_t                                                    shadow_map_texture_handle
 )
     : parameters
         {
             .view_camera          = view_camera,
-            .view_camera_viewport = view_camera_viewport,
+            //.view_camera_viewport = view_camera_viewport,
             .shadow_map_viewport  = light_texture_viewport
         }
     , shadow_map_texture_handle{shadow_map_texture_handle}
@@ -212,7 +212,6 @@ auto Light_buffer::update(
             continue;
         }
 
-        using Transform = erhe::scene::Transform;
         const mat4 texture_from_world    = (light_projection_transforms != nullptr)
             ? light_projection_transforms->texture_from_world.matrix()
             : mat4{1.0f};

@@ -22,40 +22,40 @@ vec3 fix(vec3 value)
 
 float rcp(float _v)
 {
-	return 1.0 / _v;
+    return 1.0 / _v;
 }
 
 vec3 rcp(vec3 _v)
 {
-	return vec3(1.0) / _v;
+    return vec3(1.0) / _v;
 }
 
 float luminance(vec3 _color)
 {
-	vec3 W = vec3(0.2125, 0.7154, 0.0721);
-	return dot(_color, W);
+    vec3 W = vec3(0.2125, 0.7154, 0.0721);
+    return dot(_color, W);
 }
 
 // https://github.com/hughsk/glsl-luma/blob/master/index.glsl
 float luma(vec3 _color)
 {
-	vec3 W = vec3(0.299, 0.587, 0.114);
-	return dot(_color, W);
+    vec3 W = vec3(0.299, 0.587, 0.114);
+    return dot(_color, W);
 }
 
 vec3 tonemap(vec3 _c)
 {
-	return _c * rcp(max(_c.r, max(_c.g, _c.b)) + 1.0);
+    return _c * rcp(max(_c.r, max(_c.g, _c.b)) + 1.0);
 }
 
 vec3 tonemap_with_weight(vec3 _c, float _w)
 {
-	return _c * (_w * rcp(max(_c.r, max(_c.g, _c.b)) + 1.0));
+    return _c * (_w * rcp(max(_c.r, max(_c.g, _c.b)) + 1.0));
 }
 
 vec3 tonemap_invert(vec3 _c)
 {
-	return _c * rcp(1.0 - max(_c.r, max(_c.g, _c.b)));
+    return _c * rcp(1.0 - max(_c.r, max(_c.g, _c.b)));
 }
 
 vec3 tonemap_reinhard(vec3 color)

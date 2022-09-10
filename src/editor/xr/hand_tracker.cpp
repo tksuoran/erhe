@@ -137,14 +137,14 @@ auto Hand::get_closest_point_to_line(
     const glm::mat4 transform,
     const glm::vec3 p0,
     const glm::vec3 p1
-) const -> nonstd::optional<Closest_finger>
+) const -> std::optional<Finger_point>
 {
     if (!m_is_active)
     {
         return {};
     }
 
-    nonstd::optional<Closest_finger> result;
+    std::optional<Finger_point> result;
     float min_distance = std::numeric_limits<float>::max();
     for (size_t i = 0; i < XR_HAND_JOINT_COUNT_EXT; ++i)
     {
@@ -167,11 +167,9 @@ auto Hand::get_closest_point_to_line(
                 {
                     min_distance = distance;
                     result = {
-                        .finger = to_finger(joint),
-                        .closest_points = {
-                            .P = p,
-                            .Q = q
-                        }
+                        .finger       = to_finger(joint),
+                        .finger_point = p,
+                        .point        = q
                     };
                 }
             }
@@ -180,81 +178,115 @@ auto Hand::get_closest_point_to_line(
     return result;
 }
 
-auto Hand::get_closest_point_to_plane(
-    const glm::mat4 transform,
-    const glm::vec3 point_on_plane,
-    const glm::vec3 plane_normal
-) const -> nonstd::optional<Closest_finger>
-{
-    if (!m_is_active)
-    {
-        return {};
-    }
+//// auto Hand::get_closest_point_to_plane(
+////     const glm::mat4 transform,
+////     const glm::vec3 point_on_plane,
+////     const glm::vec3 plane_normal
+//// ) const -> std::optional<Closest_finger>
+//// {
+////     if (!m_is_active)
+////     {
+////         return {};
+////     }
+////
+////     std::optional<Closest_finger> result;
+////     float min_distance = std::numeric_limits<float>::max();
+////     for (size_t i = 0; i < XR_HAND_JOINT_COUNT_EXT; ++i)
+////     {
+////         const auto joint = static_cast<XrHandJointEXT>(i);
+////         const bool valid = is_valid(joint);
+////         if (valid)
+////         {
+////             const glm::vec3 pos{
+////                 m_joints[joint].location.pose.position.x,
+////                 m_joints[joint].location.pose.position.y,
+////                 m_joints[joint].location.pose.position.z
+////             };
+////             const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
+////             const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
+////             if (closest_point.has_value())
+////             {
+////                 const auto  q        = closest_point.value();
+////                 const float distance = glm::distance(p, q);
+////                 if (distance < min_distance)
+////                 {
+////                     min_distance = distance;
+////                     result = {
+////                         .finger = to_finger(joint),
+////                         .closest_points = {
+////                             .P = p,
+////                             .Q = q
+////                         }
+////                     };
+////                 }
+////             }
+////         }
+////     }
+////     return result;
+//// }
 
-    nonstd::optional<Closest_finger> result;
-    float min_distance = std::numeric_limits<float>::max();
-    for (size_t i = 0; i < XR_HAND_JOINT_COUNT_EXT; ++i)
-    {
-        const auto joint = static_cast<XrHandJointEXT>(i);
-        const bool valid = is_valid(joint);
-        if (valid)
-        {
-            const glm::vec3 pos{
-                m_joints[joint].location.pose.position.x,
-                m_joints[joint].location.pose.position.y,
-                m_joints[joint].location.pose.position.z
-            };
-            const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
-            const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
-            if (closest_point.has_value())
-            {
-                const auto  q        = closest_point.value();
-                const float distance = glm::distance(p, q);
-                if (distance < min_distance)
-                {
-                    min_distance = distance;
-                    result = {
-                        .finger = to_finger(joint),
-                        .closest_points = {
-                            .P = p,
-                            .Q = q
-                        }
-                    };
-                }
-            }
-        }
-    }
-    return result;
-}
+//// auto Hand::get_closest_point_to_plane(
+////     const XrHandJointEXT joint,
+////     const glm::mat4      transform,
+////     const glm::vec3      point_on_plane,
+////     const glm::vec3      plane_normal
+//// ) const -> std::optional<Closest_finger>
+//// {
+////     const bool valid = is_valid(joint);
+////     if (valid)
+////     {
+////         const glm::vec3 pos{
+////             m_joints[joint].location.pose.position.x,
+////             m_joints[joint].location.pose.position.y,
+////             m_joints[joint].location.pose.position.z
+////         };
+////         const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
+////         const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
+////         if (closest_point.has_value())
+////         {
+////             const auto q = closest_point.value();
+////             return Closest_finger{
+////                 .finger = to_finger(joint),
+////                 .closest_points = {
+////                     .P = p,
+////                     .Q = q
+////                 }
+////             };
+////         }
+////     }
+////     return {};
+//// }
 
-auto Hand::get_closest_point_to_plane(
-    const XrHandJointEXT joint,
-    const glm::mat4      transform,
-    const glm::vec3      point_on_plane,
-    const glm::vec3      plane_normal
-) const -> nonstd::optional<Closest_finger>
+[[nodiscard]] auto Hand::get_joint(
+    const XrHandJointEXT joint
+) const -> std::optional<Joint>
 {
     const bool valid = is_valid(joint);
     if (valid)
     {
-        const glm::vec3 pos{
-            m_joints[joint].location.pose.position.x,
-            m_joints[joint].location.pose.position.y,
-            m_joints[joint].location.pose.position.z
+#ifdef GLM_FORCE_QUAT_DATA_XYZW
+        glm::quat q{
+            m_joints[joint].location.pose.orientation.x,
+            m_joints[joint].location.pose.orientation.y,
+            m_joints[joint].location.pose.orientation.z,
+            m_joints[joint].location.pose.orientation.w
         };
-        const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
-        const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
-        if (closest_point.has_value())
-        {
-            const auto q = closest_point.value();
-            return Closest_finger{
-                .finger = to_finger(joint),
-                .closest_points = {
-                    .P = p,
-                    .Q = q
-                }
-            };
-        }
+#else
+        glm::quat q{
+            m_joints[joint].location.pose.orientation.w,
+            m_joints[joint].location.pose.orientation.x,
+            m_joints[joint].location.pose.orientation.y,
+            m_joints[joint].location.pose.orientation.z
+        };
+#endif
+        return Joint{
+            .position = glm::vec3{
+                m_joints[joint].location.pose.position.x,
+                m_joints[joint].location.pose.position.y,
+                m_joints[joint].location.pose.position.z
+            },
+            .orientation = glm::mat4{q}
+        };
     }
     return {};
 }
@@ -262,7 +294,7 @@ auto Hand::get_closest_point_to_plane(
 auto Hand::distance(
     const XrHandJointEXT lhs,
     const XrHandJointEXT rhs
-) const -> nonstd::optional<float>
+) const -> std::optional<float>
 {
     const auto lhs_joint = static_cast<XrHandJointEXT>(lhs);
     const auto rhs_joint = static_cast<XrHandJointEXT>(rhs);
@@ -338,6 +370,10 @@ void Hand::draw(
 
     line_renderer.set_line_color(m_color[Finger_name::little]);
     draw_joint_line_strip(transform, little_joints, line_renderer);
+
+    // constexpr uint32_t red   = 0xff0000ffu;
+    // constexpr uint32_t green = 0xff00ff00u;
+    // constexpr uint32_t blue  = 0xffff0000u;
 }
 
 void Hand::draw_joint_line_strip(
@@ -469,7 +505,7 @@ void Hand_tracker::tool_render(const Render_context& context)
         return;
     }
 
-    const auto camera = m_headset_renderer->root_camera();
+    const auto camera = m_headset_renderer->get_camera();
     if (!camera)
     {
         return;

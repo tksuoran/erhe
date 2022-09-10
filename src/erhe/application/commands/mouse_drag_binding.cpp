@@ -37,6 +37,11 @@ auto Mouse_drag_binding::operator=(Mouse_drag_binding&& other) noexcept -> Mouse
     return *this;
 }
 
+[[nodiscard]] auto Mouse_drag_binding::get_button() const -> erhe::toolkit::Mouse_button
+{
+    return m_button;
+}
+
 auto Mouse_drag_binding::on_button(
     Command_context&                  context,
     const erhe::toolkit::Mouse_button button,

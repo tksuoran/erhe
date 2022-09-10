@@ -7,7 +7,6 @@ erhe_target_sources_grouped(
     defer.cpp
     file.cpp
     file.hpp
-    filesystem.hpp
     math_util.cpp
     math_util.hpp
     toolkit_log.cpp

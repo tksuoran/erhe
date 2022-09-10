@@ -172,6 +172,12 @@ Imgui_viewport::~Imgui_viewport()
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+auto Imgui_viewport::want_capture_keyboard() const -> bool
+{
+    ImGuiIO& io = m_imgui_context->IO;
+    return io.WantCaptureKeyboard;
+}
+
 auto Imgui_viewport::want_capture_mouse() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
@@ -280,6 +286,7 @@ void Imgui_viewport::on_key(
     using erhe::toolkit::Keycode;
 
     ImGuiIO& io = m_imgui_context->IO;
+
     update_key_modifiers(io, modifier_mask);
     io.AddKeyEvent(from_erhe(keycode), pressed);
 }

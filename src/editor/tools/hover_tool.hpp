@@ -5,11 +5,11 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
-#include "erhe/toolkit/optional.hpp"
 
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace erhe::scene
 {
@@ -101,8 +101,8 @@ private:
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
     std::size_t                        m_hover_primitive_index{0};
-    nonstd::optional<glm::vec3>        m_hover_position_world;
-    nonstd::optional<glm::vec3>        m_hover_normal;
+    std::optional<glm::vec3>           m_hover_position_world;
+    std::optional<glm::vec3>           m_hover_normal;
     bool                               m_hover_content        {false};
     bool                               m_hover_tool           {false};
 

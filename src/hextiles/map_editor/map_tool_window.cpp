@@ -67,8 +67,8 @@ void Map_tool_window::imgui()
         return;
     }
 
-    auto mouse_input_sink = m_editor_view->mouse_input_sink();
-    if (mouse_input_sink != this)
+    auto input_sink = m_editor_view->input_sink();
+    if (input_sink != this)
     {
         return;
     }

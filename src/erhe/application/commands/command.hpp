@@ -2,7 +2,7 @@
 
 #include "erhe/application/commands/state.hpp"
 
-#include "erhe/toolkit/optional.hpp"
+#include <optional>
 
 namespace erhe::application {
 

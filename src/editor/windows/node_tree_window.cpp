@@ -62,22 +62,38 @@ void Node_tree_window::post_initialize()
 
 void Node_tree_window::clear_selection()
 {
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "clear_selection()"
-    );
+    SPDLOG_LOGGER_TRACE(log_node_properties, "clear_selection()");
 
     m_selection_tool->clear_selection();
 }
 
+void Node_tree_window::recursive_add_to_selection(
+    const std::shared_ptr<erhe::scene::Node>& node
+)
+{
+    m_selection_tool->add_to_selection(node);
+    for (const auto& child_node : node->children())
+    {
+        recursive_add_to_selection(child_node);
+    }
+}
+
 void Node_tree_window::select_all()
 {
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "select_all()"
-    );
+    SPDLOG_LOGGER_TRACE(log_node_properties, "select_all()");
 
-    //log_tools->warn("TODO: select_all");
+    m_selection_tool->clear_selection();
+    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    for (const auto& scene_root : scene_roots)
+    {
+        const auto& scene = scene_root->scene();
+        {
+            for (const auto& node : scene.root_node->children())
+            {
+                recursive_add_to_selection(node);
+            }
+        }
+    }
 }
 
 template <typename T>
@@ -146,6 +162,30 @@ void Node_tree_window::move_selection_after(
     //// );
 }
 
+namespace {
+
+[[nodiscard]] auto get_ancestor_in(
+    const std::shared_ptr<erhe::scene::Node>&              node,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& selection
+) -> std::shared_ptr<erhe::scene::Node>
+{
+    const auto& node_parent = node->parent().lock();
+    if (node_parent)
+    {
+        if (is_in(node_parent, selection))
+        {
+            return node_parent;
+        }
+        return get_ancestor_in(node_parent, selection);
+    }
+    else
+    {
+        return {};
+    }
+}
+
+} // anonymous namespace
+
 void Node_tree_window::try_add_to_attach(
     Compound_operation::Parameters&           compound_parameters,
     const std::shared_ptr<erhe::scene::Node>& target_node,
@@ -154,28 +194,50 @@ void Node_tree_window::try_add_to_attach(
 {
     SPDLOG_LOGGER_TRACE(
         log_node_properties,
-        "try_add_to_attach()"
+        "try_add_to_attach(target_node = {}, node = {})",
+        target_node ? target_node->name() : "(empty)",
+        node        ? node->name() : "(empty)"
     );
 
-    // Nodes cannot be attached to themselves
-    // Ancestors cannot be attached to descendants
-    if (
-        (node == target_node) ||
-        (target_node->is_ancestor(node.get()))
-    )
+    if (!node)
     {
+        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty node");
         return;
     }
 
-    // Ignore nodes if their parent is also in selection
-    const auto& node_parent = node->parent().lock();
-    if (node_parent)
+    if (!target_node)
     {
-        const auto& selection = m_selection_tool->selection();
-        if (is_in(node_parent, selection))
-        {
-            return;
-        }
+        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty target node");
+        return;
+    }
+
+    // Nodes cannot be attached to themselves
+    if (node == target_node)
+    {
+        SPDLOG_LOGGER_WARN(log_node_properties, "Nodes cannot be attached to themselves");
+        return;
+    }
+
+    // Ancestors cannot be attached to descendants
+    if (target_node->is_ancestor(node.get()))
+    {
+        SPDLOG_LOGGER_WARN(log_node_properties, "Ancestors cannot be attached to descendants");
+        return;
+    }
+
+    const auto& selection = m_selection_tool->selection();
+
+    // Ignore nodes if their ancestors is in selection
+    const auto ancestor_in_selection = get_ancestor_in(node, selection);
+    if (ancestor_in_selection)
+    {
+        SPDLOG_LOGGER_TRACE(
+            log_node_properties,
+            "Ignoring node {} because ancestor {} is in selection",
+            node->name(),
+            ancestor_in_selection->name()
+        );
+        return;
     }
 
     compound_parameters.operations.push_back(
@@ -230,11 +292,6 @@ void Node_tree_window::drag_and_drop_source(
 {
     ERHE_PROFILE_FUNCTION
 
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "drag_and_drop_source()"
-    );
-
     const auto node_id = node->get_id();
     m_tree_nodes.emplace(node_id, node);
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
@@ -271,11 +328,6 @@ static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs)
 
 void drag_and_drop_rectangle_preview(const ImRect rect)
 {
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "drag_and_drop_rectangle_preview()"
-    );
-
     const auto* g       = ImGui::GetCurrentContext();
     const auto* window  = g->CurrentWindow;
     const auto& payload = g->DragDropPayload;
@@ -302,11 +354,6 @@ void drag_and_drop_gradient_preview(
     const ImU32 bottom
 )
 {
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "drag_and_drop_gradient_preview()"
-    );
-
     const auto* g       = ImGui::GetCurrentContext();
     const auto* window  = g->CurrentWindow;
     const auto& payload = g->DragDropPayload;
@@ -331,11 +378,6 @@ auto Node_tree_window::drag_and_drop_target(
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION
-
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "drag_and_drop_target()"
-    );
 
     const auto  rect_min = ImGui::GetItemRectMin();
     const auto  rect_max = ImGui::GetItemRectMax();
@@ -417,7 +459,6 @@ void Node_tree_window::imgui_node_update(
             log_node_properties,
             "imgui_node_update() - no selection tool"
         );
-
         return;
     }
 
@@ -425,11 +466,8 @@ void Node_tree_window::imgui_node_update(
 
     drag_and_drop_source(node);
 
-    const bool shift_down     = ImGui::IsKeyDown(ImGuiKey_ModShift);
-    const bool ctrl_down      = ImGui::IsKeyDown(ImGuiKey_ModCtrl);
-    const bool up_pressed     = ImGui::IsKeyPressed(ImGuiKey_UpArrow);
-    const bool down_pressed   = ImGui::IsKeyPressed(ImGuiKey_DownArrow);
-    const bool home_pressed   = ImGui::IsKeyPressed(ImGuiKey_Home);
+    const bool shift_down     = ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift);
+    const bool ctrl_down      = ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl);
     const bool mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
     const bool focused        = ImGui::IsItemFocused();
     const bool hovered        = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
@@ -470,14 +508,15 @@ void Node_tree_window::imgui_node_update(
         }
         else
         {
-            SPDLOG_LOGGER_TRACE(
-                log_node_properties,
-                "click without modifier keys on node {} - selecting it",
-                node->name()
-            );
             const bool was_selected = node->is_selected();
             range_selection.reset();
             m_selection_tool->clear_selection();
+            SPDLOG_LOGGER_TRACE(
+                log_node_properties,
+                "mouse button release without modifier keys on node {} - {} selecting it",
+                node->name(),
+                was_selected ? "de" : ""
+            );
             if (!was_selected)
             {
                 m_selection_tool->add_to_selection(node);
@@ -488,7 +527,7 @@ void Node_tree_window::imgui_node_update(
 
     if (focused)
     {
-        if (up_pressed || down_pressed || home_pressed || down_pressed)
+        if (node != m_last_focus_node.lock())
         {
             if (shift_down)
             {
@@ -499,24 +538,25 @@ void Node_tree_window::imgui_node_update(
                 );
                 range_selection.set_terminator(node);
             }
-            else
-            {
-                SPDLOG_LOGGER_TRACE(
-                    log_node_properties,
-                    "key without modifier key on node {} - clearing range select and select",
-                    node->name()
-                );
-                range_selection.reset();
-                range_selection.set_terminator(node);
-            }
+            // else
+            // {
+            //     SPDLOG_LOGGER_TRACE(
+            //         log_node_properties,
+            //         "key without modifier key on node {} - clearing range select and select",
+            //         node->name()
+            //     );
+            //     range_selection.reset();
+            //     range_selection.set_terminator(node);
+            // }
         }
+        m_last_focus_node = node;
     }
 
     // CTRL-A to select all
-    if (hovered || focused)
+    if (ctrl_down)
     {
         const bool a_pressed = ImGui::IsKeyPressed(ImGuiKey_A);
-        if (ctrl_down && a_pressed)
+        if (a_pressed)
         {
             SPDLOG_LOGGER_TRACE(
                 log_node_properties,
@@ -563,10 +603,6 @@ auto Node_tree_window::node_items(
             m_icon_set->icon(*node);
         }
     }
-    //if (update)
-    //{
-    //    imgui_node_update(node);
-    //}
 
     const auto child_count = node->child_count();
     const bool is_leaf = (child_count == 0);
@@ -583,21 +619,26 @@ auto Node_tree_window::node_items(
             ? ImGuiTreeNodeFlags_Selected
             : ImGuiTreeNodeFlags_None)};
 
-    //const auto label     = fmt::format("{} {}##{}", node->name(), node->get_id(), node->get_id());
     bool node_open;
     {
         ERHE_PROFILE_SCOPE("TreeNodeEx");
         node_open = ImGui::TreeNodeEx(node->label().c_str(), node_flags);
+        // const std::string label = fmt::format(
+        //     "{}{}",
+        //     node->is_selected() ? "S." : "",
+        //     node->label().c_str()
+        // );
+        //node_open = ImGui::TreeNodeEx(label.c_str(), node_flags);
     }
 
     if (update)
     {
         ERHE_PROFILE_SCOPE("update");
-        if (ImGui::IsDragDropPayloadBeingAccepted())
+        const bool consumed_by_drag_and_drop = drag_and_drop_target(node);;
+        if (!consumed_by_drag_and_drop)
         {
-            drag_and_drop_target(node);
+            imgui_node_update(node);
         }
-        imgui_node_update(node);
     }
 
     return node_open;
@@ -663,8 +704,7 @@ void Node_tree_window::imgui()
         m_selection_tool->range_selection().begin();
     }
 
-    // TODO Replace with scene combo
-    //      to avoid cross scene drags and drops
+    // TODO Handle cross scene drags and drops
     const auto& scene_roots = m_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {

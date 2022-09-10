@@ -25,7 +25,7 @@ public:
     );
     ~Node_physics() noexcept override;
 
-	// Implements INode_attachment
+    // Implements INode_attachment
     [[nodiscard]] auto node_attachment_type() const -> const char* override;
     void on_node_transform_changed() override;
 

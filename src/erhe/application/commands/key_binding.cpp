@@ -6,10 +6,10 @@
 namespace erhe::application {
 
 Key_binding::Key_binding(
-    Command* const                   command,
-    const erhe::toolkit::Keycode     code,
-    const bool                       pressed,
-    const nonstd::optional<uint32_t> modifier_mask
+    Command* const                command,
+    const erhe::toolkit::Keycode  code,
+    const bool                    pressed,
+    const std::optional<uint32_t> modifier_mask
 )
     : Command_binding{command      }
     , m_code         {code         }
@@ -41,6 +41,16 @@ auto Key_binding::operator=(Key_binding&& other) noexcept -> Key_binding&
     m_pressed       = other.m_pressed;
     m_modifier_mask = other.m_modifier_mask;
     return *this;
+}
+
+[[nodiscard]] auto Key_binding::get_keycode() const -> erhe::toolkit::Keycode
+{
+    return m_code;
+}
+
+[[nodiscard]] auto Key_binding::get_pressed() const -> bool
+{
+    return m_pressed;
 }
 
 auto Key_binding::on_key(

@@ -84,15 +84,15 @@ public:
     class Actions
     {
     public:
-        XrActionSet          action_set;
-        XrAction             trigger_value;
-        XrActionStateFloat   trigger_value_state;
-        XrAction             squeeze_click;
-        XrActionStateBoolean squeeze_click_state;
-        XrAction             aim_pose;
-        XrActionStatePose    aim_pose_state;
-        XrSpace              aim_pose_space;
-        XrSpaceLocation      aim_pose_space_location;
+        XrActionSet          action_set             {};
+        XrAction             trigger_value          {};
+        XrActionStateFloat   trigger_value_state    {.currentState = 0.0f, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction             squeeze_click          {};
+        XrActionStateBoolean squeeze_click_state    {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction             aim_pose               {};
+        XrActionStatePose    aim_pose_state         {.isActive = XR_FALSE};
+        XrSpace              aim_pose_space         {};
+        XrSpaceLocation      aim_pose_space_location{.locationFlags = 0};
     };
 
     Paths   paths;

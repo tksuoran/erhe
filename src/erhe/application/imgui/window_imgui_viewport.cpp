@@ -142,20 +142,28 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
 
     menu();
 
-    bool& show_demo = m_imgui_windows->get_show_imgui_demo_window();
-    if (show_demo)
+    auto& imgui_builtin_windows = m_imgui_windows->get_imgui_builtin_windows();
+    if (imgui_builtin_windows.demo)
     {
-        ImGui::ShowDemoWindow(&show_demo);
+        ImGui::ShowDemoWindow(&imgui_builtin_windows.demo);
     }
 
-    bool& show_style_editor = m_imgui_windows->get_show_imgui_style_editor_window();
-    if (show_style_editor)
+    if (imgui_builtin_windows.style_editor)
     {
-        ImGui::Begin("Dear ImGui Style Editor", &show_style_editor);
+        ImGui::Begin("Dear ImGui Style Editor", &imgui_builtin_windows.style_editor);
         ImGui::ShowStyleEditor();
         ImGui::End();
     }
 
+    if (imgui_builtin_windows.metrics)
+    {
+        ImGui::ShowMetricsWindow(&imgui_builtin_windows.metrics);
+    }
+
+    if (imgui_builtin_windows.stack_tool)
+    {
+        ImGui::ShowStackToolWindow(&imgui_builtin_windows.stack_tool);
+    }
     return true;
 }
 

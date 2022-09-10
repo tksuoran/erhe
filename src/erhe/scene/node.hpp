@@ -1,10 +1,10 @@
 #pragma once
 
 #include "erhe/scene/transform.hpp"
-#include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -125,6 +125,7 @@ public:
     [[nodiscard]] auto world_from_parent         () const -> glm::mat4;
     [[nodiscard]] auto position_in_world         () const -> glm::vec4;
     [[nodiscard]] auto direction_in_world        () const -> glm::vec4;
+    [[nodiscard]] auto look_at                   (const Node& target) const -> glm::mat4;
     [[nodiscard]] auto transform_point_from_world_to_local    (const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto transform_direction_from_world_to_local(const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto is_selected        () const -> bool;
@@ -134,7 +135,7 @@ public:
     [[nodiscard]] auto child_count        () const -> std::size_t;
     [[nodiscard]] auto get_id             () const -> erhe::toolkit::Unique_id<Node>::id_type;
     [[nodiscard]] auto get_index_in_parent() const -> std::size_t;
-    [[nodiscard]] auto get_index_of_child (const Node* child) const -> nonstd::optional<std::size_t>;
+    [[nodiscard]] auto get_index_of_child (const Node* child) const -> std::optional<std::size_t>;
     [[nodiscard]] auto is_ancestor        (const Node* ancestor_candidate) const -> bool;
 
     void set_parent                (const std::weak_ptr<Node>& parent);

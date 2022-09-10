@@ -60,7 +60,7 @@ public:
     Light_projections(
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const erhe::scene::Camera*                                  view_camera,
-        const erhe::scene::Viewport&                                view_camera_viewport,
+        ////const erhe::scene::Viewport&                                view_camera_viewport,
         const erhe::scene::Viewport&                                light_texture_viewport,
         uint64_t                                                    shadow_map_texture_handle
     );

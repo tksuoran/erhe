@@ -85,7 +85,7 @@ Headset_view_resources::Headset_view_resources(
     );
 
     scene_root->scene().add(camera);
-    headset_renderer.root_camera()->attach(camera);
+    headset_renderer.get_camera()->attach(camera);
 
     is_valid = true;
 }

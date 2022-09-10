@@ -11,6 +11,17 @@ class Command;
 class Command_binding
 {
 public:
+    enum class Type : int
+    {
+        None         = 0,
+        Key          = 1,
+        Mouse        = 2,
+        Mouse_click  = 3,
+        Mouse_drag   = 4,
+        Mouse_motion = 5,
+        Mouse_wheel  = 6,
+        Update       = 7
+    };
     explicit Command_binding(Command* const command);
     virtual ~Command_binding() noexcept;
 
@@ -20,8 +31,9 @@ public:
     auto operator=(const Command_binding&) -> Command_binding& = delete;
     auto operator=(Command_binding&& other) noexcept -> Command_binding&;
 
-    [[nodiscard]] auto get_id     () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
-    [[nodiscard]] auto get_command() const -> Command*;
+    [[nodiscard]] virtual auto get_type   () const -> Type { return Type::None; }
+    [[nodiscard]] auto         get_id     () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
+    [[nodiscard]] auto         get_command() const -> Command*;
 
 private:
     Command*                                  m_command{nullptr};

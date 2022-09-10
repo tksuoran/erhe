@@ -17,6 +17,7 @@
 #include "windows/viewport_config.hpp"
 
 #include "erhe/application/commands/commands.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
@@ -50,8 +51,22 @@ void Range_selection::set_terminator(
         m_edited = true;
         return;
     }
-    if (m_secondary_terminator == node)
+    if (node == m_primary_terminator)
     {
+        log_selection->trace(
+            "ignoring setting terminator to {} - {} because it is already the primary terminator",
+            node->node_type(),
+            node->name()
+        );
+        return;
+    }
+    if (node == m_secondary_terminator)
+    {
+        log_selection->trace(
+            "ignoring setting terminator to {} - {} because it is already the secondary terminator",
+            node->node_type(),
+            node->name()
+        );
         return;
     }
     log_selection->trace("setting secondary terminator to {} {}", node->node_type(), node->name());
@@ -90,7 +105,7 @@ void Range_selection::end()
             (node == m_secondary_terminator)
         )
         {
-            log_selection->trace("    ! {} {} {}", node->node_type(), node->name(), node->get_id());
+            log_selection->trace("   T. {} {} {}", node->node_type(), node->name(), node->get_id());
             selection.push_back(node);
             between_terminators = !between_terminators;
             continue;
@@ -233,10 +248,11 @@ auto Selection_tool::range_selection() -> Range_selection&
 }
 
 Selection_tool::Selection_tool()
-    : erhe::components::Component{c_type_name}
-    , m_select_command           {*this}
-    , m_delete_command           {*this}
-    , m_range_selection          {*this}
+    : erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::components::Component    {c_type_name}
+    , m_select_command               {*this}
+    , m_delete_command               {*this}
+    , m_range_selection              {*this}
 {
 }
 
@@ -247,12 +263,16 @@ Selection_tool::~Selection_tool() noexcept
 void Selection_tool::declare_required_components()
 {
     require<erhe::application::Commands>();
+    require<erhe::application::Imgui_windows>();
     require<Tools>();
 }
 
 void Selection_tool::initialize_component()
 {
     get<Tools>()->register_tool(this);
+
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    hide();
 
     const auto commands = get<erhe::application::Commands>();
 
@@ -582,6 +602,28 @@ void Selection_tool::call_selection_change_subscriptions() const
     {
         entry.callback(m_selection);
     }
+}
+
+void Selection_tool::imgui()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    for (const auto& node : m_selection)
+    {
+        if (!node)
+        {
+            ImGui::BulletText("(empty)");
+        }
+        else
+        {
+            ImGui::BulletText(
+                "%s %s %s",
+                node->node_type(),
+                node->name().c_str(),
+                node->is_selected() ? "Ok" : "?!"
+            );
+        }
+    }
+#endif
 }
 
 }

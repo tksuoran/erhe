@@ -22,7 +22,7 @@ public:
             JPH::Vec3Arg{scale, scale, scale}
         }
     {
-	    auto result = m_shape_settings.Create();
+       auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }

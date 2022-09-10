@@ -169,18 +169,16 @@ void Rendergraph_window::imgui()
 
     const float zoom = canvas_state->Zoom;
 
-    //for (auto it = nodes.begin(); it != nodes.end();)
-    //`{
     const auto& render_graph_nodes = m_render_graph->get_nodes();
     ImNodes::Ez::PushStyleVar(ImNodesStyleVar_CurveStrength, m_curve_strength);
     for (const auto& node : render_graph_nodes)
     {
         // Start rendering node
-        const auto glm_position = node->get_position();
+        const auto   glm_position = node->get_position();
         const ImVec2 start_position{glm_position.x, glm_position.y};
-        const bool start_selected = node->get_selected();
-        ImVec2 position = start_position;
-        bool selected = start_selected;
+        const bool   start_selected = node->get_selected();
+        ImVec2       position = start_position;
+        bool         selected = start_selected;
         if (ImNodes::Ez::BeginNode(node.get(), node->name().c_str(), &position, &selected))
         {
             const auto& inputs  = node->get_inputs();
@@ -189,7 +187,12 @@ void Rendergraph_window::imgui()
             std::vector<ImNodes::Ez::SlotInfo> input_slot_infos;
             for (const auto& input : inputs)
             {
-                input_slot_infos.emplace_back(input.label.c_str(), input.key);
+                input_slot_infos.push_back(
+                    ImNodes::Ez::SlotInfo{
+                        .title = input.label.c_str(),
+                        .kind = input.key
+                    }
+                );
             }
 
             ImNodes::Ez::InputSlots(input_slot_infos.data(), static_cast<int>(input_slot_infos.size()));
@@ -253,7 +256,9 @@ void Rendergraph_window::imgui()
             std::vector<ImNodes::Ez::SlotInfo> output_slot_infos;
             for (const auto& output : outputs)
             {
-                output_slot_infos.emplace_back(output.label.c_str(), output.key);
+                output_slot_infos.push_back(
+                    ImNodes::Ez::SlotInfo{output.label.c_str(), output.key}
+                );
             }
 
             // Render output nodes first (order is important)

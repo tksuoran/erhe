@@ -44,8 +44,8 @@ void Physics_tool_drag_command::try_ready(
 }
 
 auto Physics_tool_drag_command::try_call(
-    erhe::application::Command_context&
-context) -> bool
+    erhe::application::Command_context& context
+) -> bool
 {
     if (state() == erhe::application::State::Inactive)
     {

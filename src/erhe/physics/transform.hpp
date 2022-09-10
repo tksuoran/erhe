@@ -37,7 +37,7 @@ inline auto operator*(const Transform& lhs, const Transform& rhs) -> Transform
 
 inline auto inverse(const Transform& transform) -> Transform
 {
-	const auto inverse_basis = glm::transpose(transform.basis);
+    const auto inverse_basis = glm::transpose(transform.basis);
     return Transform{inverse_basis, inverse_basis * -transform.origin};
 }
 

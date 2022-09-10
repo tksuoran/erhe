@@ -1,11 +1,11 @@
 #pragma once
 
 #include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/toolkit/optional.hpp"
 
 #include <gsl/pointers>
 
 #include <deque>
+#include <optional>
 #include <sstream>
 #include <string_view>
 #include <vector>
@@ -69,36 +69,36 @@ public:
 
     // Struct member
     Shader_resource(
-        const std::string_view              struct_member_name,
-        gsl::not_null<Shader_resource*>     struct_type,
-        const nonstd::optional<std::size_t> array_size = {},
-        Shader_resource*                    parent = nullptr
+        const std::string_view           struct_member_name,
+        gsl::not_null<Shader_resource*>  struct_type,
+        const std::optional<std::size_t> array_size = {},
+        Shader_resource*                 parent = nullptr
     );
 
     // Block (uniform block or shader storage block)
     Shader_resource(
-        const std::string_view              block_name,
-        const int                           binding_point,
-        const Type                          block_type,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           block_name,
+        const int                        binding_point,
+        const Type                       block_type,
+        const std::optional<std::size_t> array_size = {}
     );
 
     // Basic type
     Shader_resource(
-        std::string_view                    basic_name,
-        const gl::Uniform_type              basic_type,
-        const nonstd::optional<std::size_t> array_size = {},
-        Shader_resource*                    parent = nullptr
+        std::string_view                 basic_name,
+        const gl::Uniform_type           basic_type,
+        const std::optional<std::size_t> array_size = {},
+        Shader_resource*                 parent = nullptr
     );
 
     // Sampler
     Shader_resource(
-        const std::string_view              sampler_name,
-        gsl::not_null<Shader_resource*>     parent,
-        const int                           location,
-        const gl::Uniform_type              sampler_type,
-        const nonstd::optional<std::size_t> array_size = {},
-        const nonstd::optional<int>         dedicated_texture_unit = {}
+        const std::string_view           sampler_name,
+        gsl::not_null<Shader_resource*>  parent,
+        const int                        location,
+        const gl::Uniform_type           sampler_type,
+        const std::optional<std::size_t> array_size = {},
+        const std::optional<int>         dedicated_texture_unit = {}
     );
 
     // Constructor with no arguments creates default uniform block
@@ -113,7 +113,7 @@ public:
     [[nodiscard]] auto is_array                    () const -> bool;
     [[nodiscard]] auto type                        () const -> Type;
     [[nodiscard]] auto name                        () const -> const std::string&;
-    [[nodiscard]] auto array_size                  () const -> nonstd::optional<std::size_t>;
+    [[nodiscard]] auto array_size                  () const -> std::optional<std::size_t>;
     [[nodiscard]] auto basic_type                  () const -> gl::Uniform_type;
 
     // Only? for uniforms in default uniform block
@@ -139,71 +139,71 @@ public:
     static constexpr const std::size_t unsized_array = 0;
 
     auto add_struct(
-        const std::string_view              name,
-        gsl::not_null<Shader_resource*>     struct_type,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        gsl::not_null<Shader_resource*>  struct_type,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_sampler(
-        const std::string_view              name,
-        const gl::Uniform_type              sampler_type,
-        const nonstd::optional<int>         dedicated_texture_unit = {},
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const gl::Uniform_type           sampler_type,
+        const std::optional<int>         dedicated_texture_unit = {},
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_float(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec2(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec3(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_vec4(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_mat4(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_int(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec2(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec3(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uvec4(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
     auto add_uint64(
-        const std::string_view              name,
-        const nonstd::optional<std::size_t> array_size = {}
+        const std::string_view           name,
+        const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
 
 private:
@@ -212,12 +212,12 @@ private:
     void indent(std::stringstream& ss, const int indent_level) const;
 
     // Any shader type declaration
-    Type                          m_type{Type::default_uniform_block};
-    std::string                   m_name;
-    nonstd::optional<std::size_t> m_array_size; // 0 means unsized
-    Shader_resource*              m_parent          {nullptr};
-    std::size_t                   m_index_in_parent {     0};
-    std::size_t                   m_offset_in_parent{     0};
+    Type                       m_type{Type::default_uniform_block};
+    std::string                m_name;
+    std::optional<std::size_t> m_array_size; // 0 means unsized
+    Shader_resource*           m_parent          {nullptr};
+    std::size_t                m_index_in_parent {     0};
+    std::size_t                m_offset_in_parent{     0};
 
     // Basic type declaration
     //Precision              m_precision{Precision::highp};

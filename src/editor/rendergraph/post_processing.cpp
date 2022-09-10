@@ -303,7 +303,6 @@ Post_processing::Post_processing()
         0,
         erhe::graphics::Shader_resource::Type::uniform_block
     }
-    , m_offsets{m_parameter_block, m_source_texture_count}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -311,6 +310,7 @@ Post_processing::Post_processing()
             .location = 0
         }
     }
+    , m_offsets{m_parameter_block, m_source_texture_count}
 {
 }
 
@@ -341,11 +341,11 @@ void Post_processing::initialize_component()
     {
         ERHE_PROFILE_SCOPE("shader");
 
-        const auto shader_path = fs::path("res") / fs::path("shaders");
-        const fs::path vs_path         = shader_path / fs::path("post_processing.vert");
-        const fs::path x_fs_path       = shader_path / fs::path("downsample_x.frag");
-        const fs::path y_fs_path       = shader_path / fs::path("downsample_y.frag");
-        const fs::path compose_fs_path = shader_path / fs::path("compose.frag");
+        const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
+        const std::filesystem::path vs_path         = shader_path / std::filesystem::path("post_processing.vert");
+        const std::filesystem::path x_fs_path       = shader_path / std::filesystem::path("downsample_x.frag");
+        const std::filesystem::path y_fs_path       = shader_path / std::filesystem::path("downsample_y.frag");
+        const std::filesystem::path compose_fs_path = shader_path / std::filesystem::path("compose.frag");
 
         Shader_stages::Create_info x_create_info{
             .name             = "downsample_x",

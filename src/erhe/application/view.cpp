@@ -186,6 +186,14 @@ void View::on_key(
         pressed
     );
 
+    const bool imgui_capture_keyboard = get_imgui_capture_keyboard();
+    const bool has_input_sink         = (m_commands->input_sink() != nullptr);
+
+    if (imgui_capture_keyboard && !has_input_sink)
+    {
+        return;
+    }
+
     if (m_view_client != nullptr)
     {
         m_view_client->update_keyboard(pressed, code, modifier_mask);
@@ -200,6 +208,26 @@ void View::on_char(
 {
     log_input_event->trace("char input codepoint = {}", codepoint);
     m_imgui_windows->on_char(codepoint);
+}
+
+auto View::get_imgui_capture_keyboard() const -> bool
+{
+    const bool viewports_hosted_in_imgui =
+        m_configuration->window.show &&
+        m_configuration->imgui.window_viewport;
+
+    if (!viewports_hosted_in_imgui)
+    {
+        return false;
+    }
+
+    const auto& imgui_windows = get<Imgui_windows>();
+    if (!imgui_windows)
+    {
+        return false;
+    }
+
+    return imgui_windows->want_capture_keyboard();
 }
 
 auto View::get_imgui_capture_mouse() const -> bool
@@ -229,10 +257,10 @@ void View::on_mouse_click(
 {
     m_imgui_windows->on_mouse_click(static_cast<uint32_t>(button), count);
 
-    const bool imgui_capture_mouse  = get_imgui_capture_mouse();
-    const bool has_mouse_input_sink = (m_commands->mouse_input_sink() != nullptr);
+    const bool imgui_capture_mouse = get_imgui_capture_mouse();
+    const bool has_input_sink      = (m_commands->input_sink() != nullptr);
 
-    if (imgui_capture_mouse && !has_mouse_input_sink)
+    if (imgui_capture_mouse && !has_input_sink)
     {
         return;
     }
@@ -255,10 +283,10 @@ void View::on_mouse_wheel(const double x, const double y)
 {
     m_imgui_windows->on_mouse_wheel(x, y);
 
-    const bool imgui_capture_mouse  = get_imgui_capture_mouse();
-    const bool has_mouse_input_sink = (m_commands->mouse_input_sink() != nullptr);
+    const bool imgui_capture_mouse = get_imgui_capture_mouse();
+    const bool has_input_sink      = (m_commands->input_sink() != nullptr);
 
-    if (imgui_capture_mouse && !has_mouse_input_sink)
+    if (imgui_capture_mouse && !has_input_sink)
     {
         return;
     }
@@ -272,10 +300,10 @@ void View::on_mouse_move(const double x, const double y)
 {
     m_imgui_windows->on_mouse_move(x, y);
 
-    const bool imgui_capture_mouse  = get_imgui_capture_mouse();
-    const bool has_mouse_input_sink = (m_commands->mouse_input_sink() != nullptr);
+    const bool imgui_capture_mouse = get_imgui_capture_mouse();
+    const bool has_input_sink      = (m_commands->input_sink() != nullptr);
 
-    if (imgui_capture_mouse && !has_mouse_input_sink)
+    if (imgui_capture_mouse && !has_input_sink)
     {
         SPDLOG_LOGGER_TRACE(log_input_event_filtered, "ImGui WantCaptureMouse");
         return;

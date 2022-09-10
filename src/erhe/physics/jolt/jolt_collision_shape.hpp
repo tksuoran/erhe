@@ -2,7 +2,6 @@
 
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
-#include "erhe/toolkit/optional.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <Jolt/Jolt.h>
@@ -14,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace erhe::physics
 {
@@ -66,7 +66,7 @@ public:
     explicit Jolt_box_shape(const glm::vec3 half_extents)
         : m_shape_settings{to_jolt(half_extents)}
     {
-	    auto result = m_shape_settings.Create();
+        auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
@@ -88,7 +88,7 @@ public:
         : m_shape_settings{length * 0.5f, radius}
     {
         ERHE_VERIFY(axis == Axis::Y);
-	    auto result = m_shape_settings.Create();
+        auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
@@ -133,7 +133,7 @@ public:
         : m_shape_settings{half_extents.x, half_extents.y}
     {
         ERHE_VERIFY(axis == Axis::Y);
-	    auto result = m_shape_settings.Create();
+        auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
@@ -159,7 +159,7 @@ public:
     explicit Jolt_sphere_shape(const float radius)
         : m_shape_settings{radius}
     {
-	    auto result = m_shape_settings.Create();
+        auto result = m_shape_settings.Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
@@ -173,7 +173,7 @@ public:
 
 private:
     //float m_radius;
-	JPH::SphereShapeSettings m_shape_settings;
+    JPH::SphereShapeSettings m_shape_settings;
 };
 
 } // namespace erhe::physics
