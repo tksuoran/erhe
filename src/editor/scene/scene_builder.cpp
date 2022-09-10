@@ -164,8 +164,8 @@ void Scene_builder::add_rendertarget_viewports(int count)
 
         rendertarget_node_1->set_world_from_node(
             erhe::toolkit::create_look_at(
-                glm::vec3{-0.3f, 1.1f, -0.3f},
-                glm::vec3{-2.0f, 0.7f, -2.0f},
+                glm::vec3{-0.3f, 0.6f, -0.3f},
+                glm::vec3{ 0.0f, 0.7f,  0.0f},
                 glm::vec3{ 0.0f, 1.0f,  0.0f}
             )
         );
@@ -176,7 +176,6 @@ void Scene_builder::add_rendertarget_viewports(int count)
             *m_components
         );
 
-        // true means we have imgui windows lock - assume we come from operations with imgui scoped context
         imgui_windows->register_imgui_viewport(imgui_viewport_1);
 
         const auto& grid_tool = get<editor::Grid_tool>();
@@ -228,8 +227,8 @@ void Scene_builder::add_rendertarget_viewports(int count)
 
         rendertarget_node_2->set_world_from_node(
             erhe::toolkit::create_look_at(
-                glm::vec3{0.3f, 1.1f, -0.3f},
-                glm::vec3{2.0f, 0.7f, -2.0f},
+                glm::vec3{0.3f, 0.6f, -0.3f},
+                glm::vec3{0.0f, 0.7f,  0.0f},
                 glm::vec3{0.0f, 1.0f,  0.0f}
             )
         );

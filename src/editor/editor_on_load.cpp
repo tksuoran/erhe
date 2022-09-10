@@ -25,6 +25,7 @@
 #include "tools/debug_visualizations.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
+#include "tools/hotbar.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "tools/physics_tool.hpp"
@@ -145,6 +146,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Fly_camera_tool       >());
         m_components.add(make_shared<editor::Forward_renderer      >());
         m_components.add(make_shared<editor::Grid_tool             >());
+        m_components.add(make_shared<editor::Hotbar                >());
         m_components.add(make_shared<editor::Hover_tool            >());
         m_components.add(make_shared<editor::Icon_set              >());
         m_components.add(make_shared<editor::Id_renderer           >());

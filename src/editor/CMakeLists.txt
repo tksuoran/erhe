@@ -104,6 +104,8 @@ erhe_target_sources_grouped(
     tools/fly_camera_tool.hpp
     tools/grid_tool.cpp
     tools/grid_tool.hpp
+    tools/hotbar.cpp
+    tools/hotbar.hpp
     tools/hover_tool.cpp
     tools/hover_tool.hpp
     tools/material_paint_tool.cpp

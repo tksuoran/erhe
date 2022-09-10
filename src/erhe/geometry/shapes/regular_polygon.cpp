@@ -62,7 +62,8 @@ auto make_quad(const double edge) -> Geometry
 auto make_rectangle(
     const double width,
     const double height,
-    const bool   double_sided
+    const bool   front_face,
+    const bool   back_face
 ) -> Geometry
 {
     ERHE_PROFILE_FUNCTION
@@ -76,11 +77,20 @@ auto make_rectangle(
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 1.0f, 1.0f);
             geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height *  0.5), 0.0f, 0.0f, 1.0f);
 
-            geometry.make_polygon( {0, 1, 2, 3} );
+            // Texcoords X-flipped
+            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height *  0.5), 0.0f, 1.0f, 1.0f);
+            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 0.0f, 1.0f);
+            geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
+            geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
 
-            if (double_sided)
+            if (front_face)
             {
-                geometry.make_polygon( {3, 2, 1, 0} );
+                geometry.make_polygon( {0, 1, 2, 3} );
+            }
+
+            if (back_face)
+            {
+                geometry.make_polygon( {4, 5, 6, 7} );
             }
 
             geometry.make_point_corners();

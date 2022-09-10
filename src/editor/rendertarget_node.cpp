@@ -125,7 +125,8 @@ void Rendertarget_node::add_primitive(
     auto geometry = erhe::geometry::shapes::make_rectangle(
         m_local_width,
         m_local_height,
-        false
+        false,
+        true
     );
 
     const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
@@ -310,7 +311,7 @@ auto Rendertarget_node::update_pointer() -> bool
             return false;
         }
         const glm::vec2 hit_position_in_viewport{
-            m_texture->width() * b.x,
+            m_texture->width() * (1.0f - b.x),
             m_texture->height() * b.y
         };
 
@@ -349,7 +350,7 @@ auto Rendertarget_node::update_pointer() -> bool
         return {};
     }
     return glm::vec2{
-        m_texture->width() * b.x,
+        m_texture->width() * (1.0f - b.x),
         m_texture->height() * b.y
     };
 }
