@@ -48,7 +48,7 @@ namespace mango::simd
     static inline u32x2 u32x2_uload(const u32* s)
     {
         u32x2 temp;
-        std::memcpy(&temp, source, sizeof(temp));
+        std::memcpy(&temp, s, sizeof(temp));
         return temp;
     }
 

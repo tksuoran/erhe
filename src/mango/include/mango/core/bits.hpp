@@ -375,7 +375,7 @@ namespace mango
         return _tzcnt_u32(value);
     }
 
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) && 0
 
     static inline
     int u32_tzcnt(u32 value)
@@ -451,7 +451,7 @@ namespace mango
         return int(_lzcnt_u32(value));
     }
 
-#elif defined(__ARM_FEATURE_CLZ)
+#elif defined(__ARM_FEATURE_CLZ) && 0
 
     static inline
     u32 u32_mask_msb(u32 value)
@@ -586,7 +586,7 @@ namespace mango
         return u32_index_of_msb(value);
     }
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) && 0
 
     static inline
     u32 u32_reverse_bits(u32 value)
@@ -872,7 +872,7 @@ namespace mango
         return int(_tzcnt_u64(value));
     }
 
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) && 0
 
     static inline
     int u64_tzcnt(u64 value)
@@ -950,7 +950,7 @@ namespace mango
         return int(_lzcnt_u64(value));
     }
 
-#elif defined(__ARM_FEATURE_CLZ)
+#elif defined(__ARM_FEATURE_CLZ) && 0
 
     static inline
     u64 u64_mask_msb(u64 value)
@@ -1078,7 +1078,7 @@ namespace mango
         return u64_index_of_msb(value);
     }
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) && 0
 
     static inline
     u64 u64_reverse_bits(u64 value)
