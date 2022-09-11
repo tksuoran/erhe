@@ -1904,6 +1904,22 @@ namespace mango::simd
         return vreinterpretq_s64_u64(temp);
     }
 
+#if defined(__aarch64__)
+
+    static inline s64x2 neg(s64x2 a)
+    {
+        return vnegq_s64(a);
+    }
+
+#else
+
+    static inline s64x2 neg(s64x2 a)
+    {
+        return vsubq_s64(veorq_s64(a, a), a);
+    }
+
+#endif
+
     // bitwise
 
     static inline s64x2 bitwise_nand(s64x2 a, s64x2 b)
@@ -2151,10 +2167,15 @@ namespace mango::simd
 
     static inline u32 get_mask(mask16x8 a)
     {
+#if 1
         uint32x4_t b = vreinterpretq_u32_u16(vshrq_n_u16(a, 15));
         uint64x2_t c = vreinterpretq_u64_u32(vsraq_n_u32(b, b, 15));
         uint8x16_t d = vreinterpretq_u8_u64(vsraq_n_u64(c, c, 30));
         return vgetq_lane_u8(d, 0) | vgetq_lane_u8(d, 8) << 4;
+#else
+        const uint16x8_t mask = { 1, 2, 4, 8, 16, 32, 64, 128 };
+        return u32(vaddvq_u16(vandq_u16(a, mask)));
+#endif
     }
 
 #ifdef __aarch64__
@@ -2222,12 +2243,17 @@ namespace mango::simd
 
     static inline u32 get_mask(mask32x4 a)
     {
+#if 1
         // a: 11111111111111111111111111111111 11111111111111111111111111111111 11111111111111111111111111111111 11111111111111111111111111111111
         // b: 00000000000000000000000000000001 00000000000000000000000000000001 00000000000000000000000000000001 00000000000000000000000000000001
         // c: 00000000000000000000000000000000 00000000000000000000000000000011 00000000000000000000000000000000 00000000000000000000000000000011
         uint64x2_t b = vreinterpretq_u64_u32(vshrq_n_u32(a, 31));
         uint32x4_t c = vreinterpretq_u32_u64(vsraq_n_u64(b, b, 31));
         return vgetq_lane_u32(c, 0) | (vgetq_lane_u32(c, 2) << 2);
+#else
+        const uint32x4_t mask = { 1, 2, 4, 8 };
+        return vaddvq_u32(vandq_u32(a, mask));
+#endif
     }
 
 #ifdef __aarch64__
@@ -2295,10 +2321,15 @@ namespace mango::simd
 
     static inline u32 get_mask(mask64x2 a)
     {
+#if 1
         // a:  1111111111111111111111111111111111111111111111111111111111111111 1111111111111111111111111111111111111111111111111111111111111111
         // b:  0000000000000000000000000000000000000000000000000000000000000001 0000000000000000000000000000000000000000000000000000000000000001
         uint32x4_t b = vreinterpretq_u32_u64(vshrq_n_u64(a, 63));
         return vgetq_lane_u32(b, 0) | (vgetq_lane_u32(b, 2) << 1);
+#else
+        const uint64x2_t mask = { 1, 2 };
+        return u32(vaddvq_u64(vandq_u64(a, mask)));
+#endif
     }
 
     static inline bool none_of(mask64x2 a)

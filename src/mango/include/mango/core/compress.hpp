@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <mango/core/configure.hpp>
+#include <mango/core/exception.hpp>
 #include <mango/core/memory.hpp>
 
 namespace mango
@@ -77,88 +78,105 @@ namespace mango
     // Level 10: maximum compression
     // Other levels are implementation defined
 
+    struct CompressionStatus : Status
+    {
+        size_t size = 0;
+
+        operator size_t () const
+        {
+            return size;
+        }
+    };
+
     namespace nocompress
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace lz4
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace lzo
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace zstd
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace bzip2
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace lzfse
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace lzma
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace lzma2
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace ppmd8
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
-    }
-
-    namespace deflate
-    {
-        size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     namespace zlib
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
-    namespace gzip
+    namespace deflate
     {
         size_t bound(size_t size);
-        size_t compress(Memory dest, ConstMemory source, int level = 6);
-        size_t decompress(Memory dest, ConstMemory source);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
+    }
+
+    namespace deflate_zlib
+    {
+        size_t bound(size_t size);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
+    }
+
+    namespace deflate_gzip
+    {
+        size_t bound(size_t size);
+        CompressionStatus compress(Memory dest, ConstMemory source, int level = 6);
+        CompressionStatus decompress(Memory dest, ConstMemory source);
     }
 
     // -----------------------------------------------------------------------
@@ -181,15 +199,16 @@ namespace mango
             LZMA,
             LZMA2,
             PPMD8,
-            DEFLATE,
             ZLIB,
-            GZIP,
+            DEFLATE,
+            DEFLATE_ZLIB,
+            DEFLATE_GZIP,
         } method = NONE;
         std::string name;
 
         size_t (*bound)(size_t size) = nullptr;
-        size_t (*compress)(Memory dest, ConstMemory source, int level) = nullptr;
-        size_t (*decompress)(Memory dest, ConstMemory source) = nullptr;
+        CompressionStatus (*compress)(Memory dest, ConstMemory source, int level) = nullptr;
+        CompressionStatus (*decompress)(Memory dest, ConstMemory source) = nullptr;
     };
 
     std::vector<Compressor> getCompressors();

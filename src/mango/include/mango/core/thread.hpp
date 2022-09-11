@@ -55,7 +55,7 @@ namespace mango
         ThreadPool(size_t size);
         ~ThreadPool();
 
-        static int getHardwareConcurrency();
+        static size_t getHardwareConcurrency();
         static ThreadPool& getInstance();
 
         int size() const;
@@ -74,8 +74,6 @@ namespace mango
         void wait(Queue* queue);
 
     private:
-        static ThreadPool m_static_instance;
-
         struct TaskQueue;
         alignas(64) TaskQueue* m_queues;
 
@@ -130,6 +128,8 @@ namespace mango
     public:
         ConcurrentQueue();
         ConcurrentQueue(const std::string& name, Priority priority = Priority::NORMAL);
+        ConcurrentQueue(ThreadPool& pool);
+        ConcurrentQueue(ThreadPool& pool, const std::string& name, Priority priority = Priority::NORMAL);
         ~ConcurrentQueue();
 
         template <class F, class... Args>

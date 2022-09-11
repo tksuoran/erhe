@@ -8,6 +8,7 @@
 #include <map>
 #include <algorithm>
 #include <mango/core/string.hpp>
+#include <mango/core/system.hpp>
 #include <mango/core/exception.hpp>
 #include <mango/core/pointer.hpp>
 #include <mango/filesystem/mapper.hpp>
@@ -24,6 +25,7 @@ namespace
     // interface to "unrar" library to do the decompression
     // -----------------------------------------------------------------
 
+    using namespace mango;
     using mango::Memory;
     using mango::ConstMemory;
     using mango::VirtualMemory;
@@ -298,7 +300,8 @@ namespace
                     const char* s = reinterpret_cast<const char*>(us);
                     p += filename_size;
 
-                    //printf("RAR version: %d, method: %d\n", version, method);
+                    debugPrint("[RAR] version: 0x%x, method: 0x%x\n", version, method);
+
                     if (isSupportedVersion())
                     {
                         if (flags & LHD_UNICODE)
@@ -312,6 +315,7 @@ namespace
                             filename = std::string(s, filename_size);
                         }
 
+                        debugPrint("  Filename: %s\n", filename.c_str());
                         std::replace(filename.begin(), filename.end(), '\\', '/');
                     }
 
@@ -347,17 +351,17 @@ namespace
 
         bool isSupportedVersion() const
         {
-            return method >= 0x30 && method <= 0x35 && version <= 36 && !filename.empty();
+            return method >= 0x30 && method <= 0x35 && version <= 36;
         }
     };
 
     struct FileHeader
     {
-        u64  packed_size;
-        u64  unpacked_size;
-        u32  crc;
-        u8   version;
-        u8   method;
+        u64 packed_size;
+        u64 unpacked_size;
+        u32 crc;
+        u8  version;
+        u8  method;
         bool is_rar5;
         std::string filename;
 
@@ -432,16 +436,19 @@ namespace mango::filesystem
                 if (!std::memcmp(ptr, rar4_signature, 7))
                 {
                     // RAR 4.x
+                    debugPrint("[RAR] Signature: 4\n");
                     parse_rar4(ptr + 7, end);
                 }
                 else if (!std::memcmp(ptr, rar5_signature, 8))
                 {
                     // RAR 5.0
+                    debugPrint("[RAR] Signature: 4\n");
                     parse_rar5(ptr + 8, end);
                 }
                 else
                 {
                     // Incorrect signature
+                    debugPrint("[RAR] Incorrect signature.\n");
                 }
 
                 for (auto& header : m_files)
@@ -482,26 +489,29 @@ namespace mango::filesystem
                     {
                         if (header.isSupportedVersion())
                         {
-                            FileHeader file;
-
-                            file.packed_size = header.packed_size;
-                            file.unpacked_size = header.unpacked_size;
-                            file.crc = header.file_crc;
-                            file.version = header.version;
-                            file.method  = header.method;
-                            file.is_rar5 = false;
-
-                            int dict_flags = (header.flags >> 5) & 7;
-                            file.folder = (dict_flags == 7);
-                            file.data = p;
-
-                            file.filename = header.filename;
-                            if (file.folder)
+                            if (!header.filename.empty())
                             {
-                                file.filename += "/";
-                            }
+                                FileHeader file;
 
-                            m_files.push_back(file);
+                                file.packed_size = header.packed_size;
+                                file.unpacked_size = header.unpacked_size;
+                                file.crc = header.file_crc;
+                                file.version = header.version;
+                                file.method  = header.method;
+                                file.is_rar5 = false;
+
+                                int dict_flags = (header.flags >> 5) & 7;
+                                file.folder = (dict_flags == 7);
+                                file.data = p;
+
+                                file.filename = header.filename;
+                                if (file.folder)
+                                {
+                                    file.filename += "/";
+                                }
+
+                                m_files.push_back(file);
+                            }
                         }
                         else
                         {

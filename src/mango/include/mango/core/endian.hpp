@@ -91,35 +91,35 @@ namespace mango
 
 #ifdef MANGO_LITTLE_ENDIAN
 
-    constexpr auto uload16le = uload16;
-    constexpr auto uload32le = uload32;
-    constexpr auto uload64le = uload64;
-    constexpr auto uload16be = uload16swap;
-    constexpr auto uload32be = uload32swap;
-    constexpr auto uload64be = uload64swap;
+    static constexpr auto uload16le = uload16;
+    static constexpr auto uload32le = uload32;
+    static constexpr auto uload64le = uload64;
+    static constexpr auto uload16be = uload16swap;
+    static constexpr auto uload32be = uload32swap;
+    static constexpr auto uload64be = uload64swap;
 
-    constexpr auto ustore16le = ustore16;
-    constexpr auto ustore32le = ustore32;
-    constexpr auto ustore64le = ustore64;
-    constexpr auto ustore16be = ustore16swap;
-    constexpr auto ustore32be = ustore32swap;
-    constexpr auto ustore64be = ustore64swap;
+    static constexpr auto ustore16le = ustore16;
+    static constexpr auto ustore32le = ustore32;
+    static constexpr auto ustore64le = ustore64;
+    static constexpr auto ustore16be = ustore16swap;
+    static constexpr auto ustore32be = ustore32swap;
+    static constexpr auto ustore64be = ustore64swap;
 
 #else
 
-    constexpr auto uload16le = uload16swap;
-    constexpr auto uload32le = uload32swap;
-    constexpr auto uload64le = uload64swap;
-    constexpr auto uload16be = uload16;
-    constexpr auto uload32be = uload32;
-    constexpr auto uload64be = uload64;
+    static constexpr auto uload16le = uload16swap;
+    static constexpr auto uload32le = uload32swap;
+    static constexpr auto uload64le = uload64swap;
+    static constexpr auto uload16be = uload16;
+    static constexpr auto uload32be = uload32;
+    static constexpr auto uload64be = uload64;
 
-    constexpr auto ustore16le = ustore16swap;
-    constexpr auto ustore32le = ustore32swap;
-    constexpr auto ustore64le = ustore64swap;
-    constexpr auto ustore16be = ustore16;
-    constexpr auto ustore32be = ustore32;
-    constexpr auto ustore64be = ustore64;
+    static constexpr auto ustore16le = ustore16swap;
+    static constexpr auto ustore32le = ustore32swap;
+    static constexpr auto ustore64le = ustore64swap;
+    static constexpr auto ustore16be = ustore16;
+    static constexpr auto ustore32be = ustore32;
+    static constexpr auto ustore64be = ustore64;
 
 #endif
 

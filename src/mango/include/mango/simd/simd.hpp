@@ -1,6 +1,6 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2021 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 #pragma once
 
@@ -100,7 +100,7 @@ namespace mango::simd
     struct scalar_vector
     {
         using scalar = ScalarType;
-        using vector = void;
+        using vector = ScalarType[VectorSize];
 
         enum
         {
@@ -111,7 +111,7 @@ namespace mango::simd
             is_composite = 0
         };
 
-        ScalarType data[VectorSize];
+        vector data;
 
         ScalarType & operator [] (int index)
         {
@@ -137,7 +137,7 @@ namespace mango::simd
     struct composite_vector
     {
         using scalar = typename VectorType::scalar;
-        using vector = void;
+        using vector = scalar[VectorType::size * 2];
 
         enum
         {

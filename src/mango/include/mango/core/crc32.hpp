@@ -1,6 +1,6 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2021 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 #pragma once
 
@@ -11,10 +11,14 @@ namespace mango
 {
 
     // Hardware acceleration support:
-    //
-    // - ARM CRC32 (crc32, crc32c)
-    // - Intel PCLMUL (crc32)
-    // - Intel SSE4.2 (crc32c)
+    // ---------------------------------------------------
+    //                   crc32   crc32c
+    // ---------------------------------------------------
+    // ARM CRC32          x       x
+    // Intel PCLMUL       x       -
+    // Intel SSE4.2       -       x
+
+    // NOTE: Initial crc default value is 0x0
 
     // CRC32
     u32 crc32(u32 crc, ConstMemory memory);

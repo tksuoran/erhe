@@ -1859,6 +1859,11 @@ namespace mango::simd
         return vec_avg(a, b);
     }
 
+    static inline s64x2 neg(s64x2 a)
+    {
+        return vec_sub(vec_xor(a.data, a.data), a.data);
+    }
+
     // bitwise
 
     static inline s64x2 bitwise_nand(s64x2 a, s64x2 b)

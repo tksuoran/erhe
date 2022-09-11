@@ -16,9 +16,9 @@ namespace mango::filesystem
     // extension registry
     // -----------------------------------------------------------------
 
-    //AbstractMapper* createMapperZIP(ConstMemory parent, const std::string& password);
-    //AbstractMapper* createMapperRAR(ConstMemory parent, const std::string& password);
-    //AbstractMapper* createMapperMGX(ConstMemory parent, const std::string& password);
+    AbstractMapper* createMapperZIP(ConstMemory parent, const std::string& password);
+    AbstractMapper* createMapperRAR(ConstMemory parent, const std::string& password);
+    AbstractMapper* createMapperMGX(ConstMemory parent, const std::string& password);
 
     using CreateMapperFunc = AbstractMapper* (*)(ConstMemory, const std::string&);
 
@@ -40,14 +40,15 @@ namespace mango::filesystem
 
     static std::vector<MapperExtension> g_extensions =
     {
-        //MapperExtension(createMapperZIP, ".zip"),
-        //MapperExtension(createMapperZIP, ".cbz"),
-        //MapperExtension(createMapperZIP, ".apk"),
-        //MapperExtension(createMapperZIP, ".zipx"),
-        //MapperExtension(createMapperMGX, ".mgx"),
-        //MapperExtension(createMapperMGX, ".snitch"),
-        //MapperExtension(createMapperRAR, ".rar"),
-        //MapperExtension(createMapperRAR, ".cbr"),
+        // tksuoran: Disabled in erhe
+        // MapperExtension(createMapperZIP, ".zip"),
+        // MapperExtension(createMapperZIP, ".cbz"),
+        // MapperExtension(createMapperZIP, ".apk"),
+        // MapperExtension(createMapperZIP, ".zipx"),
+        // MapperExtension(createMapperMGX, ".mgx"),
+        // MapperExtension(createMapperMGX, ".snitch"),
+        // MapperExtension(createMapperRAR, ".rar"),
+        // MapperExtension(createMapperRAR, ".cbr"),
     };
 
     static inline
@@ -122,10 +123,10 @@ namespace mango::filesystem
         if (!name.empty())
         {
             files.emplace_back(name, size, flags);
-
+ 
             const bool isFile = (flags & FileInfo::DIRECTORY) == 0;
             const bool isContainer = (flags & FileInfo::CONTAINER) != 0;
-
+ 
             if (isFile && !isContainer && name.back() != '/' && Mapper::isCustomMapper(name))
             {
                 // file is a container; add it into the index again

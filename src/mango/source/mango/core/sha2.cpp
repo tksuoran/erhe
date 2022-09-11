@@ -478,7 +478,8 @@ namespace
     // Generic C++ SHA-256
     // ----------------------------------------------------------------------------------------
 
-    constexpr u32 rotateRight(u32 value, int count)
+    static constexpr
+    u32 rotateRight(u32 value, int count)
     {
         return (value >> count) | (value << (32 - count));
     }

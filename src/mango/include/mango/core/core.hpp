@@ -11,6 +11,7 @@
 #include <mango/core/endian.hpp>
 #include <mango/core/pointer.hpp>
 //#include <mango/core/compress.hpp>
+//#include <mango/core/adler32.hpp>
 //#include <mango/core/crc32.hpp>
 //#include <mango/core/hash.hpp>
 //#include <mango/core/aes.hpp>

@@ -259,7 +259,7 @@ namespace mango
     // -----------------------------------------------------------------------
 
     template <size_t alignment>
-    constexpr inline
+    static constexpr
     uintptr_t align_pointer(uintptr_t pointer)
     {
         static_assert((alignment & (alignment - 1)) == 0, "alignment must be a power of two.");
@@ -268,7 +268,7 @@ namespace mango
     }
 
     template <size_t alignment>
-    constexpr inline
+    static constexpr
     const u8* align_pointer(const u8* pointer)
     {
         uintptr_t p = align_pointer<alignment>(reinterpret_cast<uintptr_t>(pointer));
@@ -276,7 +276,7 @@ namespace mango
     }
 
     template <size_t alignment>
-    constexpr inline
+    static constexpr
     u8* align_pointer(u8* pointer)
     {
         uintptr_t p = align_pointer<alignment>(reinterpret_cast<uintptr_t>(pointer));

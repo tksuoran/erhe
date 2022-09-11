@@ -19,7 +19,7 @@ namespace
         StringBuilder eliminates small-string construction overhead when
         the string is constructed one element at a time. A small temporary
         buffer is filled and flushed so that string does not have to
-        continuously grow it's capacity. The consturected string is not
+        continuously grow it's capacity. The constructed string is not
         a member so that optimizing compilers can utilize NRVO.
 
         Guardband is utilized so that insertions do not have to be checked

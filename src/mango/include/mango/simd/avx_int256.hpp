@@ -1398,6 +1398,7 @@ namespace detail {
     SIMD_COMPOSITE_FUNC2(s64x4, s64x4, sub)
     SIMD_COMPOSITE_FUNC2(s64x4, s64x4, avg)
     SIMD_COMPOSITE_FUNC2(s64x4, s64x4, avg_round)
+    SIMD_COMPOSITE_FUNC1(s64x4, s64x4, neg)
     SIMD_COMPOSITE_FUNC2(s64x4, s64x4, bitwise_nand)
     SIMD_COMPOSITE_FUNC2(s64x4, s64x4, bitwise_and)
     SIMD_COMPOSITE_FUNC2(s64x4, s64x4, bitwise_or)

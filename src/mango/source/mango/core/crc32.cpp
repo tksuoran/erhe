@@ -1,75 +1,645 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2021 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 #include <mango/core/crc32.hpp>
-#include <mango/core/exception.hpp>
 #include <mango/core/bits.hpp>
 #include <mango/core/endian.hpp>
 #include <mango/core/thread.hpp>
-
-    // ----------------------------------------------------------------------------------------
-    // configuration
-    // ----------------------------------------------------------------------------------------
-
-#if defined(__ARM_FEATURE_CRC32)
-    #define HARDWARE_U8_CRC32
-    #define HARDWARE_U8_CRC32C
-    #define HARDWARE_U64_CRC32
-    #define HARDWARE_U64_CRC32C
-#endif
-
-#if defined(__PCLMUL__) && defined(MANGO_ENABLE_SSE4_2)
-    #define HARDWARE_U64_CRC32
-#endif
-
-#if defined(MANGO_ENABLE_SSE4_2)
-    #define HARDWARE_U8_CRC32C
-    #define HARDWARE_U64_CRC32C
-#endif
 
 namespace
 {
     using namespace mango;
 
     // ----------------------------------------------------------------------------------------
-    // tables and constants
+    // ARMv8 Crypto ISA implementation
     // ----------------------------------------------------------------------------------------
 
-    /*
+#if defined(__ARM_FEATURE_CRC32) && defined(__ARM_FEATURE_CRYPTO)
 
-    constexpr u32 crc32_polynomial_little_endian = 0xedb88320;
-    constexpr u32 crc32c_polynomial_little_endian = 0x82f63b78;
+    #define HARDWARE_CRC32
+    #define HARDWARE_CRC32C
 
-    constexpr u32 crc32_polynomial_big_endian = 0x04c11db7;
-    constexpr u32 crc32c_polynomial_big_endian = 0x1edc6f41;
-
-    */
-
-    constexpr u32 crc32_combine_table [] =
+    inline
+    u32 u8_crc32(u32 crc, u8 data)
     {
-        0x1db71064,
-        0x3b6e20c8,
-        0x76dc4190,
-        0xedb88320, // <-- little-endian crc32 polynomial
+        return __crc32b(crc, data);
+    }
+
+    inline
+    u32 u64_crc32(u32 crc, u64 data)
+    {
+        return __crc32d(crc, data);
+    }
+
+    inline
+    u32 u8_crc32c(u32 crc, u8 data)
+    {
+        return __crc32cb(crc, data);
+    }
+
+    inline
+    u32 u64_crc32c(u32 crc, u64 data)
+    {
+        return __crc32cd(crc, data);
+    }
+
+    u32 crc32(u32 crc, const u8* address, size_t size)
+    {
+        crc = ~crc;
+
+        uintptr_t alignment = (0 - reinterpret_cast<uintptr_t>(address)) & 7;
+        if (alignment + 8 < size)
+        {
+            size -= alignment;
+            while (alignment-- > 0)
+            {
+                crc = u8_crc32(crc, *address++);
+            }
+
+            while (size >= 64)
+            {
+                u64 data0 = uload64le(address + 8 * 0);
+                u64 data1 = uload64le(address + 8 * 1);
+                u64 data2 = uload64le(address + 8 * 2);
+                u64 data3 = uload64le(address + 8 * 3);
+                u64 data4 = uload64le(address + 8 * 4);
+                u64 data5 = uload64le(address + 8 * 5);
+                u64 data6 = uload64le(address + 8 * 6);
+                u64 data7 = uload64le(address + 8 * 7);
+                crc = u64_crc32(crc, data0);
+                crc = u64_crc32(crc, data1);
+                crc = u64_crc32(crc, data2);
+                crc = u64_crc32(crc, data3);
+                crc = u64_crc32(crc, data4);
+                crc = u64_crc32(crc, data5);
+                crc = u64_crc32(crc, data6);
+                crc = u64_crc32(crc, data7);
+                address += 64;
+                size -= 64;
+            }
+
+            while (size >= 8)
+            {
+                u64 data = uload64le(address);
+                crc = u64_crc32(crc, data);
+                address += 8;
+                size -= 8;
+            }
+        }
+
+        while (size-- > 0)
+        {
+            crc = u8_crc32(crc, *address++);
+        }
+
+        return ~crc;
+    }
+
+    u32 crc32c(u32 crc, const u8* address, size_t size)
+    {
+        crc = ~crc;
+
+        uintptr_t alignment = (0 - reinterpret_cast<uintptr_t>(address)) & 7;
+        if (alignment + 8 < size)
+        {
+            size -= alignment;
+            while (alignment-- > 0)
+            {
+                crc = u8_crc32c(crc, *address++);
+            }
+
+            constexpr size_t SEGMENT_BYTES = 256;
+            constexpr size_t BLOCK_BYTES = 256 * 4 + 8;
+
+            const poly64_t k0 = 0x8d96551c;
+            const poly64_t k1 = 0xbd6f81f8;
+            const poly64_t k2 = 0xdcb17aa4;
+
+            while (size >= BLOCK_BYTES)
+            {
+                u32 crc0 = crc;
+                u32 crc1 = 0;
+                u32 crc2 = 0;
+                u32 crc3 = 0;
+
+                #define CRC32C_32BYTES(idx) \
+                    crc1 = u64_crc32c(crc1, uload64(address + SEGMENT_BYTES * 1 + (idx) * 8)); \
+                    crc2 = u64_crc32c(crc2, uload64(address + SEGMENT_BYTES * 2 + (idx) * 8)); \
+                    crc3 = u64_crc32c(crc3, uload64(address + SEGMENT_BYTES * 3 + (idx) * 8)); \
+                    crc0 = u64_crc32c(crc0, uload64(address + SEGMENT_BYTES * 0 + (idx) * 8));
+
+                CRC32C_32BYTES(0 * 8 + 0);
+                CRC32C_32BYTES(0 * 8 + 1);
+                CRC32C_32BYTES(0 * 8 + 2);
+                CRC32C_32BYTES(0 * 8 + 3);
+                CRC32C_32BYTES(0 * 8 + 4);
+                CRC32C_32BYTES(0 * 8 + 5);
+                CRC32C_32BYTES(0 * 8 + 6);
+                CRC32C_32BYTES(0 * 8 + 7);
+
+                CRC32C_32BYTES(1 * 8 + 0);
+                CRC32C_32BYTES(1 * 8 + 1);
+                CRC32C_32BYTES(1 * 8 + 2);
+                CRC32C_32BYTES(1 * 8 + 3);
+                CRC32C_32BYTES(1 * 8 + 4);
+                CRC32C_32BYTES(1 * 8 + 5);
+                CRC32C_32BYTES(1 * 8 + 6);
+                CRC32C_32BYTES(1 * 8 + 7);
+
+                CRC32C_32BYTES(2 * 8 + 0);
+                CRC32C_32BYTES(2 * 8 + 1);
+                CRC32C_32BYTES(2 * 8 + 2);
+                CRC32C_32BYTES(2 * 8 + 3);
+                CRC32C_32BYTES(2 * 8 + 4);
+                CRC32C_32BYTES(2 * 8 + 5);
+                CRC32C_32BYTES(2 * 8 + 6);
+                CRC32C_32BYTES(2 * 8 + 7);
+
+                CRC32C_32BYTES(3 * 8 + 0);
+                CRC32C_32BYTES(3 * 8 + 1);
+                CRC32C_32BYTES(3 * 8 + 2);
+                CRC32C_32BYTES(3 * 8 + 3);
+                CRC32C_32BYTES(3 * 8 + 4);
+                CRC32C_32BYTES(3 * 8 + 5);
+                CRC32C_32BYTES(3 * 8 + 6);
+                CRC32C_32BYTES(3 * 8 + 7);
+
+                #undef CRC32C_32BYTES
+
+                crc = u64_crc32c(crc3, uload64le(address + 1024));
+
+                u64 t2 = u64(vmull_p64(crc2, k2));
+                u64 t1 = u64(vmull_p64(crc1, k1));
+                u64 t0 = u64(vmull_p64(crc0, k0));
+
+                crc ^= u64_crc32c(0, t2);
+                crc ^= u64_crc32c(0, t1);
+                crc ^= u64_crc32c(0, t0);
+
+                address += BLOCK_BYTES;
+                size -= BLOCK_BYTES;
+            }
+
+            while (size >= 8)
+            {
+                u64 data = uload64le(address);
+                crc = u64_crc32c(crc, data);
+                address += 8;
+                size -= 8;
+            }
+        }
+
+        while (size-- > 0)
+        {
+            crc = u8_crc32c(crc, *address++);
+        }
+
+        return ~crc;
+    }
+
+#endif // defined(__ARM_FEATURE_CRC32) && defined(__ARM_FEATURE_CRYPTO)
+
+    // ----------------------------------------------------------------------------------------
+    // Intel SSE4.2 implementation
+    // ----------------------------------------------------------------------------------------
+
+#if defined(MANGO_ENABLE_SSE4_2)
+
+    #define HARDWARE_CRC32C
+
+    static constexpr int g_skip_blocks = 3;
+    static constexpr int g_skip_block0_size = 5440; // must be multiple of 32
+    static constexpr int g_skip_block1_size = 1360; // must be multiple of 8
+    static constexpr int g_skip_block2_size = 336;  // must be multiple of 8
+
+    const u32 g_crc32c_block0_skip_table [] =
+    {
+        0x00000000, 0xff770459, 0xfb027e43, 0x04757a1a, 0xf3e88a77, 0x0c9f8e2e, 0x08eaf434, 0xf79df06d,
+        0xe23d621f, 0x1d4a6646, 0x193f1c5c, 0xe6481805, 0x11d5e868, 0xeea2ec31, 0xead7962b, 0x15a09272,
+        0x00000000, 0xc196b2cf, 0x86c1136f, 0x4757a1a0, 0x086e502f, 0xc9f8e2e0, 0x8eaf4340, 0x4f39f18f,
+        0x10dca05e, 0xd14a1291, 0x961db331, 0x578b01fe, 0x18b2f071, 0xd92442be, 0x9e73e31e, 0x5fe551d1,
+        0x00000000, 0x21b940bc, 0x43728178, 0x62cbc1c4, 0x86e502f0, 0xa75c424c, 0xc5978388, 0xe42ec334,
+        0x08267311, 0x299f33ad, 0x4b54f269, 0x6aedb2d5, 0x8ec371e1, 0xaf7a315d, 0xcdb1f099, 0xec08b025,
+        0x00000000, 0x104ce622, 0x2099cc44, 0x30d52a66, 0x41339888, 0x517f7eaa, 0x61aa54cc, 0x71e6b2ee,
+        0x82673110, 0x922bd732, 0xa2fefd54, 0xb2b21b76, 0xc354a998, 0xd3184fba, 0xe3cd65dc, 0xf38183fe,
+        0x00000000, 0x012214d1, 0x024429a2, 0x03663d73, 0x04885344, 0x05aa4795, 0x06cc7ae6, 0x07ee6e37,
+        0x0910a688, 0x0832b259, 0x0b548f2a, 0x0a769bfb, 0x0d98f5cc, 0x0cbae11d, 0x0fdcdc6e, 0x0efec8bf,
+        0x00000000, 0x12214d10, 0x24429a20, 0x3663d730, 0x48853440, 0x5aa47950, 0x6cc7ae60, 0x7ee6e370,
+        0x910a6880, 0x832b2590, 0xb548f2a0, 0xa769bfb0, 0xd98f5cc0, 0xcbae11d0, 0xfdcdc6e0, 0xefec8bf0,
+        0x00000000, 0x27f8a7f1, 0x4ff14fe2, 0x6809e813, 0x9fe29fc4, 0xb81a3835, 0xd013d026, 0xf7eb77d7,
+        0x3a294979, 0x1dd1ee88, 0x75d8069b, 0x5220a16a, 0xa5cbd6bd, 0x8233714c, 0xea3a995f, 0xcdc23eae,
+        0x00000000, 0x745292f2, 0xe8a525e4, 0x9cf7b716, 0xd4a63d39, 0xa0f4afcb, 0x3c0318dd, 0x48518a2f,
+        0xaca00c83, 0xd8f29e71, 0x44052967, 0x3057bb95, 0x780631ba, 0x0c54a348, 0x90a3145e, 0xe4f186ac,
     };
 
-    constexpr u32 crc32c_combine_table [] =
+    const u32 g_crc32c_block1_skip_table [] =
     {
-        0x105ec76f,
-        0x20bd8ede,
-        0x417b1dbc,
-        0x82f63b78, // <-- little-endian crc32c polynomial
+        0x00000000, 0x79113270, 0xf22264e0, 0x8b335690, 0xe1a8bf31, 0x98b98d41, 0x138adbd1, 0x6a9be9a1,
+        0xc6bd0893, 0xbfac3ae3, 0x349f6c73, 0x4d8e5e03, 0x2715b7a2, 0x5e0485d2, 0xd537d342, 0xac26e132,
+        0x00000000, 0x889667d7, 0x14c0b95f, 0x9c56de88, 0x298172be, 0xa1171569, 0x3d41cbe1, 0xb5d7ac36,
+        0x5302e57c, 0xdb9482ab, 0x47c25c23, 0xcf543bf4, 0x7a8397c2, 0xf215f015, 0x6e432e9d, 0xe6d5494a,
+        0x00000000, 0xa605caf8, 0x49e7e301, 0xefe229f9, 0x93cfc602, 0x35ca0cfa, 0xda282503, 0x7c2deffb,
+        0x2273faf5, 0x8476300d, 0x6b9419f4, 0xcd91d30c, 0xb1bc3cf7, 0x17b9f60f, 0xf85bdff6, 0x5e5e150e,
+        0x00000000, 0x44e7f5ea, 0x89cfebd4, 0xcd281e3e, 0x1673a159, 0x529454b3, 0x9fbc4a8d, 0xdb5bbf67,
+        0x2ce742b2, 0x6800b758, 0xa528a966, 0xe1cf5c8c, 0x3a94e3eb, 0x7e731601, 0xb35b083f, 0xf7bcfdd5,
+        0x00000000, 0x59ce8564, 0xb39d0ac8, 0xea538fac, 0x62d66361, 0x3b18e605, 0xd14b69a9, 0x8885eccd,
+        0xc5acc6c2, 0x9c6243a6, 0x7631cc0a, 0x2fff496e, 0xa77aa5a3, 0xfeb420c7, 0x14e7af6b, 0x4d292a0f,
+        0x00000000, 0x8eb5fb75, 0x1887801b, 0x96327b6e, 0x310f0036, 0xbfbafb43, 0x2988802d, 0xa73d7b58,
+        0x621e006c, 0xecabfb19, 0x7a998077, 0xf42c7b02, 0x5311005a, 0xdda4fb2f, 0x4b968041, 0xc5237b34,
+        0x00000000, 0xc43c00d8, 0x8d947741, 0x49a87799, 0x1ec49873, 0xdaf898ab, 0x9350ef32, 0x576cefea,
+        0x3d8930e6, 0xf9b5303e, 0xb01d47a7, 0x7421477f, 0x234da895, 0xe771a84d, 0xaed9dfd4, 0x6ae5df0c,
+        0x00000000, 0x7b1261cc, 0xf624c398, 0x8d36a254, 0xe9a5f1c1, 0x92b7900d, 0x1f813259, 0x64935395,
+        0xd6a79573, 0xadb5f4bf, 0x208356eb, 0x5b913727, 0x3f0264b2, 0x4410057e, 0xc926a72a, 0xb234c6e6,
     };
 
-#if !defined(HARDWARE_U8_CRC32) || !defined(HARDWARE_U64_CRC32)
+    const u32 g_crc32c_block2_skip_table [] =
+    {
+        0x00000000, 0x8f158014, 0x1bc776d9, 0x94d2f6cd, 0x378eedb2, 0xb89b6da6, 0x2c499b6b, 0xa35c1b7f,
+        0x6f1ddb64, 0xe0085b70, 0x74daadbd, 0xfbcf2da9, 0x589336d6, 0xd786b6c2, 0x4354400f, 0xcc41c01b,
+        0x00000000, 0xde3bb6c8, 0xb99b1b61, 0x67a0ada9, 0x76da4033, 0xa8e1f6fb, 0xcf415b52, 0x117aed9a,
+        0xedb48066, 0x338f36ae, 0x542f9b07, 0x8a142dcf, 0x9b6ec055, 0x4555769d, 0x22f5db34, 0xfcce6dfc,
+        0x00000000, 0xde85763d, 0xb8e69a8b, 0x6663ecb6, 0x742143e7, 0xaaa435da, 0xccc7d96c, 0x1242af51,
+        0xe84287ce, 0x36c7f1f3, 0x50a41d45, 0x8e216b78, 0x9c63c429, 0x42e6b214, 0x24855ea2, 0xfa00289f,
+        0x00000000, 0xd569796d, 0xaf3e842b, 0x7a57fd46, 0x5b917ea7, 0x8ef807ca, 0xf4affa8c, 0x21c683e1,
+        0xb722fd4e, 0x624b8423, 0x181c7965, 0xcd750008, 0xecb383e9, 0x39dafa84, 0x438d07c2, 0x96e47eaf,
+        0x00000000, 0x6ba98c6d, 0xd75318da, 0xbcfa94b7, 0xab4a4745, 0xc0e3cb28, 0x7c195f9f, 0x17b0d3f2,
+        0x5378f87b, 0x38d17416, 0x842be0a1, 0xef826ccc, 0xf832bf3e, 0x939b3353, 0x2f61a7e4, 0x44c82b89,
+        0x00000000, 0xa6f1f0f6, 0x480f971d, 0xeefe67eb, 0x901f2e3a, 0x36eedecc, 0xd810b927, 0x7ee149d1,
+        0x25d22a85, 0x8323da73, 0x6dddbd98, 0xcb2c4d6e, 0xb5cd04bf, 0x133cf449, 0xfdc293a2, 0x5b336354,
+        0x00000000, 0x4ba4550a, 0x9748aa14, 0xdcecff1e, 0x2b7d22d9, 0x60d977d3, 0xbc3588cd, 0xf791ddc7,
+        0x56fa45b2, 0x1d5e10b8, 0xc1b2efa6, 0x8a16baac, 0x7d87676b, 0x36233261, 0xeacfcd7f, 0xa16b9875,
+        0x00000000, 0xadf48b64, 0x5e056039, 0xf3f1eb5d, 0xbc0ac072, 0x11fe4b16, 0xe20fa04b, 0x4ffb2b2f,
+        0x7df9f615, 0xd00d7d71, 0x23fc962c, 0x8e081d48, 0xc1f33667, 0x6c07bd03, 0x9ff6565e, 0x3202dd3a,
+    };
 
-    // //////////////////////////////////////////////////////////
+    static inline
+    u32 skip_block(u32 crc, const u32* table)
+    {
+        crc = table[((crc >>  0) & 0xf) + 0x00] ^
+              table[((crc >>  4) & 0xf) + 0x10] ^
+              table[((crc >>  8) & 0xf) + 0x20] ^
+              table[((crc >> 12) & 0xf) + 0x30] ^
+              table[((crc >> 16) & 0xf) + 0x40] ^
+              table[((crc >> 20) & 0xf) + 0x50] ^
+              table[((crc >> 24) & 0xf) + 0x60] ^
+              table[((crc >> 28) & 0xf) + 0x70];
+        return crc;
+    }
+
+    inline
+    u32 u8_crc32c(u32 crc, u8 data)
+    {
+        return _mm_crc32_u8(crc, data);
+    }
+
+#ifdef MANGO_CPU_64BIT
+
+    inline
+    u32 u64_crc32c(u32 crc, u64 data)
+    {
+        return u32(_mm_crc32_u64(crc, data));
+    }
+
+#else
+
+    inline
+    u32 u64_crc32c(u32 crc, u64 data)
+    {
+        // _mm_crc32_u64 is not available in 32 bit x86
+        crc = _mm_crc32_u32(crc, u32(data & 0xffffffff));
+        crc = _mm_crc32_u32(crc, u32(data >> 32));
+        return crc;
+    }
+
+#endif // MANGO_CPU_64BIT
+
+    u32 crc32c(u32 crc, const u8* address, size_t size)
+    {
+        crc = ~crc;
+
+        uintptr_t alignment = (0 - reinterpret_cast<uintptr_t>(address)) & 7;
+        if (alignment + 8 < size)
+        {
+            size -= alignment;
+            while (alignment-- > 0)
+            {
+                crc = u8_crc32c(crc, *address++);
+            }
+
+            u32 c0 = crc;
+
+            constexpr size_t block0_size = g_skip_blocks * g_skip_block0_size;
+            constexpr size_t block1_size = g_skip_blocks * g_skip_block1_size;
+            constexpr size_t block2_size = g_skip_blocks * g_skip_block2_size;
+
+            while (size >= block0_size)
+            {
+                u32 c1 = 0;
+                u32 c2 = 0;
+                for (int i = 0; i < g_skip_block0_size; i += 32)
+                {
+                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 0 * 8));
+                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 0 * 8));
+                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 0 * 8));
+
+                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 1 * 8));
+                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 1 * 8));
+                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 1 * 8));
+
+                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 2 * 8));
+                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 2 * 8));
+                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 2 * 8));
+
+                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 3 * 8));
+                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 3 * 8));
+                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 3 * 8));
+
+                    address += 32;
+                }
+
+                c0 = skip_block(c0, g_crc32c_block0_skip_table) ^ c1;
+                c0 = skip_block(c0, g_crc32c_block0_skip_table) ^ c2;
+                address += (g_skip_blocks - 1) * g_skip_block0_size;
+                size -= block0_size;
+            }
+
+            while (size >= block1_size)
+            {
+                u32 c1 = 0;
+                u32 c2 = 0;
+                for (int i = 0; i < g_skip_block1_size; i += 8)
+                {
+                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block1_size));
+                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block1_size));
+                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block1_size));
+                    address += 8;
+                }
+
+                c0 = skip_block(c0, g_crc32c_block1_skip_table) ^ c1;
+                c0 = skip_block(c0, g_crc32c_block1_skip_table) ^ c2;
+                address += (g_skip_blocks - 1) * g_skip_block1_size;
+                size -= block1_size;
+            }
+
+            while (size >= block2_size)
+            {
+                u32 c1 = 0;
+                u32 c2 = 0;
+                for (int i = 0; i < g_skip_block2_size; i += 8)
+                {
+                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block2_size));
+                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block2_size));
+                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block2_size));
+                    address += 8;
+                }
+
+                c0 = skip_block(c0, g_crc32c_block2_skip_table) ^ c1;
+                c0 = skip_block(c0, g_crc32c_block2_skip_table) ^ c2;
+                address += (g_skip_blocks - 1) * g_skip_block2_size;
+                size -= block2_size;
+            }
+
+            crc = c0;
+
+            while (size >= 8)
+            {
+                u64 data = uload64le(address);
+                crc = u64_crc32c(crc, data);
+                address += 8;
+                size -= 8;
+            }
+        }
+
+        while (size-- > 0)
+        {
+            crc = u8_crc32c(crc, *address++);
+        }
+
+        return ~crc;
+    }
+
+#endif // defined(MANGO_ENABLE_SSE4_2)
+
+    // ----------------------------------------------------------------------------------------
+    // Intel CLMUL implementation
+    // ----------------------------------------------------------------------------------------
+
+#if defined(MANGO_ENABLE_SSE4_2) && defined(__PCLMUL__)
+
+    // * Copyright 2017 The Chromium Authors. All rights reserved.
+    // * Use of this source code is governed by a BSD-style license that can be
+    // * found in the Chromium source repository LICENSE file.
+
+    // Enabled with -mpclmul compiler switch (clang, gcc)
+
+    #define HARDWARE_CRC32
+
+    inline
+    u32 crc32_bitwise(u32 crc, const u8* data, size_t length)
+    {
+        constexpr u32 polynomial = 0xedb88320;
+
+        while (length--)
+        {
+            crc ^= *data++;
+            for (int i = 0; i < 8; ++i)
+            {
+                crc = (crc >> 1) ^ ((0 - (crc & 1)) & polynomial);
+            }
+        }
+
+        return crc;
+    }
+
+    u32 crc32_simd(u32 crc, const u8* data, size_t length)
+    {
+        const __m128i* buffer = reinterpret_cast<const __m128i*>(data);
+
+        __m128i x5, x6, x7, x8;
+        __m128i y5, y6, y7, y8;
+
+        // There's at least one block of 64
+        __m128i x1 = _mm_loadu_si128(buffer + 0);
+        __m128i x2 = _mm_loadu_si128(buffer + 1);
+        __m128i x3 = _mm_loadu_si128(buffer + 2);
+        __m128i x4 = _mm_loadu_si128(buffer + 3);
+
+        buffer += 4;
+        length -= 64;
+
+        x1 = _mm_xor_si128(x1, _mm_cvtsi32_si128(crc));
+        __m128i x0 = _mm_set_epi64x(0x00000001c6e41596, 0x0000000154442bd4);
+
+        // Parallel fold blocks of 64
+        while (length >= 64)
+        {
+            x5 = _mm_clmulepi64_si128(x1, x0, 0x00);
+            x6 = _mm_clmulepi64_si128(x2, x0, 0x00);
+            x7 = _mm_clmulepi64_si128(x3, x0, 0x00);
+            x8 = _mm_clmulepi64_si128(x4, x0, 0x00);
+
+            x1 = _mm_clmulepi64_si128(x1, x0, 0x11);
+            x2 = _mm_clmulepi64_si128(x2, x0, 0x11);
+            x3 = _mm_clmulepi64_si128(x3, x0, 0x11);
+            x4 = _mm_clmulepi64_si128(x4, x0, 0x11);
+
+            y5 = _mm_loadu_si128(buffer + 0);
+            y6 = _mm_loadu_si128(buffer + 1);
+            y7 = _mm_loadu_si128(buffer + 2);
+            y8 = _mm_loadu_si128(buffer + 3);
+
+            x1 = _mm_xor_si128(x1, x5);
+            x2 = _mm_xor_si128(x2, x6);
+            x3 = _mm_xor_si128(x3, x7);
+            x4 = _mm_xor_si128(x4, x8);
+
+            x1 = _mm_xor_si128(x1, y5);
+            x2 = _mm_xor_si128(x2, y6);
+            x3 = _mm_xor_si128(x3, y7);
+            x4 = _mm_xor_si128(x4, y8);
+
+            buffer += 4;
+            length -= 64;
+        }
+
+        // Fold into 128-bits
+        x0 = _mm_set_epi64x(0x00000000ccaa009e, 0x00000001751997d0);
+        x5 = _mm_clmulepi64_si128(x1, x0, 0x00);
+        x1 = _mm_clmulepi64_si128(x1, x0, 0x11);
+        x1 = _mm_xor_si128(x1, x2);
+        x1 = _mm_xor_si128(x1, x5);
+
+        x5 = _mm_clmulepi64_si128(x1, x0, 0x00);
+        x1 = _mm_clmulepi64_si128(x1, x0, 0x11);
+        x1 = _mm_xor_si128(x1, x3);
+        x1 = _mm_xor_si128(x1, x5);
+
+        x5 = _mm_clmulepi64_si128(x1, x0, 0x00);
+        x1 = _mm_clmulepi64_si128(x1, x0, 0x11);
+        x1 = _mm_xor_si128(x1, x4);
+        x1 = _mm_xor_si128(x1, x5);
+
+        // Single fold blocks of 16
+        while (length >= 16)
+        {
+            x2 = _mm_loadu_si128(buffer);
+            x5 = _mm_clmulepi64_si128(x1, x0, 0x00);
+            x1 = _mm_clmulepi64_si128(x1, x0, 0x11);
+            x1 = _mm_xor_si128(x1, x2);
+            x1 = _mm_xor_si128(x1, x5);
+
+            ++buffer;
+            length -= 16;
+        }
+
+        // Fold 128-bits to 64-bits
+        x2 = _mm_clmulepi64_si128(x1, x0, 0x10);
+        x3 = _mm_setr_epi32(~0, 0, ~0, 0);
+        x1 = _mm_srli_si128(x1, 8);
+        x1 = _mm_xor_si128(x1, x2);
+
+        x0 = _mm_set_epi64x(0x0000000000000000, 0x0000000163cd6124);
+        x2 = _mm_srli_si128(x1, 4);
+        x1 = _mm_and_si128(x1, x3);
+        x1 = _mm_clmulepi64_si128(x1, x0, 0x00);
+        x1 = _mm_xor_si128(x1, x2);
+
+        // Barret reduce to 32-bits
+        x0 = _mm_set_epi64x(0x00000001f7011641, 0x00000001db710641);
+        x2 = _mm_and_si128(x1, x3);
+        x2 = _mm_clmulepi64_si128(x2, x0, 0x10);
+        x2 = _mm_and_si128(x2, x3);
+        x2 = _mm_clmulepi64_si128(x2, x0, 0x00);
+        x1 = _mm_xor_si128(x1, x2);
+
+        return _mm_extract_epi32(x1, 1);
+    }
+
+    u32 crc32(u32 crc, const u8* address, size_t size)
+    {
+        crc = ~crc;
+
+        // The simd code can only handle blocks of 16 bytes
+        size_t chunk_size = size & ~15;
+
+        // The simd code can handle minimum of 64 bytes
+        if (chunk_size >= 64)
+        {
+            crc = crc32_simd(crc, address, chunk_size);
+            size -= chunk_size;
+            address += chunk_size;
+        }
+
+        if (size > 0)
+        {
+            crc = crc32_bitwise(crc, address, size);
+        }
+
+        return ~crc;
+    }
+
+#endif // defined(MANGO_ENABLE_SSE4_2) && defined(__PCLMUL__)
+
+    // ----------------------------------------------------------------------------------------
+    // slice-by-8 table implementation
+    // ----------------------------------------------------------------------------------------
+
+#if !defined(HARDWARE_CRC32) || !defined(HARDWARE_CRC32C)
+
     // Copyright (c) 2014 Stephan Brumme. All rights reserved.
     // see http://create.stephan-brumme.com/disclaimer.html
-    //
+    // Adapted for MANGO in June 2016.
 
-    // Original implementaiton of Intel slice-by-8 by Stephan Brumme. Adapted for MANGO in June 2016.
+    inline
+    u32 u64_crc(u32 crc, u64 data, const u32* table)
+    {
+        data ^= u64(crc);
+        crc = table[((data >> 56) & 0xff) + 0x000] ^
+              table[((data >> 48) & 0xff) + 0x100] ^
+              table[((data >> 40) & 0xff) + 0x200] ^
+              table[((data >> 32) & 0xff) + 0x300] ^
+              table[((data >> 24) & 0xff) + 0x400] ^
+              table[((data >> 16) & 0xff) + 0x500] ^
+              table[((data >>  8) & 0xff) + 0x600] ^
+              table[((data >>  0) & 0xff) + 0x700];
+        return crc;
+    }
+
+    template <typename C8, typename C64>
+    u32 ComputeCRC(C8 compute8, C64 compute64, u32 crc, const u8* address, size_t size)
+    {
+        crc = ~crc;
+
+        uintptr_t alignment = (0 - reinterpret_cast<uintptr_t>(address)) & 7;
+        if (alignment + 8 < size)
+        {
+            size -= alignment;
+            while (alignment-- > 0)
+            {
+                crc = compute8(crc, *address++);
+            }
+
+            while (size >= 8)
+            {
+                u64 data = uload64le(address);
+                crc = compute64(crc, data);
+                address += 8;
+                size -= 8;
+            }
+        }
+
+        while (size-- > 0)
+        {
+            crc = compute8(crc, *address++);
+        }
+
+        return ~crc;
+    }
+
+#endif // !defined(HARDWARE_CRC32) || !defined(HARDWARE_CRC32C)
+
+#if !defined(HARDWARE_CRC32)
 
     constexpr u32 g_crc32_table[] =
     {
@@ -338,9 +908,28 @@ namespace
         0x2c8e0fff,0xe0240f61,0x6eab0882,0xa201081c,0xa8c40105,0x646e019b,0xeae10678,0x264b06e6,
     };
 
-#endif // !defined(HARDWARE_U8_CRC32) || !defined(HARDWARE_U64_CRC32)
+    inline
+    u32 u8_crc32(u32 crc, u8 data)
+    {
+        crc = (crc >> 8) ^ g_crc32_table[(crc & 0xff) ^ data];
+        return crc;
+    }
 
-#if !defined(HARDWARE_U8_CRC32C) || !defined(HARDWARE_U64_CRC32C)
+    inline
+    u32 u64_crc32(u32 crc, u64 data)
+    {
+        return u64_crc(crc, data, g_crc32_table);
+    }
+
+    inline
+    u32 crc32(u32 crc, const u8* address, size_t size)
+    {
+        return ComputeCRC(u8_crc32, u64_crc32, crc, address, size);
+    }
+
+#endif // !defined(HARDWARE_CRC32)
+
+#if !defined(HARDWARE_CRC32C)
 
     constexpr u32 g_crc32c_table[] =
     {
@@ -609,662 +1198,113 @@ namespace
         0xe54c35a1,0xac704886,0x7734cfef,0x3e08b2c8,0xc451b7cc,0x8d6dcaeb,0x56294d82,0x1f1530a5,
     };
 
-#endif // !defined(HARDWARE_U8_CRC32C) || !defined(HARDWARE_U64_CRC32C)
-
-    // ----------------------------------------------------------------------------------------
-    // templates
-    // ----------------------------------------------------------------------------------------
-
-#if !defined(HARDWARE_U64_CRC32) || !defined(HARDWARE_U64_CRC32C)
-
     inline
-    u32 u64_crc(u32 crc, u64 data, const u32* table)
-    {
-        data ^= u64(crc);
-        crc = table[((data >> 56) & 0xff) + 0x000] ^
-              table[((data >> 48) & 0xff) + 0x100] ^
-              table[((data >> 40) & 0xff) + 0x200] ^
-              table[((data >> 32) & 0xff) + 0x300] ^
-              table[((data >> 24) & 0xff) + 0x400] ^
-              table[((data >> 16) & 0xff) + 0x500] ^
-              table[((data >>  8) & 0xff) + 0x600] ^
-              table[((data >>  0) & 0xff) + 0x700];
-        return crc;
-    }
-
-#endif // !defined(HARDWARE_U64_CRC32) || !defined(HARDWARE_U64_CRC32C)
-
-    // ----------------------------------------------------------------------------------------
-    // generic software implementation
-    // ----------------------------------------------------------------------------------------
-
-#if !defined(HARDWARE_U8_CRC32)
-
-    inline u32 u8_crc32(u32 crc, u8 data)
-    {
-        // TODO: big-endian
-        crc = (crc >> 8) ^ g_crc32_table[(crc & 0xff) ^ data];
-        return crc;
-    }
-
-#endif
-
-#if !defined(HARDWARE_U64_CRC32)
-
-    inline u32 u64_crc32(u32 crc, u64 data)
-    {
-        return u64_crc(crc, data, g_crc32_table);
-    }
-
-#endif
-
-#if !defined(HARDWARE_U8_CRC32C)
-
-    inline u32 u8_crc32c(u32 crc, u8 data)
+    u32 u8_crc32c(u32 crc, u8 data)
     {
         crc = (crc >> 8) ^ g_crc32c_table[(crc & 0xff) ^ data];
         return crc;
     }
 
-#endif
-
-#if !defined(HARDWARE_U64_CRC32C)
-
-    inline u32 u64_crc32c(u32 crc, u64 data)
+    inline
+    u32 u64_crc32c(u32 crc, u64 data)
     {
         return u64_crc(crc, data, g_crc32c_table);
     }
 
-#endif
-
-    // ----------------------------------------------------------------------------------------
-    // ARMv8 Crypto ISA implementation
-    // ----------------------------------------------------------------------------------------
-
-#if defined(__ARM_FEATURE_CRC32)
-
-    inline u32 u8_crc32(u32 crc, u8 data)
-    {
-        return __crc32b(crc, data);
-    }
-
-    inline u32 u64_crc32(u32 crc, u64 data)
-    {
-        return __crc32d(crc, data);
-    }
-
-    inline u32 u8_crc32c(u32 crc, u8 data)
-    {
-        return __crc32cb(crc, data);
-    }
-
-    inline u32 u64_crc32c(u32 crc, u64 data)
-    {
-        return __crc32cd(crc, data);
-    }
-
-#endif // defined(__ARM_FEATURE_CRC32)
-
-    // ----------------------------------------------------------------------------------------
-    // Intel CLMUL implementation
-    // ----------------------------------------------------------------------------------------
-
-#if defined(__PCLMUL__) && defined(MANGO_ENABLE_SSE4_2)
-
-    inline u32 u64_crc32(u32 crc, u64 data)
-    {
-        // https://merrymage.com/lab/crc32/
-        // Enabled with -mpclmul compiler switch (clang, gcc)
-
-        __m128i magic = _mm_set_epi64x(0x00000001DB710641, 0xB4E5B025F7011641);
-        __m128i value = _mm_set_epi64x(0, data ^ crc);
-
-        value = _mm_clmulepi64_si128(value, magic, 0x00);
-        value = _mm_clmulepi64_si128(value, magic, 0x10);
-        return _mm_extract_epi32(value, 2);
-    }
-
-#endif // defined(__PCLMUL__) && defined(MANGO_ENABLE_SSE4_2)
-
-    // ----------------------------------------------------------------------------------------
-    // Intel SSE4.2 implementation
-    // ----------------------------------------------------------------------------------------
-
-#if defined(MANGO_ENABLE_SSE4_2)
-
-    inline u32 u8_crc32c(u32 crc, u8 data)
-    {
-        return _mm_crc32_u8(crc, data);
-    }
-
-#ifdef MANGO_CPU_64BIT
-
-    inline u32 u64_crc32c(u32 crc, u64 data)
-    {
-        return u32(_mm_crc32_u64(crc, data));
-    }
-
-#else
-
-    inline u32 u64_crc32c(u32 crc, u64 data)
-    {
-        // _mm_crc32_u64 is not available in 32 bit x86
-        crc = _mm_crc32_u32(crc, u32(data & 0xffffffff));
-        crc = _mm_crc32_u32(crc, u32(data >> 32));
-        return crc;
-    }(
-
-#endif // MANGO_CPU_64BIT
-
-#endif // MANGO_ENABLE_SSE4_2
-
-    // ----------------------------------------------------------------------------------------
-    // crc_combine
-    // ----------------------------------------------------------------------------------------
-
-    // Original implementation (C) Stephan Brumme
-
-    static inline
-    u32 combine(u32 value, const u32* table)
-    {
-        u32 sum = 0;
-#if 1
-        // NOTE: Requires fast tzcnt instruction
-        //       The emulated tzcnt uses multiplication and high bit-density values will
-        //       result in dramatic performance decrease. :(
-        int index = 0;
-        while (value)
-        {
-            int count = u32_tzcnt(value) + 1;
-            index += count;
-            value >>= count;
-            sum ^= table[index - 1];
-        }
-#else
-        for (int i = 0; value != 0; i++, value >>= 1)
-        {
-            if (value & 1)
-            {
-                sum ^= table[i];
-            }
-        }
-#endif
-        return sum;
-    }
-
-    u32 crc_combine(u32 crc, size_t length, const u32* table)
-    {
-        if (!length)
-        {
-            return crc;
-        }
-
-        constexpr int BITS = 32;
-
-        u32 odd[BITS];
-        u32 even[BITS];
-
-        odd[0] = table[0];
-        odd[1] = table[1];
-        odd[2] = table[2];
-        odd[3] = table[3];
-
-        for (int i = 0; i < 28; ++i)
-        {
-            odd[i + 4] = 1 << i;
-        }
-
-        even[0] = table[2];
-        even[1] = table[3];
-
-        for (int i = 0; i < 30; ++i)
-        {
-            even[i + 2] = 1 << i;
-        }
-
-        u32* a = even;
-        u32* b = odd;
-
-        // apply length zeros to crc
-        for ( ; length > 0; length >>= 1)
-        {
-            for (int i = 0; i < BITS; ++i)
-            {
-                a[i] = combine(b[i], b);
-            }
-
-            // apply zeros operator for this bit
-            if (length & 1)
-            {
-                crc = combine(crc, a);
-            }
-
-            std::swap(a, b);
-        }
-
-        return crc;
-    }
-
-    // ----------------------------------------------------------------------------------------
-    // skip_block
-    // ----------------------------------------------------------------------------------------
-
-#if defined(HARDWARE_U64_CRC32C)
-
-    constexpr int g_skip_blocks = 3;
-    constexpr int g_skip_block0_size = 5440; // must be multiple of 32
-    constexpr int g_skip_block1_size = 1360; // must be multiple of 8
-    constexpr int g_skip_block2_size = 336;  // must be multiple of 8
-
-    const u32 g_crc32c_block0_skip_table [] =
-    {
-        0x00000000, 0xff770459, 0xfb027e43, 0x04757a1a, 0xf3e88a77, 0x0c9f8e2e, 0x08eaf434, 0xf79df06d,
-        0xe23d621f, 0x1d4a6646, 0x193f1c5c, 0xe6481805, 0x11d5e868, 0xeea2ec31, 0xead7962b, 0x15a09272,
-        0x00000000, 0xc196b2cf, 0x86c1136f, 0x4757a1a0, 0x086e502f, 0xc9f8e2e0, 0x8eaf4340, 0x4f39f18f,
-        0x10dca05e, 0xd14a1291, 0x961db331, 0x578b01fe, 0x18b2f071, 0xd92442be, 0x9e73e31e, 0x5fe551d1,
-        0x00000000, 0x21b940bc, 0x43728178, 0x62cbc1c4, 0x86e502f0, 0xa75c424c, 0xc5978388, 0xe42ec334,
-        0x08267311, 0x299f33ad, 0x4b54f269, 0x6aedb2d5, 0x8ec371e1, 0xaf7a315d, 0xcdb1f099, 0xec08b025,
-        0x00000000, 0x104ce622, 0x2099cc44, 0x30d52a66, 0x41339888, 0x517f7eaa, 0x61aa54cc, 0x71e6b2ee,
-        0x82673110, 0x922bd732, 0xa2fefd54, 0xb2b21b76, 0xc354a998, 0xd3184fba, 0xe3cd65dc, 0xf38183fe,
-        0x00000000, 0x012214d1, 0x024429a2, 0x03663d73, 0x04885344, 0x05aa4795, 0x06cc7ae6, 0x07ee6e37,
-        0x0910a688, 0x0832b259, 0x0b548f2a, 0x0a769bfb, 0x0d98f5cc, 0x0cbae11d, 0x0fdcdc6e, 0x0efec8bf,
-        0x00000000, 0x12214d10, 0x24429a20, 0x3663d730, 0x48853440, 0x5aa47950, 0x6cc7ae60, 0x7ee6e370,
-        0x910a6880, 0x832b2590, 0xb548f2a0, 0xa769bfb0, 0xd98f5cc0, 0xcbae11d0, 0xfdcdc6e0, 0xefec8bf0,
-        0x00000000, 0x27f8a7f1, 0x4ff14fe2, 0x6809e813, 0x9fe29fc4, 0xb81a3835, 0xd013d026, 0xf7eb77d7,
-        0x3a294979, 0x1dd1ee88, 0x75d8069b, 0x5220a16a, 0xa5cbd6bd, 0x8233714c, 0xea3a995f, 0xcdc23eae,
-        0x00000000, 0x745292f2, 0xe8a525e4, 0x9cf7b716, 0xd4a63d39, 0xa0f4afcb, 0x3c0318dd, 0x48518a2f,
-        0xaca00c83, 0xd8f29e71, 0x44052967, 0x3057bb95, 0x780631ba, 0x0c54a348, 0x90a3145e, 0xe4f186ac,
-    };
-
-    const u32 g_crc32c_block1_skip_table [] =
-    {
-        0x00000000, 0x79113270, 0xf22264e0, 0x8b335690, 0xe1a8bf31, 0x98b98d41, 0x138adbd1, 0x6a9be9a1,
-        0xc6bd0893, 0xbfac3ae3, 0x349f6c73, 0x4d8e5e03, 0x2715b7a2, 0x5e0485d2, 0xd537d342, 0xac26e132,
-        0x00000000, 0x889667d7, 0x14c0b95f, 0x9c56de88, 0x298172be, 0xa1171569, 0x3d41cbe1, 0xb5d7ac36,
-        0x5302e57c, 0xdb9482ab, 0x47c25c23, 0xcf543bf4, 0x7a8397c2, 0xf215f015, 0x6e432e9d, 0xe6d5494a,
-        0x00000000, 0xa605caf8, 0x49e7e301, 0xefe229f9, 0x93cfc602, 0x35ca0cfa, 0xda282503, 0x7c2deffb,
-        0x2273faf5, 0x8476300d, 0x6b9419f4, 0xcd91d30c, 0xb1bc3cf7, 0x17b9f60f, 0xf85bdff6, 0x5e5e150e,
-        0x00000000, 0x44e7f5ea, 0x89cfebd4, 0xcd281e3e, 0x1673a159, 0x529454b3, 0x9fbc4a8d, 0xdb5bbf67,
-        0x2ce742b2, 0x6800b758, 0xa528a966, 0xe1cf5c8c, 0x3a94e3eb, 0x7e731601, 0xb35b083f, 0xf7bcfdd5,
-        0x00000000, 0x59ce8564, 0xb39d0ac8, 0xea538fac, 0x62d66361, 0x3b18e605, 0xd14b69a9, 0x8885eccd,
-        0xc5acc6c2, 0x9c6243a6, 0x7631cc0a, 0x2fff496e, 0xa77aa5a3, 0xfeb420c7, 0x14e7af6b, 0x4d292a0f,
-        0x00000000, 0x8eb5fb75, 0x1887801b, 0x96327b6e, 0x310f0036, 0xbfbafb43, 0x2988802d, 0xa73d7b58,
-        0x621e006c, 0xecabfb19, 0x7a998077, 0xf42c7b02, 0x5311005a, 0xdda4fb2f, 0x4b968041, 0xc5237b34,
-        0x00000000, 0xc43c00d8, 0x8d947741, 0x49a87799, 0x1ec49873, 0xdaf898ab, 0x9350ef32, 0x576cefea,
-        0x3d8930e6, 0xf9b5303e, 0xb01d47a7, 0x7421477f, 0x234da895, 0xe771a84d, 0xaed9dfd4, 0x6ae5df0c,
-        0x00000000, 0x7b1261cc, 0xf624c398, 0x8d36a254, 0xe9a5f1c1, 0x92b7900d, 0x1f813259, 0x64935395,
-        0xd6a79573, 0xadb5f4bf, 0x208356eb, 0x5b913727, 0x3f0264b2, 0x4410057e, 0xc926a72a, 0xb234c6e6,
-    };
-
-    const u32 g_crc32c_block2_skip_table [] =
-    {
-        0x00000000, 0x8f158014, 0x1bc776d9, 0x94d2f6cd, 0x378eedb2, 0xb89b6da6, 0x2c499b6b, 0xa35c1b7f,
-        0x6f1ddb64, 0xe0085b70, 0x74daadbd, 0xfbcf2da9, 0x589336d6, 0xd786b6c2, 0x4354400f, 0xcc41c01b,
-        0x00000000, 0xde3bb6c8, 0xb99b1b61, 0x67a0ada9, 0x76da4033, 0xa8e1f6fb, 0xcf415b52, 0x117aed9a,
-        0xedb48066, 0x338f36ae, 0x542f9b07, 0x8a142dcf, 0x9b6ec055, 0x4555769d, 0x22f5db34, 0xfcce6dfc,
-        0x00000000, 0xde85763d, 0xb8e69a8b, 0x6663ecb6, 0x742143e7, 0xaaa435da, 0xccc7d96c, 0x1242af51,
-        0xe84287ce, 0x36c7f1f3, 0x50a41d45, 0x8e216b78, 0x9c63c429, 0x42e6b214, 0x24855ea2, 0xfa00289f,
-        0x00000000, 0xd569796d, 0xaf3e842b, 0x7a57fd46, 0x5b917ea7, 0x8ef807ca, 0xf4affa8c, 0x21c683e1,
-        0xb722fd4e, 0x624b8423, 0x181c7965, 0xcd750008, 0xecb383e9, 0x39dafa84, 0x438d07c2, 0x96e47eaf,
-        0x00000000, 0x6ba98c6d, 0xd75318da, 0xbcfa94b7, 0xab4a4745, 0xc0e3cb28, 0x7c195f9f, 0x17b0d3f2,
-        0x5378f87b, 0x38d17416, 0x842be0a1, 0xef826ccc, 0xf832bf3e, 0x939b3353, 0x2f61a7e4, 0x44c82b89,
-        0x00000000, 0xa6f1f0f6, 0x480f971d, 0xeefe67eb, 0x901f2e3a, 0x36eedecc, 0xd810b927, 0x7ee149d1,
-        0x25d22a85, 0x8323da73, 0x6dddbd98, 0xcb2c4d6e, 0xb5cd04bf, 0x133cf449, 0xfdc293a2, 0x5b336354,
-        0x00000000, 0x4ba4550a, 0x9748aa14, 0xdcecff1e, 0x2b7d22d9, 0x60d977d3, 0xbc3588cd, 0xf791ddc7,
-        0x56fa45b2, 0x1d5e10b8, 0xc1b2efa6, 0x8a16baac, 0x7d87676b, 0x36233261, 0xeacfcd7f, 0xa16b9875,
-        0x00000000, 0xadf48b64, 0x5e056039, 0xf3f1eb5d, 0xbc0ac072, 0x11fe4b16, 0xe20fa04b, 0x4ffb2b2f,
-        0x7df9f615, 0xd00d7d71, 0x23fc962c, 0x8e081d48, 0xc1f33667, 0x6c07bd03, 0x9ff6565e, 0x3202dd3a,
-    };
-
-    static inline
-    u32 skip_block(u32 crc, const u32* table)
-    {
-        crc = table[((crc >>  0) & 0xf) + 0x00] ^
-              table[((crc >>  4) & 0xf) + 0x10] ^
-              table[((crc >>  8) & 0xf) + 0x20] ^
-              table[((crc >> 12) & 0xf) + 0x30] ^
-              table[((crc >> 16) & 0xf) + 0x40] ^
-              table[((crc >> 20) & 0xf) + 0x50] ^
-              table[((crc >> 24) & 0xf) + 0x60] ^
-              table[((crc >> 28) & 0xf) + 0x70];
-        return crc;
-    }
-
-#endif
-
-    // ----------------------------------------------------------------------------------------
-    // crc32
-    // ----------------------------------------------------------------------------------------
-
-    u32 crc32(u32 crc, const u8* address, size_t size)
-    {
-        crc = ~crc;
-
-        uintptr_t alignment = (0 - reinterpret_cast<uintptr_t>(address)) & 7;
-        if (alignment + 8 < size)
-        {
-            size -= alignment;
-            while (alignment-- > 0)
-            {
-                crc = u8_crc32(crc, *address++);
-            }
-
-#if defined(HARDWARE_U64_CRC32)
-
-            while (size >= 64)
-            {
-                u64 data0 = uload64le(address + 8 * 0);
-                u64 data1 = uload64le(address + 8 * 1);
-                u64 data2 = uload64le(address + 8 * 2);
-                u64 data3 = uload64le(address + 8 * 3);
-                u64 data4 = uload64le(address + 8 * 4);
-                u64 data5 = uload64le(address + 8 * 5);
-                u64 data6 = uload64le(address + 8 * 6);
-                u64 data7 = uload64le(address + 8 * 7);
-                crc = u64_crc32(crc, data0);
-                crc = u64_crc32(crc, data1);
-                crc = u64_crc32(crc, data2);
-                crc = u64_crc32(crc, data3);
-                crc = u64_crc32(crc, data4);
-                crc = u64_crc32(crc, data5);
-                crc = u64_crc32(crc, data6);
-                crc = u64_crc32(crc, data7);
-                address += 64;
-                size -= 64;
-            }
-
-            /*
-            u32 c0 = crc;
-
-            constexpr size_t block0_size = g_skip_blocks * g_skip_block0_size;
-            constexpr size_t block1_size = g_skip_blocks * g_skip_block1_size;
-            constexpr size_t block2_size = g_skip_blocks * g_skip_block2_size;
-
-            while (size >= block0_size)
-            {
-                u32 c1 = 0;
-                u32 c2 = 0;
-                for (int i = 0; i < g_skip_block0_size; i += 32)
-                {
-                    c0 = u64_crc32(c0, uload64le(address + 0 * g_skip_block0_size + 0 * 8));
-                    c1 = u64_crc32(c1, uload64le(address + 1 * g_skip_block0_size + 0 * 8));
-                    c2 = u64_crc32(c2, uload64le(address + 2 * g_skip_block0_size + 0 * 8));
-
-                    c0 = u64_crc32(c0, uload64le(address + 0 * g_skip_block0_size + 1 * 8));
-                    c1 = u64_crc32(c1, uload64le(address + 1 * g_skip_block0_size + 1 * 8));
-                    c2 = u64_crc32(c2, uload64le(address + 2 * g_skip_block0_size + 1 * 8));
-
-                    c0 = u64_crc32(c0, uload64le(address + 0 * g_skip_block0_size + 2 * 8));
-                    c1 = u64_crc32(c1, uload64le(address + 1 * g_skip_block0_size + 2 * 8));
-                    c2 = u64_crc32(c2, uload64le(address + 2 * g_skip_block0_size + 2 * 8));
-
-                    c0 = u64_crc32(c0, uload64le(address + 0 * g_skip_block0_size + 3 * 8));
-                    c1 = u64_crc32(c1, uload64le(address + 1 * g_skip_block0_size + 3 * 8));
-                    c2 = u64_crc32(c2, uload64le(address + 2 * g_skip_block0_size + 3 * 8));
-
-                    address += 32;
-                }
-
-                c0 = skip_block(c0, g_crc32_block0_skip_table) ^ c1;
-                c0 = skip_block(c0, g_crc32_block0_skip_table) ^ c2;
-                address += (g_skip_blocks - 1) * g_skip_block0_size;
-                size -= block0_size;
-            }
-
-            while (size >= block1_size)
-            {
-                u32 c1 = 0;
-                u32 c2 = 0;
-                for (int i = 0; i < g_skip_block1_size; i += 8)
-                {
-                    c0 = u64_crc32(c0, uload64le(address + 0 * g_skip_block1_size));
-                    c1 = u64_crc32(c1, uload64le(address + 1 * g_skip_block1_size));
-                    c2 = u64_crc32(c2, uload64le(address + 2 * g_skip_block1_size));
-                    address += 8;
-                }
-
-                c0 = skip_block(c0, g_crc32_block1_skip_table) ^ c1;
-                c0 = skip_block(c0, g_crc32_block1_skip_table) ^ c2;
-                address += (g_skip_blocks - 1) * g_skip_block1_size;
-                size -= block1_size;
-            }
-
-            while (size >= block2_size)
-            {
-                u32 c1 = 0;
-                u32 c2 = 0;
-                for (int i = 0; i < g_skip_block2_size; i += 8)
-                {
-                    c0 = u64_crc32(c0, uload64le(address + 0 * g_skip_block2_size));
-                    c1 = u64_crc32(c1, uload64le(address + 1 * g_skip_block2_size));
-                    c2 = u64_crc32(c2, uload64le(address + 2 * g_skip_block2_size));
-                    address += 8;
-                }
-
-                c0 = skip_block(c0, g_crc32_block2_skip_table) ^ c1;
-                c0 = skip_block(c0, g_crc32_block2_skip_table) ^ c2;
-                address += (g_skip_blocks - 1) * g_skip_block2_size;
-                size -= block2_size;
-            }
-
-            crc = c0;
-            */
-
-#endif // HARDWARE_U64_CRC32
-
-            while (size >= 8)
-            {
-                u64 data = uload64le(address);
-                crc = u64_crc32(crc, data);
-                address += 8;
-                size -= 8;
-            }
-        }
-
-        while (size-- > 0)
-        {
-            crc = u8_crc32(crc, *address++);
-        }
-
-        return ~crc;
-    }
-
-    // ----------------------------------------------------------------------------------------
-    // crc32c
-    // ----------------------------------------------------------------------------------------
-
+    inline
     u32 crc32c(u32 crc, const u8* address, size_t size)
     {
-        crc = ~crc;
+        return ComputeCRC(u8_crc32c, u64_crc32c, crc, address, size);
+    }
 
-        uintptr_t alignment = (0 - reinterpret_cast<uintptr_t>(address)) & 7;
-        if (alignment + 8 < size)
+#endif // !defined(HARDWARE_CRC32)
+
+    // ----------------------------------------------------------------------------------------
+    // CombineCRC
+    // ----------------------------------------------------------------------------------------
+
+    /*
+    static constexpr u32 crc32_polynomial_little_endian  = 0xedb88320;
+    static constexpr u32 crc32c_polynomial_little_endian = 0x82f63b78;
+    static constexpr u32 crc32_polynomial_big_endian     = 0x04c11db7;
+    static constexpr u32 crc32c_polynomial_big_endian    = 0x1edc6f41;
+    */
+
+    static constexpr
+    u32 g_crc32_combine_table [] =
+    {
+        0x40000000, 0x20000000, 0x08000000, 0x00800000,
+        0x00008000, 0xedb88320, 0xb1e6b092, 0xa06a2517,
+        0xed627dae, 0x88d14467, 0xd7bbfe6a, 0xec447f11,
+        0x8e7ea170, 0x6427800e, 0x4d47bae0, 0x09fe548f,
+        0x83852d0f, 0x30362f1a, 0x7b5a9cc3, 0x31fec169,
+        0x9fec022a, 0x6c8dedc4, 0x15d6874d, 0x5fde7a4e,
+        0xbad90e37, 0x2e4e5eef, 0x4eaba214, 0xa8a472c0,
+        0x429a969e, 0x148d302a, 0xc40ba6d0, 0xc4e22c3c,
+    };
+
+    static constexpr
+    u32 g_crc32c_combine_table [] =
+    {
+        0x40000000, 0x20000000, 0x08000000, 0x00800000,
+        0x00008000, 0x82f63b78, 0x6ea2d55c, 0x18b8ea18,
+        0x510ac59a, 0xb82be955, 0xb8fdb1e7, 0x88e56f72,
+        0x74c360a4, 0xe4172b16, 0x0d65762a, 0x35d73a62,
+        0x28461564, 0xbf455269, 0xe2ea32dc, 0xfe7740e6,
+        0xf946610b, 0x3c204f8f, 0x538586e3, 0x59726915,
+        0x734d5309, 0xbc1ac763, 0x7d0722cc, 0xd289cabe,
+        0xe94ca9bc, 0x05b74f3f, 0xa51e1f42, 0x40000000,
+    };
+
+    inline
+    u32 multmodp(u32 a, u32 b, u32 polynomial)
+    {
+        u32 m = 1 << 31;
+        u32 p = 0;
+
+        for ( ;; )
         {
-            size -= alignment;
-            while (alignment-- > 0)
+            if (a & m)
             {
-                crc = u8_crc32c(crc, *address++);
+                p ^= b;
+                if ((a & (m - 1)) == 0)
+                    break;
             }
-
-#if defined(__ARM_FEATURE_CRC32) && defined(__ARM_FEATURE_CRYPTO)
-
-            constexpr size_t SEGMENT_BYTES = 256;
-            constexpr size_t BLOCK_BYTES = 256 * 4 + 8;
-
-            const poly64_t k0 = 0x8d96551c;
-            const poly64_t k1 = 0xbd6f81f8;
-            const poly64_t k2 = 0xdcb17aa4;
-
-            while (size >= BLOCK_BYTES)
-            {
-                u32 crc0 = crc;
-                u32 crc1 = 0;
-                u32 crc2 = 0;
-                u32 crc3 = 0;
-
-                #define CRC32C_32BYTES(idx) \
-                    crc1 = u64_crc32c(crc1, uload64(address + SEGMENT_BYTES * 1 + (idx) * 8)); \
-                    crc2 = u64_crc32c(crc2, uload64(address + SEGMENT_BYTES * 2 + (idx) * 8)); \
-                    crc3 = u64_crc32c(crc3, uload64(address + SEGMENT_BYTES * 3 + (idx) * 8)); \
-                    crc0 = u64_crc32c(crc0, uload64(address + SEGMENT_BYTES * 0 + (idx) * 8));
-
-                CRC32C_32BYTES(0 * 8 + 0);
-                CRC32C_32BYTES(0 * 8 + 1);
-                CRC32C_32BYTES(0 * 8 + 2);
-                CRC32C_32BYTES(0 * 8 + 3);
-                CRC32C_32BYTES(0 * 8 + 4);
-                CRC32C_32BYTES(0 * 8 + 5);
-                CRC32C_32BYTES(0 * 8 + 6);
-                CRC32C_32BYTES(0 * 8 + 7);
-
-                CRC32C_32BYTES(1 * 8 + 0);
-                CRC32C_32BYTES(1 * 8 + 1);
-                CRC32C_32BYTES(1 * 8 + 2);
-                CRC32C_32BYTES(1 * 8 + 3);
-                CRC32C_32BYTES(1 * 8 + 4);
-                CRC32C_32BYTES(1 * 8 + 5);
-                CRC32C_32BYTES(1 * 8 + 6);
-                CRC32C_32BYTES(1 * 8 + 7);
-
-                CRC32C_32BYTES(2 * 8 + 0);
-                CRC32C_32BYTES(2 * 8 + 1);
-                CRC32C_32BYTES(2 * 8 + 2);
-                CRC32C_32BYTES(2 * 8 + 3);
-                CRC32C_32BYTES(2 * 8 + 4);
-                CRC32C_32BYTES(2 * 8 + 5);
-                CRC32C_32BYTES(2 * 8 + 6);
-                CRC32C_32BYTES(2 * 8 + 7);
-
-                CRC32C_32BYTES(3 * 8 + 0);
-                CRC32C_32BYTES(3 * 8 + 1);
-                CRC32C_32BYTES(3 * 8 + 2);
-                CRC32C_32BYTES(3 * 8 + 3);
-                CRC32C_32BYTES(3 * 8 + 4);
-                CRC32C_32BYTES(3 * 8 + 5);
-                CRC32C_32BYTES(3 * 8 + 6);
-                CRC32C_32BYTES(3 * 8 + 7);
-
-                #undef CRC32C_32BYTES
-
-                crc = u64_crc32c(crc3, uload64le(address + 1024));
-
-                u64 t2 = u64(vmull_p64(crc2, k2));
-                u64 t1 = u64(vmull_p64(crc1, k1));
-                u64 t0 = u64(vmull_p64(crc0, k0));
-
-                crc ^= u64_crc32c(0, t2);
-                crc ^= u64_crc32c(0, t1);
-                crc ^= u64_crc32c(0, t0);
-
-                address += BLOCK_BYTES;
-                size -= BLOCK_BYTES;
-            }
-
-#elif defined(HARDWARE_U64_CRC32C)
-
-            u32 c0 = crc;
-
-            constexpr size_t block0_size = g_skip_blocks * g_skip_block0_size;
-            constexpr size_t block1_size = g_skip_blocks * g_skip_block1_size;
-            constexpr size_t block2_size = g_skip_blocks * g_skip_block2_size;
-
-            while (size >= block0_size)
-            {
-                u32 c1 = 0;
-                u32 c2 = 0;
-                for (int i = 0; i < g_skip_block0_size; i += 32)
-                {
-                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 0 * 8));
-                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 0 * 8));
-                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 0 * 8));
-
-                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 1 * 8));
-                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 1 * 8));
-                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 1 * 8));
-
-                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 2 * 8));
-                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 2 * 8));
-                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 2 * 8));
-
-                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block0_size + 3 * 8));
-                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block0_size + 3 * 8));
-                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block0_size + 3 * 8));
-
-                    address += 32;
-                }
-
-                c0 = skip_block(c0, g_crc32c_block0_skip_table) ^ c1;
-                c0 = skip_block(c0, g_crc32c_block0_skip_table) ^ c2;
-                address += (g_skip_blocks - 1) * g_skip_block0_size;
-                size -= block0_size;
-            }
-
-            while (size >= block1_size)
-            {
-                u32 c1 = 0;
-                u32 c2 = 0;
-                for (int i = 0; i < g_skip_block1_size; i += 8)
-                {
-                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block1_size));
-                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block1_size));
-                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block1_size));
-                    address += 8;
-                }
-
-                c0 = skip_block(c0, g_crc32c_block1_skip_table) ^ c1;
-                c0 = skip_block(c0, g_crc32c_block1_skip_table) ^ c2;
-                address += (g_skip_blocks - 1) * g_skip_block1_size;
-                size -= block1_size;
-            }
-
-            while (size >= block2_size)
-            {
-                u32 c1 = 0;
-                u32 c2 = 0;
-                for (int i = 0; i < g_skip_block2_size; i += 8)
-                {
-                    c0 = u64_crc32c(c0, uload64le(address + 0 * g_skip_block2_size));
-                    c1 = u64_crc32c(c1, uload64le(address + 1 * g_skip_block2_size));
-                    c2 = u64_crc32c(c2, uload64le(address + 2 * g_skip_block2_size));
-                    address += 8;
-                }
-
-                c0 = skip_block(c0, g_crc32c_block2_skip_table) ^ c1;
-                c0 = skip_block(c0, g_crc32c_block2_skip_table) ^ c2;
-                address += (g_skip_blocks - 1) * g_skip_block2_size;
-                size -= block2_size;
-            }
-
-            crc = c0;
-
-#endif // HARDWARE_U64_CRC32C
-
-            while (size >= 8)
-            {
-                u64 data = uload64le(address);
-                crc = u64_crc32c(crc, data);
-                address += 8;
-                size -= 8;
-            }
+            m >>= 1;
+            b = b & 1 ? (b >> 1) ^ polynomial : b >> 1;
         }
 
-        while (size-- > 0)
+        return p;
+    }
+
+    inline
+    u32 CombineCRC(u32 crc0, u32 crc1, size_t length, const u32* table)
+    {
+        const u32 polynomial = table[5];
+
+        u32 k = 3;
+        u32 p = 1 << 31;
+
+        while (length > 0)
         {
-            crc = u8_crc32c(crc, *address++);
+            if (length & 1)
+                p = multmodp(table[k & 31], p, polynomial);
+            length >>= 1;
+            ++k;
         }
 
-        return ~crc;
+        return multmodp(p, crc0, polynomial) ^ crc1;
     }
 
     // ----------------------------------------------------------------------------------------
-    // parallel_crc
+    // ParallelCRC
     // ----------------------------------------------------------------------------------------
 
-    template<typename Compute, typename Combine>
-    u32 parallel_crc(Compute compute, Combine combine, u32 crc, ConstMemory memory)
+    template <typename Compute, typename Combine>
+    u32 ParallelCRC(Compute compute, Combine combine, u32 crc, ConstMemory memory)
     {
         constexpr size_t KB = 1 << 10;
-        constexpr size_t MIN_BLOCK = 32 * KB;
+        constexpr size_t MIN_BLOCK = 256 * KB;
 
         if (memory.size < MIN_BLOCK * 2)
         {
@@ -1275,7 +1315,12 @@ namespace
         size_t block = std::max(MIN_BLOCK, memory.size / (ThreadPool::getHardwareConcurrency() * 2));
         int threads = int(memory.size / block);
 
-        std::vector<u32> temp(threads);
+        struct Block
+        {
+            size_t bytes;
+            u32 crc;
+        };
+        std::vector<Block> temp(threads);
 
         ConcurrentQueue q;
 
@@ -1288,7 +1333,8 @@ namespace
 
             q.enqueue([compute, &temp, i, address, bytes]
             {
-                temp[i] = compute(0, address, bytes);
+                temp[i].bytes = bytes;
+                temp[i].crc = compute(0, address, bytes);
             });
         }
 
@@ -1299,10 +1345,7 @@ namespace
 
         for (int i = 1; i < threads; ++i)
         {
-            size_t left = memory.size - block * i;
-            size_t bytes = (i == threads - 1) ? left : std::min(block, left);
-
-            crc = combine(crc, temp[i], bytes);
+            crc = combine(crc, temp[i].crc, temp[i].bytes);
         }
 
         return crc;
@@ -1315,24 +1358,22 @@ namespace mango
 
     u32 crc32_combine(u32 crc0, u32 crc1, size_t length1)
     {
-        crc0 = ::crc_combine(crc0, length1, crc32_combine_table);
-        return crc0 ^ crc1;
+        return CombineCRC(crc0, crc1, length1, g_crc32_combine_table);
     }
 
     u32 crc32c_combine(u32 crc0, u32 crc1, size_t length1)
     {
-        crc0 = ::crc_combine(crc0, length1, crc32c_combine_table);
-        return crc0 ^ crc1;
+        return CombineCRC(crc0, crc1, length1, g_crc32c_combine_table);
     }
 
     u32 crc32(u32 crc, ConstMemory memory)
     {
-        return parallel_crc(::crc32, ::crc32_combine, crc, memory);
+        return ParallelCRC(::crc32, mango::crc32_combine, crc, memory);
     }
 
     u32 crc32c(u32 crc, ConstMemory memory)
     {
-        return parallel_crc(::crc32c, ::crc32c_combine, crc, memory);
+        return ParallelCRC(::crc32c, mango::crc32c_combine, crc, memory);
     }
 
 } // namespace mango

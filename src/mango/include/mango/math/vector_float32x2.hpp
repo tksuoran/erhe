@@ -23,12 +23,12 @@ namespace mango::math
         template <int X, int Y>
         struct ShuffleAccessor2
         {
-			float v[2];
+            float v[2];
 
-			operator Vector<float, 2> () const
-			{
-				return Vector<float, 2>(v[X], v[Y]);
-			}
+            operator Vector<float, 2> () const
+            {
+                return Vector<float, 2>(v[X], v[Y]);
+            }
         };
 
         union
@@ -68,52 +68,52 @@ namespace mango::math
 
         Vector(float s)
         {
-			x = s;
-			y = s;
+            x = s;
+            y = s;
         }
 
         explicit Vector(float s0, float s1)
         {
-			x = s0;
-			y = s1;
+            x = s0;
+            y = s1;
         }
 
         Vector(const Vector& v)
         {
-			x = v.x;
-			y = v.y;
+            x = v.x;
+            y = v.y;
         }
 
 #if 0
         template <int X, int Y>
         Vector(const ShuffleAccessor2<X, Y>& p)
         {
-			const float* v = p.v;
-			x = v[X];
-			y = v[Y];
+            const float* v = p.v;
+            x = v[X];
+            y = v[Y];
         }
 
         template <int X, int Y>
         Vector& operator = (const ShuffleAccessor2<X, Y>& p)
         {
-			const float* v = p.v;
-			x = v[X];
-			y = v[Y];
+            const float* v = p.v;
+            x = v[X];
+            y = v[Y];
             return *this;
         }
 #endif
 
         Vector& operator = (float s)
         {
-			x = s;
-			y = s;
+            x = s;
+            y = s;
             return *this;
         }
 
         Vector& operator = (const Vector& v)
         {
-			x = v.x;
-			y = v.y;
+            x = v.x;
+            y = v.y;
             return *this;
         }
 
@@ -127,14 +127,14 @@ namespace mango::math
     // operators
     // ------------------------------------------------------------------
 
-    static inline const Vector<float, 2>& operator + (const Vector<float, 2>& v)
+    static inline const Vector<float, 2>& operator + (const Vector<float, 2>& a)
     {
-        return v;
+        return a;
     }
 
-    static inline Vector<float, 2> operator - (const Vector<float, 2>& v)
+    static inline Vector<float, 2> operator - (const Vector<float, 2>& a)
     {
-        return Vector<float, 2>(-v.x, -v.y);
+        return Vector<float, 2>(-a.x, -a.y);
     }
 
     static inline Vector<float, 2>& operator += (Vector<float, 2>& a, const Vector<float, 2>& b)
@@ -144,10 +144,24 @@ namespace mango::math
         return a;
     }
 
+    static inline Vector<float, 2>& operator += (Vector<float, 2>& a, float b)
+    {
+        a.x += b;
+        a.y += b;
+        return a;
+    }
+
     static inline Vector<float, 2>& operator -= (Vector<float, 2>& a, const Vector<float, 2>& b)
     {
         a.x -= b.x;
         a.y -= b.y;
+        return a;
+    }
+
+    static inline Vector<float, 2>& operator -= (Vector<float, 2>& a, float b)
+    {
+        a.x -= b;
+        a.y -= b;
         return a;
     }
 
@@ -196,10 +210,38 @@ namespace mango::math
         return Vector<float, 2>(x, y);
     }
 
+    static inline Vector<float, 2> operator + (Vector<float, 2> a, float b)
+    {
+        float x = a.x + b;
+        float y = a.y + b;
+        return Vector<float, 2>(x, y);
+    }
+
+    static inline Vector<float, 2> operator + (float a, Vector<float, 2> b)
+    {
+        float x = a + b.x;
+        float y = a + b.y;
+        return Vector<float, 2>(x, y);
+    }
+
     static inline Vector<float, 2> operator - (Vector<float, 2> a, Vector<float, 2> b)
     {
         float x = a.x - b.x;
         float y = a.y - b.y;
+        return Vector<float, 2>(x, y);
+    }
+
+    static inline Vector<float, 2> operator - (Vector<float, 2> a, float b)
+    {
+        float x = a.x - b;
+        float y = a.y - b;
+        return Vector<float, 2>(x, y);
+    }
+
+    static inline Vector<float, 2> operator - (float a, Vector<float, 2> b)
+    {
+        float x = a - b.x;
+        float y = a - b.y;
         return Vector<float, 2>(x, y);
     }
 

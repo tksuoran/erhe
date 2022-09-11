@@ -1,6 +1,6 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2021 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 
 #include <limits>
@@ -14,7 +14,7 @@
 namespace mango::math
 {
 
-    constexpr float epsilon = std::numeric_limits<float>::epsilon();
+    static constexpr float epsilon = std::numeric_limits<float>::epsilon();
 
     // ------------------------------------------------------------------------
     // Matrix4x4
@@ -66,36 +66,37 @@ namespace mango::math
 
     const Matrix4x4& Matrix4x4::operator = (const AngleAxis& a)
     {
-        const float length2 = square(a.axis);
+        float length2 = square(a.axis);
         if (length2 < epsilon)
         {
             *this = 1.0f; // set identity
             return *this;
         }
 
-        const float length = 1.0f / std::sqrt(length2);
+        float s = std::sin(a.angle);
+        float c = std::cos(a.angle);
+        float k = 1.0f - c;
 
-        const float x = a.axis.x * length;
-        const float y = a.axis.y * length;
-        const float z = a.axis.z * length;
+        float length = 1.0f / std::sqrt(length2);
 
-        const float s = std::sin(a.angle);
-        const float c = std::cos(a.angle);
-        const float i = 1.0f - c;
+        float x = a.axis.x * length;
+        float y = a.axis.y * length;
+        float z = a.axis.z * length;
 
-        const float xx = x * x * i + c;
-        const float yy = y * y * i + c;
-        const float zz = z * z * i + c;
-        const float xy = x * y * i;
-        const float yz = y * z * i;
-        const float zx = z * x * i;
-        const float xs = x * s;
-        const float ys = y * s;
-        const float zs = z * s;
+        float xk = x * k;
+        float yk = y * k;
+        float zk = z * k;
 
-        m[0] = float32x4(xx, xy + zs, zx - ys, 0.0f);
-        m[1] = float32x4(xy - zs, yy, yz + xs, 0.0f);
-        m[2] = float32x4(zx + ys, yz - xs, zz, 0.0f);
+        float xy = x * yk;
+        float yz = y * zk;
+        float zx = z * xk;
+        float xs = x * s;
+        float ys = y * s;
+        float zs = z * s;
+
+        m[0] = float32x4(x * xk + c, xy + zs, zx - ys, 0.0f);
+        m[1] = float32x4(xy - zs, y * yk + c, yz + xs, 0.0f);
+        m[2] = float32x4(zx + ys, yz - xs, z * zk + c, 0.0f);
         m[3] = float32x4(0.0f, 0.0f, 0.0f, 1.0f);
 
         return *this;

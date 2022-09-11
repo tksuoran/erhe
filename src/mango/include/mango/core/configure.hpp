@@ -224,7 +224,7 @@
         #endif
     #endif
 
-    #pragma warning(disable : 4146 4996 4201 26812)
+    #pragma warning(disable : 4146 4996 4201 4244 26812)
 
 #elif defined(__llvm__) || defined(__clang__)
 
@@ -585,6 +585,16 @@
         #include <msa.h>
 
     #endif
+
+#endif
+
+// -----------------------------------------------------------------------
+// gcc built-ins
+// -----------------------------------------------------------------------
+
+#if defined(MANGO_COMPILER_GCC) || defined(MANGO_COMPILER_CLANG) || defined(MANGO_COMPILER_INTEL)
+
+    #define MANGO_GCC_BUILTINS
 
 #endif
 

@@ -1613,6 +1613,16 @@ namespace mango::simd
         return _mm512_abs_epi32(a);
     }
 
+    static inline s32x16 abs(s32x16 a, mask32x16 mask)
+    {
+        return _mm512_maskz_abs_epi32(mask, a);
+    }
+
+    static inline s32x16 abs(s32x16 a, mask32x16 mask, s32x16 value)
+    {
+        return _mm512_mask_abs_epi32(value, mask, a);
+    }
+
     static inline s32x16 neg(s32x16 a)
     {
         return _mm512_sub_epi32(_mm512_setzero_si512(), a);
@@ -1968,6 +1978,11 @@ namespace mango::simd
 
         temp = _mm512_xor_si512(temp, sign);
         return temp;
+    }
+
+    static inline s64x8 neg(s64x8 a)
+    {
+        return _mm512_sub_epi64(_mm512_setzero_si512(), a);
     }
 
     // bitwise

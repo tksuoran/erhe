@@ -1,6 +1,6 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2019 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 /*
     This work is based on "SLEEF" library and converted to use MANGO SIMD abstraction
@@ -15,19 +15,19 @@ namespace fp32
 
     // constants
 
-    constexpr float float_pi    = 3.14159265358979323846f;
-    constexpr float float_pi_2  = 1.57079632679489661923f;
-    constexpr float float_pi_4  = 0.785398163397448309616f;
-    constexpr float float_1_pi  = 0.318309886183790671538f;
-    constexpr float float_2_pi  = 0.636619772367581343076f;
-    constexpr float float_pi4_a = 0.78515625f;
-    constexpr float float_pi4_b = 0.00024187564849853515625f;
-    constexpr float float_pi4_c = 3.7747668102383613586e-08f;
-    constexpr float float_pi4_d = 1.2816720341285448015e-12f;
-    constexpr float float_r_ln2 = 1.442695040888963407359924681001892137426645954152985934135449406931f;
-    constexpr float float_r_inf = float(std::numeric_limits<float>::infinity());
-    constexpr float float_l2u   = 0.693145751953125f;
-    constexpr float float_l2l   = 1.428606765330187045e-06f;
+    static constexpr float float_pi    = 3.14159265358979323846f;
+    static constexpr float float_pi_2  = 1.57079632679489661923f;
+    static constexpr float float_pi_4  = 0.785398163397448309616f;
+    static constexpr float float_1_pi  = 0.318309886183790671538f;
+    static constexpr float float_2_pi  = 0.636619772367581343076f;
+    static constexpr float float_pi4_a = 0.78515625f;
+    static constexpr float float_pi4_b = 0.00024187564849853515625f;
+    static constexpr float float_pi4_c = 3.7747668102383613586e-08f;
+    static constexpr float float_pi4_d = 1.2816720341285448015e-12f;
+    static constexpr float float_r_ln2 = 1.442695040888963407359924681001892137426645954152985934135449406931f;
+    static constexpr float float_r_inf = float(std::numeric_limits<float>::infinity());
+    static constexpr float float_l2u   = 0.693145751953125f;
+    static constexpr float float_l2l   = 1.428606765330187045e-06f;
 
     // utility functions
 
@@ -358,13 +358,13 @@ namespace fp64
 
     // constants
 
-    constexpr double double_1_pi  = 0.318309886183790671538;
-    constexpr double double_2_pi  = 0.636619772367581343076;
-    constexpr double double_pi4_a = 0.78539816290140151978;
-    constexpr double double_pi4_b = 4.9604678871439933374e-10;
-    constexpr double double_pi4_c = 1.1258708853173288931e-18;
-    constexpr double double_pi4_d = 1.7607799325916000908e-27;
-    constexpr double double_r_inf = double(std::numeric_limits<double>::infinity());
+    static constexpr double double_1_pi  = 0.318309886183790671538;
+    static constexpr double double_2_pi  = 0.636619772367581343076;
+    static constexpr double double_pi4_a = 0.78539816290140151978;
+    static constexpr double double_pi4_b = 4.9604678871439933374e-10;
+    static constexpr double double_pi4_c = 1.1258708853173288931e-18;
+    static constexpr double double_pi4_d = 1.7607799325916000908e-27;
+    static constexpr double double_r_inf = double(std::numeric_limits<double>::infinity());
 
     // utility functions
 

@@ -1664,6 +1664,12 @@ namespace mango::simd
         return __msa_aver_s_d(a, b);
     }
 
+    static inline s64x2 neg(s64x2 a)
+    {
+        const v2i64 zero = (v2i64) __msa_xor_v((v16u8) a, (v16u8) a);
+        return __msa_subv_d(zero, a);
+    }
+
     // bitwise
 
     static inline s64x2 bitwise_nand(s64x2 a, s64x2 b)

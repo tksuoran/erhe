@@ -12,7 +12,7 @@ namespace
     using namespace mango;
     namespace fs = mango::filesystem;
 
-    constexpr u64 mgx_header_size = 24;
+    static constexpr u64 mgx_header_size = 24;
 
     struct Block
     {
@@ -131,6 +131,30 @@ namespace
                 MANGO_EXCEPTION("[mapper.mgx] Incorrect block identifier (%x)", magic2);
             }
 
+            u64 compressed = p.read64();
+            u64 uncompressed = p.read64();
+
+            ConstMemory source(p, compressed);
+            Buffer temp(uncompressed);
+
+            CompressionStatus status = zstd::decompress(temp, source);
+            if (status.size != uncompressed)
+            {
+                MANGO_EXCEPTION("[mapper.mgx] Incorrect compressed index");
+            }
+
+            parseFileArray(temp.data());
+            p += compressed;
+
+            u32 magic3 = p.read32();
+            if (magic3 != u32_mask('m', 'g', 'x', '3'))
+            {
+                MANGO_EXCEPTION("[mapper.mgx] Incorrect block terminator (%x)", magic3);
+            }
+        }
+
+        void parseFileArray(LittleEndianConstPointer p)
+        {
             u32 num_files = p.read32();
             for (u32 i = 0; i < num_files; ++i)
             {
@@ -169,12 +193,6 @@ namespace
 
                 header.filename = filename.substr(folder.length());
                 m_folders.insert(folder, filename, header);
-            }
-
-            u32 magic3 = p.read32();
-            if (magic3 != u32_mask('m', 'g', 'x', '3'))
-            {
-                MANGO_EXCEPTION("[mapper.mgx] Incorrect block terminator (%x)", magic3);
             }
         }
     };

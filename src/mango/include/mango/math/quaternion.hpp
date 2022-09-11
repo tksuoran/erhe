@@ -21,7 +21,7 @@ namespace mango::math
         union
         {
             struct { float x, y, z, w; };
-            float data[4];
+            float data[4] {};
         };
 
         explicit Quaternion()
@@ -129,7 +129,7 @@ namespace mango::math
 
         Quaternion operator - () const
         {
-    		return Quaternion(-x, -y, -z, -w);
+            return Quaternion(-x, -y, -z, -w);
         }
 
         operator Vector<float, 4> () const
@@ -183,7 +183,7 @@ namespace mango::math
 
     static inline Quaternion operator + (const Quaternion& a, const Quaternion& b)
     {
-		return Quaternion(a.x + b.x,
+        return Quaternion(a.x + b.x,
                           a.y + b.y,
                           a.z + b.z,
                           a.w + b.w);
@@ -191,7 +191,7 @@ namespace mango::math
 
     static inline Quaternion operator - (const Quaternion& a, const Quaternion& b)
     {
-		return Quaternion(a.x - b.x,
+        return Quaternion(a.x - b.x,
                           a.y - b.y,
                           a.z - b.z,
                           a.w - b.w);
@@ -199,7 +199,7 @@ namespace mango::math
 
     static inline Quaternion operator * (const Quaternion& q, float s)
     {
-		return Quaternion(q.x * s,
+        return Quaternion(q.x * s,
                           q.y * s,
                           q.z * s,
                           q.w * s);
@@ -207,7 +207,7 @@ namespace mango::math
 
     static inline Quaternion operator * (float s, const Quaternion& q)
     {
-		return Quaternion(q.x * s,
+        return Quaternion(q.x * s,
                           q.y * s,
                           q.z * s,
                           q.w * s);

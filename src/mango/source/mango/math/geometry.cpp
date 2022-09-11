@@ -1,6 +1,6 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2019 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2021 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 
 #include <cmath>
@@ -63,16 +63,13 @@ namespace mango::math
     FastRay::FastRay(const Ray& ray)
         : Ray(ray.origin, ray.direction)
     {
-        dotod = dot(origin, direction);
-        dotoo = dot(origin, origin);
+        dot_od = dot(origin, direction);
+        dot_oo = dot(origin, origin);
+        invdir = 1.0f / direction;
 
-        for (int i = 0; i < 3; ++i)
-        {
-            // division by zero is OK here; 
-            // all code that uses FastRay must correctly handle +inf and -inf
-            invdir[i] = 1.0f / direction[i];
-            sign[i] = invdir[i] < 0;
-        }
+        sign.x = invdir.x < 0;
+        sign.y = invdir.y < 0;
+        sign.z = invdir.z < 0;
     }
 
     // ------------------------------------------------------------------
@@ -225,10 +222,10 @@ namespace mango::math
         const float32x2 c = texcoord[1] - texcoord[0];
         const float32x2 d = texcoord[2] - texcoord[0];
         float s = c.x * d.y - c.y * d.x;
-		if (s)
-		{
-			s = 1.0f / s;
-		}
+        if (s)
+        {
+            s = 1.0f / s;
+        }
 
         Matrix3x3 tbn;
 
@@ -342,8 +339,8 @@ namespace mango::math
         if (dot(point, normal) < dot(ray.origin, normal))
             return false;
 
-		t0 = is.t0;
-		return true;
+        t0 = is.t0;
+        return true;
     }
 
     // ------------------------------------------------------------------
@@ -352,23 +349,18 @@ namespace mango::math
 
     bool IntersectRange::intersect(const Ray& ray, const Box& box)
     {
-        float id = 1.0f / ray.direction[0];
-        float s1 = (box.corner[0][0] - ray.origin[0]) * id;
-        float s2 = (box.corner[1][0] - ray.origin[0]) * id;
-        float tmin = std::min(s1, s2);
-        float tmax = std::max(s1, s2);
+        float32x3 s0 = (box.corner[0] - ray.origin) / ray.direction;
+        float32x3 s1 = (box.corner[1] - ray.origin) / ray.direction;
 
-        for (int i = 1; i < 3; ++i)
-        {
-            id = 1.0f / ray.direction[i];
-            s1 = (box.corner[0][i] - ray.origin[i]) * id;
-            s2 = (box.corner[1][i] - ray.origin[i]) * id;
-            tmin = std::max(tmin, std::min(std::min(s1, s2), tmax));
-            tmax = std::min(tmax, std::max(std::max(s1, s2), tmin));
-        }
+        float tmin = std::min(s0.x, s1.x);
+        float tmax = std::max(s0.x, s1.x);
 
-		t0 = tmin;
-		t1 = tmax;
+        tmin = std::max(tmin, std::min({ s0.y, s1.y, tmax }));
+        tmax = std::min(tmax, std::max({ s0.y, s1.y, tmin }));
+
+        t0 = std::max(tmin, std::min({ s0.z, s1.z, tmax }));
+        t1 = std::min(tmax, std::max({ s0.z, s1.z, tmin }));
+
         return t1 > std::max(t0, 0.0f);
     }
 
@@ -377,39 +369,39 @@ namespace mango::math
         // Implementation based on a paper by:
         // Amy Williams, Steve Barrus, R. Keith Morley and Peter Shirley
 
-        float tmin = (box.corner[0 + ray.sign[0]].x - ray.origin.x) * ray.invdir.x;
-        float ymax = (box.corner[1 - ray.sign[1]].y - ray.origin.y) * ray.invdir.y;
+        float tmin = (box.corner[0 + ray.sign.x].x - ray.origin.x) * ray.invdir.x;
+        float ymax = (box.corner[1 - ray.sign.y].y - ray.origin.y) * ray.invdir.y;
         if (tmin > ymax)
             return false;
 
-        float tmax = (box.corner[1 - ray.sign[0]].x - ray.origin.x) * ray.invdir.x;
-        float ymin = (box.corner[0 + ray.sign[1]].y - ray.origin.y) * ray.invdir.y;
+        float tmax = (box.corner[1 - ray.sign.x].x - ray.origin.x) * ray.invdir.x;
+        float ymin = (box.corner[0 + ray.sign.y].y - ray.origin.y) * ray.invdir.y;
         if (tmax < ymin)
             return false;
 
         tmin = std::max(tmin, ymin);
         tmax = std::min(tmax, ymax);
 
-        float zmin = (box.corner[0 + ray.sign[2]].z - ray.origin.z) * ray.invdir.z;
+        float zmin = (box.corner[0 + ray.sign.z].z - ray.origin.z) * ray.invdir.z;
         if (tmax < zmin)
             return false;
 
-        float zmax = (box.corner[1 - ray.sign[2]].z - ray.origin.z) * ray.invdir.z;
+        float zmax = (box.corner[1 - ray.sign.z].z - ray.origin.z) * ray.invdir.z;
         if (tmin > zmax)
             return false;
 
         tmin = std::max(tmin, zmin);
         tmax = std::min(tmax, zmax);
 
-		t0 = tmin;
-		t1 = tmax;
+        t0 = tmin;
+        t1 = tmax;
         return t1 > std::max(t0, 0.0f);
     }
 
     bool IntersectRange::intersect(const FastRay& ray, const Sphere& sphere)
     {
-        float b = -(ray.dotod - dot(sphere.center, ray.direction));
-        float c = ray.dotoo + dot(sphere.center, sphere.center) - 2.0f * dot(ray.origin, sphere.center) - sphere.radius * sphere.radius;
+        float b = -(ray.dot_od - dot(sphere.center, ray.direction));
+        float c = ray.dot_oo + dot(sphere.center, sphere.center) - 2.0f * dot(ray.origin, sphere.center) - sphere.radius * sphere.radius;
 
         const float det = b * b - c;
 
@@ -529,7 +521,7 @@ namespace mango::math
             return false;
 
         t0 = dot(edge2, qvec) * det;
-        u = 1.0f - w - v;
+        u = 1.0f - (v + w);
 
         return true;
     }

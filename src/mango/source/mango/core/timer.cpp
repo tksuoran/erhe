@@ -3,30 +3,25 @@
     Copyright (C) 2012-2019 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 #include <ctime>
+#include <mango/core/system.hpp>
 #include <mango/core/timer.hpp>
-
-namespace
-{
-    mango::Timer g_timer;
-
-} // namespace
 
 namespace mango
 {
 
     u64 Time::ms()
     {
-        return g_timer.ms();
+        return getSystemContext().timer.ms();
     }
 
     u64 Time::us()
     {
-        return g_timer.us();
+        return getSystemContext().timer.us();
     }
 
     u64 Time::ns()
     {
-        return g_timer.ns();
+        return getSystemContext().timer.ns();
     }
 
     LocalTime getLocalTime()

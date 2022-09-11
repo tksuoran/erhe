@@ -1,6 +1,6 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2018 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 #include <mango/core/pointer.hpp>
 #include <mango/core/string.hpp>
@@ -320,46 +320,46 @@ namespace
             p += commentLen;
 
             return true;
-		}
-	};
+        }
+    };
 
-	struct DirEndRecord
-	{
-		u32	signature;         // 0x06054b50
-		u16	thisDisk;          // number of this disk
-		u16	dirStartDisk;      // number of the disk containing the start of the central directory
-		u64	numEntriesOnDisk;  // # of entries in the central directory on this disk
-		u64	numEntriesTotal;   // total # of entries in the central directory
-		u64	dirSize;           // size of the central directory
-		u64	dirStartOffset;    // offset of the start of central directory on the disk
-		u16	commentLen;        // zip file comment length
+    struct DirEndRecord
+    {
+        u32	signature;         // 0x06054b50
+        u16	thisDisk;          // number of this disk
+        u16	dirStartDisk;      // number of the disk containing the start of the central directory
+        u64	numEntriesOnDisk;  // # of entries in the central directory on this disk
+        u64	numEntriesTotal;   // total # of entries in the central directory
+        u64	dirSize;           // size of the central directory
+        u64	dirStartOffset;    // offset of the start of central directory on the disk
+        u16	commentLen;        // zip file comment length
 
-		DirEndRecord(ConstMemory memory)
-		{
+        DirEndRecord(ConstMemory memory)
+        {
             std::memset(this, 0, sizeof(DirEndRecord));
 
-			// find central directory end record signature
-			// by scanning backwards from the end of the file
+            // find central directory end record signature
+            // by scanning backwards from the end of the file
             const u8* start = memory.address;
             const u8* end = memory.address + memory.size;
 
             end -= 22; // header size is 22 bytes
 
             for ( ; end >= start; --end)
-			{
+            {
                 LittleEndianConstPointer p = end;
 
-				signature = p.read32();
-				if (status())
+                signature = p.read32();
+                if (status())
                 {
                     // central directory detected
-    				thisDisk         = p.read16();
-	    			dirStartDisk     = p.read16();
-		    		numEntriesOnDisk = p.read16();
-			    	numEntriesTotal  = p.read16();
-				    dirSize          = p.read32();
-				    dirStartOffset   = p.read32();
-				    commentLen       = p.read16();
+                    thisDisk         = p.read16();
+                    dirStartDisk     = p.read16();
+                    numEntriesOnDisk = p.read16();
+                    numEntriesTotal  = p.read16();
+                    dirSize          = p.read32();
+                    dirStartOffset   = p.read32();
+                    commentLen       = p.read16();
 
                     if (thisDisk != 0 || dirStartDisk != 0 || numEntriesOnDisk != numEntriesTotal)
                     {
@@ -383,18 +383,18 @@ namespace
                             {
                                 // ZIP64 End of Central Directory
                                 p += 20;
-		    		            numEntriesOnDisk = p.read64();
-			    	            numEntriesTotal  = p.read64();
+                                numEntriesOnDisk = p.read64();
+                                numEntriesTotal  = p.read64();
                                 dirSize          = p.read64();
-				                dirStartOffset   = p.read64();
+                                dirStartOffset   = p.read64();
                             }
                         }
                     }
 
                     break;
                 }
-			}
-		}
+            }
+        }
 
         ~DirEndRecord()
         {
@@ -404,7 +404,7 @@ namespace
         {
             return signature == 0x06054b50;
         }
-	};
+    };
 
     // --------------------------------------------------------------------
     // zip functions
@@ -422,132 +422,96 @@ namespace
         x = (x >> 4) ^ crc_table[(x & 0xf) ^ (v & 0xf)];
         x = (x >> 4) ^ crc_table[(x & 0xf) ^ (v >> 4)];
         return x;
-	}
+    }
 
-	inline u8 zip_decrypt_value(u32* keys)
-	{
-		u32 temp = (keys[2] & 0xffff) | 2;
-		return u8(((temp * (temp ^ 1)) >> 8) & 0xff);
-	}
+    inline u8 zip_decrypt_value(u32* keys)
+    {
+        u32 temp = (keys[2] & 0xffff) | 2;
+        return u8(((temp * (temp ^ 1)) >> 8) & 0xff);
+    }
 
-	inline void zip_update(u32* keys, u8 v)
-	{
-		keys[0] = zip_crc32(keys[0], v);
-		keys[1] = 1 + (keys[1] + (keys[0] & 0xff)) * 134775813L;
-		keys[2] = zip_crc32(keys[2], u8(keys[1] >> 24));
-	}
+    inline void zip_update(u32* keys, u8 v)
+    {
+        keys[0] = zip_crc32(keys[0], v);
+        keys[1] = 1 + (keys[1] + (keys[0] & 0xff)) * 134775813L;
+        keys[2] = zip_crc32(keys[2], u8(keys[1] >> 24));
+    }
 
-	void zip_decrypt_buffer(u8* out, const u8* in, u64 size, u32* keys)
-	{
-		for (u64 i = 0; i < size; ++i)
-		{
-			u8 v = in[i] ^ zip_decrypt_value(keys);
-			zip_update(keys, v);
-			out[i] = v;
-		}
-	}
+    void zip_decrypt_buffer(u8* out, const u8* in, u64 size, u32* keys)
+    {
+        for (u64 i = 0; i < size; ++i)
+        {
+            u8 v = in[i] ^ zip_decrypt_value(keys);
+            zip_update(keys, v);
+            out[i] = v;
+        }
+    }
 
-	void zip_init_keys(u32* keys, const char* password)
-	{
-		keys[0] = 305419896L;
-		keys[1] = 591751049L;
-		keys[2] = 878082192L;
+    void zip_init_keys(u32* keys, const char* password)
+    {
+        keys[0] = 305419896L;
+        keys[1] = 591751049L;
+        keys[2] = 878082192L;
 
-		for (; *password; ++password)
-		{
-			zip_update(keys, *password);
-		}
-	}
+        for (; *password; ++password)
+        {
+            zip_update(keys, *password);
+        }
+    }
 
-	bool zip_decrypt(u8* out, const u8* in, u64 size, const u8* dcheader, int version, u32 crc, const std::string& password)
-	{
-		if (password.empty())
-		{
-			// missing password
-		    return false;
-		}
+    bool zip_decrypt(u8* out, const u8* in, u64 size, const u8* dcheader, int version, u32 crc, const std::string& password)
+    {
+        if (password.empty())
+        {
+            // missing password
+            return false;
+        }
 
-		// decryption keys
-		u32 keys[3];
-		zip_init_keys(keys, password.c_str());
+        // decryption keys
+        u32 keys[3];
+        zip_init_keys(keys, password.c_str());
 
-		// decrypt the 12 byte encryption header
-		u8 keyfile[DCKEYSIZE];
-		zip_decrypt_buffer(keyfile, dcheader, DCKEYSIZE, keys);
+        // decrypt the 12 byte encryption header
+        u8 keyfile[DCKEYSIZE];
+        zip_decrypt_buffer(keyfile, dcheader, DCKEYSIZE, keys);
 
-		// check that password is correct one
-		if (version < 20)
-		{
-			u16* p = reinterpret_cast<u16*>(&keyfile[10]);
-			if (*p != (crc >> 16))
-			{
-				// incorrect password
-				return false;
-			}
-		}
-		else if (version < 30)
-		{
-			if (keyfile[11] != (crc >> 24))
-			{
-				// incorrect password
-				return false;
-			}
-		}
-		else
-		{
-		    // NOTE: the CRC/password check should be same for version > 3.0
-		    //       but some compression programs don't create compatible
-		    //       dcheader so the check would fail above.
+        // check that password is correct one
+        if (version < 20)
+        {
+            u16* p = reinterpret_cast<u16*>(&keyfile[10]);
+            if (*p != (crc >> 16))
+            {
+                // incorrect password
+                return false;
+            }
+        }
+        else if (version < 30)
+        {
+            if (keyfile[11] != (crc >> 24))
+            {
+                // incorrect password
+                return false;
+            }
+        }
+        else
+        {
+            // NOTE: the CRC/password check should be same for version > 3.0
+            //       but some compression programs don't create compatible
+            //       dcheader so the check would fail above.
 
 #if 0 // TODO: the condition is reversed here.. need more testing (check specs!)
-			if (keyfile[11] == (crc >> 24))
-			{
-				// incorrect password
-				return false;
-			}
+            if (keyfile[11] == (crc >> 24))
+            {
+                // incorrect password
+                return false;
+            }
 #endif
-		}
-
-		// read compressed data & decrypt
-		zip_decrypt_buffer(out, in, size, keys);
-
-		return true;
-	}
-
-	u64 zip_decompress(const u8* compressed, u8* uncompressed, u64 compressedLen, u64 uncompressedLen)
-	{
-        libdeflate_decompressor* decompressor = libdeflate_alloc_decompressor();
-
-        size_t bytes_out = 0;
-        libdeflate_result result = libdeflate_deflate_decompress(decompressor,
-            compressed, size_t(compressedLen),
-            uncompressed, size_t(uncompressedLen), &bytes_out);
-
-        libdeflate_free_decompressor(decompressor);
-
-        const char* error = nullptr;
-        switch (result)
-        {
-            default:
-            case LIBDEFLATE_SUCCESS:
-                break;
-            case LIBDEFLATE_BAD_DATA:
-                error = "Bad data";
-                break;
-            case LIBDEFLATE_SHORT_OUTPUT:
-                error = "Short output";
-                break;
-            case LIBDEFLATE_INSUFFICIENT_SPACE:
-                error = "Insufficient space";
-                break;
         }
 
-        if (error)
-        {
-            MANGO_EXCEPTION("[mapper.zip] %s.", error);
-        }
+        // read compressed data & decrypt
+        zip_decrypt_buffer(out, in, size, keys);
 
-        return bytes_out;
+        return true;
     }
 
 } // namespace
@@ -710,29 +674,32 @@ namespace mango::filesystem
             switch (header.compression)
             {
                 case COMPRESSION_NONE:
+                {
                     size = header.uncompressedSize;
                     break;
+                }
 
                 case COMPRESSION_DEFLATE:
                 {
-                    const size_t uncompressed_size = size_t(header.uncompressedSize);
-                    u8* uncompressed_buffer = new u8[uncompressed_size];
+                    compressor = getCompressor(Compressor::DEFLATE);
+                    break;
+                }
 
-                    u64 outsize = zip_decompress(address, uncompressed_buffer, header.compressedSize, header.uncompressedSize);
+                case COMPRESSION_PPMD:
+                {
+                    compressor = getCompressor(Compressor::PPMD8);
+                    break;
+                }
 
-                    delete[] buffer;
-                    buffer = uncompressed_buffer;
+                case COMPRESSION_BZIP2:
+                {
+                    compressor = getCompressor(Compressor::BZIP2);
+                    break;
+                }
 
-                    if (outsize != header.uncompressedSize)
-                    {
-                        // incorrect output size
-                        delete[] buffer;
-                        MANGO_EXCEPTION("[mapper.zip] Incorrect decompressed size.");
-                    }
-
-                    // use decode_buffer as memory map
-                    address = buffer;
-                    size = header.uncompressedSize;
+                case COMPRESSION_ZSTD:
+                {
+                    compressor = getCompressor(Compressor::ZSTD);
                     break;
                 }
 
@@ -753,24 +720,6 @@ namespace mango::filesystem
                     header.compressedSize -= 4;
 
                     compressor = getCompressor(Compressor::LZMA);
-                    break;
-                }
-
-                case COMPRESSION_PPMD:
-                {
-                    compressor = getCompressor(Compressor::PPMD8);
-                    break;
-                }
-
-                case COMPRESSION_BZIP2:
-                {
-                    compressor = getCompressor(Compressor::BZIP2);
-                    break;
-                }
-
-                case COMPRESSION_ZSTD:
-                {
-                    compressor = getCompressor(Compressor::ZSTD);
                     break;
                 }
 
@@ -801,10 +750,17 @@ namespace mango::filesystem
 
                 ConstMemory input(address, size_t(header.compressedSize));
                 Memory output(uncompressed_buffer, size_t(header.uncompressedSize));
-                compressor.decompress(output, input);
+
+                CompressionStatus status = compressor.decompress(output, input);
 
                 delete[] buffer;
                 buffer = uncompressed_buffer;
+
+                if (!status)
+                {
+                    delete[] buffer;
+                    MANGO_EXCEPTION("[mapper.zip] %s", status.info.c_str());
+                }
 
                 // use decode_buffer as memory map
                 address = buffer;

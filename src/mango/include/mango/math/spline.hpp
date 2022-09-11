@@ -1,6 +1,6 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2021 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 #pragma once
 
@@ -10,7 +10,7 @@
 namespace mango::math
 {
 
-    constexpr double pi = 3.14159265358979323846264338327;
+    static constexpr double pi = 3.14159265358979323846264338327;
 
     // ------------------------------------------------------------------
     // easing functions
@@ -240,7 +240,7 @@ namespace mango::math
     template <typename ScalarType>
     inline ScalarType easeOutElastic(ScalarType time)
     {
-	    return std::sin(ScalarType(-13.0 * pi * 0.5) * (time + ScalarType(1.0))) * pow(ScalarType(2.0), ScalarType(-10.0) * time) + ScalarType(1.0);
+        return std::sin(ScalarType(-13.0 * pi * 0.5) * (time + ScalarType(1.0))) * pow(ScalarType(2.0), ScalarType(-10.0) * time) + ScalarType(1.0);
     }
 
     template <typename ScalarType>
@@ -248,11 +248,11 @@ namespace mango::math
     {
         if (time < ScalarType(0.5))
         {
-		    time = ScalarType(0.5) * std::sin(ScalarType(13.0 * pi * 0.5) * (ScalarType(2.0) * time)) * std::pow(ScalarType(2.0), ScalarType(10.0) * ((ScalarType(2.0) * time) - ScalarType(1.0)));
+            time = ScalarType(0.5) * std::sin(ScalarType(13.0 * pi * 0.5) * (ScalarType(2.0) * time)) * std::pow(ScalarType(2.0), ScalarType(10.0) * ((ScalarType(2.0) * time) - ScalarType(1.0)));
         }
         else
         {
-		    time = ScalarType(0.5) * (std::sin(ScalarType(-13.0 * pi * 0.5) * ((ScalarType(2.0) * time - ScalarType(1.0)) + ScalarType(1.0))) * std::pow(ScalarType(2.0), ScalarType(-10.0) * (ScalarType(2.0) * time - ScalarType(1.0))) + ScalarType(2.0));
+            time = ScalarType(0.5) * (std::sin(ScalarType(-13.0 * pi * 0.5) * ((ScalarType(2.0) * time - ScalarType(1.0)) + ScalarType(1.0))) * std::pow(ScalarType(2.0), ScalarType(-10.0) * (ScalarType(2.0) * time - ScalarType(1.0))) + ScalarType(2.0));
         }
         return time;
     }

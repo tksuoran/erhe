@@ -1032,6 +1032,7 @@ namespace mango::simd
     SIMD_COMPOSITE_FUNC2(s64x8, s64x8, sub)
     SIMD_COMPOSITE_FUNC2(s64x8, s64x8, avg)
     SIMD_COMPOSITE_FUNC2(s64x8, s64x8, avg_round)
+    SIMD_COMPOSITE_FUNC1(s64x8, s64x8, neg)
 
     SIMD_COMPOSITE_ZEROMASK_FUNC2(s64x8, s64x8, mask64x8, min)
     SIMD_COMPOSITE_ZEROMASK_FUNC2(s64x8, s64x8, mask64x8, max)

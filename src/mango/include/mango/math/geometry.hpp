@@ -93,8 +93,8 @@ namespace mango::math
 
     struct FastRay : Ray
     {
-        float dotod;
-        float dotoo;
+        float dot_od;
+        float dot_oo;
         float32x3 invdir;
         int32x3 sign;
 
@@ -199,7 +199,7 @@ namespace mango::math
 
         Box()
         {
-            const float s = std::numeric_limits<float>::max();
+            constexpr float s = std::numeric_limits<float>::max();
             corner[0] = float32x3(s, s, s);
             corner[1] = float32x3(-s, -s, -s);
         }
@@ -361,9 +361,9 @@ namespace mango::math
     {
         float t0;
 
-	    bool intersect(const Ray& ray, const Plane& plane);
-	    bool intersect(const Ray& ray, const Sphere& sphere);
-	    bool intersect(const Ray& ray, const Triangle& triangle);
+        bool intersect(const Ray& ray, const Plane& plane);
+        bool intersect(const Ray& ray, const Sphere& sphere);
+        bool intersect(const Ray& ray, const Triangle& triangle);
     };
 
     // IntersectRange implements non-solid primitives and the intersections are at the boundaries.
@@ -375,9 +375,9 @@ namespace mango::math
         float t0;
         float t1;
 
-	    bool intersect(const Ray& ray, const Box& box);
-	    bool intersect(const FastRay& ray, const Box& box);
-	    bool intersect(const FastRay& ray, const Sphere& sphere);
+        bool intersect(const Ray& ray, const Box& box);
+        bool intersect(const FastRay& ray, const Box& box);
+        bool intersect(const FastRay& ray, const Sphere& sphere);
     };
 
     // Intersection inside the primitive will intersect at ray origin
@@ -386,9 +386,9 @@ namespace mango::math
     {
         float t0;
 
-	    bool intersect(const Ray& ray, const Box& box);
-	    bool intersect(const FastRay& ray, const Box& box);
-	    bool intersect(const FastRay& ray, const Sphere& sphere);
+        bool intersect(const Ray& ray, const Box& box);
+        bool intersect(const FastRay& ray, const Box& box);
+        bool intersect(const FastRay& ray, const Sphere& sphere);
     };
 
     struct IntersectBarycentric

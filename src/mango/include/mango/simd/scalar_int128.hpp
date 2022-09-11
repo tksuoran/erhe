@@ -1676,6 +1676,11 @@ namespace mango::simd
         return detail::scalar_unroll(detail::scalar_signed_rounded_average, a, b);
     }
 
+    static inline s64x2 neg(s64x2 a)
+    {
+        return detail::scalar_unroll(detail::scalar_neg, a);
+    }
+
     // bitwise
 
     static inline s64x2 bitwise_nand(s64x2 a, s64x2 b)

@@ -1,8 +1,9 @@
 /*
     MANGO Multimedia Development Platform
-    Copyright (C) 2012-2020 Twilight Finland 3D Oy Ltd. All rights reserved.
+    Copyright (C) 2012-2022 Twilight Finland 3D Oy Ltd. All rights reserved.
 */
 #include <chrono>
+#include <mango/core/system.hpp>
 #include <mango/core/thread.hpp>
 #include "../../external/concurrentqueue/concurrentqueue.h"
 #include "../../external/concurrentqueue/readerwriterqueue.h"
@@ -94,11 +95,6 @@ namespace mango
     // ThreadPool
     // ------------------------------------------------------------
 
-    static const
-    size_t concurrency = std::max(std::thread::hardware_concurrency() - 0, 1U);
-
-    ThreadPool ThreadPool::m_static_instance(concurrency);
-
     struct ThreadPool::TaskQueue
     {
         using Task = ThreadPool::Task;
@@ -115,7 +111,7 @@ namespace mango
         // NOTE: let OS scheduler shuffle tasks as it sees fit
         //       this gives better performance overall UNTIL we have some practical
         //       use for the affinity (eg. dependent tasks using same cache)
-        const bool affinity = false;//std::thread::hardware_concurrency() > 1;
+        const bool affinity = false; //std::thread::hardware_concurrency() > 1;
 		if (affinity)
         {
             set_current_thread_affinity(0);
@@ -129,7 +125,7 @@ namespace mango
             });
 
 #if defined(MANGO_PLATFORM_WINDOWS)
-            if (concurrency > 64)
+            if (getHardwareConcurrency() > 64)
             {
                 // HACK: work around Windows 64 logical processor per ProcessorGroup limitation
                 GROUP_AFFINITY group{};
@@ -161,14 +157,14 @@ namespace mango
         delete[] m_queues;
     }
 
-    int ThreadPool::getHardwareConcurrency()
+    size_t ThreadPool::getHardwareConcurrency()
     {
-        return int(std::thread::hardware_concurrency());
+        return std::max(std::thread::hardware_concurrency(), 1u);
     }
 
     ThreadPool& ThreadPool::getInstance()
     {
-        return m_static_instance;
+        return getSystemContext().thread_pool;
     }
 
     int ThreadPool::size() const
@@ -274,6 +270,18 @@ namespace mango
 
     ConcurrentQueue::ConcurrentQueue(const std::string& name, Priority priority)
         : m_pool(ThreadPool::getInstance())
+        , m_queue(&m_pool, int(priority), name)
+    {
+    }
+
+    ConcurrentQueue::ConcurrentQueue(ThreadPool& pool)
+        : m_pool(pool)
+        , m_queue(&m_pool, int(Priority::NORMAL), "concurrent.default")
+    {
+    }
+
+    ConcurrentQueue::ConcurrentQueue(ThreadPool& pool, const std::string& name, Priority priority)
+        : m_pool(pool)
         , m_queue(&m_pool, int(priority), name)
     {
     }

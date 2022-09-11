@@ -43,6 +43,9 @@ namespace mango
         void reserve(size_t bytes);
         void append(const void* source, size_t bytes);
 
+        [[nodiscard]] Memory acquire();
+        static void release(Memory memory);
+
     private:
         u8* allocate(size_t bytes, Alignment alignment) const;
         void free(u8* ptr) const;
@@ -76,5 +79,7 @@ namespace mango
             Stream::write(memory);
         }
     };
+
+    using MemoryStream = BufferStream;
 
 } // namespace mango

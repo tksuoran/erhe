@@ -183,24 +183,24 @@ namespace mango::math
     }
 
     template <typename T>
-	static inline T sign(T a)
-	{
-		if (a < 0) a = -T(1.0);
-		else if (a > 0) a = T(1.0);
-		return a;
-	}
+    static inline T sign(T a)
+    {
+        if (a < 0) a = -T(1.0);
+        else if (a > 0) a = T(1.0);
+        return a;
+    }
 
     template <typename T>
-	static inline T radians(T a)
-	{
+    static inline T radians(T a)
+    {
         return a * T(0.01745329251);
-	}
+    }
 
     template <typename T>
-	static inline T degrees(T a)
-	{
+    static inline T degrees(T a)
+    {
         return a * T(57.2957795131);
-	}
+    }
 
     // ------------------------------------------------------------------
     // Vector
@@ -568,18 +568,18 @@ namespace mango::math
     // ------------------------------------------------------------------
 
     template <typename ScalarType, int VectorSize>
-    static inline const Vector<ScalarType, VectorSize>& operator + (const Vector<ScalarType, VectorSize>& v)
+    static inline const Vector<ScalarType, VectorSize>& operator + (const Vector<ScalarType, VectorSize>& a)
     {
-        return v;
+        return a;
     }
 
     template <typename ScalarType, int VectorSize>
-    static inline Vector<ScalarType, VectorSize> operator - (const Vector<ScalarType, VectorSize>& v)
+    static inline Vector<ScalarType, VectorSize> operator - (const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
         {
-            temp[i] = -v[i];
+            temp[i] = -a[i];
         }
         return temp;
     }
@@ -595,11 +595,31 @@ namespace mango::math
     }
 
     template <typename ScalarType, int VectorSize>
+    static inline Vector<ScalarType, VectorSize>& operator += (Vector<ScalarType, VectorSize>& a, ScalarType b)
+    {
+        for (int i = 0; i < VectorSize; ++i)
+        {
+            a[i] += b;
+        }
+        return a;
+    }
+
+    template <typename ScalarType, int VectorSize>
     static inline Vector<ScalarType, VectorSize>& operator -= (Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
     {
         for (int i = 0; i < VectorSize; ++i)
         {
             a[i] -= b[i];
+        }
+        return a;
+    }
+
+    template <typename ScalarType, int VectorSize>
+    static inline Vector<ScalarType, VectorSize>& operator -= (Vector<ScalarType, VectorSize>& a, ScalarType b)
+    {
+        for (int i = 0; i < VectorSize; ++i)
+        {
+            a[i] -= b;
         }
         return a;
     }
@@ -656,12 +676,56 @@ namespace mango::math
     }
 
     template <typename ScalarType, int VectorSize>
+    static inline Vector<ScalarType, VectorSize> operator + (const Vector<ScalarType, VectorSize>& a, ScalarType b)
+    {
+        Vector<ScalarType, VectorSize> temp;
+        for (int i = 0; i < VectorSize; ++i)
+        {
+            temp[i] = a[i] + b;
+        }
+        return temp;
+    }
+
+    template <typename ScalarType, int VectorSize>
+    static inline Vector<ScalarType, VectorSize> operator + (ScalarType a, const Vector<ScalarType, VectorSize>& b)
+    {
+        Vector<ScalarType, VectorSize> temp;
+        for (int i = 0; i < VectorSize; ++i)
+        {
+            temp[i] = a + b[i];
+        }
+        return temp;
+    }
+
+    template <typename ScalarType, int VectorSize>
     static inline Vector<ScalarType, VectorSize> operator - (const Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
         {
             temp[i] = a[i] - b[i];
+        }
+        return temp;
+    }
+
+    template <typename ScalarType, int VectorSize>
+    static inline Vector<ScalarType, VectorSize> operator - (const Vector<ScalarType, VectorSize>& a, ScalarType b)
+    {
+        Vector<ScalarType, VectorSize> temp;
+        for (int i = 0; i < VectorSize; ++i)
+        {
+            temp[i] = a[i] - b;
+        }
+        return temp;
+    }
+
+    template <typename ScalarType, int VectorSize>
+    static inline Vector<ScalarType, VectorSize> operator - (ScalarType a, const Vector<ScalarType, VectorSize>& b)
+    {
+        Vector<ScalarType, VectorSize> temp;
+        for (int i = 0; i < VectorSize; ++i)
+        {
+            temp[i] = a - b[i];
         }
         return temp;
     }
@@ -720,6 +784,19 @@ namespace mango::math
         }
         return temp;
     }
+
+    /*
+    template <typename ScalarType, int VectorSize>
+    static inline Vector<ScalarType, VectorSize> operator / (ScalarType a, const Vector<ScalarType, VectorSize>& b)
+    {
+        Vector<ScalarType, VectorSize> temp;
+        for (int i = 0; i < VectorSize; ++i)
+        {
+            temp[i] = a / b[i];
+        }
+        return temp;
+    }
+    */
 
     // ------------------------------------------------------------------
     // Vector functions
@@ -831,8 +908,8 @@ namespace mango::math
         return a + (b - a) * factor;
     }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> sign(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> sign(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -840,10 +917,10 @@ namespace mango::math
             temp[i] = sign(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> radians(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> radians(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -851,10 +928,10 @@ namespace mango::math
             temp[i] = radians(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> degrees(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> degrees(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -862,10 +939,10 @@ namespace mango::math
             temp[i] = degrees(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> sin(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> sin(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -873,10 +950,10 @@ namespace mango::math
             temp[i] = sin(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> cos(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> cos(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -884,10 +961,10 @@ namespace mango::math
             temp[i] = cos(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> tan(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> tan(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -895,10 +972,10 @@ namespace mango::math
             temp[i] = tan(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> asin(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> asin(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -906,10 +983,10 @@ namespace mango::math
             temp[i] = asin(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> acos(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> acos(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -917,10 +994,10 @@ namespace mango::math
             temp[i] = acos(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> atan(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> atan(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -928,10 +1005,10 @@ namespace mango::math
             temp[i] = atan(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> exp(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> exp(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -939,10 +1016,10 @@ namespace mango::math
             temp[i] = exp(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> log(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> log(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -950,10 +1027,10 @@ namespace mango::math
             temp[i] = log(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> exp2(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> exp2(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -961,10 +1038,10 @@ namespace mango::math
             temp[i] = exp2(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> log2(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> log2(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -972,10 +1049,10 @@ namespace mango::math
             temp[i] = log2(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> sqrt(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> sqrt(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -983,10 +1060,10 @@ namespace mango::math
             temp[i] = sqrt(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> rsqrt(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> rsqrt(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -994,10 +1071,10 @@ namespace mango::math
             temp[i] = ScalarType(1.0f) / sqrt(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> round(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> round(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -1005,10 +1082,10 @@ namespace mango::math
             temp[i] = round(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> floor(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> floor(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -1016,10 +1093,10 @@ namespace mango::math
             temp[i] = floor(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> ceil(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> ceil(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -1027,10 +1104,10 @@ namespace mango::math
             temp[i] = ceil(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> fract(const Vector<ScalarType, VectorSize>& a)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> fract(const Vector<ScalarType, VectorSize>& a)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -1038,10 +1115,10 @@ namespace mango::math
             temp[i] = a[i] - floor(a[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> pow(const Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> pow(const Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -1049,10 +1126,10 @@ namespace mango::math
             temp[i] = pow(a[i], b[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> mod(const Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> mod(const Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -1060,10 +1137,10 @@ namespace mango::math
             temp[i] = a[i] - b[i] * floor(a[i] / b[i]);
         }
         return temp;
-	}
+    }
 
-	template <typename ScalarType, int VectorSize>
-	static inline const Vector<ScalarType, VectorSize> atan2(const Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
+    template <typename ScalarType, int VectorSize>
+    static inline const Vector<ScalarType, VectorSize> atan2(const Vector<ScalarType, VectorSize>& a, const Vector<ScalarType, VectorSize>& b)
     {
         Vector<ScalarType, VectorSize> temp;
         for (int i = 0; i < VectorSize; ++i)
@@ -1071,7 +1148,7 @@ namespace mango::math
             temp[i] = atan2(a[i], b[i]);
         }
         return temp;
-	}
+    }
 
     // ------------------------------------------------------------------
     // Vector2 functions
@@ -1254,7 +1331,7 @@ namespace mango::math
         MANGO_UNREFERENCED(source);
 
         // load_low() is not available by default
-		Vector<ScalarType, VectorSize>::undefined_operation();
+        Vector<ScalarType, VectorSize>::undefined_operation();
     }
 
     // ------------------------------------------------------------------
@@ -1314,83 +1391,179 @@ namespace mango::math
         }
     };
 
-    // operators
+    // operator +
 
     template <typename ScalarType, typename VectorType, int Index0, int Index1>
     ScalarType operator + (const ScalarAccessor<ScalarType, VectorType, Index0>& a,
                            const ScalarAccessor<ScalarType, VectorType, Index1>& b)
     {
+        // a + a
         return ScalarType(a) + ScalarType(b);
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator + (const ScalarAccessor<ScalarType, VectorType, Index>& a, ScalarType b)
     {
+        // a + s
         return ScalarType(a) + b;
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator + (ScalarType a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
     {
+        // s + a
         return a + ScalarType(b);
     }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator + (const ScalarAccessor<ScalarType, VectorType, Index>& a, Vector<ScalarType, N> b)
+    {
+        // a + v
+        return ScalarType(a) + b;
+    }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator + (Vector<ScalarType, N> a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
+    {
+        // v + a
+        return a + ScalarType(b);
+    }
+
+    // operator -
 
     template <typename ScalarType, typename VectorType, int Index0, int Index1>
     ScalarType operator - (const ScalarAccessor<ScalarType, VectorType, Index0>& a,
                            const ScalarAccessor<ScalarType, VectorType, Index1>& b)
     {
+        // a - a
         return ScalarType(a) - ScalarType(b);
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator - (const ScalarAccessor<ScalarType, VectorType, Index>& a, ScalarType b)
     {
+        // a - s
         return ScalarType(a) - b;
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator - (ScalarType a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
     {
+        // s - a
         return a - ScalarType(b);
     }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator - (const ScalarAccessor<ScalarType, VectorType, Index>& a, Vector<ScalarType, N> b)
+    {
+        // a - v
+        return ScalarType(a) - b;
+    }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator - (Vector<ScalarType, N> a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
+    {
+        // v - a
+        return a - ScalarType(b);
+    }
+
+    // operator *
 
     template <typename ScalarType, typename VectorType, int Index0, int Index1>
     ScalarType operator * (const ScalarAccessor<ScalarType, VectorType, Index0>& a,
                            const ScalarAccessor<ScalarType, VectorType, Index1>& b)
     {
+        // a * a
         return ScalarType(a) * ScalarType(b);
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator * (const ScalarAccessor<ScalarType, VectorType, Index>& a, ScalarType b)
     {
+        // a * s
         return ScalarType(a) * b;
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator * (ScalarType a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
     {
+        // s * a
         return a * ScalarType(b);
     }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator * (const ScalarAccessor<ScalarType, VectorType, Index>& a, Vector<ScalarType, N> b)
+    {
+        // a * v
+        return ScalarType(a) * b;
+    }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator * (Vector<ScalarType, N> a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
+    {
+        // v * a
+        return a * ScalarType(b);
+    }
+
+    // operator /
 
     template <typename ScalarType, typename VectorType, int Index0, int Index1>
     ScalarType operator / (const ScalarAccessor<ScalarType, VectorType, Index0>& a,
                            const ScalarAccessor<ScalarType, VectorType, Index1>& b)
     {
+        // a / a
         return ScalarType(a) / ScalarType(b);
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator / (const ScalarAccessor<ScalarType, VectorType, Index>& a, ScalarType b)
     {
+        // a / s
         return ScalarType(a) / b;
     }
 
     template <typename ScalarType, typename VectorType, int Index>
     ScalarType operator / (ScalarType a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
     {
+        // s / a
         return a / ScalarType(b);
     }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator / (const ScalarAccessor<ScalarType, VectorType, Index>& a, Vector<ScalarType, N> b)
+    {
+        // a / v
+        return ScalarType(a) / b;
+    }
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    Vector<ScalarType, N> operator / (Vector<ScalarType, N> a, const ScalarAccessor<ScalarType, VectorType, Index>& b)
+    {
+        // v / a
+        return a / ScalarType(b);
+    }
+
+    // operator *=
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    static inline
+    Vector<ScalarType, N>& operator *= (Vector<ScalarType, N>& a, ScalarAccessor<ScalarType, VectorType, Index> b)
+    {
+        a = a * ScalarType(b);
+        return a;
+    }
+
+    // operator /=
+
+    template <typename ScalarType, typename VectorType, int Index, int N>
+    static inline
+    Vector<ScalarType, N>& operator /= (Vector<ScalarType, N>& a, ScalarAccessor<ScalarType, VectorType, Index> b)
+    {
+        a = a / ScalarType(b);
+        return a;
+    }
+
+    // compare
 
     template <typename ScalarType, typename VectorType, int Index0, int Index1>
     bool operator < (const ScalarAccessor<ScalarType, VectorType, Index0>& a,
@@ -1558,6 +1731,534 @@ namespace mango::math
         }
 #endif
     };
+
+    // ------------------------------------------------------------------
+    // simd operator / function wrappers
+    // ------------------------------------------------------------------
+
+#define MATH_SIMD_FLOAT_OPERATORS(T, N, SIMD) \
+    \
+    static inline Vector<T, N> operator + (Vector<T, N> a) \
+    { \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N> operator - (Vector<T, N> a) \
+    { \
+        return simd::neg(a); \
+    } \
+    \
+    static inline Vector<T, N>& operator += (Vector<T, N>& a, Vector<T, N> b) \
+    { \
+        a = simd::add(a, b); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator += (Vector<T, N>& a, T b) \
+    { \
+        a = simd::add(a, simd::SIMD##_set(b)); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator -= (Vector<T, N>& a, Vector<T, N> b) \
+    { \
+        a = simd::sub(a, b); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator -= (Vector<T, N>& a, T b) \
+    { \
+        a = simd::sub(a, simd::SIMD##_set(b)); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator *= (Vector<T, N>& a, Vector<T, N> b) \
+    { \
+        a = simd::mul(a, b); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator *= (Vector<T, N>& a, T b) \
+    { \
+        a = simd::mul(a, simd::SIMD##_set(b)); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator /= (Vector<T, N>& a, Vector<T, N> b) \
+    { \
+        a = simd::div(a, b); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator /= (Vector<T, N>& a, T b) \
+    { \
+        a = simd::div(a, b); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N> operator + (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::add(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator + (Vector<T, N> a, T b) \
+    { \
+        return simd::add(a, simd::SIMD##_set(b)); \
+    } \
+    \
+    static inline Vector<T, N> operator + (T a, Vector<T, N> b) \
+    { \
+        return simd::add(simd::SIMD##_set(a), b); \
+    } \
+    \
+    static inline Vector<T, N> operator - (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::sub(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator - (Vector<T, N> a, T b) \
+    { \
+        return simd::sub(a, simd::SIMD##_set(b)); \
+    } \
+    \
+    static inline Vector<T, N> operator - (T a, Vector<T, N> b) \
+    { \
+        return simd::sub(simd::SIMD##_set(a), b); \
+    } \
+    \
+    static inline Vector<T, N> operator * (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::mul(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator / (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::div(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator / (Vector<T, N> a, T b) \
+    { \
+        return simd::div(a, b); \
+    }
+
+#define MATH_SIMD_FLOAT_FUNCTIONS(T, N, SIMD, MASK) \
+    \
+    static inline Vector<T, N> add(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::add(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> add(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::add(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> sub(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::sub(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> sub(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::sub(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> mul(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::mul(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> mul(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::mul(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> div(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::div(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> div(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::div(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> abs(Vector<T, N> a) \
+    { \
+        return simd::abs(a); \
+    } \
+    \
+    static inline Vector<T, N> round(Vector<T, N> a) \
+    { \
+        return simd::round(a); \
+    } \
+    \
+    static inline Vector<T, N> floor(Vector<T, N> a) \
+    { \
+        return simd::floor(a); \
+    } \
+    \
+    static inline Vector<T, N> ceil(Vector<T, N> a) \
+    { \
+        return simd::ceil(a); \
+    } \
+    \
+    static inline Vector<T, N> trunc(Vector<T, N> a) \
+    { \
+        return simd::trunc(a); \
+    } \
+    \
+    static inline Vector<T, N> fract(Vector<T, N> a) \
+    { \
+        return simd::fract(a); \
+    } \
+    \
+    static inline Vector<T, N> mod(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::sub(a, simd::mul(b, simd::floor(simd::div(a, b)))); \
+    } \
+    \
+    static inline Vector<T, N> sign(Vector<T, N> a) \
+    { \
+        return simd::sign(a); \
+    } \
+    \
+    static inline Vector<T, N> radians(Vector<T, N> a) \
+    { \
+        return simd::mul(a, simd::SIMD##_set(T(0.01745329251))); \
+    } \
+    \
+    static inline Vector<T, N> degrees(Vector<T, N> a) \
+    { \
+        return simd::mul(a, simd::SIMD##_set(T(57.2957795131))); \
+    } \
+    \
+    static inline Vector<T, N> sqrt(Vector<T, N> a) \
+    { \
+        return simd::sqrt(a); \
+    } \
+    \
+    static inline Vector<T, N> rsqrt(Vector<T, N> a) \
+    { \
+        return simd::rsqrt(a); \
+    } \
+    \
+    static inline Vector<T, N> rcp(Vector<T, N> a) \
+    { \
+        return simd::rcp(a); \
+    } \
+    \
+    static inline Vector<T, N> unpacklo(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::unpacklo(a, b); \
+    } \
+    \
+    static inline Vector<T, N> unpackhi(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::unpackhi(a, b); \
+    } \
+    \
+    static inline Vector<T, N> min(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::min(a, b); \
+    } \
+    \
+    static inline Vector<T, N> min(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::min(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> min(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::min(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> max(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::max(a, b); \
+    } \
+    \
+    static inline Vector<T, N> max(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::max(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> max(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::max(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> madd(Vector<T, N> a, Vector<T, N> b, Vector<T, N> c) \
+    { \
+        return simd::madd(a, b, c); \
+    } \
+    \
+    static inline Vector<T, N> msub(Vector<T, N> a, Vector<T, N> b, Vector<T, N> c) \
+    { \
+        return simd::msub(a, b, c); \
+    } \
+    \
+    static inline Vector<T, N> nmadd(Vector<T, N> a, Vector<T, N> b, Vector<T, N> c) \
+    { \
+        return simd::nmadd(a, b, c); \
+    } \
+    \
+    static inline Vector<T, N> nmsub(Vector<T, N> a, Vector<T, N> b, Vector<T, N> c) \
+    { \
+        return simd::nmsub(a, b, c); \
+    } \
+    \
+    static inline Vector<T, N> clamp(Vector<T, N> a, Vector<T, N> low, Vector<T, N> high) \
+    { \
+        return simd::min(high, simd::max(low, a)); \
+    } \
+    \
+    static inline Vector<T, N> lerp(Vector<T, N> a, Vector<T, N> b, float factor) \
+    { \
+        Vector<T, N> s(factor); \
+        return simd::lerp(a, b, s); \
+    } \
+    \
+    static inline Vector<T, N> lerp(Vector<T, N> a, Vector<T, N> b, Vector<T, N> factor) \
+    { \
+        return simd::lerp(a, b, factor); \
+    }
+
+#define MATH_SIMD_SIGNED_INTEGER_OPERATORS(T, N) \
+    \
+    static inline Vector<T, N> operator - (Vector<T, N> a) \
+    { \
+        return simd::neg(a); \
+    }
+
+#define MATH_SIMD_UNSIGNED_INTEGER_OPERATORS(T, N) \
+    \
+    static inline Vector<T, N> operator + (Vector<T, N> a) \
+    { \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator += (Vector<T, N>& a, Vector<T, N> b) \
+    { \
+        a = simd::add(a, b); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N>& operator -= (Vector<T, N>& a, Vector<T, N> b) \
+    { \
+        a = simd::sub(a, b); \
+        return a; \
+    } \
+    \
+    static inline Vector<T, N> operator + (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::add(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator + (Vector<T, N> a, T b) \
+    { \
+        return simd::add(a, simd::T##x##N##_set(b)); \
+    } \
+    \
+    static inline Vector<T, N> operator + (T a, Vector<T, N> b) \
+    { \
+        return simd::add(simd::T##x##N##_set(a), b); \
+    } \
+    \
+    static inline Vector<T, N> operator - (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::sub(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator - (Vector<T, N> a, T b) \
+    { \
+        return simd::sub(a, simd::T##x##N##_set(b)); \
+    } \
+    \
+    static inline Vector<T, N> operator - (T a, Vector<T, N> b) \
+    { \
+        return simd::sub(simd::T##x##N##_set(a), b); \
+    }
+
+#define MATH_SIMD_INTEGER_FUNCTIONS(T, N, MASK) \
+    \
+    static inline Vector<T, N> unpacklo(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::unpacklo(a, b); \
+    } \
+    \
+    static inline Vector<T, N> unpackhi(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::unpackhi(a, b); \
+    } \
+    \
+    static inline Vector<T, N> add(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::add(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> add(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::add(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> sub(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::sub(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> sub(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::sub(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> min(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::min(a, b); \
+    } \
+    \
+    static inline Vector<T, N> min(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::min(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> min(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::min(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> max(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::max(a, b); \
+    } \
+    \
+    static inline Vector<T, N> max(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::max(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> max(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::max(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> clamp(Vector<T, N> a, Vector<T, N> low, Vector<T, N> high) \
+    { \
+        return simd::min(high, simd::max(low, a)); \
+    }
+
+#define MATH_SIMD_SATURATING_INTEGER_FUNCTIONS(T, N, MASK) \
+    \
+    static inline Vector<T, N> adds(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::adds(a, b); \
+    } \
+    \
+    static inline Vector<T, N> adds(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::adds(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> adds(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::adds(a, b, mask, value); \
+    } \
+    \
+    static inline Vector<T, N> subs(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::subs(a, b); \
+    } \
+    \
+    static inline Vector<T, N> subs(Vector<T, N> a, Vector<T, N> b, MASK mask) \
+    { \
+        return simd::subs(a, b, mask); \
+    } \
+    \
+    static inline Vector<T, N> subs(Vector<T, N> a, Vector<T, N> b, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::subs(a, b, mask, value); \
+    }
+
+#define MATH_SIMD_ABS_INTEGER_FUNCTIONS(T, N, MASK) \
+    \
+    static inline Vector<T, N> abs(Vector<T, N> a) \
+    { \
+        return simd::abs(a); \
+    } \
+    \
+    static inline Vector<T, N> abs(Vector<T, N> a, MASK mask) \
+    { \
+        return simd::abs(a, mask); \
+    } \
+    \
+    static inline Vector<T, N> abs(Vector<T, N> a, MASK mask, Vector<T, N> value) \
+    { \
+        return simd::abs(a, mask, value); \
+    }
+
+#define MATH_SIMD_BITWISE_FUNCTIONS(T, N) \
+    \
+    static inline Vector<T, N> nand(Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::bitwise_nand(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator & (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::bitwise_and(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator | (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::bitwise_or(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator ^ (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::bitwise_xor(a, b); \
+    } \
+    \
+    static inline Vector<T, N> operator ~ (Vector<T, N> a) \
+    { \
+        return simd::bitwise_not(a); \
+    }
+
+#define MATH_SIMD_COMPARE_FUNCTIONS(T, N, MASK) \
+    \
+    static inline MASK operator > (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::compare_gt(a, b); \
+    } \
+    \
+    static inline MASK operator >= (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::compare_ge(a, b); \
+    } \
+    \
+    static inline MASK operator < (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::compare_lt(a, b); \
+    } \
+    \
+    static inline MASK operator <= (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::compare_le(a, b); \
+    } \
+    \
+    static inline MASK operator == (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::compare_eq(a, b); \
+    } \
+    \
+    static inline MASK operator != (Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::compare_neq(a, b); \
+    } \
+    \
+    static inline Vector<T, N> select(MASK mask, Vector<T, N> a, Vector<T, N> b) \
+    { \
+        return simd::select(mask, a, b); \
+    }
 
     // ------------------------------------------------------------------
     // named vector types
