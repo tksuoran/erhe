@@ -777,6 +777,11 @@ void Context_window::make_current() const
     auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr)
     {
+        const auto* const already_current_context = glfwGetCurrentContext();
+        if (already_current_context != nullptr)
+        {
+            log_window->error("context is already current");
+        }
         glfwMakeContextCurrent(window);
     }
 }

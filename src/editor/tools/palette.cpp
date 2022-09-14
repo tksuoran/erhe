@@ -1,4 +1,4 @@
-#include "tools/hotbar.hpp"
+#include "tools/palette.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -25,28 +25,28 @@ namespace editor
 
 using glm::vec3;
 
-Hotbar::Hotbar()
+Palette::Palette()
     : erhe::application::Imgui_window{c_title, c_type_name}
     , erhe::components::Component    {c_type_name}
 {
 }
 
-Hotbar::~Hotbar() noexcept
+Palette::~Palette() noexcept
 {
 }
 
-void Hotbar::declare_required_components()
+void Palette::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows>();
     require<erhe::application::Rendergraph  >();
-    require<Fly_camera_tool >();
-    require<Scene_builder   >();
-    require<Tools           >();
-    require<Viewport_windows>();
+    require<Fly_camera_tool                 >();
+    require<Scene_builder                   >();
+    require<Tools                           >();
+    require<Viewport_windows                >();
 }
 
-void Hotbar::initialize_component()
+void Palette::initialize_component()
 {
     const erhe::application::Scoped_gl_context gl_context{
         get<erhe::application::Gl_context_provider>()
@@ -65,8 +65,8 @@ void Hotbar::initialize_component()
     m_rendertarget_node = scene_root->create_rendertarget_node(
         *m_components,
         *primary_viewport_window.get(),
-        512,
-        64,
+        1024,
+        1024,
         2000.0
     );
 
@@ -77,7 +77,7 @@ void Hotbar::initialize_component()
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         m_rendertarget_node.get(),
-        "Hotbar Viewport",
+        "Palette Viewport",
         *m_components,
         false
     );
@@ -87,20 +87,19 @@ void Hotbar::initialize_component()
 
     set_viewport(m_rendertarget_imgui_viewport.get());
     show();
-
 }
 
-void Hotbar::post_initialize()
+void Palette::post_initialize()
 {
     m_viewport_windows = get<Viewport_windows>();
 }
 
-auto Hotbar::description() -> const char*
+auto Palette::description() -> const char*
 {
    return c_title.data();
 }
 
-void Hotbar::update_once_per_frame(
+void Palette::update_once_per_frame(
     const erhe::components::Time_context& /*time_context*/
 )
 {
@@ -126,13 +125,14 @@ void Hotbar::update_once_per_frame(
     m_rendertarget_node->update_transform();
 }
 
-void Hotbar::tool_render(
+void Palette::tool_render(
     const Render_context& /*context*/
 )
 {
 }
 
-auto Hotbar::flags() -> ImGuiWindowFlags
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+auto Palette::flags() -> ImGuiWindowFlags
 {
     return
         ImGuiWindowFlags_NoTitleBar        |
@@ -145,7 +145,7 @@ auto Hotbar::flags() -> ImGuiWindowFlags
         ImGuiWindowFlags_NoNavFocus;
 }
 
-void Hotbar::on_begin()
+void Palette::on_begin()
 {
     m_min_size[0] = static_cast<float>(m_rendertarget_node->width());
     m_min_size[1] = static_cast<float>(m_rendertarget_node->height());
@@ -154,23 +154,21 @@ void Hotbar::on_begin()
     ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
 }
 
-void Hotbar::imgui()
+void Palette::imgui()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     const ImVec2 button_size{64.0f, 64.0f};
-    //ImGui::SliderFloat("X", &m_x, -2.0f, 2.0f);
-    //ImGui::SliderFloat("Y", &m_y, -0.3f, 0.0f);
-    //ImGui::SliderFloat("Z", &m_z, -2.0f, 2.0f);
-    ImGui::Button("1", button_size); ImGui::SameLine();
-    ImGui::Button("2", button_size); ImGui::SameLine();
-    ImGui::Button("3", button_size); ImGui::SameLine();
-    ImGui::Button("4", button_size); ImGui::SameLine();
-    ImGui::Button("5", button_size); ImGui::SameLine();
-    ImGui::Button("6", button_size); ImGui::SameLine();
-    ImGui::Button("7", button_size); ImGui::SameLine();
-    ImGui::Button("8", button_size); ImGui::SameLine();
-    ImGui::Button("9", button_size); ImGui::SameLine();
-#endif
+    for (int y = 0; y < m_height_items; ++y)
+    {
+        for (int x = 0; x < m_width_items; ++x)
+        {
+            ImGui::Button("_", button_size);
+            if (x != (m_width_items - 1))
+            {
+                ImGui::SameLine();
+            }
+        }
+    }
 }
+#endif
 
 } // namespace editor

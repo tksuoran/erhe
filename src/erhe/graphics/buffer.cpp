@@ -279,6 +279,46 @@ auto Buffer::map_bytes(
             m_map_buffer_access_mask
         )
     );
+    if (map_pointer == nullptr)
+    {
+        log_buffer->warn("glMapNamedBufferRange() returned nullptr");
+        GLint is_buffer = gl::is_buffer(gl_name());
+        log_buffer->warn("is_buffer = {}", is_buffer);
+        GLint int_access           {0};
+        GLint int_access_flags     {0};
+        GLint int_immutable_storage{0};
+        GLint int_map_length       {0};
+        GLint int_map_offset       {0};
+        GLint int_mapped           {0};
+        GLint int_size             {0};
+        GLint int_storage_flags    {0};
+        GLint int_usage            {0};
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_access           , &int_access           );
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_access_flags     , &int_access_flags     );
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_immutable_storage, &int_immutable_storage);
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_map_length       , &int_map_length       );
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_map_offset       , &int_map_offset       );
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_mapped           , &int_mapped           );
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_size             , &int_size             );
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_storage_flags    , &int_storage_flags    );
+        gl::get_named_buffer_parameter_iv(gl_name(), gl::Buffer_p_name::buffer_usage            , &int_usage            );
+        const auto access        = static_cast<gl::Buffer_access         >(int_access       );
+        const auto access_flags  = static_cast<gl::Map_buffer_access_mask>(int_access_flags );
+        const auto storage_flags = static_cast<gl::Buffer_storage_mask   >(int_storage_flags);
+        const auto usage         = static_cast<gl::Buffer_usage          >(int_usage        );
+        log_buffer->trace("access            = {}",          (int_access == 0) ? "0" : gl::c_str(access));
+        log_buffer->trace("access flags      = {} ({:04x})", gl::to_string(access_flags), int_access_flags);
+        log_buffer->trace("immutable storage = {}",          int_immutable_storage);
+        log_buffer->trace("map length        = {}",          int_map_length);
+        log_buffer->trace("map offset        = {}",          int_map_offset);
+        log_buffer->trace("mapped            = {}",          int_mapped);
+        log_buffer->trace("size              = {}",          int_size);
+        log_buffer->trace("storage flags     = {} ({:04x})", gl::to_string(storage_flags), int_storage_flags);
+        log_buffer->trace("usage             = {}",          (int_usage == 0) ? "0" : gl::c_str(usage), int_usage);
+        void* map_pointer{nullptr};
+        gl::get_named_buffer_pointer_v(gl_name(), gl::Buffer_pointer_name::buffer_map_pointer, &map_pointer);
+        log_buffer->trace("map pointer       = {}", fmt::ptr(map_pointer));
+    }
     ERHE_VERIFY(map_pointer != nullptr);
 
     log_buffer->trace(

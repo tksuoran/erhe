@@ -120,6 +120,8 @@ void initialize_log_sinks()
     sink_log_file   = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
     tail_store_log  = std::make_shared<store_log_sink>();
     frame_store_log = std::make_shared<store_log_sink>();
+
+    sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
 }
 
 auto make_logger(

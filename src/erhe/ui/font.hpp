@@ -137,14 +137,13 @@ public:
         m_outline_thickness = value;
     }
 
-    void render();
+    auto render() -> bool;
 
     void post_process();
 
     void trace_info() const;
 
 private:
-    void validate(int error);
 
     struct ft_char
     {

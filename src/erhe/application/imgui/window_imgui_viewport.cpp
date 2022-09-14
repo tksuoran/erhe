@@ -179,7 +179,6 @@ void Window_imgui_viewport::execute_rendergraph_node()
     Scoped_imgui_context imgui_context{*m_imgui_windows, *this};
 
     const auto& context_window = m_window->get_context_window();
-    context_window->make_current();
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     gl::viewport        (0, 0, context_window->get_width(), context_window->get_height());
 

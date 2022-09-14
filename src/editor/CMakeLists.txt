@@ -110,6 +110,8 @@ erhe_target_sources_grouped(
     tools/hover_tool.hpp
     tools/material_paint_tool.cpp
     tools/material_paint_tool.hpp
+    tools/palette.cpp
+    tools/palette.hpp
     tools/physics_tool.cpp
     tools/physics_tool.hpp
     tools/selection_tool.cpp

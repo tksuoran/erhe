@@ -440,9 +440,6 @@ Texture::Texture(const Create_info& create_info)
         //gl::Internal_format immutable_internal_format = static_cast<gl::Internal_format>(immutable_format_i);
         gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_min_filter, GL_NEAREST);
         gl::texture_parameter_i(gl_name(), gl::Texture_parameter_name::texture_mag_filter, GL_NEAREST);
-
-        //// Restore original texture 2d bionding
-        //gl::bind_texture(gl::Texture_target::texture_2d, original_texture_2d_binding);
         return;
     }
 

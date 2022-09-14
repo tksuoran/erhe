@@ -43,8 +43,8 @@ Font::~Font() noexcept
 #endif
 
 #if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE)
-    validate(FT_Done_Face(m_freetype_face));
-    validate(FT_Done_FreeType(m_freetype_library));
+    FT_Done_Face(m_freetype_face);
+    FT_Done_FreeType(m_freetype_library);
 #endif
 }
 
@@ -90,19 +90,24 @@ Font::Font(
 
     m_pixel_size = size;
 
-    render();
+    const bool render_ok = render();
+    if (!render_ok)
+    {
+         log_font->error("Font loading failed. Check working directory '{}'", current_path.string());
+    }
 }
 
-void Font::validate(const int /*FT_Error*/ error)
-{
-    ERHE_VERIFY(error == FT_Err_Ok);
-}
-
-void Font::render()
+auto Font::render() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    validate(FT_Init_FreeType(&m_freetype_library));
+    FT_Error res;
+    res = FT_Init_FreeType(&m_freetype_library);
+    if (res != FT_Err_Ok)
+    {
+        log_font->error("FT_Init_FreeType() returned error code {}", res);
+        return false;
+    }
 
     {
         FT_Int major{0};
@@ -112,14 +117,33 @@ void Font::render()
         log_font->trace("Freetype version {}.{}.{}", major, minor, patch);
     }
 
-    validate(FT_New_Face(m_freetype_library, m_path.string().c_str(), 0, &m_freetype_face));
-    validate(FT_Select_Charmap(m_freetype_face, FT_ENCODING_UNICODE));
+    res = FT_New_Face(m_freetype_library, m_path.string().c_str(), 0, &m_freetype_face);
+    if (res != FT_Err_Ok)
+    {
+        log_font->error(
+            "FT_New_Face(pathname = '{}') returned error code {}",
+            m_path.string(),
+            res
+        );
+        return false;
+    }
+    res = FT_Select_Charmap(m_freetype_face, FT_ENCODING_UNICODE);
+    if (res != FT_Err_Ok)
+    {
+        log_font->error("FT_Select_Charmap() returned error code {}", res);
+        return false;
+    }
     FT_Face face = m_freetype_face;
 
     auto xsize = m_pixel_size << 6u;
     auto ysize = m_pixel_size << 6u;
 
-    validate(FT_Set_Char_Size(m_freetype_face, xsize, ysize, m_dpi, m_dpi));
+    res = FT_Set_Char_Size(m_freetype_face, xsize, ysize, m_dpi, m_dpi);
+    if (res != FT_Err_Ok)
+    {
+        log_font->error("FT_Set_Char_Size() returned error code {}", res);
+        return false;
+    }
 
     m_harfbuzz_font = hb_ft_font_create(m_freetype_face, nullptr);
     m_harfbuzz_buffer = hb_buffer_create();
@@ -321,6 +345,7 @@ void Font::render()
 
     post_process();
 
+    return true;
     //m_bitmap->dump();
 }
 
@@ -451,7 +476,6 @@ void Font::trace_info() const
 }
 #else
 Font::Font(const std::filesystem::path&, const unsigned int, const float) {}
-void Font::validate(const int) {}
 void Font::render(){}
 void Font::trace_info() const {}
 #endif

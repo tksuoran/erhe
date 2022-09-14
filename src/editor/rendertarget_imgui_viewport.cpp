@@ -30,7 +30,8 @@ namespace editor
 Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     Rendertarget_node*                  rendertarget_node,
     const std::string_view              name,
-    const erhe::components::Components& components
+    const erhe::components::Components& components,
+    const bool                          imgui_ini
 )
     : erhe::application::Imgui_viewport{
         name,
@@ -46,13 +47,13 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     , m_headset_renderer {components.get<Headset_renderer>()}
 #endif
     , m_name             {name}
-    , m_imgui_ini_path   {fmt::format("imgui_{}.ini", name)}
+    , m_imgui_ini_path   {imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
 {
     m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
     ImGuiIO& io = m_imgui_context->IO;
     io.MouseDrawCursor = true;
-    io.IniFilename = m_imgui_ini_path.c_str();
+    io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
     io.FontDefault = m_imgui_renderer->vr_primary_font();
 
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");

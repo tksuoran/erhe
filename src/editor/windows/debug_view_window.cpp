@@ -67,10 +67,6 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
 
 void Depth_to_color_rendergraph_node::initialize_pipeline()
 {
-    const erhe::application::Scoped_gl_context gl_context{
-        m_gl_context_provider
-    };
-
     m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
         erhe::graphics::Vertex_input_state_data{}
     );

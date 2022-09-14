@@ -35,7 +35,8 @@ public:
     Rendertarget_imgui_viewport(
         Rendertarget_node*                  rendertarget_node,
         const std::string_view              name,
-        const erhe::components::Components& components
+        const erhe::components::Components& components,
+        bool                                imgui_ini = true
     );
     virtual ~Rendertarget_imgui_viewport() noexcept;
 

@@ -187,11 +187,22 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
         };
 
         Shader_stages::Prototype prototype(create_info);
-        shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-
-        if (shader_monitor != nullptr)
+        if (prototype.is_valid())
         {
-            shader_monitor->add(create_info, shader_stages.get());
+            shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
+
+            if (shader_monitor != nullptr)
+            {
+                shader_monitor->add(create_info, shader_stages.get());
+            }
+        }
+        else
+        {
+            const auto current_path = std::filesystem::current_path();
+            log_startup->error(
+                "Unable to load Line_renderer shader - check working directory '{}'",
+                current_path.string()
+            );
         }
     }
 }
