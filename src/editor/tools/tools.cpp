@@ -62,9 +62,9 @@ void Tools::render_tools(const Render_context& context)
     }
 }
 
-[[nodiscard]] auto Tools::get_tool_scene_root() -> Scene_root*
+[[nodiscard]] auto Tools::get_tool_scene_root() -> std::weak_ptr<Scene_root>
 {
-    return m_scene_root.get();
+    return m_scene_root;
 }
 
 }  // namespace erhe::application

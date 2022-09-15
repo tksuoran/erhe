@@ -734,6 +734,15 @@ void Node_properties::on_end()
 #endif
 }
 
+namespace {
+
+[[nodiscard]] auto test_bits(uint64_t mask, uint64_t test_bits) -> bool
+{
+    return (mask & test_bits) == test_bits;
+}
+
+}
+
 void Node_properties::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -759,6 +768,59 @@ void Node_properties::imgui()
             {
                 node->set_name(name);
             }
+        }
+
+        if (ImGui::TreeNodeEx("Visibility", /*ImGuiTreeNodeFlags_DefaultOpen |*/ ImGuiTreeNodeFlags_Framed))
+        {
+            const uint64_t initial_visibility = node->get_visibility_mask();
+            uint64_t visibility = initial_visibility;
+            bool visible      = test_bits(visibility, erhe::scene::Node_visibility::visible     );
+            bool content      = test_bits(visibility, erhe::scene::Node_visibility::content     );
+            //bool shadow_cast  = test_bits(visibility, erhe::scene::Node_visibility::shadow_cast );
+            //bool id           = test_bits(visibility, erhe::scene::Node_visibility::id          );
+            bool tool         = test_bits(visibility, erhe::scene::Node_visibility::tool        );
+            //bool brush        = test_bits(visibility, erhe::scene::Node_visibility::brush       );
+            //bool selected     = test_bits(visibility, erhe::scene::Node_visibility::selected    );
+            //bool rendertarget = test_bits(visibility, erhe::scene::Node_visibility::rendertarget);
+            //bool controller   = test_bits(visibility, erhe::scene::Node_visibility::controller  );
+            if (ImGui::Checkbox("Visible", &visible))
+            {
+                if (visible)
+                {
+                    visibility |= erhe::scene::Node_visibility::visible;
+                }
+                else
+                {
+                    visibility &= ~erhe::scene::Node_visibility::visible;
+                }
+            }
+            if (ImGui::Checkbox("Content", &content))
+            {
+                if (content)
+                {
+                    visibility |= erhe::scene::Node_visibility::content;
+                }
+                else
+                {
+                    visibility &= ~erhe::scene::Node_visibility::content;
+                }
+            }
+            if (ImGui::Checkbox("Tool", &tool))
+            {
+                if (tool)
+                {
+                    visibility |= erhe::scene::Node_visibility::tool;
+                }
+                else
+                {
+                    visibility &= ~erhe::scene::Node_visibility::tool;
+                }
+            }
+            if (visibility != initial_visibility)
+            {
+                node->set_visibility_mask(visibility);
+            }
+            ImGui::TreePop();
         }
 
         ImGui::ColorEdit3(

@@ -16,7 +16,7 @@ cmake ^
     -DERHE_PHYSICS_LIBRARY=bullet ^
     -DERHE_PNG_LIBRARY=mango ^
     -DERHE_PROFILE_LIBRARY=tracy ^
-    -DERHE_RAYTRACE_LIBRARY=none ^
+    -DERHE_RAYTRACE_LIBRARY=bvh ^
     -DERHE_SVG_LIBRARY=lunasvg ^
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
     -DERHE_WINDOW_LIBRARY=glfw ^

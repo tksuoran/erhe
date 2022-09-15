@@ -83,7 +83,11 @@ void Hover_tool::declare_required_components()
 void Hover_tool::initialize_component()
 {
     const auto& tools            = get<Tools>();
-    auto*       tools_scene_root = tools->get_tool_scene_root();
+    const auto& tools_scene_root = tools->get_tool_scene_root().lock();
+    if (!tools_scene_root)
+    {
+        return;
+    }
     const auto& material_library = tools_scene_root->material_library();
     m_hover_material = material_library->make_material("hover");
     m_hover_material->visible = false;

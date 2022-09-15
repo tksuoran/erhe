@@ -1,16 +1,15 @@
+#include <fmt/chrono.h>
+
 #include "erhe/raytrace/bvh/bvh_geometry.hpp"
 #include "erhe/raytrace/bvh/bvh_instance.hpp"
 #include "erhe/raytrace/bvh/bvh_scene.hpp"
 #include "erhe/raytrace/bvh/glm_conversions.hpp"
 #include "erhe/raytrace/ibuffer.hpp"
 #include "erhe/raytrace/iinstance.hpp"
-#include "erhe/raytrace/log.hpp"
+#include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 
-#include "erhe/log/log_fmt.hpp"
 #include "erhe/toolkit/timer.hpp"
-
-#include <fmt/chrono.h>
 
 #include <bvh/sphere.hpp>
 #include <bvh/ray.hpp>
@@ -58,16 +57,23 @@ Bvh_geometry::Bvh_geometry(
 
 Bvh_geometry::~Bvh_geometry() = default;
 
-auto Bvh_geometry::point_count() const -> std::size_t
+auto Bvh_geometry::get_element_count() const -> std::size_t
 {
+    return 1;
+}
+
+auto Bvh_geometry::get_element_point_count(std::size_t element_index) const -> std::size_t
+{
+    static_cast<void>(element_index);
     return m_points.size();
 }
 
-auto Bvh_geometry::get_point(std::size_t index) const -> std::optional<glm::vec3>
+auto Bvh_geometry::get_point(std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3>
 {
-    if (index < m_points.size())
+    static_cast<void>(element_index);
+    if (point_index < m_points.size())
     {
-        return m_points[index];
+        return m_points[point_index];
     }
     return {};
 }
@@ -191,20 +197,20 @@ void Bvh_geometry::commit()
     const auto duration = build_timer.duration().value();
     if (duration >= std::chrono::milliseconds(1))
     {
-        info_fmt(log_geometry, "build time:             {}\n", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
+        log_geometry->info("build time:             {}", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
     }
     else if (duration >= std::chrono::microseconds(1))
     {
-        info_fmt(log_geometry, "build time:             {}\n", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
+        log_geometry->info("build time:             {}", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
     }
     else
     {
-        info_fmt(log_geometry, "build time:             {}\n", build_timer.duration().value());
+        log_geometry->info("build time:             {}", build_timer.duration().value());
     }
-    info_fmt(log_geometry, "bvh triangle count:     {}\n", m_triangles.size());
-    info_fmt(log_geometry, "bvh point count:        {}\n", m_points.size());
-    info_fmt(log_geometry, "bounding box volume:    {}\n", m_bounding_box.volume());
-    info_fmt(log_geometry, "bounding sphere volume: {}\n", m_bounding_sphere.volume());
+    log_geometry->info("bvh triangle count:     {}", m_triangles.size());
+    log_geometry->info("bvh point count:        {}", m_points.size());
+    log_geometry->info("bounding box volume:    {}", m_bounding_box.volume());
+    log_geometry->info("bounding sphere volume: {}", m_bounding_sphere.volume());
 }
 
 void Bvh_geometry::enable()

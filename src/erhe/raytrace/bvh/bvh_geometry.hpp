@@ -22,7 +22,7 @@ class Hit;
 
 class Bvh_geometry
     : public IGeometry
-    , public erhe::toolkit::Point_source
+    , public erhe::toolkit::Bounding_volume_source
 {
 public:
     explicit Bvh_geometry(
@@ -56,9 +56,10 @@ public:
     auto intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool;
     [[nodiscard]] auto get_sphere() const -> const erhe::toolkit::Bounding_sphere&;
 
-    // Implements erhe::toolkit::Point_source
-    auto point_count() const -> std::size_t override;
-    auto get_point  (std::size_t index) const -> std::optional<glm::vec3> override;
+    // Implements erhe::toolkit::Bounding_volume_source
+    auto get_element_count      () const -> std::size_t override;
+    auto get_element_point_count(std::size_t element_index) const -> std::size_t override;
+    auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> override;
 
 private:
     class Buffer_info

@@ -156,10 +156,8 @@ public:
     [[nodiscard]] auto projection_viewport() const -> const erhe::scene::Viewport&;
 
     // Pointer context API
-#if !defined(ERHE_RAYTRACE_LIBRARY_NONE)
     void raytrace(uint32_t mask);
     void raytrace();
-#endif
 
     // call with const glm::vec2 position_in_window = m_window.to_scene_content(position);
     void reset_pointer_context();
@@ -213,6 +211,7 @@ private:
     std::string                 m_name;
 
     std::weak_ptr<Scene_root>          m_scene_root;
+    std::weak_ptr<Scene_root>          m_tool_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_camera{};
 
     Viewport_windows*           m_viewport_windows      {nullptr};

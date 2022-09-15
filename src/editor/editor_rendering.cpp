@@ -577,8 +577,13 @@ void Editor_rendering::render_id(const Render_context& context)
     const auto position = position_opt.value();
 
     const auto& layers          = scene_root->layers();
-    auto*       tool_scene_root = m_tools->get_tool_scene_root();
-    const auto& tool_layers     = tool_scene_root->layers();
+    const auto& tool_scene_root = m_tools->get_tool_scene_root().lock();
+    if (!tool_scene_root)
+    {
+        return;
+    }
+
+    const auto& tool_layers = tool_scene_root->layers();
 
     m_id_renderer->render(
         {
@@ -907,8 +912,8 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         return;
     }
 
-    auto* scene_root = m_tools->get_tool_scene_root();
-    if (scene_root == nullptr)
+    const auto& scene_root = m_tools->get_tool_scene_root().lock();
+    if (!scene_root)
     {
         return;
     }

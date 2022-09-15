@@ -189,7 +189,12 @@ void Trs_tool::initialize_component()
     ERHE_VERIFY(m_mesh_memory);
     ERHE_VERIFY(m_tools);
 
-    m_visualization.initialize(*m_mesh_memory, *m_tools->get_tool_scene_root());
+    const auto& tool_scene_root = m_tools->get_tool_scene_root().lock();
+    if (!tool_scene_root)
+    {
+        return;
+    }
+    m_visualization.initialize(*m_mesh_memory, *tool_scene_root.get());
     m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_cone_mesh    .get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.y_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_y;

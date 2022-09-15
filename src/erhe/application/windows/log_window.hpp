@@ -76,7 +76,7 @@ private:
     //};
 
     Log_window_toggle_pause_command m_toggle_pause_command;
-    int                             m_tail_buffer_show_size{50};
+    int                             m_tail_buffer_show_size{25};
     int                             m_tail_buffer_trim_size{1000};
     bool                            m_paused{false};
 };

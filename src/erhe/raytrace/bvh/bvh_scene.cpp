@@ -3,7 +3,7 @@
 #include "erhe/raytrace/bvh/bvh_instance.hpp"
 #include "erhe/raytrace/bvh/glm_conversions.hpp"
 #include "erhe/raytrace/iinstance.hpp"
-#include "erhe/raytrace/log.hpp"
+#include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 
 #include <bvh/sweep_sah_builder.hpp>
@@ -42,7 +42,7 @@ void Bvh_scene::attach(IGeometry* geometry)
     const auto i = std::find(m_geometries.begin(), m_geometries.end(), bvh_geometry);
     if (i != m_geometries.end())
     {
-        log_scene.error("raytrace geometry already in scene\n");
+        log_scene->error("raytrace geometry already in scene");
     }
     else
 #endif
@@ -59,7 +59,7 @@ void Bvh_scene::attach(IInstance* instance)
     const auto i = std::find(m_instances.begin(), m_instances.end(), bvh_instance);
     if (i != m_instances.end())
     {
-        log_scene.error("raytrace instance already in scene\n");
+        log_scene->error("raytrace instance already in scene");
     }
     else
 #endif
@@ -75,7 +75,7 @@ void Bvh_scene::detach(IGeometry* geometry)
     const auto i = std::remove(m_geometries.begin(), m_geometries.end(), bvh_geometry);
     if (i == m_geometries.end())
     {
-        log_scene.error("raytrace geometry not in scene\n");
+        log_scene->error("raytrace geometry not in scene");
     }
     else
     {
@@ -90,7 +90,7 @@ void Bvh_scene::detach(IInstance* instance)
     const auto i = std::remove(m_instances.begin(), m_instances.end(), bvh_instance);
     if (i == m_instances.end())
     {
-        log_scene.error("raytrace instance not in scene\n");
+        log_scene->error("raytrace instance not in scene");
     }
     else
     {
@@ -101,6 +101,7 @@ void Bvh_scene::detach(IInstance* instance)
 void Bvh_scene::commit()
 {
     // WIP - not really used
+#if 0
     m_collected_spheres.clear();
     m_collected_instances.clear();
 
@@ -123,6 +124,7 @@ void Bvh_scene::commit()
         centers.get(),
         m_collected_spheres.size()
     );
+#endif
 }
 
 void Bvh_scene::intersect(Ray& ray, Hit& hit)

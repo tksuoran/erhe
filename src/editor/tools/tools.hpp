@@ -43,7 +43,7 @@ public:
     void register_tool           (Tool* tool);
     void register_background_tool(Tool* tool);
 
-    [[nodiscard]] auto get_tool_scene_root() -> Scene_root*;
+    [[nodiscard]] auto get_tool_scene_root() -> std::weak_ptr<Scene_root>;
 
 private:
     // Component dependencies
