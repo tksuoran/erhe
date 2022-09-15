@@ -161,7 +161,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Node_tree_window      >());
         m_components.add(make_shared<editor::Operation_stack       >());
         m_components.add(make_shared<editor::Operations            >());
-        //m_components.add(make_shared<editor::Palette               >());
+        m_components.add(make_shared<editor::Palette               >());
         m_components.add(make_shared<editor::Physics_tool          >());
         m_components.add(make_shared<editor::Physics_window        >());
         m_components.add(make_shared<editor::Post_processing       >());
@@ -231,7 +231,6 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     if (m_components.get<editor::Node_tree_window      >() && !config.node_tree          ) m_components.get<editor::Node_tree_window      >()->hide();
     if (m_components.get<editor::Operation_stack       >() && !config.operation_stack    ) m_components.get<editor::Operation_stack       >()->hide();
     if (m_components.get<editor::Operations            >() && !config.operations         ) m_components.get<editor::Operations            >()->hide();
-    //if (m_components.get<editor::Palette               >() && !config.physics            ) m_components.get<editor::Palette               >()->hide();
     if (m_components.get<editor::Physics_window        >() && !config.physics            ) m_components.get<editor::Physics_window        >()->hide();
     if (m_components.get<editor::Post_processing_window>() && !config.post_processing    ) m_components.get<editor::Post_processing_window>()->hide();
     if (m_components.get<editor::Rendergraph_window    >() && !config.render_graph       ) m_components.get<editor::Rendergraph_window    >()->hide();

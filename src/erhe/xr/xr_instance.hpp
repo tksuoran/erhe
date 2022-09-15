@@ -67,7 +67,6 @@ public:
         Xr_path user_hand_left;
         Xr_path user_hand_right;
         Xr_path interaction_profile_vive_controller;
-        Xr_path head;
         Xr_path menu_click;
         Xr_path trigger_click;
         Xr_path trigger_value;

@@ -1108,9 +1108,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         );
     }
 
-    XrSpace         space     = actions.aim_pose_space;
-    XrSpace         baseSpace = session.get_xr_reference_space();
-    XrTime          time      = session.get_xr_frame_state().predictedDisplayTime;
+    const XrTime time = session.get_xr_frame_state().predictedDisplayTime;
     XrSpaceLocation location{
         .type          = XR_TYPE_SPACE_LOCATION,
         .next          = nullptr,
@@ -1132,8 +1130,8 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
 
     ERHE_XR_CHECK(
         xrLocateSpace(
-            space,
-            baseSpace,
+            actions.aim_pose_space,
+            session.get_xr_reference_space_local(),
             time,
             &location
         )

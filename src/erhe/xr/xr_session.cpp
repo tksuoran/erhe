@@ -47,12 +47,14 @@ Xr_session::Xr_session(
     Xr_instance&                   instance,
     erhe::toolkit::Context_window& context_window
 )
-    : m_instance              {instance}
-    , m_context_window        {context_window}
-    , m_xr_session            {XR_NULL_HANDLE}
-    , m_swapchain_color_format{gl::Internal_format::srgb8_alpha8}
-    , m_swapchain_depth_format{gl::Internal_format::depth24_stencil8}
-    , m_xr_reference_space    {XR_NULL_HANDLE}
+    : m_instance                {instance}
+    , m_context_window          {context_window}
+    , m_xr_session              {XR_NULL_HANDLE}
+    , m_swapchain_color_format  {gl::Internal_format::srgb8_alpha8}
+    , m_swapchain_depth_format  {gl::Internal_format::depth24_stencil8}
+    , m_xr_reference_space_local{XR_NULL_HANDLE}
+    , m_xr_reference_space_stage{XR_NULL_HANDLE}
+    , m_xr_reference_space_view {XR_NULL_HANDLE}
     //, m_xr_session_state      {XR_SESSION_STATE_VISIBLE}
     , m_xr_frame_state        {
         XR_TYPE_FRAME_STATE,
@@ -204,9 +206,19 @@ auto Xr_session::get_xr_session() const -> XrSession
     return m_xr_session;
 }
 
-auto Xr_session::get_xr_reference_space() const -> XrSpace
+auto Xr_session::get_xr_reference_space_local() const -> XrSpace
 {
-    return m_xr_reference_space;
+    return m_xr_reference_space_local;
+}
+
+auto Xr_session::get_xr_reference_space_stage() const -> XrSpace
+{
+    return m_xr_reference_space_stage;
+}
+
+auto Xr_session::get_xr_reference_space_view() const -> XrSpace
+{
+    return m_xr_reference_space_view;
 }
 
 auto Xr_session::get_xr_frame_state() const -> const XrFrameState&
@@ -376,7 +388,7 @@ auto Xr_session::create_reference_space() -> bool
         return false;
     }
 
-    XrReferenceSpaceCreateInfo reference_space_create_info{
+    XrReferenceSpaceCreateInfo local_create_info{
         .type                 = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
         .next                 = nullptr,
         .referenceSpaceType   = XR_REFERENCE_SPACE_TYPE_LOCAL,
@@ -395,7 +407,47 @@ auto Xr_session::create_reference_space() -> bool
         }
     };
 
-    ERHE_XR_CHECK(xrCreateReferenceSpace(m_xr_session, &reference_space_create_info, &m_xr_reference_space));
+    XrReferenceSpaceCreateInfo stage_create_info{
+        .type                 = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
+        .next                 = nullptr,
+        .referenceSpaceType   = XR_REFERENCE_SPACE_TYPE_STAGE,
+        .poseInReferenceSpace = {
+            .orientation = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f,
+                .w = 1.0f
+            },
+            .position = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f
+            }
+        }
+    };
+
+    XrReferenceSpaceCreateInfo view_create_info{
+        .type                 = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
+        .next                 = nullptr,
+        .referenceSpaceType   = XR_REFERENCE_SPACE_TYPE_VIEW,
+        .poseInReferenceSpace = {
+            .orientation = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f,
+                .w = 1.0f
+            },
+            .position = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f
+            }
+        }
+    };
+
+    ERHE_XR_CHECK(xrCreateReferenceSpace(m_xr_session, &local_create_info, &m_xr_reference_space_local));
+    ERHE_XR_CHECK(xrCreateReferenceSpace(m_xr_session, &stage_create_info, &m_xr_reference_space_stage));
+    ERHE_XR_CHECK(xrCreateReferenceSpace(m_xr_session, &view_create_info, &m_xr_reference_space_view));
 
     return true;
 }
@@ -526,6 +578,39 @@ auto Xr_session::create_hand_tracking() -> bool
     return true;
 }
 
+void Xr_session::update_view_pose()
+{
+    XrSpaceLocation location{
+        .type          = XR_TYPE_SPACE_LOCATION,
+        .next          = nullptr,
+        .locationFlags = 0,
+        .pose = {
+            .orientation = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f,
+                .w = 1.0f
+            },
+            .position = {
+                .x = 0.0f,
+                .y = 0.0f,
+                .z = 0.0f
+            }
+        }
+    };
+
+    const XrResult result = xrLocateSpace(
+        m_xr_reference_space_view,
+        m_xr_reference_space_local,
+        m_xr_frame_state.predictedDisplayTime,
+        &location
+    );
+    if (result == XR_SUCCESS)
+    {
+        m_view_location = location;
+    }
+}
+
 void Xr_session::update_hand_tracking()
 {
     ERHE_PROFILE_FUNCTION
@@ -588,7 +673,7 @@ void Xr_session::update_hand_tracking()
     const XrHandJointsLocateInfoEXT hand_joints_locate_info{
         .type      = XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT,
         .next      = nullptr,
-        .baseSpace = m_xr_reference_space,
+        .baseSpace = m_xr_reference_space_local,
         .time      = m_xr_frame_state.predictedDisplayTime
     };
 
@@ -627,6 +712,11 @@ auto Xr_session::get_hand_tracking_active(const XrHandEXT hand) const -> bool
 {
     const auto& tracker = (hand == XR_HAND_LEFT_EXT) ? m_hand_tracker_left : m_hand_tracker_right;
     return tracker.locations.isActive;
+}
+
+[[nodiscard]] auto Xr_session::get_view_space_location() const -> const XrSpaceLocation&
+{
+    return m_view_location;
 }
 
 auto Xr_session::begin_frame() -> bool
@@ -730,7 +820,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             .type        = XR_TYPE_VIEW_LOCATE_INFO,
             .next        = nullptr,
             .displayTime = m_xr_frame_state.predictedDisplayTime,
-            .space       = m_xr_reference_space
+            .space       = m_xr_reference_space_local
         };
 
         ERHE_XR_CHECK(
@@ -876,7 +966,7 @@ auto Xr_session::end_frame() -> bool
         .type       = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
         .next       = nullptr,
         .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-        .space      = m_xr_reference_space,
+        .space      = m_xr_reference_space_local,
         .viewCount  = static_cast<uint32_t>(m_xr_views.size()),
         .views      = m_xr_composition_layer_projection_views.data()
     };
@@ -895,7 +985,8 @@ auto Xr_session::end_frame() -> bool
     };
 
     check_gl_context_in_current_in_this_thread();
-    ERHE_XR_CHECK(xrEndFrame(m_xr_session, &frame_end_info));
+    const XrResult result = xrEndFrame(m_xr_session, &frame_end_info);
+    ERHE_XR_CHECK(result);
 
     return true;
 }

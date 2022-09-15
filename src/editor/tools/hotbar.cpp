@@ -7,6 +7,9 @@
 #include "tools/tools.hpp"
 #include "rendertarget_node.hpp"
 #include "rendertarget_imgui_viewport.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_renderer.hpp"
+#endif
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -100,29 +103,49 @@ auto Hotbar::description() -> const char*
    return c_title.data();
 }
 
+auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
+{
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    {
+        const auto& headset_renderer = get<editor::Headset_renderer>();
+        if (headset_renderer)
+        {
+            return headset_renderer->get_camera();
+        }
+    }
+#endif
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (!viewport_window)
+    {
+        return {};
+    }
+    return viewport_window->get_camera();
+}
+
 void Hotbar::update_once_per_frame(
     const erhe::components::Time_context& /*time_context*/
 )
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
-    {
-        return;
-    }
-    const auto camera = viewport_window->get_camera();
-    //if (m_rendertarget_node->parent().lock() == camera)
+    //const auto viewport_window = m_viewport_windows->hover_window();
+    //if (viewport_window)
     //{
-    //    return;
+    //    update_node_transform(viewport_window->get_camera()->world_from_node());
     //}
-    m_rendertarget_node->set_parent(camera);
+}
+
+void Hotbar::update_node_transform(const glm::mat4& world_from_camera)
+{
+    const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}};
+    const glm::vec3 eye_position{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
+    const glm::vec3 up_direction{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
 
     const glm::mat4 m = erhe::toolkit::create_look_at(
-        glm::vec3{ m_x, m_y, m_z},
-        glm::vec3{ 0.0f, 2.0f * -m_y, 0.0f},
-        glm::vec3{ 0.0f, 1.0f, 0.0f}
+        eye_position,
+        target_position,
+        up_direction
     );
 
-    m_rendertarget_node->set_parent_from_node(m);
+    m_rendertarget_node->set_world_from_node(m);
     m_rendertarget_node->update_transform();
 }
 
@@ -170,6 +193,12 @@ void Hotbar::imgui()
     ImGui::Button("7", button_size); ImGui::SameLine();
     ImGui::Button("8", button_size); ImGui::SameLine();
     ImGui::Button("9", button_size); ImGui::SameLine();
+
+    const auto viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window)
+    {
+        update_node_transform(viewport_window->get_camera()->world_from_node());
+    }
 #endif
 }
 

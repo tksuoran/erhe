@@ -29,18 +29,22 @@ public:
     void operator=(Xr_session&&)      = delete;
 
     // TODO [[nodiscard]]
-    auto begin_session         () -> bool;
-    auto begin_frame           () -> bool;
-    auto wait_frame            () -> XrFrameState*;
-    auto render_frame          (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame             () -> bool;
-    auto get_xr_session        () const -> XrSession;
-    auto get_xr_reference_space() const -> XrSpace;
-    auto get_xr_frame_state    () const -> const XrFrameState&;
-    void update_hand_tracking  ();
+    auto begin_session               () -> bool;
+    auto begin_frame                 () -> bool;
+    auto wait_frame                  () -> XrFrameState*;
+    auto render_frame                (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    auto end_frame                   () -> bool;
+    auto get_xr_session              () const -> XrSession;
+    auto get_xr_reference_space_local() const -> XrSpace;
+    auto get_xr_reference_space_stage() const -> XrSpace;
+    auto get_xr_reference_space_view () const -> XrSpace;
+    auto get_xr_frame_state          () const -> const XrFrameState&;
+    void update_hand_tracking        ();
+    void update_view_pose            ();
 
     [[nodiscard]] auto get_hand_tracking_joint (const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint;
     [[nodiscard]] auto get_hand_tracking_active(const XrHandEXT hand) const -> bool;
+    [[nodiscard]] auto get_view_space_location () const -> const XrSpaceLocation&;
 
 private:
     auto create_session             () -> bool;
@@ -84,7 +88,10 @@ private:
     std::vector<XrCompositionLayerProjectionView> m_xr_composition_layer_projection_views;
     std::vector<XrCompositionLayerDepthInfoKHR>   m_xr_composition_layer_depth_infos;
     std::vector<XrReferenceSpaceType>             m_xr_reference_space_types;
-    XrSpace                                       m_xr_reference_space;
+    XrSpace                                       m_xr_reference_space_local;
+    XrSpace                                       m_xr_reference_space_stage;
+    XrSpace                                       m_xr_reference_space_view;
+    XrSpaceLocation                               m_view_location;
     //XrSessionState                                m_xr_session_state;
     XrFrameState                                  m_xr_frame_state;
     Hand_tracker                                  m_hand_tracker_left;

@@ -7,6 +7,11 @@
 
 #include <glm/glm.hpp>
 
+namespace erhe::scene
+{
+    class Camera;
+}
+
 namespace editor
 {
 
@@ -42,11 +47,16 @@ public:
     void update_once_per_frame(const erhe::components::Time_context& time_context) override;
 
     // Implements Imgui_window
-    auto flags   () -> ImGuiWindowFlags override;
+    [[nodiscard]] auto flags() -> ImGuiWindowFlags override;
     void on_begin() override;
     void imgui   () override;
 
+    // Public API
+    void update_node_transform(const glm::mat4& world_from_camera);
+
 private:
+    [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
+
     std::shared_ptr<Viewport_windows> m_viewport_windows;
 
     std::shared_ptr<Rendertarget_node>           m_rendertarget_node;

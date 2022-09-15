@@ -27,6 +27,7 @@ std::shared_ptr<spdlog::logger> log_textures;
 std::shared_ptr<spdlog::logger> log_trs_tool;
 std::shared_ptr<spdlog::logger> log_rendertarget_imgui_windows;
 std::shared_ptr<spdlog::logger> log_xr;
+std::shared_ptr<spdlog::logger> log_palette;
 
 void initialize_logging()
 {
@@ -54,6 +55,7 @@ void initialize_logging()
     log_trs_tool                   = erhe::log::make_logger("editor::trs_tool"                  , spdlog::level::info);
     log_rendertarget_imgui_windows = erhe::log::make_logger("editor::rendertarget_imgui_windows", spdlog::level::info, false);
     log_xr                         = erhe::log::make_logger("editor::xr"                        , spdlog::level::info);
+    log_palette                    = erhe::log::make_logger("editor::palette"                   , spdlog::level::trace);
 }
 
 }

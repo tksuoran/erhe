@@ -52,6 +52,31 @@ auto Headset::get_hand_tracking_active(const XrHandEXT hand) const -> bool
         : false;
 }
 
+[[nodiscard]] auto Headset::get_view_in_world() const -> glm::mat4
+{
+    if (!m_xr_session)
+    {
+        return glm::mat4{1.0f};
+    }
+    const auto& space_location = m_xr_session->get_view_space_location();
+
+    glm::vec3 position{0.0f, 0.0f, 0.0f};
+    if ((space_location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT)
+    {
+        position = to_glm(space_location.pose.position);
+    }
+    glm::quat orientation{};
+    if ((space_location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) == XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
+    {
+        orientation = to_glm(space_location.pose.orientation);
+    }
+
+    const glm::mat4 m_orientation = glm::mat4_cast(orientation);
+    const glm::mat4 m_translation = glm::translate(glm::mat4{ 1 }, position);
+    const glm::mat4 m             = m_translation * m_orientation;
+    return m;
+}
+
 auto Headset::trigger_value() const -> float
 {
     return m_xr_instance
@@ -86,6 +111,8 @@ auto Headset::begin_frame() -> Frame_timing
     }
 
     m_xr_session->update_hand_tracking();
+
+    m_xr_session->update_view_pose();
 
     if ((m_xr_instance->actions.aim_pose_space_location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT)
     {

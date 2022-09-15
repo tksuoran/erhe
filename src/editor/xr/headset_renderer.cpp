@@ -12,6 +12,7 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "scene/material_library.hpp"
+#include "tools/hotbar.hpp"
 #include "tools/tools.hpp"
 #include "windows/viewport_config.hpp"
 #include "xr/controller_visualization.hpp"
@@ -394,15 +395,27 @@ void Headset_renderer::add_controller_input(const Controller_input& controller_i
 
 void Headset_renderer::begin_frame()
 {
+    if (!m_headset)
+    {
+        return;
+    }
+
     m_finger_inputs.clear();
     m_controller_inputs.clear();
-    if (m_controller_visualization && m_headset)
+    if (m_controller_visualization)
     {
         m_controller_visualization->update(m_headset->controller_pose());
     }
-    if (m_hand_tracker && m_headset)
+    if (m_hand_tracker)
     {
         m_hand_tracker->update_hands(*m_headset.get());
+    }
+
+    const auto& hotbar = get<Hotbar>();
+    if (hotbar)
+    {
+        const glm::mat4 world_from_view = m_headset->get_view_in_world();
+        hotbar->update_node_transform(world_from_view);
     }
 }
 

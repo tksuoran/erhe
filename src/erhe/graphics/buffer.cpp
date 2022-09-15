@@ -315,8 +315,8 @@ auto Buffer::map_bytes(
         log_buffer->trace("size              = {}",          int_size);
         log_buffer->trace("storage flags     = {} ({:04x})", gl::to_string(storage_flags), int_storage_flags);
         log_buffer->trace("usage             = {}",          (int_usage == 0) ? "0" : gl::c_str(usage), int_usage);
-        void* map_pointer{nullptr};
-        gl::get_named_buffer_pointer_v(gl_name(), gl::Buffer_pointer_name::buffer_map_pointer, &map_pointer);
+        void* get_map_pointer{nullptr};
+        gl::get_named_buffer_pointer_v(gl_name(), gl::Buffer_pointer_name::buffer_map_pointer, &get_map_pointer);
         log_buffer->trace("map pointer       = {}", fmt::ptr(map_pointer));
     }
     ERHE_VERIFY(map_pointer != nullptr);

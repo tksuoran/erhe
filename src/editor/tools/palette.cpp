@@ -1,4 +1,5 @@
 #include "tools/palette.hpp"
+#include "editor_log.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -8,6 +9,8 @@
 #include "rendertarget_node.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 
+#include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -25,9 +28,19 @@ namespace editor
 
 using glm::vec3;
 
+auto Toggle_palette_visibility_command::try_call(
+    erhe::application::Command_context& context
+) -> bool
+{
+    static_cast<void>(context);
+    m_palette.toggle_visibility();
+    return true;
+}
+
 Palette::Palette()
     : erhe::application::Imgui_window{c_title, c_type_name}
     , erhe::components::Component    {c_type_name}
+    , m_toggle_visibility_command    {*this}
 {
 }
 
@@ -37,9 +50,10 @@ Palette::~Palette() noexcept
 
 void Palette::declare_required_components()
 {
+    require<erhe::application::Commands           >();
     require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Imgui_windows>();
-    require<erhe::application::Rendergraph  >();
+    require<erhe::application::Imgui_windows      >();
+    require<erhe::application::Rendergraph        >();
     require<Fly_camera_tool                 >();
     require<Scene_builder                   >();
     require<Tools                           >();
@@ -54,6 +68,10 @@ void Palette::initialize_component()
 
     get<Tools                           >()->register_background_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+
+    const auto& commands = get<erhe::application::Commands>();
+    commands->register_command(&m_toggle_visibility_command);
+    commands->bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true );
 
     //const auto& rendergraph             = get<erhe::application::Rendergraph  >();
     const auto& imgui_windows           = get<erhe::application::Imgui_windows>();
@@ -74,6 +92,8 @@ void Palette::initialize_component()
         *scene_root->layers().rendertarget(),
         m_rendertarget_node
     );
+
+    m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         m_rendertarget_node.get(),
@@ -129,6 +149,22 @@ void Palette::tool_render(
     const Render_context& /*context*/
 )
 {
+}
+
+void Palette::toggle_visibility()
+{
+    m_is_visible = !m_is_visible;
+
+    if (m_is_visible)
+    {
+        log_palette->trace("Palette visible");
+        m_rendertarget_node->node_data.visibility_mask |= erhe::scene::Node_visibility::visible;
+    }
+    else
+    {
+        log_palette->trace("Palette hidden");
+        m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
+    }
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)

@@ -194,11 +194,22 @@ void Fly_camera_tool::initialize_component()
     const auto& commands = get<erhe::application::Commands>();
     const auto& config   = get<erhe::application::Configuration>()->camera_controls;
 
-    // TODO these commands should be registered
-    commands->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_e, true );
-    commands->bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_e, false);
-    commands->bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_q, true );
-    commands->bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_q, false);
+    commands->register_command(&m_move_up_active_command);
+    commands->register_command(&m_move_up_inactive_command);
+    commands->register_command(&m_move_down_active_command);
+    commands->register_command(&m_move_down_inactive_command);
+    commands->register_command(&m_move_left_active_command);
+    commands->register_command(&m_move_left_inactive_command);
+    commands->register_command(&m_move_right_active_command);
+    commands->register_command(&m_move_right_inactive_command);
+    commands->register_command(&m_move_forward_active_command);
+    commands->register_command(&m_move_forward_inactive_command);
+    commands->register_command(&m_move_backward_active_command);
+    commands->register_command(&m_move_backward_inactive_command);
+    commands->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_r, true );
+    commands->bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_r, false);
+    commands->bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_f, true );
+    commands->bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_f, false);
     commands->bind_command_to_key(&m_move_left_active_command,       erhe::toolkit::Key_a, true );
     commands->bind_command_to_key(&m_move_left_inactive_command,     erhe::toolkit::Key_a, false);
     commands->bind_command_to_key(&m_move_right_active_command,      erhe::toolkit::Key_d, true );

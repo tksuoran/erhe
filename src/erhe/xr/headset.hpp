@@ -45,6 +45,7 @@ public:
     auto controller_pose() const -> Pose;
     [[nodiscard]] auto get_hand_tracking_joint (const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint;
     [[nodiscard]] auto get_hand_tracking_active(const XrHandEXT hand) const -> bool;
+    [[nodiscard]] auto get_view_in_world       () const -> glm::mat4;
 
 private:
     std::unique_ptr<Xr_instance> m_xr_instance;
