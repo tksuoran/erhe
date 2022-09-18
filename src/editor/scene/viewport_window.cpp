@@ -5,7 +5,6 @@
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/id_renderer.hpp"
-#include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -65,29 +64,7 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
-
 int Viewport_window::s_serial = 0;
-
-auto Scene_view::get_light_projections() const -> Light_projections*
-{
-    auto* shadow_render_node = get_shadow_render_node();
-    if (shadow_render_node == nullptr)
-    {
-        return nullptr;
-    }
-    Light_projections& light_projections = shadow_render_node->get_light_projections();
-    return &light_projections;
-}
-
-auto Scene_view::get_shadow_texture() const -> erhe::graphics::Texture*
-{
-    const auto* shadow_render_node = get_shadow_render_node();
-    if (shadow_render_node == nullptr)
-    {
-        return nullptr;
-    }
-    return shadow_render_node->get_texture().get();
-}
 
 Viewport_window::Viewport_window(
     const std::string_view                      name,

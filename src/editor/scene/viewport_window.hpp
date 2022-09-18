@@ -2,7 +2,7 @@
 
 #include "windows/viewport_config.hpp"
 #include "renderers/programs.hpp"
-#include "scene/node_raytrace_mask.hpp"
+#include "scene/scene_view.hpp"
 
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/commands/command.hpp"
@@ -41,9 +41,6 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
-    class Texture;
-    class Renderbuffer;
-    class OpenGL_state_tracker;
 }
 
 namespace editor
@@ -63,50 +60,6 @@ class Trs_tool;
 class Viewport_window;
 class Viewport_windows;
 
-class Hover_entry
-{
-public:
-    static constexpr std::size_t content_slot      = 0;
-    static constexpr std::size_t tool_slot         = 1;
-    static constexpr std::size_t brush_slot        = 2;
-    static constexpr std::size_t rendertarget_slot = 3;
-    static constexpr std::size_t slot_count   = 4;
-
-    static constexpr std::array<uint32_t, slot_count> slot_masks = {
-        Raytrace_node_mask::content,
-        Raytrace_node_mask::tool,
-        Raytrace_node_mask::brush,
-        Raytrace_node_mask::rendertarget
-    };
-
-    static constexpr std::array<const char*, slot_count> slot_names = {
-        "content",
-        "tool",
-        "brush",
-        "rendertarget"
-    };
-
-    uint32_t                           mask         {0};
-    bool                               valid        {false};
-    Node_raytrace*                     raytrace_node{nullptr};
-    std::shared_ptr<erhe::scene::Mesh> mesh         {};
-    erhe::geometry::Geometry*          geometry     {nullptr};
-    std::optional<glm::vec3>           position     {};
-    std::optional<glm::vec3>           normal       {};
-    std::size_t                        primitive    {0};
-    std::size_t                        local_index  {0};
-};
-
-class Scene_view
-{
-public:
-    [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
-    [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
-    [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* = 0;
-
-    [[nodiscard]] auto get_light_projections () const -> Light_projections*;
-    [[nodiscard]] auto get_shadow_texture    () const -> erhe::graphics::Texture*;
-};
 
 /// <summary>
 /// Rendergraph producer node for rendering contents of scene into output rendergraph node.

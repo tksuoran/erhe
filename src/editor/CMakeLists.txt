@@ -91,6 +91,8 @@ erhe_target_sources_grouped(
     scene/scene_builder.hpp
     scene/scene_commands.cpp
     scene/scene_commands.hpp
+    scene/scene_view.cpp
+    scene/scene_view.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
     scene/viewport_window.cpp
