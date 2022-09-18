@@ -603,35 +603,6 @@ void Viewport_window::update_pointer_context(
     }
 }
 
-auto Viewport_window::near_position_in_world() const -> std::optional<glm::vec3>
-{
-    return m_near_position_in_world;
-}
-
-auto Viewport_window::far_position_in_world() const -> std::optional<glm::vec3>
-{
-    return m_far_position_in_world;
-}
-
-auto Viewport_window::position_in_world_distance(
-    const float distance
-) const -> std::optional<glm::vec3>
-{
-    if (
-        !m_near_position_in_world.has_value() ||
-        !m_far_position_in_world.has_value()
-    )
-    {
-        return {};
-    }
-
-    const glm::vec3 p0        = m_near_position_in_world.value();
-    const glm::vec3 p1        = m_far_position_in_world.value();
-    const glm::vec3 origin    = p0;
-    const glm::vec3 direction = glm::normalize(p1 - p0);
-    return origin + distance * direction;
-}
-
 auto Viewport_window::position_in_world_viewport_depth(
     const double viewport_depth
 ) const -> std::optional<glm::dvec3>
@@ -666,21 +637,6 @@ auto Viewport_window::position_in_world_viewport_depth(
         static_cast<double>(vp.width),
         static_cast<double>(vp.height)
     );
-}
-
-auto Viewport_window::position_in_viewport() const -> std::optional<glm::vec2>
-{
-    return m_position_in_viewport;
-}
-
-auto Viewport_window::get_hover(size_t slot) const -> const Hover_entry&
-{
-    return m_hover_entries.at(slot);
-}
-
-auto Viewport_window::get_nearest_hover() const -> const Hover_entry&
-{
-    return m_hover_entries.at(m_nearest_slot);
 }
 
 auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*

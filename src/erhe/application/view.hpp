@@ -89,11 +89,9 @@ public:
     void imgui() override;
 
     // Public API
-    void set_client      (View_client* view_client);
+    void set_client(View_client* view_client);
 
-    [[nodiscard]] auto view_client              () const -> View_client*;
-    //// [[nodiscard]] auto to_window_bottom_left    (const glm::vec2 position_in_root) const -> glm::vec2;
-    //// [[nodiscard]] auto to_window_top_left       (const glm::vec2 position_in_root) const -> glm::vec2;
+    [[nodiscard]] auto view_client() const -> View_client*;
 
 private:
     // Component dependencies

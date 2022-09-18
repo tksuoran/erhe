@@ -27,7 +27,6 @@ public:
 
     [[nodiscard]] auto accept_mouse_command(Command* const command) -> bool;
     [[nodiscard]] auto commands            () const -> Commands&;
-    //// [[nodiscard]] auto view                () const -> View&;
 
 private:
     Commands&     m_commands;

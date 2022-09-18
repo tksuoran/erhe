@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace erhe::application
 {
@@ -87,12 +88,28 @@ public:
 class Scene_view
 {
 public:
+
+    // Virtual interface
     [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* = 0;
 
-    [[nodiscard]] auto get_light_projections () const -> Light_projections*;
-    [[nodiscard]] auto get_shadow_texture    () const -> erhe::graphics::Texture*;
+    // "Pointing"
+    [[nodiscard]] auto position_in_viewport      () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto near_position_in_world    () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto far_position_in_world     () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto position_in_world_distance(float distance) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto get_hover                 (std::size_t slot) const -> const Hover_entry&;
+    [[nodiscard]] auto get_nearest_hover         () const -> const Hover_entry&;
+    [[nodiscard]] auto get_light_projections     () const -> Light_projections*;
+    [[nodiscard]] auto get_shadow_texture        () const -> erhe::graphics::Texture*;
+
+protected:
+    std::optional<glm::vec2>                         m_position_in_viewport;
+    std::optional<glm::vec3>                         m_near_position_in_world;
+    std::optional<glm::vec3>                         m_far_position_in_world;
+    std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
+    std::size_t                                      m_nearest_slot{0};
 };
 
 } // namespace editor

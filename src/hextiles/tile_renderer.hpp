@@ -96,10 +96,6 @@ public:
     [[nodiscard]] auto get_unit_shapes   () const -> const std::vector<Pixel_coordinate>&;
     [[nodiscard]] auto get_extra_shape   (int extra) const -> Pixel_coordinate;
 
-    ///[[nodiscard]] auto get_terrain_tile(const terrain_t terrain  ) const -> tile_t;
-    ///[[nodiscard]] auto get_unit_tile   (const unit_t    unit     ) const -> tile_t;
-    ///[[nodiscard]] auto get_grid_tile   (const int       grid_mode) const -> tile_t;
-
     void blit(
         int      src_x,
         int      src_y,
@@ -111,15 +107,6 @@ public:
         float    dst_y1,
         uint32_t color
     );
-
-    //void blit_tile(
-    //    tile_t   tile,
-    //    float    dst_x0,
-    //    float    dst_y0,
-    //    float    dst_x1,
-    //    float    dst_y1,
-    //    uint32_t color
-    //);
 
     void begin    ();
     void end      ();
@@ -211,18 +198,11 @@ private:
     // - 2 * 2 : explosion tiles 4 x 2, double width and height
     // -     2 : multiplayer tiles 6 x 2
     // - unit tiles 8 x 8
-
-    //tile_t m_terrain_tile_offset   {0};
-    //tile_t m_extra_tile_offset     {0};
-    //tile_t m_unit_tile_offset      {0};
-    //tile_t m_edge_tile_offset      {0};
-    //tile_t m_grid_tile_offset      {0};
-    //tile_t m_brush_size_tile_offset{0};
-    std::vector<Pixel_coordinate>         m_terrain_shapes;
-    std::vector<Pixel_coordinate>         m_multiplayer_shapes;
-    std::vector<Pixel_coordinate>         m_unit_shapes;
-    std::vector<Pixel_coordinate>         m_extra_shapes;
-    std::vector<Pixel_coordinate>         m_explosion_shapes;
+    std::vector<Pixel_coordinate>    m_terrain_shapes;
+    std::vector<Pixel_coordinate>    m_multiplayer_shapes;
+    std::vector<Pixel_coordinate>    m_unit_shapes;
+    std::vector<Pixel_coordinate>    m_extra_shapes;
+    std::vector<Pixel_coordinate>    m_explosion_shapes;
 
     static constexpr int s_special_unit_tile_count  = 8;
     static constexpr int s_single_unit_tile_count   = max_player_count * Unit_group::width * Unit_group::height;

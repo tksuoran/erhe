@@ -119,13 +119,7 @@ public:
         glm::vec2    position_in_viewport
     );
 
-    [[nodiscard]] auto position_in_viewport            () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto position_in_world_viewport_depth(double viewport_depth) const -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto near_position_in_world          () const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto far_position_in_world           () const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto position_in_world_distance      (float distance) const -> std::optional<glm::vec3>;
-    [[nodiscard]] auto get_hover                       (std::size_t slot) const -> const Hover_entry&;
-    [[nodiscard]] auto get_nearest_hover               () const -> const Hover_entry&;
 
     auto get_shadow_render_node() const -> Shadow_render_node* override;
 
@@ -172,14 +166,6 @@ private:
     erhe::scene::Viewport       m_projection_viewport   {0, 0, 0, 0, true};
     Shader_stages_variant       m_shader_stages_variant {Shader_stages_variant::standard};
     bool                        m_is_hovered            {false};
-
-    // Pointer context data
-    std::optional<glm::vec2> m_position_in_viewport;
-    std::optional<glm::vec3> m_near_position_in_world;
-    std::optional<glm::vec3> m_far_position_in_world;
-
-    std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
-    std::size_t                                      m_nearest_slot{0};
 };
 
 } // namespace editor
