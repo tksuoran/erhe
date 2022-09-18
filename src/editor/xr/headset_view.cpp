@@ -1,4 +1,4 @@
-#include "xr/headset_renderer.hpp"
+#include "xr/headset_view.hpp"
 
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
@@ -48,18 +48,18 @@ namespace editor
 
 using erhe::graphics::Color_blend_state;
 
-Headset_renderer::Headset_renderer()
+Headset_view::Headset_view()
     : erhe::components::Component        {c_name}
     , erhe::application::Imgui_window    {c_description}
     , erhe::application::Rendergraph_node{c_description}
 {
 }
 
-Headset_renderer::~Headset_renderer()
+Headset_view::~Headset_view()
 {
 }
 
-void Headset_renderer::declare_required_components()
+void Headset_view::declare_required_components()
 {
     m_configuration = require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
@@ -70,7 +70,7 @@ void Headset_renderer::declare_required_components()
     require<Tools          >();
 }
 
-void Headset_renderer::initialize_component()
+void Headset_view::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
@@ -100,7 +100,7 @@ void Headset_renderer::initialize_component()
     //hide();
 }
 
-void Headset_renderer::post_initialize()
+void Headset_view::post_initialize()
 {
     m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
     m_text_renderer          = get<erhe::application::Text_renderer    >();
@@ -111,12 +111,12 @@ void Headset_renderer::post_initialize()
     m_tools            = get<Tools           >();
 }
 
-auto Headset_renderer::description() -> const char*
+auto Headset_view::description() -> const char*
 {
     return c_description.data();
 }
 
-void Headset_renderer::tool_render(const Render_context& context)
+void Headset_view::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 
@@ -165,7 +165,7 @@ void Headset_renderer::tool_render(const Render_context& context)
     }
 }
 
-auto Headset_renderer::get_headset_view_resources(
+auto Headset_view::get_headset_view_resources(
     erhe::xr::Render_view& render_view
 ) -> std::shared_ptr<Headset_view_resources>
 {
@@ -184,7 +184,7 @@ auto Headset_renderer::get_headset_view_resources(
     {
         auto resource = std::make_shared<Headset_view_resources>(
             render_view,                               // erhe::xr::Render_view& render_view,
-            *this,                                     // Headset_renderer&      headset_renderer,
+            *this,                                     // Headset_view&          headset_view,
             m_scene_root,                              // Scene_root&            scene_root,
             static_cast<std::size_t>(render_view.slot) // const std::size_t      slot
         );
@@ -214,7 +214,7 @@ auto Headset_renderer::get_headset_view_resources(
 static constexpr std::string_view c_id_headset_clear{"HS clear"};
 static constexpr std::string_view c_id_headset_render_content{"HS render content"};
 
-void Headset_renderer::execute_rendergraph_node()
+void Headset_view::execute_rendergraph_node()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -305,7 +305,7 @@ void Headset_renderer::execute_rendergraph_node()
                 //const auto& materials        = material_library->materials();
 
                 Render_context render_context {
-                    .scene_viewport  = view_resources->viewport_window.get(),
+                    .scene_view      = view_resources->viewport_window.get(),
                     .viewport_config = &viewport_config,
                     .camera          = as_camera(view_resources->camera.get()),
                     .viewport        = viewport
@@ -331,7 +331,7 @@ void Headset_renderer::execute_rendergraph_node()
     m_headset->end_frame();
 }
 
-void Headset_renderer::setup_root_camera()
+void Headset_view::setup_root_camera()
 {
     m_root_camera = std::make_shared<erhe::scene::Camera>(
         "Headset Root Camera"
@@ -351,49 +351,49 @@ void Headset_renderer::setup_root_camera()
     m_scene_root->scene().add(m_root_camera);
 }
 
-auto Headset_renderer::get_scene_root() const -> std::shared_ptr<Scene_root>
+auto Headset_view::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
     return m_scene_root;
 }
 
-auto Headset_renderer::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
+auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
     return m_root_camera;
 }
 
-[[nodiscard]] auto Headset_renderer::get_shadow_render_node() const -> Shadow_render_node*
+[[nodiscard]] auto Headset_view::get_shadow_render_node() const -> Shadow_render_node*
 {
     return m_shadow_render_node.get();
 }
 
-void Headset_renderer::add_finger_input(
+void Headset_view::add_finger_input(
     const Finger_point& finger_input
 )
 {
     m_finger_inputs.push_back(finger_input);
 }
 
-void Headset_renderer::add_controller_input(const Controller_input& controller_input)
+void Headset_view::add_controller_input(const Controller_input& controller_input)
 {
     m_controller_inputs.push_back(controller_input);
 }
 
-[[nodiscard]] auto Headset_renderer::finger_to_viewport_distance_threshold() const -> float
+[[nodiscard]] auto Headset_view::finger_to_viewport_distance_threshold() const -> float
 {
     return m_finger_to_viewport_distance_threshold;
 }
 
-[[nodiscard]] auto Headset_renderer::get_hand_tracker() const -> Hand_tracker*
+[[nodiscard]] auto Headset_view::get_hand_tracker() const -> Hand_tracker*
 {
     return m_hand_tracker.get();
 }
 
-[[nodiscard]] auto Headset_renderer::get_headset() const -> erhe::xr::Headset*
+[[nodiscard]] auto Headset_view::get_headset() const -> erhe::xr::Headset*
 {
     return m_headset.get();
 }
 
-void Headset_renderer::begin_frame()
+void Headset_view::begin_frame()
 {
     if (!m_headset)
     {
@@ -419,12 +419,12 @@ void Headset_renderer::begin_frame()
     }
 }
 
-void Headset_renderer::connect(const std::shared_ptr<Shadow_render_node>& shadow_render_node)
+void Headset_view::connect(const std::shared_ptr<Shadow_render_node>& shadow_render_node)
 {
     m_shadow_render_node = shadow_render_node;
 }
 
-void Headset_renderer::imgui()
+void Headset_view::imgui()
 {
     m_mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
 

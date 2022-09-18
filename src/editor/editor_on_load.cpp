@@ -11,7 +11,7 @@
 
 #include "renderers/forward_renderer.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #   include "xr/hand_tracker.hpp"
 #   include "xr/theremin.hpp"
 #endif
@@ -178,9 +178,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Viewport_windows      >());
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        m_components.add(make_shared<editor::Hand_tracker    >());
-        m_components.add(make_shared<editor::Headset_renderer>());
-        m_components.add(make_shared<editor::Theremin        >());
+        m_components.add(make_shared<editor::Hand_tracker>());
+        m_components.add(make_shared<editor::Headset_view>());
+        m_components.add(make_shared<editor::Theremin    >());
 #endif
     }
 
@@ -248,15 +248,15 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (configuration->headset.openxr)
     {
-        const auto& headset_renderer = m_components.get<editor::Headset_renderer>();
-        const auto& rendergraph      = m_components.get<erhe::application::Rendergraph>();
-        rendergraph->register_node(headset_renderer);
+        const auto& headset_view = m_components.get<editor::Headset_view>();
+        const auto& rendergraph  = m_components.get<erhe::application::Rendergraph>();
+        rendergraph->register_node(headset_view);
 
         const auto& shadow_renderer = m_components.get<editor::Shadow_renderer>();
-        const auto shadow_render_node = shadow_renderer->create_node_for_viewport(headset_renderer);
+        const auto shadow_render_node = shadow_renderer->create_node_for_viewport(headset_view);
         rendergraph->register_node(shadow_render_node);
 
-        headset_renderer->connect(shadow_render_node);
+        headset_view->connect(shadow_render_node);
 
         const auto& scene_builder    = m_components.get<editor::Scene_builder>();
         scene_builder->add_rendertarget_viewports(1);

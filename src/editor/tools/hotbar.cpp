@@ -8,7 +8,7 @@
 #include "rendertarget_node.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 
 #include "erhe/application/configuration.hpp"
@@ -107,10 +107,10 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     {
-        const auto& headset_renderer = get<editor::Headset_renderer>();
-        if (headset_renderer)
+        const auto& headset_view = get<editor::Headset_view>();
+        if (headset_view)
         {
-            return headset_renderer->get_camera();
+            return headset_view->get_camera();
         }
     }
 #endif

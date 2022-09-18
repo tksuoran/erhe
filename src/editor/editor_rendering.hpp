@@ -40,7 +40,7 @@ namespace editor
 class Editor_rendering;
 class Forward_renderer;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-class Headset_renderer;
+class Headset_view;
 #endif
 class Id_renderer;
 class Mesh_memory;
@@ -133,7 +133,7 @@ private:
     std::shared_ptr<Tools>                          m_tools;
     std::shared_ptr<Forward_renderer>               m_forward_renderer;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    std::shared_ptr<Headset_renderer>               m_headset_renderer;
+    std::shared_ptr<Headset_view>                   m_headset_view;
 #endif
     std::shared_ptr<Id_renderer>                    m_id_renderer;
     std::shared_ptr<Post_processing>                m_post_processing;

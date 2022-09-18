@@ -97,7 +97,7 @@ public:
     std::size_t                        local_index  {0};
 };
 
-class Scene_viewport
+class Scene_view
 {
 public:
     [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
@@ -118,7 +118,7 @@ public:
 /// Inputs:  "shadow_maps"
 /// Outputs: "viewport"
 class Viewport_window
-    : public Scene_viewport
+    : public Scene_view
     , public erhe::application::Rendergraph_node
 {
 public:
@@ -133,7 +133,7 @@ public:
     );
     ~Viewport_window();
 
-    // Implements Scene_viewport
+    // Implements Scene_view
     [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root> override;
     [[nodiscard]] auto get_camera    () const -> std::shared_ptr<erhe::scene::Camera> override;
 

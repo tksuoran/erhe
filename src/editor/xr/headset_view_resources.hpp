@@ -23,7 +23,7 @@ namespace editor
 {
 
 class Editor_rendering;
-class Headset_renderer;
+class Headset_view;
 class Scene_root;
 class Viewport_window;
 
@@ -32,7 +32,7 @@ class Headset_view_resources
 public:
     Headset_view_resources(
         erhe::xr::Render_view&             render_view,
-        Headset_renderer&                  headset_renderer,
+        Headset_view&                      headset_view,
         const std::shared_ptr<Scene_root>& scene_root,
         const std::size_t                  slot
     );

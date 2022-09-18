@@ -10,7 +10,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 
 #include "erhe/application/configuration.hpp"

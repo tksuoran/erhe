@@ -1,5 +1,5 @@
 #include "xr/hand_tracker.hpp"
-#include "xr/headset_renderer.hpp"
+#include "xr/headset_view.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"
@@ -457,7 +457,7 @@ void Hand_tracker::initialize_component()
 
 void Hand_tracker::post_initialize()
 {
-    m_headset_renderer  = get<Headset_renderer >();
+    m_headset_view      = get<Headset_view>();
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
 }
 
@@ -505,7 +505,7 @@ void Hand_tracker::tool_render(const Render_context& context)
         return;
     }
 
-    const auto camera = m_headset_renderer->get_camera();
+    const auto camera = m_headset_view->get_camera();
     if (!camera)
     {
         return;

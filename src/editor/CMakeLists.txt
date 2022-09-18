@@ -232,8 +232,8 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
         xr/controller_visualization.hpp
         xr/hand_tracker.cpp
         xr/hand_tracker.hpp
-        xr/headset_renderer.cpp
-        xr/headset_renderer.hpp
+        xr/headset_view.cpp
+        xr/headset_view.hpp
         xr/headset_view_resources.cpp
         xr/headset_view_resources.hpp
         xr/theremin.cpp

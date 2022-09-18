@@ -23,7 +23,7 @@ namespace editor
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 class Hand_tracker;
-class Headset_renderer;
+class Headset_view;
 #endif
 class Rendertarget_node;
 class Viewport_window;
@@ -80,7 +80,7 @@ private:
     std::shared_ptr<erhe::application::View>           m_view;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     std::shared_ptr<Hand_tracker>                      m_hand_tracker;
-    std::shared_ptr<Headset_renderer>                  m_headset_renderer;
+    std::shared_ptr<Headset_view>                      m_headset_view;
     bool                                               m_last_mouse_finger{false};
 #endif
     std::string                                        m_name;

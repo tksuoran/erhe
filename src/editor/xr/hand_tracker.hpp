@@ -25,7 +25,7 @@ namespace erhe::application
 namespace editor
 {
 
-class Headset_renderer;
+class Headset_view;
 
 enum class Hand_name : unsigned int
 {
@@ -138,7 +138,7 @@ public:
 private:
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Headset_renderer>                     m_headset_renderer;
+    std::shared_ptr<Headset_view>                         m_headset_view;
 
     Hand m_left_hand;
     Hand m_right_hand;

@@ -188,7 +188,7 @@ void Debug_visualizations::directional_light_visualization(
 )
 {
     const auto shadow_renderer    = get<Shadow_renderer>();
-    const auto shadow_render_node = shadow_renderer->get_node_for_viewport(context.render_context.scene_viewport);
+    const auto shadow_render_node = shadow_renderer->get_node_for_view(context.render_context.scene_view);
     if (!shadow_render_node)
     {
         return;
@@ -548,12 +548,12 @@ void Debug_visualizations::tool_render(
         }
     }
 
-    if (context.scene_viewport == nullptr)
+    if (context.scene_view == nullptr)
     {
         return;
     }
 
-    const auto scene_root = context.scene_viewport->get_scene_root();
+    const auto scene_root = context.scene_view->get_scene_root();
     if (!scene_root)
     {
         return;

@@ -30,7 +30,7 @@ namespace editor
 {
 
 class Hand_tracker;
-class Headset_renderer;
+class Headset_view;
 class Pointer_context;
 class Scene_root;
 
@@ -87,9 +87,9 @@ private:
     auto normalized_finger_distance() const -> float;
 
     // Component dependencies
-    std::shared_ptr<Hand_tracker                        > m_hand_tracker;
-    std::shared_ptr<Headset_renderer                    > m_headset_renderer;
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<Hand_tracker                        > m_hand_tracker;
+    std::shared_ptr<Headset_view                        > m_headset_view;
 
     bool                 m_enable_audio          {false};   // master on/off switch
     float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna

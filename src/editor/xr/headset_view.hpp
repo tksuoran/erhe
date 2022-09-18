@@ -41,7 +41,7 @@ namespace editor
 
 class Controller_visualization;
 class Editor_rendering;
-class Headset_renderer;
+class Headset_view;
 class Mesh_memory;
 class Scene_builder;
 class Scene_root;
@@ -55,20 +55,20 @@ public:
     float     trigger_value{0.0f};
 };
 
-class Headset_renderer
+class Headset_view
     : public erhe::components::Component
     , public erhe::application::Imgui_window
     , public erhe::application::Rendergraph_node
-    , public Scene_viewport
+    , public Scene_view
     , public Tool
 {
 public:
-    static constexpr std::string_view c_name       {"Headset_renderer"};
-    static constexpr std::string_view c_description{"Headset Renderer"};
+    static constexpr std::string_view c_name       {"Headset_view"};
+    static constexpr std::string_view c_description{"Headset View"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_name.data(), c_name.size(), {});
 
-    Headset_renderer ();
-    ~Headset_renderer() noexcept override;
+    Headset_view ();
+    ~Headset_view() noexcept override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
@@ -97,7 +97,7 @@ public:
     [[nodiscard]] auto get_hand_tracker      () const -> Hand_tracker*;
     [[nodiscard]] auto get_headset           () const -> erhe::xr::Headset*;
 
-    // Implements Scene_viewport
+    // Implements Scene_view
     [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
     [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
     [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                  override;

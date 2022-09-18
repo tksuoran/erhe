@@ -10,14 +10,14 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_viewport;
+class Scene_view;
 class Viewport_config;
 class Viewport_window;
 
 class Render_context
 {
 public:
-    Scene_viewport*                scene_viewport        {nullptr};
+    Scene_view*                    scene_view            {nullptr};
     Viewport_window*               viewport_window       {nullptr};
     Viewport_config*               viewport_config       {nullptr};
     erhe::scene::Camera*           camera                {nullptr};

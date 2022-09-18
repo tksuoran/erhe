@@ -9,7 +9,7 @@
 
 #include "graphics/gradients.hpp"
 #include "xr/hand_tracker.hpp"
-#include "xr/headset_renderer.hpp"
+#include "xr/headset_view.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -208,9 +208,9 @@ void Theremin::initialize_component()
 
 void Theremin::post_initialize()
 {
-    m_hand_tracker      = get<Hand_tracker                        >();
-    m_headset_renderer  = get<Headset_renderer                    >();
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_hand_tracker      = get<Hand_tracker>();
+    m_headset_view      = get<Headset_view>();
 }
 
 void Theremin::set_antenna_distance(const float distance)
@@ -297,13 +297,13 @@ void Theremin::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 
-    if (!m_headset_renderer || !m_enable_audio)
+    if (!m_headset_view || !m_enable_audio)
     {
         return;
     }
 
     auto&      line_renderer = m_line_renderer_set->hidden;
-    const auto camera        = m_headset_renderer->get_camera();
+    const auto camera        = m_headset_view->get_camera();
 
     if (!camera)
     {

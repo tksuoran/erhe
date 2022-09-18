@@ -236,11 +236,11 @@ void Physics_window::tool_render(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (context.scene_viewport == nullptr)
+    if (context.scene_view == nullptr)
     {
         return;
     }
-    const auto& scene_root   = context.scene_viewport->get_scene_root();
+    const auto& scene_root   = context.scene_view->get_scene_root();
     const auto& debug_drawer = get<Debug_draw>();
     if (
         !debug_drawer ||

@@ -28,7 +28,7 @@
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 
 #include "SkylineBinPack.h" // RectangleBinPack
@@ -183,10 +183,10 @@ void Scene_builder::add_rendertarget_viewports(int count)
         grid_tool->show();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        const auto& headset_renderer = get<editor::Headset_renderer>();
-        if (headset_renderer)
+        const auto& headset_view = get<editor::Headset_view>();
+        if (headset_view)
         {
-            headset_renderer->set_viewport(imgui_viewport_1.get());
+            headset_view->set_viewport(imgui_viewport_1.get());
         }
 #endif
     }

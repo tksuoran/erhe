@@ -2,7 +2,7 @@
 #include "editor_rendering.hpp"
 #include "editor_log.hpp"
 #include "scene/scene_root.hpp"
-#include "xr/headset_renderer.hpp"
+#include "xr/headset_view.hpp"
 
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/framebuffer.hpp"
@@ -19,7 +19,7 @@ using erhe::graphics::Texture;
 
 Headset_view_resources::Headset_view_resources(
     erhe::xr::Render_view&             render_view,
-    Headset_renderer&                  headset_renderer,
+    Headset_view&                      headset_view,
     const std::shared_ptr<Scene_root>& scene_root,
     const std::size_t                  slot
 )
@@ -85,7 +85,7 @@ Headset_view_resources::Headset_view_resources(
     );
 
     scene_root->scene().add(camera);
-    headset_renderer.get_camera()->attach(camera);
+    headset_view.get_camera()->attach(camera);
 
     is_valid = true;
 }

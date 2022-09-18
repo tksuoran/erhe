@@ -7,7 +7,7 @@
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 
 #include "erhe/application/configuration.hpp"
@@ -43,8 +43,8 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     , m_imgui_windows    {components.get<erhe::application::Imgui_windows >()}
     , m_view             {components.get<erhe::application::View          >()}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    , m_hand_tracker     {components.get<Hand_tracker    >()}
-    , m_headset_renderer {components.get<Headset_renderer>()}
+    , m_hand_tracker     {components.get<Hand_tracker>()}
+    , m_headset_view     {components.get<Headset_view>()}
 #endif
     , m_name             {name}
     , m_imgui_ini_path   {imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
@@ -101,7 +101,7 @@ template <typename T>
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_rendertarget_node->update_headset(*m_headset_renderer.get());
+    m_rendertarget_node->update_headset(*m_headset_view.get());
 #endif
 
     const auto pointer = m_rendertarget_node->get_pointer();
@@ -142,12 +142,12 @@ template <typename T>
 #if 0
     if (m_hand_tracker)
     {
-        m_rendertarget_node->update_headset(*m_headset_renderer.get());
+        m_rendertarget_node->update_headset(*m_headset_view.get());
         const auto& pointer_finger_opt = m_rendertarget_node->get_pointer_finger();
         if (pointer_finger_opt.has_value())
         {
             const auto& pointer_finger           = pointer_finger_opt.value();
-            m_headset_renderer->add_finger_input(pointer_finger);
+            m_headset_view->add_finger_input(pointer_finger);
             const auto  finger_world_position    = pointer_finger.finger_point;
             const auto  viewport_world_position  = pointer_finger.point;
             //const float distance                 = glm::distance(finger_world_position, viewport_world_position);
@@ -181,7 +181,7 @@ template <typename T>
                 }
             }
 
-            ////const float finger_press_threshold = m_headset_renderer->finger_to_viewport_distance_threshold();
+            ////const float finger_press_threshold = m_headset_view->finger_to_viewport_distance_threshold();
             ////if ((distance < finger_press_threshold * 0.98f) && (!m_last_mouse_finger))
             ////{
             ////    m_last_mouse_finger = true;
@@ -262,7 +262,7 @@ template <typename T>
             }
         }
 
-        m_headset_renderer->add_controller_input(
+        m_headset_view->add_controller_input(
             Controller_input{
                 .position      = pose.position,
                 .direction     = controller_direction,

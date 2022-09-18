@@ -18,7 +18,7 @@
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 
 #include "erhe/application/windows/log_window.hpp"
@@ -68,7 +68,7 @@ using erhe::graphics::Texture;
 
 int Viewport_window::s_serial = 0;
 
-auto Scene_viewport::get_light_projections() const -> Light_projections*
+auto Scene_view::get_light_projections() const -> Light_projections*
 {
     auto* shadow_render_node = get_shadow_render_node();
     if (shadow_render_node == nullptr)
@@ -79,7 +79,7 @@ auto Scene_viewport::get_light_projections() const -> Light_projections*
     return &light_projections;
 }
 
-auto Scene_viewport::get_shadow_texture() const -> erhe::graphics::Texture*
+auto Scene_view::get_shadow_texture() const -> erhe::graphics::Texture*
 {
     const auto* shadow_render_node = get_shadow_render_node();
     if (shadow_render_node == nullptr)
@@ -173,7 +173,7 @@ void Viewport_window::execute_rendergraph_node()
 
     const Render_context context
     {
-        .scene_viewport         = this,
+        .scene_view             = this,
         .viewport_window        = this,
         .viewport_config        = m_viewport_config.get(),
         .camera                 = m_camera.lock().get(),

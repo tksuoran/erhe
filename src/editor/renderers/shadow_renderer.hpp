@@ -39,7 +39,7 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_viewport;
+class Scene_view;
 class Mesh_memory;
 class Scene_root;
 class Shadow_render_node;
@@ -84,10 +84,10 @@ public:
     };
 
     auto create_node_for_viewport(
-        const std::shared_ptr<Scene_viewport>& scene_viewport
+        const std::shared_ptr<Scene_view>& scene_view
     ) -> std::shared_ptr<Shadow_render_node>;
-    auto get_node_for_viewport(
-        const Scene_viewport* scene_viewport
+    auto get_node_for_view(
+        const Scene_view* scene_view
     ) -> std::shared_ptr<Shadow_render_node>;
     auto get_nodes() const -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
 

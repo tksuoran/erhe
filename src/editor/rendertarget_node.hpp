@@ -71,7 +71,7 @@ public:
     [[nodiscard]] auto world_to_window(glm::vec3 world_position) const -> std::optional<glm::vec2>;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    void update_headset(Headset_renderer& headset_renderer);
+    void update_headset(Headset_view& headset_view);
     [[nodiscard]] auto get_pointer_finger    () const -> std::optional<Finger_point>;
     [[nodiscard]] auto get_finger_trigger    () const -> bool;
     [[nodiscard]] auto get_controller_pose   () const -> const erhe::xr::Pose&;

@@ -18,7 +18,7 @@
 #include "windows/debug_view_window.hpp"
 #include "windows/viewport_config.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 
 #include "erhe/application/application.hpp"
@@ -396,7 +396,7 @@ void Editor_rendering::post_initialize()
     m_tools                  = get<Tools           >();
     m_forward_renderer       = get<Forward_renderer>();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_headset_renderer       = get<Headset_renderer>();
+    m_headset_view           = get<Headset_view>();
 #endif
     m_id_renderer            = get<Id_renderer     >();
     m_post_processing        = get<Post_processing >();
@@ -444,9 +444,9 @@ void Editor_rendering::begin_frame()
     m_viewport_windows->update_hover(imgui_viewport);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_headset_renderer)
+    if (m_headset_view)
     {
-        m_headset_renderer->begin_frame();
+        m_headset_view->begin_frame();
     }
 #endif
 }
@@ -555,15 +555,15 @@ void Editor_rendering::render_id(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        (!m_id_renderer)                    ||
-        (context.scene_viewport == nullptr) ||
-        (context.camera         == nullptr)
+        (!m_id_renderer)                ||
+        (context.scene_view == nullptr) ||
+        (context.camera     == nullptr)
     )
     {
         return;
     }
 
-    const auto scene_root = context.scene_viewport->get_scene_root();
+    const auto scene_root = context.scene_view->get_scene_root();
     if (!scene_root)
     {
         return;
@@ -604,7 +604,7 @@ void Editor_rendering::render_content(const Render_context& context)
 
     if (
         (!m_forward_renderer) ||
-        (context.scene_viewport  == nullptr) ||
+        (context.scene_view      == nullptr) ||
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
     )
@@ -613,7 +613,7 @@ void Editor_rendering::render_content(const Render_context& context)
         return;
     }
 
-    const auto scene_root = context.scene_viewport->get_scene_root();
+    const auto scene_root = context.scene_view->get_scene_root();
     if (!scene_root)
     {
         log_render->error("Missing scene root - cannot render");
@@ -652,12 +652,12 @@ void Editor_rendering::render_content(const Render_context& context)
             {
                 .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
-                .light_projections = context.scene_viewport->get_light_projections(),
+                .light_projections = context.scene_view->get_light_projections(),
                 .lights            = layers.light()->lights,
                 .materials         = materials,
                 .mesh_spans        = { layers.content()->meshes, layers.controller()->meshes },
                 .passes            = { &renderpass },
-                .shadow_texture    = context.scene_viewport->get_shadow_texture(),
+                .shadow_texture    = context.scene_view->get_shadow_texture(),
                 .viewport          = context.viewport,
                 .visibility_filter = content_not_selected_filter,
             }
@@ -732,7 +732,7 @@ void Editor_rendering::render_rendertarget_nodes(
 
     if (
         (!m_forward_renderer) ||
-        (context.scene_viewport  == nullptr) ||
+        (context.scene_view      == nullptr) ||
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
     )
@@ -740,7 +740,7 @@ void Editor_rendering::render_rendertarget_nodes(
         return;
     }
 
-    const auto scene_root = context.scene_viewport->get_scene_root();
+    const auto scene_root = context.scene_view->get_scene_root();
     if (!scene_root)
     {
         return;
@@ -775,13 +775,13 @@ void Editor_rendering::render_selection(const Render_context& context)
     if (
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr) ||
-        (context.scene_viewport  == nullptr)
+        (context.scene_view      == nullptr)
     )
     {
         return;
     }
 
-    const auto scene_root = context.scene_viewport->get_scene_root();
+    const auto scene_root = context.scene_view->get_scene_root();
     if (!scene_root)
     {
         return;
@@ -821,12 +821,12 @@ void Editor_rendering::render_selection(const Render_context& context)
             {
                 .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
-                .light_projections = context.scene_viewport->get_light_projections(),
+                .light_projections = context.scene_view->get_light_projections(),
                 .lights            = layers.light()->lights,
                 .materials         = materials,
                 .mesh_spans        = { layers.content()->meshes },
                 .passes            = { &renderpass },
-                .shadow_texture    = context.scene_viewport->get_shadow_texture(),
+                .shadow_texture    = context.scene_view->get_shadow_texture(),
                 .viewport          = context.viewport,
                 .visibility_filter = content_selected_filter
             }
@@ -905,8 +905,8 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        (context.camera         == nullptr) ||
-        (context.scene_viewport == nullptr)
+        (context.camera     == nullptr) ||
+        (context.scene_view == nullptr)
     )
     {
         return;
@@ -962,14 +962,14 @@ void Editor_rendering::render_brush(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        (context.camera         == nullptr) ||
-        (context.scene_viewport == nullptr)
+        (context.camera     == nullptr) ||
+        (context.scene_view == nullptr)
     )
     {
         return;
     }
 
-    const auto scene_root = context.scene_viewport->get_scene_root();
+    const auto scene_root = context.scene_view->get_scene_root();
     if (!scene_root)
     {
         return;

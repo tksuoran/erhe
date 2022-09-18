@@ -15,7 +15,7 @@
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
-#   include "xr/headset_renderer.hpp"
+#   include "xr/headset_view.hpp"
 #endif
 
 #include "erhe/application/configuration.hpp"
@@ -170,9 +170,9 @@ auto Rendertarget_node::framebuffer() const -> std::shared_ptr<erhe::graphics::F
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-void Rendertarget_node::update_headset(Headset_renderer& headset_renderer)
+void Rendertarget_node::update_headset(Headset_view& headset_view)
 {
-    const auto* headset = headset_renderer.get_headset();
+    const auto* headset = headset_view.get_headset();
     if (headset != nullptr)
     {
         m_controller_pose = headset->controller_pose();
@@ -206,7 +206,7 @@ void Rendertarget_node::update_headset(Headset_renderer& headset_renderer)
         //// }
     }
 
-    auto* hand_tracker = headset_renderer.get_hand_tracker();
+    auto* hand_tracker = headset_view.get_hand_tracker();
     if (hand_tracker == nullptr)
     {
         return;

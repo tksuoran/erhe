@@ -138,7 +138,7 @@ void Shadow_renderer::post_initialize()
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
 
 auto Shadow_renderer::create_node_for_viewport(
-    const std::shared_ptr<Scene_viewport>& scene_viewport
+    const std::shared_ptr<Scene_view>& scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& config        = m_configuration->shadow_renderer;
@@ -148,7 +148,7 @@ auto Shadow_renderer::create_node_for_viewport(
 
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
         *this,
-        scene_viewport,
+        scene_view,
         resolution,
         light_count,
         reverse_depth
@@ -158,20 +158,20 @@ auto Shadow_renderer::create_node_for_viewport(
     return shadow_render_node;
 }
 
-auto Shadow_renderer::get_node_for_viewport(
-    const Scene_viewport* scene_viewport
+auto Shadow_renderer::get_node_for_view(
+    const Scene_view* scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    if (scene_viewport== nullptr)
+    if (scene_view == nullptr)
     {
         return {};
     }
     auto i = std::find_if(
         m_nodes.begin(),
         m_nodes.end(),
-        [scene_viewport](const auto& entry)
+        [scene_view](const auto& entry)
         {
-            return entry->get_scene_viewport().get() == scene_viewport;
+            return entry->get_scene_view().get() == scene_view;
         }
     );
     if (i == m_nodes.end())
