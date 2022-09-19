@@ -95,6 +95,11 @@ public:
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* = 0;
 
     // "Pointing"
+    void raytrace_update(
+        const glm::vec3 ray_origim,
+        const glm::vec3 ray_direction,
+        Scene_root*     tool_scene_root = nullptr
+    );
     [[nodiscard]] auto position_in_viewport      () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto near_position_in_world    () const -> std::optional<glm::vec3>;
     [[nodiscard]] auto far_position_in_world     () const -> std::optional<glm::vec3>;

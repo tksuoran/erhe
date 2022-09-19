@@ -15,6 +15,7 @@
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
+#include "xr/headset_view.hpp"
 
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -276,16 +277,18 @@ void Selection_tool::initialize_component()
 
     const auto commands = get<erhe::application::Commands>();
 
-    commands->register_command           (&m_select_command);
-    commands->register_command           (&m_delete_command);
-    commands->bind_command_to_mouse_click(&m_select_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_key        (&m_delete_command, erhe::toolkit::Key_delete, true);
+    commands->register_command                  (&m_select_command);
+    commands->register_command                  (&m_delete_command);
+    commands->bind_command_to_mouse_click       (&m_select_command, erhe::toolkit::Mouse_button_left);
+    commands->bind_command_to_controller_trigger(&m_select_command, 0.5f, 1.0f);
+    commands->bind_command_to_key               (&m_delete_command, erhe::toolkit::Key_delete, true);
 }
 
 void Selection_tool::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_editor_scenes     = get<Editor_scenes   >();
+    m_headset_view      = get<Headset_view    >();
     m_viewport_config   = get<Viewport_config >();
     m_viewport_windows  = get<Viewport_windows>();
 }
@@ -361,6 +364,17 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
 
 auto Selection_tool::mouse_select_try_ready() -> bool
 {
+    if (m_headset_view)
+    {
+        const auto& content = m_headset_view->get_hover(Hover_entry::content_slot);
+        const auto& tool    = m_headset_view->get_hover(Hover_entry::tool_slot);
+        m_hover_mesh    = content.mesh;
+        m_hover_content = content.valid;
+        m_hover_tool    = tool.valid;
+
+        return m_hover_content;
+    }
+
     const auto viewport_window = m_viewport_windows->hover_window();
     if (!viewport_window)
     {

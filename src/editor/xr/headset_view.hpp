@@ -31,6 +31,7 @@ namespace erhe::xr
 
 namespace erhe::application
 {
+    class Commands;
     class Configuration;
     class Line_renderer_set;
     class Text_renderer;
@@ -109,7 +110,10 @@ private:
 
     void setup_root_camera();
 
+    void update_pointer_context_from_controller();
+
     // Component dependencies
+    std::shared_ptr<erhe::application::Commands>          m_commands;
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;

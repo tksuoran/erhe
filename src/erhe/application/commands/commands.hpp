@@ -15,6 +15,7 @@ namespace erhe::application {
 
 class Command;
 class Command_binding;
+class Controller_trigger_binding;
 class Key_binding;
 class Mouse_binding;
 class Mouse_click_binding;
@@ -57,11 +58,12 @@ public:
     // Public API
     void register_command(Command* const command);
 
-    [[nodiscard]] auto get_commands            () const -> const std::vector<Command*>&;
-    [[nodiscard]] auto get_key_bindings        () const -> const std::vector<Key_binding>&;
-    [[nodiscard]] auto get_mouse_bindings      () const -> const std::vector<std::unique_ptr<Mouse_binding>>&;
-    [[nodiscard]] auto get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&;
-    [[nodiscard]] auto get_update_bindings     () const -> const std::vector<Update_binding>&;
+    [[nodiscard]] auto get_commands                   () const -> const std::vector<Command*>&;
+    [[nodiscard]] auto get_key_bindings               () const -> const std::vector<Key_binding>&;
+    [[nodiscard]] auto get_mouse_bindings             () const -> const std::vector<std::unique_ptr<Mouse_binding>>&;
+    [[nodiscard]] auto get_mouse_wheel_bindings       () const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&;
+    [[nodiscard]] auto get_controller_trigger_bindings() const -> const std::vector<Controller_trigger_binding>&;
+    [[nodiscard]] auto get_update_bindings            () const -> const std::vector<Update_binding>&;
 
     auto bind_command_to_key(
         Command* const                command,
@@ -88,6 +90,12 @@ public:
         const erhe::toolkit::Mouse_button button
     ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
 
+    auto bind_command_to_controller_trigger(
+        Command* const command,
+        float          min_value,
+        float          max_value
+    ) -> erhe::toolkit::Unique_id<Controller_trigger_binding>::id_type;
+
     auto bind_command_to_update(
         Command* const command
     ) -> erhe::toolkit::Unique_id<Key_binding>::id_type;
@@ -106,17 +114,20 @@ public:
     [[nodiscard]] auto input_sink() const -> Imgui_window*;
     void set_input_sink(Imgui_window* input_sink);
 
-    [[nodiscard]] auto last_mouse_button_bits   () const -> uint32_t;
-    [[nodiscard]] auto last_mouse_position      () const -> glm::dvec2;
-    [[nodiscard]] auto last_mouse_position_delta() const -> glm::dvec2;
-    [[nodiscard]] auto last_mouse_wheel_delta   () const -> glm::dvec2;
+    [[nodiscard]] auto last_mouse_button_bits       () const -> uint32_t;
+    [[nodiscard]] auto last_mouse_position          () const -> glm::dvec2;
+    [[nodiscard]] auto last_mouse_position_delta    () const -> glm::dvec2;
+    [[nodiscard]] auto last_mouse_wheel_delta       () const -> glm::dvec2;
+    [[nodiscard]] auto last_controller_trigger_value() const -> float;
 
     // Subset of erhe::toolkit::View
-    void on_key        (const erhe::toolkit::Keycode code, const uint32_t modifier_mask, const bool pressed);
-    void on_mouse_move (const double x, const double y);
-    void on_mouse_click(const erhe::toolkit::Mouse_button button, const int count);
-    void on_mouse_wheel(const double x, const double y);
+    void on_key        (erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed);
+    void on_mouse_move (double x, const double y);
+    void on_mouse_click(erhe::toolkit::Mouse_button button, int count);
+    void on_mouse_wheel(double x, double y);
     void on_update     ();
+
+    void on_controller_trigger(float trigger_value);
 
 private:
     [[nodiscard]] auto get_command_priority   (Command* const command) const -> int;
@@ -133,15 +144,17 @@ private:
     Command*      m_active_mouse_command{nullptr};
     Imgui_window* m_input_sink          {nullptr};
 
-    uint32_t      m_last_mouse_button_bits   {0u};
-    glm::dvec2    m_last_mouse_position      {0.0, 0.0};
-    glm::dvec2    m_last_mouse_position_delta{0.0, 0.0};
-    glm::dvec2    m_last_mouse_wheel_delta   {0.0, 0.0};
+    uint32_t      m_last_mouse_button_bits       {0u};
+    glm::dvec2    m_last_mouse_position          {0.0, 0.0};
+    glm::dvec2    m_last_mouse_position_delta    {0.0, 0.0};
+    glm::dvec2    m_last_mouse_wheel_delta       {0.0, 0.0};
+    float         m_last_controller_trigger_value{0.0f};
 
     std::vector<Command*>                             m_commands;
     std::vector<Key_binding>                          m_key_bindings;
     std::vector<std::unique_ptr<Mouse_binding>>       m_mouse_bindings;
     std::vector<std::unique_ptr<Mouse_wheel_binding>> m_mouse_wheel_bindings;
+    std::vector<Controller_trigger_binding>           m_controller_trigger_bindings;
     std::vector<Update_binding>                       m_update_bindings;
 };
 

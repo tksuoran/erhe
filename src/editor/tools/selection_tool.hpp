@@ -27,6 +27,7 @@ namespace editor
 {
 
 class Editor_scenes;
+class Headset_view;
 class Scene_root;
 class Selection_tool;
 class Viewport_config;
@@ -200,6 +201,7 @@ private:
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Editor_scenes>     m_editor_scenes;
+    std::shared_ptr<Headset_view>      m_headset_view;
     std::shared_ptr<Viewport_windows>  m_viewport_windows;
     std::shared_ptr<Viewport_config>   m_viewport_config;
 

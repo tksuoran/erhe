@@ -951,7 +951,7 @@ auto Xr_instance::initialize_actions() -> bool
     paths.aim_pose                            = path(c_aim_pose);
     paths.interaction_profile_vive_controller = path(c_interaction_profile_vive_controller);
 
-    const std::array<XrActionSuggestedBinding, 3> vive_controller_trigger_value_suggested_bindings{
+    const std::array<XrActionSuggestedBinding, 3> vive_controller_suggested_bindings{
         {
             {
                 .action  = actions.trigger_value,
@@ -973,8 +973,8 @@ auto Xr_instance::initialize_actions() -> bool
         .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
         .next                   = nullptr,
         .interactionProfile     = paths.interaction_profile_vive_controller.xr_path,
-        .countSuggestedBindings = static_cast<uint32_t>(vive_controller_trigger_value_suggested_bindings.size()),
-        .suggestedBindings      = vive_controller_trigger_value_suggested_bindings.data()
+        .countSuggestedBindings = static_cast<uint32_t>(vive_controller_suggested_bindings.size()),
+        .suggestedBindings      = vive_controller_suggested_bindings.data()
     };
 
     ERHE_XR_CHECK(

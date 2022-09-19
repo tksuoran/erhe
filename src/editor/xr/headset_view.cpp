@@ -19,6 +19,7 @@
 #include "xr/hand_tracker.hpp"
 
 #include "erhe/application/application.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/window.hpp"
@@ -102,6 +103,7 @@ void Headset_view::initialize_component()
 
 void Headset_view::post_initialize()
 {
+    m_commands               = get<erhe::application::Commands         >();
     m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
     m_text_renderer          = get<erhe::application::Text_renderer    >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
@@ -213,6 +215,23 @@ auto Headset_view::get_headset_view_resources(
 
 static constexpr std::string_view c_id_headset_clear{"HS clear"};
 static constexpr std::string_view c_id_headset_render_content{"HS render content"};
+
+void Headset_view::update_pointer_context_from_controller()
+{
+    const auto& pose                   = m_headset->controller_pose();
+    const float trigger_value          = m_headset->trigger_value();
+    const auto  controller_orientation = glm::mat4_cast(pose.orientation);
+    const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+
+    if (trigger_value == 0.0f)
+    {
+        return;
+    }
+    const glm::vec3 ray_origin    = pose.position;
+    const glm::vec3 ray_direction = controller_direction;
+
+    raytrace_update(ray_origin, ray_direction);
+}
 
 void Headset_view::execute_rendergraph_node()
 {
@@ -405,6 +424,12 @@ void Headset_view::begin_frame()
     if (m_controller_visualization)
     {
         m_controller_visualization->update(m_headset->controller_pose());
+        update_pointer_context_from_controller();
+        const float trigger_value = m_headset->trigger_value();
+        if (trigger_value > 0.0f)
+        {
+            m_commands->on_controller_trigger(trigger_value);
+        }
     }
     if (m_hand_tracker)
     {

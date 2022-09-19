@@ -5,6 +5,7 @@
 #include "erhe/application/application_log.hpp"
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
+#include "erhe/application/commands/controller_trigger_binding.hpp"
 #include "erhe/application/commands/key_binding.hpp"
 #include "erhe/application/commands/mouse_click_binding.hpp"
 #include "erhe/application/commands/mouse_drag_binding.hpp"
@@ -68,6 +69,11 @@ void Commands::register_command(Command* const command)
 [[nodiscard]] auto Commands::get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&
 {
     return m_mouse_wheel_bindings;
+}
+
+[[nodiscard]] auto Commands::get_controller_trigger_bindings() const -> const std::vector<Controller_trigger_binding>&
+{
+    return m_controller_trigger_bindings;
 }
 
 [[nodiscard]] auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
@@ -138,6 +144,18 @@ auto Commands::bind_command_to_mouse_drag(
     return id;
 }
 
+auto Commands::bind_command_to_controller_trigger(
+    Command* const command,
+    const float    min_value,
+    const float    max_value
+) -> erhe::toolkit::Unique_id<Key_binding>::id_type
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    auto& binding = m_controller_trigger_bindings.emplace_back(command, min_value, max_value);
+    return binding.get_id();
+}
+
 auto Commands::bind_command_to_update(
     Command* const                command
 ) -> erhe::toolkit::Unique_id<Key_binding>::id_type
@@ -186,6 +204,17 @@ void Commands::remove_command_binding(
             }
         ),
         m_mouse_wheel_bindings.end()
+    );
+    m_controller_trigger_bindings.erase(
+        std::remove_if(
+            m_controller_trigger_bindings.begin(),
+            m_controller_trigger_bindings.end(),
+            [binding_id](const Controller_trigger_binding& binding)
+            {
+                return binding.get_id() == binding_id;
+            }
+        ),
+        m_controller_trigger_bindings.end()
     );
     m_update_bindings.erase(
         std::remove_if(
@@ -285,6 +314,29 @@ void Commands::on_update()
     }
 }
 
+void Commands::on_controller_trigger(const float trigger_value)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    Command_context context{
+        *this,
+        m_input_sink
+    };
+
+    for (auto& binding : m_controller_trigger_bindings)
+    {
+        if ((trigger_value >= binding.get_min_value()) && (trigger_value <= binding.get_max_value()))
+        {
+            auto* command = binding.get_command();
+            if ((command != nullptr))
+            {
+                command->try_ready(context);
+                binding.on_trigger(context, trigger_value);
+            }
+        }
+    }
+}
+
 namespace {
 
 [[nodiscard]] auto get_priority(const State state) -> int
@@ -370,6 +422,11 @@ auto Commands::last_mouse_position_delta() const -> glm::dvec2
 auto Commands::last_mouse_wheel_delta() const -> glm::dvec2
 {
     return m_last_mouse_wheel_delta;
+}
+
+auto Commands::last_controller_trigger_value() const -> float
+{
+    return m_last_controller_trigger_value;
 }
 
 void Commands::update_active_mouse_command(

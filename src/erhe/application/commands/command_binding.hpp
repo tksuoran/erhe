@@ -13,14 +13,15 @@ class Command_binding
 public:
     enum class Type : int
     {
-        None         = 0,
-        Key          = 1,
-        Mouse        = 2,
-        Mouse_click  = 3,
-        Mouse_drag   = 4,
-        Mouse_motion = 5,
-        Mouse_wheel  = 6,
-        Update       = 7
+        None               = 0,
+        Key                = 1,
+        Mouse              = 2,
+        Mouse_click        = 3,
+        Mouse_drag         = 4,
+        Mouse_motion       = 5,
+        Mouse_wheel        = 6,
+        Controller_trigger = 7,
+        Update             = 8
     };
     explicit Command_binding(Command* const command);
     virtual ~Command_binding() noexcept;
