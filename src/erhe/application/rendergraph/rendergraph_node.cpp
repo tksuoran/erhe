@@ -3,7 +3,7 @@
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/application_log.hpp"
-#include <mango/include/mango/math/vector256_int8x32.hpp>
+//#include <mango/include/mango/math/vector256_int8x32.hpp>
 
 namespace erhe::application {
 
