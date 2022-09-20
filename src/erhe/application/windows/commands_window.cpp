@@ -108,6 +108,10 @@ void Commands_window::imgui()
                 const auto type = binding->get_type();
                 switch (type)
                 {
+                    default:
+                    {
+                        break;
+                    }
                     case erhe::application::Command_binding::Type::Mouse_click:
                     {
                         const auto click_binding = reinterpret_cast<erhe::application::Mouse_click_binding*>(binding.get());

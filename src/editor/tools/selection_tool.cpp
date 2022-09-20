@@ -15,7 +15,9 @@
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
-#include "xr/headset_view.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_view.hpp"
+#endif
 
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -288,7 +290,9 @@ void Selection_tool::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_editor_scenes     = get<Editor_scenes   >();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     m_headset_view      = get<Headset_view    >();
+#endif
     m_viewport_config   = get<Viewport_config >();
     m_viewport_windows  = get<Viewport_windows>();
 }
@@ -364,6 +368,7 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
 
 auto Selection_tool::mouse_select_try_ready() -> bool
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_view)
     {
         const auto& content = m_headset_view->get_hover(Hover_entry::content_slot);
@@ -374,6 +379,7 @@ auto Selection_tool::mouse_select_try_ready() -> bool
 
         return m_hover_content;
     }
+#endif
 
     const auto viewport_window = m_viewport_windows->hover_window();
     if (!viewport_window)

@@ -12,6 +12,8 @@ erhe_target_sources_grouped(
     commands/command_binding.hpp
     commands/command_context.cpp
     commands/command_context.hpp
+    commands/controller_trigger_binding.cpp
+    commands/controller_trigger_binding.hpp
     commands/key_binding.cpp
     commands/key_binding.hpp
     commands/mouse_binding.cpp

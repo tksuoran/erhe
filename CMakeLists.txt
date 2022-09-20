@@ -7,6 +7,7 @@ if (EXISTS "${LOC_PATH}")
 endif ()
 
 cmake_policy(SET CMP0048 NEW) # The project() command manages VERSION variables.
+cmake_policy(SET CMP0072 NEW) # FindOpenGL prefers GLVND by default when available.
 cmake_policy(SET CMP0076 NEW) # target_sources() command converts relative paths
 cmake_policy(SET CMP0079 NEW) # target_link_libraries() allows use with targets in other directories.
 cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
