@@ -34,7 +34,7 @@ Space_mouse_controller::Space_mouse_controller(Space_mouse_listener& listener)
     }
 }
 
-Space_mouse_controller::~Space_mouse_controller()
+Space_mouse_controller::~Space_mouse_controller() noexcept
 {
     m_listener.set_active(false);
 

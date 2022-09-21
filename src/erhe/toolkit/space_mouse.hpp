@@ -14,11 +14,11 @@ namespace erhe::toolkit
 class Space_mouse_listener
 {
 public:
-    virtual [[nodiscard]] auto is_active     () -> bool = 0;
-    virtual               void set_active    (const bool value) = 0;
-    virtual               void on_translation(const int tx, const int ty, const int tz) = 0;
-    virtual               void on_rotation   (const int rx, const int ry, const int rz) = 0;
-    virtual               void on_button     (const int id) = 0;
+    [[nodiscard]] virtual auto is_active() -> bool = 0;
+    virtual void set_active    (const bool value) = 0;
+    virtual void on_translation(const int tx, const int ty, const int tz) = 0;
+    virtual void on_rotation   (const int rx, const int ry, const int rz) = 0;
+    virtual void on_button     (const int id) = 0;
 };
 
 class Space_mouse_controller

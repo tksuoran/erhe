@@ -5,7 +5,7 @@ namespace erhe::graphics
 
 PNG_loader::PNG_loader() = default;
 
-PNG_loader::~PNG_loader()
+PNG_loader::~PNG_loader() noexcept
 {
     close();
 }
