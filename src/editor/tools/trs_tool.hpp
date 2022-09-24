@@ -59,6 +59,7 @@ class Materials;
 class Mesh_memory;
 class Operation_stack;
 class Raytrace_primitive;
+class Scene_view;
 class Tools;
 class Trs_tool;
 class Viewport_windows;
@@ -100,7 +101,6 @@ private:
 
 class Trs_tool
     : public erhe::components::Component
-    , public erhe::components::IUpdate_once_per_frame
     , public Tool
     , public erhe::application::Imgui_window
 {
@@ -139,9 +139,6 @@ public:
     void initialize_component       () override;
     void post_initialize            () override;
 
-    // Implements IUpdate_once_per_frame
-    void update_once_per_frame(const erhe::components::Time_context&) override;
-
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
@@ -152,6 +149,7 @@ public:
     void imgui() override;
 
     // Public API
+    void update_for_view (Scene_view* scene_view);
     void viewport_toolbar();
     void set_translate   (const bool enabled);
     void set_rotate      (const bool enabled);

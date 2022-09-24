@@ -1345,15 +1345,14 @@ void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
     root()->set_parent_from_node(mat4{parent_from_world});
  }
 
-void Trs_tool::update_once_per_frame(const erhe::components::Time_context&)
+void Trs_tool::update_for_view(Scene_view* scene_view)
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    if (scene_view == nullptr)
     {
         return;
     }
 
-    const auto camera = viewport_window->get_camera();
+    const auto camera = scene_view->get_camera();
     if (!camera)
     {
         return;

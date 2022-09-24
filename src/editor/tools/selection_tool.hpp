@@ -174,8 +174,8 @@ public:
     void sanity_check              ();
 
     // Commands
-    auto mouse_select_try_ready() -> bool;
-    auto on_mouse_select       () -> bool;
+    auto on_select_try_ready() -> bool;
+    auto on_select          () -> bool;
 
     auto delete_selection() -> bool;
 

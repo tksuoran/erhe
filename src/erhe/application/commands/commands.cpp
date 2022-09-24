@@ -325,14 +325,11 @@ void Commands::on_controller_trigger(const float trigger_value)
 
     for (auto& binding : m_controller_trigger_bindings)
     {
-        if ((trigger_value >= binding.get_min_value()) && (trigger_value <= binding.get_max_value()))
+        auto* command = binding.get_command();
+        if ((command != nullptr))
         {
-            auto* command = binding.get_command();
-            if ((command != nullptr))
-            {
-                command->try_ready(context);
-                binding.on_trigger(context, trigger_value);
-            }
+            command->try_ready(context);
+            binding.on_trigger(context, trigger_value);
         }
     }
 }

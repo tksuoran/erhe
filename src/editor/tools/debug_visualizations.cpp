@@ -131,14 +131,21 @@ void Debug_visualizations::mesh_selection_visualization(
         }
         if ((!box_smaller && smallest_visualization) || m_viewport_config->selection_bounding_sphere)
         {
-            const erhe::scene::Transform* const camera_world_from_node_transform = &(render_context.camera->world_from_node_transform());
-            line_renderer.add_sphere(
-                mesh->world_from_node(),
-                color,
-                primitive_geometry.bounding_sphere.center,
-                primitive_geometry.bounding_sphere.radius,
-                camera_world_from_node_transform
-            );
+            if (render_context.scene_view != nullptr)
+            {
+                const auto& view_camera = render_context.scene_view->get_camera();
+                if (view_camera)
+                {
+                    const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
+                    line_renderer.add_sphere(
+                        mesh->world_from_node(),
+                        color,
+                        primitive_geometry.bounding_sphere.center,
+                        primitive_geometry.bounding_sphere.radius,
+                        &camera_world_from_node_transform
+                    );
+                }
+            }
         }
     }
 }

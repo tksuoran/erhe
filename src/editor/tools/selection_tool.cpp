@@ -148,7 +148,7 @@ void Selection_tool_select_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (m_selection_tool.mouse_select_try_ready())
+    if (m_selection_tool.on_select_try_ready())
     {
         set_ready(context);
     }
@@ -163,7 +163,7 @@ auto Selection_tool_select_command::try_call(
         return false;
     }
 
-    const bool consumed = m_selection_tool.on_mouse_select();
+    const bool consumed = m_selection_tool.on_select();
     set_inactive(context);
     return consumed;
 }
@@ -282,7 +282,7 @@ void Selection_tool::initialize_component()
     commands->register_command                  (&m_select_command);
     commands->register_command                  (&m_delete_command);
     commands->bind_command_to_mouse_click       (&m_select_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_controller_trigger(&m_select_command, 0.5f, 1.0f);
+    commands->bind_command_to_controller_trigger(&m_select_command, 0.5f, 0.45f);
     commands->bind_command_to_key               (&m_delete_command, erhe::toolkit::Key_delete, true);
 }
 
@@ -366,7 +366,7 @@ void Selection_tool::unsubscribe_selection_change_notification(int handle)
     );
 }
 
-auto Selection_tool::mouse_select_try_ready() -> bool
+auto Selection_tool::on_select_try_ready() -> bool
 {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_view)
@@ -377,7 +377,10 @@ auto Selection_tool::mouse_select_try_ready() -> bool
         m_hover_content = content.valid;
         m_hover_tool    = tool.valid;
 
-        return m_hover_content;
+        if (m_hover_content)
+        {
+            return m_hover_content;
+        }
     }
 #endif
 
@@ -396,7 +399,7 @@ auto Selection_tool::mouse_select_try_ready() -> bool
     return m_hover_content;
 }
 
-auto Selection_tool::on_mouse_select() -> bool
+auto Selection_tool::on_select() -> bool
 {
     if (m_viewport_windows->control_key_down())
     {

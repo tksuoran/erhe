@@ -15,6 +15,7 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
+#include "tools/trs_tool.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/viewport_config.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -515,7 +516,7 @@ void Editor_rendering::render_viewport_main(
         render_brush             (context);
 
         static_cast<void>(has_pointer);
-        if (has_pointer)
+        //if (has_pointer)
         {
             render_tool_meshes(context);
         }
@@ -910,6 +911,12 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
     )
     {
         return;
+    }
+
+    const auto trs_tool = get<Trs_tool>();
+    if (trs_tool)
+    {
+        trs_tool->update_for_view(context.scene_view);
     }
 
     const auto& scene_root = m_tools->get_tool_scene_root().lock();

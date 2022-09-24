@@ -13,8 +13,8 @@ class Controller_trigger_binding
 public:
     Controller_trigger_binding(
         Command* command,
-        float    min_value,
-        float    max_value
+        float    min_to_activate,
+        float    max_to_deactivate
     );
     ~Controller_trigger_binding() noexcept override;
 
@@ -26,8 +26,8 @@ public:
 
     [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Controller_trigger; }
 
-    [[nodiscard]] auto get_min_value() const -> float;
-    [[nodiscard]] auto get_max_value() const -> float;
+    [[nodiscard]] auto get_min_to_activate() const -> float;
+    [[nodiscard]] auto get_max_to_deactivate() const -> float;
 
     auto on_trigger(
         Command_context& context,
@@ -35,8 +35,9 @@ public:
     ) -> bool;
 
 private:
-    float m_min_value{1.0f};
-    float m_max_value{1.0f};
+    float m_min_to_activate  {0.50f};
+    float m_max_to_deactivate{0.45f};
+    bool  m_active{false};
 };
 
 } // namespace erhe/application

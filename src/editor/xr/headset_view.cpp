@@ -230,7 +230,11 @@ void Headset_view::update_pointer_context_from_controller()
     const glm::vec3 ray_origin    = pose.position;
     const glm::vec3 ray_direction = controller_direction;
 
-    raytrace_update(ray_origin, ray_direction);
+    raytrace_update(
+        ray_origin,
+        ray_direction,
+        m_tools->get_tool_scene_root().lock().get()
+    );
 }
 
 void Headset_view::execute_rendergraph_node()
@@ -302,6 +306,15 @@ void Headset_view::execute_rendergraph_node()
             {
                 ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
 
+            }
+
+            if (m_headset->squeeze_click())
+            {
+                gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+                gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+            }
+            else
+            {
                 gl::clear_color(
                     m_clear_color[0],
                     m_clear_color[1],
@@ -313,10 +326,7 @@ void Headset_view::execute_rendergraph_node()
                     gl::Clear_buffer_mask::color_buffer_bit |
                     gl::Clear_buffer_mask::depth_buffer_bit
                 );
-            }
 
-            if (!m_headset->squeeze_click())
-            {
                 Viewport_config viewport_config;
 
                 //const auto& layers           = m_scene_root->layers();
@@ -324,13 +334,15 @@ void Headset_view::execute_rendergraph_node()
                 //const auto& materials        = material_library->materials();
 
                 Render_context render_context {
-                    .scene_view      = view_resources->viewport_window.get(),
+                    .scene_view      = this,
                     .viewport_config = &viewport_config,
                     .camera          = as_camera(view_resources->camera.get()),
                     .viewport        = viewport
                 };
 
                 m_editor_rendering->render_content(render_context);
+                m_editor_rendering->render_selection(render_context);
+                m_editor_rendering->render_tool_meshes(render_context);
                 m_editor_rendering->render_rendertarget_nodes(render_context);
 
                 if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)

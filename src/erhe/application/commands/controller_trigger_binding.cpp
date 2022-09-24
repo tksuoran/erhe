@@ -7,12 +7,12 @@ namespace erhe::application {
 
 Controller_trigger_binding::Controller_trigger_binding(
     Command* const command,
-    const float    min_value,
-    const float    max_value
+    const float    min_to_activate,
+    const float    max_to_deactivate
 )
-    : Command_binding{command}
-    , m_min_value    {min_value}
-    , m_max_value    {max_value}
+    : Command_binding    {command}
+    , m_min_to_activate  {min_to_activate}
+    , m_max_to_deactivate{max_to_deactivate}
 {
 }
 
@@ -26,27 +26,27 @@ Controller_trigger_binding::~Controller_trigger_binding() noexcept
 
 Controller_trigger_binding::Controller_trigger_binding(Controller_trigger_binding&& other) noexcept
     : Command_binding{std::move(other)}
-    , m_min_value    {other.m_min_value}
-    , m_max_value    {other.m_max_value}
+    , m_min_to_activate  {other.m_min_to_activate  }
+    , m_max_to_deactivate{other.m_max_to_deactivate}
 {
 }
 
 auto Controller_trigger_binding::operator=(Controller_trigger_binding&& other) noexcept -> Controller_trigger_binding&
 {
     Command_binding::operator=(std::move(other));
-    this->m_min_value = other.m_min_value;
-    this->m_max_value = other.m_max_value;
+    this->m_min_to_activate   = other.m_min_to_activate  ;
+    this->m_max_to_deactivate = other.m_max_to_deactivate;
     return *this;
 }
 
-[[nodiscard]] auto Controller_trigger_binding::get_min_value() const -> float
+[[nodiscard]] auto Controller_trigger_binding::get_min_to_activate() const -> float
 {
-    return m_min_value;
+    return m_min_to_activate;
 }
 
-[[nodiscard]] auto Controller_trigger_binding::get_max_value() const -> float
+[[nodiscard]] auto Controller_trigger_binding::get_max_to_deactivate() const -> float
 {
-    return m_max_value;
+    return m_max_to_deactivate;
 }
 
 auto Controller_trigger_binding::on_trigger(
@@ -54,24 +54,34 @@ auto Controller_trigger_binding::on_trigger(
     const float      trigger_value
 ) -> bool
 {
-    if ((trigger_value < m_min_value) || (trigger_value > m_max_value))
+    if (!m_active)
     {
-        return false;
-    }
+        if (trigger_value >= m_min_to_activate)
+        {
+            m_active = true;
+            auto* const command = get_command();
+            if (command->state() == State::Disabled)
+            {
+                return false;
+            }
 
-    auto* const command = get_command();
-    if (command->state() == State::Disabled)
+            const bool consumed = command->try_call(context);
+            log_input_event_consumed->trace(
+                "{} consumed controller trigger value = {} click",
+                command->name(),
+                trigger_value
+            );
+            return consumed;
+        }
+    }
+    else
     {
-        return false;
+        if (trigger_value <= m_max_to_deactivate)
+        {
+            m_active = false;
+        }
     }
-
-    const bool consumed = command->try_call(context);
-    log_input_event_consumed->trace(
-        "{} consumed controller trigger value = {} click",
-        command->name(),
-        trigger_value
-    );
-    return consumed;
+    return false;
 }
 
 } // namespace erhe::application
