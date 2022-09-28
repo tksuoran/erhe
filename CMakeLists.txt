@@ -6,10 +6,11 @@ if (EXISTS "${LOC_PATH}")
     message(FATAL_ERROR "You cannot build in a source directory (or any directory with a CMakeLists.txt file). Please make a build subdirectory. Feel free to remove CMakeCache.txt and CMakeFiles.")
 endif ()
 
-cmake_policy(SET CMP0048 NEW) # The project() command manages VERSION variables.
-cmake_policy(SET CMP0072 NEW) # FindOpenGL prefers GLVND by default when available.
-cmake_policy(SET CMP0076 NEW) # target_sources() command converts relative paths
-cmake_policy(SET CMP0079 NEW) # target_link_libraries() allows use with targets in other directories.
+cmake_policy(SET CMP0048 NEW) # The `project()` command manages `VERSION `variables.
+cmake_policy(SET CMP0072 NEW) # `FindOpenGL` prefers GLVND by default when available.
+cmake_policy(SET CMP0075 NEW) # Include file check macros honor `CMAKE_REQUIRED_LIBRARIES`.
+cmake_policy(SET CMP0076 NEW) # The `target_sources()` command converts relative paths to absolute.
+cmake_policy(SET CMP0079 NEW) # `target_link_libraries()` allows use with targets in other directories.
 cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
 
 project(

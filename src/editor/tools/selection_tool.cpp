@@ -158,7 +158,7 @@ auto Selection_tool_select_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    if (state() != erhe::application::State::Ready)
+    if (get_tool_state() != erhe::application::State::Ready)
     {
         return false;
     }
@@ -282,7 +282,7 @@ void Selection_tool::initialize_component()
     commands->register_command                  (&m_select_command);
     commands->register_command                  (&m_delete_command);
     commands->bind_command_to_mouse_click       (&m_select_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_controller_trigger(&m_select_command, 0.5f, 0.45f);
+    commands->bind_command_to_controller_trigger(&m_select_command, 0.5f, 0.45f, false);
     commands->bind_command_to_key               (&m_delete_command, erhe::toolkit::Key_delete, true);
 }
 
@@ -371,15 +371,16 @@ auto Selection_tool::on_select_try_ready() -> bool
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_headset_view)
     {
-        const auto& content = m_headset_view->get_hover(Hover_entry::content_slot);
-        const auto& tool    = m_headset_view->get_hover(Hover_entry::tool_slot);
+        const auto& content      = m_headset_view->get_hover(Hover_entry::content_slot);
+        const auto& tool         = m_headset_view->get_hover(Hover_entry::tool_slot);
+        const auto& rendertarget = m_headset_view->get_hover(Hover_entry::rendertarget_slot);
         m_hover_mesh    = content.mesh;
         m_hover_content = content.valid;
         m_hover_tool    = tool.valid;
 
-        if (m_hover_content)
+        if (m_hover_content && !m_hover_tool && !rendertarget.valid)
         {
-            return m_hover_content;
+            return true;
         }
     }
 #endif
@@ -401,6 +402,8 @@ auto Selection_tool::on_select_try_ready() -> bool
 
 auto Selection_tool::on_select() -> bool
 {
+    log_selection->trace("on select");
+
     if (m_viewport_windows->control_key_down())
     {
         if (m_hover_content)

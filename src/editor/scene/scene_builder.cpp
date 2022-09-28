@@ -532,7 +532,7 @@ void Scene_builder::make_brushes()
                         const mat4 scale_t = erhe::toolkit::create_scale(0.01f);
                         geometry->transform(scale_t);
                         geometry->flip_reversed_polygons();
-                        make_brush(instantiate, move(geometry), context);
+                        make_brush(instantiate, geometry, context);
                     }
                 }
             }

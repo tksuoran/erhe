@@ -58,7 +58,7 @@ auto Brush_tool_preview_command::try_call(
     static_cast<void>(context);
 
     if (
-        (state() != erhe::application::State::Active) ||
+        (get_tool_state() != erhe::application::State::Active) ||
         !m_brushes.is_enabled()
     )
     {
@@ -82,7 +82,7 @@ auto Brush_tool_insert_command::try_call(
     erhe::application::Command_context& command_context
 ) -> bool
 {
-    if (state() != erhe::application::State::Ready)
+    if (get_tool_state() != erhe::application::State::Ready)
     {
         return false;
     }

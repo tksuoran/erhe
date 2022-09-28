@@ -77,14 +77,14 @@ auto Key_binding::on_key(
     {
         log_input_event_filtered->trace(
             "{} rejected key {} due to modifier mask mismatch",
-            command->name(),
+            command->get_name(),
             pressed ? "press" : "release",
             erhe::toolkit::c_str(code)
         );
         return false;
     }
 
-    if (command->state() == State::Disabled)
+    if (command->get_tool_state() == State::Disabled)
     {
         return false;
     }
@@ -94,7 +94,7 @@ auto Key_binding::on_key(
     {
         log_input_event_consumed->trace(
             "{} consumed key {} {}",
-            command->name(),
+            command->get_name(),
             erhe::toolkit::c_str(code),
             pressed ? "press" : "release"
         );

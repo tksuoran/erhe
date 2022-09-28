@@ -27,7 +27,7 @@ std::shared_ptr<spdlog::logger> log_textures;
 std::shared_ptr<spdlog::logger> log_trs_tool;
 std::shared_ptr<spdlog::logger> log_rendertarget_imgui_windows;
 std::shared_ptr<spdlog::logger> log_xr;
-std::shared_ptr<spdlog::logger> log_palette;
+std::shared_ptr<spdlog::logger> log_hud;
 std::shared_ptr<spdlog::logger> log_controller_ray;
 
 void initialize_logging()
@@ -44,7 +44,7 @@ void initialize_logging()
     log_node_properties            = erhe::log::make_logger("editor::node_properties"           , spdlog::level::info);
     log_parsers                    = erhe::log::make_logger("editor::parsers"                   , spdlog::level::info);
     log_physics                    = erhe::log::make_logger("editor::physics"                   , spdlog::level::info);
-    log_pointer                    = erhe::log::make_logger("editor::pointer"                   , spdlog::level::trace);
+    log_pointer                    = erhe::log::make_logger("editor::pointer"                   , spdlog::level::info);
     log_post_processing            = erhe::log::make_logger("editor::post_processing"           , spdlog::level::info, false);
     log_programs                   = erhe::log::make_logger("editor::programs"                  , spdlog::level::info);
     log_raytrace                   = erhe::log::make_logger("editor::raytrace"                  , spdlog::level::warn);
@@ -56,8 +56,8 @@ void initialize_logging()
     log_trs_tool                   = erhe::log::make_logger("editor::trs_tool"                  , spdlog::level::info);
     log_rendertarget_imgui_windows = erhe::log::make_logger("editor::rendertarget_imgui_windows", spdlog::level::info, false);
     log_xr                         = erhe::log::make_logger("editor::xr"                        , spdlog::level::info);
-    log_palette                    = erhe::log::make_logger("editor::palette"                   , spdlog::level::trace);
-    log_controller_ray             = erhe::log::make_logger("editor::controller_ray"            , spdlog::level::trace, false);
+    log_hud                        = erhe::log::make_logger("editor::hud"                       , spdlog::level::info);
+    log_controller_ray             = erhe::log::make_logger("editor::controller_ray"            , spdlog::level::info, false);
 }
 
 }

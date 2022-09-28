@@ -110,10 +110,10 @@ erhe_target_sources_grouped(
     tools/hotbar.hpp
     tools/hover_tool.cpp
     tools/hover_tool.hpp
+    tools/hud.cpp
+    tools/hud.hpp
     tools/material_paint_tool.cpp
     tools/material_paint_tool.hpp
-    tools/palette.cpp
-    tools/palette.hpp
     tools/physics_tool.cpp
     tools/physics_tool.hpp
     tools/selection_tool.cpp

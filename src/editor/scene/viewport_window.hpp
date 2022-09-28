@@ -95,6 +95,9 @@ public:
     [[nodiscard]] auto type_hash() const -> uint32_t         override { return c_type_hash; }
     void execute_rendergraph_node() override;
 
+    // Implements erhe::application::Input_context
+    [[nodiscard]] auto get_type() const -> int override;
+
     // Public API
     void connect            (Viewport_windows* viewport_windows);
     void set_window_viewport(int x, int y, int width, int height);
@@ -113,7 +116,6 @@ public:
     void raytrace();
 
     // call with const glm::vec2 position_in_window = m_window.to_scene_content(position);
-    void reset_pointer_context();
     void update_pointer_context(
         Id_renderer& id_renderer,
         glm::vec2    position_in_viewport

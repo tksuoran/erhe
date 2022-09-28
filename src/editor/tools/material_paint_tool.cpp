@@ -27,7 +27,7 @@ void Material_paint_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (state() != erhe::application::State::Inactive)
+    if (get_tool_state() != erhe::application::State::Inactive)
     {
         return;
     }
@@ -42,20 +42,20 @@ auto Material_paint_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    if (state() == erhe::application::State::Inactive)
+    if (get_tool_state() == erhe::application::State::Inactive)
     {
         return false;
     }
 
     if (
         m_material_paint_tool.on_paint() &&
-        (state() == erhe::application::State::Ready)
+        (get_tool_state() == erhe::application::State::Ready)
     )
     {
         set_active(context);
     }
 
-    return state() == erhe::application::State::Active;
+    return get_tool_state() == erhe::application::State::Active;
 }
 
 ////////
@@ -64,7 +64,7 @@ void Material_pick_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (state() != erhe::application::State::Inactive)
+    if (get_tool_state() != erhe::application::State::Inactive)
     {
         return;
     }
@@ -79,20 +79,20 @@ auto Material_pick_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    if (state() == erhe::application::State::Inactive)
+    if (get_tool_state() == erhe::application::State::Inactive)
     {
         return false;
     }
 
     if (
         m_material_paint_tool.on_pick() &&
-        (state() == erhe::application::State::Ready)
+        (get_tool_state() == erhe::application::State::Ready)
     )
     {
         set_active(context);
     }
 
-    return state() == erhe::application::State::Active;
+    return get_tool_state() == erhe::application::State::Active;
 }
 
 

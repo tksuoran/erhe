@@ -19,16 +19,11 @@ namespace erhe::components
 namespace erhe::application
 {
 
+class Commands;
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 class Imgui_renderer;
 #endif
 class Imgui_viewport;
-
-
-class Mouse_input_sink
-{
-public:
-};
 
 /// <summary>
 /// Wrapper for ImGui window.
@@ -64,7 +59,7 @@ public:
     virtual void on_begin            ();
     virtual void on_end              ();
     virtual auto flags               () -> ImGuiWindowFlags;
-    virtual auto consumes_mouse_input() const -> bool;
+    virtual auto visit               (Commands& commands) const -> bool;
     virtual auto has_toolbar         () const -> bool;
     virtual void toolbar             ();
 

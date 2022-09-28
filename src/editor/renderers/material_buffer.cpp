@@ -64,7 +64,6 @@ auto Material_buffer::update(
     const auto  entry_size     = m_material_interface.material_struct.size_bytes();
     const auto& offsets        = m_material_interface.offsets;
     const auto  gpu_data       = buffer.map();
-    std::size_t material_index = 0;
     m_writer.begin(buffer.target());
     m_used_handles.clear();
     for (const auto& material : materials)
@@ -116,7 +115,6 @@ auto Material_buffer::update(
 
         m_writer.write_offset += entry_size;
         ERHE_VERIFY(m_writer.write_offset <= buffer.capacity_byte_count());
-        ++material_index;
     }
     m_writer.end();
 

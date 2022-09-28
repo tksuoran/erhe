@@ -62,6 +62,7 @@ class Raytrace_primitive;
 class Scene_view;
 class Tools;
 class Trs_tool;
+class Viewport_window;
 class Viewport_windows;
 
 class Trs_tool_drag_command
@@ -76,23 +77,6 @@ public:
 
     auto try_call   (erhe::application::Command_context& context) -> bool override;
     void try_ready  (erhe::application::Command_context& context) override;
-    void on_inactive(erhe::application::Command_context& context) override;
-
-private:
-    Trs_tool& m_trs_tool;
-};
-
-class Trs_tool_hover_command
-    : public erhe::application::Command
-{
-public:
-    explicit Trs_tool_hover_command(Trs_tool& trs_tool)
-        : Command   {"Trs_tool.hover"}
-        , m_trs_tool{trs_tool}
-    {
-    }
-
-    auto try_call   (erhe::application::Command_context& context) -> bool override;
     void on_inactive(erhe::application::Command_context& context) override;
 
 private:
@@ -119,9 +103,9 @@ public:
         "World"
     };
 
-    static constexpr int              c_priority{1};
-    static constexpr std::string_view c_type_name   {"Trs_tool"};
-    static constexpr std::string_view c_title   {"Transform"};
+    static constexpr int              c_priority {1};
+    static constexpr std::string_view c_type_name{"Trs_tool"};
+    static constexpr std::string_view c_title    {"Transform"};
     static constexpr uint32_t         c_type_hash{
         compiletime_xxhash::xxh32(
             c_type_name.data(),
@@ -142,6 +126,7 @@ public:
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
+    void tool_hover             (Scene_view* scene_view) override;
     void tool_render            (const Render_context& context) override;
     void on_enable_state_changed() override;
 
@@ -155,12 +140,9 @@ public:
     void set_rotate      (const bool enabled);
 
     // Commands
-    auto on_drag_ready() -> bool;
-    auto on_drag      () -> bool;
-    void end_drag     ();
-
-    auto on_hover     () -> bool;
-    void end_hover    ();
+    auto on_drag_ready(erhe::application::Command_context& context) -> bool;
+    auto on_drag      (erhe::application::Command_context& context) -> bool;
+    void end_drag     (erhe::application::Command_context& context);
 
 private:
     enum class Handle : unsigned int
@@ -184,6 +166,8 @@ private:
         e_handle_type_translate_plane = 2,
         e_handle_type_rotate          = 3
     };
+
+    [[nodiscard]] static auto c_str(const Handle handle) -> const char*;
 
     class Debug_rendering
     {
@@ -269,6 +253,7 @@ private:
         bool      show_rotate   {false};
         bool      hide_inactive {true};
         float     scale         {3.5f}; // 3.5 for normal, 6.6 for debug
+        //float     scale         {8.8f}; // OpenXR TODO erhe.ini
 
         [[nodiscard]] auto make_material(
             const std::string_view name,
@@ -319,9 +304,11 @@ private:
 
     void set_local                  (bool local);
     void set_node                   (const std::shared_ptr<erhe::scene::Node>& node);
-    void update_axis_translate      ();
+    void update_axis_translate_2d   (Viewport_window* viewport_window);
+    void update_axis_translate_3d   (Scene_view* scene_view);
     void update_axis_translate_final(const glm::dvec3 drag_position);
-    void update_plane_translate     ();
+    void update_plane_translate_2d  (Viewport_window* viewport_window);
+    void update_plane_translate_3d  (Scene_view* scene_view);
     void update_rotate              ();
     auto update_rotate_circle_around() -> bool;
     auto update_rotate_parallel     () -> bool;
@@ -332,7 +319,6 @@ private:
     void update_visibility          ();
 
     Trs_tool_drag_command                         m_drag_command;
-    Trs_tool_hover_command                        m_hover_command;
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;

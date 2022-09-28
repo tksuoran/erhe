@@ -28,7 +28,7 @@
 #include "tools/hotbar.hpp"
 #include "tools/hover_tool.hpp"
 #include "tools/material_paint_tool.hpp"
-#include "tools/palette.hpp"
+#include "tools/hud.hpp"
 #include "tools/physics_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -98,6 +98,42 @@ using erhe::graphics::OpenGL_state_tracker;
 using std::shared_ptr;
 using std::make_shared;
 
+
+void Application::init_window(
+    const std::shared_ptr<erhe::application::Imgui_window>& window,
+    const erhe::application::Configuration::Window_entry&   config
+) const
+{
+    if (!window)
+    {
+        return;
+    }
+    const auto& configuration = m_components.get<erhe::application::Configuration>();
+    if (config.hud_window && configuration->headset.openxr)
+    {
+        const auto hud = m_components.get<editor::Hud>();
+        if (hud)
+        {
+            const auto viewport = hud->get_rendertarget_imgui_viewport();
+            if (viewport)
+            {
+                window->set_viewport(viewport.get());
+                window->show();
+                return;
+            }
+        }
+    }
+
+    if (config.window || config.hud_window)
+    {
+        window->show();
+    }
+    else
+    {
+        window->hide();
+    }
+}
+
 auto Application::initialize_components(int argc, char** argv) -> bool
 {
     ERHE_PROFILE_FUNCTION
@@ -161,7 +197,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Node_tree_window      >());
         m_components.add(make_shared<editor::Operation_stack       >());
         m_components.add(make_shared<editor::Operations            >());
-        m_components.add(make_shared<editor::Palette               >());
+        m_components.add(make_shared<editor::Hud                   >());
         m_components.add(make_shared<editor::Physics_tool          >());
         m_components.add(make_shared<editor::Physics_window        >());
         m_components.add(make_shared<editor::Post_processing       >());
@@ -212,31 +248,31 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     const auto& config = configuration->windows;
 
-    if (m_components.get<erhe::application::Commands_window   >() && !config.commands   ) m_components.get<erhe::application::Commands_window   >()->hide();
-    if (m_components.get<erhe::application::Log_window        >() && !config.log        ) m_components.get<erhe::application::Log_window        >()->hide();
-    if (m_components.get<erhe::application::Performance_window>() && !config.performance) m_components.get<erhe::application::Performance_window>()->hide();
-    if (m_components.get<erhe::application::Pipelines         >() && !config.pipelines  ) m_components.get<erhe::application::Pipelines         >()->hide();
-    if (m_components.get<erhe::application::View              >() && !config.view       ) m_components.get<erhe::application::View              >()->hide();
+    init_window(m_components.get<erhe::application::Commands_window   >(), config.commands   );
+    init_window(m_components.get<erhe::application::Log_window        >(), config.log        );
+    init_window(m_components.get<erhe::application::Performance_window>(), config.performance);
+    init_window(m_components.get<erhe::application::Pipelines         >(), config.pipelines  );
     //if (m_components.get<erhe::application::Tool_properties_window>()) m_components.get<Terhe::application::ool_properties_window>()->hide();
 
-    if (m_components.get<editor::Brushes               >() && !config.brushes            ) m_components.get<editor::Brushes               >()->hide();
-    if (m_components.get<editor::Debug_view_window     >() && !config.debug_view         ) m_components.get<editor::Debug_view_window     >()->hide();
-    if (m_components.get<editor::Fly_camera_tool       >() && !config.fly_camera         ) m_components.get<editor::Fly_camera_tool       >()->hide();
-    if (m_components.get<editor::Grid_tool             >() && !config.grid               ) m_components.get<editor::Grid_tool             >()->hide();
-    if (m_components.get<editor::Layers_window         >() && !config.layers             ) m_components.get<editor::Layers_window         >()->hide();
-    if (m_components.get<editor::Material_properties   >() && !config.material_properties) m_components.get<editor::Material_properties   >()->hide();
-    if (m_components.get<editor::Materials_window      >() && !config.materials          ) m_components.get<editor::Materials_window      >()->hide();
-    if (m_components.get<editor::Mesh_properties       >() && !config.mesh_properties    ) m_components.get<editor::Mesh_properties       >()->hide();
-    if (m_components.get<editor::Node_properties       >() && !config.node_properties    ) m_components.get<editor::Node_properties       >()->hide();
-    if (m_components.get<editor::Node_tree_window      >() && !config.node_tree          ) m_components.get<editor::Node_tree_window      >()->hide();
-    if (m_components.get<editor::Operation_stack       >() && !config.operation_stack    ) m_components.get<editor::Operation_stack       >()->hide();
-    if (m_components.get<editor::Operations            >() && !config.operations         ) m_components.get<editor::Operations            >()->hide();
-    if (m_components.get<editor::Physics_window        >() && !config.physics            ) m_components.get<editor::Physics_window        >()->hide();
-    if (m_components.get<editor::Post_processing_window>() && !config.post_processing    ) m_components.get<editor::Post_processing_window>()->hide();
-    if (m_components.get<editor::Rendergraph_window    >() && !config.render_graph       ) m_components.get<editor::Rendergraph_window    >()->hide();
-    if (m_components.get<editor::Trs_tool              >() && !config.trs                ) m_components.get<editor::Trs_tool              >()->hide();
-    if (m_components.get<editor::Tool_properties_window>() && !config.tool_properties    ) m_components.get<editor::Tool_properties_window>()->hide();
-    if (m_components.get<editor::Viewport_config       >() && !config.viewport_config    ) m_components.get<editor::Viewport_config       >()->hide();
+    init_window(m_components.get<editor::Brushes               >(), config.brushes            );
+    init_window(m_components.get<editor::Debug_view_window     >(), config.debug_view         );
+    init_window(m_components.get<editor::Fly_camera_tool       >(), config.fly_camera         );
+    init_window(m_components.get<editor::Grid_tool             >(), config.grid               );
+    init_window(m_components.get<editor::Hover_tool            >(), config.hover_tool         );
+    init_window(m_components.get<editor::Layers_window         >(), config.layers             );
+    init_window(m_components.get<editor::Material_properties   >(), config.material_properties);
+    init_window(m_components.get<editor::Materials_window      >(), config.materials          );
+    init_window(m_components.get<editor::Mesh_properties       >(), config.mesh_properties    );
+    init_window(m_components.get<editor::Node_properties       >(), config.node_properties    );
+    init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree          );
+    init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack    );
+    init_window(m_components.get<editor::Operations            >(), config.operations         );
+    init_window(m_components.get<editor::Physics_window        >(), config.physics            );
+    init_window(m_components.get<editor::Post_processing_window>(), config.post_processing    );
+    init_window(m_components.get<editor::Rendergraph_window    >(), config.render_graph       );
+    init_window(m_components.get<editor::Trs_tool              >(), config.trs                );
+    init_window(m_components.get<editor::Tool_properties_window>(), config.tool_properties    );
+    init_window(m_components.get<editor::Viewport_config       >(), config.viewport_config    );
 
     if (configuration->physics.enabled)
     {

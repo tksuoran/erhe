@@ -18,6 +18,11 @@
 namespace editor
 {
 
+[[nodiscard]] auto Scene_view::get_type() const -> int
+{
+    return Input_context_type_scene_view;
+}
+
 auto Scene_view::get_light_projections() const -> Light_projections*
 {
     auto* shadow_render_node = get_shadow_render_node();
@@ -39,36 +44,34 @@ auto Scene_view::get_shadow_texture() const -> erhe::graphics::Texture*
     return shadow_render_node->get_texture().get();
 }
 
-auto Scene_view::near_position_in_world() const -> std::optional<glm::vec3>
+auto Scene_view::get_control_ray_origin_in_world() const -> std::optional<glm::dvec3>
 {
-    return m_near_position_in_world;
+    return m_control_ray_origin_in_world;
 }
 
-auto Scene_view::far_position_in_world() const -> std::optional<glm::vec3>
+auto Scene_view::get_control_ray_direction_in_world() const -> std::optional<glm::dvec3>
 {
-    return m_far_position_in_world;
+    return m_control_ray_direction_in_world;
 }
 
-auto Scene_view::position_in_world_distance(
-    const float distance
-) const -> std::optional<glm::vec3>
+auto Scene_view::get_control_position_in_world_at_distance(
+    const double distance
+) const -> std::optional<glm::dvec3>
 {
     if (
-        !m_near_position_in_world.has_value() ||
-        !m_far_position_in_world.has_value()
+        !m_control_ray_origin_in_world.has_value() ||
+        !m_control_ray_direction_in_world.has_value()
     )
     {
         return {};
     }
 
-    const glm::vec3 p0        = m_near_position_in_world.value();
-    const glm::vec3 p1        = m_far_position_in_world.value();
-    const glm::vec3 origin    = p0;
-    const glm::vec3 direction = glm::normalize(p1 - p0);
+    const glm::dvec3 origin    = m_control_ray_origin_in_world.value();
+    const glm::dvec3 direction = m_control_ray_direction_in_world.value();
     return origin + distance * direction;
 }
 
-auto Scene_view::position_in_viewport() const -> std::optional<glm::vec2>
+auto Scene_view::get_position_in_viewport() const -> std::optional<glm::dvec2>
 {
     return m_position_in_viewport;
 }
@@ -83,15 +86,32 @@ auto Scene_view::get_nearest_hover() const -> const Hover_entry&
     return m_hover_entries.at(m_nearest_slot);
 }
 
+void Scene_view::reset_control_ray()
+{
+    std::fill(
+        m_hover_entries.begin(),
+        m_hover_entries.end(),
+        Hover_entry{}
+    );
+
+    m_control_ray_origin_in_world.reset();
+    m_control_ray_direction_in_world.reset();
+    m_position_in_viewport  .reset();
+}
+
 void Scene_view::raytrace_update(
     const glm::vec3 ray_origin,
     const glm::vec3 ray_direction,
     Scene_root*     tool_scene_root
 )
 {
+    m_control_ray_origin_in_world    = ray_origin;
+    m_control_ray_direction_in_world = ray_direction;
+
     const auto& scene_root = get_scene_root();
     if (!scene_root)
     {
+        reset_control_ray();
         return;
     }
 
@@ -139,7 +159,7 @@ void Scene_view::raytrace_update(
                 entry.raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
                 entry.position      = ray.origin + ray.t_far * ray.direction;
                 entry.geometry      = nullptr;
-                entry.local_index   = 0;
+                entry.local_index   = std::numeric_limits<std::size_t>::max();
 
                 SPDLOG_LOGGER_TRACE(
                     log_controller_ray,
@@ -233,6 +253,14 @@ void Scene_view::raytrace_update(
             }
             else
             {
+                entry.raytrace_node = nullptr;
+                entry.mesh.reset();
+                entry.geometry      = nullptr;
+                entry.position.reset();
+                entry.normal.reset();
+                entry.primitive     = std::numeric_limits<std::size_t>::max();
+                entry.local_index   = std::numeric_limits<std::size_t>::max();
+
                 SPDLOG_LOGGER_TRACE(
                     log_controller_ray,
                     "{}: no hit",

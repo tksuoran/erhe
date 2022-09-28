@@ -61,6 +61,11 @@ using erhe::graphics::Texture;
 
 int Viewport_window::s_serial = 0;
 
+[[nodiscard]] auto Viewport_window::get_type() const -> int
+{
+    return Input_context_type_viewport_window;
+}
+
 Viewport_window::Viewport_window(
     const std::string_view                      name,
     const erhe::components::Components&         components,
@@ -298,27 +303,16 @@ void Viewport_window::raytrace()
 
     if (!pointer_near.has_value() || !pointer_far.has_value())
     {
+        reset_control_ray();
         return;
     }
 
-    const glm::vec3 ray_origin   {pointer_near.value()};
-    const glm::vec3 ray_direction{glm::normalize(pointer_far.value() - pointer_near.value())};
+    const glm::dvec3 ray_origin   {pointer_near.value()};
+    const glm::dvec3 ray_direction{glm::normalize(pointer_far.value() - pointer_near.value())};
 
     raytrace_update(ray_origin, ray_direction);
 }
 
-void Viewport_window::reset_pointer_context()
-{
-    std::fill(
-        m_hover_entries.begin(),
-        m_hover_entries.end(),
-        Hover_entry{}
-    );
-
-    m_position_in_viewport  .reset();
-    m_near_position_in_world.reset();
-    m_far_position_in_world .reset();
-}
 
 void Viewport_window::update_pointer_context(
     Id_renderer&    id_renderer,
@@ -329,17 +323,30 @@ void Viewport_window::update_pointer_context(
 
     const bool reverse_depth = projection_viewport().reverse_depth;
     m_position_in_viewport   = position_in_viewport;
-    m_near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
-    m_far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
+    const auto near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
+    const auto far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
+    if (near_position_in_world.has_value() && far_position_in_world.has_value())
+    {
+        m_control_ray_origin_in_world = near_position_in_world;
+        const auto direction = glm::normalize(far_position_in_world.value() - near_position_in_world.value());
+        m_control_ray_direction_in_world = direction;
+    }
+    else
+    {
+        m_control_ray_origin_in_world.reset();
+        m_control_ray_direction_in_world.reset();
+    }
 
     const auto camera = m_camera.lock();
     if (!camera)
     {
+        reset_control_ray();
         return;
     }
 
     if (!m_is_hovered)
     {
+        reset_control_ray();
         return;
     }
 
@@ -349,9 +356,6 @@ void Viewport_window::update_pointer_context(
             static_cast<int>(position_in_viewport.x),
             static_cast<int>(position_in_viewport.y)
         );
-
-        m_near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
-        m_far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
 
         Hover_entry entry;
         entry.position = position_in_world_viewport_depth(id_query.depth);
@@ -412,22 +416,10 @@ void Viewport_window::update_pointer_context(
             hover_brush        ? "brush "        : "",
             hover_rendertarget ? "rendertarget " : ""
         );
-        if (hover_content)
-        {
-            m_hover_entries[Hover_entry::content_slot] = entry;
-        }
-        if (hover_tool)
-        {
-            m_hover_entries[Hover_entry::tool_slot] = entry;
-        }
-        if (hover_brush)
-        {
-            m_hover_entries[Hover_entry::brush_slot] = entry;
-        }
-        if (hover_rendertarget)
-        {
-            m_hover_entries[Hover_entry::rendertarget_slot] = entry;
-        }
+        m_hover_entries[Hover_entry::content_slot     ] = hover_content      ? entry : Hover_entry{};
+        m_hover_entries[Hover_entry::tool_slot        ] = hover_tool         ? entry : Hover_entry{};
+        m_hover_entries[Hover_entry::brush_slot       ] = hover_brush        ? entry : Hover_entry{};
+        m_hover_entries[Hover_entry::rendertarget_slot] = hover_rendertarget ? entry : Hover_entry{};
 
         const auto scene_root = m_scene_root.lock();
         if (scene_root)

@@ -127,7 +127,7 @@ void Imgui_windows::imgui_windows()
 
     //Scoped_imgui_context scoped_context{m_imgui_context};
 
-    bool any_input_sink{false};
+    bool any_input_context{false};
     for (const auto& viewport : m_imgui_viewports)
     {
         Scoped_imgui_context imgui_context{*this, *viewport.get()};
@@ -149,14 +149,7 @@ void Imgui_windows::imgui_windows()
                     if (is_window_visible)
                     {
                         imgui_window->imgui();
-                    }
-                    if (
-                        imgui_window->consumes_mouse_input() &&
-                        ImGui::IsWindowHovered()
-                    )
-                    {
-                        any_input_sink = true;
-                        m_commands->set_input_sink(imgui_window);
+                        any_input_context |= imgui_window->visit(*m_commands.get());
                     }
                     const auto window_position    = ImGui::GetWindowPos();
                     const auto content_region_min = ImGui::GetWindowContentRegionMin();
@@ -207,9 +200,10 @@ void Imgui_windows::imgui_windows()
         }
     }
 
-    if (!any_input_sink)
+    if (!any_input_context)
     {
-        m_commands->set_input_sink(nullptr);
+        //log_input->info("!any_input_context");
+        m_commands->set_input_context(nullptr);
     }
 }
 

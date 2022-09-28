@@ -30,7 +30,6 @@ namespace erhe::application {
 
 View::View()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
 {
 }
 
@@ -40,14 +39,8 @@ View::~View() noexcept
 
 void View::declare_required_components()
 {
-    m_imgui_windows = require<Imgui_windows>();
-    m_render_graph  = require<Rendergraph  >();
-    m_window        = require<Window       >();
-}
-
-void View::initialize_component()
-{
-    m_imgui_windows->register_imgui_window(this);
+    m_render_graph = require<Rendergraph>();
+    m_window       = require<Window     >();
 }
 
 void View::post_initialize()
@@ -55,6 +48,7 @@ void View::post_initialize()
     m_commands       = get<Commands      >();
     m_configuration  = get<Configuration >();
     m_imgui_renderer = get<Imgui_renderer>();
+    m_imgui_windows  = get<Imgui_windows >();
     m_time           = get<Time          >();
 }
 
@@ -82,9 +76,15 @@ void View::on_refresh()
         m_configuration->window.show
     )
     {
-        m_time->update(); // Also does once per frame updates - moving to next slot in renderers
+        if (m_time)
+        {
+            m_time->update(); // Also does once per frame updates - moving to next slot in renderers
+        }
         m_view_client->update();
-        m_window->get_context_window()->swap_buffers();
+        if (m_window)
+        {
+            m_window->get_context_window()->swap_buffers();
+        }
     }
 }
 
@@ -161,17 +161,26 @@ void View::update()
 
 void View::on_enter()
 {
-    m_time->start_time();
+    if (m_time)
+    {
+        m_time->start_time();
+    }
 }
 
 void View::on_focus(int focused)
 {
-    m_imgui_windows->on_focus(focused);
+    if (m_imgui_windows)
+    {
+        m_imgui_windows->on_focus(focused);
+    }
 }
 
 void View::on_cursor_enter(int entered)
 {
-    m_imgui_windows->on_cursor_enter(entered);
+    if (m_imgui_windows)
+    {
+        m_imgui_windows->on_cursor_enter(entered);
+    }
 }
 
 void View::on_key(
@@ -180,16 +189,24 @@ void View::on_key(
     const bool                   pressed
 )
 {
-    m_imgui_windows->on_key(
-        static_cast<signed int>(code),
-        modifier_mask,
-        pressed
-    );
+    if (m_imgui_windows)
+    {
+        m_imgui_windows->on_key(
+            static_cast<signed int>(code),
+            modifier_mask,
+            pressed
+        );
+    }
+
+    if (!m_commands)
+    {
+        return;
+    }
 
     const bool imgui_capture_keyboard = get_imgui_capture_keyboard();
-    const bool has_input_sink         = (m_commands->input_sink() != nullptr);
+    const bool has_input_context      = (m_commands->get_input_context() != nullptr);
 
-    if (imgui_capture_keyboard && !has_input_sink)
+    if (imgui_capture_keyboard && !has_input_context)
     {
         return;
     }
@@ -207,7 +224,10 @@ void View::on_char(
 )
 {
     log_input_event->trace("char input codepoint = {}", codepoint);
-    m_imgui_windows->on_char(codepoint);
+    if (m_imgui_windows)
+    {
+        m_imgui_windows->on_char(codepoint);
+    }
 }
 
 auto View::get_imgui_capture_keyboard() const -> bool
@@ -255,12 +275,20 @@ void View::on_mouse_click(
     const int                         count
 )
 {
-    m_imgui_windows->on_mouse_click(static_cast<uint32_t>(button), count);
+    if (m_imgui_windows)
+    {
+        m_imgui_windows->on_mouse_click(static_cast<uint32_t>(button), count);
+    }
+
+    if (!m_commands)
+    {
+        return;
+    }
 
     const bool imgui_capture_mouse = get_imgui_capture_mouse();
-    const bool has_input_sink      = (m_commands->input_sink() != nullptr);
+    const bool has_input_context   = (m_commands->get_input_context() != nullptr);
 
-    if (imgui_capture_mouse && !has_input_sink)
+    if (imgui_capture_mouse && !has_input_context)
     {
         return;
     }
@@ -281,12 +309,20 @@ void View::on_mouse_click(
 
 void View::on_mouse_wheel(const double x, const double y)
 {
-    m_imgui_windows->on_mouse_wheel(x, y);
+    if (m_imgui_windows)
+    {
+        m_imgui_windows->on_mouse_wheel(x, y);
+    }
+
+    if (!m_commands)
+    {
+        return;
+    }
 
     const bool imgui_capture_mouse = get_imgui_capture_mouse();
-    const bool has_input_sink      = (m_commands->input_sink() != nullptr);
+    const bool has_input_context   = (m_commands->get_input_context() != nullptr);
 
-    if (imgui_capture_mouse && !has_input_sink)
+    if (imgui_capture_mouse && !has_input_context)
     {
         return;
     }
@@ -298,12 +334,20 @@ void View::on_mouse_wheel(const double x, const double y)
 
 void View::on_mouse_move(const double x, const double y)
 {
-    m_imgui_windows->on_mouse_move(x, y);
+    if (m_imgui_windows)
+    {
+        m_imgui_windows->on_mouse_move(x, y);
+    }
+
+    if (!m_commands)
+    {
+        return;
+    }
 
     const bool imgui_capture_mouse = get_imgui_capture_mouse();
-    const bool has_input_sink      = (m_commands->input_sink() != nullptr);
+    const bool has_input_context   = (m_commands->get_input_context() != nullptr);
 
-    if (imgui_capture_mouse && !has_input_sink)
+    if (imgui_capture_mouse && !has_input_context)
     {
         SPDLOG_LOGGER_TRACE(log_input_event_filtered, "ImGui WantCaptureMouse");
         return;
@@ -315,73 +359,6 @@ void View::on_mouse_move(const double x, const double y)
     }
 
     m_commands->on_mouse_move(x, y);
-}
-
-void View::imgui()
-{
-#if defined(ERHE_GUI_LIBRARY_IMGUI) && 0
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    const ImGuiTreeNodeFlags leaf_flags{
-        ImGuiTreeNodeFlags_NoTreePushOnOpen |
-        ImGuiTreeNodeFlags_Leaf
-    };
-
-    ImGui::Text(
-        "Active mouse command: %s",
-        (m_active_mouse_command != nullptr)
-            ? m_active_mouse_command->name()
-            : "(none)"
-    );
-
-    if (ImGui::TreeNodeEx("Active", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto* command : m_commands)
-        {
-            if (command->state() == State::Active)
-            {
-                ImGui::TreeNodeEx(command->name(), leaf_flags);
-            }
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNodeEx("Ready", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto* command : m_commands)
-        {
-            if (command->state() == State::Ready)
-            {
-                ImGui::TreeNodeEx(command->name(), leaf_flags);
-            }
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNodeEx("Inactive", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto* command : m_commands)
-        {
-            if (command->state() == State::Inactive)
-            {
-                ImGui::TreeNodeEx(command->name(), leaf_flags);
-            }
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNodeEx("Disabled", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto* command : m_commands)
-        {
-            if (command->state() == State::Disabled)
-            {
-                ImGui::TreeNodeEx(command->name(), leaf_flags);
-            }
-        }
-        ImGui::TreePop();
-    }
-#endif
 }
 
 }  // namespace editor

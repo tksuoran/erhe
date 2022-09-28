@@ -46,11 +46,9 @@ public:
 class View
     : public erhe::components::Component
     , public erhe::toolkit::View
-    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_type_name{"View"};
-    static constexpr std::string_view c_title    {"View"};
     static constexpr uint32_t         c_type_hash{
         compiletime_xxhash::xxh32(
             c_type_name.data(),
@@ -65,7 +63,6 @@ public:
     // Implements erhe::components::Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
-    void initialize_component       () override;
     void post_initialize            () override;
 
     void run();
@@ -84,9 +81,6 @@ public:
     void on_mouse_wheel (const double x, const double y) override;
     void on_key         (const erhe::toolkit::Keycode code, const uint32_t modifier_mask, const bool pressed) override;
     void on_char        (const unsigned int codepoint) override;
-
-    // Implements Imgui_window
-    void imgui() override;
 
     // Public API
     void set_client(View_client* view_client);

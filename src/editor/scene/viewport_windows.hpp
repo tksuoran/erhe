@@ -40,6 +40,7 @@ class Imgui_viewport_window;
 class Post_processing;
 class Scene_root;
 class Shadow_renderer;
+class Tools;
 class Viewport_window;
 
 class Viewport_windows;
@@ -173,6 +174,7 @@ private:
     std::shared_ptr<Post_processing>                      m_post_processing;
     std::shared_ptr<Scene_root>                           m_scene_root;
     std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
+    std::shared_ptr<Tools>                                m_tools;
     std::shared_ptr<Viewport_config>                      m_viewport_config;
 
     // Commands

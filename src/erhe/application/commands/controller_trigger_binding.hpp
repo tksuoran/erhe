@@ -13,8 +13,9 @@ class Controller_trigger_binding
 public:
     Controller_trigger_binding(
         Command* command,
-        float    min_to_activate,
-        float    max_to_deactivate
+        float    min_to_activate = 0.50f,
+        float    max_to_deactivate = 0.45f,
+        bool     drag = false
     );
     ~Controller_trigger_binding() noexcept override;
 
@@ -35,9 +36,10 @@ public:
     ) -> bool;
 
 private:
-    float m_min_to_activate  {0.50f};
-    float m_max_to_deactivate{0.45f};
-    bool  m_active{false};
+    float m_min_to_activate  {0.0f};
+    float m_max_to_deactivate{0.0f};
+    bool  m_drag             {false};
+    bool  m_active           {false};
 };
 
 } // namespace erhe/application

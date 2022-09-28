@@ -13,6 +13,7 @@
 #include "scene/viewport_windows.hpp"
 #include "scene/material_library.hpp"
 #include "tools/hotbar.hpp"
+#include "tools/hud.hpp"
 #include "tools/tools.hpp"
 #include "windows/viewport_config.hpp"
 #include "xr/controller_visualization.hpp"
@@ -48,6 +49,11 @@ namespace editor
 {
 
 using erhe::graphics::Color_blend_state;
+
+[[nodiscard]] auto Headset_view::get_type() const -> int
+{
+    return Input_context_type_headset_view;
+}
 
 Headset_view::Headset_view()
     : erhe::components::Component        {c_name}
@@ -110,6 +116,7 @@ void Headset_view::post_initialize()
 
     m_editor_rendering = get<Editor_rendering>();
     m_hand_tracker     = get<Hand_tracker    >();
+    m_hud              = get<Hud             >();
     m_tools            = get<Tools           >();
 }
 
@@ -219,14 +226,14 @@ static constexpr std::string_view c_id_headset_render_content{"HS render content
 void Headset_view::update_pointer_context_from_controller()
 {
     const auto& pose                   = m_headset->controller_pose();
-    const float trigger_value          = m_headset->trigger_value();
+    //const float trigger_value          = m_headset->trigger_value();
     const auto  controller_orientation = glm::mat4_cast(pose.orientation);
     const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
-    if (trigger_value == 0.0f)
-    {
-        return;
-    }
+    //if (trigger_value == 0.0f)
+    //{
+    //    return;
+    //}
     const glm::vec3 ray_origin    = pose.position;
     const glm::vec3 ray_direction = controller_direction;
 
@@ -431,29 +438,37 @@ void Headset_view::begin_frame()
         return;
     }
 
+    m_commands->set_input_context(this);
     m_finger_inputs.clear();
     m_controller_inputs.clear();
+    update_pointer_context_from_controller();
+    const float trigger_value = m_headset->trigger_value();
+    if (trigger_value > 0.0f)
+    {
+        m_commands->on_controller_trigger(trigger_value);
+    }
     if (m_controller_visualization)
     {
         m_controller_visualization->update(m_headset->controller_pose());
-        update_pointer_context_from_controller();
-        const float trigger_value = m_headset->trigger_value();
-        if (trigger_value > 0.0f)
-        {
-            m_commands->on_controller_trigger(trigger_value);
-        }
     }
     if (m_hand_tracker)
     {
         m_hand_tracker->update_hands(*m_headset.get());
     }
 
+    const glm::mat4 world_from_view = m_headset->get_view_in_world();
+
     const auto& hotbar = get<Hotbar>();
     if (hotbar)
     {
-        const glm::mat4 world_from_view = m_headset->get_view_in_world();
         hotbar->update_node_transform(world_from_view);
     }
+
+    if (m_hud)
+    {
+        m_hud->update_node_transform(world_from_view);
+    }
+    m_tools->on_hover(this);
 }
 
 void Headset_view::connect(const std::shared_ptr<Shadow_render_node>& shadow_render_node)

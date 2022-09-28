@@ -31,7 +31,7 @@ auto Mouse_wheel_binding::on_wheel(Command_context& context) -> bool
 {
     auto* const command = get_command();
 
-    if (command->state() == State::Disabled)
+    if (command->get_tool_state() == State::Disabled)
     {
         return false;
     }

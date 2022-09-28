@@ -2,169 +2,198 @@
     "version": 3,
     "configurePresets": [
         {
-            "name":      "Base",
+            "name": "Base",
             "generator": "Ninja Multi-Config",
             "binaryDir": "${sourceDir}/build/${presetName}",
-            "cacheVariables":
-            {
-                "CMAKE_EXPORT_COMPILE_COMMANDS":   "1",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "1",
                 "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
-                "ERHE_GLTF_LIBRARY":               "cgltf",
-                "ERHE_GUI_LIBRARY":                "imgui",
-                "ERHE_PHYSICS_LIBRARY":            "bullet",
-                "ERHE_PNG_LIBRARY":                "mango",
-                "ERHE_PROFILE_LIBRARY":            "tracy",
-                "ERHE_RAYTRACE_LIBRARY":           "none",
-                "ERHE_SVG_LIBRARY":                "lunasvg",
-                "ERHE_TEXT_LAYOUT_LIBRARY":        "harfbuzz",
-                "ERHE_WINDOW_LIBRARY":             "glfw",
-                "ERHE_XR_LIBRARY":                 "none"
+                "ERHE_GLTF_LIBRARY": "cgltf",
+                "ERHE_GUI_LIBRARY": "imgui",
+                "ERHE_PHYSICS_LIBRARY": "bullet",
+                "ERHE_PNG_LIBRARY": "mango",
+                "ERHE_PROFILE_LIBRARY": "tracy",
+                "ERHE_RAYTRACE_LIBRARY": "none",
+                "ERHE_SVG_LIBRARY": "lunasvg",
+                "ERHE_TEXT_LAYOUT_LIBRARY": "harfbuzz",
+                "ERHE_WINDOW_LIBRARY": "glfw",
+                "ERHE_XR_LIBRARY": "none"
             }
         },
         {
             "hidden": true,
-            "name":   "Bullet",
+            "name": "Bullet",
             "cacheVariables": {
                 "ERHE_PHYSICS_LIBRARY": "bullet"
             }
         },
         {
             "hidden": true,
-            "name":   "Embree",
+            "name": "Embree",
             "cacheVariables": {
-                "ERHE_RAYTRACE_LIBRARY":       "Embree",
-                "EMBREE_ISPC_SUPPORT":         "FALSE",
-                "EMBREE_TASKING_SYSTEM":       "INTERNAL",
-                "EMBREE_TUTORIALS":            "OFF",
-                "EMBREE_STATIC_LIB":           "ON",
-                "EMBREE_GEOMETRY_TRIANGLE":    "ON",
-                "EMBREE_GEOMETRY_QUAD":        "OFF",
-                "EMBREE_GEOMETRY_CURVE":       "OFF",
+                "ERHE_RAYTRACE_LIBRARY": "Embree",
+                "EMBREE_ISPC_SUPPORT": "FALSE",
+                "EMBREE_TASKING_SYSTEM": "INTERNAL",
+                "EMBREE_TUTORIALS": "OFF",
+                "EMBREE_STATIC_LIB": "ON",
+                "EMBREE_GEOMETRY_TRIANGLE": "ON",
+                "EMBREE_GEOMETRY_QUAD": "OFF",
+                "EMBREE_GEOMETRY_CURVE": "OFF",
                 "EMBREE_GEOMETRY_SUBDIVISION": "OFF",
-                "EMBREE_GEOMETRY_USER":        "OFF",
-                "EMBREE_GEOMETRY_INSTANCE":    "ON",
-                "EMBREE_GEOMETRY_GRID":        "OFF",
-                "EMBREE_GEOMETRY_POINT":       "OFF",
-                "EMBREE_MAX_ISA":              "NONE",
-                "EMBREE_ISA_NEON":             "OFF",
-                "EMBREE_ISA_SSE2":             "OFF",
-                "EMBREE_ISA_SSE42":            "OFF",
-                "EMBREE_ISA_AVX":              "OFF",
-                "EMBREE_ISA_AVX2":             "OFF",
-                "EMBREE_ISA_AVX512":           "OFF"
+                "EMBREE_GEOMETRY_USER": "OFF",
+                "EMBREE_GEOMETRY_INSTANCE": "ON",
+                "EMBREE_GEOMETRY_GRID": "OFF",
+                "EMBREE_GEOMETRY_POINT": "OFF",
+                "EMBREE_MAX_ISA": "NONE",
+                "EMBREE_ISA_NEON": "OFF",
+                "EMBREE_ISA_SSE2": "OFF",
+                "EMBREE_ISA_SSE42": "OFF",
+                "EMBREE_ISA_AVX": "OFF",
+                "EMBREE_ISA_AVX2": "OFF",
+                "EMBREE_ISA_AVX512": "OFF"
             }
         },
         {
-            "hidden":         true,
-            "name":           "Embree SSE",
-            "inherits":       ["Embree"],
-            "cacheVariables": { "EMBREE_ISA_SSE42": "ON" }
+            "hidden": true,
+            "name": "Embree SSE",
+            "inherits": [
+                "Embree"
+            ],
+            "cacheVariables": {
+                "EMBREE_ISA_SSE42": "ON"
+            }
         },
         {
-            "hidden":         true,
-            "name":           "Embree Neon",
-            "inherits":       ["Embree"],
-            "cacheVariables": { "EMBREE_ISA_NEON": "ON" }
+            "hidden": true,
+            "name": "Embree Neon",
+            "inherits": [
+                "Embree"
+            ],
+            "cacheVariables": {
+                "EMBREE_ISA_NEON": "ON"
+            }
         },
         {
-            "name":     "Clang",
+            "name": "Clang",
             "inherits": "Base",
             "cacheVariables": {
-                "CMAKE_C_COMPILER":   "clang",
+                "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++"
             }
         },
         {
-            "name":     "GCC",
+            "name": "GCC",
             "inherits": "Base",
             "cacheVariables": {
-                "CMAKE_C_COMPILER":   "gcc",
+                "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++"
             }
         },
         {
-            "name":   "Windows",
+            "name": "Windows",
             "hidden": true,
             "condition": {
                 "type": "equals",
-                "lhs":  "${hostSystemName}",
-                "rhs":  "Windows"
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
             }
         },
         {
-            "name":      "Visual Studio 2019",
-            "inherits":  ["Base", "Windows"],
+            "name": "Visual Studio 2019",
+            "inherits": [
+                "Base",
+                "Windows"
+            ],
             "generator": "Visual Studio 16 2019"
         },
         {
-            "name":      "Visual Studio 2022",
-            "inherits":  ["Base", "Windows"],
+            "name": "Visual Studio 2022",
+            "inherits": [
+                "Base",
+                "Windows"
+            ],
             "generator": "Visual Studio 17 2022"
+        },
+        {
+            "name": "Clang 15",
+            "inherits": [ "Base" ],
+            "displayName": "Clang 15",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "clang-15",
+                "CMAKE_CXX_COMPILER": "clang++-15"
+            }
         }
     ],
-
     "buildPresets": [
         {
-            "name":    "Build Base",
-            "hidden":  true,
+            "name": "Build Base",
+            "hidden": true,
             "verbose": false
         },
         {
-            "name":            "Build Debug",
-            "displayName":     "Build Debug",
-            "inherits":        "Build Base",
-            "configuration":   "Debug",
+            "name": "Build Debug",
+            "displayName": "Build Debug",
+            "inherits": "Build Base",
+            "configuration": "Debug",
             "configurePreset": "Base"
         },
         {
-            "name":            "Build Release",
-            "displayName":     "Build Release",
-            "inherits":        "Build Base",
-            "configuration":   "Release",
+            "name": "Build Release",
+            "displayName": "Build Release",
+            "inherits": "Build Base",
+            "configuration": "Release",
             "configurePreset": "Base"
         },
-
         {
-            "name":            "Build Clang Debug",
-            "inherits":        "Build Debug",
+            "name": "Build Clang Debug",
+            "inherits": "Build Debug",
             "configurePreset": "Clang"
         },
         {
-            "name":            "Build Clang Release",
-            "inherits":        "Build Release",
+            "name": "Build Clang Release",
+            "inherits": "Build Release",
             "configurePreset": "Clang"
         },
-
         {
-            "name":            "Build GCC Debug",
-            "inherits":        "Build Debug",
+            "name": "Build GCC Debug",
+            "inherits": "Build Debug",
             "configurePreset": "GCC"
         },
         {
-            "name":            "Build GCC Release",
-            "inherits":        "Build Release",
+            "name": "Build GCC Release",
+            "inherits": "Build Release",
             "configurePreset": "GCC"
         },
-
         {
-            "name":            "Build Visual Studio 2019 Debug",
-            "inherits":        "Build Debug",
+            "name": "Build Visual Studio 2019 Debug",
+            "inherits": "Build Debug",
             "configurePreset": "Visual Studio 2019"
         },
         {
-            "name":            "Build Visual Studio 2019 Release",
-            "inherits":        "Build Release",
+            "name": "Build Visual Studio 2019 Release",
+            "inherits": "Build Release",
             "configurePreset": "Visual Studio 2019"
         },
         {
-            "name":            "Build Visual Studio 2022 Debug",
-            "inherits":        "Build Debug",
+            "name": "Build Visual Studio 2022 Debug",
+            "inherits": "Build Debug",
             "configurePreset": "Visual Studio 2022"
         },
         {
-            "name":            "Build Visual Studio 2022 Release",
-            "inherits":        "Build Release",
+            "name": "Build Visual Studio 2022 Release",
+            "inherits": "Build Release",
             "configurePreset": "Visual Studio 2022"
+        },
+        {
+            "name": "Build Clang 15 Debug",
+            "inherits": "Build Debug",
+            "configurePreset": "Clang 15"
+        },
+        {
+            "name": "Build Clang 15 Release",
+            "inherits": "Build Release",
+            "configurePreset": "Clang 15"
         }
     ]
 }

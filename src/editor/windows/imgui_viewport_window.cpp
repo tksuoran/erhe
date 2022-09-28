@@ -14,6 +14,7 @@
 #endif
 
 #include "erhe/application/configuration.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
@@ -111,11 +112,6 @@ Imgui_viewport_window::Imgui_viewport_window(
 [[nodiscard]] auto Imgui_viewport_window::is_hovered() const -> bool
 {
     return m_is_hovered;
-}
-
-auto Imgui_viewport_window::consumes_mouse_input() const -> bool
-{
-    return true;
 }
 
 void Imgui_viewport_window::on_begin()
@@ -239,8 +235,23 @@ void Imgui_viewport_window::imgui()
     viewport_window->set_is_hovered(m_is_hovered);
 
     //m_viewport_config.imgui();
-
 #endif
+}
+
+auto Imgui_viewport_window::visit(erhe::application::Commands& commands) const -> bool
+{
+    if (ImGui::IsWindowHovered())
+    {
+        const auto viewport_window_shared = m_viewport_window.lock();
+        if (viewport_window_shared)
+        {
+            Viewport_window* viewport_window = viewport_window_shared.get();
+            Scene_view* scene_view = viewport_window;
+            commands.set_input_context(scene_view);
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace editor

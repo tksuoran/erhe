@@ -138,10 +138,10 @@ private:
 
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
     std::shared_ptr<Node_physics>               m_target_node_physics;
-    float                                       m_target_distance        {1.0f};
-    glm::vec3                                   m_target_position_in_mesh{0.0f, 0.0f, 0.0f};
-    glm::vec3                                   m_target_position_start  {0.0f, 0.0f, 0.0f};
-    glm::vec3                                   m_target_position_end    {0.0f, 0.0f, 0.0f};
+    double                                      m_target_distance        {1.0};
+    glm::dvec3                                  m_target_position_in_mesh{0.0, 0.0, 0.0};
+    glm::dvec3                                  m_target_position_start  {0.0, 0.0, 0.0};
+    glm::dvec3                                  m_target_position_end    {0.0, 0.0, 0.0};
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
 
     float m_force_distance          {1.000f};
@@ -153,9 +153,9 @@ private:
     float m_original_linear_damping {0.00f};
     float m_original_angular_damping{0.00f};
 
-    glm::vec3 m_to_end_direction  {0.0f};
-    glm::vec3 m_to_start_direction{0.0f};
-    float     m_target_mesh_size  {0.0f};
+    glm::dvec3 m_to_end_direction  {0.0};
+    glm::dvec3 m_to_start_direction{0.0};
+    double     m_target_mesh_size  {0.0};
 };
 
 } // namespace editor

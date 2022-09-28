@@ -1,9 +1,12 @@
 #pragma once
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/window.hpp"
 
 namespace erhe::application {
+
+class Imgui_window;
 
 class Application
     : public erhe::components::Component
@@ -31,6 +34,11 @@ public:
     void component_initialization_complete(const bool initialization_succeeded);
 
 private:
+    void init_window(
+        const std::shared_ptr<erhe::application::Imgui_window>& window,
+        const erhe::application::Configuration::Window_entry&   config
+    ) const;
+
     erhe::components::Components m_components;
 };
 

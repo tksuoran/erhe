@@ -30,7 +30,7 @@ extern std::shared_ptr<spdlog::logger> log_textures;
 extern std::shared_ptr<spdlog::logger> log_trs_tool;
 extern std::shared_ptr<spdlog::logger> log_rendertarget_imgui_windows;
 extern std::shared_ptr<spdlog::logger> log_xr;
-extern std::shared_ptr<spdlog::logger> log_palette;
+extern std::shared_ptr<spdlog::logger> log_hud;
 extern std::shared_ptr<spdlog::logger> log_controller_ray;
 
 void initialize_logging();

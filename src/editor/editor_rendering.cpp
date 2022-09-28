@@ -570,7 +570,7 @@ void Editor_rendering::render_id(const Render_context& context)
         return;
     }
 
-    const auto position_opt = context.viewport_window->position_in_viewport();
+    const auto position_opt = context.viewport_window->get_position_in_viewport();
     if (!position_opt.has_value())
     {
         return;

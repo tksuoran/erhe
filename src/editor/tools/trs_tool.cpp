@@ -47,6 +47,24 @@
 namespace editor
 {
 
+[[nodiscard]] auto Trs_tool::c_str(const Handle handle) -> const char*
+{
+    switch (handle)
+    {
+        case Handle::e_handle_none        : return "None";
+        case Handle::e_handle_translate_x : return "Translate X";
+        case Handle::e_handle_translate_y : return "Translate Y";
+        case Handle::e_handle_translate_z : return "Translate Z";
+        case Handle::e_handle_translate_xy: return "Translate XY";
+        case Handle::e_handle_translate_xz: return "Translate XZ";
+        case Handle::e_handle_translate_yz: return "Translate YZ";
+        case Handle::e_handle_rotate_x    : return "Rotate X";
+        case Handle::e_handle_rotate_y    : return "Rotate Y";
+        case Handle::e_handle_rotate_z    : return "Rotate Z";
+        default: return "?";
+    };
+}
+
 using glm::normalize;
 using glm::cross;
 using glm::dot;
@@ -63,8 +81,8 @@ void Trs_tool_drag_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    log_trs_tool->trace("try_ready");
-    if (m_trs_tool.on_drag_ready())
+    //log_trs_tool->trace("try_ready");
+    if (m_trs_tool.on_drag_ready(context))
     {
         set_ready(context);
     }
@@ -74,7 +92,7 @@ auto Trs_tool_drag_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    log_trs_tool->trace("try_call");
+    //log_trs_tool->trace("try_call");
     if (!m_trs_tool.is_enabled())
     {
         log_trs_tool->trace("not enabled");
@@ -82,20 +100,25 @@ auto Trs_tool_drag_command::try_call(
     }
 
     if (
-        (state() == erhe::application::State::Ready) &&
+        (get_tool_state() == erhe::application::State::Ready) &&
         m_trs_tool.is_enabled()
     )
     {
         set_active(context);
     }
 
-    if (state() != erhe::application::State::Active)
+    if (get_tool_state() != erhe::application::State::Active)
     {
         // We might be ready, but not consuming event yet
         return false;
     }
 
-    return m_trs_tool.on_drag();
+    const bool still_active = m_trs_tool.on_drag(context);
+    if (!still_active)
+    {
+        set_inactive(context);
+    }
+    return still_active;
 }
 
 void Trs_tool_drag_command::on_inactive(
@@ -105,47 +128,9 @@ void Trs_tool_drag_command::on_inactive(
     static_cast<void>(context);
     log_trs_tool->trace("on_inactive");
 
-    if (state() != erhe::application::State::Inactive)
+    if (get_tool_state() != erhe::application::State::Inactive)
     {
-        m_trs_tool.end_drag();
-    }
-}
-
-auto Trs_tool_hover_command::try_call(
-    erhe::application::Command_context& context
-) -> bool
-{
-    if (!m_trs_tool.is_enabled())
-    {
-        return false;
-    }
-
-    if (
-        (state() == erhe::application::State::Ready) &&
-        m_trs_tool.is_enabled()
-    )
-    {
-        set_active(context);
-    }
-
-    if (state() != erhe::application::State::Active)
-    {
-        // We might be ready, but not consuming event yet
-        return false;
-    }
-
-    return m_trs_tool.on_hover();
-}
-
-void Trs_tool_hover_command::on_inactive(
-    erhe::application::Command_context& context
-)
-{
-    static_cast<void>(context);
-
-    if (state() != erhe::application::State::Inactive)
-    {
-        m_trs_tool.end_hover();
+        m_trs_tool.end_drag(context);
     }
 }
 
@@ -153,7 +138,6 @@ Trs_tool::Trs_tool()
     : erhe::components::Component{c_type_name}
     , Imgui_window               {c_title, c_type_name}
     , m_drag_command             {*this}
-    , m_hover_command            {*this}
     , m_visualization            {*this}
 {
 }
@@ -224,14 +208,15 @@ void Trs_tool::initialize_component()
         m_selection_subscription = m_selection_tool->subscribe_selection_change_notification(lambda);
     }
 
-    get<Tools>()->register_tool(this);
+    const auto& tools = get<Tools>();
+    tools->register_tool(this);
+    tools->register_hover_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_drag_command);
-    commands->register_command(&m_hover_command);
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_update    (&m_hover_command);
+    commands->bind_command_to_controller_trigger(&m_drag_command, 0.50f, 0.45f, true);
 }
 
 void Trs_tool::post_initialize()
@@ -268,12 +253,15 @@ void Trs_tool::set_node(
         return;
     }
 
+    log_trs_tool->trace("set_node(node = {})", node ? node->name() : "");
+
     if (
         m_node_physics &&
         m_node_physics->rigid_body() &&
         m_original_motion_mode.has_value()
     )
     {
+        log_trs_tool->trace("restoring old physics node");
         m_node_physics->rigid_body()->set_motion_mode(m_original_motion_mode.value());
         m_original_motion_mode.reset();
     }
@@ -298,12 +286,12 @@ void Trs_tool::set_node(
 
     if (m_target_node)
     {
-        log_trs_tool->trace("has target node");
+        log_trs_tool->trace("trs tool now has target node");
         m_visualization.root = m_target_node.get();
     }
     else
     {
-        log_trs_tool->trace("no target");
+        log_trs_tool->trace("trs tool now does not have target");
         m_visualization.root = nullptr;
     }
 
@@ -692,6 +680,9 @@ void Trs_tool::imgui()
     const bool   show_rotate    = m_visualization.show_rotate;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
 
+    ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
+    ImGui::Text("Active handle: %s", c_str(m_active_handle));
+
     if (
         erhe::application::make_button(
             "Local",
@@ -774,45 +765,68 @@ void Trs_tool::imgui()
 #endif
 }
 
-auto Trs_tool::on_hover() -> bool
+void Trs_tool::tool_hover(Scene_view* scene_view)
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    if (scene_view == nullptr)
     {
-        return false;
+        m_hover_handle = Handle::e_handle_none;
+        return;
     }
 
-    const auto& tool = viewport_window->get_hover(Hover_entry::tool_slot);
+    const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
     if (!tool.valid || !tool.mesh)
     {
-        return false;
+        m_hover_handle = Handle::e_handle_none;
+        return;
     }
 
     m_hover_handle = get_handle(tool.mesh.get());
-
-    return false; // do not consume
 }
 
-void Trs_tool::end_hover()
+auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
 {
-    m_hover_handle = Handle::e_handle_none;
-}
+    auto* input_context = context.get_input_context();
+    if (input_context == nullptr)
+    {
+        log_trs_tool->trace("no input context");
+        end_drag(context);
+        return false;
+    }
+    const int type = input_context->get_type();
+    Viewport_window* viewport_window = (type == Input_context_type_viewport_window) ? reinterpret_cast<Viewport_window*>(input_context) : nullptr;
+    Scene_view*      scene_view      = reinterpret_cast<Scene_view*>(input_context);
 
-auto Trs_tool::on_drag() -> bool
-{
     auto handle_type = get_handle_type(m_active_handle);
     switch (handle_type)
     {
         //using enum Handle_type;
         case Handle_type::e_handle_type_translate_axis:
         {
-            update_axis_translate();
+            if (type == Input_context_type_viewport_window)
+            {
+                //log_trs_tool->trace("update_axis_translate_2d(viewport_window);");
+                update_axis_translate_2d(viewport_window);
+            }
+            else if (type == Input_context_type_headset_view)
+            {
+                //log_trs_tool->trace("update_axis_translate_3d(scene_view);");
+                update_axis_translate_3d(scene_view);
+            }
             return true;
         }
 
         case Handle_type::e_handle_type_translate_plane:
         {
-            update_plane_translate();
+            if (type == Input_context_type_viewport_window)
+            {
+                //log_trs_tool->trace("update_plane_translate_2d(viewport_window);");
+                update_plane_translate_2d(viewport_window);
+            }
+            else if (type == Input_context_type_headset_view)
+            {
+                //log_trs_tool->trace("update_plane_translate_3d(scene_view);");
+                update_plane_translate_3d(scene_view);
+            }
             return true;
         }
 
@@ -830,34 +844,49 @@ auto Trs_tool::on_drag() -> bool
     }
 }
 
-auto Trs_tool::on_drag_ready() -> bool
+auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> bool
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    static_cast<void>(context);
+
+    log_trs_tool->trace("on_drag_ready");
+
+    //const auto viewport_window = m_viewport_windows->hover_window();
+    //if (!viewport_window)
+    //{
+    //    return false;
+    //}
+    //
+
+    m_active_handle = m_hover_handle; //get_handle(tool.mesh.get());
+
+    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
+    if (scene_view == nullptr)
     {
+        log_trs_tool->trace("drag not possible - scene_view == nullptr");
         return false;
     }
 
-    const auto& tool = viewport_window->get_hover(Hover_entry::tool_slot);
+    const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
     if (!tool.valid || !tool.mesh)
     {
+        log_trs_tool->trace("drag not possible - !tool.valid || !tool.mesh");
         return false;
     }
-
-    m_active_handle = get_handle(tool.mesh.get());
 
     if (
         (m_active_handle == Handle::e_handle_none) ||
-        (root() == nullptr) ||
-        !viewport_window->position_in_viewport().has_value()
+        (root() == nullptr) ////||
+        ////!viewport_window->position_in_viewport().has_value()
     )
     {
+        log_trs_tool->trace("drag not possible - no handle, or no root");
         return false;
     }
 
-    const auto camera = viewport_window->get_camera();
+    const auto camera = scene_view->get_camera();
     if (!camera)
     {
+        log_trs_tool->trace("drag not possible - no camera");
         return false;
     }
 
@@ -865,7 +894,7 @@ auto Trs_tool::on_drag_ready() -> bool
     m_drag.initial_world_from_local  = root()->world_from_node();
     m_drag.initial_local_from_world  = root()->node_from_world();
     m_drag.initial_distance          = glm::distance(
-        glm::vec3{camera->position_in_world()},
+        glm::dvec3{camera->position_in_world()},
         tool.position.value()
     );
     if (m_target_node)
@@ -906,11 +935,52 @@ auto Trs_tool::on_drag_ready() -> bool
         auto* const rigid_body = m_node_physics->rigid_body();
         if (rigid_body != nullptr)
         {
+            log_trs_tool->trace("m_node_physics and rigid_body != nullptr -> rigid_body->begin_move()");
             rigid_body->begin_move();
         }
     }
 
+    log_trs_tool->trace("drag has been activated");
     return true;
+}
+
+void Trs_tool::end_drag(erhe::application::Command_context& context)
+{
+    log_trs_tool->trace("ending drag");
+
+    static_cast<void>(context);
+
+    m_active_handle                  = Handle::e_handle_none;
+    m_drag.initial_position_in_world = dvec3{0.0};
+    m_drag.initial_world_from_local  = dmat4{1};
+    m_drag.initial_distance          = 0.0;
+    update_visibility();
+
+    if (m_touched && m_target_node)
+    {
+        log_trs_tool->trace("m_touched && m_target_node -> creating transform operation");
+
+        m_operation_stack->push(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = m_target_node,
+                    .parent_from_node_before = m_drag.initial_parent_from_node_transform,
+                    .parent_from_node_after  = m_target_node->parent_from_node_transform()
+                }
+            )
+        );
+        m_touched = false;
+    }
+
+    if (m_node_physics)
+    {
+        log_trs_tool->trace("m_node_physics -> rigid_body->end_move()");
+
+        auto* const rigid_body = m_node_physics->rigid_body();
+        rigid_body->end_move();
+    }
+
+    log_trs_tool->trace("drag ended");
 }
 
 auto Trs_tool::get_axis_direction() const -> dvec3
@@ -935,12 +1005,17 @@ auto Trs_tool::get_axis_direction() const -> dvec3
     }
 }
 
-void Trs_tool::update_axis_translate()
+void Trs_tool::update_axis_translate_2d(Viewport_window* viewport_window)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    ////const auto viewport_window = m_viewport_windows->hover_window();
+    if (viewport_window == nullptr)
+    {
+        return;
+    }
+    const auto position_in_viewport_opt = viewport_window->get_position_in_viewport();
+    if (!position_in_viewport_opt.has_value())
     {
         return;
     }
@@ -962,7 +1037,7 @@ void Trs_tool::update_axis_translate()
     const auto  ss_closest = erhe::toolkit::closest_point<double>(
         dvec2{ss_P0},
         dvec2{ss_P1},
-        dvec2{viewport_window->position_in_viewport().value()}
+        dvec2{position_in_viewport_opt.value()}
     );
 
     if (ss_closest.has_value())
@@ -994,6 +1069,41 @@ void Trs_tool::update_axis_translate()
                 update_axis_translate_final(closest_points_q.value().P);
             }
         }
+    }
+}
+
+void Trs_tool::update_axis_translate_3d(Scene_view* scene_view)
+{
+    ERHE_PROFILE_FUNCTION
+
+    if (scene_view == nullptr)
+    {
+        log_trs_tool->trace("scene_view == nullptr");
+        return;
+    }
+
+    const dvec3 drag_world_direction = get_axis_direction();
+    const dvec3 P0 = m_drag.initial_position_in_world - drag_world_direction;
+    const dvec3 P1 = m_drag.initial_position_in_world + drag_world_direction;
+    const auto Q_origin_opt    = scene_view->get_control_ray_origin_in_world();
+    const auto Q_direction_opt = scene_view->get_control_ray_direction_in_world();
+    if (Q_origin_opt.has_value() && Q_direction_opt.has_value())
+    {
+        const auto Q0 = Q_origin_opt.value();
+        const auto Q1 = Q0 + Q_direction_opt.value();
+        const auto closest_points_q = erhe::toolkit::closest_points<double>(P0, P1, Q0, Q1);
+        if (closest_points_q.has_value())
+        {
+            update_axis_translate_final(closest_points_q.value().P);
+        }
+        else
+        {
+            log_trs_tool->trace("!closest_points_q.has_value()");
+        }
+    }
+    else
+    {
+        log_trs_tool->trace("! (Q_origin_opt.has_value() && Q_direction_opt.has_value())");
     }
 }
 
@@ -1128,12 +1238,11 @@ auto Trs_tool::get_plane_side(const bool world) const -> dvec3
     }
 }
 
-void Trs_tool::update_plane_translate()
+void Trs_tool::update_plane_translate_2d(Viewport_window* viewport_window)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    if (viewport_window == nullptr)
     {
         return;
     }
@@ -1151,6 +1260,46 @@ void Trs_tool::update_plane_translate()
     }
     const dvec3 Q0 = Q0_opt.value();
     const dvec3 Q1 = Q1_opt.value();
+    const dvec3 v  = normalize(Q1 - Q0);
+
+    const auto intersection = erhe::toolkit::intersect_plane<double>(world_n, p0, Q0, v);
+    if (!intersection.has_value())
+    {
+        return;
+    }
+
+    const dvec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
+    const dvec3 translation_vector               = drag_point_new_position_in_world - m_drag.initial_position_in_world;
+    const dvec3 snapped_translation              = snap_translate(translation_vector);
+    const dmat4 translation                      = erhe::toolkit::create_translation<double>(snapped_translation);
+    const dmat4 world_from_node                  = translation * m_drag.initial_world_from_local;
+
+    set_node_world_transform(world_from_node);
+    update_transforms();
+}
+
+void Trs_tool::update_plane_translate_3d(Scene_view* scene_view)
+{
+    ERHE_PROFILE_FUNCTION
+
+    if (scene_view == nullptr)
+    {
+        return;
+    }
+
+    const dvec3 p0      = m_drag.initial_position_in_world;
+    const dvec3 world_n = get_plane_normal(!m_local);
+    const auto  Q_origin_opt    = scene_view->get_control_ray_origin_in_world();
+    const auto  Q_direction_opt = scene_view->get_control_ray_direction_in_world();
+    if (
+        !Q_origin_opt.has_value() ||
+        !Q_direction_opt.has_value()
+    )
+    {
+        return;
+    }
+    const dvec3 Q0 = Q_origin_opt.value();
+    const dvec3 Q1 = Q0 + Q_direction_opt.value();
     const dvec3 v  = normalize(Q1 - Q0);
 
     const auto intersection = erhe::toolkit::intersect_plane<double>(world_n, p0, Q0, v);
@@ -1295,15 +1444,15 @@ auto Trs_tool::update_rotate_parallel() -> bool
         return false;
     }
 
-    const auto p0_opt = viewport_window->near_position_in_world();
-    const auto p1_opt = viewport_window->far_position_in_world();
-    if (!p0_opt.has_value() || !p1_opt.has_value())
+    const auto p_origin_opt    = viewport_window->get_control_ray_origin_in_world();
+    const auto p_direction_opt = viewport_window->get_control_ray_direction_in_world();
+    if (!p_origin_opt.has_value() || !p_direction_opt.has_value())
     {
         return false;
     }
 
-    const auto p0        = glm::dvec3{p0_opt.value()};
-    const auto p1        = glm::dvec3{p1_opt.value()};
+    const auto p0        = p_origin_opt.value();
+    const auto p1        = p0 + p_direction_opt.value();
     const auto direction = glm::normalize(p1 - p0);
     const auto q0        = p0 + m_drag.initial_distance * direction;
 
@@ -1338,6 +1487,10 @@ void Trs_tool::update_rotate_final()
 
 void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
 {
+    if (root() == nullptr)
+    {
+        return;
+    }
     const auto& root_parent = root()->parent().lock();
     const dmat4 parent_from_world = root_parent
         ? dmat4{root_parent->node_from_world()} * world_from_node
@@ -1488,35 +1641,6 @@ void Trs_tool::tool_render(
     line_renderer.add_lines(red,                             { { p, r1 * side1 } } );
     line_renderer.add_lines(blue,                            { { p, snapped    } } );
     line_renderer.add_lines(get_axis_color(m_active_handle), { { p - 10.0 * n, p + 10.0 * n } } );
-}
-
-void Trs_tool::end_drag()
-{
-    m_active_handle                  = Handle::e_handle_none;
-    m_drag.initial_position_in_world = dvec3{0.0};
-    m_drag.initial_world_from_local  = dmat4{1};
-    m_drag.initial_distance          = 0.0;
-    update_visibility();
-
-    if (m_touched && m_target_node)
-    {
-        m_operation_stack->push(
-            std::make_shared<Node_transform_operation>(
-                Node_transform_operation::Parameters{
-                    .node                    = m_target_node,
-                    .parent_from_node_before = m_drag.initial_parent_from_node_transform,
-                    .parent_from_node_after  = m_target_node->parent_from_node_transform()
-                }
-            )
-        );
-        m_touched = false;
-    }
-
-    if (m_node_physics)
-    {
-        auto* const rigid_body = m_node_physics->rigid_body();
-        rigid_body->end_move();
-    }
 }
 
 auto Trs_tool::get_active_handle() const -> Handle

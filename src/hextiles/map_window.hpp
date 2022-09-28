@@ -151,14 +151,12 @@ public:
     auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
 
     // Overrides Imgui_window
-    auto flags               () -> ImGuiWindowFlags override;
-    auto consumes_mouse_input() const -> bool override;
-    void on_begin            () override;
-    void on_end              () override;
+    auto flags   () -> ImGuiWindowFlags override;
+    void on_begin() override;
+    void on_end  () override;
 
     // Public API
     void set_map(const std::shared_ptr<Map>& map);
-    //auto get_map              () const -> const std::shared_ptr<Map>&;
 
     // Commands
     auto mouse_scroll_try_ready() const -> bool;

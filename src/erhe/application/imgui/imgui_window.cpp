@@ -139,11 +139,6 @@ auto Imgui_window::flags() -> ImGuiWindowFlags
     return 0; //ImGuiWindowFlags_NoCollapse;
 }
 
-auto Imgui_window::consumes_mouse_input() const -> bool
-{
-    return false;
-}
-
 auto Imgui_window::has_toolbar() const -> bool
 {
     return false;
@@ -164,6 +159,12 @@ void Imgui_window::on_begin()
 
 void Imgui_window::on_end()
 {
+}
+
+auto Imgui_window::visit(Commands& commands) const -> bool
+{
+    static_cast<void>(commands);
+    return false;
 }
 
 #if 0

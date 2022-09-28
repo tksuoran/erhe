@@ -3,6 +3,8 @@
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 
+#include "mini/ini.h"
+
 namespace erhe::application {
 
 class Configuration
@@ -153,35 +155,44 @@ public:
     };
     Scene scene;
 
+    class Window_entry
+    {
+    public:
+        bool window{false};
+        bool hud_window{false};
+    };
+
+    void get_window(mINI::INIStructure& ini, const char* key, Window_entry& entry);
+
     class Windows
     {
     public:
-        bool brushes             {true};
-        bool commands            {false};
-        bool debug_view          {false};
-        bool debug_visualizations{false};
-        bool fly_camera          {false};
-        bool grid                {false};
-        bool layers              {false};
-        bool log                 {false};
-        bool materials           {true};
-        bool material_properties {true};
-        bool mesh_properties     {false};
-        bool node_properties     {true};
-        bool node_tree           {true};
-        bool operation_stack     {true};
-        bool operations          {true};
-        bool performance         {false};
-        bool pipelines           {false};
-        bool physics             {false};
-        bool physics_tool        {false};
-        bool post_processing     {false};
-        bool render_graph        {false};
-        bool tool_properties     {true};
-        bool trs                 {false};
-        bool view                {false};
-        bool viewport            {true};
-        bool viewport_config     {false};
+        Window_entry brushes             {false};
+        Window_entry commands            {false};
+        Window_entry debug_view          {false};
+        Window_entry debug_visualizations{false};
+        Window_entry fly_camera          {false};
+        Window_entry grid                {false};
+        Window_entry hover_tool          {false};
+        Window_entry layers              {false};
+        Window_entry log                 {false};
+        Window_entry materials           {false};
+        Window_entry material_properties {false};
+        Window_entry mesh_properties     {false};
+        Window_entry node_properties     {false};
+        Window_entry node_tree           {false};
+        Window_entry operation_stack     {false};
+        Window_entry operations          {false};
+        Window_entry performance         {false};
+        Window_entry pipelines           {false};
+        Window_entry physics             {false};
+        Window_entry physics_tool        {false};
+        Window_entry post_processing     {false};
+        Window_entry render_graph        {false};
+        Window_entry tool_properties     {false};
+        Window_entry trs                 {false};
+        Window_entry viewport            {true};
+        Window_entry viewport_config     {false};
     };
     Windows windows;
 

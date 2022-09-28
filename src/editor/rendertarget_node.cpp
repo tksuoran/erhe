@@ -262,28 +262,27 @@ auto Rendertarget_node::update_pointer() -> bool
     {
         return false;
     }
-    const auto opt_near_position_in_world = m_host_viewport_window.near_position_in_world();
-    const auto opt_far_position_in_world  = m_host_viewport_window.far_position_in_world();
+    const auto opt_origin_in_world    = m_host_viewport_window.get_control_ray_origin_in_world();
+    const auto opt_direction_in_world = m_host_viewport_window.get_control_ray_direction_in_world();
     if (
-        !opt_near_position_in_world.has_value() ||
-        !opt_far_position_in_world .has_value()
+        !opt_origin_in_world.has_value() ||
+        !opt_direction_in_world.has_value()
     )
     {
         return false;
     }
-    const glm::vec3 near_position_in_world = opt_near_position_in_world.value();
-    const glm::vec3 far_position_in_world  = opt_far_position_in_world .value();
-    const glm::vec3 near_position_in_mesh  = this->transform_point_from_world_to_local(near_position_in_world);
-    const glm::vec3 far_position_in_mesh   = this->transform_point_from_world_to_local(far_position_in_world);
-    const glm::vec3 ray_direction          = glm::normalize(far_position_in_mesh - near_position_in_mesh);
+    const glm::vec3 origin_position_in_world = opt_origin_in_world.value();
+    const glm::vec3 direction_in_world       = opt_direction_in_world.value();
+    const glm::vec3 origin_in_mesh           = this->transform_point_from_world_to_local(origin_position_in_world);
+    const glm::vec3 direction_in_mesh        = this->transform_direction_from_world_to_local(direction_in_world      );
 
     const glm::vec3 origo      { 0.0f, 0.0f, 0.0f};
     const glm::vec3 unit_axis_z{ 0.0f, 0.0f, 1.0f};
     const auto hit = erhe::toolkit::intersect_plane<float>(
         unit_axis_z,
         origo,
-        near_position_in_mesh,
-        ray_direction
+        origin_in_mesh,
+        direction_in_mesh
     );
 
     if (!hit.has_value())
@@ -292,7 +291,7 @@ auto Rendertarget_node::update_pointer() -> bool
     }
 
     {
-        const glm::vec3 hit_position_in_mesh = near_position_in_mesh + hit.value() * ray_direction;
+        const glm::vec3 hit_position_in_mesh = origin_in_mesh + hit.value() * direction_in_mesh;
         const glm::vec2 a{
             hit_position_in_mesh.x / m_local_width,
             hit_position_in_mesh.y / m_local_height

@@ -75,7 +75,6 @@ auto Primitive_buffer::update(
     const auto  entry_size         = m_primitive_interface.primitive_struct.size_bytes();
     const auto& offsets            = m_primitive_interface.offsets;
     const auto  primitive_gpu_data = buffer.map();
-    std::size_t primitive_index    = 0;
     m_writer.begin(buffer.target());
     for (const auto& mesh : meshes)
     {
@@ -160,8 +159,6 @@ auto Primitive_buffer::update(
 
                 m_id_offset += count;
             }
-
-            ++primitive_index;
         }
     }
 

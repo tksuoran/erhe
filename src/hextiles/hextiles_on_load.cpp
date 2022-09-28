@@ -120,7 +120,6 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     component_initialization_complete(true);
 
-    m_components.get<erhe::application::View              >()->hide();
     m_components.get<erhe::application::Log_window        >()->hide();
     m_components.get<erhe::application::Performance_window>()->hide();
     m_components.get<erhe::application::Pipelines         >()->hide();

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "scene/scene_view.hpp"
 
-#include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
@@ -32,28 +32,13 @@ namespace editor
 
 class Editor_scenes;
 class Hover_tool;
+class Scene_view;
 class Viewport_window;
 class Viewport_windows;
 
-class Hover_tool_hover_command
-    : public erhe::application::Command
-{
-public:
-    explicit Hover_tool_hover_command(Hover_tool& hover_tool)
-        : Command     {"Hover_tool.hover"}
-        , m_hover_tool{hover_tool}
-    {
-    }
-
-    auto try_call   (erhe::application::Command_context& context) -> bool override;
-    void on_inactive(erhe::application::Command_context& context) override;
-
-private:
-    Hover_tool& m_hover_tool;
-};
-
 class Hover_tool
-    : public erhe::components::Component
+    : public erhe::application::Imgui_window
+    , public erhe::components::Component
     , public Tool
 {
 public:
@@ -78,18 +63,22 @@ public:
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
+    void tool_hover (Scene_view* scene_view) override;
     void tool_render(const Render_context& context) override;
 
+    // Implements Imgui_window
+    void imgui() override;
+
     // Public API
-    [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
+    //[[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
 
     // Command
-    void on_inactive();
-    auto try_call() -> bool;
+    //void on_inactive  ();
+    //void on_scene_view(Scene_view* scene_view);
 
 private:
-    void deselect();
-    void select  ();
+    //void deselect();
+    //void select  ();
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
@@ -97,22 +86,24 @@ private:
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
-    Hover_tool_hover_command           m_hover_command;
+    std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
+    std::optional<glm::dvec3> m_origin;
+    std::optional<glm::dvec3> m_direction;
 
-    std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
-    std::size_t                        m_hover_primitive_index{0};
-    std::optional<glm::vec3>           m_hover_position_world;
-    std::optional<glm::vec3>           m_hover_normal;
-    bool                               m_hover_content        {false};
-    bool                               m_hover_tool           {false};
+    //std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
+    //std::size_t                        m_hover_primitive_index{0};
+    //std::optional<glm::vec3>           m_hover_position_world;
+    //std::optional<glm::vec3>           m_hover_normal;
+    //bool                               m_hover_content        {false};
+    //bool                               m_hover_tool           {false};
 
-    glm::vec4                                  m_hover_primitive_emissive{0.00f, 0.00f, 0.00f, 0.0f};
-    glm::vec4                                  m_hover_emissive          {0.05f, 0.05f, 0.10f, 0.0f};
-    std::shared_ptr<erhe::primitive::Material> m_original_primitive_material;
-    std::shared_ptr<erhe::primitive::Material> m_hover_material;
-    std::size_t                                m_hover_material_index{0};
+    //glm::vec4                                  m_hover_primitive_emissive{0.00f, 0.00f, 0.00f, 0.0f};
+    //glm::vec4                                  m_hover_emissive          {0.05f, 0.05f, 0.10f, 0.0f};
+    //std::shared_ptr<erhe::primitive::Material> m_original_primitive_material;
+    //std::shared_ptr<erhe::primitive::Material> m_hover_material;
+    //std::size_t                                m_hover_material_index{0};
 
-    bool m_enable_color_highlight{false};
+    //bool m_enable_color_highlight{false};
 };
 
 } // namespace editor

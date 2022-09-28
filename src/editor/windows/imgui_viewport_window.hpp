@@ -26,7 +26,6 @@ class Viewport_window;
 class Imgui_viewport_window
     : public erhe::application::Imgui_window
     , public erhe::application::Texture_rendergraph_node
-    , public erhe::application::Mouse_input_sink
 {
 public:
     static constexpr std::string_view c_type_name{"Imgui_viewport_window"};
@@ -50,10 +49,10 @@ public:
     auto has_toolbar         () const -> bool override { return true; }
     void toolbar             () override;
     auto get_window_type_hash() const -> uint32_t override { return c_type_hash; }
-    auto consumes_mouse_input() const -> bool override;
     void on_begin            () override;
     void on_end              () override;
     void set_viewport        (erhe::application::Imgui_viewport* imgui_viewport) override;
+    auto visit               (erhe::application::Commands& commands) const -> bool override;
 
     // Implements Rendergraph_node
     [[nodiscard]] auto get_consumer_input_viewport(

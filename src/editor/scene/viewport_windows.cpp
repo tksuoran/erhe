@@ -101,6 +101,7 @@ void Viewport_windows::post_initialize()
     m_editor_rendering       = get<Editor_rendering>();
     m_id_renderer            = get<Id_renderer     >();
     m_viewport_config        = get<Viewport_config >();
+    m_tools                  = get<Tools           >();
 }
 
 void Viewport_windows::erase(Viewport_window* viewport_window)
@@ -389,8 +390,6 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
             continue;
         }
 
-        viewport_window->reset_pointer_context();
-
         if (imgui_viewport_window->is_hovered())
         {
             const glm::vec2 viewport_position = viewport_window->to_scene_content(
@@ -415,6 +414,14 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
             m_last_window = viewport_window;
             m_hover_stack.push_back(m_last_window);
         }
+        else
+        {
+            viewport_window->reset_control_ray();
+        }
+
+        // TODO same on both hover and non-hover?
+        // TODO Only call when transitioning from hover to non-hover
+        m_tools->on_hover(viewport_window.get());
     }
 }
 
@@ -427,8 +434,6 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
         {
             continue;
         }
-
-        viewport_window->reset_pointer_context();
 
         const erhe::scene::Viewport& viewport = basic_viewport_window->get_viewport();
         const bool is_hoverered = viewport.hit_test(
@@ -463,6 +468,14 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
             m_last_window = viewport_window;
             m_hover_stack.push_back(m_last_window);
         }
+        else
+        {
+            viewport_window->reset_control_ray();
+        }
+
+        // TODO same on both hover and non-hover?
+        // TODO Only call when transitioning from hover to non-hover
+        m_tools->on_hover(viewport_window.get());
     }
 }
 

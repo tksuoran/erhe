@@ -2,7 +2,6 @@
 #include "erhe/application/application_log.hpp"
 
 #include "erhe/graphics/state/depth_stencil_state.hpp"
-#include "mini/ini.h"
 
 #include <cxxopts.hpp>
 
@@ -89,6 +88,20 @@ void ini_get(
         {
             destination = false;
         }
+    }
+}
+
+void Configuration::get_window(mINI::INIStructure& ini, const char* key, Window_entry& entry)
+{
+    if (ini.has("windows"))
+    {
+        const auto& section = ini["windows"];
+        ini_get(section, key, entry.window);
+    }
+    if (ini.has("hud_windows"))
+    {
+        const auto& section = ini["hud_windows"];
+        ini_get(section, key, entry.hud_window);
     }
 }
 
@@ -181,37 +194,32 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "enabled", physics.enabled);
         }
 
-        if (ini.has("windows"))
-        {
-            const auto& section = ini["windows"];
-
-            ini_get(section, "brushes",              windows.brushes             );
-            ini_get(section, "commands",             windows.commands            );
-            ini_get(section, "debug_view",           windows.debug_view          );
-            ini_get(section, "debug_visualizations", windows.debug_visualizations);
-            ini_get(section, "fly_camera",           windows.fly_camera          );
-            ini_get(section, "grid",                 windows.grid                );
-            ini_get(section, "layers",               windows.layers              );
-            ini_get(section, "log",                  windows.log                 );
-            ini_get(section, "materials",            windows.materials           );
-            ini_get(section, "material_properties",  windows.material_properties );
-            ini_get(section, "mesh_properties",      windows.mesh_properties     );
-            ini_get(section, "node_properties",      windows.node_properties     );
-            ini_get(section, "node_tree",            windows.node_tree           );
-            ini_get(section, "operation_stack",      windows.operation_stack     );
-            ini_get(section, "operations",           windows.operations          );
-            ini_get(section, "performance",          windows.performance         );
-            ini_get(section, "pipelines",            windows.pipelines           );
-            ini_get(section, "physics",              windows.physics             );
-            ini_get(section, "physics_tool",         windows.physics_tool        );
-            ini_get(section, "post_processing",      windows.post_processing     );
-            ini_get(section, "render_graph",         windows.render_graph        );
-            ini_get(section, "tool_properties",      windows.tool_properties     );
-            ini_get(section, "trs",                  windows.trs                 );
-            ini_get(section, "view",                 windows.view                );
-            ini_get(section, "viewport",             windows.viewport            );
-            ini_get(section, "viewport_config",      windows.viewport_config     );
-        }
+        get_window(ini, "brushes",              windows.brushes             );
+        get_window(ini, "commands",             windows.commands            );
+        get_window(ini, "debug_view",           windows.debug_view          );
+        get_window(ini, "debug_visualizations", windows.debug_visualizations);
+        get_window(ini, "fly_camera",           windows.fly_camera          );
+        get_window(ini, "grid",                 windows.grid                );
+        get_window(ini, "hover_tool",           windows.hover_tool          );
+        get_window(ini, "layers",               windows.layers              );
+        get_window(ini, "log",                  windows.log                 );
+        get_window(ini, "materials",            windows.materials           );
+        get_window(ini, "material_properties",  windows.material_properties );
+        get_window(ini, "mesh_properties",      windows.mesh_properties     );
+        get_window(ini, "node_properties",      windows.node_properties     );
+        get_window(ini, "node_tree",            windows.node_tree           );
+        get_window(ini, "operation_stack",      windows.operation_stack     );
+        get_window(ini, "operations",           windows.operations          );
+        get_window(ini, "performance",          windows.performance         );
+        get_window(ini, "pipelines",            windows.pipelines           );
+        get_window(ini, "physics",              windows.physics             );
+        get_window(ini, "physics_tool",         windows.physics_tool        );
+        get_window(ini, "post_processing",      windows.post_processing     );
+        get_window(ini, "render_graph",         windows.render_graph        );
+        get_window(ini, "tool_properties",      windows.tool_properties     );
+        get_window(ini, "trs",                  windows.trs                 );
+        get_window(ini, "viewport",             windows.viewport            );
+        get_window(ini, "viewport_config",      windows.viewport_config     );
 
         if (ini.has("scene"))
         {

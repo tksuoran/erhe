@@ -31,7 +31,7 @@ void Command::on_inactive(Command_context& context)
     static_cast<void>(context);
 }
 
-auto Command::state() const -> State
+auto Command::get_tool_state() const -> State
 {
     return m_state;
 }
@@ -40,7 +40,7 @@ void Command::set_inactive(Command_context& context)
 {
     log_command_state_transition->trace(
         "{} -> inactive",
-        name()
+        get_name()
     );
     on_inactive(context);
     m_state = State::Inactive;
@@ -49,7 +49,7 @@ void Command::set_inactive(Command_context& context)
 
 void Command::disable(Command_context& context)
 {
-    log_command_state_transition->trace("{} -> disabled", name());
+    log_command_state_transition->trace("{} -> disabled", get_name());
     if (m_state == State::Active)
     {
         set_inactive(context);
@@ -63,25 +63,25 @@ void Command::enable(Command_context& context)
     {
         return;
     }
-    log_command_state_transition->trace("{} -> enabled", name());
+    log_command_state_transition->trace("{} -> enabled", get_name());
     set_inactive(context);
 };
 
 void Command::set_ready(Command_context& context)
 {
     static_cast<void>(context);
-    log_command_state_transition->trace("{} -> ready", name());
+    log_command_state_transition->trace("{} -> ready", get_name());
     m_state = State::Ready;
 }
 
 void Command::set_active(Command_context& context)
 {
     static_cast<void>(context);
-    log_command_state_transition->trace("{} -> active", name());
+    log_command_state_transition->trace("{} -> active", get_name());
     m_state = State::Active;
 }
 
-auto Command::name() const -> const char*
+auto Command::get_name() const -> const char*
 {
     return m_name;
 }

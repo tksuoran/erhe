@@ -75,6 +75,7 @@ void Fly_camera_turn_command::try_ready(
 
 auto Fly_camera_tool::try_ready() -> bool
 {
+    // TODO use scene_view instead?
     const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
@@ -91,12 +92,13 @@ auto Fly_camera_tool::try_ready() -> bool
 
     // Exclude safe border near viewport edges from mouse interaction
     // to filter out viewport window resizing for example.
-    if (!viewport_window->position_in_viewport().has_value())
+    const auto position_opt = viewport_window->get_position_in_viewport();
+    if (!position_opt.has_value())
     {
         return false;
     }
     constexpr float border   = 32.0f;
-    const glm::vec2 position = viewport_window->position_in_viewport().value();
+    const glm::vec2 position = position_opt.value();
     const erhe::scene::Viewport viewport = viewport_window->projection_viewport();
     if (
         (position.x <  border) ||
@@ -119,13 +121,18 @@ auto Fly_camera_turn_command::try_call(
     {
         return false;
     }
-    if (state() == erhe::application::State::Ready)
+    if (get_tool_state() == erhe::application::State::Ready)
     {
         set_active(context);
     }
 
-    if (state() != erhe::application::State::Active)
+    if (get_tool_state() != erhe::application::State::Active)
     {
+        return false;
+    }
+    if (context.get_input_context() == nullptr)
+    {
+        set_inactive(context);
         return false;
     }
 

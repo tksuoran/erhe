@@ -40,13 +40,9 @@ void Corner::smooth_normalize(
     const T    polygon_value  = polygon_attribute.get(polygon_id);
     T          corner_value   = polygon_value;
 
-    std::size_t point_corner_count{0};
-    std::size_t participant_count {0};
-
     const Point& point = geometry.points[point_id];
     point.for_each_corner_const(geometry, [&](const auto& i)
     {
-        ++point_corner_count;
         const Polygon_id neighbor_polygon_id = i.corner.polygon_id;
         const Polygon&   neighbor_polygon    = geometry.polygons[polygon_id];
 
@@ -76,7 +72,6 @@ void Corner::smooth_normalize(
             if (cos_angle <= cos_max_smoothing_angle)
             {
                 corner_value += polygon_attribute.get(neighbor_polygon_id);
-                ++participant_count;
             }
         }
     });
