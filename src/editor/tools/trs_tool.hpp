@@ -17,6 +17,11 @@
 #include <optional>
 #include <string_view>
 
+namespace erhe::application
+{
+    class Configuration;
+}
+
 namespace erhe::geometry
 {
     class Geometry;
@@ -139,6 +144,7 @@ public:
     void viewport_toolbar();
     void set_translate   (const bool enabled);
     void set_rotate      (const bool enabled);
+    [[nodiscard]] auto is_active() const -> bool;
 
     // Commands
     auto on_drag_ready(erhe::application::Command_context& context) -> bool;
@@ -242,8 +248,9 @@ private:
         ) -> std::shared_ptr<erhe::primitive::Material>;
 
         void initialize(
-            Mesh_memory& mesh_memory,
-            Scene_root&  scene_root
+            const erhe::application::Configuration& configuration,
+            Mesh_memory&                            mesh_memory,
+            Scene_root&                             scene_root
         );
 
         void update_visibility(const bool show);
@@ -301,7 +308,7 @@ private:
         std::vector<std::shared_ptr<Raytrace_primitive>> rt_primitives;
     };
 
-    [[nodiscard]] auto project_pointer_to_plane(const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
     [[nodiscard]] auto root                    () -> erhe::scene::Node*;
     [[nodiscard]] auto snap_translate          (const glm::dvec3 translation) const -> glm::dvec3;
     [[nodiscard]] auto snap_rotate             (const double angle_radians) const -> double;
@@ -328,9 +335,9 @@ private:
     void update_axis_translate_final(const glm::dvec3 drag_position);
     void update_plane_translate_2d  (Viewport_window* viewport_window);
     void update_plane_translate_3d  (Scene_view* scene_view);
-    void update_rotate              ();
-    auto update_rotate_circle_around() -> bool;
-    auto update_rotate_parallel     () -> bool;
+    void update_rotate              (Scene_view* scene_view);
+    auto update_rotate_circle_around(Scene_view* scene_view) -> bool;
+    auto update_rotate_parallel     (Scene_view* scene_view) -> bool;
     void update_rotate_final        ();
     void set_node_world_transform   (const glm::dmat4 world_from_node);
     void set_scene_changed          ();

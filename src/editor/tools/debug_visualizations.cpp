@@ -11,6 +11,7 @@
 #include "scene/viewport_window.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
+#include "tools/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"
@@ -54,6 +55,7 @@ void Debug_visualizations::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_selection_tool    = get<Selection_tool >();
+    m_trs_tool          = get<Trs_tool       >();
     m_viewport_config   = get<Viewport_config>();
 }
 
@@ -489,6 +491,11 @@ void Debug_visualizations::tool_render(
 )
 {
     if (m_line_renderer_set == nullptr)
+    {
+        return;
+    }
+
+    if (m_trs_tool && m_trs_tool->is_active())
     {
         return;
     }

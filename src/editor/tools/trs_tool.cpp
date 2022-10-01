@@ -18,6 +18,7 @@
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -154,6 +155,7 @@ auto Trs_tool::description() -> const char*
 void Trs_tool::declare_required_components()
 {
     require<erhe::application::Commands           >();
+    require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
     m_editor_scenes  = require<Editor_scenes >();
@@ -178,7 +180,7 @@ void Trs_tool::initialize_component()
     {
         return;
     }
-    m_visualization.initialize(*m_mesh_memory, *tool_scene_root.get());
+    m_visualization.initialize(*Component::get<erhe::application::Configuration>(), *m_mesh_memory, *tool_scene_root.get());
     m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_x;
@@ -228,6 +230,11 @@ void Trs_tool::post_initialize()
     m_text_renderer     = get<erhe::application::Text_renderer    >();
     m_operation_stack   = get<Operation_stack>();
     m_viewport_windows  = get<Viewport_windows>();
+}
+
+[[nodiscard]] auto Trs_tool::is_active() const -> bool
+{
+    return m_active_handle != Handle::e_handle_none;
 }
 
 void Trs_tool::set_translate(const bool enabled)
@@ -569,11 +576,16 @@ auto Trs_tool::Visualization::get_handle_material(
 }
 
 void Trs_tool::Visualization::initialize(
-    Mesh_memory& mesh_memory,
-    Scene_root&  scene_root
+    const erhe::application::Configuration& configuration,
+    Mesh_memory&                            mesh_memory,
+    Scene_root&                             scene_root
 )
 {
     ERHE_PROFILE_FUNCTION
+
+    this->scale          = configuration.trs_tool.scale;
+    this->show_translate = configuration.trs_tool.show_translate;
+    this->show_rotate    = configuration.trs_tool.show_rotate;
 
     material_library = scene_root.material_library();
 
@@ -896,7 +908,7 @@ auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
 
         case Handle_type::e_handle_type_rotate:
         {
-            update_rotate();
+            update_rotate(scene_view);
             return true;
         }
 
@@ -973,7 +985,7 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         const dvec3 n            = get_plane_normal(world);
         const dvec3 side         = get_plane_side  (world);
         const dvec3 center       = root()->position_in_world();
-        const auto  intersection = project_pointer_to_plane(n, center);
+        const auto  intersection = project_pointer_to_plane(scene_view, n, center);
         if (intersection.has_value())
         {
             const dvec3 direction = normalize(intersection.value() - center);
@@ -1414,28 +1426,26 @@ auto Trs_tool::project_to_offset_plane(
     }
 }
 
-auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> std::optional<dvec3>
+auto Trs_tool::project_pointer_to_plane(Scene_view* scene_view, const dvec3 n, const dvec3 p) -> std::optional<dvec3>
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    if (scene_view == nullptr)
     {
         return {};
     }
 
-    const auto near_opt = viewport_window->position_in_world_viewport_depth(0.0);
-    const auto far_opt  = viewport_window->position_in_world_viewport_depth(1.0);
+    const auto origin_opt    = scene_view->get_control_ray_origin_in_world();
+    const auto direction_opt = scene_view->get_control_ray_direction_in_world();
     if (
-        !near_opt.has_value() ||
-        !far_opt.has_value()
+        !origin_opt.has_value() ||
+        !direction_opt.has_value()
     )
     {
         return {};
     }
 
-    const dvec3 q0           = near_opt.value();
-    const dvec3 q1           = far_opt .value();
-    const dvec3 v            = normalize(q1 - q0);
-    const auto  intersection = erhe::toolkit::intersect_plane<double>(n, p, q0, v);
+    const glm::dvec3 q0           = origin_opt.value();
+    const glm::dvec3 v            = direction_opt.value();
+    const auto       intersection = erhe::toolkit::intersect_plane<double>(n, p, q0, v);
     if (intersection.has_value())
     {
         return q0 + intersection.value() * v;
@@ -1443,25 +1453,13 @@ auto Trs_tool::project_pointer_to_plane(const dvec3 n, const dvec3 p) -> std::op
     return {};
 }
 
-void Trs_tool::update_rotate()
+void Trs_tool::update_rotate(Scene_view* scene_view)
 {
     ERHE_PROFILE_FUNCTION
 
     // log_trs_tool->trace("update_rotate()");
 
     if (root() == nullptr)
-    {
-        return;
-    }
-
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
-    {
-        return;
-    }
-
-    const auto camera = viewport_window->get_camera();
-    if (!camera)
     {
         return;
     }
@@ -1478,12 +1476,12 @@ void Trs_tool::update_rotate()
     //log_trs_tool->trace("V.N = {}", v_dot_n);
     //if (std::abs(v_dot_n) > c_parallel_threshold) TODO
     {
-        ready_to_rotate = update_rotate_circle_around();
+        ready_to_rotate = update_rotate_circle_around(scene_view);
     }
 
     if (!ready_to_rotate)
     {
-        ready_to_rotate = update_rotate_parallel();
+        ready_to_rotate = update_rotate_parallel(scene_view);
     }
     if (ready_to_rotate)
     {
@@ -1491,33 +1489,31 @@ void Trs_tool::update_rotate()
     }
 }
 
-auto Trs_tool::update_rotate_circle_around() -> bool
+auto Trs_tool::update_rotate_circle_around(Scene_view* scene_view) -> bool
 {
     m_rotation.intersection = project_pointer_to_plane(
+        scene_view,
         m_rotation.normal,
         m_rotation.center_of_rotation
     );
     return m_rotation.intersection.has_value();
 }
 
-auto Trs_tool::update_rotate_parallel() -> bool
+auto Trs_tool::update_rotate_parallel(Scene_view* scene_view) -> bool
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    if (scene_view == nullptr)
     {
         return false;
     }
-
-    const auto p_origin_opt    = viewport_window->get_control_ray_origin_in_world();
-    const auto p_direction_opt = viewport_window->get_control_ray_direction_in_world();
+    const auto p_origin_opt    = scene_view->get_control_ray_origin_in_world();
+    const auto p_direction_opt = scene_view->get_control_ray_direction_in_world();
     if (!p_origin_opt.has_value() || !p_direction_opt.has_value())
     {
         return false;
     }
 
     const auto p0        = p_origin_opt.value();
-    const auto p1        = p0 + p_direction_opt.value();
-    const auto direction = glm::normalize(p1 - p0);
+    const auto direction = p_direction_opt.value();
     const auto q0        = p0 + m_drag.initial_distance * direction;
 
     m_rotation.intersection = project_to_offset_plane(

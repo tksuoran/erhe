@@ -295,6 +295,14 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "velocity_max_delta", camera_controls.velocity_max_delta);
             ini_get(section, "sensitivity",        camera_controls.sensitivity);
         }
+
+        if (ini.has("trs_tool"))
+        {
+            const auto& section = ini["trs_tool"];
+            ini_get(section, "scale",          trs_tool.scale);
+            ini_get(section, "show_translate", trs_tool.show_translate);
+            ini_get(section, "show_rotate",    trs_tool.show_rotate);
+        }
     }
 
     cxxopts::Options options("Editor", "Erhe Editor (C) 2022 Timo Suoranta");

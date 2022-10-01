@@ -249,6 +249,15 @@ public:
         float sensitivity       {1.0f};
     };
     Camera_controls camera_controls;
+
+    class Trs_tool
+    {
+    public:
+        float scale         {4.0f};
+        bool  show_translate{true};
+        bool  show_rotate   {false};
+    };
+    Trs_tool trs_tool;
 };
 
 } // namespace erhe::application

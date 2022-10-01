@@ -29,6 +29,7 @@ namespace editor
 
 class Scene_root;
 class Selection_tool;
+class Trs_tool;
 class Viewport_config;
 
 class Debug_visualizations
@@ -91,6 +92,7 @@ private:
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Viewport_config>                      m_viewport_config;
     std::shared_ptr<Selection_tool>                       m_selection_tool;
+    std::shared_ptr<Trs_tool>                             m_trs_tool;
     erhe::toolkit::Bounding_volume_combiner               m_selection_bounding_volume;
 };
 
