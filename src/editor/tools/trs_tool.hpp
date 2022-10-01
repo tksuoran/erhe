@@ -284,11 +284,14 @@ private:
         std::shared_ptr<erhe::primitive::Material> y_active_material;
         std::shared_ptr<erhe::primitive::Material> z_active_material;
         std::shared_ptr<erhe::scene::Mesh>         x_arrow_cylinder_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         x_arrow_cone_mesh;
+        std::shared_ptr<erhe::scene::Mesh>         x_arrow_neg_cone_mesh;
+        std::shared_ptr<erhe::scene::Mesh>         x_arrow_pos_cone_mesh;
         std::shared_ptr<erhe::scene::Mesh>         y_arrow_cylinder_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         y_arrow_cone_mesh;
+        std::shared_ptr<erhe::scene::Mesh>         y_arrow_neg_cone_mesh;
+        std::shared_ptr<erhe::scene::Mesh>         y_arrow_pos_cone_mesh;
         std::shared_ptr<erhe::scene::Mesh>         z_arrow_cylinder_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         z_arrow_cone_mesh;
+        std::shared_ptr<erhe::scene::Mesh>         z_arrow_neg_cone_mesh;
+        std::shared_ptr<erhe::scene::Mesh>         z_arrow_pos_cone_mesh;
         std::shared_ptr<erhe::scene::Mesh>         xy_box_mesh;
         std::shared_ptr<erhe::scene::Mesh>         xz_box_mesh;
         std::shared_ptr<erhe::scene::Mesh>         yz_box_mesh;

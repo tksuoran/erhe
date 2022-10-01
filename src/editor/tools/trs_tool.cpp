@@ -180,11 +180,14 @@ void Trs_tool::initialize_component()
     }
     m_visualization.initialize(*m_mesh_memory, *tool_scene_root.get());
     m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
-    m_handles[m_visualization.x_arrow_cone_mesh    .get()] = Handle::e_handle_translate_x;
+    m_handles[m_visualization.x_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_x;
+    m_handles[m_visualization.x_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.y_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_y;
-    m_handles[m_visualization.y_arrow_cone_mesh    .get()] = Handle::e_handle_translate_y;
+    m_handles[m_visualization.y_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_y;
+    m_handles[m_visualization.y_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_y;
     m_handles[m_visualization.z_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_z;
-    m_handles[m_visualization.z_arrow_cone_mesh    .get()] = Handle::e_handle_translate_z;
+    m_handles[m_visualization.z_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_z;
+    m_handles[m_visualization.z_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_z;
     m_handles[m_visualization.xy_box_mesh          .get()] = Handle::e_handle_translate_xy;
     m_handles[m_visualization.xz_box_mesh          .get()] = Handle::e_handle_translate_xz;
     m_handles[m_visualization.yz_box_mesh          .get()] = Handle::e_handle_translate_yz;
@@ -334,26 +337,29 @@ void Trs_tool::Visualization::update_mesh_visibility(
 {
     const auto active_handle = trs_tool.get_active_handle();
     const auto hover_handle  = trs_tool.get_hover_handle();
-    const bool show_all      = is_visible && (active_handle == Handle::e_handle_none);
+    const bool show_all      = is_visible && (active_handle == Handle::e_handle_none); // nothing is active, so show all handles
     const auto handle        = trs_tool.get_handle(mesh.get());
     const bool show          = get_handle_visibility(handle);
+    const bool translate_x   = trs_tool.is_x_translate_active() && (handle == Handle::e_handle_translate_x);
+    const bool translate_y   = trs_tool.is_y_translate_active() && (handle == Handle::e_handle_translate_y);
+    const bool translate_z   = trs_tool.is_z_translate_active() && (handle == Handle::e_handle_translate_z);
     mesh->set_visibility_mask(
         show &&
         (
             !hide_inactive ||
             (active_handle == handle) ||
+            (translate_x || translate_y || translate_z) ||
             show_all
         )
             ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id)
             : erhe::scene::Node_visibility::tool
     );
 
-    const Mode mode = (active_handle == handle)
+    const Mode mode = (active_handle == handle) || (translate_x || translate_y || translate_z)
         ? Mode::Active
         : (hover_handle == handle)
             ? Mode::Hover
             : Mode::Normal;
-    log_trs_tool->info("mode = {}", static_cast<int>(mode));
     mesh->mesh_data.primitives.front().material = get_handle_material(handle, mode);
 }
 
@@ -363,11 +369,14 @@ void Trs_tool::Visualization::update_visibility(
 {
     is_visible = visible;
     update_mesh_visibility(x_arrow_cylinder_mesh);
-    update_mesh_visibility(x_arrow_cone_mesh    );
+    update_mesh_visibility(x_arrow_neg_cone_mesh);
+    update_mesh_visibility(x_arrow_pos_cone_mesh);
     update_mesh_visibility(y_arrow_cylinder_mesh);
-    update_mesh_visibility(y_arrow_cone_mesh    );
+    update_mesh_visibility(y_arrow_neg_cone_mesh);
+    update_mesh_visibility(y_arrow_pos_cone_mesh);
     update_mesh_visibility(z_arrow_cylinder_mesh);
-    update_mesh_visibility(z_arrow_cone_mesh    );
+    update_mesh_visibility(z_arrow_neg_cone_mesh);
+    update_mesh_visibility(z_arrow_pos_cone_mesh);
     update_mesh_visibility(xy_box_mesh          );
     update_mesh_visibility(xz_box_mesh          );
     update_mesh_visibility(yz_box_mesh          );
@@ -423,7 +432,7 @@ namespace {
     constexpr float arrow_cylinder_radius    = 0.08f;
     constexpr float arrow_cone_length        = 1.0f;
     constexpr float arrow_cone_radius        = 0.35f;
-    constexpr float box_half_thickness       = 0.02f;
+    constexpr float box_half_thickness       = 0.1f;
     constexpr float box_length               = 1.0f;
     constexpr float rotate_ring_major_radius = 4.0f;
     constexpr float rotate_ring_minor_radius = 0.1f;
@@ -437,7 +446,7 @@ auto Trs_tool::Visualization::make_arrow_cylinder(
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_cylinder(
-            0.0,
+            -arrow_cylinder_length,
             arrow_cylinder_length,
             arrow_cylinder_radius,
             true,
@@ -482,9 +491,9 @@ auto Trs_tool::Visualization::make_box(
 {
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_box(
-            0.0,
+            -box_length,
             box_length,
-            0.0,
+            -box_length,
             box_length,
             -box_half_thickness,
             box_half_thickness
@@ -590,11 +599,14 @@ void Trs_tool::Visualization::initialize(
     const auto rotate_ring    = make_rotate_ring   (mesh_memory);
 
     x_arrow_cylinder_mesh  = make_mesh(scene_root, "X arrow cylinder", x_material, arrow_cylinder);
-    x_arrow_cone_mesh      = make_mesh(scene_root, "X arrow cone",     x_material, arrow_cone    );
+    x_arrow_neg_cone_mesh  = make_mesh(scene_root, "X arrow cone",     x_material, arrow_cone    );
+    x_arrow_pos_cone_mesh  = make_mesh(scene_root, "X arrow cone",     x_material, arrow_cone    );
     y_arrow_cylinder_mesh  = make_mesh(scene_root, "Y arrow cylinder", y_material, arrow_cylinder);
-    y_arrow_cone_mesh      = make_mesh(scene_root, "Y arrow cone",     y_material, arrow_cone    );
+    y_arrow_neg_cone_mesh  = make_mesh(scene_root, "Y arrow cone",     y_material, arrow_cone    );
+    y_arrow_pos_cone_mesh  = make_mesh(scene_root, "Y arrow cone",     y_material, arrow_cone    );
     z_arrow_cylinder_mesh  = make_mesh(scene_root, "Z arrow cylinder", z_material, arrow_cylinder);
-    z_arrow_cone_mesh      = make_mesh(scene_root, "Z arrow cone",     z_material, arrow_cone    );
+    z_arrow_neg_cone_mesh  = make_mesh(scene_root, "Z arrow cone",     z_material, arrow_cone    );
+    z_arrow_pos_cone_mesh  = make_mesh(scene_root, "Z arrow cone",     z_material, arrow_cone    );
     xy_box_mesh            = make_mesh(scene_root, "XY box",           z_material, box           );
     xz_box_mesh            = make_mesh(scene_root, "XZ box",           y_material, box           );
     yz_box_mesh            = make_mesh(scene_root, "YZ box",           x_material, box           );
@@ -602,21 +614,32 @@ void Trs_tool::Visualization::initialize(
     y_rotate_ring_mesh     = make_mesh(scene_root, "Y rotate ring",    y_material, rotate_ring   );
     z_rotate_ring_mesh     = make_mesh(scene_root, "Z rotate ring",    z_material, rotate_ring   );
 
-    x_arrow_cylinder_mesh->set_parent_from_node(mat4{1});
-    x_arrow_cone_mesh    ->set_parent_from_node(mat4{1});
-
     using erhe::scene::Transform;
-    y_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
-    y_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
-    z_arrow_cylinder_mesh->set_parent_from_node(Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
-    z_arrow_cone_mesh    ->set_parent_from_node(Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+    const auto rotate_z_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
+    const auto rotate_z_neg_90  = Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
+    const auto rotate_x_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f});
+    const auto rotate_y_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
+    const auto rotate_y_neg_90  = Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f});
+    const auto rotate_y_pos_180 = Transform::create_rotation(-glm::pi<float>()       , vec3{0.0f, 1.0f, 0.0f});
+
+    x_arrow_cylinder_mesh->set_parent_from_node(mat4{1});
+    x_arrow_neg_cone_mesh->set_parent_from_node(rotate_y_pos_180);
+    x_arrow_pos_cone_mesh->set_parent_from_node(mat4{1});
+
+    y_arrow_cylinder_mesh->set_parent_from_node(rotate_z_pos_90);
+    y_arrow_neg_cone_mesh->set_parent_from_node(rotate_z_neg_90);
+    y_arrow_pos_cone_mesh->set_parent_from_node(rotate_z_pos_90);
+    z_arrow_cylinder_mesh->set_parent_from_node(rotate_y_neg_90);
+    z_arrow_neg_cone_mesh->set_parent_from_node(rotate_y_pos_90);
+    z_arrow_pos_cone_mesh->set_parent_from_node(rotate_y_neg_90);
+
     xy_box_mesh          ->set_parent_from_node(mat4{1});
-    xz_box_mesh          ->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f}));
-    yz_box_mesh          ->set_parent_from_node(Transform::create_rotation(-glm::pi<float>() / 2.0f, vec3{0.0f, 1.0f, 0.0f}));
+    xz_box_mesh          ->set_parent_from_node(rotate_x_pos_90);
+    yz_box_mesh          ->set_parent_from_node(rotate_y_neg_90);
 
     y_rotate_ring_mesh->set_parent_from_node(mat4{1});
-    x_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f}));
-    z_rotate_ring_mesh->set_parent_from_node(Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{1.0f, 0.0f, 0.0f}));
+    x_rotate_ring_mesh->set_parent_from_node(rotate_z_pos_90);
+    z_rotate_ring_mesh->set_parent_from_node(rotate_x_pos_90);
 
     update_visibility(false);
 }
