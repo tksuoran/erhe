@@ -53,10 +53,11 @@ namespace editor
 {
 
 class Editor_scenes;
-class Node_physics;
-class Node_raytrace;
+class Material_library;
 class Materials;
 class Mesh_memory;
+class Node_physics;
+class Node_raytrace;
 class Operation_stack;
 class Raytrace_primitive;
 class Scene_view;
@@ -213,6 +214,12 @@ private:
     public:
         explicit Visualization(Trs_tool& trs_tool);
 
+        enum class Mode : unsigned int
+        {
+            Normal = 0,
+            Hover  = 1,
+            Active = 2
+        };
         class Part
         {
         public:
@@ -225,13 +232,20 @@ private:
         [[nodiscard]] auto make_arrow_cone      (Mesh_memory& mesh_memory) -> Part;
         [[nodiscard]] auto make_box             (Mesh_memory& mesh_memory) -> Part;
         [[nodiscard]] auto make_rotate_ring     (Mesh_memory& mesh_memory) -> Part;
-        [[nodiscard]] auto get_handle_material  (const Handle handle) -> std::shared_ptr<erhe::primitive::Material>;
-        [[nodiscard]] auto get_handle_visibility(const Handle handle) const -> bool;
+        [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
+        [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
+
+        [[nodiscard]] auto make_material(
+            const char*      name,
+            const glm::vec3& color,
+            Mode             mode = Mode::Normal
+        ) -> std::shared_ptr<erhe::primitive::Material>;
 
         void initialize(
             Mesh_memory& mesh_memory,
             Scene_root&  scene_root
         );
+
         void update_visibility(const bool show);
         void update_scale     (const glm::vec3 view_position_in_world);
         void update_transforms(const uint64_t serial);
@@ -255,11 +269,7 @@ private:
         float     scale         {3.5f}; // 3.5 for normal, 6.6 for debug
         //float     scale         {8.8f}; // OpenXR TODO erhe.ini
 
-        [[nodiscard]] auto make_material(
-            const std::string_view name,
-            glm::vec3              color
-        ) -> std::shared_ptr<erhe::primitive::Material>;
-
+        std::shared_ptr<Material_library>          material_library;
         erhe::scene::Node*                         root{nullptr};
         std::shared_ptr<erhe::scene::Node>         tool_node;
         bool                                       local{true};
@@ -267,7 +277,12 @@ private:
         std::shared_ptr<erhe::primitive::Material> x_material;
         std::shared_ptr<erhe::primitive::Material> y_material;
         std::shared_ptr<erhe::primitive::Material> z_material;
-        std::shared_ptr<erhe::primitive::Material> highlight_material;
+        std::shared_ptr<erhe::primitive::Material> x_hover_material;
+        std::shared_ptr<erhe::primitive::Material> y_hover_material;
+        std::shared_ptr<erhe::primitive::Material> z_hover_material;
+        std::shared_ptr<erhe::primitive::Material> x_active_material;
+        std::shared_ptr<erhe::primitive::Material> y_active_material;
+        std::shared_ptr<erhe::primitive::Material> z_active_material;
         std::shared_ptr<erhe::scene::Mesh>         x_arrow_cylinder_mesh;
         std::shared_ptr<erhe::scene::Mesh>         x_arrow_cone_mesh;
         std::shared_ptr<erhe::scene::Mesh>         y_arrow_cylinder_mesh;
@@ -292,6 +307,7 @@ private:
     [[nodiscard]] auto is_z_translate_active   () const -> bool;
     [[nodiscard]] auto is_rotate_active        () const -> bool;
     [[nodiscard]] auto get_active_handle       () const -> Handle;
+    [[nodiscard]] auto get_hover_handle        () const -> Handle;
     [[nodiscard]] auto get_handle              (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_handle_type         (const Handle handle) const -> Handle_type;
     [[nodiscard]] auto offset_plane_origo      (const Handle handle, const glm::dvec3 p) const -> glm::dvec3;

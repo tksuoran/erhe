@@ -333,6 +333,7 @@ void Trs_tool::Visualization::update_mesh_visibility(
 )
 {
     const auto active_handle = trs_tool.get_active_handle();
+    const auto hover_handle  = trs_tool.get_hover_handle();
     const bool show_all      = is_visible && (active_handle == Handle::e_handle_none);
     const auto handle        = trs_tool.get_handle(mesh.get());
     const bool show          = get_handle_visibility(handle);
@@ -347,10 +348,13 @@ void Trs_tool::Visualization::update_mesh_visibility(
             : erhe::scene::Node_visibility::tool
     );
 
-    mesh->mesh_data.primitives.front().material =
-        (active_handle == handle)
-            ? highlight_material
-            : get_handle_material(handle);
+    const Mode mode = (active_handle == handle)
+        ? Mode::Active
+        : (hover_handle == handle)
+            ? Mode::Hover
+            : Mode::Normal;
+    log_trs_tool->info("mode = {}", static_cast<int>(mode));
+    mesh->mesh_data.primitives.front().material = get_handle_material(handle, mode);
 }
 
 void Trs_tool::Visualization::update_visibility(
@@ -514,21 +518,44 @@ auto Trs_tool::Visualization::make_rotate_ring(
     };
 }
 
-auto Trs_tool::Visualization::get_handle_material(const Handle handle)
+auto Trs_tool::Visualization::get_handle_material(
+    const Handle handle,
+    const Mode   mode
+)
 -> std::shared_ptr<erhe::primitive::Material>
 {
     switch (handle)
     {
-        case Handle::e_handle_translate_x : return x_material;
-        case Handle::e_handle_translate_y : return y_material;
-        case Handle::e_handle_translate_z : return z_material;
-        case Handle::e_handle_translate_xy: return z_material;
-        case Handle::e_handle_translate_xz: return y_material;
-        case Handle::e_handle_translate_yz: return x_material;
-        case Handle::e_handle_rotate_x    : return x_material;
-        case Handle::e_handle_rotate_y    : return y_material;
-        case Handle::e_handle_rotate_z    : return z_material;
+        case Handle::e_handle_translate_x : return (mode == Mode::Active) ? x_active_material : (mode == Mode::Hover) ? x_hover_material : x_material;
+        case Handle::e_handle_translate_y : return (mode == Mode::Active) ? y_active_material : (mode == Mode::Hover) ? y_hover_material : y_material;
+        case Handle::e_handle_translate_z : return (mode == Mode::Active) ? z_active_material : (mode == Mode::Hover) ? z_hover_material : z_material;
+        case Handle::e_handle_translate_xy: return (mode == Mode::Active) ? z_active_material : (mode == Mode::Hover) ? z_hover_material : z_material;
+        case Handle::e_handle_translate_xz: return (mode == Mode::Active) ? y_active_material : (mode == Mode::Hover) ? y_hover_material : y_material;
+        case Handle::e_handle_translate_yz: return (mode == Mode::Active) ? x_active_material : (mode == Mode::Hover) ? x_hover_material : x_material;
+        case Handle::e_handle_rotate_x    : return (mode == Mode::Active) ? x_active_material : (mode == Mode::Hover) ? x_hover_material : x_material;
+        case Handle::e_handle_rotate_y    : return (mode == Mode::Active) ? y_active_material : (mode == Mode::Hover) ? y_hover_material : y_material;
+        case Handle::e_handle_rotate_z    : return (mode == Mode::Active) ? z_active_material : (mode == Mode::Hover) ? z_hover_material : z_material;
         default: return {};
+    }
+}
+
+[[nodiscard]] auto Trs_tool::Visualization::make_material(
+    const char*      name,
+    const glm::vec3& color,
+    const Mode       mode
+) -> std::shared_ptr<erhe::primitive::Material>
+{
+    if (mode == Mode::Active)
+    {
+        return material_library->make_material(name, glm::vec3(1.0f, 0.7f, 0.1f));
+    }
+    else if (mode == Mode::Hover)
+    {
+        return material_library->make_material(name, 2.0f * color);
+    }
+    else
+    {
+        return material_library->make_material(name, color);
     }
 }
 
@@ -539,17 +566,21 @@ void Trs_tool::Visualization::initialize(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& material_library = scene_root.material_library();
+    material_library = scene_root.material_library();
 
-    x_material         = material_library->make_material("x",         vec3{1.00f, 0.00f, 0.0f});
-    y_material         = material_library->make_material("y",         vec3{0.23f, 1.00f, 0.0f});
-    z_material         = material_library->make_material("z",         vec3{0.00f, 0.23f, 1.0f});
-    highlight_material = material_library->make_material("highlight", vec3{1.00f, 0.70f, 0.1f});
+    x_material        = make_material("x",        vec3{1.00f, 0.00f, 0.0f}, Mode::Normal);
+    y_material        = make_material("y",        vec3{0.23f, 1.00f, 0.0f}, Mode::Normal);
+    z_material        = make_material("z",        vec3{0.00f, 0.23f, 1.0f}, Mode::Normal);
+    x_hover_material  = make_material("x hover",  vec3{1.00f, 0.00f, 0.0f}, Mode::Hover);
+    y_hover_material  = make_material("y hover",  vec3{0.23f, 1.00f, 0.0f}, Mode::Hover);
+    z_hover_material  = make_material("z hover",  vec3{0.00f, 0.23f, 1.0f}, Mode::Hover);
+    x_active_material = make_material("x active", vec3{1.00f, 0.00f, 0.0f}, Mode::Active);
+    y_active_material = make_material("y active", vec3{0.23f, 1.00f, 0.0f}, Mode::Active);
+    z_active_material = make_material("z active", vec3{0.00f, 0.23f, 1.0f}, Mode::Active);
 
-    x_material        ->visible = false;
-    y_material        ->visible = false;
-    z_material        ->visible = false;
-    highlight_material->visible = false;
+    x_material->visible = false;
+    y_material->visible = false;
+    z_material->visible = false;
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 
@@ -776,11 +807,21 @@ void Trs_tool::tool_hover(Scene_view* scene_view)
     const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
     if (!tool.valid || !tool.mesh)
     {
-        m_hover_handle = Handle::e_handle_none;
+        if (m_hover_handle != Handle::e_handle_none)
+        {
+            m_hover_handle = Handle::e_handle_none;
+            update_visibility();
+        }
         return;
     }
 
+    const auto new_handle = get_handle(tool.mesh.get());
+    if (m_hover_handle == new_handle)
+    {
+        return;
+    }
     m_hover_handle = get_handle(tool.mesh.get());
+    update_visibility();
 }
 
 auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
@@ -1646,6 +1687,11 @@ void Trs_tool::tool_render(
 auto Trs_tool::get_active_handle() const -> Handle
 {
     return m_active_handle;
+}
+
+auto Trs_tool::get_hover_handle() const -> Handle
+{
+    return m_hover_handle;
 }
 
 auto Trs_tool::get_handle(erhe::scene::Mesh* mesh) const -> Trs_tool::Handle
