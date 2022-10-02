@@ -58,6 +58,7 @@ namespace editor
 {
 
 class Editor_scenes;
+class Icon_set;
 class Material_library;
 class Materials;
 class Mesh_memory;
@@ -273,8 +274,7 @@ private:
         bool      show_translate{true};
         bool      show_rotate   {false};
         bool      hide_inactive {true};
-        float     scale         {3.5f}; // 3.5 for normal, 6.6 for debug
-        //float     scale         {8.8f}; // OpenXR TODO erhe.ini
+        float     scale         {1.0f};
 
         std::shared_ptr<Material_library>          material_library;
         erhe::scene::Node*                         root{nullptr};
@@ -351,6 +351,7 @@ private:
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
     std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
+    std::shared_ptr<Icon_set>                             m_icon_set;
     std::shared_ptr<Operation_stack>                      m_operation_stack;
     std::shared_ptr<Selection_tool>                       m_selection_tool;
     std::shared_ptr<Tools>                                m_tools;

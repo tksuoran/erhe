@@ -1,4 +1,5 @@
 #include "tools/hotbar.hpp"
+#include "graphics/icon_set.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -14,6 +15,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
@@ -68,9 +70,9 @@ void Hotbar::initialize_component()
     m_rendertarget_node = scene_root->create_rendertarget_node(
         *m_components,
         *primary_viewport_window.get(),
-        512,
-        64,
-        2000.0
+        1024,
+        128,
+        4000.0
     );
 
     scene_root->scene().add_to_mesh_layer(
@@ -95,6 +97,8 @@ void Hotbar::initialize_component()
 
 void Hotbar::post_initialize()
 {
+    m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
+    m_icon_set         = get<Icon_set>();
     m_viewport_windows = get<Viewport_windows>();
 }
 
@@ -184,15 +188,16 @@ void Hotbar::imgui()
     //ImGui::SliderFloat("X", &m_x, -2.0f, 2.0f);
     //ImGui::SliderFloat("Y", &m_y, -0.3f, 0.0f);
     //ImGui::SliderFloat("Z", &m_z, -2.0f, 2.0f);
-    ImGui::Button("1", button_size); ImGui::SameLine();
-    ImGui::Button("2", button_size); ImGui::SameLine();
-    ImGui::Button("3", button_size); ImGui::SameLine();
-    ImGui::Button("4", button_size); ImGui::SameLine();
-    ImGui::Button("5", button_size); ImGui::SameLine();
-    ImGui::Button("6", button_size); ImGui::SameLine();
-    ImGui::Button("7", button_size); ImGui::SameLine();
-    ImGui::Button("8", button_size); ImGui::SameLine();
-    ImGui::Button("9", button_size); ImGui::SameLine();
+    const glm::vec4 background_color{0.0f, 0.0f, 0.3f, 0.6f};
+    const glm::vec4 tint_color      {0.9f, 0.9f, 1.0f, 0.95f};
+    const int       frame_padding      = 0;
+    const auto&     icon_rasterization = m_icon_set->get_large_rasterization();
+    const bool      linear{false};
+    icon_rasterization.icon_button(m_icon_set->icons.move,   frame_padding, background_color, tint_color, linear);
+    icon_rasterization.icon_button(m_icon_set->icons.rotate, frame_padding, background_color, tint_color, linear);
+    icon_rasterization.icon_button(m_icon_set->icons.push,   frame_padding, background_color, tint_color, linear);
+    icon_rasterization.icon_button(m_icon_set->icons.pull,   frame_padding, background_color, tint_color, linear);
+    icon_rasterization.icon_button(m_icon_set->icons.drag,   frame_padding, background_color, tint_color, linear);
 
     const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window)

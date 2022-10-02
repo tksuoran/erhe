@@ -7,6 +7,11 @@
 
 #include <glm/glm.hpp>
 
+namespace erhe::application
+{
+    class Imgui_renderer;
+}
+
 namespace erhe::scene
 {
     class Camera;
@@ -15,6 +20,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Icon_set;
 class Rendertarget_imgui_viewport;
 class Rendertarget_node;
 class Viewport_windows;
@@ -57,7 +63,11 @@ public:
 private:
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 
-    std::shared_ptr<Viewport_windows> m_viewport_windows;
+    // Component dependencies
+    std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
+    std::shared_ptr<Icon_set>                          m_icon_set;
+    std::shared_ptr<Viewport_windows>                  m_viewport_windows;
+
 
     std::shared_ptr<Rendertarget_node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;

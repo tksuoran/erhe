@@ -177,9 +177,14 @@ erhe_target_sources_grouped(
 
     res/icons/camera.svg
     res/icons/directional_light.svg
+    res/icons/drag.svg
     res/icons/mesh.svg
+    res/icons/move.svg
     res/icons/node.svg
     res/icons/point_light.svg
+    res/icons/pull.svg
+    res/icons/push.svg
+    res/icons/rotate.svg
     res/icons/spot_light.svg
 
     res/shaders/brush.vert

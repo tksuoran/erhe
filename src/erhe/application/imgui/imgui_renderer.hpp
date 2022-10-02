@@ -145,12 +145,24 @@ public:
 
     auto image(
         const std::shared_ptr<erhe::graphics::Texture>& texture,
-        const int                                       width,
-        const int                                       height,
-        const glm::vec2                                 uv0        = {0.0f, 1.0f},
-        const glm::vec2                                 uv1        = {1.0f, 0.0f},
-        const glm::vec4                                 tint_color = {1.0f, 1.0f, 1.0f, 1.0f},
-        const bool                                      linear     = true
+        int                                             width,
+        int                                             height,
+        glm::vec2                                       uv0        = {0.0f, 1.0f},
+        glm::vec2                                       uv1        = {1.0f, 0.0f},
+        glm::vec4                                       tint_color = {1.0f, 1.0f, 1.0f, 1.0f},
+        bool                                            linear     = true
+    ) -> bool;
+
+    auto image_button(
+        const std::shared_ptr<erhe::graphics::Texture>& texture,
+        int                                             width,
+        int                                             height,
+        glm::vec2                                       uv0              = {0.0f, 1.0f},
+        glm::vec2                                       uv1              = {1.0f, 0.0f},
+        int                                             frame_padding    = -1,
+        glm::vec4                                       background_color = {0.0f, 0.0f, 0.0f, 0.0f},
+        glm::vec4                                       tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
+        bool                                            linear           = true
     ) -> bool;
 
     void use(

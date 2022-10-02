@@ -69,7 +69,9 @@ void Layers_window::imgui()
         ImGuiTreeNodeFlags_Leaf
     };
 
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    const auto& scene_roots        = m_editor_scenes->get_scene_roots();
+    const auto  mesh_icon          = m_icon_set->icons.mesh;
+    const auto& icon_rasterization = m_icon_set->get_small_rasterization();
     for (const auto& scene_root : scene_roots)
     {
         if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
@@ -82,7 +84,7 @@ void Layers_window::imgui()
                     const auto& meshes = layer->meshes;
                     for (const auto& mesh : meshes)
                     {
-                        m_icon_set->icon(*mesh.get());
+                        icon_rasterization.icon(mesh_icon);
                         ImGui::TreeNodeEx(
                             mesh->name().c_str(),
                             leaf_flags |

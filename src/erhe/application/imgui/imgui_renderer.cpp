@@ -663,6 +663,48 @@ auto Imgui_renderer::image(
     return ImGui::IsItemClicked();
 }
 
+namespace {
+
+[[nodiscard]] auto from_glm(const glm::vec4& v) -> ImVec4
+{
+    return ImVec4{v.x, v.y, v.z, v.w};
+}
+
+}
+
+auto Imgui_renderer::image_button(
+    const std::shared_ptr<erhe::graphics::Texture>& texture,
+    const int                                       width,
+    const int                                       height,
+    const glm::vec2                                 uv0,
+    const glm::vec2                                 uv1,
+    const int                                       frame_padding,
+    const glm::vec4                                 background_color,
+    const glm::vec4                                 tint_color,
+    const bool                                      linear
+) -> bool
+{
+    const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
+    const uint64_t handle = erhe::graphics::get_handle(
+        *texture.get(),
+        *sampler.get()
+    );
+    ImGui::ImageButton(
+        handle,
+        ImVec2{
+            static_cast<float>(width),
+            static_cast<float>(height)
+        },
+        uv0,
+        uv1,
+        frame_padding,
+        from_glm(background_color),
+        from_glm(tint_color)
+    );
+    use(texture, handle);
+    return ImGui::IsItemClicked();
+}
+
 void Imgui_renderer::use(
     const std::shared_ptr<erhe::graphics::Texture>& texture,
     const uint64_t                                  handle

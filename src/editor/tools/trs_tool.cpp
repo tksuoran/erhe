@@ -3,6 +3,7 @@
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
+#include "graphics/icon_set.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -228,7 +229,8 @@ void Trs_tool::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_text_renderer     = get<erhe::application::Text_renderer    >();
-    m_operation_stack   = get<Operation_stack>();
+    m_icon_set          = get<Icon_set        >();
+    m_operation_stack   = get<Operation_stack >();
     m_viewport_windows  = get<Viewport_windows>();
 }
 
@@ -664,6 +666,8 @@ void Trs_tool::set_local(const bool local)
 
 void Trs_tool::viewport_toolbar()
 {
+    const auto& icon_rasterication = m_icon_set->get_small_rasterization();
+
     ImGui::SameLine();
     const auto local_pressed = erhe::application::make_button(
         "L",
@@ -697,45 +701,62 @@ void Trs_tool::viewport_toolbar()
     }
 
     ImGui::SameLine();
-    const auto translate_pressed = erhe::application::make_button(
-        "T",
-        (m_visualization.show_translate)
+    {
+        const auto mode = m_visualization.show_translate
             ? erhe::application::Item_mode::active
-            : erhe::application::Item_mode::normal
-    );
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip(
-            m_visualization.show_translate
-                ? "Hide Translate Tool"
-                : "Show Translate Tool"
+            : erhe::application::Item_mode::normal;
+
+        erhe::application::begin_button_style(mode);
+        const bool translate_pressed = icon_rasterication.icon_button(
+            m_icon_set->icons.move,
+            -1,
+            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+            false
         );
-    }
-    if (translate_pressed)
-    {
-        m_visualization.show_translate = !m_visualization.show_translate;
-        update_visibility();
+        erhe::application::end_button_style(mode);
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip(
+                m_visualization.show_translate
+                    ? "Hide Translate Tool"
+                    : "Show Translate Tool"
+            );
+        }
+        if (translate_pressed)
+        {
+            m_visualization.show_translate = !m_visualization.show_translate;
+            update_visibility();
+        }
     }
 
     ImGui::SameLine();
-    const auto rotate_pressed = erhe::application::make_button(
-        "R",
-        (m_visualization.show_rotate)
+    {
+        const auto mode = m_visualization.show_rotate
             ? erhe::application::Item_mode::active
-            : erhe::application::Item_mode::normal
-    );
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip(
-            m_visualization.show_rotate
-                ? "Hide Rotate Tool"
-                : "Show Rotate Tool"
+            : erhe::application::Item_mode::normal;
+        erhe::application::begin_button_style(mode);
+        const bool rotate_pressed = icon_rasterication.icon_button(
+            m_icon_set->icons.rotate,
+            -1,
+            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+            false
         );
-    }
-    if (rotate_pressed)
-    {
-        m_visualization.show_rotate = !m_visualization.show_rotate;
-        update_visibility();
+        erhe::application::end_button_style(mode);
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip(
+                m_visualization.show_rotate
+                    ? "Hide Rotate Tool"
+                    : "Show Rotate Tool"
+            );
+        }
+        if (rotate_pressed)
+        {
+            m_visualization.show_rotate = !m_visualization.show_rotate;
+            update_visibility();
+        }
     }
 }
 

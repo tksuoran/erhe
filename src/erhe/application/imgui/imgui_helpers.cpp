@@ -21,12 +21,7 @@ void make_text_with_background(const char* text, float rounding, const ImVec4 ba
     ImGui::PopStyleVar   ();
 }
 
-bool make_button(
-    const char*     label,
-    const Item_mode mode,
-    const ImVec2    size,
-    const bool      small
-)
+void begin_button_style(const Item_mode mode)
 {
     if (mode == Item_mode::active)
     {
@@ -41,14 +36,29 @@ bool make_button(
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  c_color_disabled_active);
     }
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 1.0f});
-    const bool pressed = small
-        ? ImGui::SmallButton(label)
-        : ImGui::Button(label, size) && (mode != Item_mode::disabled);
+}
+
+void end_button_style(const Item_mode mode)
+{
     ImGui::PopStyleVar();
     if (mode != Item_mode::normal)
     {
         ImGui::PopStyleColor(3);
     }
+}
+
+bool make_button(
+    const char*     label,
+    const Item_mode mode,
+    const ImVec2    size,
+    const bool      small
+)
+{
+    begin_button_style(mode);
+    const bool pressed = small
+        ? ImGui::SmallButton(label)
+        : ImGui::Button(label, size) && (mode != Item_mode::disabled);
+    end_button_style(mode);
     return pressed;
 }
 

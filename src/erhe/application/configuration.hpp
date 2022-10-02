@@ -37,6 +37,7 @@ public:
         std::string mono_font      {"res/fonts/SourceCodePro-Semibold.otf"};
         float       font_size      {17.0f};
         int         icon_size      {16};
+        int         vr_icon_size   {128};
         float       padding        {2.0f};
         float       rounding       {3.0f};
     };

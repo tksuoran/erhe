@@ -577,21 +577,30 @@ auto Node_tree_window::node_items(
     {
         ERHE_PROFILE_SCOPE("icon");
 
+        std::optional<glm::vec2> icon;
+
         if (is_empty(node))
         {
-            m_icon_set->icon(*node);
+            icon = m_icon_set->icons.node;
         }
         else if (is_mesh(node))
         {
-            m_icon_set->icon(*as_mesh(node));
+            icon = m_icon_set->icons.mesh;
         }
-        else if (is_light(node)) // note light is before camera - light is also camera
+        else if (is_light(node))
         {
-            m_icon_set->icon(*as_light(node));
+            switch (as_light(node)->type)
+            {
+                //using enum erhe::scene::Light_type;
+                case erhe::scene::Light_type::spot:        icon = m_icon_set->icons.spot_light; break;
+                case erhe::scene::Light_type::directional: icon = m_icon_set->icons.directional_light; break;
+                case erhe::scene::Light_type::point:       icon = m_icon_set->icons.point_light; break;
+                default: return {};
+            }
         }
         else if (is_camera(node))
         {
-            m_icon_set->icon(*as_camera(node));
+            icon = m_icon_set->icons.camera;
         }
         //else if (is_physics(node))
         //{
@@ -600,7 +609,13 @@ auto Node_tree_window::node_items(
         //}
         else
         {
-            m_icon_set->icon(*node);
+            icon = m_icon_set->icons.node;
+        }
+
+        if (icon.has_value())
+        {
+            const auto& icon_rasterization = m_icon_set->get_small_rasterization();
+            icon_rasterization.icon(icon.value());
         }
     }
 
