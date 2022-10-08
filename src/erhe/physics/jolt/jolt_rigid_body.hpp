@@ -39,6 +39,7 @@ public:
     void set_restitution             (const float restitution)                                 override;
     auto get_center_of_mass_transform() const -> Transform                                     override;
     void set_center_of_mass_transform(const Transform transform)                               override;
+    auto get_world_transform         () const -> Transform                                     override;
     void set_world_transform         (const Transform transform)                               override;
     void move_world_transform        (const Transform transform, float delta_time)             override;
     void set_linear_velocity         (const glm::vec3 velocity)                                override;
@@ -54,8 +55,9 @@ public:
     auto get_debug_label             () const -> const char*                                   override;
 
     // Public API
-    auto get_jolt_body      () const -> JPH::Body*;
-    void update_motion_state() const;
+    auto get_jolt_body          () const -> JPH::Body*;
+    void pre_update_motion_state() const;
+    void update_motion_state    () const;
 
 private:
     JPH::Body*                            m_body            {nullptr};

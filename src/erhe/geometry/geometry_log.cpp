@@ -22,8 +22,8 @@ std::shared_ptr<spdlog::logger> log_weld             ;
 
 void initialize_logging()
 {
-    log_geometry          = erhe::log::make_logger("erhe::geometry::geometry",          spdlog::level::trace);
-    log_build_edges       = erhe::log::make_logger("erhe::geometry::build_edges",       spdlog::level::info);
+    log_geometry          = erhe::log::make_logger("erhe::geometry::geometry",          spdlog::level::info);
+    log_build_edges       = erhe::log::make_logger("erhe::geometry::build_edges",       spdlog::level::warn);
     log_tangent_gen       = erhe::log::make_logger("erhe::geometry::tangent_gen",       spdlog::level::info);
     log_cone              = erhe::log::make_logger("erhe::geometry::cone",              spdlog::level::info);
     log_torus             = erhe::log::make_logger("erhe::geometry::torus",             spdlog::level::info);

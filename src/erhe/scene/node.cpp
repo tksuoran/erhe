@@ -1,4 +1,5 @@
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -8,6 +9,18 @@
 
 namespace erhe::scene
 {
+
+uint64_t Node_transforms::s_global_update_serial = 0;
+
+auto Node_transforms::get_current_serial() -> uint64_t
+{
+    return s_global_update_serial;
+}
+
+auto Node_transforms::get_next_serial() -> uint64_t
+{
+    return ++s_global_update_serial;
+}
 
 INode_attachment::~INode_attachment() noexcept
 {
@@ -51,6 +64,7 @@ Node::~Node() noexcept
     for (auto& attachment : node_data.attachments)
     {
         attachment->on_detached_from(this);
+        attachment->set_node(nullptr);
     }
     unparent();
 
@@ -112,9 +126,10 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 #endif
 
     node_data.attachments.push_back(attachment);
+    attachment->set_node(this);
     attachment->on_attached_to(this);
+    attachment->on_node_transform_changed();
     sanity_check();
-    update_transform();
     on_visibility_mask_changed();
     sanity_check();
 }
@@ -167,6 +182,7 @@ auto Node::detach(INode_attachment* attachment) -> bool
         );
         node_data.attachments.erase(i, node_data.attachments.end());
         attachment->on_detached_from(this);
+        attachment->set_node(nullptr);
         sanity_check();
         return true;
     }
@@ -233,64 +249,6 @@ auto Node::is_ancestor(const Node* ancestor_candidate) const -> bool
 
 void Node::attach(
     const std::shared_ptr<Node>& child_node,
-    const bool                   primary_operation
-)
-{
-    ERHE_PROFILE_FUNCTION
-
-    if (child_node.get() == this)
-    {
-        log->error("Cannot attach node to itself");
-        return;
-    }
-    if (is_ancestor(child_node.get()))
-    {
-        log->error("Cannot attach node to ancestor");
-        return;
-    }
-
-    ERHE_VERIFY(child_node);
-
-    SPDLOG_LOGGER_TRACE(
-        log,
-        "{} ({}).attach({} ({}))",
-        name(),
-        node_type(),
-        child_node->name(),
-        child_node->node_type()
-    );
-
-#ifndef NDEBUG
-    const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
-    if (i != node_data.children.end())
-    {
-        log->error("Node {} already attached to {}", child_node->name(), name());
-        return;
-    }
-#endif
-
-    const auto child_parent_from_node = node_from_world_transform() * child_node->world_from_node_transform();
-
-    const auto& current_parent = child_node->parent().lock();
-    if (current_parent)
-    {
-        current_parent->detach(child_node.get(), false);
-    }
-
-    node_data.children.push_back(child_node);
-    child_node->set_parent                (shared_from_this());
-    child_node->set_parent_from_node      (child_parent_from_node);
-    child_node->set_depth_recursive       (depth() + 1);
-    child_node->update_transform_recursive();
-    if (primary_operation)
-    {
-        child_node->on_attached();
-    }
-    sanity_check();
-}
-
-void Node::attach(
-    const std::shared_ptr<Node>& child_node,
     const std::size_t            position,
     const bool                   primary_operation
 )
@@ -337,10 +295,13 @@ void Node::attach(
     }
 
     node_data.children.insert(node_data.children.begin() + position, child_node);
-    child_node->set_parent                (shared_from_this());
-    child_node->set_parent_from_node      (child_parent_from_node);
-    child_node->set_depth_recursive       (depth() + 1);
-    child_node->update_transform_recursive();
+    child_node->set_parent          (shared_from_this());
+    child_node->set_parent_from_node(child_parent_from_node);
+
+    // Attached child transform is as good as parent transform
+    child_node->node_data.transforms.update_serial = node_data.transforms.update_serial;
+
+    child_node->set_depth_recursive (depth() + 1);
     if (primary_operation)
     {
         child_node->on_attached();
@@ -482,10 +443,15 @@ void Node::on_detached_from(Node& node)
     sanity_check();
 }
 
-void Node::on_transform_changed()
+void Node::on_transform_changed(uint64_t serial) const
 {
     ERHE_PROFILE_FUNCTION
 
+    const uint64_t effective_serial = (serial > 0)
+        ? serial
+        : Node_transforms::get_next_serial();
+
+    node_data.transforms.update_serial = effective_serial;
     for (const auto& attachment : node_data.attachments)
     {
         attachment->on_node_transform_changed();
@@ -527,38 +493,31 @@ auto Node::root() -> std::weak_ptr<Node>
     return current_parent->root();
 }
 
-//auto Node::root() const -> std::weak_ptr<Node>
-//{
-//    const auto& current_parent = parent().lock();
-//    if (current_parent)
-//    {
-//        return std::weak_ptr<Node>(shared_from_this());
-//    }
-//    return current_parent->root();
-//}
-
-void Node::update_transform(const uint64_t serial)
+void Node::update_transform(uint64_t serial) const
 {
     ERHE_PROFILE_FUNCTION
 
-    //log.trace("{} update_transform\n", name());
     const auto& current_parent = parent().lock();
-
-    if (serial != 0)
-    {
-        if (node_data.last_transform_update_serial == serial)
-        {
-            return;
-        }
-        if (
-            current_parent &&
-            (current_parent->node_data.last_transform_update_serial < serial)
-        )
-        {
-            current_parent->update_transform(serial);
-        }
+    if (!current_parent) {
+        return;
     }
 
+    serial = std::max(serial, current_parent->node_data.transforms.update_serial);
+
+    if (node_data.transforms.update_serial >= serial) {
+        return;
+    }
+
+    node_data.transforms.world_from_node.set(
+        current_parent->world_from_node() * parent_from_node(),
+        node_from_parent() * current_parent->node_from_world()
+    );
+    on_transform_changed(serial);
+}
+
+void Node::update_world_from_node()
+{
+    const auto& current_parent = parent().lock();
     if (current_parent)
     {
         node_data.transforms.world_from_node.set(
@@ -573,30 +532,11 @@ void Node::update_transform(const uint64_t serial)
             node_from_parent()
         );
     }
-
-    node_data.last_transform_update_serial = (serial != 0)
-        ? serial
-        : current_parent
-            ? current_parent->node_data.last_transform_update_serial
-            : node_data.last_transform_update_serial;
-
-    on_transform_changed();
-}
-
-void Node::update_transform_recursive(const uint64_t serial)
-{
-    ERHE_PROFILE_FUNCTION
-
-    update_transform(serial);
-    for (auto& child_node : node_data.children)
-    {
-        child_node->update_transform_recursive(serial);
-    }
 }
 
 void Node::sanity_check() const
 {
-#if 0
+#if 1
     sanity_check_root_path(this);
 
     const auto& current_parent = parent().lock();
@@ -812,8 +752,8 @@ auto Node::transform_direction_from_world_to_local(const glm::vec3 d) const -> g
 void Node::set_parent_from_node(const glm::mat4 m)
 {
     node_data.transforms.parent_from_node.set(m);
-    node_data.last_transform_update_serial = 0;
-    on_transform_changed();
+    on_transform_changed(Node_transforms::get_next_serial());
+    update_world_from_node();
 }
 
 void Node::set_parent_from_node(const Transform& transform)
@@ -821,22 +761,22 @@ void Node::set_parent_from_node(const Transform& transform)
     ERHE_PROFILE_FUNCTION
 
     node_data.transforms.parent_from_node = transform;
-    node_data.last_transform_update_serial = 0;
-    on_transform_changed();
+    on_transform_changed(Node_transforms::get_next_serial());
+    update_world_from_node();
 }
 
 void Node::set_node_from_parent(const glm::mat4 matrix)
 {
     node_data.transforms.parent_from_node.set(glm::inverse(matrix), matrix);
-    node_data.last_transform_update_serial = 0;
-    on_transform_changed();
+    on_transform_changed(Node_transforms::get_next_serial());
+    update_world_from_node();
 }
 
 void Node::set_node_from_parent(const Transform& transform)
 {
     node_data.transforms.parent_from_node = Transform::inverse(transform);
-    node_data.last_transform_update_serial = 0;
-    on_transform_changed();
+    on_transform_changed(Node_transforms::get_next_serial());
+    update_world_from_node();
 }
 
 void Node::set_world_from_node(const glm::mat4 matrix)

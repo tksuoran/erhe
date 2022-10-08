@@ -1,5 +1,6 @@
 #include "erhe/application/time.hpp"
 #include "erhe/application/application.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/window.hpp"
 
 #include "erhe/scene/scene.hpp"
@@ -37,8 +38,10 @@ void Time::update()
     m_current_time = new_time;
     m_time_accumulator += frame_time;
     const double dt = 1.0 / 100.0;
+    int steps = 0;
     while (m_time_accumulator >= dt)
     {
+        ++steps;
         update_fixed_step(
             erhe::components::Time_context{
                 .dt           = dt,
@@ -49,6 +52,8 @@ void Time::update()
         m_time_accumulator -= dt;
         m_time += dt;
     }
+
+    //log_update->trace("{} fixed update steps", steps);
 
     update_once_per_frame(
         erhe::components::Time_context{

@@ -40,6 +40,8 @@ public:
     );
     virtual ~Rendertarget_imgui_viewport() noexcept;
 
+    void set_clear_color(const glm::vec4& value);
+
     // Implements Imgui_viewport
     [[nodiscard]] auto rendertarget_node() -> Rendertarget_node*;
     [[nodiscard]] auto begin_imgui_frame() -> bool override;
@@ -83,11 +85,12 @@ private:
     std::shared_ptr<Headset_view>                      m_headset_view;
     bool                                               m_last_mouse_finger{false};
 #endif
-    std::string                                        m_name;
-    std::string                                        m_imgui_ini_path;
-    double                                             m_time     {0.0};
-    double m_last_mouse_x{0.0};
-    double m_last_mouse_y{0.0};
+    std::string m_name;
+    std::string m_imgui_ini_path;
+    glm::vec4   m_clear_color {0.0f, 0.0f, 0.0f, 0.0f};
+    double      m_time        {0.0};
+    double      m_last_mouse_x{0.0};
+    double      m_last_mouse_y{0.0};
 };
 
 } // namespace erhe::application

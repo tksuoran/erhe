@@ -57,6 +57,7 @@ public:
     [[nodiscard]] virtual auto get_angular_damping         () const -> float                             = 0;
     [[nodiscard]] virtual auto get_local_inertia           () const -> glm::mat4                         = 0;
     [[nodiscard]] virtual auto get_center_of_mass_transform() const -> Transform                         = 0;
+    [[nodiscard]] virtual auto get_world_transform         () const -> Transform                         = 0;
     [[nodiscard]] virtual auto get_mass                    () const -> float                             = 0;
     [[nodiscard]] virtual auto get_debug_label             () const -> const char*                       = 0;
     virtual void set_motion_mode             (const Motion_mode motion_mode)                            = 0;

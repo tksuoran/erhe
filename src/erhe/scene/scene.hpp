@@ -58,10 +58,9 @@ public:
     void update_node_transforms();
 
     //[[nodiscard]] auto get_node_by_id         (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Node>;
-    [[nodiscard]] auto get_mesh_by_id         (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
-    [[nodiscard]] auto get_light_by_id        (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
-    [[nodiscard]] auto get_camera_by_id       (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>;
-    [[nodiscard]] auto transform_update_serial() -> uint64_t;
+    [[nodiscard]] auto get_mesh_by_id  (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
+    [[nodiscard]] auto get_light_by_id (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
+    [[nodiscard]] auto get_camera_by_id(const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>;
 
     void add_node(
         const std::shared_ptr<erhe::scene::Node>& node
@@ -115,9 +114,6 @@ public:
     std::vector<std::shared_ptr<Camera>>      cameras;
 
     bool nodes_sorted{false};
-
-private:
-    uint64_t m_transform_update_serial{0};
 };
 
 } // namespace erhe::scene

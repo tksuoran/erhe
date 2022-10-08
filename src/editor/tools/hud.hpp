@@ -34,9 +34,7 @@ private:
 };
 
 class Hud
-    //: public erhe::application::Imgui_window
     : public erhe::components::Component
-    //, public erhe::components::IUpdate_once_per_frame
     , public Tool
 {
 public:
@@ -64,6 +62,7 @@ public:
     [[nodiscard]] auto get_rendertarget_imgui_viewport() -> std::shared_ptr<Rendertarget_imgui_viewport>;
     void update_node_transform(const glm::mat4& world_from_camera);
     void toggle_visibility    ();
+    void set_visibility       (bool value);
 
 //// #if defined(ERHE_GUI_LIBRARY_IMGUI)
 ////     // Implements Imgui_window
@@ -79,12 +78,12 @@ private:
 
     std::shared_ptr<Rendertarget_node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
-    float m_x{-0.09f};
-    float m_y{ 0.0f};
-    float m_z{-0.38f};
-    int   m_width_items{10};
+    float m_x           {-0.09f};
+    float m_y           { 0.0f};
+    float m_z           {-0.38f};
+    int   m_width_items {10};
     int   m_height_items{10};
-    bool  m_is_visible{false};
+    bool  m_is_visible  {false};
 };
 
 } // namespace editor

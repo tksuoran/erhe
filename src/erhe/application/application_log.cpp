@@ -20,6 +20,7 @@ std::shared_ptr<spdlog::logger> log_shader_monitor          ;
 std::shared_ptr<spdlog::logger> log_imgui                   ;
 std::shared_ptr<spdlog::logger> log_frame                   ;
 std::shared_ptr<spdlog::logger> log_imnodes                 ;
+std::shared_ptr<spdlog::logger> log_update                  ;
 
 void initialize_logging()
 {
@@ -33,13 +34,14 @@ void initialize_logging()
     log_performance              = erhe::log::make_logger("erhe::application::performance",              spdlog::level::info);
     log_rendergraph              = erhe::log::make_logger("erhe::application::rendergraph",              spdlog::level::info);
     log_renderdoc                = erhe::log::make_logger("erhe::application::renderdoc",                spdlog::level::info);
-    log_startup                  = erhe::log::make_logger("erhe::application::startup",                  spdlog::level::trace);
+    log_startup                  = erhe::log::make_logger("erhe::application::startup",                  spdlog::level::info);
     log_tools                    = erhe::log::make_logger("erhe::application::tools",                    spdlog::level::info);
     log_windows                  = erhe::log::make_logger("erhe::application::windows",                  spdlog::level::info);
     log_shader_monitor           = erhe::log::make_logger("erhe::application::shader_monitor",           spdlog::level::info);
     log_imgui                    = erhe::log::make_logger("erhe::application::imgui",                    spdlog::level::info);
     log_frame                    = erhe::log::make_logger("erhe::application::frame",                    spdlog::level::info, false);
     log_imnodes                  = erhe::log::make_logger("imnodes",                                     spdlog::level::info);
+    log_update                   = erhe::log::make_logger("erhe::application::update",                   spdlog::level::info);
 }
 
 }

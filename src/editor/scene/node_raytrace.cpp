@@ -200,7 +200,6 @@ auto Node_raytrace::node_attachment_type() const -> const char*
 
 void Node_raytrace::on_attached_to(erhe::scene::Node* node)
 {
-    erhe::scene::INode_attachment::on_attached_to(node);
     if (node == nullptr)
     {
         return;

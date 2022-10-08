@@ -76,9 +76,10 @@ auto Controller_trigger_binding::on_trigger(
                 m_active = true;
                 if (command->get_tool_state() == State::Inactive)
                 {
+                    log_command_state_transition->info("trigfer press event - command {} call try_ready()", command->get_name());
                     command->try_ready(context);
                 }
-                return false;
+                return command->get_tool_state() == State::Active;
             }
         }
         else
@@ -90,8 +91,8 @@ auto Controller_trigger_binding::on_trigger(
                 if (command->get_tool_state() == State::Ready)
                 {
                     consumed = command->try_call(context);
-                    log_input_event_consumed->trace(
-                        "{} consumed controller trigger 'click'",
+                    log_input_event_consumed->info(
+                        "{} consumed controller trigger release",
                         command->get_name()
                     );
                 }
@@ -116,18 +117,26 @@ auto Controller_trigger_binding::on_trigger(
         else if (m_active && (trigger_value <= m_max_to_deactivate))
         {
             m_active = false;
-            //log_input_event_consumed->info("{} - {}", command->get_name(), trigger_value);
-            command->on_inactive(context);
-            return true;
+            bool consumed{false};
+            if (command->get_tool_state() != State::Inactive)
+            {
+                consumed = command->get_tool_state() == State::Active;
+                command->set_inactive(context);
+                //log_input_event_consumed->trace(
+                //    "{} consumed controller trigger 'click'",
+                //    command->get_name()
+                //);
+            }
+            return consumed;
         }
         if (m_active)
         {
             const bool consumed = command->try_call(context);
-            log_input_event_consumed->trace(
-                "{} consumed controller trigger value = {} click",
-                command->get_name(),
-                trigger_value
-            );
+            //log_input_event_consumed->trace(
+            //    "{} consumed controller trigger value = {} click",
+            //    command->get_name(),
+            //    trigger_value
+            //);
             return consumed;
         }
         return false;

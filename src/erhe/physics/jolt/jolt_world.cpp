@@ -1,17 +1,17 @@
 #include "erhe/physics/jolt/jolt_world.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/physics/jolt/jolt_constraint.hpp"
 #include "erhe/physics/jolt/jolt_debug_renderer.hpp"
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
 #include "erhe/physics/idebug_draw.hpp"
-#include "erhe/physics/log.hpp"
-#include "erhe/log/log_fmt.hpp"
+#include "erhe/physics/physics_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <Jolt/Core/Factory.h>
-#include <Jolt/Core/RTTI.h>
 #include <Jolt/RegisterTypes.h>
+#include <Jolt/Core/Factory.h>
+#include <Jolt/Core/TempAllocator.h>
 
 namespace erhe::physics
 {
@@ -164,20 +164,25 @@ auto IWorld::create_unique() -> std::unique_ptr<IWorld>
     return std::make_unique<Jolt_world>();
 }
 
-Jolt_world::Jolt_world()
+Jolt_world::Initialize_first::Initialize_first()
 {
+    // Register allocation hook
+    JPH::RegisterDefaultAllocator();
+
     // Install callbacks
     JPH::Trace = TraceImpl;
     JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
 
+    // Create a factory
     JPH::Factory::sInstance = new JPH::Factory();
+
     JPH::RegisterTypes();
+}
 
-    const unsigned int cMaxBodies             = 1024 * 32;
-    const unsigned int cNumBodyMutexes        = 0;
-    const unsigned int cMaxBodyPairs          = 1024 * 8;
-    const unsigned int cMaxContactConstraints = 1024;
-
+Jolt_world::Jolt_world()
+    : m_temp_allocator{10 * 1024 * 1024}
+    , m_job_system{JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10}
+{
     //m_debug_renderer              = std::make_unique<Jolt_debug_renderer             >();
     m_broad_phase_layer_interface = std::make_unique<Broad_phase_layer_interface_impl>();
     m_physics_system.Init(
@@ -199,11 +204,13 @@ Jolt_world::~Jolt_world() = default;
 void Jolt_world::enable_physics_updates()
 {
     m_physics_enabled = true;
+    log_physics->trace("physics updates enabled");
 }
 
 void Jolt_world::disable_physics_updates()
 {
     m_physics_enabled = false;
+    log_physics->trace("physics updates disabled");
 }
 
 auto Jolt_world::is_physics_updates_enabled() const -> bool
@@ -227,6 +234,11 @@ void Jolt_world::update_fixed_step(const double dt)
     // If you want more accurate step results you can do multiple sub steps
     // within a collision step. Usually you would set this to 1.
     const int cIntegrationSubSteps = 1;
+
+    for (auto* rigid_body : m_rigid_bodies)
+    {
+        rigid_body->pre_update_motion_state();
+    }
 
     m_physics_system.Update(
         static_cast<float>(dt),
@@ -256,6 +268,7 @@ void Jolt_world::update_fixed_step(const double dt)
 
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 {
+    log_physics->trace("add rigid body {}", rigid_body->get_debug_label());
     m_rigid_bodies.push_back(reinterpret_cast<Jolt_rigid_body*>(rigid_body));
     auto& body_interface  = m_physics_system.GetBodyInterface();
     auto* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(rigid_body);
@@ -268,6 +281,7 @@ void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 
 void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
 {
+    log_physics->trace("remove rigid body {}", rigid_body->get_debug_label());
     m_rigid_bodies.erase(
         std::remove(
             m_rigid_bodies.begin(),
@@ -284,6 +298,7 @@ void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
 
 void Jolt_world::add_constraint(IConstraint* constraint)
 {
+    log_physics->error("add constraint not implemented");
     //m_constraints.push_back(constraint);
     // TODO
     static_cast<void>(constraint);
@@ -291,6 +306,7 @@ void Jolt_world::add_constraint(IConstraint* constraint)
 
 void Jolt_world::remove_constraint(IConstraint* constraint)
 {
+    log_physics->error("remove constraint not implemented");
     //m_constraints.erase(
     //    std::remove(
     //        m_constraints.begin(),
@@ -304,6 +320,7 @@ void Jolt_world::remove_constraint(IConstraint* constraint)
 
 void Jolt_world::set_gravity(const glm::vec3 gravity)
 {
+    log_physics->trace("set gravity {}", gravity);
     m_gravity = gravity;
     m_physics_system.SetGravity(to_jolt(gravity));
 }
@@ -334,7 +351,7 @@ void Jolt_world::OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBody
     //const auto userdata = m_physics_system.GetBodyInterface().GetUserData(inBodyID);
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
 
-    log_physics->info(
+    log_physics->trace(
         "Body activated ID = {}, name = {}",
         inBodyID.GetIndex(),
         (body != nullptr)
@@ -350,7 +367,7 @@ void Jolt_world::OnBodyDeactivated(
 {
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
 
-    log_physics->info(
+    log_physics->trace(
         "Body deactivated ID = {}, name = {}",
         inBodyID.GetIndex(),
         (body != nullptr)

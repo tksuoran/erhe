@@ -1,4 +1,4 @@
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_OFF
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/geometry_log.hpp"

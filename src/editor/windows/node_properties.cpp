@@ -6,6 +6,7 @@
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/material_library.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -13,6 +14,7 @@
 #include "erhe/application/windows/log_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/physics/iworld.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/material.hpp"
@@ -767,6 +769,23 @@ void Node_properties::imgui()
             if (name != node->name())
             {
                 node->set_name(name);
+            }
+        }
+
+        std::shared_ptr<Node_physics> node_physics = get_physics_node(node.get());
+        if (node_physics)
+        {
+            const erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+            if (rigid_body != nullptr)
+            {
+                if (ImGui::TreeNodeEx("Physics", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
+                {
+                    const erhe::physics::Transform transform = rigid_body->get_world_transform();
+                    ImGui::Text("RX: %f", transform.origin.x);
+                    ImGui::Text("RY: %f", transform.origin.y);
+                    ImGui::Text("RZ: %f", transform.origin.z);
+                    ImGui::TreePop();
+                }
             }
         }
 

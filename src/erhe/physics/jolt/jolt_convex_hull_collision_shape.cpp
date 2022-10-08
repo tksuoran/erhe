@@ -32,7 +32,7 @@ auto make_convex_hull_shape_settings(
     const int          stride
 ) -> JPH::ConvexHullShapeSettings
 {
-    std::vector<JPH::Vec3> points;
+    JPH::Array<JPH::Vec3> points;
     points.reserve(point_count);
     const float* data = point_data;
     for (int i = 0; i < point_count; ++i)

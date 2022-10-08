@@ -251,15 +251,14 @@ private:
         void initialize(
             const erhe::application::Configuration& configuration,
             Mesh_memory&                            mesh_memory,
-            Scene_root&                             scene_root
+            Scene_root*                             tool_scene_root
         );
 
         void update_visibility(const bool show);
         void update_scale     (const glm::vec3 view_position_in_world);
-        void update_transforms(const uint64_t serial);
+        void update_transforms(); //const uint64_t serial);
 
         auto make_mesh(
-            Scene_root&                                       scene_root,
             const std::string_view                            name,
             const std::shared_ptr<erhe::primitive::Material>& material,
             const Part&                                       part
@@ -278,6 +277,7 @@ private:
 
         std::shared_ptr<Material_library>          material_library;
         erhe::scene::Node*                         root{nullptr};
+        Scene_root*                                tool_scene_root{nullptr};
         std::shared_ptr<erhe::scene::Node>         tool_node;
         bool                                       local{true};
         float                                      view_distance{1.0f};

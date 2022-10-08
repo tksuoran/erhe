@@ -23,9 +23,11 @@ public:
     static constexpr uint64_t c_flag_bit_is_raytrace         = (1u << 1);
     static constexpr uint64_t c_flag_bit_is_frame_controller = (1u << 2);
 
+    void set_node(Node* node) { m_node = node; };
+
     [[nodiscard]] virtual auto node_attachment_type() const -> const char* = 0;
-    virtual void on_attached_to                 (Node* node) { m_node = node; };
-    virtual void on_detached_from               (Node* node) { static_cast<void>(node); m_node = nullptr; };
+    virtual void on_attached_to                 (Node* node) { static_cast<void>(node); };
+    virtual void on_detached_from               (Node* node) { static_cast<void>(node); };
     virtual void on_node_transform_changed      () {};
     virtual void on_node_visibility_mask_changed(const uint64_t mask) { static_cast<void>(mask); };
 
@@ -70,15 +72,23 @@ public:
 class Node_transforms
 {
 public:
-    Transform parent_from_node; // normative
-    Transform world_from_node;  // calculated by update_transform()
+    mutable std::uint64_t update_serial{0}; // update needed if 0
+    Transform             parent_from_node; // normative
+    mutable Transform     world_from_node;  // calculated by update_transform()
+
+    static auto get_current_serial() -> uint64_t;
+    static auto get_next_serial   () -> uint64_t;
+
+private:
+    static uint64_t       s_global_update_serial;
 };
+
+class Scene;
 
 class Node_data
 {
 public:
     Node_transforms                                transforms;
-    std::uint64_t                                  last_transform_update_serial{0};
     void*                                          host           {nullptr};
     std::weak_ptr<Node>                            parent         {};
     std::vector<std::shared_ptr<Node>>             children;
@@ -101,7 +111,7 @@ public:
 
     virtual void on_attached               ();
     virtual void on_detached_from          (Node& node);
-    virtual void on_transform_changed      ();
+    virtual void on_transform_changed      (uint64_t serial) const;
     virtual void on_visibility_mask_changed();
 
     [[nodiscard]] virtual auto node_type() const -> const char*;
@@ -138,27 +148,26 @@ public:
     [[nodiscard]] auto get_index_of_child (const Node* child) const -> std::optional<std::size_t>;
     [[nodiscard]] auto is_ancestor        (const Node* ancestor_candidate) const -> bool;
 
-    void set_parent                (const std::weak_ptr<Node>& parent);
-    void set_depth_recursive       (const std::size_t depth);
-    void update_transform          (const uint64_t serial = 0);
-    void update_transform_recursive(const uint64_t serial = 0);
-    void sanity_check              () const;
-    void sanity_check_root_path    (const Node* node) const;
-    void set_parent_from_node      (const glm::mat4 matrix);
-    void set_parent_from_node      (const Transform& transform);
-    void set_node_from_parent      (const glm::mat4 matrix);
-    void set_node_from_parent      (const Transform& transform);
-    void set_world_from_node       (const glm::mat4 matrix);
-    void set_world_from_node       (const Transform& transform);
-    void attach                    (const std::shared_ptr<Node>& node, const bool primary_operation = true);
-    void attach                    (const std::shared_ptr<Node>& node, const std::size_t position, const bool primary_operation = true);
-    auto detach                    (Node* node, const bool primary_operation = true) -> bool;
-    void attach                    (const std::shared_ptr<INode_attachment>& attachment);
-    auto detach                    (INode_attachment* attachment) -> bool;
-    void unparent                  ();
-    void set_name                  (const std::string_view name);
+    void set_parent            (const std::weak_ptr<Node>& parent);
+    void set_depth_recursive   (std::size_t depth);
+    void update_world_from_node();
+    void update_transform      (uint64_t serial) const;
+    void sanity_check          () const;
+    void sanity_check_root_path(const Node* node) const;
+    void set_parent_from_node  (const glm::mat4 matrix);
+    void set_parent_from_node  (const Transform& transform);
+    void set_node_from_parent  (const glm::mat4 matrix);
+    void set_node_from_parent  (const Transform& transform);
+    void set_world_from_node   (const glm::mat4 matrix);
+    void set_world_from_node   (const Transform& transform);
+    void attach                (const std::shared_ptr<Node>& node, std::size_t position = 0, bool primary_operation = true);
+    auto detach                (Node* node, const bool primary_operation = true) -> bool;
+    void attach                (const std::shared_ptr<INode_attachment>& attachment);
+    auto detach                (INode_attachment* attachment) -> bool;
+    void unparent              ();
+    void set_name              (const std::string_view name);
 
-    Node_data                      node_data;
+    Node_data node_data;
 
 protected:
     erhe::toolkit::Unique_id<Node> m_id;

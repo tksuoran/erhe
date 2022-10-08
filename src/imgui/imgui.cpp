@@ -15192,15 +15192,20 @@ static void ImGui::DockNodeUpdate(ImGuiDockNode* node)
     // Draw whole dockspace background if ImGuiDockNodeFlags_PassthruCentralNode if set.
     // We need to draw a background at the root level if requested by ImGuiDockNodeFlags_PassthruCentralNode, but we will only know the correct pos/size
     // _after_ processing the resizing splitters. So we are using the DrawList channel splitting facility to submit drawing primitives out of order!
-    const bool render_dockspace_bg = node->IsRootNode() && host_window && (node_flags & ImGuiDockNodeFlags_PassthruCentralNode) != 0;
-    if (render_dockspace_bg && node->IsVisible)
-    {
-        host_window->DrawList->ChannelsSetCurrent(0);
-        if (central_node_hole)
-            RenderRectFilledWithHole(host_window->DrawList, node->Rect(), central_node->Rect(), GetColorU32(ImGuiCol_WindowBg), 0.0f);
-        else
-            host_window->DrawList->AddRectFilled(node->Pos, node->Pos + node->Size, GetColorU32(ImGuiCol_WindowBg), 0.0f);
-    }
+    ////
+    //// See:
+    ////
+    //// https://github.com/ocornut/imgui/issues/5634
+    ////
+    //// const bool render_dockspace_bg = node->IsRootNode() && host_window && (node_flags & ImGuiDockNodeFlags_PassthruCentralNode) != 0;
+    //// if (render_dockspace_bg && node->IsVisible)
+    //// {
+    ////     host_window->DrawList->ChannelsSetCurrent(0);
+    ////     if (central_node_hole)
+    ////         RenderRectFilledWithHole(host_window->DrawList, node->Rect(), central_node->Rect(), GetColorU32(ImGuiCol_WindowBg), 0.0f);
+    ////     else
+    ////         host_window->DrawList->AddRectFilled(node->Pos, node->Pos + node->Size, GetColorU32(ImGuiCol_WindowBg), 0.0f);
+    //// }
 
     // Draw and populate Tab Bar
     if (host_window)

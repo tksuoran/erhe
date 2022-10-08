@@ -84,6 +84,12 @@ void Trs_tool_drag_command::try_ready(
 )
 {
     //log_trs_tool->trace("try_ready");
+    if (!m_trs_tool.is_enabled())
+    {
+        //log_trs_tool->trace("trs not enabled");
+        return;
+    }
+
     if (m_trs_tool.on_drag_ready(context))
     {
         set_ready(context);
@@ -97,7 +103,7 @@ auto Trs_tool_drag_command::try_call(
     //log_trs_tool->trace("try_call");
     if (!m_trs_tool.is_enabled())
     {
-        log_trs_tool->trace("not enabled");
+        //log_trs_tool->trace("trs not enabled");
         return false;
     }
 
@@ -128,7 +134,7 @@ void Trs_tool_drag_command::on_inactive(
 )
 {
     static_cast<void>(context);
-    log_trs_tool->trace("on_inactive");
+    log_trs_tool->trace("TRS on_inactive");
 
     if (get_tool_state() != erhe::application::State::Inactive)
     {
@@ -181,7 +187,7 @@ void Trs_tool::initialize_component()
     {
         return;
     }
-    m_visualization.initialize(*Component::get<erhe::application::Configuration>(), *m_mesh_memory, *tool_scene_root.get());
+    m_visualization.initialize(*Component::get<erhe::application::Configuration>(), *m_mesh_memory, tool_scene_root.get());
     m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_visualization.x_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_x;
@@ -265,7 +271,7 @@ void Trs_tool::set_node(
         return;
     }
 
-    log_trs_tool->trace("set_node(node = {})", node ? node->name() : "");
+    log_trs_tool->trace("TRS set_node(node = {})", node ? node->name() : "");
 
     if (
         m_node_physics &&
@@ -273,7 +279,9 @@ void Trs_tool::set_node(
         m_original_motion_mode.has_value()
     )
     {
-        log_trs_tool->trace("restoring old physics node");
+        log_trs_tool->trace("TRS restoring old physics node");
+        m_node_physics->rigid_body()->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0});
+        m_node_physics->rigid_body()->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0});
         m_node_physics->rigid_body()->set_motion_mode(m_original_motion_mode.value());
         m_original_motion_mode.reset();
     }
@@ -290,7 +298,7 @@ void Trs_tool::set_node(
 
     if (rigid_body != nullptr)
     {
-        log_trs_tool->trace("node has rigid_body");
+        log_trs_tool->trace("TRS node has rigid_body");
         m_original_motion_mode = rigid_body->get_motion_mode();
         rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic);
         rigid_body->begin_move();
@@ -298,12 +306,12 @@ void Trs_tool::set_node(
 
     if (m_target_node)
     {
-        log_trs_tool->trace("trs tool now has target node");
+        log_trs_tool->trace("TRS now has target node");
         m_visualization.root = m_target_node.get();
     }
     else
     {
-        log_trs_tool->trace("trs tool now does not have target");
+        log_trs_tool->trace("TRS now does not have target");
         m_visualization.root = nullptr;
     }
 
@@ -313,7 +321,6 @@ void Trs_tool::set_node(
 Trs_tool::Visualization::Visualization(Trs_tool& trs_tool)
     : trs_tool{trs_tool}
 {
-    tool_node = std::make_shared<erhe::scene::Node>("Trs");
 }
 
 void Trs_tool::Visualization::update_scale(
@@ -395,12 +402,13 @@ void Trs_tool::Visualization::update_visibility(
 }
 
 auto Trs_tool::Visualization::make_mesh(
-    Scene_root&                                       scene_root,
     const std::string_view                            name,
     const std::shared_ptr<erhe::primitive::Material>& material,
     const Part&                                       part
 ) -> std::shared_ptr<erhe::scene::Mesh>
 {
+    ERHE_VERIFY(tool_scene_root != nullptr);
+
     auto mesh = std::make_shared<erhe::scene::Mesh>(
         name,
         erhe::primitive::Primitive{
@@ -412,15 +420,16 @@ auto Trs_tool::Visualization::make_mesh(
         }
     );
     mesh->set_visibility_mask(erhe::scene::Node_visibility::tool);
+    tool_scene_root->scene().add_node(mesh);
     auto* parent = tool_node.get();
     if (parent != nullptr)
     {
         parent->attach(mesh);
     }
 
-    const auto& layers     = scene_root.layers();
+    const auto& layers     = tool_scene_root->layers();
     auto*       tool_layer = layers.tool();
-    scene_root.add(mesh, tool_layer);
+    tool_scene_root->add(mesh, tool_layer);
     if (part.raytrace_primitive)
     {
         auto node_raytrace = std::make_shared<Node_raytrace>(
@@ -429,7 +438,7 @@ auto Trs_tool::Visualization::make_mesh(
         );
         mesh->attach(node_raytrace);
         add_to_raytrace_scene(
-            scene_root.raytrace_scene(),
+            tool_scene_root->raytrace_scene(),
             node_raytrace
         );
     }
@@ -539,8 +548,7 @@ auto Trs_tool::Visualization::make_rotate_ring(
 auto Trs_tool::Visualization::get_handle_material(
     const Handle handle,
     const Mode   mode
-)
--> std::shared_ptr<erhe::primitive::Material>
+) -> std::shared_ptr<erhe::primitive::Material>
 {
     switch (handle)
     {
@@ -580,16 +588,21 @@ auto Trs_tool::Visualization::get_handle_material(
 void Trs_tool::Visualization::initialize(
     const erhe::application::Configuration& configuration,
     Mesh_memory&                            mesh_memory,
-    Scene_root&                             scene_root
+    Scene_root*                             in_tool_scene_root
 )
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(in_tool_scene_root != nullptr);
+
+    this->tool_scene_root = in_tool_scene_root;
+    tool_node = std::make_shared<erhe::scene::Node>("Trs");
+    //tool_scene_root->scene().add_node(tool_node);
 
     this->scale          = configuration.trs_tool.scale;
     this->show_translate = configuration.trs_tool.show_translate;
     this->show_rotate    = configuration.trs_tool.show_rotate;
 
-    material_library = scene_root.material_library();
+    material_library = tool_scene_root->material_library();
 
     x_material        = make_material("x",        vec3{1.00f, 0.00f, 0.0f}, Mode::Normal);
     y_material        = make_material("y",        vec3{0.23f, 1.00f, 0.0f}, Mode::Normal);
@@ -612,21 +625,21 @@ void Trs_tool::Visualization::initialize(
     const auto box            = make_box           (mesh_memory);
     const auto rotate_ring    = make_rotate_ring   (mesh_memory);
 
-    x_arrow_cylinder_mesh  = make_mesh(scene_root, "X arrow cylinder", x_material, arrow_cylinder);
-    x_arrow_neg_cone_mesh  = make_mesh(scene_root, "X arrow cone",     x_material, arrow_cone    );
-    x_arrow_pos_cone_mesh  = make_mesh(scene_root, "X arrow cone",     x_material, arrow_cone    );
-    y_arrow_cylinder_mesh  = make_mesh(scene_root, "Y arrow cylinder", y_material, arrow_cylinder);
-    y_arrow_neg_cone_mesh  = make_mesh(scene_root, "Y arrow cone",     y_material, arrow_cone    );
-    y_arrow_pos_cone_mesh  = make_mesh(scene_root, "Y arrow cone",     y_material, arrow_cone    );
-    z_arrow_cylinder_mesh  = make_mesh(scene_root, "Z arrow cylinder", z_material, arrow_cylinder);
-    z_arrow_neg_cone_mesh  = make_mesh(scene_root, "Z arrow cone",     z_material, arrow_cone    );
-    z_arrow_pos_cone_mesh  = make_mesh(scene_root, "Z arrow cone",     z_material, arrow_cone    );
-    xy_box_mesh            = make_mesh(scene_root, "XY box",           z_material, box           );
-    xz_box_mesh            = make_mesh(scene_root, "XZ box",           y_material, box           );
-    yz_box_mesh            = make_mesh(scene_root, "YZ box",           x_material, box           );
-    x_rotate_ring_mesh     = make_mesh(scene_root, "X rotate ring",    x_material, rotate_ring   );
-    y_rotate_ring_mesh     = make_mesh(scene_root, "Y rotate ring",    y_material, rotate_ring   );
-    z_rotate_ring_mesh     = make_mesh(scene_root, "Z rotate ring",    z_material, rotate_ring   );
+    x_arrow_cylinder_mesh  = make_mesh("X arrow cylinder", x_material, arrow_cylinder);
+    x_arrow_neg_cone_mesh  = make_mesh("X arrow cone",     x_material, arrow_cone    );
+    x_arrow_pos_cone_mesh  = make_mesh("X arrow cone",     x_material, arrow_cone    );
+    y_arrow_cylinder_mesh  = make_mesh("Y arrow cylinder", y_material, arrow_cylinder);
+    y_arrow_neg_cone_mesh  = make_mesh("Y arrow cone",     y_material, arrow_cone    );
+    y_arrow_pos_cone_mesh  = make_mesh("Y arrow cone",     y_material, arrow_cone    );
+    z_arrow_cylinder_mesh  = make_mesh("Z arrow cylinder", z_material, arrow_cylinder);
+    z_arrow_neg_cone_mesh  = make_mesh("Z arrow cone",     z_material, arrow_cone    );
+    z_arrow_pos_cone_mesh  = make_mesh("Z arrow cone",     z_material, arrow_cone    );
+    xy_box_mesh            = make_mesh("XY box",           z_material, box           );
+    xz_box_mesh            = make_mesh("XZ box",           y_material, box           );
+    yz_box_mesh            = make_mesh("YZ box",           x_material, box           );
+    x_rotate_ring_mesh     = make_mesh("X rotate ring",    x_material, rotate_ring   );
+    y_rotate_ring_mesh     = make_mesh("Y rotate ring",    y_material, rotate_ring   );
+    z_rotate_ring_mesh     = make_mesh("Z rotate ring",    z_material, rotate_ring   );
 
     using erhe::scene::Transform;
     const auto rotate_z_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, vec3{0.0f, 0.0f, 1.0f});
@@ -885,7 +898,7 @@ auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
     auto* input_context = context.get_input_context();
     if (input_context == nullptr)
     {
-        log_trs_tool->trace("no input context");
+        log_trs_tool->trace("TRS no input context");
         end_drag(context);
         return false;
     }
@@ -945,7 +958,7 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
 {
     static_cast<void>(context);
 
-    log_trs_tool->trace("on_drag_ready");
+    log_trs_tool->trace("TRS on_drag_ready");
 
     //const auto viewport_window = m_viewport_windows->hover_window();
     //if (!viewport_window)
@@ -959,14 +972,14 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
     Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
     if (scene_view == nullptr)
     {
-        log_trs_tool->trace("drag not possible - scene_view == nullptr");
+        //log_trs_tool->trace("drag not possible - scene_view == nullptr");
         return false;
     }
 
     const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
     if (!tool.valid || !tool.mesh)
     {
-        log_trs_tool->trace("drag not possible - !tool.valid || !tool.mesh");
+        //log_trs_tool->trace("drag not possible - !tool.valid || !tool.mesh");
         return false;
     }
 
@@ -976,14 +989,14 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         ////!viewport_window->position_in_viewport().has_value()
     )
     {
-        log_trs_tool->trace("drag not possible - no handle, or no root");
+        //log_trs_tool->trace("drag not possible - no handle, or no root");
         return false;
     }
 
     const auto camera = scene_view->get_camera();
     if (!camera)
     {
-        log_trs_tool->trace("drag not possible - no camera");
+        //log_trs_tool->trace("drag not possible - no camera");
         return false;
     }
 
@@ -1785,7 +1798,7 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
     }
 }
 
-void Trs_tool::Visualization::update_transforms(const uint64_t serial)
+void Trs_tool::Visualization::update_transforms() //const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -1793,10 +1806,6 @@ void Trs_tool::Visualization::update_transforms(const uint64_t serial)
     {
         return;
     }
-
-    //// TODO XXX MUSTFIX what is this?
-    //// auto* scene_root = reinterpret_cast<Scene_root*>(tool_node->node_data.host);
-    //// const auto serial = scene_root->scene().transform_update_serial();
 
     auto world_from_root_transform = local
         ? root->world_from_node_transform()
@@ -1806,7 +1815,6 @@ void Trs_tool::Visualization::update_transforms(const uint64_t serial)
     world_from_root_transform.catenate(scaling);
 
     tool_node->set_parent_from_node(world_from_root_transform);
-    tool_node->update_transform_recursive(serial);
 }
 
 void Trs_tool::update_transforms()
@@ -1821,13 +1829,7 @@ void Trs_tool::update_transforms()
         log_trs_tool->error("Node '{}' has no scene root");
         return;
     }
-    const auto serial = scene_root->scene().transform_update_serial();
-    root()->update_transform(serial);
-    //if (m_node_physics)
-    //{
-    //    m_node_physics->on_node_updated();
-    //}
-    m_visualization.update_transforms(serial);
+    m_visualization.update_transforms();
 }
 
 void Trs_tool::on_enable_state_changed()

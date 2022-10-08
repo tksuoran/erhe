@@ -148,6 +148,11 @@ void Selection_tool_select_command::try_ready(
     erhe::application::Command_context& context
 )
 {
+    if (!m_selection_tool.is_enabled())
+    {
+        log_selection->trace("selection tool not enabled");
+        return;
+    }
     if (m_selection_tool.on_select_try_ready())
     {
         set_ready(context);
@@ -158,8 +163,15 @@ auto Selection_tool_select_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
+    if (!m_selection_tool.is_enabled())
+    {
+        log_selection->trace("selection tool not enabled");
+        return false;
+    }
+
     if (get_tool_state() != erhe::application::State::Ready)
     {
+        log_selection->trace("selection tool not in ready state");
         return false;
     }
 

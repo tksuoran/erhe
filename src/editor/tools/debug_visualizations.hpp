@@ -33,7 +33,8 @@ class Trs_tool;
 class Viewport_config;
 
 class Debug_visualizations
-    : public erhe::components::Component
+    : public erhe::application::Imgui_window
+    , public erhe::components::Component
     , public Tool
 {
 public:
@@ -55,6 +56,9 @@ public:
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
     void tool_render(const Render_context& context) override;
+
+    // Implements Imgui_window
+    void imgui() override;
 
 private:
 
@@ -84,8 +88,8 @@ private:
     void spot_light_visualization       (Light_visualization_context& context);
 
     void camera_visualization(
-        const Render_context&       render_context,
-        const erhe::scene::Camera*  camera
+        const Render_context&      render_context,
+        const erhe::scene::Camera* camera
     );
 
     // Component dependencies
@@ -94,6 +98,13 @@ private:
     std::shared_ptr<Selection_tool>                       m_selection_tool;
     std::shared_ptr<Trs_tool>                             m_trs_tool;
     erhe::toolkit::Bounding_volume_combiner               m_selection_bounding_volume;
+
+    bool m_tool_hide{true};
+    bool m_physics  {false};
+    bool m_raytrace {false};
+    bool m_selection{true};
+    bool m_lights   {false};
+    bool m_cameras  {false};
 };
 
 } // namespace editor

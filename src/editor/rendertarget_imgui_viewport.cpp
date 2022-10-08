@@ -62,6 +62,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     io.BackendPlatformName     = "erhe rendertarget";
     io.DisplaySize             = ImVec2{static_cast<float>(m_rendertarget_node->width()), static_cast<float>(m_rendertarget_node->height())};
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
+    io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
 
     io.MousePos                = ImVec2{-FLT_MAX, -FLT_MAX};
     io.MouseHoveredViewport    = 0;
@@ -292,7 +293,7 @@ template <typename T>
     m_time = current_time;
 
     ImGui::NewFrame();
-    ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+    ////ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
     return true;
 }
@@ -308,9 +309,19 @@ void Rendertarget_imgui_viewport::end_imgui_frame()
     ImGui::Render();
 }
 
+void Rendertarget_imgui_viewport::set_clear_color(const glm::vec4& value)
+{
+    m_clear_color = value;
+}
+
 void Rendertarget_imgui_viewport::execute_rendergraph_node()
 {
     SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::execute_rendergraph_node()");
+
+    if (!m_enabled)
+    {
+        return;
+    }
 
     erhe::application::Imgui_windows&  imgui_windows  = *m_imgui_windows.get();
     erhe::application::Imgui_viewport& imgui_viewport = *this;
@@ -318,7 +329,7 @@ void Rendertarget_imgui_viewport::execute_rendergraph_node()
     erhe::application::Scoped_imgui_context imgui_context(imgui_windows, imgui_viewport);
 
     m_rendertarget_node->bind();
-    m_rendertarget_node->clear(glm::vec4{0.0f, 0.0f, 0.0f, 0.5f});
+    m_rendertarget_node->clear(m_clear_color);
     m_imgui_renderer->render_draw_data();
     m_rendertarget_node->render_done();
 }

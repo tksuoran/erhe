@@ -133,7 +133,7 @@ private:
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
-    std::array<float, 4>                                 m_clear_color{0.0f, 0.0f, 0.0f, 0.95f};
+    std::array<float, 4>                                 m_clear_color{0.1f, 0.2f, 0.3f, 1.0f};
     std::vector<Finger_point>                            m_finger_inputs;
     std::vector<Controller_input>                        m_controller_inputs;
     float                                                m_finger_to_viewport_distance_threshold{0.1f};

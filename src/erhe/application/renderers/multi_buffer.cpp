@@ -44,7 +44,7 @@ void Multi_buffer::allocate(
     ERHE_VERIFY(gl_helpers::is_indexed(target));
     m_binding_point = binding_point;
 
-    log_multi_buffer->info("{}: binding point = {} size = {}", m_name, binding_point, size);
+    log_multi_buffer->trace("{}: binding point = {} size = {}", m_name, binding_point, size);
 
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
@@ -66,7 +66,7 @@ void Multi_buffer::allocate(
     ERHE_VERIFY(!gl_helpers::is_indexed(target));
     m_binding_point = 0;
 
-    log_multi_buffer->info("{}: size = {}", m_name, size);
+    log_multi_buffer->trace("{}: size = {}", m_name, size);
 
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {

@@ -213,7 +213,6 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "performance",          windows.performance         );
         get_window(ini, "pipelines",            windows.pipelines           );
         get_window(ini, "physics",              windows.physics             );
-        get_window(ini, "physics_tool",         windows.physics_tool        );
         get_window(ini, "post_processing",      windows.post_processing     );
         get_window(ini, "render_graph",         windows.render_graph        );
         get_window(ini, "tool_properties",      windows.tool_properties     );
@@ -302,6 +301,24 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "scale",          trs_tool.scale);
             ini_get(section, "show_translate", trs_tool.show_translate);
             ini_get(section, "show_rotate",    trs_tool.show_rotate);
+        }
+
+        if (ini.has("hud"))
+        {
+            const auto& section = ini["hud"];
+            ini_get(section, "show", hud.show);
+            ini_get(section, "x",    hud.x);
+            ini_get(section, "y",    hud.y);
+            ini_get(section, "z",    hud.z);
+        }
+
+        if (ini.has("hotbar"))
+        {
+            const auto& section = ini["hotbar"];
+            ini_get(section, "show", hotbar.show);
+            ini_get(section, "x",    hotbar.x);
+            ini_get(section, "y",    hotbar.y);
+            ini_get(section, "z",    hotbar.z);
         }
     }
 

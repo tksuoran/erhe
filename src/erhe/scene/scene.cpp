@@ -136,11 +136,6 @@ void Scene::sort_transform_nodes()
     nodes_sorted = true;
 }
 
-auto Scene::transform_update_serial() -> uint64_t
-{
-    return ++m_transform_update_serial;
-}
-
 void Scene::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION
@@ -150,18 +145,18 @@ void Scene::update_node_transforms()
         sort_transform_nodes();
     }
 
-    const auto serial = transform_update_serial();
-
     for (auto& node : flat_node_vector)
     {
-        node->update_transform(serial);
+        node->update_transform(0);
     }
 }
 
 Scene::Scene(void* host)
-    : host  {host}
+    : host     {host}
     , root_node{std::make_shared<erhe::scene::Node>("root")}
 {
+    // The implicit root node has a valid (identity) transform
+    root_node->node_data.transforms.update_serial = 1;
 }
 
 void Scene::add_node(

@@ -37,6 +37,7 @@ public:
 
     // Public API
     // TODO XXX FIXME Move to erhe::application::View
+    void set_active_tool(Tool* tool);
     [[nodiscard]] auto get_active_tool() const -> Tool*;
     void register_active_tool(Tool* tool);
 

@@ -38,6 +38,13 @@ class Physics_tool;
 class Scene_root;
 class Viewport_windows;
 
+enum class Physics_tool_mode : int
+{
+    Drag = 0,
+    Push = 1,
+    Pull = 2
+};
+
 class Physics_tool_drag_command
     : public erhe::application::Command
 {
@@ -56,27 +63,8 @@ private:
     Physics_tool& m_physics_tool;
 };
 
-class Physics_tool_force_command
-    : public erhe::application::Command
-{
-public:
-    explicit Physics_tool_force_command(Physics_tool& physics_tool)
-        : Command       {"Physics_tool.force"}
-        , m_physics_tool{physics_tool}
-    {
-    }
-
-    auto try_call   (erhe::application::Command_context& context) -> bool override;
-    void try_ready  (erhe::application::Command_context& context) override;
-    void on_inactive(erhe::application::Command_context& context) override;
-
-private:
-    Physics_tool& m_physics_tool;
-};
-
 class Physics_tool
     : public erhe::components::Component
-    , public erhe::components::IUpdate_fixed_step
     , public Tool
 {
 public:
@@ -97,33 +85,26 @@ public:
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int     override { return c_priority; }
     [[nodiscard]] auto description  () -> const char*   override;
+    void tool_hover     (Scene_view* scene_view) override;
     void tool_render    (const Render_context& context) override;
     void tool_properties() override;
 
-    // Implements IUpdate_fixed_step
-    void update_fixed_step(const erhe::components::Time_context&) override;
-
-    auto acquire_target() -> bool;
+    // Public API
+    auto acquire_target(Scene_view* scene_view) -> bool;
     void release_target();
     void begin_point_to_point_constraint();
 
-    // Commands
-    void set_active_command(const int command);
+    [[nodiscard]] auto get_mode() const -> Physics_tool_mode;
+    void set_mode(Physics_tool_mode value);
 
-    // Drag
-    auto on_drag_ready() -> bool;
-    auto on_drag      () -> bool;
-
-    // Force
-    auto on_force_ready() -> bool;
-    auto on_force      () -> bool;
+    auto on_drag_ready(Scene_view* scene_view) -> bool;
+    auto on_drag      (Scene_view* scene_view) -> bool;
 
 private:
     [[nodiscard]] auto physics_world() const -> erhe::physics::IWorld*;
 
     // Commands
-    Physics_tool_drag_command  m_drag_command;
-    Physics_tool_force_command m_force_command;
+    Physics_tool_drag_command m_drag_command;
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
@@ -131,11 +112,9 @@ private:
     std::shared_ptr<Fly_camera_tool>                      m_fly_camera;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
-    static const int c_command_drag {0};
-    static const int c_command_force{1};
+    Physics_tool_mode m_mode{Physics_tool_mode::Drag};
 
-    int m_active_command{c_command_drag};
-
+    std::shared_ptr<erhe::scene::Mesh>          m_hover_mesh;
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
     std::shared_ptr<Node_physics>               m_target_node_physics;
     double                                      m_target_distance        {1.0};

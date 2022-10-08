@@ -93,6 +93,7 @@ auto Primitive_buffer::update(
 
         const auto& node_data = mesh->node_data;
         const auto& mesh_data = mesh->mesh_data;
+        const glm::mat4 world_from_node = mesh->world_from_node();
 
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives)
@@ -117,7 +118,6 @@ auto Primitive_buffer::update(
 
             const glm::vec3 id_offset_vec3  = erhe::toolkit::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4  = glm::vec4{id_offset_vec3, 0.0f};
-            const glm::mat4 world_from_node = mesh->world_from_node();
             const uint32_t  material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
             const uint32_t  extra2          = 0;
             const uint32_t  extra3          = 0;

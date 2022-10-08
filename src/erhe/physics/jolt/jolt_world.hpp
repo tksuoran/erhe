@@ -79,12 +79,25 @@ public:
     [[nodiscard]] auto get_physics_system() -> JPH::PhysicsSystem&;
 
 private:
+    class Initialize_first
+    {
+    public:
+        Initialize_first();
+    };
+    Initialize_first m_initialize_first;
+
     bool                                           m_physics_enabled{false};
     glm::vec3                                      m_gravity        {0.0f};
-    JPH::PhysicsSystem                             m_physics_system;
-    JPH::TempAllocatorImpl                         m_temp_allocator{10 * 1024 * 1024};
-    JPH::JobSystemThreadPool                       m_job_system    {JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10};
+
+    static constexpr unsigned int cMaxBodies             = 1024 * 32;
+    static constexpr unsigned int cNumBodyMutexes        = 0;
+    static constexpr unsigned int cMaxBodyPairs          = 1024 * 8;
+    static constexpr unsigned int cMaxContactConstraints = 1024;
+
+    JPH::TempAllocatorImpl                         m_temp_allocator;
+    JPH::JobSystemThreadPool                       m_job_system;
     std::unique_ptr<JPH::BroadPhaseLayerInterface> m_broad_phase_layer_interface;
+    JPH::PhysicsSystem                             m_physics_system;
     //std::unique_ptr<Jolt_debug_renderer>           m_debug_renderer;
 
     std::vector<Jolt_rigid_body*> m_rigid_bodies;

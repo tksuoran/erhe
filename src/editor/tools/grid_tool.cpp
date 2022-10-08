@@ -30,15 +30,15 @@ Grid_tool::~Grid_tool() noexcept
 
 void Grid_tool::declare_required_components()
 {
-    require<Tools>();
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
+    require<Tools>();
 }
 
 void Grid_tool::initialize_component()
 {
-    get<Tools                           >()->register_background_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    get<Tools                           >()->register_background_tool(this);
 
     const auto& config = get<erhe::application::Configuration>()->grid;
     m_enable     = config.enabled;

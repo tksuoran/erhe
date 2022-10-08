@@ -1,7 +1,11 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/physics/jolt/jolt_collision_shape.hpp"
 #include "erhe/physics/jolt/jolt_world.hpp"
 #include "erhe/physics/imotion_state.hpp"
+#include "erhe/physics/physics_log.hpp"
 #include "erhe/physics/transform.hpp"
 #include "erhe/scene/node.hpp"
 
@@ -70,10 +74,19 @@ Jolt_rigid_body::Jolt_rigid_body(
     , m_restitution    {create_info.restitution}
     , m_linear_damping {create_info.linear_damping}
     , m_angular_damping{create_info.angular_damping}
+    , m_debug_label    {create_info.debug_label}
 {
     const JPH::Shape* shape       = m_collision_shape->get_jolt_shape().GetPtr();
     const auto        transform   = motion_state->get_world_from_rigidbody();
     const JPH::Vec3   position    = to_jolt(transform.origin);
+
+    SPDLOG_LOGGER_TRACE(
+        log_physics,
+        "rigid body create {} with position {}",
+        m_debug_label,
+        transform.origin
+    );
+
     const JPH::Quat   rotation    = to_jolt(glm::quat(transform.basis));
     const auto        motion_mode = motion_state->get_motion_mode();
     JPH::BodyCreationSettings creation_settings
@@ -128,6 +141,12 @@ void Jolt_rigid_body::set_friction(const float friction)
     {
         return;
     }
+    SPDLOG_LOGGER_TRACE(
+        log_physics,
+        "{} set friction {}",
+        m_debug_label,
+        friction
+    );
     m_friction = friction;
     m_body->SetFriction(friction);
 }
@@ -139,6 +158,13 @@ auto Jolt_rigid_body::get_rolling_friction() const -> float
 
 void Jolt_rigid_body::set_rolling_friction(const float rolling_friction)
 {
+    // TODO Use angular dampening to simulate rolling friction with Jolt
+    SPDLOG_LOGGER_TRACE(
+        log_physics,
+        "{} set rolling friction {}",
+        m_debug_label,
+        rolling_friction
+    );
     m_rolling_friction = rolling_friction;
 }
 
@@ -159,14 +185,31 @@ void Jolt_rigid_body::set_restitution(float restitution)
 
 void Jolt_rigid_body::begin_move()
 {
+    SPDLOG_LOGGER_TRACE(log_physics, "{} begin move", m_debug_label);
     m_body->SetAllowSleeping(false);
     m_body_interface.ActivateBody(m_body->GetID());
 }
 
 void Jolt_rigid_body::end_move()
 {
+    SPDLOG_LOGGER_TRACE(log_physics, "{} end move", m_debug_label);
     m_body->SetAllowSleeping(true);
     //m_body_interface.ActivateBody(m_body->GetID());
+}
+
+namespace {
+
+auto c_str(const Motion_mode motion_mode) -> const char*
+{
+    switch (motion_mode)
+    {
+        case Motion_mode::e_static: return "static";
+        case Motion_mode::e_kinematic: return "kinematic";
+        case Motion_mode::e_dynamic: return "dynamic";
+        default: return "?";
+    }
+}
+
 }
 
 void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
@@ -175,8 +218,19 @@ void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     {
         return;
     }
+    SPDLOG_LOGGER_TRACE(log_physics, "{} set motion mode = {}", m_debug_label, c_str(motion_mode));
+    if (m_body->IsActive() && (motion_mode == Motion_mode::e_static))
+    {
+        m_body_interface.DeactivateBody(m_body->GetID());
+    }
+
     m_motion_mode = motion_mode;
     m_body->SetMotionType(to_jolt(motion_mode));
+
+    if (motion_mode == Motion_mode::e_dynamic)
+    {
+        m_body_interface.ActivateBody(m_body->GetID());
+    }
 }
 
 auto Jolt_rigid_body::get_center_of_mass_transform() const -> Transform
@@ -199,6 +253,14 @@ void Jolt_rigid_body::set_center_of_mass_transform(const Transform transform)
 
 void Jolt_rigid_body::move_world_transform(const Transform transform, float delta_time)
 {
+    SPDLOG_LOGGER_TRACE(
+        log_physics,
+        "{} move to position {} time {}",
+        m_debug_label,
+        transform.origin,
+        delta_time
+    );
+
     m_body_interface.MoveKinematic(
         m_body->GetID(),
         to_jolt(transform.origin),
@@ -210,8 +272,25 @@ void Jolt_rigid_body::move_world_transform(const Transform transform, float delt
     );
 }
 
+auto Jolt_rigid_body::get_world_transform() const -> Transform
+{
+    JPH::Quat basis;
+    JPH::Vec3 origin;
+    m_body_interface.GetPositionAndRotation(
+        m_body->GetID(),
+        origin,
+        basis
+    );
+    return erhe::physics::Transform{
+        glm::mat3{from_jolt(basis)},
+        from_jolt(origin)
+    };
+}
+
 void Jolt_rigid_body::set_world_transform(const Transform transform)
 {
+    SPDLOG_LOGGER_TRACE(log_physics, "{} set transform position {}", m_debug_label, transform.origin);
+
     m_body_interface.SetPositionAndRotation(
         m_body->GetID(),
         to_jolt(transform.origin),
@@ -225,11 +304,15 @@ void Jolt_rigid_body::set_world_transform(const Transform transform)
 
 void Jolt_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 {
+    SPDLOG_LOGGER_TRACE(log_physics, "{} set linear velocity {}", m_debug_label, velocity);
+
     m_body_interface.SetLinearVelocity(m_body->GetID(), to_jolt(velocity));
 }
 
 void Jolt_rigid_body::set_angular_velocity(const glm::vec3 velocity)
 {
+    SPDLOG_LOGGER_TRACE(log_physics, "{} set angular velocity {}", m_debug_label, velocity);
+
     m_body_interface.SetAngularVelocity(m_body->GetID(), to_jolt(velocity));
 }
 
@@ -245,9 +328,12 @@ auto Jolt_rigid_body::get_linear_damping() const -> float
 
 void Jolt_rigid_body::set_damping(const float linear_damping, const float angular_damping)
 {
+    SPDLOG_LOGGER_TRACE(log_physics, "{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
+
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr)
     {
+        log_physics->warn("{} no motion properties");
         return;
     }
     motion_properties->SetLinearDamping(linear_damping);
@@ -276,6 +362,8 @@ auto Jolt_rigid_body::get_mass() const -> float
 
 void Jolt_rigid_body::set_mass_properties(const float mass, const glm::mat4 local_inertia)
 {
+    SPDLOG_LOGGER_TRACE(log_physics, "{} set mass = {}", m_debug_label, mass);
+
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr)
     {
@@ -301,6 +389,21 @@ auto Jolt_rigid_body::get_jolt_body() const -> JPH::Body*
     return m_body;
 }
 
+void Jolt_rigid_body::pre_update_motion_state() const
+{
+    if (m_motion_mode != Motion_mode::e_kinematic)
+    {
+        return;
+    }
+
+    const auto transform = m_motion_state->get_world_from_rigidbody();
+    m_body->MoveKinematic(
+        to_jolt(transform.origin),
+        to_jolt(glm::quat{transform.basis}),
+        1.0f / 10.f
+    );
+}
+
 void Jolt_rigid_body::update_motion_state() const
 {
     if (m_motion_mode != Motion_mode::e_dynamic)
@@ -323,7 +426,6 @@ void Jolt_rigid_body::update_motion_state() const
         }
     );
 }
-
 
 } // namespace erhe::physics
 

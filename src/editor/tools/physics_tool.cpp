@@ -34,11 +34,14 @@ void Physics_tool_drag_command::try_ready(
 {
     if (get_tool_state() != erhe::application::State::Inactive)
     {
+        log_physics->info("PT state not inactive");
         return;
     }
 
-    if (m_physics_tool.on_drag_ready())
+    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
+    if (m_physics_tool.on_drag_ready(scene_view))
     {
+        log_physics->info("PT set ready");
         set_ready(context);
     }
 }
@@ -52,8 +55,9 @@ auto Physics_tool_drag_command::try_call(
         return false;
     }
 
+    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
     if (
-        m_physics_tool.on_drag() &&
+        m_physics_tool.on_drag(scene_view) &&
         (get_tool_state() == erhe::application::State::Ready)
     )
     {
@@ -69,71 +73,16 @@ void Physics_tool_drag_command::on_inactive(
 {
     static_cast<void>(context);
 
-    log_physics->info("Physics_tool_drag_command::on_inactive() - command state = {}", c_str(get_tool_state()));
+    log_physics->info("PT on_inactive");
     if (get_tool_state() == erhe::application::State::Active)
     {
         m_physics_tool.release_target();
     }
 }
-
-////////
-
-void Physics_tool_force_command::try_ready(
-    erhe::application::Command_context& context
-)
-{
-    if (get_tool_state() != erhe::application::State::Inactive)
-    {
-        return;
-    }
-
-    if (m_physics_tool.on_force_ready())
-    {
-        //set_ready(context);
-        set_active(context);
-    }
-}
-
-auto Physics_tool_force_command::try_call(
-    erhe::application::Command_context& context
-) -> bool
-{
-    if (get_tool_state() == erhe::application::State::Inactive)
-    {
-        return false;
-    }
-
-    if (
-        m_physics_tool.on_force() &&
-        (get_tool_state() == erhe::application::State::Ready)
-    )
-    {
-        set_active(context);
-    }
-
-    return get_tool_state() == erhe::application::State::Active;
-}
-
-void Physics_tool_force_command::on_inactive(
-    erhe::application::Command_context& context
-)
-{
-    static_cast<void>(context);
-
-    log_physics->info("Physics_tool_force_command::on_inactive() - command state = {}", c_str(get_tool_state()));
-
-    if (get_tool_state() == erhe::application::State::Active)
-    {
-        m_physics_tool.release_target();
-    }
-}
-
-/////////
 
 Physics_tool::Physics_tool()
     : erhe::components::Component{c_type_name}
     , m_drag_command             {*this}
-    , m_force_command            {*this}
 {
 }
 
@@ -176,18 +125,16 @@ void Physics_tool::declare_required_components()
 
 void Physics_tool::initialize_component()
 {
-    get<Tools>()->register_tool(this);
+    const auto& tools = get<Tools>();
+    tools->register_tool(this);
+    tools->register_hover_tool(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_drag_command);
-    commands->register_command(&m_force_command);
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
-    commands->bind_command_to_mouse_drag(&m_force_command, erhe::toolkit::Mouse_button_right);
-
-    erhe::application::Command_context context{*commands.get()};
-    set_active_command(c_command_drag);
-
+    commands->bind_command_to_controller_trigger(&m_drag_command, 0.5f, 0.45f, true);
     get<Operations>()->register_active_tool(this);
+
 }
 
 void Physics_tool::post_initialize()
@@ -203,26 +150,39 @@ auto Physics_tool::description() -> const char*
     return c_title.data();
 }
 
-auto Physics_tool::acquire_target() -> bool
+[[nodiscard]] auto Physics_tool::get_mode() const -> Physics_tool_mode
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    return m_mode;
+}
+
+void Physics_tool::set_mode(Physics_tool_mode value)
+{
+    m_mode = value;
+}
+
+auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
+{
+    log_physics->warn("acquire_target() ...");
+    if (scene_view == nullptr)
     {
+        log_physics->warn("Cant target: No scene_view");
         return false;
     }
 
-    const auto& content = viewport_window->get_hover(Hover_entry::content_slot);
+    const auto& content = scene_view->get_hover(Hover_entry::content_slot);
     if (
         !content.valid ||
         !content.position.has_value()
     )
     {
+        log_physics->warn("Cant target: No content");
         return false;
     }
 
-    const auto p0_opt = viewport_window->get_control_ray_origin_in_world();
+    const auto p0_opt = scene_view->get_control_ray_origin_in_world();
     if (!p0_opt.has_value())
     {
+        log_physics->warn("Cant target: No ray origin");
         return false;
     }
 
@@ -238,12 +198,15 @@ auto Physics_tool::acquire_target() -> bool
 
     if (!m_target_node_physics)
     {
+        log_physics->warn("Cant target: No physics mesh");
+        m_target_mesh.reset();
         return false;
     }
 
     erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
     if (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static)
     {
+        log_physics->warn("Cant target: Static mesh");
         return false;
     }
 
@@ -266,14 +229,14 @@ auto Physics_tool::acquire_target() -> bool
         /// TODO Should we also do this? m_target_constraint.reset();
     }
 
-    log_physics->info("Physics_tool: Target acquired");
+    log_physics->info("PT Target acquired - OK");
 
     return true;
 }
 
 void Physics_tool::release_target()
 {
-    log_physics->info("Physics_tool: Target released");
+    log_physics->info("PT Target released");
 
     if (m_target_constraint)
     {
@@ -299,7 +262,7 @@ void Physics_tool::release_target()
 
 void Physics_tool::begin_point_to_point_constraint()
 {
-    log_physics->info("Physics_tool: Begin point to point constraint");
+    log_physics->info("PT Begin point to point constraint");
 
     m_target_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(
         m_target_node_physics->rigid_body(),
@@ -316,24 +279,25 @@ void Physics_tool::begin_point_to_point_constraint()
     }
 }
 
-auto Physics_tool::on_drag_ready() -> bool
+auto Physics_tool::on_drag_ready(Scene_view* scene_view) -> bool
 {
     if (!is_enabled())
     {
+        log_physics->info("PT not enabled");
         return false;
     }
-    if (!acquire_target())
+    if (!acquire_target(scene_view))
     {
-        log_physics->info("Physics tool drag - acquire target failed");
         return false;
     }
 
     begin_point_to_point_constraint();
 
-    log_physics->info("Physics tool drag {} ready", m_target_mesh->name());
+    log_physics->info("PT drag {} ready", m_target_mesh->name());
     return true;
 }
 
+#if 0
 auto Physics_tool::on_force_ready() -> bool
 {
     if (!is_enabled())
@@ -351,8 +315,20 @@ auto Physics_tool::on_force_ready() -> bool
     log_physics->info("Physics tool force {} ready", m_target_mesh->name());
     return true;
 }
+#endif
 
-auto Physics_tool::on_drag() -> bool
+void Physics_tool::tool_hover(Scene_view* scene_view)
+{
+    if (scene_view == nullptr)
+    {
+        return;
+    }
+
+    const auto& hover = scene_view->get_hover(Hover_entry::content_slot);
+    m_hover_mesh = hover.mesh;
+}
+
+auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
 {
     if (!is_enabled())
     {
@@ -367,14 +343,14 @@ auto Physics_tool::on_drag() -> bool
     {
         return false;
     }
-
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    if (scene_view == nullptr)
     {
         return false;
     }
 
-    const auto end = viewport_window->get_control_position_in_world_at_distance(m_target_distance);
+    const auto end = m_mode == Physics_tool_mode::Drag
+        ? scene_view->get_control_position_in_world_at_distance(m_target_distance)
+        : scene_view->get_control_ray_origin_in_world();
     if (!end.has_value())
     {
         return false;
@@ -385,90 +361,46 @@ auto Physics_tool::on_drag() -> bool
         return false;
     }
 
-    m_target_position_start = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
-    m_target_position_end   = end.value();
-
-    if (m_target_constraint)
+    if (m_mode == Physics_tool_mode::Drag)
     {
+        m_target_position_start = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
+        m_target_position_end   = end.value();
+
+        if (m_target_constraint)
+        {
+            m_target_constraint->set_pivot_in_b(m_target_position_end);
+        }
+    }
+    else
+    {
+        m_target_position_start = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
+
+        float max_radius = 0.0f;
+        for (const auto& primitive : m_target_mesh->mesh_data.primitives)
+        {
+            max_radius = std::max(
+                max_radius,
+                primitive.gl_primitive_geometry.bounding_sphere.radius
+            );
+        }
+        m_target_mesh_size   = max_radius;
+        m_to_end_direction   = glm::normalize(end.value() - m_target_position_start);
+        m_to_start_direction = glm::normalize(m_target_position_start - end.value());
+        const double distance = glm::distance(end.value(), m_target_position_start);
+        if (distance > max_radius * 4.0)
+        {
+            m_target_position_end = m_target_position_start + m_force_distance * distance * m_to_end_direction;
+        }
+        else
+        {
+            m_target_position_end = end.value() + m_force_distance * distance * m_to_start_direction;
+        }
+        m_target_distance = distance;
+
         m_target_constraint->set_pivot_in_b(m_target_position_end);
     }
 
     return true;
-}
-
-auto Physics_tool::on_force() -> bool
-{
-    if (!is_enabled())
-    {
-        return false;
-    }
-    auto* world = physics_world();
-    if (world == nullptr)
-    {
-        return false;
-    }
-    if (!world->is_physics_updates_enabled())
-    {
-        return false;
-    }
-
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
-    {
-        return false;
-    }
-
-    const auto end = viewport_window->get_control_ray_origin_in_world();
-    if (!end.has_value())
-    {
-        return false;
-    }
-
-    if (!m_target_mesh)
-    {
-        return false;
-    }
-
-    if (!m_target_constraint)
-    {
-        return false;
-    }
-
-    m_target_position_start = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
-
-    float max_radius = 0.0f;
-    for (const auto& primitive : m_target_mesh->mesh_data.primitives)
-    {
-        max_radius = std::max(
-            max_radius,
-            primitive.gl_primitive_geometry.bounding_sphere.radius
-        );
-    }
-    m_target_mesh_size   = max_radius;
-    m_to_end_direction   = glm::normalize(end.value() - m_target_position_start);
-    m_to_start_direction = glm::normalize(m_target_position_start - end.value());
-    const double distance = glm::distance(end.value(), m_target_position_start);
-    if (distance > max_radius * 4.0)
-    {
-        m_target_position_end = m_target_position_start + m_force_distance * distance * m_to_end_direction;
-    }
-    else
-    {
-        m_target_position_end = end.value() + m_force_distance * distance * m_to_start_direction;
-    }
-    m_target_distance = distance;
-
-    m_target_constraint->set_pivot_in_b(m_target_position_end);
-
-    return true;
-}
-
-void Physics_tool::update_fixed_step(const erhe::components::Time_context&)
-{
-    if (m_force_command.get_tool_state() == erhe::application::State::Active)
-    {
-        on_force();
-    }
 }
 
 void Physics_tool::tool_render(const Render_context& /*context*/)
@@ -510,47 +442,31 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
     );
 }
 
-void Physics_tool::set_active_command(const int command)
-{
-    m_active_command = command;
-    erhe::application::Command_context context{
-        *get<erhe::application::Commands>().get()
-    };
-
-    switch (command)
-    {
-        case c_command_drag:
-        {
-            m_drag_command.enable(context);
-            m_force_command.disable(context);
-            break;
-        }
-        case c_command_force:
-        {
-            m_drag_command.disable(context);
-            m_force_command.enable(context);
-            break;
-        }
-        default:
-        {
-            break;
-        }
-    }
-}
-
 void Physics_tool::tool_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    int command = m_active_command;
-    ImGui::RadioButton("Drag",  &command, c_command_drag); ImGui::SameLine();
-    ImGui::RadioButton("Force", &command, c_command_force);
-    if (command != m_active_command)
-    {
-        set_active_command(command);
-    }
+    //int command = m_active_command;
+    ////const bool drag = ImGui::Button("Drag"); ImGui::SameLine();
+    ////const bool push = ImGui::Button("Push"); ImGui::SameLine();
+    ////const bool pull = ImGui::Button("Pull"); ImGui::SameLine();
+    ////if (drag)
+    ////{
+    ////    m_mode = Physics_tool_mode::Drag;
+    ////}
+    ////if (push)
+    ////{
+    ////    m_mode = Physics_tool_mode::Push;
+    ////}
+    ////if (pull)
+    ////{
+    ////    m_mode = Physics_tool_mode::Pull;
+    ////}
 
-    ImGui::Text("Drag state: %s",  erhe::application::c_state_str[static_cast<int>(m_drag_command.get_tool_state())]);
-    ImGui::Text("Force state: %s", erhe::application::c_state_str[static_cast<int>(m_force_command.get_tool_state())]);
+    ImGui::Text("State: %s",     erhe::application::c_state_str[static_cast<int>(m_drag_command.get_tool_state())]);
+    if (m_hover_mesh)
+    {
+        ImGui::Text("Hover mesh: %s", m_hover_mesh->name().c_str());
+    }
     ImGui::Text("Mesh: %s",            m_target_mesh ? m_target_mesh->name().c_str() : "");
     ImGui::Text("Drag distance: %f",   m_target_distance);
     ImGui::Text("Target distance: %f", m_target_distance);

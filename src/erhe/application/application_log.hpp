@@ -23,6 +23,8 @@ extern std::shared_ptr<spdlog::logger> log_shader_monitor;
 extern std::shared_ptr<spdlog::logger> log_imgui;
 extern std::shared_ptr<spdlog::logger> log_frame;
 extern std::shared_ptr<spdlog::logger> log_imnodes;
+extern std::shared_ptr<spdlog::logger> log_update;
+extern std::shared_ptr<spdlog::logger> log_selection;
 
 void initialize_logging();
 

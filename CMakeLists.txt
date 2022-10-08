@@ -11,6 +11,7 @@ cmake_policy(SET CMP0072 NEW) # `FindOpenGL` prefers GLVND by default when avail
 cmake_policy(SET CMP0075 NEW) # Include file check macros honor `CMAKE_REQUIRED_LIBRARIES`.
 cmake_policy(SET CMP0076 NEW) # The `target_sources()` command converts relative paths to absolute.
 cmake_policy(SET CMP0079 NEW) # `target_link_libraries()` allows use with targets in other directories.
+cmake_policy(SET CMP0091 NEW) # MSVC runtime library flags are selected by an abstraction.
 cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
 
 project(
@@ -53,14 +54,12 @@ include(${CMAKE_CXX_COMPILER_ID})
 include(common_options)
 include(functions)
 include(glfw)
-include(JoltPhysics)
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
+    include(JoltPhysics)
+endif ()
 include(libraries)
 include(tracy)
 include(vscode)
-
-if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
-    apply_jolt_compatible_flags()
-endif ()
 
 # Dependencies
 message("Fetching dependencies")

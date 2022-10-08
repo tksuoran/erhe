@@ -8,7 +8,7 @@ std::shared_ptr<spdlog::logger> log;
 
 void initialize_logging()
 {
-    log = erhe::log::make_logger("erhe::scene::log", spdlog::level::trace);
+    log = erhe::log::make_logger("erhe::scene::log", spdlog::level::info);
 }
 
 } // namespace erhe::scene

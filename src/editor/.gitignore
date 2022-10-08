@@ -3,3 +3,4 @@ editor
 editor.exe
 Debug
 Release
+RelWithDebInfo

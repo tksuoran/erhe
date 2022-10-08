@@ -166,7 +166,7 @@ void Headset_view::tool_render(const Render_context& context)
                 {
                     {
                         controller_input.position + controller_input.trigger_value * controller_input.direction,
-                        controller_input.position + controller_input.direction
+                        controller_input.position + 100.0f * controller_input.direction
                     }
                 }
             );
@@ -226,14 +226,9 @@ static constexpr std::string_view c_id_headset_render_content{"HS render content
 void Headset_view::update_pointer_context_from_controller()
 {
     const auto& pose                   = m_headset->controller_pose();
-    //const float trigger_value          = m_headset->trigger_value();
     const auto  controller_orientation = glm::mat4_cast(pose.orientation);
     const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
-    //if (trigger_value == 0.0f)
-    //{
-    //    return;
-    //}
     const glm::vec3 ray_origin    = pose.position;
     const glm::vec3 ray_direction = controller_direction;
 
@@ -375,7 +370,7 @@ void Headset_view::setup_root_camera()
         "Headset Root Camera"
     );
     const glm::mat4 m = erhe::toolkit::create_look_at(
-        glm::vec3{0.0f, 0.0f,  1.0f}, // eye
+        glm::vec3{0.0f, 0.0f,  0.0f}, // eye
         glm::vec3{0.0f, 0.0f,  0.0f}, // look at
         glm::vec3{0.0f, 1.0f,  0.0f}  // up
     );

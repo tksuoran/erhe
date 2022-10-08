@@ -197,20 +197,20 @@ void Bvh_geometry::commit()
     const auto duration = build_timer.duration().value();
     if (duration >= std::chrono::milliseconds(1))
     {
-        log_geometry->info("build time:             {}", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
+        log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
     }
     else if (duration >= std::chrono::microseconds(1))
     {
-        log_geometry->info("build time:             {}", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
+        log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
     }
     else
     {
-        log_geometry->info("build time:             {}", build_timer.duration().value());
+        log_geometry->trace("build time:             {}", build_timer.duration().value());
     }
-    log_geometry->info("bvh triangle count:     {}", m_triangles.size());
-    log_geometry->info("bvh point count:        {}", m_points.size());
-    log_geometry->info("bounding box volume:    {}", m_bounding_box.volume());
-    log_geometry->info("bounding sphere volume: {}", m_bounding_sphere.volume());
+    log_geometry->trace("bvh triangle count:     {}", m_triangles.size());
+    log_geometry->trace("bvh point count:        {}", m_points.size());
+    log_geometry->trace("bounding box volume:    {}", m_bounding_box.volume());
+    log_geometry->trace("bounding sphere volume: {}", m_bounding_sphere.volume());
 }
 
 void Bvh_geometry::enable()

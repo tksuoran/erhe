@@ -187,7 +187,6 @@ public:
         Window_entry performance         {false};
         Window_entry pipelines           {false};
         Window_entry physics             {false};
-        Window_entry physics_tool        {false};
         Window_entry post_processing     {false};
         Window_entry render_graph        {false};
         Window_entry tool_properties     {false};
@@ -259,6 +258,26 @@ public:
         bool  show_rotate   {false};
     };
     Trs_tool trs_tool;
+
+    class Hud
+    {
+    public:
+        bool  show{true};
+        float x   {0.0f};
+        float y   {0.0f};
+        float z   {0.0f};
+    };
+    Hud hud;
+
+    class Hotbar
+    {
+    public:
+        bool  show{true};
+        float x   {0.0f};
+        float y   {0.0f};
+        float z   {0.0f};
+    };
+    Hotbar hotbar;
 };
 
 } // namespace erhe::application

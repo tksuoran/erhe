@@ -50,6 +50,7 @@ Hud::~Hud() noexcept
 void Hud::declare_required_components()
 {
     require<erhe::application::Commands           >();
+    require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
     require<erhe::application::Rendergraph        >();
@@ -66,6 +67,13 @@ void Hud::initialize_component()
 
     get<Tools>()->register_background_tool(this);
     //get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+
+    const auto& configuration = get<erhe::application::Configuration>();
+    const auto& hud           = configuration->hud;
+    m_is_visible = hud.show;
+    m_x          = hud.x;
+    m_y          = hud.y;
+    m_z          = hud.z;
 
     const auto& commands = get<erhe::application::Commands>();
     commands->register_command(&m_toggle_visibility_command);
@@ -106,8 +114,7 @@ void Hud::initialize_component()
     //set_viewport(m_rendertarget_imgui_viewport.get());
     //show();
 
-    m_is_visible = true;
-    m_rendertarget_node->node_data.visibility_mask |= erhe::scene::Node_visibility::visible;
+    set_visibility(m_is_visible);
 }
 
 [[nodiscard]] auto Hud::get_rendertarget_imgui_viewport() -> std::shared_ptr<Rendertarget_imgui_viewport>
@@ -138,7 +145,6 @@ void Hud::update_node_transform(const glm::mat4& world_from_camera)
     );
 
     m_rendertarget_node->set_world_from_node(m);
-    m_rendertarget_node->update_transform();
 }
 
 void Hud::tool_render(
@@ -149,19 +155,27 @@ void Hud::tool_render(
 
 void Hud::toggle_visibility()
 {
-    m_is_visible = !m_is_visible;
+    set_visibility(!m_is_visible);
+}
+
+void Hud::set_visibility(const bool value)
+{
+    m_is_visible = value;
 
     if (m_is_visible)
     {
         log_hud->trace("Hud visible");
+        m_rendertarget_imgui_viewport->set_enabled(true);
         m_rendertarget_node->node_data.visibility_mask |= erhe::scene::Node_visibility::visible;
     }
     else
     {
         log_hud->trace("Hud hidden");
+        m_rendertarget_imgui_viewport->set_enabled(false);
         m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
     }
 }
+
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI) && 0
 auto Hud::flags() -> ImGuiWindowFlags

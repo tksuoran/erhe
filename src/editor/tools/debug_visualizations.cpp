@@ -17,12 +17,19 @@
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/raytrace/iinstance.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+#   include <imgui.h>
+#endif
 
 namespace editor
 {
@@ -32,7 +39,8 @@ using glm::vec3;
 using glm::vec4;
 
 Debug_visualizations::Debug_visualizations()
-    : erhe::components::Component{c_type_name}
+    : erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::components::Component    {c_type_name}
 {
 }
 
@@ -42,12 +50,13 @@ Debug_visualizations::~Debug_visualizations() noexcept
 
 void Debug_visualizations::declare_required_components()
 {
+    require<erhe::application::Imgui_windows>();
     require<Tools>();
-    require<erhe::application::View >();
 }
 
 void Debug_visualizations::initialize_component()
 {
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     get<Tools>()->register_tool(this);
 }
 
@@ -495,7 +504,7 @@ void Debug_visualizations::tool_render(
         return;
     }
 
-    if (m_trs_tool && m_trs_tool->is_active())
+    if (m_tool_hide && m_trs_tool && m_trs_tool->is_active())
     {
         return;
     }
@@ -513,52 +522,55 @@ void Debug_visualizations::tool_render(
         }
     }
 
-    m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
-    for (const auto& node : selection)
+    if (m_selection)
     {
-        //const mat4 m{node->world_from_node()};
-        //line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-        //line_renderer.add_lines( m, green, {{ O, axis_y }} );
-        //line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
-
-        if (is_mesh(node))
+        m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
+        for (const auto& node : selection)
         {
-            mesh_selection_visualization(context, as_mesh(node).get());
+            //const mat4 m{node->world_from_node()};
+            //line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+            //line_renderer.add_lines( m, green, {{ O, axis_y }} );
+            //line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+
+            if (is_mesh(node))
+            {
+                mesh_selection_visualization(context, as_mesh(node).get());
+            }
+
+            if (
+                is_camera(node) &&
+                (m_viewport_config->debug_visualizations.camera == Visualization_mode::selected)
+            )
+            {
+                camera_visualization(context, as_camera(node).get());
+            }
         }
 
-        if (
-            is_camera(node) &&
-            (m_viewport_config->debug_visualizations.camera == Visualization_mode::selected)
-        )
+        if (m_selection_bounding_volume.get_element_count() > 1)
         {
-            camera_visualization(context, as_camera(node).get());
-        }
-    }
-
-    if (m_selection_bounding_volume.get_element_count() > 1)
-    {
-        erhe::toolkit::Bounding_box    selection_bounding_box;
-        erhe::toolkit::Bounding_sphere selection_bounding_sphere;
-        erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
-        const float    box_volume    = selection_bounding_box.volume();
-        const float    sphere_volume = selection_bounding_sphere.volume();
-        const uint32_t color         = 0xff0088ffu;
-        if (
-            (box_volume > 0.0f) &&
-            (box_volume < sphere_volume)
-        )
-        {
-            line_renderer.add_cube(glm::mat4{1.0f}, color, selection_bounding_box.min, selection_bounding_box.max);
-        }
-        else if (sphere_volume > 0.0f)
-        {
-            line_renderer.add_sphere(
-                glm::mat4{1.0f},
-                color,
-                selection_bounding_sphere.center,
-                selection_bounding_sphere.radius,
-                &(context.camera->world_from_node_transform())
-            );
+            erhe::toolkit::Bounding_box    selection_bounding_box;
+            erhe::toolkit::Bounding_sphere selection_bounding_sphere;
+            erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
+            const float    box_volume    = selection_bounding_box.volume();
+            const float    sphere_volume = selection_bounding_sphere.volume();
+            const uint32_t color         = 0xff0088ffu;
+            if (
+                (box_volume > 0.0f) &&
+                (box_volume < sphere_volume)
+            )
+            {
+                line_renderer.add_cube(glm::mat4{1.0f}, color, selection_bounding_box.min, selection_bounding_box.max);
+            }
+            else if (sphere_volume > 0.0f)
+            {
+                line_renderer.add_sphere(
+                    glm::mat4{1.0f},
+                    color,
+                    selection_bounding_sphere.center,
+                    selection_bounding_sphere.radius,
+                    &(context.camera->world_from_node_transform())
+                );
+            }
         }
     }
 
@@ -573,18 +585,84 @@ void Debug_visualizations::tool_render(
         return;
     }
 
-    for (const auto& light : scene_root->layers().light()->lights)
+    if (m_lights)
     {
-        light_visualization(context, selected_camera, light.get());
+        for (const auto& light : scene_root->layers().light()->lights)
+        {
+            light_visualization(context, selected_camera, light.get());
+        }
     }
 
-    if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
+    if (m_cameras)
+    //if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
     {
         for (const auto& camera : scene_root->scene().cameras)
         {
             camera_visualization(context, camera.get());
         }
     }
+
+    if (m_physics)
+    {
+        const uint32_t red  {0xff0000ffu};
+        const uint32_t green{0xff00ff00u};
+        const uint32_t blue {0xffff0000u};
+
+        for (const auto& mesh : scene_root->layers().content()->meshes)
+        {
+            std::shared_ptr<Node_physics> node_physics = get_physics_node(mesh.get());
+            if (node_physics)
+            {
+                const erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+                if (rigid_body != nullptr)
+                {
+                    const erhe::physics::Transform transform = rigid_body->get_world_transform();
+                    glm::mat4 m{transform.basis};
+                    m[3] = glm::vec4{
+                        transform.origin.x,
+                        transform.origin.y,
+                        transform.origin.z,
+                        1.0f
+                    };
+                    line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+                    line_renderer.add_lines( m, green, {{ O, axis_y }} );
+                    line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+                }
+            }
+        }
+    }
+
+    if (m_raytrace)
+    {
+        const uint32_t red  {0xff0000ffu};
+        const uint32_t green{0xff00ff00u};
+        const uint32_t blue {0xffff0000u};
+
+        for (const auto& mesh : scene_root->layers().content()->meshes)
+        {
+            std::shared_ptr<Node_raytrace> node_raytrace = get_raytrace(mesh.get());
+            if (node_raytrace)
+            {
+                const erhe::raytrace::IInstance* instance = node_raytrace->raytrace_instance();
+                const auto m = instance->get_transform();
+                line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+                line_renderer.add_lines( m, green, {{ O, axis_y }} );
+                line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+            }
+        }
+    }
+}
+
+void Debug_visualizations::imgui()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ImGui::Checkbox("Tool Hide", &m_tool_hide);
+    ImGui::Checkbox("Raytrace",  &m_raytrace);
+    ImGui::Checkbox("Physics",   &m_physics);
+    ImGui::Checkbox("Lights",    &m_lights);
+    ImGui::Checkbox("Cameras",   &m_cameras);
+    ImGui::Checkbox("Selection", &m_selection);
+#endif
 }
 
 } // namespace editor

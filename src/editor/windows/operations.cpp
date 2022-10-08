@@ -66,6 +66,32 @@ auto Operations::count_selected_meshes() const -> size_t
     return count;
 }
 
+void Operations::set_active_tool(Tool* tool)
+{
+    if (m_current_active_tool == tool)
+    {
+        return;
+    }
+
+    if (m_current_active_tool != nullptr)
+    {
+        log_tools->trace("disabling tool {}", m_current_active_tool->description());
+        m_current_active_tool->set_enable_state(false);
+    }
+
+    m_current_active_tool = tool;
+
+    if (m_current_active_tool != nullptr)
+    {
+        log_tools->trace("enabling tool {}", m_current_active_tool->description());
+        m_current_active_tool->set_enable_state(true);
+    }
+    else
+    {
+        log_tools->trace("active tool reset");
+    }
+}
+
 [[nodiscard]] auto Operations::get_active_tool() const -> Tool*
 {
     return m_current_active_tool;
@@ -102,19 +128,10 @@ void Operations::imgui()
         );
         if (button_pressed)
         {
-            if (m_current_active_tool != tool)
-            {
-                if (m_current_active_tool != nullptr)
-                {
-                    m_current_active_tool->set_enable_state(false);
-                }
-                m_current_active_tool = tool;
-                m_current_active_tool->set_enable_state(true);
-            }
-            else
-            {
-                m_current_active_tool->set_enable_state(false);
-                m_current_active_tool = nullptr;
+            if (get_active_tool() != tool) {
+                set_active_tool(tool);
+            } else {
+                set_active_tool(nullptr);
             }
         }
     }

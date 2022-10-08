@@ -13,7 +13,7 @@ cmake ^
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
     -DERHE_GLTF_LIBRARY=cgltf ^
     -DERHE_GUI_LIBRARY=imgui ^
-    -DERHE_PHYSICS_LIBRARY=bullet ^
+    -DERHE_PHYSICS_LIBRARY=jolt ^
     -DERHE_PNG_LIBRARY=mango ^
     -DERHE_PROFILE_LIBRARY=tracy ^
     -DERHE_RAYTRACE_LIBRARY=bvh ^

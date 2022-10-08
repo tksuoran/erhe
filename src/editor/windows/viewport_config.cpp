@@ -1,5 +1,6 @@
 #include "windows/viewport_config.hpp"
 #include "renderers/primitive_buffer.hpp"
+#include "tools/hotbar.hpp"
 
 #include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
@@ -167,6 +168,21 @@ void Viewport_config::imgui()
         ImGui::TreePop();
     }
     ImGui::SliderFloat("LoD Bias", &rendertarget_node_lod_bias, -8.0f, 8.0f);
+
+    const auto& hotbar = get<Hotbar>();
+    if (hotbar)
+    {
+        if (ImGui::TreeNodeEx("Hotbar", flags))
+        {
+            auto& color_inactive = hotbar->get_color(0);
+            auto& color_hover    = hotbar->get_color(1);
+            auto& color_active   = hotbar->get_color(2);
+            ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
+            ImGui::TreePop();
+        }
+    }
 #endif
 }
 
