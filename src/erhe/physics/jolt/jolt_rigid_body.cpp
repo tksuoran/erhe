@@ -13,12 +13,170 @@
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/Shape/ConvexShape.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
 namespace erhe::physics
 {
+
+#if 0
+class EmptyShapeSettings final : public JPH::ShapeSettings
+{
+public:
+    //JPH_DECLARE_SERIALIZABLE_VIRTUAL(EmptyShapeSettings)
+
+    EmptyShapeSettings();
+
+    // See: ShapeSettings
+    JPH::ShapeSettings::ShapeResult Create() const override;
+};
+
+class EmptyShape final : public JPH::Shape
+{
+public:
+    //JPH_OVERRIDE_NEW_DELETE
+
+    EmptyShape()
+        : JPH::Shape{JPH::EShapeType::User1, JPH::EShapeSubType::User1}
+    {
+    }
+
+    EmptyShape(const JPH::ShapeSettings& inSettings, ShapeResult& outResult)
+        : JPH::Shape{JPH::EShapeType::User1, JPH::EShapeSubType::User1, inSettings, outResult}
+    {
+        outResult.Set(this);
+    }
+
+    JPH::AABox GetLocalBounds() const override
+    {
+        return JPH::AABox{};
+    }
+
+    JPH::uint GetSubShapeIDBitsRecursive() const
+    {
+        return 0;
+    }
+
+    JPH::AABox GetWorldSpaceBounds(JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale) const override
+    {
+        static_cast<void>(inCenterOfMassTransform);
+        static_cast<void>(inScale);
+        return JPH::AABox{};
+    }
+
+    float GetInnerRadius() const override
+    {
+        return 0.0f;
+    }
+
+    JPH::MassProperties	GetMassProperties() const override
+    {
+        return {};
+    }
+
+    const JPH::PhysicsMaterial* GetMaterial(const JPH::SubShapeID& inSubShapeID) const
+    {
+        static_cast<void>(inSubShapeID);
+        return nullptr;
+    }
+
+    JPH::Vec3 GetSurfaceNormal(const JPH::SubShapeID& inSubShapeID, JPH::Vec3Arg inLocalSurfacePosition) const override
+    {
+        static_cast<void>(inSubShapeID);
+        static_cast<void>(inLocalSurfacePosition);
+        return {};
+    }
+
+	void GetSubmergedVolume(JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, const JPH::Plane& inSurface, float& outTotalVolume, float& outSubmergedVolume, JPH::Vec3& outCenterOfBuoyancy) const override
+    {
+        static_cast<void>(inCenterOfMassTransform);
+        static_cast<void>(inScale);
+        static_cast<void>(inSurface);
+        outTotalVolume = 0.0f;
+        outSubmergedVolume = 0.0f;
+        outCenterOfBuoyancy = JPH::Vec3{0.0f, 0.0f, 0.0f};
+    }
+
+#ifdef JPH_DEBUG_RENDERER
+	// See Shape::Draw
+	void Draw(JPH::DebugRenderer* inRenderer, JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, JPH::ColorArg inColor, bool inUseMaterialColors, bool inDrawWireframe) const override;
+#endif // JPH_DEBUG_RENDERER
+
+    // See Shape::CastRay
+    bool CastRay(const JPH::RayCast& inRay, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::RayCastResult& ioHit) const override
+    {
+        static_cast<void>(inRay);
+        static_cast<void>(inSubShapeIDCreator);
+        static_cast<void>(ioHit);
+        return false;
+    }
+    void CastRay(const JPH::RayCast& inRay, const JPH::RayCastSettings& inRayCastSettings, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::CastRayCollector &ioCollector, const JPH::ShapeFilter& inShapeFilter = { }) const override
+    {
+        static_cast<void>(inRay);
+        static_cast<void>(inRayCastSettings);
+        static_cast<void>(inSubShapeIDCreator);
+        static_cast<void>(ioCollector);
+        static_cast<void>(inShapeFilter);
+    }
+
+    void CollidePoint(JPH::Vec3Arg inPoint, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::CollidePointCollector& ioCollector, const JPH::ShapeFilter& inShapeFilter = { }) const override
+    {
+        static_cast<void>(inPoint);
+        static_cast<void>(inSubShapeIDCreator);
+        static_cast<void>(ioCollector);
+        static_cast<void>(inShapeFilter);
+    }
+
+    void GetTrianglesStart(GetTrianglesContext& ioContext, const JPH::AABox& inBox, JPH::Vec3Arg inPositionCOM, JPH::QuatArg inRotation, JPH::Vec3Arg inScale) const override
+    {
+        static_cast<void>(ioContext);
+        static_cast<void>(inBox);
+        static_cast<void>(inPositionCOM);
+        static_cast<void>(inRotation);
+        static_cast<void>(inScale);
+    }
+
+    int GetTrianglesNext(GetTrianglesContext& ioContext, int inMaxTrianglesRequested, JPH::Float3* outTriangleVertices, const JPH::PhysicsMaterial** outMaterials = nullptr) const
+    {
+        static_cast<void>(ioContext);
+        static_cast<void>(inMaxTrianglesRequested);
+        static_cast<void>(outTriangleVertices);
+        static_cast<void>(outMaterials);
+        return 0;
+    }
+
+    Stats GetStats() const
+    {
+        return Stats{0, 0};
+    }
+
+    float GetVolume() const
+    {
+        return 0.0f;
+    }
+};
+
+EmptyShapeSettings::EmptyShapeSettings() = default;
+
+void register_empty_shape()
+{
+	JPH::ShapeFunctions& f = JPH::ShapeFunctions::sGet(JPH::EShapeSubType::User1);
+	f.mConstruct = []() -> JPH::Shape * { return new EmptyShape; };
+	f.mColor = JPH::Color::sOrange;
+}
+
+// See: ShapeSettings
+JPH::ShapeSettings::ShapeResult EmptyShapeSettings::Create() const
+{
+	if (mCachedResult.IsEmpty())
+    {
+    	JPH::Ref<JPH::Shape> shape = new EmptyShape(*this, mCachedResult);
+    }
+	return mCachedResult;
+}
+#endif
 
 [[nodiscard]] auto to_jolt(Motion_mode motion_mode) -> JPH::EMotionType
 {
@@ -76,9 +234,14 @@ Jolt_rigid_body::Jolt_rigid_body(
     , m_angular_damping{create_info.angular_damping}
     , m_debug_label    {create_info.debug_label}
 {
-    const JPH::Shape* shape       = m_collision_shape->get_jolt_shape().GetPtr();
-    const auto        transform   = motion_state->get_world_from_rigidbody();
-    const JPH::Vec3   position    = to_jolt(transform.origin);
+    if (!m_collision_shape)
+    {
+        return;
+    }
+
+    const JPH::Shape* shape     = m_collision_shape->get_jolt_shape().GetPtr();
+    const auto        transform = motion_state->get_world_from_rigidbody();
+    const JPH::Vec3   position  = to_jolt(transform.origin);
 
     SPDLOG_LOGGER_TRACE(
         log_physics,
@@ -87,8 +250,8 @@ Jolt_rigid_body::Jolt_rigid_body(
         transform.origin
     );
 
-    const JPH::Quat   rotation    = to_jolt(glm::quat(transform.basis));
-    const auto        motion_mode = motion_state->get_motion_mode();
+    const JPH::Quat rotation    = to_jolt(glm::quat(transform.basis));
+    const auto      motion_mode = motion_state->get_motion_mode();
     JPH::BodyCreationSettings creation_settings
     {
         shape,
@@ -105,7 +268,6 @@ Jolt_rigid_body::Jolt_rigid_body(
     creation_settings.mMassPropertiesOverride.mInertia = to_jolt(create_info.local_inertia);
     creation_settings.mLinearDamping                   = create_info.linear_damping;
     creation_settings.mAngularDamping                  = create_info.angular_damping;
-
     creation_settings.mLinearDamping                   = 0.001f;
 
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
@@ -137,6 +299,11 @@ auto Jolt_rigid_body::get_friction() const -> float
 
 void Jolt_rigid_body::set_friction(const float friction)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
     if (m_friction == friction)
     {
         return;
@@ -158,6 +325,12 @@ auto Jolt_rigid_body::get_rolling_friction() const -> float
 
 void Jolt_rigid_body::set_rolling_friction(const float rolling_friction)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     // TODO Use angular dampening to simulate rolling friction with Jolt
     SPDLOG_LOGGER_TRACE(
         log_physics,
@@ -175,6 +348,11 @@ auto Jolt_rigid_body::get_restitution() const -> float
 
 void Jolt_rigid_body::set_restitution(float restitution)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
     if (m_restitution == restitution)
     {
         return;
@@ -185,6 +363,11 @@ void Jolt_rigid_body::set_restitution(float restitution)
 
 void Jolt_rigid_body::begin_move()
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
     SPDLOG_LOGGER_TRACE(log_physics, "{} begin move", m_debug_label);
     m_body->SetAllowSleeping(false);
     m_body_interface.ActivateBody(m_body->GetID());
@@ -192,6 +375,11 @@ void Jolt_rigid_body::begin_move()
 
 void Jolt_rigid_body::end_move()
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
     SPDLOG_LOGGER_TRACE(log_physics, "{} end move", m_debug_label);
     m_body->SetAllowSleeping(true);
     //m_body_interface.ActivateBody(m_body->GetID());
@@ -214,6 +402,11 @@ auto c_str(const Motion_mode motion_mode) -> const char*
 
 void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
     if (m_motion_mode == motion_mode)
     {
         return;
@@ -245,6 +438,12 @@ auto Jolt_rigid_body::get_center_of_mass_transform() const -> Transform
 
 void Jolt_rigid_body::set_center_of_mass_transform(const Transform transform)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     static_cast<void>(transform);
     // TODO
     //const auto rotation = m_body->GetRotation();
@@ -253,6 +452,12 @@ void Jolt_rigid_body::set_center_of_mass_transform(const Transform transform)
 
 void Jolt_rigid_body::move_world_transform(const Transform transform, float delta_time)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     SPDLOG_LOGGER_TRACE(
         log_physics,
         "{} move to position {} time {}",
@@ -274,6 +479,11 @@ void Jolt_rigid_body::move_world_transform(const Transform transform, float delt
 
 auto Jolt_rigid_body::get_world_transform() const -> Transform
 {
+    if (m_body == nullptr)
+    {
+        return erhe::physics::Transform{};
+    }
+
     JPH::Quat basis;
     JPH::Vec3 origin;
     m_body_interface.GetPositionAndRotation(
@@ -289,6 +499,12 @@ auto Jolt_rigid_body::get_world_transform() const -> Transform
 
 void Jolt_rigid_body::set_world_transform(const Transform transform)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     SPDLOG_LOGGER_TRACE(log_physics, "{} set transform position {}", m_debug_label, transform.origin);
 
     m_body_interface.SetPositionAndRotation(
@@ -304,6 +520,12 @@ void Jolt_rigid_body::set_world_transform(const Transform transform)
 
 void Jolt_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     SPDLOG_LOGGER_TRACE(log_physics, "{} set linear velocity {}", m_debug_label, velocity);
 
     m_body_interface.SetLinearVelocity(m_body->GetID(), to_jolt(velocity));
@@ -311,6 +533,12 @@ void Jolt_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 
 void Jolt_rigid_body::set_angular_velocity(const glm::vec3 velocity)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     SPDLOG_LOGGER_TRACE(log_physics, "{} set angular velocity {}", m_debug_label, velocity);
 
     m_body_interface.SetAngularVelocity(m_body->GetID(), to_jolt(velocity));
@@ -318,6 +546,10 @@ void Jolt_rigid_body::set_angular_velocity(const glm::vec3 velocity)
 
 auto Jolt_rigid_body::get_linear_damping() const -> float
 {
+    if (m_body == nullptr)
+    {
+        return 0.0f;
+    }
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr)
     {
@@ -328,6 +560,12 @@ auto Jolt_rigid_body::get_linear_damping() const -> float
 
 void Jolt_rigid_body::set_damping(const float linear_damping, const float angular_damping)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     SPDLOG_LOGGER_TRACE(log_physics, "{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
 
     auto* motion_properties = m_body->GetMotionProperties();
@@ -342,6 +580,11 @@ void Jolt_rigid_body::set_damping(const float linear_damping, const float angula
 
 auto Jolt_rigid_body::get_angular_damping() const -> float
 {
+    if (m_body == nullptr)
+    {
+        return 0.0f;
+    }
+
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr)
     {
@@ -362,6 +605,12 @@ auto Jolt_rigid_body::get_mass() const -> float
 
 void Jolt_rigid_body::set_mass_properties(const float mass, const glm::mat4 local_inertia)
 {
+    if (m_body == nullptr)
+    {
+        log_physics->error("Fixed world body cannot be modified");
+        return;
+    }
+
     SPDLOG_LOGGER_TRACE(log_physics, "{} set mass = {}", m_debug_label, mass);
 
     auto* motion_properties = m_body->GetMotionProperties();
@@ -386,11 +635,18 @@ auto Jolt_rigid_body::get_debug_label() const -> const char*
 
 auto Jolt_rigid_body::get_jolt_body() const -> JPH::Body*
 {
-    return m_body;
+    return (m_body != nullptr)
+        ? m_body
+        : &JPH::Body::sFixedToWorld;
 }
 
 void Jolt_rigid_body::pre_update_motion_state() const
 {
+    if (m_body == nullptr)
+    {
+        return;
+    }
+
     if (m_motion_mode != Motion_mode::e_kinematic)
     {
         return;
@@ -406,6 +662,11 @@ void Jolt_rigid_body::pre_update_motion_state() const
 
 void Jolt_rigid_body::update_motion_state() const
 {
+    if (m_body == nullptr)
+    {
+        return;
+    }
+
     if (m_motion_mode != Motion_mode::e_dynamic)
     {
         return;

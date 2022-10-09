@@ -3,6 +3,7 @@
 #include "erhe/physics/bullet/glm_conversions.hpp"
 #include "erhe/physics/imotion_state.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -13,6 +14,7 @@ namespace erhe::physics
 Motion_state_adapter::Motion_state_adapter(IMotion_state* motion_state)
     : m_motion_state{motion_state}
 {
+    ERHE_VERIFY(motion_state != nullptr);
 }
 
 void Motion_state_adapter::getWorldTransform(btTransform& worldTrans) const
@@ -52,9 +54,12 @@ auto to_bullet(
     btRigidBody::btRigidBodyConstructionInfo bullet_create_info{
         static_cast<btScalar>(create_info.mass),
         &motion_state_adapter,
-        reinterpret_cast<Bullet_collision_shape*>(
-            create_info.collision_shape.get()
-        )->get_bullet_collision_shape(),
+        create_info.collision_shape
+            ?
+                reinterpret_cast<Bullet_collision_shape*>(
+                    create_info.collision_shape.get()
+                )->get_bullet_collision_shape()
+            : nullptr,
         erhe::physics::to_bullet(
             glm::vec3{
                 create_info.local_inertia[0][0],
@@ -199,6 +204,11 @@ void Bullet_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 void Bullet_rigid_body::set_center_of_mass_transform(const Transform transform)
 {
     m_bullet_rigid_body.setCenterOfMassTransform(to_bullet(transform));
+}
+
+auto Bullet_rigid_body::get_world_transform() const -> Transform
+{
+    return from_bullet(m_bullet_rigid_body.getWorldTransform());
 }
 
 void Bullet_rigid_body::set_world_transform(const Transform transform)

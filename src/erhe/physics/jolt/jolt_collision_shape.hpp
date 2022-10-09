@@ -9,6 +9,7 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/TaperedCapsuleShape.h>
 
 #include <glm/glm.hpp>
 
@@ -110,18 +111,23 @@ class Jolt_cone_shape
 {
 public:
     Jolt_cone_shape(const Axis axis, const float base_radius, const float height)
+        : m_shape_settings{height * 0.5f, 0.0f, base_radius}
     {
-        static_cast<void>(axis);
-        static_cast<void>(base_radius);
-        static_cast<void>(height);
+        ERHE_VERIFY(axis == Axis::Y);
+        auto result = m_shape_settings.Create();
+        ERHE_VERIFY(result.IsValid());
+        m_jolt_shape = result.Get();
     }
 
     ~Jolt_cone_shape() noexcept override = default;
 
+    auto get_shape_settings() -> JPH::ShapeSettings& override
+    {
+        return m_shape_settings;
+    }
+
 private:
-    //Axis  m_axis;
-    //float m_base_radius;
-    //float m_height;
+    JPH::TaperedCapsuleShapeSettings m_shape_settings;
 };
 #endif
 

@@ -12,6 +12,7 @@
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Physics/Body/Body.h>
 
 namespace erhe::physics
 {
@@ -164,6 +165,8 @@ auto IWorld::create_unique() -> std::unique_ptr<IWorld>
     return std::make_unique<Jolt_world>();
 }
 
+//// void register_empty_shape();
+
 Jolt_world::Initialize_first::Initialize_first()
 {
     // Register allocation hook
@@ -177,6 +180,8 @@ Jolt_world::Initialize_first::Initialize_first()
     JPH::Factory::sInstance = new JPH::Factory();
 
     JPH::RegisterTypes();
+
+    ////register_empty_shape();
 }
 
 Jolt_world::Jolt_world()
@@ -269,7 +274,6 @@ void Jolt_world::update_fixed_step(const double dt)
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 {
     log_physics->trace("add rigid body {}", rigid_body->get_debug_label());
-    m_rigid_bodies.push_back(reinterpret_cast<Jolt_rigid_body*>(rigid_body));
     auto& body_interface  = m_physics_system.GetBodyInterface();
     auto* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(rigid_body);
     auto* jolt_body       = jolt_rigid_body->get_jolt_body();
@@ -277,45 +281,47 @@ void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
         jolt_body->GetID(),
         JPH::EActivation::DontActivate
     );
+    m_rigid_bodies.push_back(jolt_rigid_body);
 }
 
 void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
 {
     log_physics->trace("remove rigid body {}", rigid_body->get_debug_label());
-    m_rigid_bodies.erase(
-        std::remove(
-            m_rigid_bodies.begin(),
-            m_rigid_bodies.end(),
-            reinterpret_cast<Jolt_rigid_body*>(rigid_body)
-        ),
-        m_rigid_bodies.end()
-    );
     auto& body_interface  = m_physics_system.GetBodyInterface();
     auto* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(rigid_body);
     auto* jolt_body       = jolt_rigid_body->get_jolt_body();
     body_interface.RemoveBody(jolt_body->GetID());
+    m_rigid_bodies.erase(
+        std::remove(
+            m_rigid_bodies.begin(),
+            m_rigid_bodies.end(),
+            jolt_rigid_body
+        ),
+        m_rigid_bodies.end()
+    );
 }
 
 void Jolt_world::add_constraint(IConstraint* constraint)
 {
-    log_physics->error("add constraint not implemented");
-    //m_constraints.push_back(constraint);
-    // TODO
-    static_cast<void>(constraint);
+    log_physics->trace("add constraint");
+    auto* jolt_constraint = reinterpret_cast<Jolt_constraint*>(constraint);
+    m_physics_system.AddConstraint(jolt_constraint->get_jolt_constraint());
+    m_constraints.push_back(jolt_constraint);
 }
 
 void Jolt_world::remove_constraint(IConstraint* constraint)
 {
-    log_physics->error("remove constraint not implemented");
-    //m_constraints.erase(
-    //    std::remove(
-    //        m_constraints.begin(),
-    //        m_constraints.end(),
-    //        constraint
-    //    ),
-    //    m_constraints.end()
-    //);
-    static_cast<void>(constraint);
+    log_physics->trace("remove constraint");
+    auto* jolt_constraint = reinterpret_cast<Jolt_constraint*>(constraint);
+    m_physics_system.RemoveConstraint(jolt_constraint->get_jolt_constraint());
+    m_constraints.erase(
+        std::remove(
+            m_constraints.begin(),
+            m_constraints.end(),
+            jolt_constraint
+        ),
+        m_constraints.end()
+    );
 }
 
 void Jolt_world::set_gravity(const glm::vec3 gravity)

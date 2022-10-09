@@ -235,6 +235,7 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "instance_count",              scene.instance_count);
             ini_get(section, "instance_gap",                scene.instance_gap);
             ini_get(section, "object_scale",                scene.object_scale);
+            ini_get(section, "mass_scale",                  scene.mass_scale);
             ini_get(section, "detail",                      scene.detail);
             ini_get(section, "gltf_files",                  scene.gltf_files);
             ini_get(section, "obj_files",                   scene.obj_files);

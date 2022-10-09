@@ -95,6 +95,7 @@ Physics_tool::~Physics_tool() noexcept
         {
             world->remove_constraint(m_target_constraint.get());
         }
+        m_target_constraint.reset();
     }
 }
 
@@ -158,6 +159,31 @@ auto Physics_tool::description() -> const char*
 void Physics_tool::set_mode(Physics_tool_mode value)
 {
     m_mode = value;
+}
+
+[[nodiscard]] auto Physics_tool::get_world_from_rigidbody() const -> erhe::physics::Transform
+{
+    return erhe::physics::Transform{
+        glm::mat3{1.0f},
+        m_target_position_end
+    };
+}
+
+[[nodiscard]] auto Physics_tool::get_motion_mode() const -> erhe::physics::Motion_mode
+{
+    return erhe::physics::Motion_mode::e_kinematic;
+}
+
+void Physics_tool::set_world_from_rigidbody(const erhe::physics::Transform transform)
+{
+    log_physics->warn("Physics_tool::set_world_from_rigidbody() - This should not happen");
+    static_cast<void>(transform);
+}
+
+void Physics_tool::set_motion_mode(const erhe::physics::Motion_mode motion_mode)
+{
+    log_physics->warn("Physics_tool::set_motion_mode() - This should not happen?");
+    static_cast<void>(motion_mode);
 }
 
 auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
@@ -226,7 +252,7 @@ auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
         {
             world->remove_constraint(m_target_constraint.get());
         }
-        /// TODO Should we also do this? m_target_constraint.reset();
+        m_target_constraint.reset();
     }
 
     log_physics->info("PT Target acquired - OK");
@@ -253,8 +279,10 @@ void Physics_tool::release_target()
         auto* world = physics_world();
         if (world != nullptr)
         {
+            world->remove_rigid_body(m_constraint_world_point_rigid_body.get());
             world->remove_constraint(m_target_constraint.get());
         }
+        m_constraint_world_point_rigid_body.reset();
         m_target_constraint.reset();
     }
     m_target_mesh.reset();
@@ -264,15 +292,61 @@ void Physics_tool::begin_point_to_point_constraint()
 {
     log_physics->info("PT Begin point to point constraint");
 
+    erhe::physics::IWorld* world = physics_world();
+    if (world == nullptr)
+    {
+        log_physics->error("No physics world");
+        return;
+    }
+
+    // TODO store world and use stored world for these removes.
+    if (m_target_constraint)
+    {
+        world->remove_constraint(m_target_constraint.get());
+        m_target_constraint.reset();
+    }
+    if (m_constraint_world_point_rigid_body)
+    {
+        world->remove_rigid_body(m_constraint_world_point_rigid_body.get());
+        m_constraint_world_point_rigid_body.reset();
+    }
+
+    m_constraint_world_point_rigid_body = erhe::physics::IRigid_body::create_rigid_body_shared(
+        erhe::physics::IRigid_body_create_info
+        {
+            .world       = *world,
+            .mass        = 0.0f,
+            .debug_label = "World point"
+        },
+        this
+    );
+    //m_constraint_world_point_rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic);
+    //m_constraint_world_point_rigid_body->begin_move();
+    //m_target_constraint->set_pivot_in_b(m_target_position_in_mesh);
+    ////m_constraint_world_point_rigid_body->move_world_transform(
+    ////    erhe::physics::Transform{
+    ////        glm::mat3{1.0f},
+    ////        m_target_position_in_mesh
+    ////    },
+    ////    0.0f
+    ////);
+    world->add_rigid_body(m_constraint_world_point_rigid_body.get());
+
+    //// m_target_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(
+    ////     m_target_node_physics->rigid_body(),
+    ////     m_target_position_in_mesh
+    //// );
     m_target_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(
         m_target_node_physics->rigid_body(),
-        m_target_position_in_mesh
+        m_constraint_world_point_rigid_body.get(),
+        m_target_position_in_mesh,
+        glm::vec3{0.0f, 0.0f, 0.0f}
     );
+
     m_target_constraint->set_impulse_clamp(m_impulse_clamp);
     m_target_constraint->set_damping      (m_damping);
     m_target_constraint->set_tau          (m_tau);
     m_target_node_physics->rigid_body()->begin_move();
-    auto* world = physics_world();
     if (world != nullptr)
     {
         world->add_constraint(m_target_constraint.get());
@@ -369,6 +443,13 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
         if (m_target_constraint)
         {
             m_target_constraint->set_pivot_in_b(m_target_position_end);
+            //m_constraint_world_point_rigid_body->move_world_transform(
+            //    erhe::physics::Transform{
+            //        glm::mat3{1.0f},
+            //        m_target_position_end
+            //    },
+            //    1.0f / 100.0f // TODO
+            //);
         }
     }
     else
@@ -398,6 +479,14 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
         m_target_distance = distance;
 
         m_target_constraint->set_pivot_in_b(m_target_position_end);
+        ////m_constraint_world_point_rigid_body->move_world_transform(
+        ////    erhe::physics::Transform{
+        ////        glm::mat3{1.0f},
+        ////        m_target_position_end
+        ////    },
+        ////    1.0f / 100.0f // TODO
+        ////);
+
     }
 
     return true;
@@ -472,13 +561,19 @@ void Physics_tool::tool_properties()
     ImGui::Text("Target distance: %f", m_target_distance);
     ImGui::Text("Target Size: %f",     m_target_mesh_size);
     ImGui::Text("Constraint: %s",      m_target_constraint ? "yes" : "no");
-    const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
-    ImGui::SliderFloat("Force Distance",  &m_force_distance, -10.0f, 10.0f, "%.2f", logarithmic);
-    ImGui::SliderFloat("Tau",             &m_tau,             0.0f,   0.1f);
-    ImGui::SliderFloat("Damping",         &m_damping,         0.0f,   1.0f);
-    ImGui::SliderFloat("Impulse Clamp",   &m_impulse_clamp,   0.0f, 100.0f);
-    ImGui::SliderFloat("Linear Damping",  &m_linear_damping,  0.0f,   1.0f);
-    ImGui::SliderFloat("Angular Damping", &m_angular_damping, 0.0f,   1.0f);
+    if (m_target_constraint)
+    {
+        ImGui::Text("End X: %f", m_target_position_end.x);
+        ImGui::Text("End Y: %f", m_target_position_end.y);
+        ImGui::Text("End Z: %f", m_target_position_end.z);
+    }
+    //const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
+    //ImGui::SliderFloat("Force Distance",  &m_force_distance, -10.0f, 10.0f, "%.2f", logarithmic);
+    //ImGui::SliderFloat("Tau",             &m_tau,             0.0f,   0.1f);
+    //ImGui::SliderFloat("Damping",         &m_damping,         0.0f,   1.0f);
+    //ImGui::SliderFloat("Impulse Clamp",   &m_impulse_clamp,   0.0f, 100.0f);
+    //ImGui::SliderFloat("Linear Damping",  &m_linear_damping,  0.0f,   1.0f);
+    //ImGui::SliderFloat("Angular Damping", &m_angular_damping, 0.0f,   1.0f);
 #endif
 }
 

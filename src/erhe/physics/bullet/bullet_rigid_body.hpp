@@ -41,6 +41,7 @@ public:
     [[nodiscard]] auto get_linear_damping          () const -> float                             override;
     [[nodiscard]] auto get_angular_damping         () const -> float                             override;
     [[nodiscard]] auto get_local_inertia           () const -> glm::mat4                         override;
+    [[nodiscard]] auto get_world_transform         () const -> Transform                         override;
     [[nodiscard]] auto get_mass                    () const -> float                             override;
     [[nodiscard]] auto get_center_of_mass_transform() const -> Transform                         override;
     [[nodiscard]] auto get_debug_label             () const -> const char*                       override;

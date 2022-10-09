@@ -420,7 +420,6 @@ auto Trs_tool::Visualization::make_mesh(
         }
     );
     mesh->set_visibility_mask(erhe::scene::Node_visibility::tool);
-    tool_scene_root->scene().add_node(mesh);
     auto* parent = tool_node.get();
     if (parent != nullptr)
     {

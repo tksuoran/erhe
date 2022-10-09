@@ -5,6 +5,7 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/physics/imotion_state.hpp"
 
 #include <glm/glm.hpp>
 
@@ -20,6 +21,7 @@ namespace erhe::scene
 namespace erhe::physics
 {
     class IConstraint;
+    class IRigid_body;
     class IWorld;
 }
 
@@ -65,6 +67,7 @@ private:
 
 class Physics_tool
     : public erhe::components::Component
+    , public erhe::physics::IMotion_state
     , public Tool
 {
 public:
@@ -88,6 +91,12 @@ public:
     void tool_hover     (Scene_view* scene_view) override;
     void tool_render    (const Render_context& context) override;
     void tool_properties() override;
+
+    // Implements erhe::physics::IMotion_state
+    [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform   override;
+    [[nodiscard]] auto get_motion_mode         () const -> erhe::physics::Motion_mode override;
+    void set_world_from_rigidbody(const erhe::physics::Transform   transform  ) override;
+    void set_motion_mode         (const erhe::physics::Motion_mode motion_mode) override;
 
     // Public API
     auto acquire_target(Scene_view* scene_view) -> bool;
@@ -122,6 +131,7 @@ private:
     glm::dvec3                                  m_target_position_start  {0.0, 0.0, 0.0};
     glm::dvec3                                  m_target_position_end    {0.0, 0.0, 0.0};
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
+    std::shared_ptr<erhe::physics::IRigid_body> m_constraint_world_point_rigid_body;
 
     float m_force_distance          {1.000f};
     float m_tau                     {0.001f};

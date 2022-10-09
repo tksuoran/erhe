@@ -6,29 +6,29 @@
 namespace erhe::physics
 {
 
-auto IConstraint::create_point_to_point_constraint(
-    IRigid_body*    rigid_body,
-    const glm::vec3 point
-) -> IConstraint*
-{
-    return new Bullet_point_to_point_constraint(rigid_body, point);
-}
-
-auto IConstraint::create_point_to_point_constraint_shared(
-    IRigid_body*    rigid_body,
-    const glm::vec3 point
-) -> std::shared_ptr<IConstraint>
-{
-    return std::make_shared<Bullet_point_to_point_constraint>(rigid_body, point);
-}
-
-auto IConstraint::create_point_to_point_constraint_unique(
-    IRigid_body*    rigid_body,
-    const glm::vec3 point
-) -> std::unique_ptr<IConstraint>
-{
-    return std::make_unique<Bullet_point_to_point_constraint>(rigid_body, point);
-}
+//// auto IConstraint::create_point_to_point_constraint(
+////     IRigid_body*    rigid_body,
+////     const glm::vec3 point
+//// ) -> IConstraint*
+//// {
+////     return new Bullet_point_to_point_constraint(rigid_body, point);
+//// }
+////
+//// auto IConstraint::create_point_to_point_constraint_shared(
+////     IRigid_body*    rigid_body,
+////     const glm::vec3 point
+//// ) -> std::shared_ptr<IConstraint>
+//// {
+////     return std::make_shared<Bullet_point_to_point_constraint>(rigid_body, point);
+//// }
+////
+//// auto IConstraint::create_point_to_point_constraint_unique(
+////     IRigid_body*    rigid_body,
+////     const glm::vec3 point
+//// ) -> std::unique_ptr<IConstraint>
+//// {
+////     return std::make_unique<Bullet_point_to_point_constraint>(rigid_body, point);
+//// }
 
 auto IConstraint::create_point_to_point_constraint(
     IRigid_body*    rigid_body_a,

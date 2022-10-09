@@ -143,6 +143,7 @@ public:
         int   instance_count             {1};
         float instance_gap               {0.4f};
         float object_scale               {1.0f};
+        float mass_scale                 {1.0f};
         int   detail                     {2};
         bool  floor                      {true};
         bool  gltf_files                 {false};

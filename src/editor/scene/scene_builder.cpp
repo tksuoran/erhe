@@ -419,7 +419,8 @@ void Scene_builder::make_brushes()
 
                 Brush_create_context context{
                     .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals
+                    .normal_style = Normal_style::corner_normals,
+                    .density      = config.mass_scale
                 };
                 context.normal_style = Normal_style::polygon_normals;
 
@@ -502,13 +503,14 @@ void Scene_builder::make_brushes()
     if (config.obj_files)
     {
         execution_queue->enqueue(
-            [this]()
+            [this, &config]()
             {
                 ERHE_PROFILE_SCOPE("parse .obj files");
 
                 const Brush_create_context context{
                     .build_info   = build_info(),
-                    .normal_style = Normal_style::polygon_normals
+                    .normal_style = Normal_style::polygon_normals,
+                    .density      = config.mass_scale
                 };
                 constexpr bool instantiate = true;
 
@@ -548,7 +550,8 @@ void Scene_builder::make_brushes()
 
                 const Brush_create_context context{
                     .build_info   = build_info(),
-                    .normal_style = Normal_style::polygon_normals
+                    .normal_style = Normal_style::polygon_normals,
+                    .density      = config.mass_scale
                 };
                 constexpr bool instantiate = true;
                 const auto scale = config.object_scale;
@@ -580,7 +583,8 @@ void Scene_builder::make_brushes()
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 const Brush_create_context context{
                     .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals
+                    .normal_style = Normal_style::corner_normals,
+                    .density      = config.mass_scale
                 };
                 constexpr bool instantiate = true;
 
@@ -608,7 +612,8 @@ void Scene_builder::make_brushes()
                 //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
                 const Brush_create_context context{
                     .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals
+                    .normal_style = Normal_style::corner_normals,
+                    .density      = config.mass_scale
                 };
                 constexpr bool instantiate = true;
 
@@ -693,7 +698,8 @@ void Scene_builder::make_brushes()
 
                 const Brush_create_context context{
                     .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals // Normal_style::polygon_normals
+                    .normal_style = Normal_style::corner_normals, // Normal_style::polygon_normals
+                    .density      = config.mass_scale
                 };
                 constexpr bool instantiate = true;
                 const float scale = config.object_scale;
@@ -730,7 +736,8 @@ void Scene_builder::make_brushes()
 
                 const Brush_create_context context{
                     .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals
+                    .normal_style = Normal_style::corner_normals,
+                    .density      = config.mass_scale
                 };
                 constexpr bool instantiate = true;
                 auto cone_geometry = make_cone( // always axis = x
@@ -830,7 +837,8 @@ void Scene_builder::make_brushes()
 
             const Brush_create_context context{
                 .build_info   = build_info(),
-                .normal_style = Normal_style::polygon_normals
+                .normal_style = Normal_style::polygon_normals,
+                .density      = config.mass_scale
             };
 
             {

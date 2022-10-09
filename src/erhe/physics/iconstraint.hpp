@@ -14,9 +14,9 @@ class IConstraint
 public:
     virtual ~IConstraint() noexcept {};
 
-    [[nodiscard]] static auto create_point_to_point_constraint       (IRigid_body* rigid_body, const glm::vec3 point) -> IConstraint*;
-    [[nodiscard]] static auto create_point_to_point_constraint_shared(IRigid_body* rigid_body, const glm::vec3 point) -> std::shared_ptr<IConstraint>;
-    [[nodiscard]] static auto create_point_to_point_constraint_unique(IRigid_body* rigid_body, const glm::vec3 point) -> std::unique_ptr<IConstraint>;
+    ////[[nodiscard]] static auto create_point_to_point_constraint       (IRigid_body* rigid_body, const glm::vec3 point) -> IConstraint*;
+    ////[[nodiscard]] static auto create_point_to_point_constraint_shared(IRigid_body* rigid_body, const glm::vec3 point) -> std::shared_ptr<IConstraint>;
+    ////[[nodiscard]] static auto create_point_to_point_constraint_unique(IRigid_body* rigid_body, const glm::vec3 point) -> std::unique_ptr<IConstraint>;
 
     [[nodiscard]] static auto create_point_to_point_constraint(
         IRigid_body*     rigid_body_a,

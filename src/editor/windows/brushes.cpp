@@ -182,7 +182,7 @@ auto Brushes::make_brush(
             .geometry        = geometry,
             .build_info      = context.build_info,
             .normal_style    = context.normal_style,
-            .density         = 1.0f,
+            .density         = context.density,
             .volume          = geometry->get_mass_properties().volume,
             .collision_shape = collision_shape
         }
@@ -208,7 +208,7 @@ auto Brushes::make_brush(
         .geometry                    = geometry,
         .build_info                  = context.build_info,
         .normal_style                = context.normal_style,
-        .density                     = 1.0f,
+        .density                     = context.density,
         .volume                      = 1.0f,
         .collision_shape             = {},
         .collision_volume_calculator = collision_volume_calculator,

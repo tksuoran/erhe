@@ -90,6 +90,7 @@ class Brush_create_context
 public:
     erhe::primitive::Build_info&  build_info;
     erhe::primitive::Normal_style normal_style{erhe::primitive::Normal_style::corner_normals};
+    float                         density{1.0f};
 };
 
 class Brush_context
