@@ -33,6 +33,7 @@ extern std::shared_ptr<spdlog::logger> log_rendertarget_imgui_windows;
 extern std::shared_ptr<spdlog::logger> log_xr;
 extern std::shared_ptr<spdlog::logger> log_hud;
 extern std::shared_ptr<spdlog::logger> log_controller_ray;
+extern std::shared_ptr<spdlog::logger> log_frame;
 
 void initialize_logging();
 

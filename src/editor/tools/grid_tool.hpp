@@ -51,14 +51,17 @@ private:
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
 
-    bool      m_enable     {false};
-    float     m_cell_size  {1.0f};
-    int       m_cell_div   {10};
-    int       m_cell_count {2};
-    float     m_thickness  {-2.0f};
-    glm::vec3 m_center     {0.0f};
-    glm::vec4 m_major_color{0.065f, 0.065f, 0.065f, 1.0f};
-    glm::vec4 m_minor_color{0.235f, 0.235f, 0.235f, 1.0f};
+    bool      m_enable          {true};
+    bool      m_see_hidden_major{false};
+    bool      m_see_hidden_minor{false};
+    float     m_cell_size       {1.0f};
+    int       m_cell_div        {10};
+    int       m_cell_count      {20};
+    float     m_major_width     {4.0f};
+    float     m_minor_width     {2.0f};
+    glm::vec3 m_center          {0.0f};
+    glm::vec4 m_major_color     {0.716f, 0.950f, 0.265f, 0.729f};
+    glm::vec4 m_minor_color     {0.374f, 0.557f, 0.149f, 0.737f};
 };
 
 } // namespace editor

@@ -4,57 +4,24 @@
 namespace erhe::physics
 {
 
-//// auto IConstraint::create_point_to_point_constraint(
-////     IRigid_body*    rigid_body,
-////     const glm::vec3 point
-//// ) -> IConstraint*
-//// {
-////     return new Jolt_point_to_point_constraint(rigid_body, point);
-//// }
-////
-//// auto IConstraint::create_point_to_point_constraint_shared(
-////     IRigid_body*    rigid_body,
-////     const glm::vec3 point
-//// ) -> std::shared_ptr<IConstraint>
-//// {
-////     return std::make_shared<Jolt_point_to_point_constraint>(rigid_body, point);
-//// }
-////
-//// auto IConstraint::create_point_to_point_constraint_unique(
-////     IRigid_body*    rigid_body,
-////     const glm::vec3 point
-//// ) -> std::unique_ptr<IConstraint>
-//// {
-////     return std::make_unique<Jolt_point_to_point_constraint>(rigid_body, point);
-//// }
-
 auto IConstraint::create_point_to_point_constraint(
-    IRigid_body*    rigid_body_a,
-    IRigid_body*    rigid_body_b,
-    const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b
+    const Point_to_point_constraint_settings& settings
 ) -> IConstraint*
 {
-    return new Jolt_point_to_point_constraint(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
+    return new Jolt_point_to_point_constraint(settings);
 }
 
 auto IConstraint::create_point_to_point_constraint_shared(
-    IRigid_body*    rigid_body_a,
-    IRigid_body*    rigid_body_b,
-    const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b
+    const Point_to_point_constraint_settings& settings
 ) -> std::shared_ptr<IConstraint>
 {
-    return std::make_shared<Jolt_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
+    return std::make_shared<Jolt_point_to_point_constraint>(settings);
 }
 auto IConstraint::create_point_to_point_constraint_unique(
-    IRigid_body*    rigid_body_a,
-    IRigid_body*    rigid_body_b,
-    const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b
+    const Point_to_point_constraint_settings& settings
 ) -> std::unique_ptr<IConstraint>
 {
-    return std::make_unique<Jolt_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
+    return std::make_unique<Jolt_point_to_point_constraint>(settings);
 }
 
 } // namespace erhe::physics

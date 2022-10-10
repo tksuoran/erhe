@@ -44,16 +44,17 @@ void Viewport_config::initialize_component()
     render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
 
     render_style_selected.polygon_fill      = config.polygon_fill;
-    render_style_selected.edge_lines        = config.edge_lines;
+    render_style_selected.edge_lines        = config.selection_edge_lines;
     render_style_selected.corner_points     = config.corner_points;
     render_style_selected.polygon_centroids = config.polygon_centroids;
-    render_style_selected.line_color        = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
+    render_style_selected.line_color        = config.selection_edge_color;
     render_style_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
     render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
     //render_style_selected.edge_lines = false;
 
     selection_bounding_box    = config.selection_bounding_box;
     selection_bounding_sphere = config.selection_bounding_sphere;
+    clear_color               = config.clear_color;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)

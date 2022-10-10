@@ -93,6 +93,10 @@ Bullet_rigid_body::Bullet_rigid_body(
 
     m_bullet_rigid_body.setFriction(0.5f);
     m_bullet_rigid_body.setRollingFriction(0.1f);
+    if (!create_info.enable_collisions)
+    {
+        m_bullet_rigid_body.setFlags(BT_DISABLE_WORLD_GRAVITY);
+    }
 }
 
 IRigid_body::~IRigid_body() noexcept
@@ -135,16 +139,6 @@ void Bullet_rigid_body::set_friction(const float friction)
     m_bullet_rigid_body.setFriction(static_cast<btScalar>(friction));
 }
 
-auto Bullet_rigid_body::get_rolling_friction() const -> float
-{
-    return static_cast<float>(m_bullet_rigid_body.getRollingFriction());
-}
-
-void Bullet_rigid_body::set_rolling_friction(const float rolling_friction)
-{
-    m_bullet_rigid_body.setRollingFriction(static_cast<btScalar>(rolling_friction));
-}
-
 auto Bullet_rigid_body::get_restitution() const -> float
 {
     return static_cast<float>(m_bullet_rigid_body.getRestitution());
@@ -185,7 +179,8 @@ void Bullet_rigid_body::set_motion_mode(const Motion_mode motion_mode)
             flags &= ~btCollisionObject::CF_KINEMATIC_OBJECT;
             break;
         }
-        case Motion_mode::e_kinematic:
+        case Motion_mode::e_kinematic_non_physical:
+        case Motion_mode::e_kinematic_physical:
         {
             flags &= ~btCollisionObject::CF_STATIC_OBJECT;
             flags |=  btCollisionObject::CF_KINEMATIC_OBJECT;
@@ -222,9 +217,19 @@ void Bullet_rigid_body::move_world_transform(const Transform transform, float de
     m_bullet_rigid_body.setWorldTransform(to_bullet(transform));
 }
 
+[[nodiscard]] auto Bullet_rigid_body::get_linear_velocity() const -> glm::vec3
+{
+    return from_bullet(m_bullet_rigid_body.getLinearVelocity());
+}
+
 void Bullet_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 {
     m_bullet_rigid_body.setLinearVelocity(to_bullet(velocity));
+}
+
+[[nodiscard]] auto Bullet_rigid_body::get_angular_velocity() const -> glm::vec3
+{
+    return from_bullet(m_bullet_rigid_body.getAngularVelocity());
 }
 
 void Bullet_rigid_body::set_angular_velocity(const glm::vec3 velocity)
@@ -245,7 +250,7 @@ void Bullet_rigid_body::set_damping(
     m_bullet_rigid_body.setDamping(linear_damping, angular_damping);
 }
 
-auto Bullet_rigid_body::get_angular_damping () const -> float
+auto Bullet_rigid_body::get_angular_damping() const -> float
 {
     return static_cast<float>(m_bullet_rigid_body.getAngularDamping());
 }

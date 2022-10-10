@@ -32,7 +32,7 @@ Bvh_scene::Bvh_scene(const std::string_view debug_label)
 {
 }
 
-Bvh_scene::~Bvh_scene() = default;
+Bvh_scene::~Bvh_scene() noexcept = default;
 
 void Bvh_scene::attach(IGeometry* geometry)
 {

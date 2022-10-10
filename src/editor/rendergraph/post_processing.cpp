@@ -226,7 +226,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
 
 void Post_processing_node::imgui_toolbar()
 {
-    ImGui::Checkbox("Post Processing", &m_enabled);
+    // TODO Fix ImGui::Checkbox("Post Processing", &m_enabled);
 }
 
 [[nodiscard]] auto Post_processing_node::get_consumer_input_texture(

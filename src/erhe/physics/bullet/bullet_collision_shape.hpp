@@ -3,6 +3,7 @@
 #include "erhe/physics/icollision_shape.hpp"
 
 #include <btBulletCollisionCommon.h>
+#include <BulletCollision/CollisionShapes/btCollisionShape.h>
 #include <BulletCollision/CollisionShapes/btBoxShape.h>
 #include <BulletCollision/CollisionShapes/btConeShape.h>
 #include <BulletCollision/CollisionShapes/btCylinderShape.h>
@@ -46,6 +47,16 @@ public:
 
 protected:
     btCollisionShape* m_bullet_collision_shape{nullptr};
+};
+
+class Bullet_empty_shape
+    : public Bullet_collision_shape
+{
+public:
+    Bullet_empty_shape();
+
+private:
+    btEmptyShape m_shape;
 };
 
 class Bullet_box_shape

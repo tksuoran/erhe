@@ -53,7 +53,7 @@ public:
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
-    void tool_render    (const Render_context& context)  override;
+    void tool_render(const Render_context& context)  override;
 
     // Implements IUpdate_once_per_frame
     //void update_once_per_frame(const erhe::components::Time_context& time_context) override;

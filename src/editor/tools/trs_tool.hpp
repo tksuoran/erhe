@@ -6,6 +6,7 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/physics/imotion_state.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/node.hpp"
 
@@ -357,6 +358,7 @@ private:
     std::shared_ptr<Tools>                                m_tools;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
+    erhe::physics::Motion_mode                 m_motion_mode    {erhe::physics::Motion_mode::e_kinematic_physical};
     bool                                       m_local          {true};
     bool                                       m_touched        {false};
     Handle                                     m_hover_handle   {Handle::e_handle_none};

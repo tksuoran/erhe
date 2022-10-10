@@ -35,6 +35,9 @@ class ICollision_shape
 public:
     virtual ~ICollision_shape() noexcept {};
 
+    [[nodiscard]] static auto create_empty_shape                 () -> ICollision_shape*;
+    [[nodiscard]] static auto create_empty_shape_shared          () -> std::shared_ptr<ICollision_shape>;
+
     [[nodiscard]] static auto create_box_shape                   (const glm::vec3 half_extents) -> ICollision_shape*;
     [[nodiscard]] static auto create_box_shape_shared            (const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>;
 

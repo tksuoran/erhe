@@ -1,10 +1,8 @@
-add_compile_options(-Wall)
-add_compile_options(-Wextra)
-
-set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wno-unknown-pragmas -Wno-sign-compare -Woverloaded-virtual -Wwrite-strings -Wno-unused")
-set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+add_compile_options(-Wall;-Wextra;-Wno-unused;-Wno-unknown-pragmas;-Wno-sign-compare;-Wwrite-strings;-Wno-unused;-Wno-narrowing;-Wno-deprecated-copy;-Wno-unqualified-std-cast-call)
+#add_compile_options(-Wall;-Wextra;-Wno-unused;-Wno-unknown-pragmas;-Wno-sign-compare;-Wwrite-strings;-Wno-unused;-Wno-narrowing)
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
+add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
+add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
 function (erhe_target_settings target)
-# TODO
 endfunction()

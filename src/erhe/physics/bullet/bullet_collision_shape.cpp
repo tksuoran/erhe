@@ -5,6 +5,18 @@
 namespace erhe::physics
 {
 
+auto ICollision_shape::create_empty_shape(
+) -> ICollision_shape*
+{
+    return new Bullet_empty_shape();
+}
+
+auto ICollision_shape::create_empty_shape_shared(
+) -> std::shared_ptr<ICollision_shape>
+{
+    return std::make_shared<Bullet_empty_shape>();
+}
+
 auto ICollision_shape::create_box_shape(
     const glm::vec3 half_extents
 ) -> ICollision_shape*
@@ -162,6 +174,11 @@ void Bullet_collision_shape::calculate_principal_axis_transform(
 {
     log_physics->error("Bullet_collision_shape::calculate_principal_axis_transform() called");
     assert(false);
+}
+
+Bullet_empty_shape::Bullet_empty_shape()
+    : Bullet_collision_shape{&m_shape}
+{
 }
 
 Bullet_box_shape::Bullet_box_shape(const glm::vec3 half_extents)

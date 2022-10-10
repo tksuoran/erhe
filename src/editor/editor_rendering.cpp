@@ -499,12 +499,12 @@ void Editor_rendering::render_viewport_main(
     gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
     gl::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
-        gl::Clear_buffer_mask::depth_buffer_bit
-        //// TODO gl::Clear_buffer_mask::stencil_buffer_bit
+        gl::Clear_buffer_mask::depth_buffer_bit |
+        gl::Clear_buffer_mask::stencil_buffer_bit
     );
 
     if (m_forward_renderer)
-    {
+    {               
         static constexpr std::string_view c_id_main{"Main"};
         ERHE_PROFILE_GPU_SCOPE(c_id_main);
         erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};

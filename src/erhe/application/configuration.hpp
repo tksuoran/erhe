@@ -3,6 +3,8 @@
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 
+#include <glm/glm.hpp>
+
 #include "mini/ini.h"
 
 namespace erhe::application {
@@ -175,6 +177,7 @@ public:
         Window_entry debug_visualizations{false};
         Window_entry fly_camera          {false};
         Window_entry grid                {false};
+        Window_entry headset_view        {false};
         Window_entry hover_tool          {false};
         Window_entry layers              {false};
         Window_entry log                 {false};
@@ -200,12 +203,15 @@ public:
     class Viewport
     {
     public:
-        bool polygon_fill             {true};
-        bool edge_lines               {false};
-        bool corner_points            {false};
-        bool polygon_centroids        {false};
-        bool selection_bounding_sphere{true};
-        bool selection_bounding_box   {true};
+        bool      polygon_fill             {true};
+        bool      edge_lines               {false};
+        bool      selection_edge_lines     {false};
+        bool      corner_points            {false};
+        bool      polygon_centroids        {false};
+        bool      selection_bounding_sphere{true};
+        bool      selection_bounding_box   {true};
+        glm::vec4 selection_edge_color     {0.0f, 0.0f, 0.0f, 1.0f};
+        glm::vec4 clear_color              {0.1f, 0.2f, 0.4f, 1.0f};
     };
     Viewport viewport;
 
@@ -233,10 +239,14 @@ public:
     class Grid
     {
     public:
-        bool  enabled   {false};
-        float cell_size {1.0f};
-        int   cell_div  {10};
-        int   cell_count{2};
+        bool      enabled   {false};
+        glm::vec4 major_color{1.0f, 1.0f, 1.0f, 1.0f};
+        glm::vec4 minor_color{0.5f, 0.5f, 0.5f, 0.5f};
+        float     major_width{4.0f};
+        float     minor_width{2.0f};
+        float     cell_size {1.0f};
+        int       cell_div  {10};
+        int       cell_count{2};
     };
     Grid grid;
 

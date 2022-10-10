@@ -252,27 +252,30 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<erhe::application::Log_window        >(), config.log        );
     init_window(m_components.get<erhe::application::Performance_window>(), config.performance);
     init_window(m_components.get<erhe::application::Pipelines         >(), config.pipelines  );
-    //if (m_components.get<erhe::application::Tool_properties_window>()) m_components.get<Terhe::application::ool_properties_window>()->hide();
 
-    init_window(m_components.get<editor::Brushes               >(), config.brushes            );
-    init_window(m_components.get<editor::Debug_view_window     >(), config.debug_view         );
-    init_window(m_components.get<editor::Fly_camera_tool       >(), config.fly_camera         );
-    init_window(m_components.get<editor::Grid_tool             >(), config.grid               );
-    init_window(m_components.get<editor::Hover_tool            >(), config.hover_tool         );
-    init_window(m_components.get<editor::Layers_window         >(), config.layers             );
-    init_window(m_components.get<editor::Material_properties   >(), config.material_properties);
-    init_window(m_components.get<editor::Materials_window      >(), config.materials          );
-    init_window(m_components.get<editor::Mesh_properties       >(), config.mesh_properties    );
-    init_window(m_components.get<editor::Node_properties       >(), config.node_properties    );
-    init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree          );
-    init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack    );
-    init_window(m_components.get<editor::Operations            >(), config.operations         );
-    init_window(m_components.get<editor::Physics_window        >(), config.physics            );
-    init_window(m_components.get<editor::Post_processing_window>(), config.post_processing    );
-    init_window(m_components.get<editor::Rendergraph_window    >(), config.render_graph       );
-    init_window(m_components.get<editor::Trs_tool              >(), config.trs                );
-    init_window(m_components.get<editor::Tool_properties_window>(), config.tool_properties    );
-    init_window(m_components.get<editor::Viewport_config       >(), config.viewport_config    );
+    init_window(m_components.get<editor::Brushes               >(), config.brushes             );
+    init_window(m_components.get<editor::Debug_view_window     >(), config.debug_view          );
+    init_window(m_components.get<editor::Debug_visualizations  >(), config.debug_visualizations);
+    init_window(m_components.get<editor::Fly_camera_tool       >(), config.fly_camera          );
+    init_window(m_components.get<editor::Grid_tool             >(), config.grid                );
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    init_window(m_components.get<editor::Headset_view          >(), config.headset_view        );
+#endif
+    init_window(m_components.get<editor::Hover_tool            >(), config.hover_tool          );
+    init_window(m_components.get<editor::Layers_window         >(), config.layers              );
+    init_window(m_components.get<editor::Material_properties   >(), config.material_properties );
+    init_window(m_components.get<editor::Materials_window      >(), config.materials           );
+    init_window(m_components.get<editor::Mesh_properties       >(), config.mesh_properties     );
+    init_window(m_components.get<editor::Node_properties       >(), config.node_properties     );
+    init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree           );
+    init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack     );
+    init_window(m_components.get<editor::Operations            >(), config.operations          );
+    init_window(m_components.get<editor::Physics_window        >(), config.physics             );
+    init_window(m_components.get<editor::Post_processing_window>(), config.post_processing     );
+    init_window(m_components.get<editor::Rendergraph_window    >(), config.render_graph        );
+    init_window(m_components.get<editor::Trs_tool              >(), config.trs                 );
+    init_window(m_components.get<editor::Tool_properties_window>(), config.tool_properties     );
+    init_window(m_components.get<editor::Viewport_config       >(), config.viewport_config     );
 
     if (configuration->physics.enabled)
     {
@@ -294,8 +297,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
         headset_view->connect(shadow_render_node);
 
-        const auto& scene_builder    = m_components.get<editor::Scene_builder>();
-        scene_builder->add_rendertarget_viewports(1);
+        //const auto& scene_builder = m_components.get<editor::Scene_builder>();
+        //scene_builder->add_rendertarget_viewports(1);
     }
 #endif
 

@@ -166,62 +166,6 @@ void Physics_window::imgui()
             physics_world.set_gravity(updated_gravity);
         }
     }
-
-    const auto& selection = m_selection_tool->selection();
-    for (const auto& item : selection)
-    {
-        auto* node_physics = get_physics_node(item.get()).get();
-        if (!node_physics)
-        {
-            continue;
-        }
-        ImGui::Text("Rigid body: %s", item->name().c_str());
-        auto* rigid_body = node_physics->rigid_body();
-        int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
-
-        {
-            const glm::mat4 local_inertia = rigid_body->get_local_inertia();
-            float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
-            ImGui::InputFloat3("Local Inertia", floats);
-            // TODO floats back to rigid body?
-        }
-
-        ImGui::Combo(
-            "Motion Mode",
-            &motion_mode,
-            erhe::physics::c_motion_mode_strings,
-            IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
-        );
-        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
-
-        float mass = rigid_body->get_mass();
-        const float before_mass = mass;
-        ImGui::SliderFloat("Mass", &mass, 0.0f, 10.0f);
-        if (mass != before_mass)
-        {
-            glm::mat4 local_inertia{0.0f};
-            rigid_body->get_collision_shape()->calculate_local_inertia(mass, local_inertia);
-            rigid_body->set_mass_properties(mass, local_inertia);
-        }
-
-        float restitution = rigid_body->get_restitution();
-        ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f);
-        rigid_body->set_restitution(restitution);
-
-        float friction = rigid_body->get_friction();
-        ImGui::SliderFloat("Friction", &friction, 0.0f, 1.0f);
-        rigid_body->set_friction(friction);
-
-        float rolling_friction = rigid_body->get_rolling_friction();
-        ImGui::SliderFloat("Rolling Friction", &rolling_friction, 0.0f, 1.0f);
-        rigid_body->set_rolling_friction(rolling_friction);
-
-        float linear_damping  = rigid_body->get_linear_damping();
-        float angular_damping = rigid_body->get_angular_damping();
-        ImGui::SliderFloat("Linear Damping",  &linear_damping, 0.0f, 1.0f);
-        ImGui::SliderFloat("Angular Damping", &angular_damping, 0.0f, 1.0f);
-        rigid_body->set_damping(linear_damping, angular_damping);
-    }
 #endif
 }
 

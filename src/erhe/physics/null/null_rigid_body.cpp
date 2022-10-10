@@ -75,16 +75,6 @@ void Null_rigid_body::set_friction(const float friction)
     m_friction = friction;
 }
 
-auto Null_rigid_body::get_rolling_friction() const -> float
-{
-    return m_rolling_friction;
-}
-
-void Null_rigid_body::set_rolling_friction(const float rolling_friction)
-{
-    m_rolling_friction = rolling_friction;
-}
-
 auto Null_rigid_body::get_restitution() const -> float
 {
     return m_restitution;

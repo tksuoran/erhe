@@ -80,7 +80,7 @@ void Node_physics::on_node_transform_changed()
     if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)
     {
         erhe::physics::log_physics->warn("Attempt to move static rigid body - promoting to kinematic.");
-        m_rigid_body->set_motion_mode(Motion_mode::e_kinematic);
+        m_rigid_body->set_motion_mode(Motion_mode::e_kinematic_non_physical);
     }
     m_rigid_body->set_world_transform(world_from_node * m_node_from_rigidbody);
 }
@@ -129,7 +129,7 @@ void Node_physics::set_world_from_rigidbody(
     const erhe::physics::Transform world_from_rigidbody
 )
 {
-    log_physics->trace("{} pos = {}", m_rigid_body->get_debug_label(), world_from_rigidbody.origin);
+    //log_physics->trace("{} pos = {}", m_rigid_body->get_debug_label(), world_from_rigidbody.origin);
     set_world_from_node(world_from_rigidbody * m_rigidbody_from_node);
 }
 

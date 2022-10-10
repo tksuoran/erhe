@@ -280,8 +280,6 @@ void Trs_tool::set_node(
     )
     {
         log_trs_tool->trace("TRS restoring old physics node");
-        m_node_physics->rigid_body()->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0});
-        m_node_physics->rigid_body()->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0});
         m_node_physics->rigid_body()->set_motion_mode(m_original_motion_mode.value());
         m_original_motion_mode.reset();
     }
@@ -300,7 +298,7 @@ void Trs_tool::set_node(
     {
         log_trs_tool->trace("TRS node has rigid_body");
         m_original_motion_mode = rigid_body->get_motion_mode();
-        rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic);
+        rigid_body->set_motion_mode(m_motion_mode);
         rigid_body->begin_move();
     }
 
@@ -1640,7 +1638,7 @@ void Trs_tool::tool_render(
         return;
     }
 
-    auto& line_renderer = m_line_renderer_set->hidden;
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
     const dvec3  p                 = m_rotation.center_of_rotation;
     const dvec3  n                 = m_rotation.normal;

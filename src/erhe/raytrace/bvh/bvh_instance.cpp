@@ -26,7 +26,7 @@ Bvh_instance::Bvh_instance(const std::string_view debug_label)
 {
 }
 
-Bvh_instance::~Bvh_instance()
+Bvh_instance::~Bvh_instance() noexcept
 {
 }
 

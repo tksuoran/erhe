@@ -109,6 +109,7 @@ void Icon_set::Rasterization::rasterize(
     const int          row
 )
 {
+#if defined(ERHE_SVG_LIBRARY_LUNASVG)
     // Render a super sampled icon
     const auto bitmap_ss = document.renderToBitmap(m_icon_width * 4, m_icon_height * 4);
 
@@ -166,6 +167,11 @@ void Icon_set::Rasterization::rasterize(
         y_offset,
         0
     );
+#else
+    static_cast<void>(document);
+    static_cast<void>(column);
+    static_cast<void>(row);
+#endif
 }
 
 auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2

@@ -26,9 +26,7 @@ void Tools::initialize_component()
 {
     m_scene_root = std::make_shared<Scene_root>("Tool scene");
 
-#if !defined(NDEBUG)
     get<Editor_scenes>()->register_scene_root(m_scene_root);
-#endif
 }
 
 void Tools::post_initialize()

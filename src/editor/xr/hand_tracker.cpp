@@ -512,7 +512,7 @@ void Hand_tracker::tool_render(const Render_context& context)
     }
 
     const auto transform     = camera->world_from_node();
-    auto&      line_renderer = m_line_renderer_set->hidden;
+    auto&      line_renderer = *m_line_renderer_set->hidden.at(3).get();
 
     m_left_hand .draw(line_renderer, transform);
     m_right_hand.draw(line_renderer, transform);

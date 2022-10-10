@@ -95,7 +95,7 @@ void Debug_visualizations::mesh_selection_visualization(
     erhe::scene::Mesh*    mesh
 )
 {
-    auto&           line_renderer = m_line_renderer_set->hidden;
+    auto&           line_renderer = *m_line_renderer_set->hidden.at(2).get();
     //const uint32_t color         = is_in_selection
     //    ? 0xff00ffffu
     //    : erhe::toolkit::convert_float4_to_uint32(mesh.node_data.wireframe_color);
@@ -212,7 +212,7 @@ void Debug_visualizations::directional_light_visualization(
         return;
     }
 
-    auto&                    line_renderer               = m_line_renderer_set->hidden;
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
     const Light_projections& light_projections           = shadow_render_node->get_light_projections();
     const auto*              light                       = context.light;
     const auto               light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light);
@@ -241,7 +241,7 @@ void Debug_visualizations::directional_light_visualization(
 
 void Debug_visualizations::point_light_visualization(Light_visualization_context& context)
 {
-    auto& line_renderer = m_line_renderer_set->hidden;
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
     constexpr float scale = 0.5f;
     const auto nnn = scale * glm::normalize(-axis_x - axis_y - axis_z);
@@ -269,7 +269,7 @@ void Debug_visualizations::point_light_visualization(Light_visualization_context
 
 void Debug_visualizations::spot_light_visualization(Light_visualization_context& context)
 {
-    auto& line_renderer = m_line_renderer_set->hidden;
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
     const Render_context&     render_context = context.render_context;
     const erhe::scene::Light* light = context.light;
 
@@ -465,8 +465,6 @@ void Debug_visualizations::camera_visualization(
     const erhe::scene::Camera*  camera
 )
 {
-    auto& line_renderer = m_line_renderer_set->hidden;
-
     if (camera == render_context.camera)
     {
         return;
@@ -486,6 +484,7 @@ void Debug_visualizations::camera_visualization(
     //    vec4{0.5f * vec3{camera->node_data.wireframe_color}, 0.5f}
     //);
 
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
     line_renderer.add_cube(
         world_from_clip,
         color,
@@ -509,7 +508,7 @@ void Debug_visualizations::tool_render(
         return;
     }
 
-    auto& line_renderer = m_line_renderer_set->hidden;
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
     line_renderer.set_thickness(10.0f);
 
     std::shared_ptr<erhe::scene::Camera> selected_camera;
@@ -604,10 +603,6 @@ void Debug_visualizations::tool_render(
 
     if (m_physics)
     {
-        const uint32_t red  {0xff0000ffu};
-        const uint32_t green{0xff00ff00u};
-        const uint32_t blue {0xffff0000u};
-
         for (const auto& mesh : scene_root->layers().content()->meshes)
         {
             std::shared_ptr<Node_physics> node_physics = get_physics_node(mesh.get());
@@ -617,16 +612,33 @@ void Debug_visualizations::tool_render(
                 if (rigid_body != nullptr)
                 {
                     const erhe::physics::Transform transform = rigid_body->get_world_transform();
-                    glm::mat4 m{transform.basis};
-                    m[3] = glm::vec4{
-                        transform.origin.x,
-                        transform.origin.y,
-                        transform.origin.z,
-                        1.0f
-                    };
-                    line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-                    line_renderer.add_lines( m, green, {{ O, axis_y }} );
-                    line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+                    {
+                        const uint32_t half_red  {0x880000ffu};
+                        const uint32_t half_green{0x8800ff00u};
+                        const uint32_t half_blue {0x88ff0000u};
+                        glm::mat4 m{transform.basis};
+                        m[3] = glm::vec4{
+                            transform.origin.x,
+                            transform.origin.y,
+                            transform.origin.z,
+                            1.0f
+                        };
+                        line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
+                        line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
+                        line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
+                    }
+                    {
+                        const uint32_t cyan{0xffffff00u};
+                        const glm::vec3 velocity = rigid_body->get_linear_velocity();
+                        glm::mat4 m{1.0f};
+                        m[3] = glm::vec4{
+                            transform.origin.x,
+                            transform.origin.y,
+                            transform.origin.z,
+                            1.0f
+                        };
+                        line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
+                    }
                 }
             }
         }

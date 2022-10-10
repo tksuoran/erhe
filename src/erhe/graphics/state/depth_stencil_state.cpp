@@ -200,9 +200,11 @@ void Depth_stencil_state_tracker::execute_component(
 
 void Depth_stencil_state_tracker::execute_shared(
     const Stencil_op_state& state,
-    Depth_stencil_state&    cache)
+    Depth_stencil_state&    cache
+)
 {
 #if DISABLE_CACHE
+    static_cast<void>(cache);
     gl::stencil_op(state.stencil_fail_op, state.z_fail_op, state.z_pass_op);
     gl::stencil_mask(state.write_mask);
     gl::stencil_func(state.function, state.reference, state.test_mask);
@@ -266,6 +268,7 @@ void Depth_stencil_state_tracker::execute(const Depth_stencil_state& state)
     else
     {
         gl::disable(gl::Enable_cap::depth_test);
+        gl::depth_func(state.depth_compare_op);
     }
 
     gl::depth_mask(state.depth_write_enable ? GL_TRUE : GL_FALSE);
@@ -279,6 +282,8 @@ void Depth_stencil_state_tracker::execute(const Depth_stencil_state& state)
     else
     {
         gl::disable(gl::Enable_cap::stencil_test);
+        execute_component(gl::Stencil_face_direction::front, state.stencil_front, m_cache.stencil_front);
+        execute_component(gl::Stencil_face_direction::back,  state.stencil_back,  m_cache.stencil_back);
     }
 #else
     if (state.depth_test_enable)
@@ -327,6 +332,8 @@ void Depth_stencil_state_tracker::execute(const Depth_stencil_state& state)
             gl::disable(gl::Enable_cap::stencil_test);
             m_cache.stencil_test_enable = false;
         }
+        execute_component(gl::Stencil_face_direction::front, state.stencil_front, m_cache.stencil_front);
+        execute_component(gl::Stencil_face_direction::back,  state.stencil_back,  m_cache.stencil_back);
     }
 #endif
 }
@@ -361,8 +368,8 @@ auto operator==(
 {
     return
         (lhs.depth_test_enable   == rhs.depth_test_enable  ) &&
-        (lhs.depth_compare_op    == rhs.depth_compare_op   ) &&
         (lhs.depth_write_enable  == rhs.depth_write_enable ) &&
+        (lhs.depth_compare_op    == rhs.depth_compare_op   ) &&
         (lhs.stencil_test_enable == rhs.stencil_test_enable) &&
         (lhs.stencil_front       == rhs.stencil_front      ) &&
         (lhs.stencil_back        == rhs.stencil_back       );

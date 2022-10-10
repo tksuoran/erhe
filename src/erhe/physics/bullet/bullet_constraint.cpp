@@ -44,7 +44,8 @@ auto IConstraint::create_point_to_point_constraint_shared(
     IRigid_body*    rigid_body_a,
     IRigid_body*    rigid_body_b,
     const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b) -> std::shared_ptr<IConstraint>
+    const glm::vec3 pivot_in_b
+) -> std::shared_ptr<IConstraint>
 {
     return std::make_shared<Bullet_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
 }
@@ -53,7 +54,8 @@ auto IConstraint::create_point_to_point_constraint_unique(
     IRigid_body*    rigid_body_a,
     IRigid_body*    rigid_body_b,
     const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b) -> std::unique_ptr<IConstraint>
+    const glm::vec3 pivot_in_b
+) -> std::unique_ptr<IConstraint>
 {
     return std::make_unique<Bullet_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
 }

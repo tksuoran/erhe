@@ -110,9 +110,7 @@ Line_renderer_pipeline::Line_renderer_pipeline()
 }
 
 Line_renderer_set::Line_renderer_set()
-    : Component{c_type_name  }
-    , visible  {"visible"}
-    , hidden   {"hidden" }
+    : Component{c_type_name}
 {
 }
 
@@ -140,8 +138,12 @@ void Line_renderer_set::initialize_component()
     m_pipeline.initialize(get<Shader_monitor>().get());
 
     const Configuration& configuration = *get<Configuration>().get();
-    visible.create_frame_resources(&m_pipeline, configuration);
-    hidden.create_frame_resources(&m_pipeline, configuration);
+
+    for (unsigned int stencil_reference = 0; stencil_reference <= s_max_stencil_reference; ++stencil_reference)
+    {
+        visible.at(stencil_reference) = std::make_unique<Line_renderer>("visible", stencil_reference, &m_pipeline, configuration);
+        hidden .at(stencil_reference) = std::make_unique<Line_renderer>("hidden",  stencil_reference, &m_pipeline, configuration);
+    }
 }
 
 void Line_renderer_set::post_initialize()
@@ -207,12 +209,96 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
     }
 }
 
-Line_renderer::Line_renderer(const char* name)
-    : m_name{name}
+void Line_renderer_set::begin()
 {
+    for (auto& entry : visible) entry->begin();
+    for (auto& entry : hidden ) entry->begin();
+}
+
+void Line_renderer_set::end()
+{
+    for (auto& entry : visible) entry->end();
+    for (auto& entry : hidden ) entry->end();
+}
+
+void Line_renderer_set::next_frame()
+{
+    for (auto& entry : visible) entry->next_frame();
+    for (auto& entry : hidden ) entry->next_frame();
+}
+
+void Line_renderer_set::render(
+    const erhe::scene::Viewport viewport,
+    const erhe::scene::Camera&  camera
+)
+{
+    auto& state_tracker = *m_pipeline_state_tracker.get();
+    for (auto& entry: hidden ) entry->render(state_tracker, viewport, camera, true, false);
+    for (auto& entry: visible) entry->render(state_tracker, viewport, camera, true, true);
+    state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
+}
+
+[[nodiscard]] auto Line_renderer::Frame_resources::make_pipeline(
+    const bool                           reverse_depth,
+    erhe::graphics::Shader_stages* const shader_stages,
+    const bool                           visible,
+    const unsigned int                   stencil_reference
+) -> erhe::graphics::Pipeline
+{
+    const gl::Depth_function depth_compare_op0 = visible ? gl::Depth_function::less : gl::Depth_function::gequal;
+    const gl::Depth_function depth_compare_op  = reverse_depth ? erhe::graphics::reverse(depth_compare_op0) : depth_compare_op0;
+    return erhe::graphics::Pipeline{
+        {
+            .name           = "Line Renderer depth pass",
+            .shader_stages  = shader_stages,
+            .vertex_input   = &vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::lines,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = {
+                .depth_test_enable   = true,
+                .depth_write_enable  = false,
+                .depth_compare_op    = depth_compare_op,
+                .stencil_test_enable = true,
+                .stencil_front = {
+                    .stencil_fail_op = gl::Stencil_op::keep,
+                    .z_fail_op       = gl::Stencil_op::keep,
+                    .z_pass_op       = gl::Stencil_op::replace,
+                    .function        = gl::Stencil_function::gequal,
+                    .reference       = stencil_reference,
+                    .test_mask       = 0xffu,
+                    .write_mask      = 0xffu
+                },
+                .stencil_back = {
+                    .stencil_fail_op = gl::Stencil_op::keep,
+                    .z_fail_op       = gl::Stencil_op::keep,
+                    .z_pass_op       = gl::Stencil_op::replace,
+                    .function        = gl::Stencil_function::gequal,
+                    .reference       = stencil_reference,
+                    .test_mask       = 0xffu,
+                    .write_mask      = 0xffu
+                },
+            },
+
+            .color_blend    = visible ? erhe::graphics::Color_blend_state::color_blend_premultiplied : erhe::graphics::Color_blend_state{
+                .enabled  = true,
+                .rgb      = {
+                    .equation_mode      = gl::Blend_equation_mode::func_add,
+                    .source_factor      = gl::Blending_factor::constant_alpha,
+                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                },
+                .alpha    = {
+                    .equation_mode      = gl::Blend_equation_mode::func_add,
+                    .source_factor      = gl::Blending_factor::constant_alpha,
+                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+                },
+                .constant = { 0.0f, 0.0f, 0.0f, 0.1f },
+            }
+        }
+    };
 }
 
 Line_renderer::Frame_resources::Frame_resources(
+    const unsigned int                        stencil_reference,
     const bool                                reverse_depth,
     const std::size_t                         view_stride,
     const std::size_t                         view_count,
@@ -243,54 +329,24 @@ Line_renderer::Frame_resources::Frame_resources(
             nullptr
         )
     }
-    , pipeline_depth_pass{
-        {
-            .name           = "Line Renderer depth pass",
-            .shader_stages  = shader_stages,
-            .vertex_input   = &vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::lines,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-            .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
-        }
-    }
-    , pipeline_depth_fail{
-        {
-            .name           = "Line Renderer depth fail",
-            .shader_stages  = shader_stages,
-            .vertex_input   = &vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::lines,
-            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-            .color_blend    = {
-                .enabled = true,
-                .rgb = {
-                    .equation_mode      = gl::Blend_equation_mode::func_add,
-                    .source_factor      = gl::Blending_factor::constant_alpha,
-                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
-                },
-                .alpha = {
-                    .equation_mode      = gl::Blend_equation_mode::func_add,
-                    .source_factor      = gl::Blending_factor::constant_alpha,
-                    .destination_factor = gl::Blending_factor::one_minus_constant_alpha
-                },
-                .constant = { 0.0f, 0.0f, 0.0f, 0.1f },
-            }
-        }
-    }
+    , pipeline_visible{make_pipeline(reverse_depth, shader_stages, true,  stencil_reference)}
+    , pipeline_hidden {make_pipeline(reverse_depth, shader_stages, false, stencil_reference)}
 {
     vertex_buffer.set_debug_label(fmt::format("Line Renderer {} Vertex {}", style_name, slot));
-    view_buffer  .set_debug_label(fmt::format("Line Renderer {} View {}", style_name, slot));
+    view_buffer  .set_debug_label(fmt::format("Line Renderer {} View {}",   style_name, slot));
 }
 
-void Line_renderer::create_frame_resources(
+Line_renderer::Line_renderer(
+    const char* const       name,
+    const unsigned int      stencil_reference,
     Line_renderer_pipeline* pipeline,
     const Configuration&    configuration
 )
+    : m_name    {name}
+    , m_pipeline{pipeline}
 {
     ERHE_PROFILE_FUNCTION
 
-    m_pipeline = pipeline;
     const auto            reverse_depth = configuration.graphics.reverse_depth;
     constexpr std::size_t vertex_count  = 512 * 1024;
     constexpr std::size_t view_stride   = 256;
@@ -298,6 +354,7 @@ void Line_renderer::create_frame_resources(
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
+            stencil_reference,
             reverse_depth,
             view_stride,
             view_count,
@@ -316,27 +373,8 @@ auto Line_renderer::current_frame_resources() -> Frame_resources&
     return m_frame_resources[m_current_frame_resource_slot];
 }
 
-void Line_renderer_set::begin()
-{
-    visible.begin();
-    hidden.begin();
-}
-
-void Line_renderer_set::end()
-{
-    visible.end();
-    hidden.end();
-}
-
-void Line_renderer_set::next_frame()
-{
-    visible.next_frame();
-    hidden.next_frame();
-}
-
 void Line_renderer::next_frame()
 {
-
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
     m_view_writer  .reset();
     m_vertex_writer.reset();
@@ -648,16 +686,6 @@ void Line_renderer::add_sphere(
 
 static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};
 
-void Line_renderer_set::render(
-    const erhe::scene::Viewport viewport,
-    const erhe::scene::Camera&  camera
-)
-{
-    auto& state_tracker = *m_pipeline_state_tracker.get();
-    visible.render(state_tracker, viewport, camera, true, false);
-    hidden.render(state_tracker, viewport, camera, true, true);
-}
-
 void Line_renderer::render(
     erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
     const erhe::scene::Viewport           viewport,
@@ -726,7 +754,7 @@ void Line_renderer::render(
 
     if (show_hidden_lines)
     {
-        const auto& pipeline = current_frame_resources().pipeline_depth_fail;
+        const auto& pipeline = current_frame_resources().pipeline_hidden;
         pipeline_state_tracker.execute(pipeline);
 
         gl::draw_arrays(
@@ -738,7 +766,7 @@ void Line_renderer::render(
 
     if (show_visible_lines)
     {
-        const auto& pipeline = current_frame_resources().pipeline_depth_pass;
+        const auto& pipeline = current_frame_resources().pipeline_visible;
         pipeline_state_tracker.execute(pipeline);
 
         gl::draw_arrays(

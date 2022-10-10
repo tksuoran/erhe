@@ -908,7 +908,7 @@ void Scene_builder::add_room()
     {
         .node_visibility_flags = Node_visibility::visible | Node_visibility::content | Node_visibility::id,
         .scene_root            = m_scene_root.get(),
-        .world_from_node       = erhe::toolkit::create_translation<float>(0.0f, -0.5001f, 0.0f),
+        .world_from_node       = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
         .material              = floor_material,
         .scale                 = 1.0f
     };

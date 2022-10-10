@@ -21,170 +21,14 @@
 namespace erhe::physics
 {
 
-#if 0
-class EmptyShapeSettings final : public JPH::ShapeSettings
-{
-public:
-    //JPH_DECLARE_SERIALIZABLE_VIRTUAL(EmptyShapeSettings)
-
-    EmptyShapeSettings();
-
-    // See: ShapeSettings
-    JPH::ShapeSettings::ShapeResult Create() const override;
-};
-
-class EmptyShape final : public JPH::Shape
-{
-public:
-    //JPH_OVERRIDE_NEW_DELETE
-
-    EmptyShape()
-        : JPH::Shape{JPH::EShapeType::User1, JPH::EShapeSubType::User1}
-    {
-    }
-
-    EmptyShape(const JPH::ShapeSettings& inSettings, ShapeResult& outResult)
-        : JPH::Shape{JPH::EShapeType::User1, JPH::EShapeSubType::User1, inSettings, outResult}
-    {
-        outResult.Set(this);
-    }
-
-    JPH::AABox GetLocalBounds() const override
-    {
-        return JPH::AABox{};
-    }
-
-    JPH::uint GetSubShapeIDBitsRecursive() const
-    {
-        return 0;
-    }
-
-    JPH::AABox GetWorldSpaceBounds(JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale) const override
-    {
-        static_cast<void>(inCenterOfMassTransform);
-        static_cast<void>(inScale);
-        return JPH::AABox{};
-    }
-
-    float GetInnerRadius() const override
-    {
-        return 0.0f;
-    }
-
-    JPH::MassProperties	GetMassProperties() const override
-    {
-        return {};
-    }
-
-    const JPH::PhysicsMaterial* GetMaterial(const JPH::SubShapeID& inSubShapeID) const
-    {
-        static_cast<void>(inSubShapeID);
-        return nullptr;
-    }
-
-    JPH::Vec3 GetSurfaceNormal(const JPH::SubShapeID& inSubShapeID, JPH::Vec3Arg inLocalSurfacePosition) const override
-    {
-        static_cast<void>(inSubShapeID);
-        static_cast<void>(inLocalSurfacePosition);
-        return {};
-    }
-
-	void GetSubmergedVolume(JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, const JPH::Plane& inSurface, float& outTotalVolume, float& outSubmergedVolume, JPH::Vec3& outCenterOfBuoyancy) const override
-    {
-        static_cast<void>(inCenterOfMassTransform);
-        static_cast<void>(inScale);
-        static_cast<void>(inSurface);
-        outTotalVolume = 0.0f;
-        outSubmergedVolume = 0.0f;
-        outCenterOfBuoyancy = JPH::Vec3{0.0f, 0.0f, 0.0f};
-    }
-
-#ifdef JPH_DEBUG_RENDERER
-	// See Shape::Draw
-	void Draw(JPH::DebugRenderer* inRenderer, JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, JPH::ColorArg inColor, bool inUseMaterialColors, bool inDrawWireframe) const override;
-#endif // JPH_DEBUG_RENDERER
-
-    // See Shape::CastRay
-    bool CastRay(const JPH::RayCast& inRay, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::RayCastResult& ioHit) const override
-    {
-        static_cast<void>(inRay);
-        static_cast<void>(inSubShapeIDCreator);
-        static_cast<void>(ioHit);
-        return false;
-    }
-    void CastRay(const JPH::RayCast& inRay, const JPH::RayCastSettings& inRayCastSettings, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::CastRayCollector &ioCollector, const JPH::ShapeFilter& inShapeFilter = { }) const override
-    {
-        static_cast<void>(inRay);
-        static_cast<void>(inRayCastSettings);
-        static_cast<void>(inSubShapeIDCreator);
-        static_cast<void>(ioCollector);
-        static_cast<void>(inShapeFilter);
-    }
-
-    void CollidePoint(JPH::Vec3Arg inPoint, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::CollidePointCollector& ioCollector, const JPH::ShapeFilter& inShapeFilter = { }) const override
-    {
-        static_cast<void>(inPoint);
-        static_cast<void>(inSubShapeIDCreator);
-        static_cast<void>(ioCollector);
-        static_cast<void>(inShapeFilter);
-    }
-
-    void GetTrianglesStart(GetTrianglesContext& ioContext, const JPH::AABox& inBox, JPH::Vec3Arg inPositionCOM, JPH::QuatArg inRotation, JPH::Vec3Arg inScale) const override
-    {
-        static_cast<void>(ioContext);
-        static_cast<void>(inBox);
-        static_cast<void>(inPositionCOM);
-        static_cast<void>(inRotation);
-        static_cast<void>(inScale);
-    }
-
-    int GetTrianglesNext(GetTrianglesContext& ioContext, int inMaxTrianglesRequested, JPH::Float3* outTriangleVertices, const JPH::PhysicsMaterial** outMaterials = nullptr) const
-    {
-        static_cast<void>(ioContext);
-        static_cast<void>(inMaxTrianglesRequested);
-        static_cast<void>(outTriangleVertices);
-        static_cast<void>(outMaterials);
-        return 0;
-    }
-
-    Stats GetStats() const
-    {
-        return Stats{0, 0};
-    }
-
-    float GetVolume() const
-    {
-        return 0.0f;
-    }
-};
-
-EmptyShapeSettings::EmptyShapeSettings() = default;
-
-void register_empty_shape()
-{
-	JPH::ShapeFunctions& f = JPH::ShapeFunctions::sGet(JPH::EShapeSubType::User1);
-	f.mConstruct = []() -> JPH::Shape * { return new EmptyShape; };
-	f.mColor = JPH::Color::sOrange;
-}
-
-// See: ShapeSettings
-JPH::ShapeSettings::ShapeResult EmptyShapeSettings::Create() const
-{
-	if (mCachedResult.IsEmpty())
-    {
-    	JPH::Ref<JPH::Shape> shape = new EmptyShape(*this, mCachedResult);
-    }
-	return mCachedResult;
-}
-#endif
-
 [[nodiscard]] auto to_jolt(Motion_mode motion_mode) -> JPH::EMotionType
 {
     switch (motion_mode)
     {
-        case Motion_mode::e_static:    return JPH::EMotionType::Static;
-        case Motion_mode::e_kinematic: return JPH::EMotionType::Kinematic;
-        case Motion_mode::e_dynamic:   return JPH::EMotionType::Dynamic;
+        case Motion_mode::e_static:                 return JPH::EMotionType::Static;
+        case Motion_mode::e_kinematic_non_physical: return JPH::EMotionType::Kinematic;
+        case Motion_mode::e_kinematic_physical:     return JPH::EMotionType::Kinematic;
+        case Motion_mode::e_dynamic:                return JPH::EMotionType::Dynamic;
         default:
         {
             abort();
@@ -210,7 +54,7 @@ auto IRigid_body::create_rigid_body_shared(
     return std::make_shared<Jolt_rigid_body>(create_info, motion_state);
 }
 
-IRigid_body::~IRigid_body()
+IRigid_body::~IRigid_body() noexcept
 {
 }
 
@@ -218,13 +62,13 @@ Jolt_rigid_body::Jolt_rigid_body(
     const IRigid_body_create_info& create_info,
     IMotion_state*                 motion_state
 )
-    : m_collision_shape{std::dynamic_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
-    , m_motion_state   {motion_state}
+    : m_motion_state   {motion_state}
     , m_body_interface {
         reinterpret_cast<Jolt_world&>(create_info.world)
             .get_physics_system()
             .GetBodyInterface()
     }
+    , m_collision_shape{std::dynamic_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
     , m_mass           {create_info.mass > 0.0f ? create_info.mass : 1.0f}
     , m_local_inertia  {create_info.local_inertia}
     , m_motion_mode    {motion_state->get_motion_mode()}
@@ -258,7 +102,9 @@ Jolt_rigid_body::Jolt_rigid_body(
         position,
         rotation,
         to_jolt(motion_mode),
-        Layers::get_layer(motion_mode)
+        create_info.enable_collisions
+            ? Layers::get_layer(motion_mode)
+            : Layers::NON_COLLIDING
     };
     creation_settings.mAllowDynamicOrKinematic         = true;
     creation_settings.mFriction                        = create_info.friction;
@@ -275,7 +121,7 @@ Jolt_rigid_body::Jolt_rigid_body(
     m_body = m_body_interface.CreateBody(creation_settings);
 }
 
-Jolt_rigid_body::~Jolt_rigid_body() = default;
+Jolt_rigid_body::~Jolt_rigid_body() noexcept = default;
 
 auto Jolt_rigid_body::get_motion_mode() const -> Motion_mode
 {
@@ -318,27 +164,28 @@ void Jolt_rigid_body::set_friction(const float friction)
     m_body->SetFriction(friction);
 }
 
-auto Jolt_rigid_body::get_rolling_friction() const -> float
+auto Jolt_rigid_body::get_gravity_factor() const -> float
 {
-    return m_rolling_friction;
+    if (m_body == nullptr) {
+        return 0.0f;
+    }
+    return m_body_interface.GetGravityFactor(m_body->GetID());
 }
 
-void Jolt_rigid_body::set_rolling_friction(const float rolling_friction)
+void Jolt_rigid_body::set_gravity_factor(const float gravity_factor)
 {
     if (m_body == nullptr)
     {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
-
-    // TODO Use angular dampening to simulate rolling friction with Jolt
     SPDLOG_LOGGER_TRACE(
         log_physics,
-        "{} set rolling friction {}",
+        "{} set gravity factor {}",
         m_debug_label,
-        rolling_friction
+        gravity_factor
     );
-    m_rolling_friction = rolling_friction;
+    m_body_interface.SetGravityFactor(m_body->GetID(), gravity_factor);
 }
 
 auto Jolt_rigid_body::get_restitution() const -> float
@@ -382,6 +229,7 @@ void Jolt_rigid_body::end_move()
     }
     SPDLOG_LOGGER_TRACE(log_physics, "{} end move", m_debug_label);
     m_body->SetAllowSleeping(true);
+    log_physics->trace("End velocity = {}", get_linear_velocity());
     //m_body_interface.ActivateBody(m_body->GetID());
 }
 
@@ -391,9 +239,10 @@ auto c_str(const Motion_mode motion_mode) -> const char*
 {
     switch (motion_mode)
     {
-        case Motion_mode::e_static: return "static";
-        case Motion_mode::e_kinematic: return "kinematic";
-        case Motion_mode::e_dynamic: return "dynamic";
+        case Motion_mode::e_static: return "Static";
+        case Motion_mode::e_kinematic_non_physical: return "Kinematic Non-Physical";
+        case Motion_mode::e_kinematic_physical: return "Kinematic Physical";
+        case Motion_mode::e_dynamic: return "Dynamic";
         default: return "?";
     }
 }
@@ -402,6 +251,8 @@ auto c_str(const Motion_mode motion_mode) -> const char*
 
 void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 {
+    log_physics->info("{} set_motion_mode({})", get_debug_label(), c_str(motion_mode));
+
     if (m_body == nullptr)
     {
         log_physics->error("Fixed world body cannot be modified");
@@ -518,6 +369,16 @@ void Jolt_rigid_body::set_world_transform(const Transform transform)
     );
 }
 
+auto Jolt_rigid_body::get_linear_velocity() const -> glm::vec3
+{
+    if (m_body == nullptr)
+    {
+        return {};
+    }
+
+    return from_jolt(m_body->GetLinearVelocity());
+}
+
 void Jolt_rigid_body::set_linear_velocity(const glm::vec3 velocity)
 {
     if (m_body == nullptr)
@@ -529,6 +390,16 @@ void Jolt_rigid_body::set_linear_velocity(const glm::vec3 velocity)
     SPDLOG_LOGGER_TRACE(log_physics, "{} set linear velocity {}", m_debug_label, velocity);
 
     m_body_interface.SetLinearVelocity(m_body->GetID(), to_jolt(velocity));
+}
+
+auto Jolt_rigid_body::get_angular_velocity() const -> glm::vec3
+{
+    if (m_body == nullptr)
+    {
+        return {};
+    }
+
+    return from_jolt(m_body->GetAngularVelocity());
 }
 
 void Jolt_rigid_body::set_angular_velocity(const glm::vec3 velocity)
@@ -647,16 +518,24 @@ void Jolt_rigid_body::pre_update_motion_state() const
         return;
     }
 
-    if (m_motion_mode != Motion_mode::e_kinematic)
+    // Only for kinematic moves
+    if ((m_motion_mode == Motion_mode::e_static) || (m_motion_mode == Motion_mode::e_dynamic))
     {
         return;
     }
 
     const auto transform = m_motion_state->get_world_from_rigidbody();
+
+    log_physics_frame->trace(
+        "{} pre pos = {}",
+        get_debug_label(),
+        transform.origin
+    );
+
     m_body->MoveKinematic(
         to_jolt(transform.origin),
         to_jolt(glm::quat{transform.basis}),
-        1.0f / 10.f
+        1.0f / 100.0f
     );
 }
 

@@ -99,7 +99,7 @@ private:
     std::shared_ptr<Trs_tool>                             m_trs_tool;
     erhe::toolkit::Bounding_volume_combiner               m_selection_bounding_volume;
 
-    bool m_tool_hide{true};
+    bool m_tool_hide{false};
     bool m_physics  {false};
     bool m_raytrace {false};
     bool m_selection{true};

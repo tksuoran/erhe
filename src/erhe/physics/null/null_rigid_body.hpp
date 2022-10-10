@@ -21,7 +21,6 @@ public:
     [[nodiscard]] auto get_motion_mode             () const -> Motion_mode                       override;
     [[nodiscard]] auto get_collision_shape         () const -> std::shared_ptr<ICollision_shape> override;
     [[nodiscard]] auto get_friction                () const -> float                             override;
-    [[nodiscard]] auto get_rolling_friction        () const -> float                             override;
     [[nodiscard]] auto get_restitution             () const -> float                             override;
     [[nodiscard]] auto get_linear_damping          () const -> float                             override;
     [[nodiscard]] auto get_angular_damping         () const -> float                             override;
@@ -33,7 +32,6 @@ public:
     void set_motion_mode             (const Motion_mode motion_mode)                           override;
     void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape)override;
     void set_friction                (const float friction)                                    override;
-    void set_rolling_friction        (const float rolling_friction)                            override;
     void set_restitution             (const float restitution)                                 override;
     void set_center_of_mass_transform(const Transform transform)                               override;
     void set_world_transform         (const Transform transform)                               override;
@@ -56,7 +54,6 @@ private:
     float                             m_linear_damping  {0.05f};
     float                             m_angular_damping {0.05f};
     float                             m_friction        {0.5f};
-    float                             m_rolling_friction{0.1f};
     float                             m_restitution     {0.5f};
     std::string                       m_debug_label;
 };

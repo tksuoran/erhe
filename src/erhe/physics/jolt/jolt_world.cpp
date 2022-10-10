@@ -57,10 +57,11 @@ namespace Layers {
 {
     switch (motion_mode)
     {
-        case Motion_mode::e_static:    return Layers::NON_MOVING;
-        case Motion_mode::e_kinematic: return Layers::MOVING;
-        case Motion_mode::e_dynamic:   return Layers::MOVING;
-        default:                       return Layers::MOVING;
+        case Motion_mode::e_static:                 return Layers::NON_MOVING;
+        case Motion_mode::e_kinematic_non_physical: return Layers::MOVING;
+        case Motion_mode::e_kinematic_physical:     return Layers::MOVING;
+        case Motion_mode::e_dynamic:                return Layers::MOVING;
+        default:                                    return Layers::MOVING;
     }
 }
 
@@ -68,14 +69,15 @@ namespace Layers {
 
 // Function that determines if two object layers can collide
 static bool object_can_collide(
-    JPH::ObjectLayer inObject1,
-    JPH::ObjectLayer inObject2
+    JPH::ObjectLayer in_object1,
+    JPH::ObjectLayer in_object2
 )
 {
-    switch (inObject1)
+    switch (in_object1)
     {
-        case Layers::NON_MOVING: return inObject2 == Layers::MOVING; // Non moving only collides with moving
-        case Layers::MOVING:     return true; // Moving collides with everything
+        case Layers::NON_MOVING:    return in_object2 == Layers::MOVING;        // Non moving only collides with moving
+        case Layers::MOVING:        return in_object2 != Layers::NON_COLLIDING;
+        case Layers::NON_COLLIDING: return false; // Does not collide with anything
         default:                 ERHE_VERIFY(false); return false;
     }
 };
@@ -87,9 +89,10 @@ static bool object_can_collide(
 // your broadphase layers define JPH_TRACK_BROADPHASE_STATS and look at the stats reported on the TTY.
 namespace BroadPhaseLayers
 {
-    static constexpr JPH::BroadPhaseLayer NON_MOVING{0};
-    static constexpr JPH::BroadPhaseLayer MOVING    {1};
-    static constexpr unsigned int         NUM_LAYERS{2};
+    static constexpr JPH::BroadPhaseLayer NON_MOVING   {0};
+    static constexpr JPH::BroadPhaseLayer MOVING       {1};
+    static constexpr JPH::BroadPhaseLayer NON_COLLIDING{2};
+    static constexpr unsigned int         NUM_LAYERS   {3};
 };
 
 // BroadPhaseLayerInterface implementation
@@ -101,8 +104,9 @@ public:
     Broad_phase_layer_interface_impl()
     {
         // Create a mapping table from object to broad phase layer
-        m_object_to_broad_phase[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
-        m_object_to_broad_phase[Layers::MOVING    ] = BroadPhaseLayers::MOVING;
+        m_object_to_broad_phase[Layers::NON_MOVING   ] = BroadPhaseLayers::NON_MOVING;
+        m_object_to_broad_phase[Layers::MOVING       ] = BroadPhaseLayers::MOVING;
+        m_object_to_broad_phase[Layers::NON_COLLIDING] = BroadPhaseLayers::NON_COLLIDING;
     }
 
     auto GetNumBroadPhaseLayers() const -> unsigned int override
@@ -110,20 +114,25 @@ public:
         return BroadPhaseLayers::NUM_LAYERS;
     }
 
-    auto GetBroadPhaseLayer(JPH::ObjectLayer inLayer) const -> JPH::BroadPhaseLayer override
+    auto GetBroadPhaseLayer(
+        const JPH::ObjectLayer inLayer
+    ) const -> JPH::BroadPhaseLayer override
     {
         ERHE_VERIFY(inLayer < Layers::NUM_LAYERS);
         return m_object_to_broad_phase[inLayer];
     }
 
 //#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    auto GetBroadPhaseLayerName(JPH::BroadPhaseLayer inLayer) const -> const char* override
+    auto GetBroadPhaseLayerName(
+        const JPH::BroadPhaseLayer inLayer
+    ) const -> const char* override
     {
         switch ((JPH::BroadPhaseLayer::Type)inLayer)
         {
-            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING: return "NON_MOVING";
-            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:     return "MOVING";
-            default:                                                       ERHE_VERIFY(false); return "INVALID";
+            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING:    return "NON_MOVING";
+            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:        return "MOVING";
+            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_COLLIDING: return "NON_COLLIDING";
+            default:                                                          return "?";
         }
     }
 //#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
@@ -134,19 +143,23 @@ private:
 
 // Function that determines if two broadphase layers can collide
 static bool broad_phase_can_collide(
-    JPH::ObjectLayer     inLayer1,
-    JPH::BroadPhaseLayer inLayer2
+    JPH::ObjectLayer     in_layer1,
+    JPH::BroadPhaseLayer in_layer2
 )
 {
-    switch (inLayer1)
+    switch (in_layer1)
     {
-        case Layers::NON_MOVING: return inLayer2 == BroadPhaseLayers::MOVING;
-        case Layers::MOVING:     return true;
-        default:                 ERHE_VERIFY(false); return false;
+        case Layers::NON_MOVING:    return in_layer2 == BroadPhaseLayers::MOVING;
+        case Layers::MOVING:        return in_layer2 != BroadPhaseLayers::NON_COLLIDING;
+        case Layers::NON_COLLIDING: return false;
+        default:
+        {
+            return false;
+        }
     }
 }
 
-IWorld::~IWorld()
+IWorld::~IWorld() noexcept
 {
 }
 
@@ -204,7 +217,7 @@ Jolt_world::Jolt_world()
     m_physics_system.SetContactListener(this);
 }
 
-Jolt_world::~Jolt_world() = default;
+Jolt_world::~Jolt_world() noexcept = default;
 
 void Jolt_world::enable_physics_updates()
 {
@@ -260,7 +273,7 @@ void Jolt_world::update_fixed_step(const double dt)
 
     //const auto num_active_bodies = m_physics_system.GetNumActiveBodies();
     //const auto num_bodies        = m_physics_system.GetNumBodies();
-    const auto body_stats = m_physics_system.GetBodyStats();
+    //// const auto body_stats = m_physics_system.GetBodyStats();
     //log_physics_frame.info("num active bodies = {}", num_active_bodies);
     //log_physics_frame.info("num bodies = {}", num_bodies);
     //// info_fmt(log_physics_frame, "num active dynamic = {}\n",   body_stats.mNumActiveBodiesDynamic);
@@ -389,7 +402,7 @@ void Jolt_world::OnContactAdded(
     JPH::ContactSettings&       ioSettings
 )
 {
-    log_physics->trace("contact added");
+    //log_physics->trace("contact added");
     static_cast<void>(inBody1);
     static_cast<void>(inBody2);
     static_cast<void>(inManifold);
@@ -429,7 +442,7 @@ void Jolt_world::OnContactRemoved(
 )
 {
     static_cast<void>(inSubShapePair);
-    log_physics->trace("contact removed");
+    //log_physics->trace("contact removed");
     //auto& body_interface = m_physics_system.GetBodyInterface();
     //auto* jolt_body1 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody1ID()));
     //auto* jolt_body2 = reinterpret_cast<Jolt_rigid_body*>(body_interface.GetUserData(inSubShapePair.GetBody2ID()));

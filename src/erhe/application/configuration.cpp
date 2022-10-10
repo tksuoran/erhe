@@ -59,6 +59,64 @@ void ini_get(
     }
 }
 
+auto split(
+    const std::string& s,
+    const char         delimeter
+) -> std::vector<std::string>
+{
+    std::vector<std::string> result;
+    std::stringstream        ss{s};
+    std::string              item;
+
+    while (std::getline(ss, item, delimeter))
+    {
+        result.push_back(item);
+    }
+
+    return result;
+}
+
+auto trim(
+    const std::string& str,
+    const std::string& whitespace = " \t"
+) -> std::string
+{
+    const auto strBegin = str.find_first_not_of(whitespace);
+    if (strBegin == std::string::npos)
+    {
+        return ""; // no content
+    }
+
+    const auto strEnd = str.find_last_not_of(whitespace);
+    const auto strRange = strEnd - strBegin + 1;
+
+    return str.substr(strBegin, strRange);
+}
+
+void ini_get(
+    const mINI::INIMap<std::string>& ini,
+    std::string                      key,
+    glm::vec4&                       destination
+)
+{
+    if (ini.has(key))
+    {
+        std::string value = ini.get(key);
+        const auto values = split(value, ',');
+        destination.w = 1.0f;
+        if (values.size() >= 3)
+        {
+            destination.x = std::stof(trim(values.at(0)));
+            destination.y = std::stof(trim(values.at(1)));
+            destination.z = std::stof(trim(values.at(2)));
+        }
+        if (values.size() >= 4)
+        {
+            destination.w = std::stof(trim(values.at(3)));
+        }
+    }
+}
+
 void ini_get(
     const mINI::INIMap<std::string>& ini,
     std::string                      key,
@@ -200,6 +258,7 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "debug_visualizations", windows.debug_visualizations);
         get_window(ini, "fly_camera",           windows.fly_camera          );
         get_window(ini, "grid",                 windows.grid                );
+        get_window(ini, "headset_view",         windows.headset_view        );
         get_window(ini, "hover_tool",           windows.hover_tool          );
         get_window(ini, "layers",               windows.layers              );
         get_window(ini, "log",                  windows.log                 );
@@ -253,10 +312,13 @@ Configuration::Configuration(int argc, char** argv)
             const auto& section = ini["viewport"];
             ini_get(section, "polygon_fill",              viewport.polygon_fill);
             ini_get(section, "edge_lines",                viewport.edge_lines);
+            ini_get(section, "selection_edge_lines",      viewport.selection_edge_lines);
             ini_get(section, "corner_points",             viewport.corner_points);
             ini_get(section, "polygon_centroids",         viewport.polygon_centroids);
             ini_get(section, "selection_bounding_box",    viewport.selection_bounding_box);
             ini_get(section, "selection_bounding_sphere", viewport.selection_bounding_sphere);
+            ini_get(section, "selection_edge_color",      viewport.selection_edge_color);
+            ini_get(section, "clear_color",               viewport.clear_color);
         }
 
         if (ini.has("shader_monitor"))
@@ -280,10 +342,14 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("grid"))
         {
             const auto& section = ini["grid"];
-            ini_get(section, "enabled",    grid.enabled);
-            ini_get(section, "cell_size" , grid.cell_size);
-            ini_get(section, "cell_div",   grid.cell_div);
-            ini_get(section, "cell_count", grid.cell_count);
+            ini_get(section, "enabled",     grid.enabled);
+            ini_get(section, "major_color", grid.major_color);
+            ini_get(section, "minor_color", grid.minor_color);
+            ini_get(section, "major_width", grid.major_width);
+            ini_get(section, "minor_width", grid.minor_width);
+            ini_get(section, "cell_size",   grid.cell_size);
+            ini_get(section, "cell_div",    grid.cell_div);
+            ini_get(section, "cell_count",  grid.cell_count);
         }
 
         if (ini.has("camera_controls"))

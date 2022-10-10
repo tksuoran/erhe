@@ -121,10 +121,12 @@ private:
     std::shared_ptr<Fly_camera_tool>                      m_fly_camera;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
-    Physics_tool_mode m_mode{Physics_tool_mode::Drag};
+    Physics_tool_mode                           m_mode{Physics_tool_mode::Drag};
+    erhe::physics::Motion_mode                  m_motion_mode{erhe::physics::Motion_mode::e_kinematic_physical};
 
     std::shared_ptr<erhe::scene::Mesh>          m_hover_mesh;
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
+    std::shared_ptr<erhe::scene::Mesh>          m_last_target_mesh;
     std::shared_ptr<Node_physics>               m_target_node_physics;
     double                                      m_target_distance        {1.0};
     glm::dvec3                                  m_target_position_in_mesh{0.0, 0.0, 0.0};
@@ -133,14 +135,22 @@ private:
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
     std::shared_ptr<erhe::physics::IRigid_body> m_constraint_world_point_rigid_body;
 
-    float m_force_distance          {1.000f};
-    float m_tau                     {0.001f};
+    float m_force_distance          {1.0f};
+
+    float m_frequency               {0.00f};
     float m_damping                 {1.00f};
+    float m_tau                     {0.001f};
     float m_impulse_clamp           {1.00f};
-    float m_linear_damping          {0.99f};
-    float m_angular_damping         {0.99f};
+    float m_depth                   {0.75f}; // 0.0 = surface, 1.0 = center of gravity
+    float m_override_linear_damping {0.90f};
+    float m_override_angular_damping{0.90f};
+    float m_override_friction       {0.01f};
+    float m_override_gravity        {0.40f};
+
     float m_original_linear_damping {0.00f};
     float m_original_angular_damping{0.00f};
+    float m_original_friction       {0.00f};
+    float m_original_gravity        {1.00f};
 
     glm::dvec3 m_to_end_direction  {0.0};
     glm::dvec3 m_to_start_direction{0.0};

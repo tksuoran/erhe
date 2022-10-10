@@ -38,10 +38,10 @@ void Time::update()
     m_current_time = new_time;
     m_time_accumulator += frame_time;
     const double dt = 1.0 / 100.0;
-    int steps = 0;
+    //int steps = 0;
     while (m_time_accumulator >= dt)
     {
-        ++steps;
+        //++steps;
         update_fixed_step(
             erhe::components::Time_context{
                 .dt           = dt,

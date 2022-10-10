@@ -107,20 +107,4 @@ namespace erhe::physics
     };
 }
 
-//[[nodiscard]] inline auto from_bullet(const btTransform t) -> Transform
-//{
-//    return Transform{
-//        from_bullet(t.getBasis()),
-//        from_bullet(t.getOrigin())
-//    };
-//}
-//
-//[[nodiscard]] inline auto to_bullet(const Transform t) -> btTransform
-//{
-//    return btTransform{
-//        to_bullet(t.basis),
-//        to_bullet(t.origin)
-//    };
-//}
-
 } // namespace erhe::physics

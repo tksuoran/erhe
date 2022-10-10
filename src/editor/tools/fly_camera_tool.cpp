@@ -26,7 +26,7 @@
 namespace editor
 {
 
-#if defined(_WIN32) && 0
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
 Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(
     Fly_camera_tool& fly_camera_tool
 )
@@ -153,7 +153,7 @@ auto Fly_camera_move_command::try_call(
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title, c_type_name}
-#if defined(_WIN32) && 0
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     , m_space_mouse_listener         {*this}
     , m_space_mouse_controller       {m_space_mouse_listener}
 #endif
@@ -175,7 +175,7 @@ Fly_camera_tool::Fly_camera_tool()
 
 Fly_camera_tool::~Fly_camera_tool() noexcept
 {
-#if defined(_WIN32) && 0
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     m_space_mouse_listener.set_active(false);
 #endif
 }
@@ -191,7 +191,7 @@ void Fly_camera_tool::declare_required_components()
 
 void Fly_camera_tool::initialize_component()
 {
-#if defined(_WIN32) && 0
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     m_space_mouse_listener.set_active(true);
 #endif
 
@@ -314,11 +314,13 @@ void Fly_camera_tool::translation(
         return;
     }
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+    float x = static_cast<float>(tx) * m_camera_controller->translate_x.max_delta() / 256.0f;
+    float y = static_cast<float>(ty) * m_camera_controller->translate_y.max_delta() / 256.0f;
+    float z = static_cast<float>(tz) * m_camera_controller->translate_z.max_delta() / 256.0f;
 
-    constexpr float scale = 65536.0f;
-    m_camera_controller->translate_x.adjust(tx / scale);
-    m_camera_controller->translate_y.adjust(ty / scale);
-    m_camera_controller->translate_z.adjust(tz / scale);
+    m_camera_controller->translate_x.adjust(x);
+    m_camera_controller->translate_y.adjust(y);
+    m_camera_controller->translate_z.adjust(z);
 }
 
 void Fly_camera_tool::rotation(

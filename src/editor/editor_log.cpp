@@ -30,6 +30,7 @@ std::shared_ptr<spdlog::logger> log_rendertarget_imgui_windows;
 std::shared_ptr<spdlog::logger> log_xr;
 std::shared_ptr<spdlog::logger> log_hud;
 std::shared_ptr<spdlog::logger> log_controller_ray;
+std::shared_ptr<spdlog::logger> log_frame;
 
 void initialize_logging()
 {
@@ -60,6 +61,7 @@ void initialize_logging()
     log_xr                         = erhe::log::make_logger("editor::xr"                        , spdlog::level::info);
     log_hud                        = erhe::log::make_logger("editor::hud"                       , spdlog::level::info);
     log_controller_ray             = erhe::log::make_logger("editor::controller_ray"            , spdlog::level::info, false);
+    log_frame                      = erhe::log::make_logger("editor::frame"                     , spdlog::level::info, false);
 }
 
 }

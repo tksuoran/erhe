@@ -82,7 +82,7 @@ void Hotbar::initialize_component()
     m_rendertarget_node = scene_root->create_rendertarget_node(
         *m_components,
         *primary_viewport_window.get(),
-        1024,
+        128 * 3,
         128,
         4000.0
     );
@@ -223,7 +223,7 @@ auto Hotbar::get_color(const int color) -> glm::vec4&
 void Hotbar::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const ImVec2 button_size{64.0f, 64.0f};
+    //const ImVec2 button_size{64.0f, 64.0f};
     //ImGui::SliderFloat("X", &m_x, -2.0f, 2.0f);
     //ImGui::SliderFloat("Y", &m_y, -0.3f, 0.0f);
     //ImGui::SliderFloat("Z", &m_z, -2.0f, 2.0f);
@@ -239,28 +239,48 @@ void Hotbar::imgui()
 
     const bool is_move   = m_action == Hotbar_action::Move;
     const bool is_rotate = m_action == Hotbar_action::Rotate;
-    const bool is_push   = m_action == Hotbar_action::Push;
-    const bool is_pull   = m_action == Hotbar_action::Pull;
+    //const bool is_push   = m_action == Hotbar_action::Push;
+    //const bool is_pull   = m_action == Hotbar_action::Pull;
     const bool is_drag   = m_action == Hotbar_action::Drag;
 
     if (is_move) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
     const bool move   = icon_rasterization.icon_button(m_icon_set->icons.move,   frame_padding, background_color, tint_color, linear);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Move");
+    }
     if (is_move) ImGui::PopStyleColor();
 
     if (is_rotate) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
     const bool rotate = icon_rasterization.icon_button(m_icon_set->icons.rotate, frame_padding, background_color, tint_color, linear);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Rotate");
+    }
     if (is_rotate) ImGui::PopStyleColor();
 
-    if (is_push) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    const bool push   = icon_rasterization.icon_button(m_icon_set->icons.push,   frame_padding, background_color, tint_color, linear);
-    if (is_push) ImGui::PopStyleColor();
-
-    if (is_pull) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    const bool pull   = icon_rasterization.icon_button(m_icon_set->icons.pull,   frame_padding, background_color, tint_color, linear);
-    if (is_pull) ImGui::PopStyleColor();
+    //if (is_push) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
+    //const bool push   = icon_rasterization.icon_button(m_icon_set->icons.push,   frame_padding, background_color, tint_color, linear);
+    //if (ImGui::IsItemHovered())
+    //{
+    //    ImGui::SetTooltip("Push");
+    //}
+    //if (is_push) ImGui::PopStyleColor();
+    //
+    //if (is_pull) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
+    //const bool pull   = icon_rasterization.icon_button(m_icon_set->icons.pull,   frame_padding, background_color, tint_color, linear);
+    //if (ImGui::IsItemHovered())
+    //{
+    //    ImGui::SetTooltip("Pull");
+    //}
+    //if (is_pull) ImGui::PopStyleColor();
 
     if (is_drag) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
     const bool drag   = icon_rasterization.icon_button(m_icon_set->icons.drag,   frame_padding, background_color, tint_color, linear);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Drag");
+    }
     if (is_drag) ImGui::PopStyleColor();
 
     if (move)
@@ -279,26 +299,26 @@ void Hotbar::imgui()
         m_trs_tool->set_rotate(true);
         m_action = Hotbar_action::Rotate;
     }
-    if (push)
-    {
-        m_selection_tool->clear_selection();
-        m_selection_tool->set_enable_state(false);
-        m_operations->set_active_tool(m_physics_tool.get());
-        m_trs_tool->set_translate(false);
-        m_trs_tool->set_rotate(false);
-        m_physics_tool->set_mode(Physics_tool_mode::Push);
-        m_action = Hotbar_action::Push;
-    }
-    if (pull)
-    {
-        m_selection_tool->clear_selection();
-        m_selection_tool->set_enable_state(false);
-        m_operations->set_active_tool(m_physics_tool.get());
-        m_trs_tool->set_translate(false);
-        m_trs_tool->set_rotate(false);
-        m_physics_tool->set_mode(Physics_tool_mode::Pull);
-        m_action = Hotbar_action::Pull;
-    }
+    //if (push)
+    //{
+    //    m_selection_tool->clear_selection();
+    //    m_selection_tool->set_enable_state(false);
+    //    m_operations->set_active_tool(m_physics_tool.get());
+    //    m_trs_tool->set_translate(false);
+    //    m_trs_tool->set_rotate(false);
+    //    m_physics_tool->set_mode(Physics_tool_mode::Push);
+    //    m_action = Hotbar_action::Push;
+    //}
+    //if (pull)
+    //{
+    //    m_selection_tool->clear_selection();
+    //    m_selection_tool->set_enable_state(false);
+    //    m_operations->set_active_tool(m_physics_tool.get());
+    //    m_trs_tool->set_translate(false);
+    //    m_trs_tool->set_rotate(false);
+    //    m_physics_tool->set_mode(Physics_tool_mode::Pull);
+    //    m_action = Hotbar_action::Pull;
+    //}
     if (drag)
     {
         m_selection_tool->clear_selection();

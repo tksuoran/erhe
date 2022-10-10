@@ -775,15 +775,55 @@ void Node_properties::imgui()
         std::shared_ptr<Node_physics> node_physics = get_physics_node(node.get());
         if (node_physics)
         {
-            const erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+            erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
             if (rigid_body != nullptr)
             {
                 if (ImGui::TreeNodeEx("Physics", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
                 {
-                    const erhe::physics::Transform transform = rigid_body->get_world_transform();
-                    ImGui::Text("RX: %f", transform.origin.x);
-                    ImGui::Text("RY: %f", transform.origin.y);
-                    ImGui::Text("RZ: %f", transform.origin.z);
+                    float           mass    = rigid_body->get_mass();
+                    const glm::mat4 inertia = rigid_body->get_local_inertia();
+                    if (ImGui::SliderFloat("Mass", &mass, 0.0f, 1000.0f)) {
+                        rigid_body->set_mass_properties(mass, inertia);
+                    }
+                    float friction = rigid_body->get_friction();
+                    if (ImGui::SliderFloat("Friction", &friction, 0.0f, 1.0f)) {
+                        rigid_body->set_friction(friction);
+                    }
+                    float restitution = rigid_body->get_restitution();
+                    if (ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f)) {
+                        rigid_body->set_restitution(restitution);
+                    }
+                    float angular_damping = rigid_body->get_angular_damping();
+                    float linear_damping = rigid_body->get_linear_damping();
+                    if (
+                        ImGui::SliderFloat("Angular Dampening", &angular_damping, 0.0f, 1.0f) ||
+                        ImGui::SliderFloat("Linear Dampening", &linear_damping, 0.0f, 1.0f)
+                    )
+                    {
+                        rigid_body->set_damping(linear_damping, angular_damping);
+                    }
+
+                    int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
+
+                    {
+                        const glm::mat4 local_inertia = rigid_body->get_local_inertia();
+                        float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
+                        ImGui::InputFloat3("Local Inertia", floats);
+                        // TODO floats back to rigid body?
+                    }
+
+                    if (
+                        ImGui::Combo(
+                            "Motion Mode",
+                            &motion_mode,
+                            erhe::physics::c_motion_mode_strings,
+                            IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
+                        )
+                    )
+                    {
+                        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
+                    }
+
                     ImGui::TreePop();
                 }
             }

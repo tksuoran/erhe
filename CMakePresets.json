@@ -3,17 +3,17 @@
     "configurePresets": [
         {
             "name": "Base",
-            "generator": "Ninja Multi-Config",
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "1",
                 "ERHE_FONT_RASTERIZATION_LIBRARY": "freetype",
                 "ERHE_GLTF_LIBRARY": "cgltf",
                 "ERHE_GUI_LIBRARY": "imgui",
-                "ERHE_PHYSICS_LIBRARY": "bullet",
+                "ERHE_PHYSICS_LIBRARY": "jolt",
                 "ERHE_PNG_LIBRARY": "mango",
                 "ERHE_PROFILE_LIBRARY": "tracy",
-                "ERHE_RAYTRACE_LIBRARY": "none",
+                "ERHE_RAYTRACE_LIBRARY": "bvh",
                 "ERHE_SVG_LIBRARY": "lunasvg",
                 "ERHE_TEXT_LAYOUT_LIBRARY": "harfbuzz",
                 "ERHE_WINDOW_LIBRARY": "glfw",
@@ -21,10 +21,17 @@
             }
         },
         {
-            "hidden": true,
-            "name": "Bullet",
+            "name": "Configure Debug",
+            "inherits": "Base",
             "cacheVariables": {
-                "ERHE_PHYSICS_LIBRARY": "bullet"
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "Configure Release",
+            "inherits": "Base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
@@ -116,34 +123,40 @@
         },
         {
             "name": "Clang 15",
-            "inherits": [ "Base" ],
-            "displayName": "Clang 15",
+            "hidden": true,
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
                 "CMAKE_C_COMPILER": "clang-15",
                 "CMAKE_CXX_COMPILER": "clang++-15"
             }
+        },
+        {
+            "name": "Configure Clang 15 Debug",
+            "inherits": [ "Configure Debug", "Clang 15" ]
+        },
+        {
+            "name": "Configure Clang 15 Release",
+            "inherits": [ "Configure Release", "Clang 15" ]
         }
     ],
     "buildPresets": [
         {
             "name": "Build Base",
             "hidden": true,
-            "verbose": false
+            "verbose": false,
+            "configurePreset": "Base"
         },
         {
             "name": "Build Debug",
             "displayName": "Build Debug",
-            "inherits": "Build Base",
-            "configuration": "Debug",
-            "configurePreset": "Base"
+            "configurePreset": "Configure Debug",
+            "configuration": "Debug"
         },
         {
             "name": "Build Release",
             "displayName": "Build Release",
-            "inherits": "Build Base",
-            "configuration": "Release",
-            "configurePreset": "Base"
+            "configurePreset": "Configure Release",
+            "configuration": "Release"
         },
         {
             "name": "Build Clang Debug",
@@ -187,13 +200,13 @@
         },
         {
             "name": "Build Clang 15 Debug",
-            "inherits": "Build Debug",
-            "configurePreset": "Clang 15"
+            "configurePreset": "Configure Clang 15 Debug",
+            "configuration": "Debug"
         },
         {
             "name": "Build Clang 15 Release",
-            "inherits": "Build Release",
-            "configurePreset": "Clang 15"
+            "configurePreset": "Configure Clang 15 Release",
+            "configuration": "Release"
         }
     ]
 }

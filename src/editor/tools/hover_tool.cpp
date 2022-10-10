@@ -6,6 +6,7 @@
 #include "editor_scenes.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/material_library.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
@@ -18,6 +19,7 @@
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -169,7 +171,7 @@ void Hover_tool::tool_render(
     const bool  hover_tool    = tool   .valid && tool   .mesh;
     const std::optional<glm::dvec3> hover_position_world = content.valid ? content.position : std::optional<glm::dvec3>{};
 
-    auto& line_renderer = m_line_renderer_set->hidden;
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
     constexpr uint32_t red   = 0xff0000ffu;
     constexpr uint32_t blue  = 0xffff0000u;
@@ -198,12 +200,20 @@ void Hover_tool::tool_render(
                     position_in_viewport.y,
                     -0.5f
                 };
+                const vec3 position_at_fixed_depth_line_2{
+                    position_in_viewport.x + 50.0f,
+                    position_in_viewport.y + 16.0f,
+                    -0.5f
+                };
+
                 SPDLOG_LOGGER_TRACE(log_pointer, "P position in world: {}", m_hover_position_world.value());
                 SPDLOG_LOGGER_TRACE(log_pointer, "P position in viewport: {}", position_in_viewport);
+
                 const std::string text = fmt::format(
                     "{}",
                     content.mesh->name()
                 );
+
                 m_text_renderer->print(
                     position_at_fixed_depth,
                     text_color,

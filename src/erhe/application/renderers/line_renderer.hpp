@@ -86,23 +86,22 @@ public:
 class Line_renderer
 {
 public:
-    explicit Line_renderer(const char* name);
-    Line_renderer         (const Line_renderer&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
-    void operator=        (const Line_renderer&) = delete; // Style must be non-copyable and non-movable.
-    Line_renderer         (Line_renderer&&)      = delete;
-    void operator=        (Line_renderer&&)      = delete;
-
-    // Public API
-    void create_frame_resources(
+    Line_renderer(
+        const char*             name,
+        unsigned int            stencil_reference,
         Line_renderer_pipeline* pipeline,
-        const Configuration& configuration
+        const Configuration&    configuration
     );
 
+    Line_renderer (const Line_renderer&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
+    void operator=(const Line_renderer&) = delete; // Style must be non-copyable and non-movable.
+    Line_renderer (Line_renderer&&)      = delete;
+    void operator=(Line_renderer&&)      = delete;
+
+    // Public API
     void next_frame();
-
-    void begin();
-    void end();
-
+    void begin     ();
+    void end       ();
     void render(
         erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
         const erhe::scene::Viewport           camera_viewport,
@@ -176,15 +175,16 @@ private:
     {
     public:
         Frame_resources(
-            const bool                                reverse_depth,
-            const std::size_t                         view_stride,
-            const std::size_t                         view_count,
-            const std::size_t                         vertex_count,
-            erhe::graphics::Shader_stages* const      shader_stages,
+            unsigned int                              stencil_reference,
+            bool                                      reverse_depth,
+            std::size_t                               view_stride,
+            std::size_t                               view_count,
+            std::size_t                               vertex_count,
+            erhe::graphics::Shader_stages*            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format,
             const std::string&                        style_name,
-            const std::size_t                         slot
+            std::size_t                               slot
         );
 
         Frame_resources(const Frame_resources&) = delete;
@@ -195,8 +195,15 @@ private:
         erhe::graphics::Buffer             vertex_buffer;
         erhe::graphics::Buffer             view_buffer;
         erhe::graphics::Vertex_input_state vertex_input;
-        erhe::graphics::Pipeline           pipeline_depth_pass;
-        erhe::graphics::Pipeline           pipeline_depth_fail;
+        erhe::graphics::Pipeline           pipeline_visible;
+        erhe::graphics::Pipeline           pipeline_hidden;
+
+        [[nodiscard]] auto make_pipeline(
+            bool                           reverse_depth,
+            erhe::graphics::Shader_stages* shader_stages,
+            bool                           visible,
+            unsigned int                   stencil_reference
+        ) -> erhe::graphics::Pipeline;
     };
 
     class Buffer_range
@@ -243,14 +250,14 @@ private:
 
     std::deque<Frame_resources> m_frame_resources;
     std::string                 m_name;
-    Line_renderer_pipeline*     m_pipeline  {nullptr};
-    std::size_t                 m_line_count{0};
+    Line_renderer_pipeline*     m_pipeline                   {nullptr};
+    std::size_t                 m_line_count                 {0};
     Buffer_writer               m_view_writer;
     Buffer_writer               m_vertex_writer;
     std::size_t                 m_current_frame_resource_slot{0};
     uint32_t                    m_line_color                 {0xffffffffu};
     float                       m_line_thickness             {1.0f};
-    bool                        m_inside_begin_end{false};
+    bool                        m_inside_begin_end           {false};
 };
 
 class Line_renderer_set
@@ -285,8 +292,9 @@ private:
     Line_renderer_pipeline m_pipeline;
 
 public:
-    Line_renderer visible;
-    Line_renderer hidden;
+    static constexpr unsigned int s_max_stencil_reference = 4;
+    std::array<std::unique_ptr<Line_renderer>, s_max_stencil_reference + 1> visible;
+    std::array<std::unique_ptr<Line_renderer>, s_max_stencil_reference + 1> hidden;
 };
 
 } // namespace erhe::application

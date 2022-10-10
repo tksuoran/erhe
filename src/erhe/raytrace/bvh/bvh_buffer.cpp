@@ -50,7 +50,7 @@ Bvh_buffer& Bvh_buffer::operator=(Bvh_buffer&& other) noexcept
     return *this;
 }
 
-Bvh_buffer::~Bvh_buffer() = default;
+Bvh_buffer::~Bvh_buffer() noexcept = default;
 
 auto Bvh_buffer::capacity_byte_count() const noexcept
 -> std::size_t

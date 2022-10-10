@@ -9,7 +9,9 @@
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/view.hpp" // keycode
 
-#if defined(_WIN32) && 0
+#define ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE 1
+
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
 #   include "erhe/toolkit/space_mouse.hpp"
 #endif
 
@@ -29,7 +31,7 @@ class Trs_tool;
 class Viewport_window;
 class Viewport_windows;
 
-#if defined(_WIN32) && 0
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
 class Fly_camera_space_mouse_listener
     : public erhe::toolkit::Space_mouse_listener
 {
@@ -173,13 +175,13 @@ private:
     std::shared_ptr<Viewport_windows>  m_viewport_windows;
 
     std::mutex                         m_mutex;
+    float                              m_sensitivity        {1.0f};
+    bool                               m_use_viewport_camera{true};
 
-#if defined(_WIN32) && 0
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     Fly_camera_space_mouse_listener       m_space_mouse_listener;
     erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
 #endif
-    float                             m_sensitivity        {1.0f};
-    bool                              m_use_viewport_camera{true};
 };
 
 } // namespace editor

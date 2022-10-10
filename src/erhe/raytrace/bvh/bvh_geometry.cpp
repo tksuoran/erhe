@@ -55,7 +55,7 @@ Bvh_geometry::Bvh_geometry(
     static_cast<void>(geometry_type);
 }
 
-Bvh_geometry::~Bvh_geometry() = default;
+Bvh_geometry::~Bvh_geometry() noexcept = default;
 
 auto Bvh_geometry::get_element_count() const -> std::size_t
 {
@@ -248,7 +248,11 @@ void Bvh_geometry::set_buffer(
     const std::size_t  item_count
 )
 {
-    m_buffer_infos.emplace_back(type, slot, format, buffer, byte_offset, byte_stride, item_count);
+    m_buffer_infos.push_back(
+        Buffer_info{
+            type, slot, format, buffer, byte_offset, byte_stride, item_count
+        }
+    );
 }
 
 void Bvh_geometry::set_user_data(void* ptr)

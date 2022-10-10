@@ -30,9 +30,10 @@ class Jolt_constraint;
 namespace Layers
 {
 
-static constexpr uint8_t NON_MOVING = 0u;
-static constexpr uint8_t MOVING     = 1u;
-static constexpr uint8_t NUM_LAYERS = 2u;
+static constexpr uint8_t NON_MOVING    = 0u;
+static constexpr uint8_t MOVING        = 1u;
+static constexpr uint8_t NON_COLLIDING = 2u;
+static constexpr uint8_t NUM_LAYERS    = 3u;
 
 [[nodiscard]] auto get_layer(const Motion_mode motion_mode) -> uint8_t;
 

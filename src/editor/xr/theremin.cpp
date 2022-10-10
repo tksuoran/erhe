@@ -195,7 +195,7 @@ void Theremin::initialize_component()
     ////     ma_device_start(&m_audio_device);
     //// }
 
-    update_grid_color();
+    // TODO update_grid_color();
 
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::index,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
@@ -302,7 +302,7 @@ void Theremin::tool_render(const Render_context& context)
         return;
     }
 
-    auto&      line_renderer = m_line_renderer_set->hidden;
+    auto&      line_renderer = *m_line_renderer_set->hidden.at(2).get();
     const auto camera        = m_headset_view->get_camera();
 
     if (!camera)
