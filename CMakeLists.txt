@@ -61,6 +61,16 @@ include(libraries)
 include(tracy)
 include(vscode)
 
+if (WIN32)
+    set(ERHE_TARGET_OS_WINDOWS TRUE)
+    add_definitions(-DERHE_OS_WINDOWS)
+elseif (UNIX AND ${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    set(ERHE_TARGET_OS_LINUX TRUE)
+    add_definitions(-DERHE_OS_LINUX)
+else ()
+    message(FATAL_ERROR "OS not supported ${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+endif ()
+
 # Dependencies
 message("Fetching dependencies")
 message("Fetching spdlog")

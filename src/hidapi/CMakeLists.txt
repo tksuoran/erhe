@@ -1,11 +1,18 @@
 set(_target "hidapi")
 
-set(source_list
-    hidapi.h
-    hidapi.c
-)
+if (ERHE_TARGET_OS_WINDOWS)
+    add_library(${_target}
+        hidapi.h
+        hidapi_windows.c
+    )
+elseif (ERHE_TARGET_OS_LINUX)
+    add_library(${_target}
+        hidapi.h
+        hidapi_linux.c
+    )
+    target_link_libraries(${_target} udev)
+endif ()
 
-add_library(${_target} ${source_list})
 
 target_include_directories(${_target} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 

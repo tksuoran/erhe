@@ -15,6 +15,8 @@ erhe_target_sources_grouped(
     profile.hpp
     sleep.cpp
     sleep.hpp
+    space_mouse.cpp
+    space_mouse.hpp
     timer.cpp
     timer.hpp
     timestamp.cpp
@@ -24,14 +26,6 @@ erhe_target_sources_grouped(
     view.hpp
     window.hpp
 )
-
-if (CMAKE_SYSTEM_NAME MATCHES "(Windows|MSYS)")
-    erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        space_mouse.cpp
-        space_mouse.hpp
-    )
-endif ()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     erhe_target_sources_grouped(
@@ -56,13 +50,11 @@ target_link_libraries(
         Microsoft.GSL::GSL
 )
 
-if (CMAKE_SYSTEM_NAME MATCHES "(Windows|MSYS)")
-    target_link_libraries(
-        ${_target}
-        PUBLIC
-        hidapi
-    )
-endif ()
+target_link_libraries(
+    ${_target}
+    PUBLIC
+    hidapi
+)
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     target_link_libraries(${_target} PUBLIC glfw)
