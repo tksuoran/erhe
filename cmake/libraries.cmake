@@ -51,6 +51,15 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
+
+FetchContent_Declare(
+    flecs
+    GIT_REPOSITORY https://github.com/SanderMertens/flecs.git
+    GIT_TAG        origin/master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
 FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
@@ -79,7 +88,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG        3.3.7
+    GIT_TAG        3.3.8
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

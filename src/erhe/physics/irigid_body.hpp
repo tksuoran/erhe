@@ -69,11 +69,11 @@ public:
     virtual void set_angular_velocity        (const glm::vec3 velocity)                                 = 0;
     virtual void set_center_of_mass_transform(const Transform transform)                                = 0;
     virtual void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape) = 0;
-    virtual void set_damping                 (const float linear_damping, const float angular_damping)  = 0;
+    virtual void set_damping                 (float linear_damping, float angular_damping)              = 0;
     virtual void set_friction                (float friction)                                           = 0;
     virtual void set_gravity_factor          (float gravity_factor)                                     = 0;
     virtual void set_linear_velocity         (const glm::vec3 velocity)                                 = 0;
-    virtual void set_mass_properties         (const float mass, const glm::mat4 local_inertia)          = 0;
+    virtual void set_mass_properties         (float mass, const glm::mat4 local_inertia)                = 0;
     virtual void set_motion_mode             (const Motion_mode motion_mode)                            = 0;
     virtual void set_restitution             (float restitution)                                        = 0;
     virtual void set_world_transform         (const Transform transform)                                = 0;

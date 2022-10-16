@@ -139,6 +139,16 @@ void Bullet_rigid_body::set_friction(const float friction)
     m_bullet_rigid_body.setFriction(static_cast<btScalar>(friction));
 }
 
+auto Bullet_rigid_body::get_gravity_factor() const -> float
+{
+    return m_gravity_factor;
+}
+
+void Bullet_rigid_body::set_gravity_factor(const float gravity_factor)
+{
+    m_gravity_factor = gravity_factor; // TODO apply
+}
+
 auto Bullet_rigid_body::get_restitution() const -> float
 {
     return static_cast<float>(m_bullet_rigid_body.getRestitution());

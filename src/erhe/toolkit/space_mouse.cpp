@@ -9,16 +9,16 @@ namespace erhe::toolkit
 {
 
 static constexpr uint16_t USB_VENDOR_ID_LOGITECH                = 0x046du;
-static constexpr uint16_t USB_VENDOR_ID_3DCONNECTION            = 0x256Fu;
-static constexpr uint16_t USB_DEVICE_ID_TRAVELER                = 0xC623u;
-static constexpr uint16_t USB_DEVICE_ID_NAVIGATOR               = 0xC626u;
-static constexpr uint16_t USB_DEVICE_ID_NAVIGATOR_FOR_NOTEBOOKS = 0xc628u;
-static constexpr uint16_t USB_DEVICE_ID_SPACEEXPLORER           = 0xc627u;
-static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSE              = 0xC603u;
-static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSEPRO           = 0xC62Bu;
+static constexpr uint16_t USB_VENDOR_ID_3DCONNECTION            = 0x256fu;
+static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSE              = 0xc603u;
 static constexpr uint16_t USB_DEVICE_ID_SPACEBALL5000           = 0xc621u;
+static constexpr uint16_t USB_DEVICE_ID_TRAVELER                = 0xc623u;
 static constexpr uint16_t USB_DEVICE_ID_SPACEPILOT              = 0xc625u;
+static constexpr uint16_t USB_DEVICE_ID_NAVIGATOR               = 0xc626u;
+static constexpr uint16_t USB_DEVICE_ID_SPACEEXPLORER           = 0xc627u;
+static constexpr uint16_t USB_DEVICE_ID_NAVIGATOR_FOR_NOTEBOOKS = 0xc628u;
 static constexpr uint16_t USB_DEVICE_ID_SPACEPILOTPRO           = 0xc629u;
+static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSEPRO           = 0xc62bu;
 
 Space_mouse_controller::Space_mouse_controller(Space_mouse_listener& listener)
     : m_listener{listener}

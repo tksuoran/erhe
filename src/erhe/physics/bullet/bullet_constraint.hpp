@@ -26,26 +26,23 @@ class Bullet_point_to_point_constraint
     : public Bullet_constraint
 {
 public:
-    Bullet_point_to_point_constraint(
-        IRigid_body*    rigid_body,
-        const glm::vec3 pivot_in_a
-    );
+    //Bullet_point_to_point_constraint(
+    //    IRigid_body*    rigid_body,
+    //    const glm::vec3 pivot_in_a
+    //);
 
     Bullet_point_to_point_constraint(
-        IRigid_body*    rigid_body_a,
-        IRigid_body*    rigid_body_b,
-        const glm::vec3 pivot_in_a,
-        const glm::vec3 pivot_in_b
+        const Point_to_point_constraint_settings& settings
     );
 
     // Implements IConstraint
-    [[nodiscard]] auto get_pivot_in_a() -> glm::vec3   override;
-    [[nodiscard]] auto get_pivot_in_b() -> glm::vec3   override;
-    void set_pivot_in_a   (const glm::vec3 pivot_in_a) override;
-    void set_pivot_in_b   (const glm::vec3 pivot_in_b) override;
-    void set_impulse_clamp(const float impulse_clamp)  override;
-    void set_damping      (const float damping)        override;
-    void set_tau          (const float tau)            override;
+    //[[nodiscard]] auto get_pivot_in_a() -> glm::vec3   override;
+    //[[nodiscard]] auto get_pivot_in_b() -> glm::vec3   override;
+    //void set_pivot_in_a   (const glm::vec3 pivot_in_a) override;
+    //void set_pivot_in_b   (const glm::vec3 pivot_in_b) override;
+    //void set_impulse_clamp(const float impulse_clamp)  override;
+    //void set_damping      (const float damping)        override;
+    //void set_tau          (const float tau)            override;
 
     // Implements Bullet_collision_shape
     [[nodiscard]] auto get_bullet_constraint() -> btTypedConstraint* override;

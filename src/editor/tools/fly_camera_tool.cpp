@@ -337,9 +337,9 @@ void Fly_camera_tool::rotation(
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     constexpr float scale = 65536.0f;
-    m_camera_controller->rotate_x.adjust(rx / scale);
-    m_camera_controller->rotate_y.adjust(ry / scale);
-    m_camera_controller->rotate_z.adjust(rz / scale);
+    m_camera_controller->rotate_x.adjust(m_sensitivity * static_cast<float>(rx) / scale);
+    m_camera_controller->rotate_y.adjust(m_sensitivity * static_cast<float>(ry) / scale);
+    m_camera_controller->rotate_z.adjust(m_sensitivity * static_cast<float>(rz) / scale);
 }
 
 auto Fly_camera_tool::try_move(
