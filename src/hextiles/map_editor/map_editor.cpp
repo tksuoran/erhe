@@ -16,12 +16,12 @@ namespace hextiles
 
 auto Map_primary_brush_command::try_call(erhe::application::Command_context& context) -> bool
 {
-    if (get_tool_state() == erhe::application::State::Ready)
+    if (get_command_state() == erhe::application::State::Ready)
     {
         set_active(context);
     }
 
-    if (get_tool_state() != erhe::application::State::Active)
+    if (get_command_state() != erhe::application::State::Active)
     {
         return false;
     }
@@ -32,7 +32,7 @@ auto Map_primary_brush_command::try_call(erhe::application::Command_context& con
 
 void Map_primary_brush_command::try_ready(erhe::application::Command_context& context)
 {
-    if (get_tool_state() != erhe::application::State::Inactive)
+    if (get_command_state() != erhe::application::State::Inactive)
     {
         return;
     }

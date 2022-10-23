@@ -793,25 +793,29 @@ void Node_properties::imgui()
                     if (ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f)) {
                         rigid_body->set_restitution(restitution);
                     }
-                    float angular_damping = rigid_body->get_angular_damping();
-                    float linear_damping = rigid_body->get_linear_damping();
-                    if (
-                        ImGui::SliderFloat("Angular Dampening", &angular_damping, 0.0f, 1.0f) ||
-                        ImGui::SliderFloat("Linear Dampening", &linear_damping, 0.0f, 1.0f)
-                    )
+
+                    // Static bodies don't have access to these properties, at least in Jolt
+                    if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_static)
                     {
-                        rigid_body->set_damping(linear_damping, angular_damping);
+                        float angular_damping = rigid_body->get_angular_damping();
+                        float linear_damping = rigid_body->get_linear_damping();
+                        if (
+                            ImGui::SliderFloat("Angular Dampening", &angular_damping, 0.0f, 1.0f) ||
+                            ImGui::SliderFloat("Linear Dampening", &linear_damping, 0.0f, 1.0f)
+                        )
+                        {
+                            rigid_body->set_damping(linear_damping, angular_damping);
+                        }
+
+                        {
+                            const glm::mat4 local_inertia = rigid_body->get_local_inertia();
+                            float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
+                            ImGui::InputFloat3("Local Inertia", floats);
+                            // TODO floats back to rigid body?
+                        }
                     }
 
                     int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
-
-                    {
-                        const glm::mat4 local_inertia = rigid_body->get_local_inertia();
-                        float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
-                        ImGui::InputFloat3("Local Inertia", floats);
-                        // TODO floats back to rigid body?
-                    }
-
                     if (
                         ImGui::Combo(
                             "Motion Mode",

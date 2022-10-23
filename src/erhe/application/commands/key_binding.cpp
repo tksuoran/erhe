@@ -84,7 +84,7 @@ auto Key_binding::on_key(
         return false;
     }
 
-    if (command->get_tool_state() == State::Disabled)
+    if (command->get_command_state() == State::Disabled)
     {
         return false;
     }

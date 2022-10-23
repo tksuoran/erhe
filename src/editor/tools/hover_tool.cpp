@@ -200,11 +200,6 @@ void Hover_tool::tool_render(
                     position_in_viewport.y,
                     -0.5f
                 };
-                const vec3 position_at_fixed_depth_line_2{
-                    position_in_viewport.x + 50.0f,
-                    position_in_viewport.y + 16.0f,
-                    -0.5f
-                };
 
                 SPDLOG_LOGGER_TRACE(log_pointer, "P position in world: {}", m_hover_position_world.value());
                 SPDLOG_LOGGER_TRACE(log_pointer, "P position in viewport: {}", position_in_viewport);
@@ -219,6 +214,45 @@ void Hover_tool::tool_render(
                     text_color,
                     text
                 );
+
+                if (hover_position_world.has_value())
+                {
+                    const vec3 position_at_fixed_depth_line_2{
+                        position_in_viewport.x + 50.0f,
+                        position_in_viewport.y + 16.0f,
+                        -0.5f
+                    };
+                    const std::string text_line_2 = fmt::format(
+                        "{}",
+                        hover_position_world.value()
+                    );
+                    m_text_renderer->print(
+                        position_at_fixed_depth_line_2,
+                        text_color,
+                        text_line_2
+                    );
+                }
+
+                auto node_physics = get_physics_node(content.mesh.get());
+                if (node_physics)
+                {
+                    erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+                    if (rigid_body)
+                    {
+                        const int motion_mode_index = static_cast<int>(rigid_body->get_motion_mode());
+                        const vec3 position_at_fixed_depth_line_3{
+                            position_in_viewport.x + 50.0f,
+                            position_in_viewport.y + 16.0f * 2,
+                            -0.5f
+                        };
+                        m_text_renderer->print(
+                            position_at_fixed_depth_line_3,
+                            text_color,
+                            erhe::physics::c_motion_mode_strings[motion_mode_index]
+                        );
+                    }
+                }
+
             }
         }
 

@@ -253,11 +253,6 @@ void Jolt_world::update_fixed_step(const double dt)
     // within a collision step. Usually you would set this to 1.
     const int cIntegrationSubSteps = 1;
 
-    for (auto* rigid_body : m_rigid_bodies)
-    {
-        rigid_body->pre_update_motion_state();
-    }
-
     m_physics_system.Update(
         static_cast<float>(dt),
         cCollisionSteps,

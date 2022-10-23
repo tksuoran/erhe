@@ -77,11 +77,6 @@ void Node_physics::on_node_transform_changed()
     );
 
     ERHE_VERIFY(m_rigid_body);
-    if (m_rigid_body->get_motion_mode() == Motion_mode::e_static)
-    {
-        erhe::physics::log_physics->warn("Attempt to move static rigid body - promoting to kinematic.");
-        m_rigid_body->set_motion_mode(Motion_mode::e_kinematic_non_physical);
-    }
     m_rigid_body->set_world_transform(world_from_node * m_node_from_rigidbody);
 }
 

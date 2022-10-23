@@ -11,6 +11,7 @@
 #include "erhe/raytrace/igeometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/iscene.hpp"
+#include "erhe/raytrace/ray.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -268,6 +269,35 @@ auto Node_raytrace::raytrace_instance() -> IInstance*
 auto Node_raytrace::raytrace_instance() const -> const IInstance*
 {
     return m_instance.get();
+}
+
+[[nodiscard]] auto Node_raytrace::get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
+{
+    auto* node = get_node();
+    if (
+        (node == nullptr)  ||
+        !is_mesh(node)     ||
+        !m_primitive       ||
+        !m_source_geometry ||
+        hit.primitive_id > m_primitive->primitive_geometry.primitive_id_to_polygon_id.size()
+    )
+    {
+        return {};
+    }
+
+    const auto polygon_id = m_primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
+    if (polygon_id < m_source_geometry->get_polygon_count())
+    {
+        auto* const polygon_normals = m_source_geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+        if (
+            (polygon_normals != nullptr) &&
+            polygon_normals->has(polygon_id)
+        )
+        {
+            return polygon_normals->get(polygon_id);
+        }
+    }
+    return {};
 }
 
 auto is_raytrace(const INode_attachment* const attachment) -> bool

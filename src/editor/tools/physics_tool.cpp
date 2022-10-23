@@ -4,6 +4,7 @@
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -17,10 +18,14 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/view.hpp"
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/iconstraint.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
+#include "erhe/raytrace/iinstance.hpp"
+#include "erhe/raytrace/iscene.hpp"
+#include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -37,7 +42,7 @@ void Physics_tool_drag_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (get_tool_state() != erhe::application::State::Inactive)
+    if (get_command_state() != erhe::application::State::Inactive)
     {
         log_physics->trace("PT state not inactive");
         return;
@@ -55,7 +60,7 @@ auto Physics_tool_drag_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    if (get_tool_state() == erhe::application::State::Inactive)
+    if (get_command_state() == erhe::application::State::Inactive)
     {
         return false;
     }
@@ -63,13 +68,13 @@ auto Physics_tool_drag_command::try_call(
     Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
     if (
         m_physics_tool.on_drag(scene_view) &&
-        (get_tool_state() == erhe::application::State::Ready)
+        (get_command_state() == erhe::application::State::Ready)
     )
     {
         set_active(context);
     }
 
-    return get_tool_state() == erhe::application::State::Active;
+    return get_command_state() == erhe::application::State::Active;
 }
 
 void Physics_tool_drag_command::on_inactive(
@@ -80,8 +85,8 @@ void Physics_tool_drag_command::on_inactive(
 
     log_physics->trace("PT on_inactive");
     if (
-        (get_tool_state() == erhe::application::State::Ready ) ||
-        (get_tool_state() == erhe::application::State::Active)
+        (get_command_state() == erhe::application::State::Ready ) ||
+        (get_command_state() == erhe::application::State::Active)
     )
     {
         m_physics_tool.release_target();
@@ -98,7 +103,7 @@ Physics_tool::~Physics_tool() noexcept
 {
     if (m_target_constraint)
     {
-        auto* world = physics_world();
+        auto* world = get_physics_world();
         if (world != nullptr)
         {
             world->remove_constraint(m_target_constraint.get());
@@ -107,10 +112,8 @@ Physics_tool::~Physics_tool() noexcept
     }
 }
 
-[[nodiscard]] auto Physics_tool::physics_world() const -> erhe::physics::IWorld*
+[[nodiscard]] auto Physics_tool::get_scene_root() const -> Scene_root*
 {
-    ERHE_VERIFY(m_editor_scenes);
-
     if (!m_target_mesh)
     {
         const auto scene_builder = get<Scene_builder>();
@@ -119,21 +122,36 @@ Physics_tool::~Physics_tool() noexcept
             const auto scene_root = scene_builder->get_scene_root();
             if (scene_root)
             {
-                auto& world = scene_root->physics_world();
-                return &world;
+                return scene_root.get();
             }
         }
 
         return nullptr;
     }
 
-    auto* scene_root = reinterpret_cast<Scene_root*>(m_target_mesh->node_data.host);
+    return reinterpret_cast<Scene_root*>(m_target_mesh->node_data.host);
+}
+
+[[nodiscard]] auto Physics_tool::get_raytrace_scene() const -> erhe::raytrace::IScene*
+{
+    auto* scene_root = get_scene_root();
     if (scene_root == nullptr)
     {
         return nullptr;
     }
+    auto& raytrace_scene = scene_root->raytrace_scene();
+    return &raytrace_scene;
+}
 
-    return &scene_root->physics_world();
+[[nodiscard]] auto Physics_tool::get_physics_world() const -> erhe::physics::IWorld*
+{
+    auto* scene_root = get_scene_root();
+    if (scene_root == nullptr)
+    {
+        return nullptr;
+    }
+    auto& world = scene_root->physics_world();
+    return &world;
 }
 
 void Physics_tool::declare_required_components()
@@ -157,7 +175,7 @@ void Physics_tool::initialize_component()
     commands->bind_command_to_controller_trigger(&m_drag_command, 0.5f, 0.45f, true);
     get<Operations>()->register_active_tool(this);
 
-    erhe::physics::IWorld* world = physics_world();
+    erhe::physics::IWorld* world = get_physics_world();
     if (world == nullptr)
     {
         log_physics->error("No physics world");
@@ -171,6 +189,7 @@ void Physics_tool::initialize_component()
         m_target_constraint.reset();
     }
 
+    m_motion_mode = erhe::physics::Motion_mode::e_kinematic_non_physical;
     m_constraint_world_point_rigid_body = erhe::physics::IRigid_body::create_rigid_body_shared(
         erhe::physics::IRigid_body_create_info
         {
@@ -236,6 +255,14 @@ void Physics_tool::set_motion_mode(const erhe::physics::Motion_mode motion_mode)
 auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
 {
     log_physics->warn("acquire_target() ...");
+
+    erhe::physics::IWorld* world = get_physics_world();
+    if (world == nullptr)
+    {
+        log_physics->error("No physics world");
+        return false;
+    }
+
     if (scene_view == nullptr)
     {
         log_physics->warn("Cant target: No scene_view");
@@ -271,8 +298,7 @@ auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
     m_target_position_in_mesh = m_target_mesh->transform_point_from_world_to_local(
         target_position
     );
-    m_target_node_physics     = get_physics_node(m_target_mesh.get());
-
+    m_target_node_physics = get_physics_node(m_target_mesh.get());
     if (!m_target_node_physics)
     {
         log_physics->warn("Cant target: No physics mesh");
@@ -287,86 +313,27 @@ auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
         return false;
     }
 
-    m_original_linear_damping  = rigid_body->get_linear_damping();
-    m_original_angular_damping = rigid_body->get_angular_damping();
-    m_original_friction        = rigid_body->get_friction();
-    m_original_gravity         = rigid_body->get_gravity_factor();
-
-    rigid_body->set_damping(
-        m_override_linear_damping,
-        m_override_angular_damping
-    );
-    rigid_body->set_friction(m_override_friction);
-    rigid_body->set_gravity_factor(m_override_gravity);
-
-    // TODO Make this happen automatically
-    if (m_target_constraint)
-    {
-        auto* world = physics_world();
-        if (world != nullptr)
-        {
-            world->remove_constraint(m_target_constraint.get());
-        }
-        m_target_constraint.reset();
-    }
-
-    log_physics->trace("PT Target acquired");
-
-    return true;
-}
-
-void Physics_tool::release_target()
-{
-    log_physics->trace("PT Target released");
-
-    if (m_target_constraint)
-    {
-        physics_world()->remove_constraint(m_target_constraint.get());
-        m_target_constraint.reset();
-    }
-
-    if (m_target_node_physics)
-    {
-        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
-        const glm::vec3 end_velocity = rigid_body->get_linear_velocity();
-        rigid_body->set_damping(
-            m_original_linear_damping,
-            m_original_angular_damping
-        );
-        rigid_body->set_friction(m_original_friction);
-        rigid_body->set_gravity_factor(m_original_gravity);
-        rigid_body->end_move();
-        m_target_node_physics.reset();
-    }
-
-    m_target_mesh.reset();
-
-    m_target_distance         = 1.0;
-    m_target_position_in_mesh = glm::dvec3{0.0, 0.0, 0.0};
-    m_target_position_end     = glm::dvec3{0.0, 0.0, 0.0};
-    m_to_end_direction        = glm::dvec3{0.0};
-    m_to_start_direction      = glm::dvec3{0.0};
-    m_target_mesh_size        = 0.0;
-
-}
-
-void Physics_tool::begin_point_to_point_constraint()
-{
-    log_physics->trace("PT Begin point to point constraint");
-
-    erhe::physics::IWorld* world = physics_world();
-    if (world == nullptr)
-    {
-        log_physics->error("No physics world");
-        return;
-    }
-
-    // TODO store world and use stored world for these removes?
     if (m_target_constraint)
     {
         world->remove_constraint(m_target_constraint.get());
         m_target_constraint.reset();
     }
+
+    // TODO investigate Jolt damping
+    //m_original_linear_damping  = rigid_body->get_linear_damping();
+    //m_original_angular_damping = rigid_body->get_angular_damping();
+    m_original_friction        = rigid_body->get_friction();
+    m_original_gravity         = rigid_body->get_gravity_factor();
+
+    //rigid_body->set_damping(
+    //    m_override_linear_damping,
+    //    m_override_angular_damping
+    //);
+    rigid_body->set_friction(m_override_friction);
+    rigid_body->set_gravity_factor(m_override_gravity);
+
+    rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+    rigid_body->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
 
     m_target_position_end = glm::dvec3{
         m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}
@@ -375,12 +342,7 @@ void Physics_tool::begin_point_to_point_constraint()
     log_physics->trace("PT pos in mesh {}", m_target_position_in_mesh);
     log_physics->trace("PT drag {} ready @ {}", m_target_mesh->name(), m_target_position_end);
 
-    m_constraint_world_point_rigid_body->set_world_transform(
-        erhe::physics::Transform{
-            glm::mat3{1.0f},
-            glm::vec3{m_target_position_end}
-        }
-    );
+    move_drag_point_instant(m_target_position_end);
 
     const erhe::physics::Point_to_point_constraint_settings constraint_settings
     {
@@ -397,6 +359,66 @@ void Physics_tool::begin_point_to_point_constraint()
 
     m_target_node_physics->rigid_body()->begin_move();
     world->add_constraint(m_target_constraint.get());
+
+    return true;
+}
+
+void Physics_tool::move_drag_point_instant(glm::vec3 position)
+{
+    m_motion_mode = erhe::physics::Motion_mode::e_kinematic_non_physical;
+    m_constraint_world_point_rigid_body->set_world_transform(
+        erhe::physics::Transform{
+            glm::mat3{1.0f},
+            position
+        }
+    );
+}
+
+void Physics_tool::move_drag_point_kinematic(glm::vec3 position)
+{
+    m_motion_mode = erhe::physics::Motion_mode::e_kinematic_physical;
+    m_constraint_world_point_rigid_body->set_world_transform(
+        erhe::physics::Transform{
+            glm::mat3{1.0f},
+            position
+        }
+    );
+}
+
+void Physics_tool::release_target()
+{
+    log_physics->trace("PT Target released");
+
+    if (m_target_constraint)
+    {
+        get_physics_world()->remove_constraint(m_target_constraint.get());
+        m_target_constraint.reset();
+    }
+
+    if (m_target_node_physics)
+    {
+        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
+        const glm::vec3 end_velocity = rigid_body->get_linear_velocity();
+        //rigid_body->set_damping(
+        //    m_original_linear_damping,
+        //    m_original_angular_damping
+        //);
+        rigid_body->set_friction(m_original_friction);
+        rigid_body->set_gravity_factor(m_original_gravity);
+        //rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+        //rigid_body->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+        rigid_body->end_move();
+        m_target_node_physics.reset();
+    }
+
+    m_target_mesh.reset();
+
+    m_target_distance         = 1.0;
+    m_target_position_in_mesh = glm::dvec3{0.0, 0.0, 0.0};
+    m_target_position_end     = glm::dvec3{0.0, 0.0, 0.0};
+    m_to_end_direction        = glm::dvec3{0.0};
+    m_to_start_direction      = glm::dvec3{0.0};
+    m_target_mesh_size        = 0.0;
 }
 
 auto Physics_tool::on_drag_ready(Scene_view* scene_view) -> bool
@@ -410,8 +432,6 @@ auto Physics_tool::on_drag_ready(Scene_view* scene_view) -> bool
     {
         return false;
     }
-
-    begin_point_to_point_constraint();
 
     log_physics->trace("PT drag {} ready", m_target_mesh->name());
     return true;
@@ -429,8 +449,6 @@ auto Physics_tool::on_force_ready() -> bool
         log_physics->trace("Physics tool force - acquire target failed");
         return false;
     }
-
-    begin_point_to_point_constraint();
 
     log_physics->trace("Physics tool force {} ready", m_target_mesh->name());
     return true;
@@ -454,7 +472,7 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
     {
         return false;
     }
-    auto* world = physics_world();
+    auto* world = get_physics_world();
     if (world == nullptr)
     {
         return false;
@@ -516,14 +534,142 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
         m_target_distance = distance;
     }
 
-    m_constraint_world_point_rigid_body->set_world_transform(
-        erhe::physics::Transform{
-            glm::mat3{1.0f},
-            glm::vec3{m_target_position_end}
-        }
-    );
+    move_drag_point_kinematic(m_target_position_end);
+
+    if (m_target_node_physics)
+    {
+        // TODO investigate jolt damping
+        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
+        glm::vec3 angular_velocity = rigid_body->get_angular_velocity();
+        glm::vec3 linear_velocity  = rigid_body->get_linear_velocity();
+
+        rigid_body->set_angular_velocity(angular_velocity * (1.0f - m_override_angular_damping));
+        rigid_body->set_linear_velocity(linear_velocity * (1.0f - m_override_linear_damping));
+    }
 
     return true;
+}
+
+
+auto safe_normalize(const glm::vec3& lhs, const glm::vec3& rhs)
+{
+    const float d = glm::dot(lhs, rhs);
+    if (std::abs(d) > 0.999f)
+    {
+        return erhe::toolkit::min_axis(lhs);
+    }
+
+    const glm::vec3 c0 = glm::cross(lhs, rhs);
+    if (c0.length() < glm::epsilon<float>())
+    {
+        return erhe::toolkit::min_axis(lhs);
+    }
+    return glm::normalize(c0);
+}
+
+void Physics_tool::draw_projection_ray(
+    const erhe::raytrace::Ray& ray,
+    const erhe::raytrace::Hit& hit
+)
+{
+    void* user_data     = hit.instance->get_user_data();
+    auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+    if (raytrace_node == nullptr)
+    {
+        return;
+    }
+
+    const auto local_normal_opt = raytrace_node->get_hit_normal(hit);
+    if (!local_normal_opt.has_value())
+    {
+        return;
+    }
+
+    const glm::vec3 position        = ray.origin + ray.t_far * ray.direction;
+    const glm::vec3 local_normal    = local_normal_opt.value();
+    const glm::mat4 world_from_node = raytrace_node->get_node()->world_from_node();
+    const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
+    const glm::vec3 T = safe_normalize(N, ray.direction);
+    const glm::vec3 B = safe_normalize(T, N);
+
+    constexpr uint32_t red   = 0xff0000ffu;
+    constexpr uint32_t green = 0xff00ff00u;
+    constexpr uint32_t blue  = 0xffff0000u;
+    erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    line_renderer.set_thickness(20.0f);
+    line_renderer.set_line_color(red);
+    line_renderer.add_lines(
+        {
+            {
+                position + 0.01f * N - 0.25f * T,
+                position + 0.01f * N + 0.75f * T
+            }
+        }
+    );
+    line_renderer.set_line_color(green);
+    line_renderer.add_lines(
+        {
+            {
+                position + 0.01f * N - 0.25f * B,
+                position + 0.01f * N + 0.75f * B
+            }
+        }
+    );
+    line_renderer.set_line_color(blue);
+    line_renderer.add_lines(
+        {
+            {
+                position,
+                position + 1.0f * N
+            }
+        }
+    );
+}
+
+[[nodiscard]] auto Physics_tool::project_ray(
+    erhe::raytrace::IScene* const raytrace_scene,
+    const glm::vec3               ray_direction_in_world,
+    erhe::raytrace::Ray&          ray,
+    erhe::raytrace::Hit&          hit
+) -> bool
+{
+    std::size_t count{0};
+    ray = erhe::raytrace::Ray{
+        .origin    = m_target_mesh->position_in_world(),
+        .t_near    = 0.0f,
+        .direction = ray_direction_in_world,
+        .time      = 0.0f,
+        .t_far     = 9999.0f,
+        .mask      = Raytrace_node_mask::content,
+        .id        = 0,
+        .flags     = 0
+    };
+    for (;;)
+    {
+        raytrace_scene->intersect(ray, hit);
+        if (hit.instance == nullptr)
+        {
+            return false;
+        }
+        void* user_data     = hit.instance->get_user_data();
+        auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+        if (raytrace_node == nullptr)
+        {
+            return false;
+        }
+        auto* node = raytrace_node->get_node();
+        if (node == m_target_mesh.get())
+        {
+            ray.origin = ray.origin + ray.t_far * ray.direction + 0.001f * ray_direction_in_world;
+            ++count;
+            if (count > 100)
+            {
+                return false;
+            }
+            continue;
+        }
+        return true;
+    }
 }
 
 void Physics_tool::tool_render(const Render_context& /*context*/)
@@ -531,6 +677,20 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
     ERHE_PROFILE_FUNCTION
 
     erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+
+    if (m_target_mesh)
+    {
+        auto* raytrace_scene = get_raytrace_scene();
+        if (raytrace_scene != nullptr)
+        {
+            erhe::raytrace::Ray ray;
+            erhe::raytrace::Hit hit;
+            if (project_ray(raytrace_scene, glm::vec3{0.0f, -1.0f, 0.0f}, ray, hit))
+            {
+                draw_projection_ray(ray, hit);
+            }
+        }
+    }
 
     if (m_target_constraint)
     {
@@ -547,12 +707,13 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
         );
     }
 
+    constexpr glm::vec3 axis_x{ 1.0f,  0.0f, 0.0f};
+    constexpr glm::vec3 axis_y{ 0.0f,  1.0f, 0.0f};
+    constexpr glm::vec3 axis_z{ 0.0f,  0.0f, 1.0f};
+
     if (m_target_mesh)
     {
-        constexpr uint32_t  white {0xffffffffu};
-        constexpr glm::vec3 axis_x{ 1.0f,  0.0f, 0.0f};
-        constexpr glm::vec3 axis_y{ 0.0f,  1.0f, 0.0f};
-        constexpr glm::vec3 axis_z{ 0.0f,  0.0f, 1.0f};
+        constexpr uint32_t  white {0xffff00ffu};
         const glm::mat4 m = erhe::toolkit::create_translation<float>(
             glm::vec3{m_target_mesh->position_in_world()}
         );
@@ -561,11 +722,32 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
         line_renderer.add_lines(
             m,
             {
-                { -20.0f * axis_x, 20.0f * axis_x},
-                { -20.0f * axis_y, 20.0f * axis_y},
-                { -20.0f * axis_z, 20.0f * axis_z}
+                //{ -20.0f * axis_x, 20.0f * axis_x},
+                { -20.0f * axis_y, 20.0f * axis_y}
+                //{ -20.0f * axis_z, 20.0f * axis_z}
             }
         );
+    }
+
+    if (m_show_drag_body)
+    {
+        const erhe::physics::Transform transform = m_constraint_world_point_rigid_body->get_world_transform();
+        {
+            const uint32_t half_red  {0x880000ffu};
+            const uint32_t half_green{0x8800ff00u};
+            const uint32_t half_blue {0x88ff0000u};
+            constexpr glm::vec3 O{ 0.0f };
+            glm::mat4 m{transform.basis};
+            m[3] = glm::vec4{
+                transform.origin.x,
+                transform.origin.y,
+                transform.origin.z,
+                1.0f
+            };
+            line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
+            line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
+            line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
+        }
     }
 
     //m_line_renderer_set->hidden.set_line_color(0xffff0000u);
@@ -592,7 +774,7 @@ void Physics_tool::tool_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 
-    //ImGui::Text("State: %s",     erhe::application::c_state_str[static_cast<int>(m_drag_command.get_tool_state())]);
+    //ImGui::Text("State: %s",     erhe::application::c_state_str[static_cast<int>(m_drag_command.get_command_state())]);
     //if (m_hover_mesh)
     //{
     //    ImGui::Text("Hover mesh: %s", m_hover_mesh->name().c_str());
@@ -607,6 +789,7 @@ void Physics_tool::tool_properties()
         return;
     }
 
+    ImGui::Checkbox("Show Drag Body", &m_show_drag_body);
     ImGui::Text("Mesh: %s", m_last_target_mesh->name().c_str());
 
     float speed = 0.0f;
@@ -621,24 +804,31 @@ void Physics_tool::tool_properties()
         }
     }
 
-    //const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
+    const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
     //ImGui::SliderFloat("Force Distance",  &m_force_distance, -10.0f, 10.0f, "%.2f", logarithmic);
     ImGui::SliderFloat("Depth",     &m_depth,     0.0f, 1.0f);
-    ImGui::SliderFloat("Frequency", &m_frequency, 0.0f, 1.0f);
+    ImGui::SliderFloat("Frequency", &m_frequency, 0.0f, 100.0f, "%.3f", logarithmic);
     ImGui::SliderFloat("Damping",   &m_damping,   0.0f, 1.0f);
     //ImGui::SliderFloat("Tau",             &m_tau,             0.0f,   0.1f);
     //ImGui::SliderFloat("Impulse Clamp",   &m_impulse_clamp,   0.0f, 100.0f);
-    ImGui::SliderFloat("Override Gravity",         &m_override_gravity,         0.0f, 10.0f);
-    ImGui::SliderFloat("Override Friction",        &m_override_friction,        0.0f,  1.0f);
-    ImGui::SliderFloat("Override Linear Damping",  &m_override_linear_damping,  0.0f,  1.0f);
-    ImGui::SliderFloat("Override Angular Damping", &m_override_angular_damping, 0.0f,  1.0f);
-
+    ImGui::Separator();
+    ImGui::Text("Override:");
+    ImGui::SliderFloat("Gravity",      &m_override_gravity,         0.0f, 10.0f);
+    ImGui::SliderFloat("Friction",     &m_override_friction,        0.0f,  1.0f);
+    ImGui::SliderFloat("Linear Damp",  &m_override_linear_damping,  0.0f,  1.0f);
+    ImGui::SliderFloat("Angular Damp", &m_override_angular_damping, 0.0f,  1.0f);
+    ImGui::Separator();
+    ImGui::Text("Info:");
     ImGui::Text("Distance: %f",    m_target_distance);
     ImGui::Text("Target Size: %f", m_target_mesh_size);
     if (m_target_constraint)
     {
         std::string object_position = fmt::format("{}", m_target_position_in_mesh);
         std::string world_position  = fmt::format("{}", m_target_position_end);
+        const erhe::physics::Transform transform = m_constraint_world_point_rigid_body->get_world_transform();
+        std::stringstream ss;
+        ss << fmt::format("{}", transform.origin);
+        ImGui::Text("Drag point body pos: %s", ss.str().c_str());
         ImGui::Text("Object: %s", object_position.c_str());
         ImGui::Text("World: %s",  world_position.c_str());
     }

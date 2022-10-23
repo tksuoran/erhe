@@ -53,7 +53,7 @@ auto Mouse_click_binding::on_button(
 
     auto* const command = get_command();
 
-    if (command->get_tool_state() == State::Disabled)
+    if (command->get_command_state() == State::Disabled)
     {
         return false;
     }
@@ -61,7 +61,7 @@ auto Mouse_click_binding::on_button(
     if (!context.accept_mouse_command(command))
     {
         // Paranoid check
-        if (command->get_tool_state() != State::Inactive)
+        if (command->get_command_state() != State::Inactive)
         {
             command->set_inactive(context);
         }
@@ -71,7 +71,7 @@ auto Mouse_click_binding::on_button(
     // Mouse button down
     if (count > 0)
     {
-        if (command->get_tool_state() == State::Inactive)
+        if (command->get_command_state() == State::Inactive)
         {
             command->try_ready(context);
         }
@@ -80,7 +80,7 @@ auto Mouse_click_binding::on_button(
     else // count == 0
     {
         bool consumed{false};
-        if (command->get_tool_state() == State::Ready)
+        if (command->get_command_state() == State::Ready)
         {
             consumed = command->try_call(context);
             log_input_event_consumed->trace(
@@ -98,13 +98,13 @@ auto Mouse_click_binding::on_motion(Command_context& context) -> bool
 {
     auto* const command = get_command();
 
-    if (command->get_tool_state() == State::Disabled)
+    if (command->get_command_state() == State::Disabled)
     {
         return false;
     }
 
     // Motion when not in Inactive state -> transition to inactive state
-    if (command->get_tool_state() != State::Inactive)
+    if (command->get_command_state() != State::Inactive)
     {
         command->set_inactive(context);
     }

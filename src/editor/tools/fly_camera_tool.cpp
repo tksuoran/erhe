@@ -121,12 +121,12 @@ auto Fly_camera_turn_command::try_call(
     {
         return false;
     }
-    if (get_tool_state() == erhe::application::State::Ready)
+    if (get_command_state() == erhe::application::State::Ready)
     {
         set_active(context);
     }
 
-    if (get_tool_state() != erhe::application::State::Active)
+    if (get_command_state() != erhe::application::State::Active)
     {
         return false;
     }

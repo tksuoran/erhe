@@ -299,26 +299,43 @@ void Commands::on_update()
     }
 
     // Call mouse drag bindings if buttons are being held down
-    if (
-        (m_last_mouse_button_bits != 0) &&
-        (m_active_mouse_command != nullptr)
-    )
+    if (m_last_mouse_button_bits != 0)
     {
         for (auto& binding : m_mouse_bindings)
         {
-            if (
-                (binding->get_type() == Command_binding::Type::Mouse_drag) &&
-                (binding->get_command()->get_tool_state() == State::Active)
-            )
+            if (binding->get_type() == Command_binding::Type::Mouse_drag)
             {
-                auto*          drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
-                const auto     button       = drag_binding->get_button();
-                const uint32_t bit          = (1 << button);
-                if ((m_last_mouse_button_bits & bit) == bit)
+                auto*      drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
+                Command*   command      = binding->get_command();
+                const auto state        = command->get_command_state();
+                log_frame->info(
+                    "{} state = {}",
+                    command->get_name(),
+                    c_state_str[static_cast<int>(state)]
+                );
+                if ((state == State::Ready) || (state == State::Active))
                 {
-                    drag_binding->on_motion(context);
+                    const auto     button = drag_binding->get_button();
+                    const uint32_t bit    = (1 << button);
+                    if ((m_last_mouse_button_bits & bit) == bit)
+                    {
+                        log_frame->info("calling {} on_motion", command->get_name());
+                        drag_binding->on_motion(context);
+                    }
                 }
             }
+        }
+    }
+    else
+    {
+        if (m_last_mouse_button_bits == 0)
+        {
+            log_frame->info("m_last_mouse_button_bits == 0");
+        }
+
+        if (m_active_mouse_command == nullptr)
+        {
+            log_frame->info("m_active_mouse_command == nullptr");
         }
     }
 }
@@ -370,7 +387,7 @@ auto Commands::get_command_priority(Command* const command) const -> int
     {
         return 0;
     }
-    return get_priority(command->get_tool_state());
+    return get_priority(command->get_command_state());
 }
 
 void Commands::sort_mouse_bindings()
@@ -402,7 +419,7 @@ void Commands::inactivate_ready_commands()
     };
     for (auto* command : m_commands)
     {
-        if (command->get_tool_state() == State::Ready)
+        if (command->get_command_state() == State::Ready)
         {
             command->set_inactive(context);
         }
@@ -460,7 +477,7 @@ void Commands::update_active_mouse_command(
     inactivate_ready_commands();
 
     if (
-        (command->get_tool_state() == State::Active) &&
+        (command->get_command_state() == State::Active) &&
         (m_active_mouse_command != command)
     )
     {
@@ -468,7 +485,7 @@ void Commands::update_active_mouse_command(
         m_active_mouse_command = command;
     }
     else if (
-        (command->get_tool_state() != State::Active) &&
+        (command->get_command_state() != State::Active) &&
         (m_active_mouse_command == command)
     )
     {
@@ -586,7 +603,7 @@ void Commands::imgui()
     {
         for (auto* command : m_commands)
         {
-            if (command->get_tool_state() == State::Active)
+            if (command->get_command_state() == State::Active)
             {
                 ImGui::TreeNodeEx(command->get_name(), leaf_flags);
             }
@@ -598,7 +615,7 @@ void Commands::imgui()
     {
         for (auto* command : m_commands)
         {
-            if (command->get_tool_state() == State::Ready)
+            if (command->get_command_state() == State::Ready)
             {
                 ImGui::TreeNodeEx(command->get_name(), leaf_flags);
             }
@@ -610,7 +627,7 @@ void Commands::imgui()
     {
         for (auto* command : m_commands)
         {
-            if (command->get_tool_state() == State::Inactive)
+            if (command->get_command_state() == State::Inactive)
             {
                 ImGui::TreeNodeEx(command->get_name(), leaf_flags);
             }
@@ -622,7 +639,7 @@ void Commands::imgui()
     {
         for (auto* command : m_commands)
         {
-            if (command->get_tool_state() == State::Disabled)
+            if (command->get_command_state() == State::Disabled)
             {
                 ImGui::TreeNodeEx(command->get_name(), leaf_flags);
             }

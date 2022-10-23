@@ -2,6 +2,8 @@
 #include "erhe/physics/bullet/bullet_collision_shape.hpp"
 #include "erhe/physics/bullet/glm_conversions.hpp"
 #include "erhe/physics/imotion_state.hpp"
+#include "erhe/physics/physics_log.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -86,13 +88,13 @@ Bullet_rigid_body::Bullet_rigid_body(
     : m_motion_state_adapter{motion_state}
     , m_collision_shape     {create_info.collision_shape}
     , m_bullet_rigid_body   {to_bullet(create_info, m_motion_state_adapter)}
-    , m_motion_mode         {motion_state->get_motion_mode()}
     , m_debug_label         {create_info.debug_label}
 {
     m_bullet_rigid_body.setDamping(0.02f, 0.02f);
 
     m_bullet_rigid_body.setFriction(0.5f);
     m_bullet_rigid_body.setRollingFriction(0.1f);
+    set_motion_mode(motion_state->get_motion_mode());
     if (!create_info.enable_collisions)
     {
         m_bullet_rigid_body.setFlags(BT_DISABLE_WORLD_GRAVITY);
@@ -146,7 +148,11 @@ auto Bullet_rigid_body::get_gravity_factor() const -> float
 
 void Bullet_rigid_body::set_gravity_factor(const float gravity_factor)
 {
+    const auto old_gravity = from_bullet(m_bullet_rigid_body.getGravity());
+    log_physics->info("old gravity = {}", old_gravity);
     m_gravity_factor = gravity_factor; // TODO apply
+    const glm::vec3 new_gravity{0.0f, -10.0f * gravity_factor, 0.0f};
+    m_bullet_rigid_body.setGravity(to_bullet(new_gravity));
 }
 
 auto Bullet_rigid_body::get_restitution() const -> float
@@ -171,11 +177,6 @@ void Bullet_rigid_body::end_move()
 
 void Bullet_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 {
-    if (m_motion_mode == motion_mode)
-    {
-        return;
-    }
-
     m_motion_mode = motion_mode;
 
     int flags = m_bullet_rigid_body.getCollisionFlags();

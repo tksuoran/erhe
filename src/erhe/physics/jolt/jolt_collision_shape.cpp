@@ -35,7 +35,7 @@ public:
 
     JPH::AABox GetLocalBounds() const override
     {
-        return JPH::AABox{};
+        return JPH::AABox{JPH::Vec3{0.0f, 0.0f, 0.0f}, 0.0f};
     }
 
     JPH::uint GetSubShapeIDBitsRecursive() const
@@ -78,7 +78,7 @@ public:
         return {};
     }
 
-void GetSubmergedVolume(JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, const JPH::Plane& inSurface, float& outTotalVolume, float& outSubmergedVolume, JPH::Vec3& outCenterOfBuoyancy) const override
+    void GetSubmergedVolume(JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, const JPH::Plane& inSurface, float& outTotalVolume, float& outSubmergedVolume, JPH::Vec3& outCenterOfBuoyancy) const override
     {
         static_cast<void>(inCenterOfMassTransform);
         static_cast<void>(inScale);

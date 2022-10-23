@@ -70,7 +70,7 @@ private:
     Motion_state_adapter              m_motion_state_adapter;
     std::shared_ptr<ICollision_shape> m_collision_shape;
     btRigidBody                       m_bullet_rigid_body;
-    Motion_mode                       m_motion_mode{Motion_mode::e_kinematic_non_physical};
+    Motion_mode                       m_motion_mode{Motion_mode::e_static};
     float                             m_gravity_factor{1.0};
     std::string                       m_debug_label;
 };

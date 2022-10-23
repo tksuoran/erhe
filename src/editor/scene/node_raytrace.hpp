@@ -17,6 +17,7 @@ namespace erhe::raytrace
     class IGeometry;
     class IInstance;
     class IScene;
+    class Hit;
 }
 
 namespace editor
@@ -57,12 +58,13 @@ public:
     void on_node_visibility_mask_changed(const uint64_t mask) override;
 
     // Public API
-    [[nodiscard]] auto source_geometry() -> std::shared_ptr<erhe::geometry::Geometry>;
+    [[nodiscard]] auto source_geometry   () -> std::shared_ptr<erhe::geometry::Geometry>;
     [[nodiscard]] auto raytrace_primitive() -> Raytrace_primitive*;
-    [[nodiscard]] auto raytrace_geometry()       ->       erhe::raytrace::IGeometry*;
-    [[nodiscard]] auto raytrace_geometry() const -> const erhe::raytrace::IGeometry*;
-    [[nodiscard]] auto raytrace_instance()       ->       erhe::raytrace::IInstance*;
-    [[nodiscard]] auto raytrace_instance() const -> const erhe::raytrace::IInstance*;
+    [[nodiscard]] auto raytrace_geometry ()       ->       erhe::raytrace::IGeometry*;
+    [[nodiscard]] auto raytrace_geometry () const -> const erhe::raytrace::IGeometry*;
+    [[nodiscard]] auto raytrace_instance ()       ->       erhe::raytrace::IInstance*;
+    [[nodiscard]] auto raytrace_instance () const -> const erhe::raytrace::IInstance*;
+    [[nodiscard]] auto get_hit_normal    (const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>;
 
 private:
     void initialize();

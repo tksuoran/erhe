@@ -31,7 +31,7 @@ auto Update_binding::on_update(Command_context& context) -> bool
 {
     static_cast<void>(context);
     auto* const command = get_command();
-    if (command->get_tool_state() == State::Disabled)
+    if (command->get_command_state() == State::Disabled)
     {
         return false;
     }

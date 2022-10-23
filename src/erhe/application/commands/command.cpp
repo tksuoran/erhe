@@ -31,7 +31,7 @@ void Command::on_inactive(Command_context& context)
     static_cast<void>(context);
 }
 
-auto Command::get_tool_state() const -> State
+auto Command::get_command_state() const -> State
 {
     return m_state;
 }

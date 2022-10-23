@@ -58,9 +58,8 @@ public:
     void set_world_transform         (const Transform transform)                               override;
 
     // Public API
-    auto get_jolt_body          () const -> JPH::Body*;
-    void pre_update_motion_state() const;
-    void update_motion_state    () const;
+    auto get_jolt_body      () const -> JPH::Body*;
+    void update_motion_state() const;
 
 private:
     JPH::Body*                            m_body            {nullptr};

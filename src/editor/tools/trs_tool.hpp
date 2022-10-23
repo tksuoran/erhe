@@ -154,6 +154,10 @@ public:
     void end_drag     (erhe::application::Command_context& context);
 
 private:
+    void touch     ();
+    void begin_move();
+    void end_move  ();
+
     enum class Handle : unsigned int
     {
         e_handle_none         = 0,

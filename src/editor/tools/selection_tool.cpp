@@ -169,7 +169,7 @@ auto Selection_tool_select_command::try_call(
         return false;
     }
 
-    if (get_tool_state() != erhe::application::State::Ready)
+    if (get_command_state() != erhe::application::State::Ready)
     {
         log_selection->trace("selection tool not in ready state");
         return false;

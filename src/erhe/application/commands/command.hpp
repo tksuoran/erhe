@@ -25,8 +25,8 @@ public:
     virtual void on_inactive(Command_context& context);
 
     // Non-virtual public API
-    [[nodiscard]] auto get_tool_state() const -> State;
-    [[nodiscard]] auto get_name      () const -> const char*;
+    [[nodiscard]] auto get_command_state() const -> State;
+    [[nodiscard]] auto get_name         () const -> const char*;
     void disable     (Command_context& context);
     void enable      (Command_context& context);
     void set_inactive(Command_context& context);

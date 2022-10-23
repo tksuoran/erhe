@@ -148,7 +148,7 @@ private:
     std::shared_ptr<Configuration> m_configuration;
 
     std::mutex     m_command_mutex;
-    Command*       m_active_mouse_command{nullptr};
+    Command*       m_active_mouse_command{nullptr}; // does not tell if command(s) is/are ready
     Input_context* m_input_context       {nullptr};
 
     uint32_t   m_last_mouse_button_bits       {0u};

@@ -123,6 +123,7 @@ erhe_target_sources_grouped(
     tools/tools.cpp
     tools/tools.hpp
     tools/trs_tool.cpp
+    tools/trs_tool_visualization.cpp
     tools/trs_tool.hpp
 
     windows/brushes.cpp

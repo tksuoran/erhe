@@ -1,4 +1,4 @@
-// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRAC
 
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
 #include "erhe/log/log_glm.hpp"
@@ -356,17 +356,58 @@ void Jolt_rigid_body::set_world_transform(const Transform transform)
         return;
     }
 
-    SPDLOG_LOGGER_TRACE(log_physics, "{} set transform position {}", m_debug_label, transform.origin);
-
-    m_body_interface.SetPositionAndRotation(
-        m_body->GetID(),
-        to_jolt(transform.origin),
-        to_jolt(glm::quat{transform.basis}),
-        JPH::EActivation::DontActivate
-        //(m_motion_mode != Motion_mode::e_static)
-        //    ? JPH::EActivation::Activate
-        //    : JPH::EActivation::DontActivate
-    );
+    switch (m_motion_mode)
+    {
+        //case Motion_mode::e_static:
+        //{
+        //    log_physics->info("{} cannot move static", m_debug_label);
+        //    break;
+        //}
+        case Motion_mode::e_kinematic_non_physical:
+        {
+            SPDLOG_LOGGER_TRACE(log_physics, "{} KNP SetPositionAndRotation {}", m_debug_label, transform.origin);
+            m_body_interface.SetPositionAndRotation(
+                m_body->GetID(),
+                to_jolt(transform.origin),
+                to_jolt(glm::quat{transform.basis}),
+                JPH::EActivation::DontActivate
+                //(m_motion_mode != Motion_mode::e_static)
+                //    ? JPH::EActivation::Activate
+                //    : JPH::EActivation::DontActivate
+            );
+            break;
+        }
+        case Motion_mode::e_kinematic_physical:
+        {
+            SPDLOG_LOGGER_TRACE(log_physics, "{} KP MoveKinematic {}", m_debug_label, transform.origin);
+            m_body_interface.MoveKinematic(
+                m_body->GetID(),
+                to_jolt(transform.origin),
+                to_jolt(glm::quat{transform.basis}),
+                1.0f / 30.0f  // TODO
+            );
+            break;
+        }
+        case Motion_mode::e_static:
+        case Motion_mode::e_dynamic:
+        {
+            SPDLOG_LOGGER_TRACE(log_physics, "{} S/D SetPositionAndRotation {}", m_debug_label, transform.origin);
+            m_body_interface.SetPositionAndRotation(
+                m_body->GetID(),
+                to_jolt(transform.origin),
+                to_jolt(glm::quat{transform.basis}),
+                JPH::EActivation::DontActivate
+                //(m_motion_mode != Motion_mode::e_static)
+                //    ? JPH::EActivation::Activate
+                //    : JPH::EActivation::DontActivate
+            );
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
 }
 
 auto Jolt_rigid_body::get_linear_velocity() const -> glm::vec3
@@ -437,7 +478,7 @@ void Jolt_rigid_body::set_damping(const float linear_damping, const float angula
         return;
     }
 
-    SPDLOG_LOGGER_TRACE(log_physics, "{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
+    SPDLOG_LOGGER_INFO(log_physics, "{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
 
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr)
@@ -509,34 +550,6 @@ auto Jolt_rigid_body::get_jolt_body() const -> JPH::Body*
     return (m_body != nullptr)
         ? m_body
         : &JPH::Body::sFixedToWorld;
-}
-
-void Jolt_rigid_body::pre_update_motion_state() const
-{
-    if (m_body == nullptr)
-    {
-        return;
-    }
-
-    // Only for kinematic moves
-    if ((m_motion_mode == Motion_mode::e_static) || (m_motion_mode == Motion_mode::e_dynamic))
-    {
-        return;
-    }
-
-    const auto transform = m_motion_state->get_world_from_rigidbody();
-
-    log_physics_frame->trace(
-        "{} pre pos = {}",
-        get_debug_label(),
-        transform.origin
-    );
-
-    m_body->MoveKinematic(
-        to_jolt(transform.origin),
-        to_jolt(glm::quat{transform.basis}),
-        1.0f / 100.0f
-    );
 }
 
 void Jolt_rigid_body::update_motion_state() const

@@ -47,12 +47,12 @@ auto Map_free_zoom_command::try_call(erhe::application::Command_context& context
 
 auto Map_mouse_scroll_command::try_call(erhe::application::Command_context& context) -> bool
 {
-    if (get_tool_state() == erhe::application::State::Ready)
+    if (get_command_state() == erhe::application::State::Ready)
     {
         set_active(context);
     }
 
-    if (get_tool_state() != erhe::application::State::Active)
+    if (get_command_state() != erhe::application::State::Active)
     {
         return false;
     }
@@ -69,7 +69,7 @@ auto Map_mouse_scroll_command::try_call(erhe::application::Command_context& cont
 
 void Map_mouse_scroll_command::try_ready(erhe::application::Command_context& context)
 {
-    if (get_tool_state() != erhe::application::State::Inactive)
+    if (get_command_state() != erhe::application::State::Inactive)
     {
         return;
     }

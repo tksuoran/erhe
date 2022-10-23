@@ -62,7 +62,7 @@ auto Controller_trigger_binding::on_trigger(
 {
     auto* const command = get_command();
 
-    if (command->get_tool_state() == State::Disabled)
+    if (command->get_command_state() == State::Disabled)
     {
         return false;
     }
@@ -74,12 +74,12 @@ auto Controller_trigger_binding::on_trigger(
             if (trigger_value >= m_min_to_activate)
             {
                 m_active = true;
-                if (command->get_tool_state() == State::Inactive)
+                if (command->get_command_state() == State::Inactive)
                 {
                     log_command_state_transition->info("trigfer press event - command {} call try_ready()", command->get_name());
                     command->try_ready(context);
                 }
-                return command->get_tool_state() == State::Active;
+                return command->get_command_state() == State::Active;
             }
         }
         else
@@ -88,7 +88,7 @@ auto Controller_trigger_binding::on_trigger(
             {
                 m_active = false;
                 bool consumed{false};
-                if (command->get_tool_state() == State::Ready)
+                if (command->get_command_state() == State::Ready)
                 {
                     consumed = command->try_call(context);
                     log_input_event_consumed->info(
@@ -107,7 +107,7 @@ auto Controller_trigger_binding::on_trigger(
     {
         if (!m_active && (trigger_value >= m_min_to_activate))
         {
-            if (command->get_tool_state() == State::Inactive)
+            if (command->get_command_state() == State::Inactive)
             {
                 command->try_ready(context);
             }
@@ -118,9 +118,9 @@ auto Controller_trigger_binding::on_trigger(
         {
             m_active = false;
             bool consumed{false};
-            if (command->get_tool_state() != State::Inactive)
+            if (command->get_command_state() != State::Inactive)
             {
-                consumed = command->get_tool_state() == State::Active;
+                consumed = command->get_command_state() == State::Active;
                 command->set_inactive(context);
                 //log_input_event_consumed->trace(
                 //    "{} consumed controller trigger 'click'",

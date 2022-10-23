@@ -25,7 +25,7 @@ public:
     IWorld&                           world;
     float                             mass             {1.0f};
     float                             friction         {0.5f};
-    float                             restitution      {0.5f};
+    float                             restitution      {0.2f};
     float                             linear_damping   {0.05f};
     float                             angular_damping  {0.05f};
     std::shared_ptr<ICollision_shape> collision_shape  {};

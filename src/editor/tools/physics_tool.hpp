@@ -12,8 +12,14 @@
 #include <functional>
 #include <memory>
 
-namespace erhe::scene
+namespace erhe::raytrace
+{
+    class IScene;
+    class Ray;
+    class Hit;
+}
 
+namespace erhe::scene
 {
     class Mesh;
 }
@@ -110,7 +116,24 @@ public:
     auto on_drag      (Scene_view* scene_view) -> bool;
 
 private:
-    [[nodiscard]] auto physics_world() const -> erhe::physics::IWorld*;
+    void move_drag_point_instant  (glm::vec3 position);
+    void move_drag_point_kinematic(glm::vec3 position);
+
+    void draw_projection_ray(
+        const erhe::raytrace::Ray& ray,
+        const erhe::raytrace::Hit& hit
+    );
+
+    [[nodiscard]] auto project_ray(
+        erhe::raytrace::IScene* const raytrace_scene,
+        const glm::vec3               direction_in_world,
+        erhe::raytrace::Ray&          ray,
+        erhe::raytrace::Hit&          hit
+    ) -> bool;
+
+    [[nodiscard]] auto get_scene_root    () const -> Scene_root*;
+    [[nodiscard]] auto get_raytrace_scene() const -> erhe::raytrace::IScene*;
+    [[nodiscard]] auto get_physics_world () const -> erhe::physics::IWorld*;
 
     // Commands
     Physics_tool_drag_command m_drag_command;
@@ -141,7 +164,7 @@ private:
     float m_damping                 {1.00f};
     float m_tau                     {0.001f};
     float m_impulse_clamp           {1.00f};
-    float m_depth                   {0.75f}; // 0.0 = surface, 1.0 = center of gravity
+    float m_depth                   {0.00f}; // TODO requires transform for mouse position 0.0 = surface, 1.0 = center of gravity
     float m_override_linear_damping {0.90f};
     float m_override_angular_damping{0.90f};
     float m_override_friction       {0.01f};
@@ -155,6 +178,8 @@ private:
     glm::dvec3 m_to_end_direction  {0.0};
     glm::dvec3 m_to_start_direction{0.0};
     double     m_target_mesh_size  {0.0};
+
+    bool       m_show_drag_body{false};
 };
 
 } // namespace editor

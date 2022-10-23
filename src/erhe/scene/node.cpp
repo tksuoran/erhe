@@ -752,8 +752,8 @@ auto Node::transform_direction_from_world_to_local(const glm::vec3 d) const -> g
 void Node::set_parent_from_node(const glm::mat4 m)
 {
     node_data.transforms.parent_from_node.set(m);
-    on_transform_changed(Node_transforms::get_next_serial());
     update_world_from_node();
+    on_transform_changed(Node_transforms::get_next_serial());
 }
 
 void Node::set_parent_from_node(const Transform& transform)
@@ -761,22 +761,22 @@ void Node::set_parent_from_node(const Transform& transform)
     ERHE_PROFILE_FUNCTION
 
     node_data.transforms.parent_from_node = transform;
-    on_transform_changed(Node_transforms::get_next_serial());
     update_world_from_node();
+    on_transform_changed(Node_transforms::get_next_serial());
 }
 
 void Node::set_node_from_parent(const glm::mat4 matrix)
 {
     node_data.transforms.parent_from_node.set(glm::inverse(matrix), matrix);
-    on_transform_changed(Node_transforms::get_next_serial());
     update_world_from_node();
+    on_transform_changed(Node_transforms::get_next_serial());
 }
 
 void Node::set_node_from_parent(const Transform& transform)
 {
     node_data.transforms.parent_from_node = Transform::inverse(transform);
-    on_transform_changed(Node_transforms::get_next_serial());
     update_world_from_node();
+    on_transform_changed(Node_transforms::get_next_serial());
 }
 
 void Node::set_world_from_node(const glm::mat4 matrix)
