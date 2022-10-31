@@ -25,7 +25,7 @@ Framebuffer_window::Framebuffer_window(
     const std::string_view title,
     const std::string_view label
 )
-    : Imgui_window {title, label.data()}
+    : Imgui_window {title}
     , m_debug_label{label}
 {
 }

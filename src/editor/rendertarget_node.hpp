@@ -59,7 +59,7 @@ public:
         const erhe::components::Components& components,
         const int                           width,
         const int                           height,
-        const double                        dots_per_meter
+        const double                        pixels_per_meter
     );
 
     // Public API
@@ -91,9 +91,9 @@ private:
     Viewport_window&                             m_host_viewport_window;
 
     std::shared_ptr<Viewport_config>             m_viewport_config;
-    double                                       m_dots_per_meter{0.0};
-    double                                       m_local_width   {0.0};
-    double                                       m_local_height  {0.0};
+    double                                       m_pixels_per_meter{0.0};
+    double                                       m_local_width     {0.0};
+    double                                       m_local_height    {0.0};
     //// std::shared_ptr<Node_raytrace>                      m_node_raytrace;
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;

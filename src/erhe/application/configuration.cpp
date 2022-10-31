@@ -173,18 +173,25 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("imgui"))
         {
             const auto& section = ini["imgui"];
-            ini_get(section, "window_viewport", imgui.window_viewport);
-            ini_get(section, "primary_font",    imgui.primary_font);
-            ini_get(section, "mono_font",       imgui.mono_font);
-            ini_get(section, "font_size",       imgui.font_size);
-            ini_get(section, "icon_size",       imgui.icon_size);
-            ini_get(section, "padding",         imgui.padding);
-            ini_get(section, "rounding",        imgui.rounding);
+            ini_get(section, "window_viewport",  imgui.window_viewport);
+            ini_get(section, "primary_font",     imgui.primary_font);
+            ini_get(section, "mono_font",        imgui.mono_font);
+            ini_get(section, "font_size",        imgui.font_size);
+            ini_get(section, "vr_font_size",     imgui.vr_font_size);
+            ini_get(section, "small_icon_size",  imgui.small_icon_size);
+            ini_get(section, "large_icon_size",  imgui.large_icon_size);
+            ini_get(section, "padding",          imgui.padding);
+            ini_get(section, "rounding",         imgui.rounding);
         }
         if (ini.has("headset"))
         {
             const auto& section = ini["headset"];
-            ini_get(section, "openxr", headset.openxr);
+            ini_get(section, "openxr",           headset.openxr);
+            ini_get(section, "quad_view",        headset.quad_view);
+            ini_get(section, "debug",            headset.debug);
+            ini_get(section, "depth",            headset.depth);
+            ini_get(section, "visibility_mask",  headset.visibility_mask);
+            ini_get(section, "hand_tracking",    headset.hand_tracking);
         }
         if (ini.has("threading"))
         {
@@ -261,6 +268,7 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "headset_view",         windows.headset_view        );
         get_window(ini, "hover_tool",           windows.hover_tool          );
         get_window(ini, "layers",               windows.layers              );
+        get_window(ini, "line_renderer",        windows.line_renderer       );
         get_window(ini, "log",                  windows.log                 );
         get_window(ini, "materials",            windows.materials           );
         get_window(ini, "material_properties",  windows.material_properties );
@@ -312,6 +320,7 @@ Configuration::Configuration(int argc, char** argv)
             const auto& section = ini["viewport"];
             ini_get(section, "polygon_fill",              viewport.polygon_fill);
             ini_get(section, "edge_lines",                viewport.edge_lines);
+            ini_get(section, "selection_polygon_fill",    viewport.selection_polygon_fill);
             ini_get(section, "selection_edge_lines",      viewport.selection_edge_lines);
             ini_get(section, "corner_points",             viewport.corner_points);
             ini_get(section, "polygon_centroids",         viewport.polygon_centroids);
@@ -373,19 +382,24 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("hud"))
         {
             const auto& section = ini["hud"];
-            ini_get(section, "show", hud.show);
-            ini_get(section, "x",    hud.x);
-            ini_get(section, "y",    hud.y);
-            ini_get(section, "z",    hud.z);
+            ini_get(section, "show",   hud.show);
+            ini_get(section, "locked", hud.locked);
+            ini_get(section, "width",  hud.width);
+            ini_get(section, "height", hud.height);
+            ini_get(section, "ppm",    hud.ppm);
+            ini_get(section, "x",      hud.x);
+            ini_get(section, "y",      hud.y);
+            ini_get(section, "z",      hud.z);
         }
 
         if (ini.has("hotbar"))
         {
             const auto& section = ini["hotbar"];
-            ini_get(section, "show", hotbar.show);
-            ini_get(section, "x",    hotbar.x);
-            ini_get(section, "y",    hotbar.y);
-            ini_get(section, "z",    hotbar.z);
+            ini_get(section, "show",      hotbar.show);
+            ini_get(section, "icon_size", hotbar.icon_size);
+            ini_get(section, "x",         hotbar.x);
+            ini_get(section, "y",         hotbar.y);
+            ini_get(section, "z",         hotbar.z);
         }
     }
 

@@ -160,7 +160,7 @@ public:
         Viewport_window&                    host_viewport_window,
         const int                           width,
         const int                           height,
-        const double                        dots_per_meter
+        const double                        pixels_per_meter
     ) -> std::shared_ptr<Rendertarget_node>;
 
     void update_pointer_for_rendertarget_nodes();

@@ -200,6 +200,11 @@ void Imgui_viewport::on_focus(int focused)
     return m_imgui_context;
 }
 
+[[nodiscard]] auto Imgui_viewport::get_scale_value() const -> float
+{
+    return 1.0f;
+}
+
 void Imgui_viewport::on_cursor_enter(int entered)
 {
     SPDLOG_LOGGER_TRACE(

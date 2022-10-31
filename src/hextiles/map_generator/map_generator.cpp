@@ -13,7 +13,7 @@ namespace hextiles
 
 Map_generator::Map_generator()
     : Component   {c_type_name}
-    , Imgui_window{c_title, c_type_name}
+    , Imgui_window{c_title}
 {
 }
 

@@ -124,7 +124,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 1u,
+                .reference       = s_stencil_tool_mesh_hidden,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
@@ -133,7 +133,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 1u,
+                .reference       = s_stencil_tool_mesh_hidden,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
@@ -159,7 +159,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 2u,
+                .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
@@ -168,7 +168,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::replace,
                 .function        = gl::Stencil_function::always,
-                .reference       = 2u,
+                .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
@@ -203,7 +203,7 @@ void Editor_rendering::initialize_component()
     };
 
     // Tool pass five: Render visible tool parts
-    // Normal depth test, stencil test require 1, color writes enabled, no blending
+    // Normal depth test, stencil test require 2, color writes enabled, no blending
     m_rp_tool5_visible_color.pipeline.data = {
         .name                    = "Tool pass 5: Render visible tool parts",
         .shader_stages           = programs.tool.get(),
@@ -220,7 +220,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::keep,
                 .function        = gl::Stencil_function::equal,
-                .reference       = 2u,
+                .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
@@ -229,7 +229,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op       = gl::Stencil_op::keep,
                 .z_pass_op       = gl::Stencil_op::keep,
                 .function        = gl::Stencil_function::equal,
-                .reference       = 2u,
+                .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
@@ -238,7 +238,7 @@ void Editor_rendering::initialize_component()
     };
 
     // Tool pass six: Render hidden tool parts
-    // Normal depth test, stencil test requires 2, color writes enabled, blending
+    // Normal depth test, stencil test requires 1, color writes enabled, blending
     m_rp_tool6_hidden_color.pipeline.data = {
         .name                       = "Tool pass 6: Render hidden tool parts",
         .shader_stages              = programs.tool.get(),
@@ -255,7 +255,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op          = gl::Stencil_op::keep,
                 .z_pass_op          = gl::Stencil_op::keep,
                 .function           = gl::Stencil_function::equal,
-                .reference          = 1u,
+                .reference          = s_stencil_tool_mesh_hidden,
                 .test_mask          = 0xffu,
                 .write_mask         = 0xffu
             },
@@ -264,7 +264,7 @@ void Editor_rendering::initialize_component()
                 .z_fail_op          = gl::Stencil_op::keep,
                 .z_pass_op          = gl::Stencil_op::replace,
                 .function           = gl::Stencil_function::always,
-                .reference          = 1u,
+                .reference          = s_stencil_tool_mesh_hidden,
                 .test_mask          = 0xffu,
                 .write_mask         = 0xffu
             },
@@ -291,7 +291,32 @@ void Editor_rendering::initialize_component()
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::lines,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        //.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        .depth_stencil = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = true,
+            .depth_compare_op    = m_configuration->depth_function(gl::Depth_function::lequal),
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::incr,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::incr,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            }
+        },
+
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
     m_rp_edge_lines.primitive_mode = erhe::primitive::Primitive_mode::edge_lines;
@@ -328,7 +353,26 @@ void Editor_rendering::initialize_component()
             .depth_test_enable      = true,
             .depth_write_enable     = false,
             .depth_compare_op       = m_configuration->depth_function(gl::Depth_function::greater),
-            .stencil_test_enable    = false
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::incr,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::incr,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+
         },
         .color_blend = {
             .enabled                = true,
@@ -481,6 +525,7 @@ void Editor_rendering::render_viewport_main(
 )
 {
     ERHE_PROFILE_FUNCTION
+    static_cast<void>(has_pointer);
 
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
@@ -504,22 +549,18 @@ void Editor_rendering::render_viewport_main(
     );
 
     if (m_forward_renderer)
-    {               
+    {
         static constexpr std::string_view c_id_main{"Main"};
         ERHE_PROFILE_GPU_SCOPE(c_id_main);
         erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
         erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
 
-        render_content           (context);
-        render_selection         (context);
-        render_rendertarget_nodes(context);
-        render_brush             (context);
+        render_content    (context, true);
+        render_selection  (context, true);
+        render_brush      (context);
 
-        static_cast<void>(has_pointer);
-        //if (has_pointer)
-        {
-            render_tool_meshes(context);
-        }
+        auto& state_tracker = *m_pipeline_state_tracker.get();
+        state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
     }
 
     if (m_line_renderer_set)
@@ -528,6 +569,14 @@ void Editor_rendering::render_viewport_main(
         m_tools->render_tools(context);
         m_line_renderer_set->end();
         m_line_renderer_set->render(context.viewport, *context.camera);
+    }
+
+    if (m_forward_renderer)
+    {
+        render_content    (context, false);
+        render_selection  (context, false);
+        render_tool_meshes(context);
+        render_rendertarget_nodes(context);
     }
 
     if (m_text_renderer)
@@ -599,7 +648,7 @@ void Editor_rendering::render_id(const Render_context& context)
     );
 }
 
-void Editor_rendering::render_content(const Render_context& context)
+void Editor_rendering::render_content(const Render_context& context, bool polygon_fill)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -635,7 +684,7 @@ void Editor_rendering::render_content(const Render_context& context)
         .require_all_bits_clear       = erhe::scene::Node_visibility::selected
     };
 
-    if (render_style.polygon_fill)
+    if (polygon_fill && render_style.polygon_fill)
     {
         //if (render_style.polygon_offset_enable)
         //{
@@ -664,6 +713,7 @@ void Editor_rendering::render_content(const Render_context& context)
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
+        return;
     }
 
     auto& primitive_settings = m_forward_renderer->primitive_settings();
@@ -771,7 +821,7 @@ void Editor_rendering::render_rendertarget_nodes(
     );
 }
 
-void Editor_rendering::render_selection(const Render_context& context)
+void Editor_rendering::render_selection(const Render_context& context, bool polygon_fill)
 {
     if (
         (context.camera          == nullptr) ||
@@ -800,7 +850,7 @@ void Editor_rendering::render_selection(const Render_context& context)
             erhe::scene::Node_visibility::selected
     };
 
-    if (render_style.polygon_fill)
+    if (polygon_fill && render_style.polygon_fill)
     {
         //if (render_style.polygon_offset_enable)
         //{
@@ -833,6 +883,7 @@ void Editor_rendering::render_selection(const Render_context& context)
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
+        return;
     }
 
     auto& primitive_settings = m_forward_renderer->primitive_settings();

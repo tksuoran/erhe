@@ -24,7 +24,7 @@ namespace erhe::application
 
 Pipelines::Pipelines()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 

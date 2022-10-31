@@ -35,7 +35,7 @@ using Light_type = erhe::scene::Light_type;
 
 Node_tree_window::Node_tree_window()
     : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 
@@ -614,7 +614,9 @@ auto Node_tree_window::node_items(
 
         if (icon.has_value())
         {
-            const auto& icon_rasterization = m_icon_set->get_small_rasterization();
+            const auto& icon_rasterization = get_scale_value() < 1.5f
+                ? m_icon_set->get_small_rasterization()
+                : m_icon_set->get_large_rasterization();
             icon_rasterization.icon(icon.value());
         }
     }

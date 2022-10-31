@@ -123,7 +123,11 @@ auto Fly_camera_turn_command::try_call(
     }
     if (get_command_state() == erhe::application::State::Ready)
     {
-        set_active(context);
+        const auto value = context.get_vec2_relative_value();
+        if ((value.x != 0.0f) || (value.y != 0.0f))
+        {
+            set_active(context);
+        }
     }
 
     if (get_command_state() != erhe::application::State::Active)
@@ -152,7 +156,7 @@ auto Fly_camera_move_command::try_call(
 
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::application::Imgui_window{c_title}
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     , m_space_mouse_listener         {*this}
     , m_space_mouse_controller       {m_space_mouse_listener}

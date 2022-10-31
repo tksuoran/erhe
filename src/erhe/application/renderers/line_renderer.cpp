@@ -2,6 +2,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/application_log.hpp"
 
@@ -23,6 +24,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/norm.hpp>
 
 #include <iomanip>
 #include <cstdarg>
@@ -111,6 +113,7 @@ Line_renderer_pipeline::Line_renderer_pipeline()
 
 Line_renderer_set::Line_renderer_set()
     : Component{c_type_name}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 
@@ -120,6 +123,7 @@ Line_renderer_set::~Line_renderer_set() noexcept
 
 void Line_renderer_set::declare_required_components()
 {
+    require<erhe::application::Imgui_windows>();
     require<Gl_context_provider>();
     require<Configuration>();
     require<Shader_monitor>();
@@ -131,6 +135,8 @@ void Line_renderer_set::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 
     erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_initialize_component};
@@ -141,8 +147,8 @@ void Line_renderer_set::initialize_component()
 
     for (unsigned int stencil_reference = 0; stencil_reference <= s_max_stencil_reference; ++stencil_reference)
     {
-        visible.at(stencil_reference) = std::make_unique<Line_renderer>("visible", stencil_reference, &m_pipeline, configuration);
-        hidden .at(stencil_reference) = std::make_unique<Line_renderer>("hidden",  stencil_reference, &m_pipeline, configuration);
+        visible.at(stencil_reference) = std::make_unique<Line_renderer>("visible", 8u + stencil_reference, &m_pipeline, configuration);
+        hidden .at(stencil_reference) = std::make_unique<Line_renderer>("hidden",  8u + stencil_reference, &m_pipeline, configuration);
     }
 }
 
@@ -225,6 +231,12 @@ void Line_renderer_set::next_frame()
 {
     for (auto& entry : visible) entry->next_frame();
     for (auto& entry : hidden ) entry->next_frame();
+}
+
+void Line_renderer_set::imgui()
+{
+    for (auto& entry: hidden ) entry->imgui();
+    for (auto& entry: visible) entry->imgui();
 }
 
 void Line_renderer_set::render(
@@ -596,52 +608,104 @@ void Line_renderer::add_cube(
     }
 }
 
+namespace {
+
+auto safe_normalize_cross(const glm::vec3& lhs, const glm::vec3& rhs)
+{
+    const glm::vec3 lhs_normalized = glm::normalize(lhs);
+    const glm::vec3 rhs_normalized = glm::normalize(rhs);
+    const float d = glm::dot(lhs_normalized, rhs_normalized);
+    if (std::abs(d) > 0.999f)
+    {
+        return erhe::toolkit::min_axis(lhs);
+    }
+
+    const glm::vec3 c0 = glm::cross(lhs, rhs);
+    if (glm::length(c0) < glm::epsilon<float>())
+    {
+        return erhe::toolkit::min_axis(lhs);
+    }
+    return glm::normalize(c0);
+}
+
+}
+
+void Line_renderer::imgui()
+{
+    for (const auto& fun : m_imgui)
+    {
+        fun();
+    }
+    m_imgui.clear();
+}
+
 void Line_renderer::add_sphere(
-    const glm::mat4                     transform,
-    const uint32_t                      color,
-    const glm::vec3                     center,
+    const erhe::scene::Transform&       transform,
+    const uint32_t                      edge_color,
+    const uint32_t                      great_circle_color,
+    const float                         edge_thickness,
+    const float                         great_circle_thickness,
+    const glm::vec3                     local_center,
     const float                         radius,
-    const erhe::scene::Transform* const camera_world_from_node
+    const erhe::scene::Transform* const camera_world_from_node,
+    const int                           step_count
 )
 {
+    const glm::mat4 m      = transform.matrix();
+    const glm::vec3 center = glm::vec3{m * glm::vec4{local_center, 1.0f}};
     const glm::vec3 axis_x{radius, 0.0f, 0.0f};
     const glm::vec3 axis_y{0.0f, radius, 0.0f};
     const glm::vec3 axis_z{0.0f, 0.0f, radius};
-    int step_count = 40;
+    const glm::mat4 I{1.0f};
+    set_thickness(great_circle_thickness);
     for (int i = 0; i < step_count; ++i)
     {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);
         const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(step_count);
         add_lines(
-            transform,
-            color,
+            great_circle_color,
             {
                 {
-                    center +
-                    + std::cos(t0) * axis_x
-                    + std::sin(t0) * axis_y,
-                    center +
-                    + std::cos(t1) * axis_x
-                    + std::sin(t1) * axis_y
+                    center + std::cos(t0) * axis_x + std::sin(t0) * axis_y,
+                    center + std::cos(t1) * axis_x + std::sin(t1) * axis_y
                 },
                 {
-                    center +
-                    + std::cos(t0) * axis_y
-                    + std::sin(t0) * axis_z,
-                    center +
-                    + std::cos(t1) * axis_y
-                    + std::sin(t1) * axis_z
+                    center + std::cos(t0) * axis_y + std::sin(t0) * axis_z,
+                    center + std::cos(t1) * axis_y + std::sin(t1) * axis_z
                 },
                 {
-                    center +
-                    + std::cos(t0) * axis_x
-                    + std::sin(t0) * axis_z,
-                    center +
-                    + std::cos(t1) * axis_x
-                    + std::sin(t1) * axis_z
+                    center + std::cos(t0) * axis_x + std::sin(t0) * axis_z,
+                    center + std::cos(t1) * axis_x + std::sin(t1) * axis_z
                 }
             }
         );
+        //add_lines(
+        //    0xffff0000,
+        //    {
+        //        {
+        //            center + std::cos(t0) * axis_x + std::sin(t0) * axis_y,
+        //            center + std::cos(t1) * axis_x + std::sin(t1) * axis_y
+        //        }
+        //    }
+        //);
+        //add_lines(
+        //    0xff0000ff,
+        //    {
+        //        {
+        //            center + std::cos(t0) * axis_y + std::sin(t0) * axis_z,
+        //            center + std::cos(t1) * axis_y + std::sin(t1) * axis_z
+        //        }
+        //    }
+        //);
+        //add_lines(
+        //    0xff00ff00,
+        //    {
+        //        {
+        //            center + std::cos(t0) * axis_x + std::sin(t0) * axis_z,
+        //            center + std::cos(t1) * axis_x + std::sin(t1) * axis_z
+        //        }
+        //    }
+        //);
     }
 
     if (camera_world_from_node == nullptr)
@@ -649,39 +713,70 @@ void Line_renderer::add_sphere(
         return;
     }
 
-    const glm::vec3 camera_position       = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-    const glm::vec3 from_camera_to_sphere = glm::normalize(center - camera_position);
-    const glm::vec3 up_direction          = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const glm::vec3 side_direction        = glm::normalize(
-        glm::cross(
-            from_camera_to_sphere,
-            up_direction
-        )
-    );
+    //                             C = sphere center        .
+    //                             r = sphere radius        .
+    //         /|                  V = camera center        .
+    //        / |  .               d = distance(C, V)       .
+    //      r/  |     . b          d*d = r*r + b*b          .
+    //      /   |h       .         d*d - r*r = b*b          .
+    //     /    |           .      b = sqrt(d*d - r*r)      .
+    //    /___p_|_____q________.   h = (r*b) / d            .
+    //   C      P d             V  p*p + h*h = r*r          .
+    //                             p = sqrt(r*r - h*h)      .
 
-    const glm::vec3 axis_a = radius * side_direction;
-    const glm::vec3 axis_b = radius * up_direction;
+    const glm::vec3 camera_position                 = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    const glm::vec3 from_camera_to_sphere           = center - camera_position;
+    const glm::vec3 from_sphere_to_camera           = camera_position - center;
+    const glm::vec3 from_camera_to_sphere_direction = glm::normalize(from_camera_to_sphere);
+    const glm::vec3 from_sphere_to_camera_direction = glm::normalize(from_sphere_to_camera);
 
+    const float r2 = radius * radius;
+    const float d2 = glm::length2(from_camera_to_sphere);
+    const float d  = std::sqrt(d2);
+    const float b2 = d2 - r2;
+    const float b  = std::sqrt(b2);
+    const float h  = radius * b / d;
+    const float h2 = h * h;
+    const float p  = std::sqrt(r2 - h2);
+
+    const glm::vec3 P = center + p * from_sphere_to_camera_direction;
+
+    const glm::vec3 up0_direction  = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const glm::vec3 side_direction = safe_normalize_cross(from_camera_to_sphere_direction, up0_direction);
+    const glm::vec3 up_direction   = safe_normalize_cross(side_direction, from_camera_to_sphere_direction);
+    const glm::vec3 axis_a = h * side_direction;
+    const glm::vec3 axis_b = h * up_direction;
+
+    //// m_imgui.emplace_back(
+    ////     [=]
+    ////     ()
+    ////     {
+    ////         const float sin_alpha = radius / d;
+    ////         const float alpha     = std::asin(sin_alpha);
+    ////         ImGui::Text("d = %f", d);
+    ////         ImGui::Text("h = %f", h);
+    ////         ImGui::Text("p = %f", p);
+    ////         ImGui::Text("Cone = %f rad", 2.0f * alpha);
+    ////         ImGui::Text("Cone = %f deg", glm::degrees(2.0f * alpha));
+    ////     }
+    //// );
+
+    set_thickness(edge_thickness);
     for (int i = 0; i < step_count; ++i)
     {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);
         const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(step_count);
         add_lines(
-            transform,
-            color,
+            //0xffffffff,
+            edge_color,
             {
                 {
-                    center +
-                    + std::cos(t0) * axis_a
-                    + std::sin(t0) * axis_b,
-                    center +
-                    + std::cos(t1) * axis_a
-                    + std::sin(t1) * axis_b
+                    P + std::cos(t0) * axis_a + std::sin(t0) * axis_b,
+                    P + std::cos(t1) * axis_a + std::sin(t1) * axis_b
                 }
             }
         );
     }
-
 }
 
 static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};

@@ -109,7 +109,16 @@ auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
 
     if (command->get_command_state() == State::Ready)
     {
-        command->set_active(context);
+        const auto value = context.get_vec2_relative_value();
+        if ((value.x != 0.0f) || (value.y != 0.0f))
+        {
+            command->set_active(context);
+        }
+    }
+
+    if (command->get_command_state() != State::Active)
+    {
+        return false;
     }
 
     const bool consumed = command->try_call(context);;

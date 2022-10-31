@@ -8,7 +8,7 @@ namespace hextiles
 
 Terrain_palette_window::Terrain_palette_window()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 

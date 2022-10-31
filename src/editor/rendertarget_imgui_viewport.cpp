@@ -51,6 +51,9 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
 {
     m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
+    auto& style = ImGui::GetStyle();
+    static_cast<void>(style);
+
     ImGuiIO& io = m_imgui_context->IO;
     io.MouseDrawCursor = true;
     io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
@@ -87,6 +90,11 @@ template <typename T>
 [[nodiscard]] auto Rendertarget_imgui_viewport::rendertarget_node() -> Rendertarget_node*
 {
     return m_rendertarget_node;
+}
+
+[[nodiscard]] auto Rendertarget_imgui_viewport::get_scale_value() const -> float
+{
+    return 2.0f;
 }
 
 [[nodiscard]] auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool

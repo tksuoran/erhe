@@ -39,6 +39,8 @@ public:
     [[nodiscard]] virtual auto begin_imgui_frame() -> bool = 0;
     virtual void end_imgui_frame() = 0;
 
+    [[nodiscard]] virtual auto get_scale_value() const -> float;
+
     [[nodiscard]] auto name                 () const -> const std::string&;
     [[nodiscard]] auto want_capture_keyboard() const -> bool;
     [[nodiscard]] auto want_capture_mouse   () const -> bool;

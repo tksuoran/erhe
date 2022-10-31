@@ -34,21 +34,28 @@ public:
     class Imgui
     {
     public:
-        bool        window_viewport{true};
-        std::string primary_font   {"res/fonts/SourceSansPro-Regular.otf"};
-        std::string mono_font      {"res/fonts/SourceCodePro-Semibold.otf"};
-        float       font_size      {17.0f};
-        int         icon_size      {16};
-        int         vr_icon_size   {128};
-        float       padding        {2.0f};
-        float       rounding       {3.0f};
+        bool        window_viewport {true};
+        std::string primary_font    {"res/fonts/SourceSansPro-Regular.otf"};
+        std::string mono_font       {"res/fonts/SourceCodePro-Semibold.otf"};
+        float       font_size       {17.0f};
+        float       vr_font_size    {22.0f};
+        int         small_icon_size {16};
+        int         large_icon_size {32};
+        int         hotbar_icon_size{128};
+        float       padding         {2.0f};
+        float       rounding        {3.0f};
     };
     Imgui imgui;
 
     class Headset
     {
     public:
-        bool openxr{false};
+        bool openxr         {false};
+        bool quad_view      {false};
+        bool debug          {false};
+        bool depth          {false};
+        bool visibility_mask{false};
+        bool hand_tracking  {false};
     };
     Headset headset;
 
@@ -180,6 +187,7 @@ public:
         Window_entry headset_view        {false};
         Window_entry hover_tool          {false};
         Window_entry layers              {false};
+        Window_entry line_renderer       {false};
         Window_entry log                 {false};
         Window_entry materials           {false};
         Window_entry material_properties {false};
@@ -205,6 +213,7 @@ public:
     public:
         bool      polygon_fill             {true};
         bool      edge_lines               {false};
+        bool      selection_polygon_fill   {true};
         bool      selection_edge_lines     {false};
         bool      corner_points            {false};
         bool      polygon_centroids        {false};
@@ -273,20 +282,25 @@ public:
     class Hud
     {
     public:
-        bool  show{true};
-        float x   {0.0f};
-        float y   {0.0f};
-        float z   {0.0f};
+        bool  show  {true};
+        bool  locked{false};
+        int   width {1024};
+        int   height{1024};
+        float ppm   {5000.0f};
+        float x     {0.0f};
+        float y     {0.0f};
+        float z     {0.0f};
     };
     Hud hud;
 
     class Hotbar
     {
     public:
-        bool  show{true};
-        float x   {0.0f};
-        float y   {0.0f};
-        float z   {0.0f};
+        bool  show     {true};
+        int   icon_size{128};
+        float x        {0.0f};
+        float y        {0.0f};
+        float z        {0.0f};
     };
     Hotbar hotbar;
 };

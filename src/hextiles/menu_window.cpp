@@ -26,7 +26,7 @@ namespace hextiles
 
 Menu_window::Menu_window()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 

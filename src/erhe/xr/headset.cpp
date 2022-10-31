@@ -6,11 +6,11 @@
 
 namespace erhe::xr {
 
-Headset::Headset(erhe::toolkit::Context_window* context_window)
+Headset::Headset(erhe::toolkit::Context_window* context_window, const Xr_configuration& configuration)
 {
     ERHE_VERIFY(context_window != nullptr);
 
-    m_xr_instance = std::make_unique<Xr_instance>();
+    m_xr_instance = std::make_unique<Xr_instance>(configuration);
     if (!m_xr_instance->is_available())
     {
         m_xr_instance.reset();
@@ -82,6 +82,13 @@ auto Headset::trigger_value() const -> float
     return m_xr_instance
         ? m_xr_instance->actions.trigger_value_state.currentState
         : 0.0f;
+}
+
+auto Headset::menu_click() const -> bool
+{
+    return m_xr_instance
+        ? (m_xr_instance->actions.menu_click_state.currentState == XR_TRUE)
+        : false;
 }
 
 auto Headset::squeeze_click() const -> bool

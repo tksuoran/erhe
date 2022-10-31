@@ -166,49 +166,49 @@ void main(void)
     v_l2    = dot(v_line, v_line);
 
 #if ERHE_LINE_SHADER_SHOW_DEBUG_LINES
-    gl_Position = gl_in[0].gl_Position; v_position = vs_position[0]; v_color = vs_color[0]; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = gl_in[1].gl_Position; v_position = vs_position[1]; v_color = vs_color[1]; v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = gl_in[0].gl_Position; v_position = vs_position[0]; v_color = vs_color[0]; v_line_width = start_width; EmitVertex();
+    gl_Position = gl_in[1].gl_Position; v_position = vs_position[1]; v_color = vs_color[1]; v_line_width = end_width;   EmitVertex();
     EndPrimitive();
 
-    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = b; v_position = vs_position[1]; v_color = end_color;   v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = b; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
     EndPrimitive();
 
-    gl_Position = b; v_position = vs_position[1]; v_color = end_color; v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = c; v_position = vs_position[1]; v_color = end_color; v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = b; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
+    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
     EndPrimitive();
 
-    gl_Position = c; v_position = vs_position[1]; v_color = end_color; v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
+    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
+    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
     EndPrimitive();
 
-    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
+    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
     EndPrimitive();
 
 #else
 
 #if ERHE_LINE_SHADER_STRIP
 #if 1
-    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = c; v_position = vs_position[1]; v_color = end_color; v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = b; v_position = vs_position[1]; v_color = end_color; v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
+    gl_Position = b; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
 #else
-    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = b; v_position = vs_position[1]; v_color = end_color; v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = c; v_position = vs_position[1]; v_color = end_color; v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = b; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
+    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
 #endif
     EndPrimitive();
 #else
-    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = d; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
     EndPrimitive();
-    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = vs_line_width[1]; EmitVertex();
-    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = vs_line_width[0]; EmitVertex();
-    gl_Position = b; v_position = vs_position[1]; v_color = end_color;   v_line_width = vs_line_width[1]; EmitVertex();
+    gl_Position = c; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
+    gl_Position = a; v_position = vs_position[0]; v_color = start_color; v_line_width = start_width; EmitVertex();
+    gl_Position = b; v_position = vs_position[1]; v_color = end_color;   v_line_width = end_width;   EmitVertex();
     EndPrimitive();
 #endif
 

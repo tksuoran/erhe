@@ -50,14 +50,14 @@ Rendertarget_node::Rendertarget_node(
     const erhe::components::Components& components,
     const int                           width,
     const int                           height,
-    const double                        dots_per_meter
+    const double                        pixels_per_meter
 )
     : erhe::scene::Mesh     {"Rendertarget Node"}
     , m_host_scene_root     {host_scene_root}
     , m_host_viewport_window{host_viewport_window}
     //, m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
     , m_viewport_config     {components.get<Viewport_config>()}
-    , m_dots_per_meter      {dots_per_meter}
+    , m_pixels_per_meter    {pixels_per_meter}
 {
     node_data.flag_bits |= (erhe::scene::Node_flag_bit::is_rendertarget);
 
@@ -119,8 +119,8 @@ void Rendertarget_node::add_primitive(
     m_material->texture = m_texture;
     m_material->sampler = m_sampler;
 
-    m_local_width  = static_cast<double>(m_texture->width ()) / m_dots_per_meter;
-    m_local_height = static_cast<double>(m_texture->height()) / m_dots_per_meter;
+    m_local_width  = static_cast<double>(m_texture->width ()) / m_pixels_per_meter;
+    m_local_height = static_cast<double>(m_texture->height()) / m_pixels_per_meter;
 
     auto geometry = erhe::geometry::shapes::make_rectangle(
         m_local_width,

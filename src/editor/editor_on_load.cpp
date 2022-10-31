@@ -108,8 +108,7 @@ void Application::init_window(
     {
         return;
     }
-    const auto& configuration = m_components.get<erhe::application::Configuration>();
-    if (config.hud_window && configuration->headset.openxr)
+    if (config.hud_window)
     {
         const auto hud = m_components.get<editor::Hud>();
         if (hud)
@@ -248,10 +247,11 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 
     const auto& config = configuration->windows;
 
-    init_window(m_components.get<erhe::application::Commands_window   >(), config.commands   );
-    init_window(m_components.get<erhe::application::Log_window        >(), config.log        );
-    init_window(m_components.get<erhe::application::Performance_window>(), config.performance);
-    init_window(m_components.get<erhe::application::Pipelines         >(), config.pipelines  );
+    init_window(m_components.get<erhe::application::Commands_window   >(), config.commands     );
+    init_window(m_components.get<erhe::application::Line_renderer_set >(), config.line_renderer);
+    init_window(m_components.get<erhe::application::Log_window        >(), config.log          );
+    init_window(m_components.get<erhe::application::Performance_window>(), config.performance  );
+    init_window(m_components.get<erhe::application::Pipelines         >(), config.pipelines    );
 
     init_window(m_components.get<editor::Brushes               >(), config.brushes             );
     init_window(m_components.get<editor::Debug_view_window     >(), config.debug_view          );

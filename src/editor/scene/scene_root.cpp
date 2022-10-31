@@ -477,7 +477,7 @@ void Scene_root::update_pointer_for_rendertarget_nodes()
     Viewport_window&                    host_viewport_window,
     const int                           width,
     const int                           height,
-    const double                        dots_per_meter
+    const double                        pixels_per_meter
 ) -> std::shared_ptr<Rendertarget_node>
 {
     std::lock_guard<std::mutex> lock(m_rendertarget_nodes_mutex);
@@ -488,7 +488,7 @@ void Scene_root::update_pointer_for_rendertarget_nodes()
         components,
         width,
         height,
-        dots_per_meter
+        pixels_per_meter
     );
     m_rendertarget_nodes.push_back(rendertarget_node);
     return rendertarget_node;

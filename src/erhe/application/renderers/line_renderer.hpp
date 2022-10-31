@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
@@ -109,6 +110,7 @@ public:
         const bool                            show_visible_lines,
         const bool                            show_hidden_lines
     );
+    void imgui();
 
     void set_line_color(const uint32_t color);
     void set_line_color(const float r, const float g, const float b, const float a);
@@ -161,11 +163,15 @@ public:
     );
 
     void add_sphere(
-        const glm::mat4               transform,
-        uint32_t                      color,
-        const glm::vec3               center,
+        const erhe::scene::Transform& transform,
+        uint32_t                      edge_color,
+        uint32_t                      great_circle_color,
+        float                         edge_thickness,
+        float                         great_circle_thickness,
+        const glm::vec3               local_center,
         float                         radius,
-        const erhe::scene::Transform* camera_world_from_node = nullptr
+        const erhe::scene::Transform* camera_world_from_node = nullptr,
+        int                           step_count = 40
     );
 
 private:
@@ -258,13 +264,16 @@ private:
     uint32_t                    m_line_color                 {0xffffffffu};
     float                       m_line_thickness             {1.0f};
     bool                        m_inside_begin_end           {false};
+    std::vector<std::function<void()>> m_imgui;
 };
 
 class Line_renderer_set
     : public erhe::components::Component
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_type_name{"Line_renderer_set"};
+    static constexpr std::string_view c_title{"Line Renderer"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Line_renderer_set ();
@@ -275,6 +284,9 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
+
+    // Implements Imgui_window
+    void imgui() override;
 
     // Public API
     void begin     ();

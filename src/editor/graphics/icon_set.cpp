@@ -26,9 +26,11 @@ Icon_set::Rasterization::Rasterization(
     const int column_count,
     const int row_count
 )
+    : m_icon_width    {size}
+    , m_icon_height   {size}
+    , m_icon_uv_width {static_cast<float>(1.0) / static_cast<float>(column_count)}
+    , m_icon_uv_height{static_cast<float>(1.0) / static_cast<float>(row_count)}
 {
-    m_icon_width  = size;
-    m_icon_height = size;
     m_texture = std::make_shared<erhe::graphics::Texture>(
         erhe::graphics::Texture_create_info{
             .target          = gl::Texture_target::texture_2d,
@@ -44,9 +46,6 @@ Icon_set::Rasterization::Rasterization(
         *m_texture.get(),
         *icon_set.get<Programs>()->linear_sampler.get()
     );
-
-    m_icon_uv_width  = static_cast<float>(1.0) / static_cast<float>(column_count);
-    m_icon_uv_height = static_cast<float>(1.0) / static_cast<float>(row_count);
 }
 
 void Icon_set::Rasterization::post_initialize(Icon_set& icon_set)
@@ -78,8 +77,9 @@ void Icon_set::initialize_component()
         Component::get<erhe::application::Gl_context_provider>()
     };
 
-    m_small = Rasterization(*this, config->imgui.icon_size,    m_column_count, m_row_count);
-    m_large = Rasterization(*this, config->imgui.vr_icon_size, m_column_count, m_row_count);
+    m_small  = Rasterization(*this, config->imgui.small_icon_size, m_column_count, m_row_count);
+    m_large  = Rasterization(*this, config->imgui.large_icon_size, m_column_count, m_row_count);
+    m_hotbar = Rasterization(*this, config->hotbar.icon_size,      m_column_count, m_row_count);
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
@@ -99,8 +99,9 @@ void Icon_set::initialize_component()
 
 void Icon_set::post_initialize()
 {
-    m_small.post_initialize(*this);
-    m_large.post_initialize(*this);
+    m_small .post_initialize(*this);
+    m_large .post_initialize(*this);
+    m_hotbar.post_initialize(*this);
 }
 
 void Icon_set::Rasterization::rasterize(
@@ -190,8 +191,9 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
     const float u = static_cast<float>(m_column) / static_cast<float>(m_column_count);
     const float v = static_cast<float>(m_row   ) / static_cast<float>(m_row_count);
 
-    m_small.rasterize(*document.get(), m_column, m_row);
-    m_large.rasterize(*document.get(), m_column, m_row);
+    m_small .rasterize(*document.get(), m_column, m_row);
+    m_large .rasterize(*document.get(), m_column, m_row);
+    m_hotbar.rasterize(*document.get(), m_column, m_row);
 
     ++m_column;
     if (m_column >= m_column_count)
@@ -264,6 +266,7 @@ auto Icon_set::Rasterization::icon_button(
     return false;
 #else
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(m_imgui_renderer);
 
     const bool result = m_imgui_renderer->image_button(
         m_texture,
@@ -301,6 +304,11 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
 [[nodiscard]] auto Icon_set::get_large_rasterization() const -> const Rasterization&
 {
     return m_large;
+}
+
+[[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Rasterization&
+{
+    return m_hotbar;
 }
 
 }

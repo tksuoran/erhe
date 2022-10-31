@@ -40,10 +40,11 @@ public:
     );
     virtual ~Rendertarget_imgui_viewport() noexcept;
 
+    [[nodiscard]] auto rendertarget_node() -> Rendertarget_node*;
     void set_clear_color(const glm::vec4& value);
 
     // Implements Imgui_viewport
-    [[nodiscard]] auto rendertarget_node() -> Rendertarget_node*;
+    [[nodiscard]] auto get_scale_value() const -> float override;
     [[nodiscard]] auto begin_imgui_frame() -> bool override;
     void end_imgui_frame() override;
 

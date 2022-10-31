@@ -15,7 +15,7 @@ namespace editor
 
 Material_properties::Material_properties()
     : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 

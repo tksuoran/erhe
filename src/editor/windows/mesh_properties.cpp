@@ -31,7 +31,7 @@ using erhe::geometry::Polygon_id;
 
 Mesh_properties::Mesh_properties()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 

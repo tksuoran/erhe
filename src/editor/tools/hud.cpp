@@ -12,15 +12,10 @@
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/scene/scene.hpp"
-
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
-#endif
 
 namespace editor
 {
@@ -31,13 +26,20 @@ auto Toggle_hud_visibility_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    static_cast<void>(context);
-    m_hud.toggle_visibility();
+    const bool is_visible = m_hud.toggle_visibility();
+    if (is_visible)
+    {
+        Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
+        const auto& camera     = scene_view->get_camera();
+        if (camera)
+        {
+            m_hud.update_node_transform(camera->world_from_node());
+        }
+    }
     return true;
 }
 
 Hud::Hud()
-    //: erhe::application::Imgui_window{c_title, c_type_name}
     : erhe::components::Component{c_type_name}
     , m_toggle_visibility_command{*this}
 {
@@ -66,7 +68,6 @@ void Hud::initialize_component()
     };
 
     get<Tools>()->register_background_tool(this);
-    //get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const auto& configuration = get<erhe::application::Configuration>();
     const auto& hud           = configuration->hud;
@@ -76,22 +77,20 @@ void Hud::initialize_component()
     m_z          = hud.z;
 
     const auto& commands = get<erhe::application::Commands>();
-    commands->register_command(&m_toggle_visibility_command);
-    commands->bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true );
+    commands->register_command   (&m_toggle_visibility_command);
+    commands->bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true);
 
-    //const auto& rendergraph             = get<erhe::application::Rendergraph  >();
     const auto& imgui_windows           = get<erhe::application::Imgui_windows>();
-    const auto& scene_builder           = get<Scene_builder   >();
-    //const auto& viewport_windows        = get<Viewport_windows>();
+    const auto& scene_builder           = get<Scene_builder>();
     const auto& primary_viewport_window = scene_builder->get_primary_viewport_window();
     const auto& scene_root              = scene_builder->get_scene_root();
 
     m_rendertarget_node = scene_root->create_rendertarget_node(
         *m_components,
         *primary_viewport_window.get(),
-        1024,
-        1024,
-        5000.0
+        hud.width,
+        hud.height,
+        hud.ppm
     );
 
     scene_root->scene().add_to_mesh_layer(
@@ -105,14 +104,9 @@ void Hud::initialize_component()
         m_rendertarget_node.get(),
         "Hud Viewport",
         *m_components
-        //false
     );
 
-    // Also registers rendertarget node
     imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
-
-    //set_viewport(m_rendertarget_imgui_viewport.get());
-    //show();
 
     set_visibility(m_is_visible);
 }
@@ -153,9 +147,10 @@ void Hud::tool_render(
 {
 }
 
-void Hud::toggle_visibility()
+auto Hud::toggle_visibility() -> bool
 {
     set_visibility(!m_is_visible);
+    return m_is_visible;
 }
 
 void Hud::set_visibility(const bool value)
@@ -164,57 +159,14 @@ void Hud::set_visibility(const bool value)
 
     if (m_is_visible)
     {
-        log_hud->trace("Hud visible");
         m_rendertarget_imgui_viewport->set_enabled(true);
         m_rendertarget_node->node_data.visibility_mask |= erhe::scene::Node_visibility::visible;
     }
     else
     {
-        log_hud->trace("Hud hidden");
         m_rendertarget_imgui_viewport->set_enabled(false);
         m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
     }
 }
-
-
-#if defined(ERHE_GUI_LIBRARY_IMGUI) && 0
-auto Hud::flags() -> ImGuiWindowFlags
-{
-    return
-        ImGuiWindowFlags_NoTitleBar        |
-        ImGuiWindowFlags_NoResize          |
-        ImGuiWindowFlags_NoMove            |
-        ImGuiWindowFlags_NoScrollbar       |
-        ImGuiWindowFlags_NoScrollWithMouse |
-        ImGuiWindowFlags_NoSavedSettings   |
-        ImGuiWindowFlags_NoNavInputs       |
-        ImGuiWindowFlags_NoNavFocus;
-}
-
-void Hud::on_begin()
-{
-    m_min_size[0] = static_cast<float>(m_rendertarget_node->width());
-    m_min_size[1] = static_cast<float>(m_rendertarget_node->height());
-    m_max_size[0] = m_min_size[0];
-    m_max_size[1] = m_min_size[1];
-    ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
-}
-
-void Hud::imgui()
-{
-    //const ImVec2 button_size{64.0f, 64.0f};
-    //for (int y = 0; y < m_height_items; ++y)
-    //{
-    //    for (int x = 0; x < m_width_items; ++x)
-    //    {
-    //        ImGui::Button("_", button_size);
-    //        if (x != (m_width_items - 1))
-    //        {
-    //            ImGui::SameLine();
-    //        }
-    //    }
-    //}
-}
-#endif
 
 } // namespace editor

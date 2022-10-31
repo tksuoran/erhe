@@ -67,12 +67,17 @@ void main(void)
     //out_color = vec4(v_color.rgb * v_color.a * alpha, v_color.a * alpha);
     out_color = vec4(v_color.rgb * v_color.a * inv_clamped_d, v_color.a * inv_clamped_d);
 #else
-    if (alpha < 0.5)
+    if (alpha < 0.15)
     {
         discard;
     }
     //out_color = vec4(v_color.rgb * v_color.a, alpha);
     //out_color = vec4(srgb_to_linear(v_color.rgb) * v_color.a, 1.0);
-    out_color = vec4(srgb_to_linear(v_color.rgb) * v_color.a, 1.0);
+    out_color = vec4(srgb_to_linear(v_color.rgb) * v_color.a, v_color.a);
+    //out_color.rgb = vec3(v_color.rgb * alpha);
+    //out_color.rgb = vec3(t, t, t);
+    //out_color.rgb = vec3(k, k, k);
+    //out_color.rgb = vec3(end_weight, end_weight, end_weight);
+    //out_color.a = alpha;
 #endif
 }

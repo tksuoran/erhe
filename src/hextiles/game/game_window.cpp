@@ -17,7 +17,7 @@ namespace hextiles
 
 Game_window::Game_window()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 

@@ -47,10 +47,7 @@ using erhe::graphics::Texture;
 //int Imgui_viewport_window::s_serial = 0;
 
 Imgui_viewport_window::Imgui_viewport_window()
-    : erhe::application::Imgui_window{
-        "(default constructed Imgui_viewport_window)",
-        "(default constructed Imgui_viewport_window)"
-    }
+    : erhe::application::Imgui_window{"(default constructed Imgui_viewport_window)"}
     , erhe::application::Texture_rendergraph_node{
         erhe::application::Texture_rendergraph_node_create_info{
             .name                 = std::string{"(default constructed Imgui_viewport_window)"},
@@ -68,7 +65,7 @@ Imgui_viewport_window::Imgui_viewport_window(
     const std::string_view                  name,
     const std::shared_ptr<Viewport_window>& viewport_window
 )
-    : erhe::application::Imgui_window            {name, name}
+    : erhe::application::Imgui_window            {name}
     , erhe::application::Texture_rendergraph_node{
         erhe::application::Texture_rendergraph_node_create_info{
             .name                 = std::string{name},

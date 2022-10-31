@@ -1,4 +1,5 @@
 #include "erhe/application/imgui/imgui_window.hpp"
+#include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -11,16 +12,6 @@ namespace erhe::application {
 
 Imgui_window::Imgui_window(const std::string_view title)
     : m_title{title}
-    , m_label{title}
-{
-}
-
-Imgui_window::Imgui_window(
-    const std::string_view title,
-    const std::string_view label
-)
-    : m_title{title}
-    , m_label{label}
 {
 }
 
@@ -94,12 +85,12 @@ auto Imgui_window::is_visible() const -> bool
 
 auto Imgui_window::title() const -> const std::string_view
 {
-    return m_title;
+    return m_title.c_str();
 }
 
-auto Imgui_window::label() -> const char*
+[[nodiscard]] auto Imgui_window::get_scale_value() const -> float
 {
-    return m_label.c_str();
+    return (m_imgui_viewport != nullptr) ? m_imgui_viewport->get_scale_value() : 0.0f;
 }
 
 auto Imgui_window::begin() -> bool
@@ -112,7 +103,7 @@ auto Imgui_window::begin() -> bool
         ImVec2{m_max_size[0], m_max_size[1]}
     );
     const bool not_collapsed = ImGui::Begin(
-        label(),
+        m_title.c_str(),
         &keep_visible,
         flags()
     );

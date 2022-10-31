@@ -32,7 +32,7 @@ namespace editor
 
 Rendergraph_window::Rendergraph_window()
     : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 

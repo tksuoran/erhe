@@ -1,5 +1,6 @@
 #include "erhe/application/windows/performance_window.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
 #include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -16,7 +17,7 @@ namespace erhe::application
 
 Performance_window::Performance_window()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 
@@ -356,7 +357,7 @@ void Plot::imgui()
         }
 
 
-        auto max_text  = fmt::format("Max: {:.3f} ms", displayed_max);
+        auto max_text = fmt::format("Max: {:.3f} ms", displayed_max);
         auto now_text = fmt::format("Now: {:.3f} ms", v0);
         ImGui::RenderTextClipped(
             ImVec2{frame_bb.Min.x, frame_bb.Min.y + style.FramePadding.y},
@@ -366,8 +367,9 @@ void Plot::imgui()
             nullptr,
             ImVec2{0.0f, 0.0f}
         );
+        const float font_size = ImGui::GetFontSize();
         ImGui::RenderTextClipped(
-            ImVec2{frame_bb.Min.x, frame_bb.Min.y + style.FramePadding.y + 14.0f},
+            ImVec2{frame_bb.Min.x, frame_bb.Max.y - style.FramePadding.y - font_size},
             frame_bb.Max,
             now_text.c_str(),
             nullptr,

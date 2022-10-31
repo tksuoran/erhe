@@ -326,18 +326,6 @@ void Commands::on_update()
             }
         }
     }
-    else
-    {
-        if (m_last_mouse_button_bits == 0)
-        {
-            log_frame->info("m_last_mouse_button_bits == 0");
-        }
-
-        if (m_active_mouse_command == nullptr)
-        {
-            log_frame->info("m_active_mouse_command == nullptr");
-        }
-    }
 }
 
 void Commands::on_controller_trigger(

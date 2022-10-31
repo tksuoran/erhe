@@ -108,12 +108,14 @@ public:
 
     Icons icons;
 
-    [[nodiscard]] auto get_small_rasterization() const -> const Rasterization&;
-    [[nodiscard]] auto get_large_rasterization() const -> const Rasterization&;
+    [[nodiscard]] auto get_small_rasterization () const -> const Rasterization&;
+    [[nodiscard]] auto get_large_rasterization () const -> const Rasterization&;
+    [[nodiscard]] auto get_hotbar_rasterization() const -> const Rasterization&;
 
 private:
     Rasterization m_small;
     Rasterization m_large;
+    Rasterization m_hotbar;
     int           m_row_count   {0};
     int           m_column_count{0};
     int           m_row         {0};

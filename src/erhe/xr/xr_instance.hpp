@@ -31,10 +31,20 @@ public:
     XrPath xr_path{XR_NULL_PATH};
 };
 
+class Xr_configuration
+{
+public:
+    bool debug          {false};
+    bool quad_view      {false};
+    bool depth          {false};
+    bool visibility_mask{false};
+    bool hand_tracking  {false};
+};
+
 class Xr_instance
 {
 public:
-    Xr_instance   ();
+    Xr_instance   (const Xr_configuration& configuration);
     ~Xr_instance  () noexcept;
     Xr_instance   (const Xr_instance&) = delete;
     void operator=(const Xr_instance&) = delete;
@@ -67,9 +77,9 @@ public:
         Xr_path user_hand_left;
         Xr_path user_hand_right;
         Xr_path interaction_profile_vive_controller;
-        Xr_path menu_click;
         Xr_path trigger_click;
         Xr_path trigger_value;
+        Xr_path menu_click;
         Xr_path squeeze_click;
         Xr_path trackpad_x;
         Xr_path trackpad_y;
@@ -86,6 +96,8 @@ public:
         XrActionSet          action_set             {};
         XrAction             trigger_value          {};
         XrActionStateFloat   trigger_value_state    {.currentState = 0.0f, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction             menu_click             {};
+        XrActionStateBoolean menu_click_state       {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction             squeeze_click          {};
         XrActionStateBoolean squeeze_click_state    {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction             aim_pose               {};
@@ -121,6 +133,8 @@ private:
     auto enumerate_blend_modes          () -> bool;
     auto enumerate_view_configurations  () -> bool;
     auto path                           (const char* path) -> Xr_path;
+
+    Xr_configuration                     m_configuration;
 
     //Xr_session*                          m_session                   {nullptr};
     XrInstance                           m_xr_instance               {XR_NULL_HANDLE};

@@ -18,7 +18,7 @@ namespace hextiles
 
 Map_tool_window::Map_tool_window()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 

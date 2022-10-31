@@ -551,7 +551,7 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
 }
 
 
-auto safe_normalize(const glm::vec3& lhs, const glm::vec3& rhs)
+auto safe_normalize_cross(const glm::vec3& lhs, const glm::vec3& rhs)
 {
     const float d = glm::dot(lhs, rhs);
     if (std::abs(d) > 0.999f)
@@ -560,7 +560,7 @@ auto safe_normalize(const glm::vec3& lhs, const glm::vec3& rhs)
     }
 
     const glm::vec3 c0 = glm::cross(lhs, rhs);
-    if (c0.length() < glm::epsilon<float>())
+    if (glm::length(c0) < glm::epsilon<float>())
     {
         return erhe::toolkit::min_axis(lhs);
     }
@@ -589,8 +589,8 @@ void Physics_tool::draw_projection_ray(
     const glm::vec3 local_normal    = local_normal_opt.value();
     const glm::mat4 world_from_node = raytrace_node->get_node()->world_from_node();
     const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
-    const glm::vec3 T = safe_normalize(N, ray.direction);
-    const glm::vec3 B = safe_normalize(T, N);
+    const glm::vec3 T = safe_normalize_cross(N, ray.direction);
+    const glm::vec3 B = safe_normalize_cross(T, N);
 
     constexpr uint32_t red   = 0xff0000ffu;
     constexpr uint32_t green = 0xff00ff00u;

@@ -39,7 +39,7 @@ using glm::vec3;
 using glm::vec4;
 
 Debug_visualizations::Debug_visualizations()
-    : erhe::application::Imgui_window{c_title, c_type_name}
+    : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
 {
 }
@@ -95,13 +95,10 @@ void Debug_visualizations::mesh_selection_visualization(
     erhe::scene::Mesh*    mesh
 )
 {
-    auto&           line_renderer = *m_line_renderer_set->hidden.at(2).get();
-    //const uint32_t color         = is_in_selection
-    //    ? 0xff00ffffu
-    //    : erhe::toolkit::convert_float4_to_uint32(mesh.node_data.wireframe_color);
-    const uint32_t  color         = 0xff00ffffu;
+    auto&          line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    const uint32_t major_color   = erhe::toolkit::convert_float4_to_uint32(m_selection_major_color);
+    const uint32_t minor_color   = erhe::toolkit::convert_float4_to_uint32(m_selection_minor_color);
 
-    //const auto& mesh = as_mesh(node);
     for (const auto& primitive : mesh->mesh_data.primitives)
     {
         if (!primitive.source_geometry)
@@ -125,11 +122,12 @@ void Debug_visualizations::mesh_selection_visualization(
         }
         if ((box_smaller && smallest_visualization) || m_viewport_config->selection_bounding_box)
         {
+            line_renderer.set_thickness(m_selection_major_width);
             line_renderer.add_cube(
                 mesh->world_from_node(),
-                color,
-                primitive_geometry.bounding_box.min,
-                primitive_geometry.bounding_box.max
+                major_color,
+                primitive_geometry.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
+                primitive_geometry.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
             );
         }
         if (!box_smaller)
@@ -149,11 +147,15 @@ void Debug_visualizations::mesh_selection_visualization(
                 {
                     const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
                     line_renderer.add_sphere(
-                        mesh->world_from_node(),
-                        color,
+                        mesh->world_from_node_transform(),
+                        major_color,
+                        minor_color,
+                        m_selection_major_width,
+                        m_selection_minor_width,
                         primitive_geometry.bounding_sphere.center,
-                        primitive_geometry.bounding_sphere.radius,
-                        &camera_world_from_node_transform
+                        primitive_geometry.bounding_sphere.radius + m_gap,
+                        &camera_world_from_node_transform,
+                        m_sphere_step_count
                     );
                 }
             }
@@ -225,6 +227,7 @@ void Debug_visualizations::directional_light_visualization(
     const glm::mat4 world_from_light_clip   = light_projection_transforms->clip_from_world.inverse_matrix();
     const glm::mat4 world_from_light_camera = light_projection_transforms->world_from_light_camera.matrix();
 
+    line_renderer.set_thickness(m_light_visualization_width);
     line_renderer.add_cube(
         world_from_light_clip,
         context.light_color,
@@ -252,6 +255,7 @@ void Debug_visualizations::point_light_visualization(Light_visualization_context
     const auto pnp = scale * glm::normalize( axis_x - axis_y + axis_z);
     const auto ppn = scale * glm::normalize( axis_x + axis_y - axis_z);
     const auto ppp = scale * glm::normalize( axis_x + axis_y + axis_z);
+    line_renderer.set_thickness(m_light_visualization_width);
     line_renderer.add_lines(
         context.light->world_from_node(),
         context.light_color,
@@ -294,6 +298,8 @@ void Debug_visualizations::spot_light_visualization(Light_visualization_context&
     //    ? time - floor(time)
     //    : 0.5f;
 
+    line_renderer.set_thickness(m_light_visualization_width);
+
     for (int i = 0; i < light_cone_sides; ++i)
     {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(light_cone_sides);
@@ -317,12 +323,8 @@ void Debug_visualizations::spot_light_visualization(Light_visualization_context&
             context.half_light_color,
             {
                 {
-                    -length * axis_z
-                    + inner_radius * std::cos(t0) * axis_x
-                    + inner_radius * std::sin(t0) * axis_y,
-                    -length * axis_z
-                    + inner_radius * std::cos(t1) * axis_x
-                    + inner_radius * std::sin(t1) * axis_y
+                    -length * axis_z + inner_radius * std::cos(t0) * axis_x + inner_radius * std::sin(t0) * axis_y,
+                    -length * axis_z + inner_radius * std::cos(t1) * axis_x + inner_radius * std::sin(t1) * axis_y
                 }
                 //{
                 //    -length * axis_z * half_position
@@ -475,9 +477,9 @@ void Debug_visualizations::camera_visualization(
         return;
     }
 
-    const mat4  clip_from_node  = camera->projection()->get_projection_matrix(1.0f, render_context.viewport.reverse_depth);
-    const mat4  node_from_clip  = inverse(clip_from_node);
-    const mat4  world_from_clip = camera->world_from_node() * node_from_clip;
+    const mat4 clip_from_node  = camera->projection()->get_projection_matrix(1.0f, render_context.viewport.reverse_depth);
+    const mat4 node_from_clip  = inverse(clip_from_node);
+    const mat4 world_from_clip = camera->world_from_node() * node_from_clip;
 
     const uint32_t color      = erhe::toolkit::convert_float4_to_uint32(camera->node_data.wireframe_color);
     //const uint32_t half_color = erhe::toolkit::convert_float4_to_uint32(
@@ -485,6 +487,7 @@ void Debug_visualizations::camera_visualization(
     //);
 
     auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    line_renderer.set_thickness(m_camera_visualization_width);
     line_renderer.add_cube(
         world_from_clip,
         color,
@@ -509,8 +512,6 @@ void Debug_visualizations::tool_render(
     }
 
     auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
-    line_renderer.set_thickness(10.0f);
-
     std::shared_ptr<erhe::scene::Camera> selected_camera;
     const auto& selection = m_selection_tool->selection();
     for (const auto& node : selection)
@@ -526,10 +527,17 @@ void Debug_visualizations::tool_render(
         m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
         for (const auto& node : selection)
         {
-            //const mat4 m{node->world_from_node()};
-            //line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-            //line_renderer.add_lines( m, green, {{ O, axis_y }} );
-            //line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+            if (m_selection_node_axis_visible)
+            {
+                const uint32_t red   = 0xff0000ffu;
+                const uint32_t green = 0xff00ff00u;
+                const uint32_t blue  = 0xffff0000u;
+                const mat4 m{node->world_from_node()};
+                line_renderer.set_thickness(m_selection_node_axis_width);
+                line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+                line_renderer.add_lines( m, green, {{ O, axis_y }} );
+                line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+            }
 
             if (is_mesh(node))
             {
@@ -552,22 +560,33 @@ void Debug_visualizations::tool_render(
             erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
             const float    box_volume    = selection_bounding_box.volume();
             const float    sphere_volume = selection_bounding_sphere.volume();
-            const uint32_t color         = 0xff0088ffu;
+            const uint32_t major_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_major_color);
+            const uint32_t minor_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_minor_color);
             if (
                 (box_volume > 0.0f) &&
                 (box_volume < sphere_volume)
             )
             {
-                line_renderer.add_cube(glm::mat4{1.0f}, color, selection_bounding_box.min, selection_bounding_box.max);
+                line_renderer.set_thickness(m_selection_major_width);
+                line_renderer.add_cube(
+                    glm::mat4{1.0f},
+                    major_color,
+                    selection_bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
+                    selection_bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
+                );
             }
             else if (sphere_volume > 0.0f)
             {
                 line_renderer.add_sphere(
-                    glm::mat4{1.0f},
-                    color,
+                    erhe::scene::Transform{},
+                    major_color,
+                    minor_color,
+                    m_selection_major_width,
+                    m_selection_minor_width,
                     selection_bounding_sphere.center,
-                    selection_bounding_sphere.radius,
-                    &(context.camera->world_from_node_transform())
+                    selection_bounding_sphere.radius + m_gap,
+                    &(context.camera->world_from_node_transform()),
+                    m_sphere_step_count
                 );
             }
         }
@@ -668,6 +687,13 @@ void Debug_visualizations::tool_render(
 void Debug_visualizations::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+    //ImGui::Text("Cam X = %f, Y = %f, Z = %f", m_camera_position.x, m_camera_position.y, m_camera_position.z);
+    ImGui::ColorEdit4 ("Selection Major Color", &m_selection_major_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Selection Minor Color", &m_selection_minor_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Selection Major Width", &m_selection_major_width, 0.1f, 100.0f);
+    ImGui::SliderFloat("Selection Minor Width", &m_selection_minor_width, 0.1f, 100.0f);
+    ImGui::SliderInt  ("Sphere Step Count", &m_sphere_step_count, 1, 200);
+    ImGui::SliderFloat("Gap", &m_gap, 0.0001f, 0.1f);
     ImGui::Checkbox("Tool Hide", &m_tool_hide);
     ImGui::Checkbox("Raytrace",  &m_raytrace);
     ImGui::Checkbox("Physics",   &m_physics);

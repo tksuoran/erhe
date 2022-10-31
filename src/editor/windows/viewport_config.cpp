@@ -17,7 +17,7 @@ namespace editor
 
 Viewport_config::Viewport_config()
     : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::application::Imgui_window{c_title}
 {
     render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     render_style_not_selected.edge_lines = false;
@@ -43,7 +43,7 @@ void Viewport_config::initialize_component()
     render_style_not_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
     render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
 
-    render_style_selected.polygon_fill      = config.polygon_fill;
+    render_style_selected.polygon_fill      = config.selection_polygon_fill;
     render_style_selected.edge_lines        = config.selection_edge_lines;
     render_style_selected.corner_points     = config.corner_points;
     render_style_selected.polygon_centroids = config.polygon_centroids;

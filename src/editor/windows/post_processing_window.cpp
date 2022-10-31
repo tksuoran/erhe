@@ -16,7 +16,7 @@ namespace editor
 
 Post_processing_window::Post_processing_window()
     : Component   {c_type_name}
-    , Imgui_window{c_title, c_type_name}
+    , Imgui_window{c_title}
 {
 }
 

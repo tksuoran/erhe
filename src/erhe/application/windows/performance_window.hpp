@@ -46,7 +46,7 @@ protected:
     float              m_scale_max      {5.0f}; // 2 ms
     float              m_scale_max_limit{1.0f}; // 1 ms
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ImVec2             m_frame_size     {256.0f, 64.0f};
+    ImVec2             m_frame_size     {512, 128.0f};
 #endif
     std::vector<float> m_values;
 };

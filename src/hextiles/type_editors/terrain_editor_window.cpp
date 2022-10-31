@@ -12,7 +12,7 @@ namespace hextiles
 
 Terrain_editor_window::Terrain_editor_window()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
 {
 }
 

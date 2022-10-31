@@ -93,7 +93,7 @@ auto Brush_tool_insert_command::try_call(
 
 Brushes::Brushes()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
     , m_preview_command          {*this}
     , m_insert_command           {*this}
 {

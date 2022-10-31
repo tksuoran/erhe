@@ -131,7 +131,7 @@ void Trs_tool_drag_command::on_inactive(
 
 Trs_tool::Trs_tool()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
     , m_drag_command             {*this}
     , m_visualization            {*this}
 {

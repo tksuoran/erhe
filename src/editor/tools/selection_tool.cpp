@@ -263,7 +263,7 @@ auto Selection_tool::range_selection() -> Range_selection&
 }
 
 Selection_tool::Selection_tool()
-    : erhe::application::Imgui_window{c_title, c_type_name}
+    : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
     , m_select_command               {*this}
     , m_delete_command               {*this}

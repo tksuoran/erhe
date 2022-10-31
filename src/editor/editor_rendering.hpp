@@ -102,8 +102,8 @@ public:
     void render                   ();
     void render_viewport_main     (const Render_context& context, bool has_pointer);
     void render_viewport_overlay  (const Render_context& context, bool has_pointer);
-    void render_content           (const Render_context& context);
-    void render_selection         (const Render_context& context);
+    void render_content           (const Render_context& context, bool polygon_fill);
+    void render_selection         (const Render_context& context, bool polygon_fill);
     void render_tool_meshes       (const Render_context& context);
     void render_rendertarget_nodes(const Render_context& context);
     void render_brush             (const Render_context& context);
@@ -163,5 +163,15 @@ private:
     std::unique_ptr<erhe::graphics::Gpu_timer> m_brush_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_tools_timer;
 };
+
+static constexpr unsigned int s_stencil_edge_lines               =  1u; // 0 inc
+static constexpr unsigned int s_stencil_tool_mesh_hidden         =  2u;
+static constexpr unsigned int s_stencil_tool_mesh_visible        =  3u;
+
+static constexpr unsigned int s_stencil_line_renderer_grid_minor =  8u;
+static constexpr unsigned int s_stencil_line_renderer_grid_major =  9u;
+static constexpr unsigned int s_stencil_line_renderer_selection  = 10u;
+static constexpr unsigned int s_stencil_line_renderer_tools      = 11u;
+
 
 }

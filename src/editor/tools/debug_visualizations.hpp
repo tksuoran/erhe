@@ -99,12 +99,25 @@ private:
     std::shared_ptr<Trs_tool>                             m_trs_tool;
     erhe::toolkit::Bounding_volume_combiner               m_selection_bounding_volume;
 
-    bool m_tool_hide{false};
-    bool m_physics  {false};
-    bool m_raytrace {false};
-    bool m_selection{true};
-    bool m_lights   {false};
-    bool m_cameras  {false};
+    float m_gap{0.005f};
+    bool  m_tool_hide{false};
+    bool  m_physics  {false};
+    bool  m_raytrace {false};
+    bool  m_selection{true};
+    bool  m_lights   {false};
+    bool  m_cameras  {false};
+
+    bool      m_selection_node_axis_visible{false};
+    float     m_selection_node_axis_width  {5.0f};
+    glm::vec4 m_selection_major_color      {1.0f, 1.0f, 0.0f, 1.0f};
+    glm::vec4 m_selection_minor_color      {1.0f, 1.0f, 0.0f, 0.5f};
+    glm::vec4 m_group_selection_major_color{1.0f, 0.8f, 0.0f, 1.0f};
+    glm::vec4 m_group_selection_minor_color{1.0f, 0.8f, 0.0f, 0.5f};
+    float     m_selection_major_width      {10.0f};
+    float     m_selection_minor_width      {5.0f};
+    float     m_camera_visualization_width {5.0f};
+    float     m_light_visualization_width  {5.0f};
+    int       m_sphere_step_count          {80};
 };
 
 } // namespace editor

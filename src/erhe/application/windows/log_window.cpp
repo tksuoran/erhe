@@ -26,7 +26,7 @@ auto Log_window_toggle_pause_command::try_call(Command_context& context) -> bool
 
 Log_window::Log_window()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title, c_type_name}
+    , Imgui_window               {c_title}
     , m_toggle_pause_command     {*this}
 {
 }

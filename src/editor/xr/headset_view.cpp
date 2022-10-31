@@ -42,6 +42,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/xr/headset.hpp"
+#include "erhe/xr/xr_instance.hpp"
 
 #include <imgui.h>
 
@@ -86,13 +87,24 @@ void Headset_view::initialize_component()
 
     setup_root_camera();
 
-    if (!get<erhe::application::Configuration>()->headset.openxr)
+    const auto config = get<erhe::application::Configuration>()->headset;
+    if (!config.openxr)
     {
         return;
     }
 
+    const erhe::xr::Xr_configuration configuration
+    {
+        .debug           = config.debug,
+        .quad_view       = config.quad_view,
+        .depth           = config.depth,
+        .visibility_mask = config.visibility_mask,
+        .hand_tracking   = config.hand_tracking
+    };
+
     m_headset = std::make_unique<erhe::xr::Headset>(
-        get<erhe::application::Window>()->get_context_window()
+        get<erhe::application::Window>()->get_context_window(),
+        configuration
     );
 
     const auto mesh_memory = get<Mesh_memory>();
@@ -130,7 +142,7 @@ void Headset_view::tool_render(const Render_context& context)
     static_cast<void>(context);
 
     const auto transform     = m_root_camera->world_from_node();
-    auto&      line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    auto&      line_renderer = *m_line_renderer_set->visible.at(2).get();
 
     constexpr uint32_t red   = 0xff0000ffu;
     constexpr uint32_t green = 0xff00ff00u;
@@ -306,22 +318,39 @@ void Headset_view::execute_rendergraph_node()
             gl::enable(gl::Enable_cap::framebuffer_srgb);
 
             {
-                ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
-
+                const bool old_menu = m_menu_down;
+                m_menu_down = m_headset->menu_click();
+                if (m_menu_down != old_menu)
+                {
+                    if (!m_menu_down)
+                    {
+                        const auto& hud = get<Hud>();
+                        const bool is_hud_visible = hud->toggle_visibility();
+                        if (is_hud_visible)
+                        {
+                            const glm::mat4 world_from_view = m_headset->get_view_in_world();
+                            hud->update_node_transform(world_from_view);
+                        }
+                    }
+                }
             }
-
             if (m_headset->squeeze_click())
             {
+                ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
+
                 gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
                 gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
             }
             else
             {
+                const auto& global_viewport_config = get<Viewport_config>();
+                const auto& clear_color = global_viewport_config->clear_color;
+
                 gl::clear_color(
-                    m_clear_color[0],
-                    m_clear_color[1],
-                    m_clear_color[2],
-                    m_clear_color[3]
+                    clear_color[0],
+                    clear_color[1],
+                    clear_color[2],
+                    clear_color[3]
                 );
                 gl::clear_depth_f(*context.configuration->depth_clear_value_pointer());
                 gl::clear(
@@ -331,10 +360,6 @@ void Headset_view::execute_rendergraph_node()
 
                 Viewport_config viewport_config;
 
-                //const auto& layers           = m_scene_root->layers();
-                //const auto& material_library = m_scene_root->material_library();
-                //const auto& materials        = material_library->materials();
-
                 Render_context render_context {
                     .scene_view      = this,
                     .viewport_config = &viewport_config,
@@ -342,10 +367,8 @@ void Headset_view::execute_rendergraph_node()
                     .viewport        = viewport
                 };
 
-                m_editor_rendering->render_content(render_context);
-                m_editor_rendering->render_selection(render_context);
-                m_editor_rendering->render_tool_meshes(render_context);
-                m_editor_rendering->render_rendertarget_nodes(render_context);
+                m_editor_rendering->render_content(render_context, true);
+                m_editor_rendering->render_selection(render_context, true);
 
                 if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)
                 {
@@ -355,6 +378,10 @@ void Headset_view::execute_rendergraph_node()
                     m_line_renderer_set->render(viewport, *render_context.camera);
                     m_line_renderer_set->end();
                 }
+                m_editor_rendering->render_content           (render_context, false);
+                m_editor_rendering->render_selection         (render_context, false);
+                m_editor_rendering->render_tool_meshes       (render_context);
+                m_editor_rendering->render_rendertarget_nodes(render_context);
             }
 
             return true;
@@ -461,7 +488,10 @@ void Headset_view::begin_frame()
 
     if (m_hud)
     {
-        m_hud->update_node_transform(world_from_view);
+        if (m_configuration->hud.locked)
+        {
+            m_hud->update_node_transform(world_from_view);
+        }
     }
     m_tools->on_hover(this);
 }
@@ -474,12 +504,6 @@ void Headset_view::connect(const std::shared_ptr<Shadow_render_node>& shadow_ren
 void Headset_view::imgui()
 {
     m_mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-
-    ImGui::ColorEdit4(
-        "Clear Color",
-        &m_clear_color[0],
-        ImGuiColorEditFlags_Float
-    );
 
     ImGui::SliderFloat("Finger Distance Threshold", &m_finger_to_viewport_distance_threshold, 0.01f, 0.50f);
 

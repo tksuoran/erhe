@@ -35,7 +35,7 @@ namespace editor
 using glm::vec3;
 
 Hotbar::Hotbar()
-    : erhe::application::Imgui_window{c_title, c_type_name}
+    : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
 {
 }
@@ -230,7 +230,7 @@ void Hotbar::imgui()
     const glm::vec4 background_color{0.0f, 0.0f, 0.0f, 0.0f};
     const glm::vec4 tint_color      {1.0f, 1.0f, 1.0f, 1.0f};
     const int       frame_padding      = 0;
-    const auto&     icon_rasterization = m_icon_set->get_large_rasterization();
+    const auto&     icon_rasterization = m_icon_set->get_hotbar_rasterization();
     const bool      linear{false};
 
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  m_color_active);

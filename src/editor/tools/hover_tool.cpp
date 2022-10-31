@@ -33,10 +33,8 @@
 namespace editor
 {
 
-using glm::vec3;
-
 Hover_tool::Hover_tool()
-    : erhe::application::Imgui_window{c_title, c_type_name}
+    : erhe::application::Imgui_window{c_title}
     , erhe::components::Component{c_type_name}
 {
 }
@@ -195,7 +193,7 @@ void Hover_tool::tool_render(
             if (position_in_viewport_opt.has_value())
             {
                 const auto position_in_viewport = position_in_viewport_opt.value();
-                const vec3 position_at_fixed_depth{
+                const glm::vec3 position_at_fixed_depth{
                     position_in_viewport.x + 50.0f,
                     position_in_viewport.y,
                     -0.5f
@@ -217,13 +215,13 @@ void Hover_tool::tool_render(
 
                 if (hover_position_world.has_value())
                 {
-                    const vec3 position_at_fixed_depth_line_2{
+                    const glm::vec3 position_at_fixed_depth_line_2{
                         position_in_viewport.x + 50.0f,
                         position_in_viewport.y + 16.0f,
                         -0.5f
                     };
                     const std::string text_line_2 = fmt::format(
-                        "{}",
+                        "Position in world: {}",
                         hover_position_world.value()
                     );
                     m_text_renderer->print(
@@ -239,16 +237,23 @@ void Hover_tool::tool_render(
                     erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
                     if (rigid_body)
                     {
-                        const int motion_mode_index = static_cast<int>(rigid_body->get_motion_mode());
-                        const vec3 position_at_fixed_depth_line_3{
+                        const glm::vec3 position_at_fixed_depth_line_3{
                             position_in_viewport.x + 50.0f,
                             position_in_viewport.y + 16.0f * 2,
                             -0.5f
                         };
+                        const glm::vec3 local_position = content.mesh->transform_point_from_world_to_local(hover_position_world.value());
+                        const std::string text_line_3 = fmt::format(
+                            "Position in {}: {}",
+                            content.mesh->name(),
+                            local_position
+                        );
+
+                        //const int motion_mode_index = static_cast<int>(rigid_body->get_motion_mode());
                         m_text_renderer->print(
                             position_at_fixed_depth_line_3,
                             text_color,
-                            erhe::physics::c_motion_mode_strings[motion_mode_index]
+                            text_line_3.c_str() // erhe::physics::c_motion_mode_strings[motion_mode_index]
                         );
                     }
                 }

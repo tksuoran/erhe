@@ -213,7 +213,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
 Debug_view_window::Debug_view_window()
     : erhe::components::Component        {c_type_name}
     , erhe::application::Rendergraph_node{"Debug View"}
-    , erhe::application::Imgui_window    {c_title, c_type_name}
+    , erhe::application::Imgui_window    {c_title}
 {
     register_input(
         erhe::application::Resource_routing::Resource_provided_by_producer,

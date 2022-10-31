@@ -426,8 +426,8 @@ void Imgui_renderer::create_font_texture()
 
     m_primary_font    = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size);
     m_mono_font       = m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.font_size);
-    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size * 2.0f);
-    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.font_size * 2.0f);
+    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.vr_font_size);
+    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.vr_font_size);
 
     // Build texture atlas
     Texture::Create_info create_info{};

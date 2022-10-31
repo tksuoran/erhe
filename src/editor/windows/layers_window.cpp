@@ -28,7 +28,7 @@ using Light_type = erhe::scene::Light_type;
 
 Layers_window::Layers_window()
     : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title, c_type_name}
+    , erhe::application::Imgui_window{c_title}
 {
 }
 
@@ -71,7 +71,10 @@ void Layers_window::imgui()
 
     const auto& scene_roots        = m_editor_scenes->get_scene_roots();
     const auto  mesh_icon          = m_icon_set->icons.mesh;
-    const auto& icon_rasterization = m_icon_set->get_small_rasterization();
+    const auto& icon_rasterization = get_scale_value() < 1.5f
+        ? m_icon_set->get_small_rasterization()
+        : m_icon_set->get_large_rasterization();
+
     for (const auto& scene_root : scene_roots)
     {
         if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))

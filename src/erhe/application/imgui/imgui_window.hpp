@@ -33,12 +33,12 @@ class Imgui_window
 {
 public:
     explicit Imgui_window(const std::string_view title);
-    Imgui_window(const std::string_view title, const std::string_view label);
+    ////Imgui_window(const std::string_view title, const std::string_view label);
     virtual ~Imgui_window() noexcept;
 
-    [[nodiscard]] auto is_visible() const -> bool;
-    [[nodiscard]] auto title     () const -> const std::string_view;
-    [[nodiscard]] auto label     () -> const char*;
+    [[nodiscard]] auto is_visible     () const -> bool;
+    [[nodiscard]] auto title          () const -> const std::string_view;
+    [[nodiscard]] auto get_scale_value() const -> float;
     auto begin            () -> bool;
     void end              ();
     void show             ();
@@ -73,7 +73,6 @@ protected:
     bool              m_is_visible{true};
 
     const std::string m_title;
-    const std::string m_label;
     float             m_min_size[2]{120.0f, 120.0f};
     float             m_max_size[2]{99999.0f, 99999.0f};
 };

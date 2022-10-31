@@ -3,7 +3,6 @@
 #include "tools/tool.hpp"
 
 #include "erhe/application/commands/command.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <glm/glm.hpp>
@@ -55,21 +54,11 @@ public:
     [[nodiscard]] auto description() -> const char* override;
     void tool_render(const Render_context& context)  override;
 
-    // Implements IUpdate_once_per_frame
-    //void update_once_per_frame(const erhe::components::Time_context& time_context) override;
-
     // Public APi
     [[nodiscard]] auto get_rendertarget_imgui_viewport() -> std::shared_ptr<Rendertarget_imgui_viewport>;
     void update_node_transform(const glm::mat4& world_from_camera);
-    void toggle_visibility    ();
+    auto toggle_visibility    () -> bool;
     void set_visibility       (bool value);
-
-//// #if defined(ERHE_GUI_LIBRARY_IMGUI)
-////     // Implements Imgui_window
-////     auto flags   () -> ImGuiWindowFlags override;
-////     void on_begin() override;
-////     void imgui   () override;
-//// #endif
 
 private:
     Toggle_hud_visibility_command m_toggle_visibility_command;
