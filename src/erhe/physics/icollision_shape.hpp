@@ -66,6 +66,7 @@ public:
 
                   virtual void calculate_local_inertia           (const float mass, glm::mat4& inertia) const = 0;
     [[nodiscard]] virtual auto is_convex                         () const -> bool = 0;
+    [[nodiscard]] virtual auto get_center_of_mass                () const -> glm::vec3 = 0;
 
     //virtual void calculate_principal_axis_transform(
     //    const std::vector<float>& child_masses,

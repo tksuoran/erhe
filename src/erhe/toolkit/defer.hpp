@@ -10,7 +10,7 @@ class Deferral
 {
 public:
     template<typename Parameter_callable>
-    Deferral(Parameter_callable&& callable)
+    explicit Deferral(Parameter_callable&& callable)
         : m_callable(static_cast<Parameter_callable&&>(callable))
     {
     }

@@ -80,13 +80,13 @@ void Mesh_insert_remove_operation::execute(
 
     auto* scene_root     = m_parameters.scene_root;
     auto& scene          = scene_root->scene();
-    auto& layer          = *scene_root->layers().content();
     auto& physics_world  = scene_root->physics_world();
     auto& raytrace_scene = scene_root->raytrace_scene();
     scene.sanity_check();
 
     if (mode == Mode::insert)
     {
+        auto& layer = *scene_root->layers().content();
         scene.add_to_mesh_layer(layer, m_parameters.mesh);
         if (m_parameters.parent)
         {
@@ -172,11 +172,11 @@ void Light_insert_remove_operation::execute(
 
     auto* scene_root = m_parameters.scene_root;
     auto& scene      = scene_root->scene();
-    auto& layer      = *scene_root->layers().light();
     scene.sanity_check();
 
     if (mode == Mode::insert)
     {
+        auto& layer = *scene_root->layers().light();
         scene.add_to_light_layer(layer, m_parameters.light);
         if (m_parameters.parent)
         {

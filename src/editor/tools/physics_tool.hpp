@@ -101,6 +101,7 @@ public:
     // Implements erhe::physics::IMotion_state
     [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform   override;
     [[nodiscard]] auto get_motion_mode         () const -> erhe::physics::Motion_mode override;
+    void set_world_from_rigidbody(const glm::mat4&                 transform  ) override;
     void set_world_from_rigidbody(const erhe::physics::Transform   transform  ) override;
     void set_motion_mode         (const erhe::physics::Motion_mode motion_mode) override;
 

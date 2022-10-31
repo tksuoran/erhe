@@ -569,15 +569,10 @@ void Jolt_rigid_body::update_motion_state() const
         return;
     }
 
-    const auto rotation = from_jolt(m_body->GetRotation());
-    const auto position = from_jolt(m_body->GetCenterOfMassPosition());
+    const JPH::Mat44 jolt_transform = m_body->GetWorldTransform();
+    const glm::mat4  transform      = from_jolt(jolt_transform);
 
-    m_motion_state->set_world_from_rigidbody(
-        erhe::physics::Transform{
-            glm::mat3{rotation},
-            position
-        }
-    );
+    m_motion_state->set_world_from_rigidbody(transform);
 }
 
 } // namespace erhe::physics

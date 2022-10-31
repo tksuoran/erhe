@@ -240,6 +240,12 @@ void Physics_tool::set_mode(Physics_tool_mode value)
     return m_motion_mode;
 }
 
+void Physics_tool::set_world_from_rigidbody(const glm::mat4& transform)
+{
+    log_physics->warn("Physics_tool::set_world_from_rigidbody() - This should not happen");
+    static_cast<void>(transform);
+}
+
 void Physics_tool::set_world_from_rigidbody(const erhe::physics::Transform transform)
 {
     log_physics->warn("Physics_tool::set_world_from_rigidbody() - This should not happen");
@@ -398,7 +404,6 @@ void Physics_tool::release_target()
     if (m_target_node_physics)
     {
         erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
-        const glm::vec3 end_velocity = rigid_body->get_linear_velocity();
         //rigid_body->set_damping(
         //    m_original_linear_damping,
         //    m_original_angular_damping
@@ -792,17 +797,17 @@ void Physics_tool::tool_properties()
     ImGui::Checkbox("Show Drag Body", &m_show_drag_body);
     ImGui::Text("Mesh: %s", m_last_target_mesh->name().c_str());
 
-    float speed = 0.0f;
-    std::shared_ptr<Node_physics> node_physics = get_physics_node(m_last_target_mesh.get());
-    if (node_physics)
-    {
-        erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
-        if (rigid_body != nullptr)
-        {
-            const glm::vec3 velocity = rigid_body->get_linear_velocity();
-            speed = glm::length(velocity);
-        }
-    }
+    //float speed = 0.0f;
+    //std::shared_ptr<Node_physics> node_physics = get_physics_node(m_last_target_mesh.get());
+    //if (node_physics)
+    //{
+    //    erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+    //    if (rigid_body != nullptr)
+    //    {
+    //        const glm::vec3 velocity = rigid_body->get_linear_velocity();
+    //        speed = glm::length(velocity);
+    //    }
+    //}
 
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
     //ImGui::SliderFloat("Force Distance",  &m_force_distance, -10.0f, 10.0f, "%.2f", logarithmic);

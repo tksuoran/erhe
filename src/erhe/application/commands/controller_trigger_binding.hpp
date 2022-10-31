@@ -11,7 +11,7 @@ class Controller_trigger_binding
     : public Command_binding
 {
 public:
-    Controller_trigger_binding(
+    explicit Controller_trigger_binding(
         Command* command,
         float    min_to_activate = 0.50f,
         float    max_to_deactivate = 0.45f,

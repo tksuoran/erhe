@@ -44,7 +44,7 @@ public:
 class Xr_instance
 {
 public:
-    Xr_instance   (const Xr_configuration& configuration);
+    explicit Xr_instance(const Xr_configuration& configuration);
     ~Xr_instance  () noexcept;
     Xr_instance   (const Xr_instance&) = delete;
     void operator=(const Xr_instance&) = delete;

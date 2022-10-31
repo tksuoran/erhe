@@ -2,12 +2,14 @@
 
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
+#include "erhe/physics/physics_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/TaperedCapsuleShape.h>
 
@@ -38,18 +40,16 @@ public:
         return true;
     }
 
-    //virtual void calculate_principal_axis_transform(
-    //    const std::vector<float>& /*child_masses*/,
-    //    Transform&                /*principal_transform*/,
-    //    glm::mat4&                /*inertia*/
-    //) override
-    //{
-    //    //assert(false);
-    //}
-
     auto get_jolt_shape() -> JPH::ShapeRefC
     {
         return m_jolt_shape;
+    }
+
+    [[nodiscard]] auto get_center_of_mass() const -> glm::vec3
+    {
+        const JPH::Vec3 jolt_center_of_mass = m_jolt_shape->GetCenterOfMass();
+        const glm::vec3 center_of_mass = from_jolt(jolt_center_of_mass);
+        return center_of_mass;
     }
 
     virtual auto get_shape_settings() -> JPH::ShapeSettings& = 0;
@@ -86,23 +86,37 @@ class Jolt_capsule_shape
 {
 public:
     Jolt_capsule_shape(const Axis axis, const float radius, const float length)
-        : m_shape_settings{length * 0.5f, radius}
     {
-        ERHE_VERIFY(axis == Axis::Y);
-        auto result = m_shape_settings.Create();
+        m_capsule_shape_settings = new JPH::CapsuleShapeSettings(length * 0.5f, radius);
+        const JPH::Vec3 x_axis{1.0f, 0.0f, 0.0f};
+        const JPH::Vec3 y_axis{0.0f, 1.0f, 0.0f};
+        const JPH::Vec3 z_axis{0.0f, 0.0f, 1.0f};
+        m_shape_settings = new JPH::RotatedTranslatedShapeSettings{
+            JPH::Vec3{0.0f, 0.0f, 0.0f},
+            (axis == Axis::Y)
+                ? JPH::Quat::sIdentity()
+                : (axis == Axis::X)
+                    ? JPH::Quat::sFromTo(y_axis, x_axis)
+                    : JPH::Quat::sFromTo(y_axis, z_axis),
+            m_capsule_shape_settings
+        };
+        auto result = m_shape_settings->Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
 
-    ~Jolt_capsule_shape() noexcept override = default;
+    ~Jolt_capsule_shape() noexcept override
+    {
+    }
 
     auto get_shape_settings() -> JPH::ShapeSettings& override
     {
-        return m_shape_settings;
+        return *m_shape_settings.GetPtr();
     }
 
 private:
-    JPH::CapsuleShapeSettings m_shape_settings;
+    JPH::Ref<JPH::CapsuleShapeSettings>           m_capsule_shape_settings;
+    JPH::Ref<JPH::RotatedTranslatedShapeSettings> m_shape_settings;
 };
 
 #if 0
@@ -136,10 +150,21 @@ class Jolt_cylinder_shape
 {
 public:
     Jolt_cylinder_shape(const Axis axis, const glm::vec3 half_extents)
-        : m_shape_settings{half_extents.x, half_extents.y}
     {
-        ERHE_VERIFY(axis == Axis::Y);
-        auto result = m_shape_settings.Create();
+        m_cylinder_shape_settings = new JPH::CylinderShapeSettings(half_extents.x, half_extents.y);
+        const JPH::Vec3 x_axis{1.0f, 0.0f, 0.0f};
+        const JPH::Vec3 y_axis{0.0f, 1.0f, 0.0f};
+        const JPH::Vec3 z_axis{0.0f, 0.0f, 1.0f};
+        m_shape_settings = new JPH::RotatedTranslatedShapeSettings(
+            JPH::Vec3{0.0f, 0.0f, 0.0f},
+            (axis == Axis::Y)
+                ? JPH::Quat::sIdentity()
+                : (axis == Axis::X)
+                    ? JPH::Quat::sFromTo(y_axis, x_axis)
+                    : JPH::Quat::sFromTo(y_axis, z_axis),
+            m_cylinder_shape_settings
+        );
+        auto result = m_shape_settings->Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
@@ -148,13 +173,12 @@ public:
 
     auto get_shape_settings() -> JPH::ShapeSettings& override
     {
-        return m_shape_settings;
+        return *m_shape_settings.GetPtr();
     }
 
 private:
-    //Axis m_axis;
-    //glm::vec3 m_half_extents;
-    JPH::CylinderShapeSettings m_shape_settings;
+    JPH::Ref<JPH::CylinderShapeSettings>          m_cylinder_shape_settings;
+    JPH::Ref<JPH::RotatedTranslatedShapeSettings> m_shape_settings;
 };
 
 
@@ -178,7 +202,6 @@ public:
     }
 
 private:
-    //float m_radius;
     JPH::SphereShapeSettings m_shape_settings;
 };
 

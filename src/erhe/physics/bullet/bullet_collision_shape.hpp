@@ -37,6 +37,11 @@ public:
         return m_bullet_collision_shape;
     }
 
+    [[nodiscard]] auto get_center_of_mass() const -> glm::vec3 override
+    {
+        return glm::vec3{0.0f, 0.0f, 0.0f};
+    }
+
     void calculate_local_inertia(float mass, glm::mat4& inertia) const override;
 
     virtual void calculate_principal_axis_transform(

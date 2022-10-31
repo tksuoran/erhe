@@ -31,7 +31,7 @@ class Jolt_point_to_point_constraint
     : public Jolt_constraint
 {
 public:
-    Jolt_point_to_point_constraint(
+    explicit Jolt_point_to_point_constraint(
         const Point_to_point_constraint_settings& settings
     )
     {

@@ -712,7 +712,7 @@ void Scene_builder::make_brushes()
                     9 * std::max(1, config.detail),
                     std::max(1, config.detail)
                 ); // always axis = x
-                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
+                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);
 
                 make_brush(
                     instantiate,
@@ -1061,11 +1061,12 @@ void Scene_builder::make_mesh_nodes()
         }
     }
 
-    const auto& material_library = m_scene_root->material_library();
-    const auto& materials        = material_library->materials();
-    std::size_t material_index = 0;
     {
         ERHE_PROFILE_SCOPE("make instances");
+
+        const auto& material_library = m_scene_root->material_library();
+        const auto& materials        = material_library->materials();
+        std::size_t material_index   = 0;
 
         for (auto& entry : pack_entries)
         {

@@ -27,6 +27,7 @@ public:
     [[nodiscard]] virtual auto get_world_from_rigidbody() const -> Transform   = 0;
     [[nodiscard]] virtual auto get_motion_mode         () const -> Motion_mode = 0;
 
+    virtual void set_world_from_rigidbody(const glm::mat4&  transform  ) = 0;
     virtual void set_world_from_rigidbody(const Transform   transform  ) = 0;
     virtual void set_motion_mode         (const Motion_mode motion_mode) = 0;
 };

@@ -141,8 +141,7 @@ void Headset_view::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 
-    const auto transform     = m_root_camera->world_from_node();
-    auto&      line_renderer = *m_line_renderer_set->visible.at(2).get();
+    auto& line_renderer = *m_line_renderer_set->visible.at(2).get();
 
     constexpr uint32_t red   = 0xff0000ffu;
     constexpr uint32_t green = 0xff00ff00u;

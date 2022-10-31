@@ -121,9 +121,10 @@ void Scene_view::raytrace_update(
     }
 
     m_nearest_slot = 0;
-    float nearest_t_far = 9999.0f;
     {
         ERHE_PROFILE_SCOPE("raytrace inner");
+
+        float nearest_t_far = 9999.0f;
 
         for (size_t i = 0; i < Hover_entry::slot_count; ++i)
         {

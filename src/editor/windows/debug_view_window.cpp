@@ -381,7 +381,6 @@ void Debug_view_window::imgui()
     const int texture_height = texture->height();
 
     if (
-        texture &&
         (texture_width  > 0) &&
         (texture_height > 0) &&
         (m_area_size > 0)

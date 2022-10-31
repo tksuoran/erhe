@@ -36,7 +36,7 @@ class Depth_to_color_rendergraph_node
     : public erhe::application::Texture_rendergraph_node
 {
 public:
-    Depth_to_color_rendergraph_node(
+    explicit Depth_to_color_rendergraph_node(
         erhe::components::Components& components
     );
 

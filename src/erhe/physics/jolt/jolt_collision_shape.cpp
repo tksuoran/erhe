@@ -18,6 +18,14 @@ class EmptyShape final : public JPH::Shape
 {
 public:
     //JPH_OVERRIDE_NEW_DELETE
+    //void* operator new     (std::size_t inCount)                               { return JPH::Allocate(inCount); }
+    //void  operator delete  (void* inPointer) noexcept                          { JPH::Free(inPointer); }
+    //void* operator new[]   (std::size_t inCount)                               { return JPH::Allocate(inCount); }
+    //void  operator delete[](void* inPointer) noexcept                          { JPH::Free(inPointer); }
+    //void* operator new     (std::size_t inCount, std::align_val_t inAlignment) { return JPH::AlignedAllocate(inCount, static_cast<size_t>(inAlignment)); }
+    //void  operator delete  (void* inPointer, std::align_val_t) noexcept        { JPH::AlignedFree(inPointer); }
+    //void* operator new   [](std::size_t inCount, std::align_val_t inAlignment) { return JPH::AlignedAllocate(inCount, static_cast<size_t>(inAlignment)); }
+    //void  operator delete[](void* inPointer, std::align_val_t) noexcept        { JPH::AlignedFree(inPointer); }
 
     EmptyShape()
         : JPH::Shape{JPH::EShapeType::User1, JPH::EShapeSubType::User1}
@@ -169,7 +177,9 @@ JPH::ShapeSettings::ShapeResult EmptyShapeSettings::Create() const
 {
     if (mCachedResult.IsEmpty())
     {
-        JPH::Ref<JPH::Shape> shape = new EmptyShape(*this, mCachedResult);
+        static_cast<void>(
+            new EmptyShape(*this, mCachedResult)
+        );
     }
     return mCachedResult;
 }

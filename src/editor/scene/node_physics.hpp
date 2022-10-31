@@ -32,6 +32,7 @@ public:
     // Implements IMotion_state
     [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform   override;
     [[nodiscard]] auto get_motion_mode         () const -> erhe::physics::Motion_mode override;
+    void set_world_from_rigidbody(const glm::mat4&                 world_from_rigidbody) override;
     void set_world_from_rigidbody(const erhe::physics::Transform   world_from_rigidbody) override;
     void set_motion_mode         (const erhe::physics::Motion_mode motion_mode         ) override;
 
@@ -46,6 +47,7 @@ public:
     using erhe::scene::INode_attachment::on_detached_from;
     void on_detached_from        (erhe::physics::IWorld* world);
 
+    void set_world_from_node     (const glm::mat4& world_from_node);
     void set_world_from_node     (const erhe::physics::Transform world_from_node);
     void set_rigidbody_from_node (const erhe::physics::Transform rigidbody_from_node);
 

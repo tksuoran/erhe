@@ -205,21 +205,12 @@ auto Light_buffer::update(
             : nullptr;
         if (light_projection_transforms == nullptr)
         {
-            //// log_render->warn(
-            ////     "light {} has no light projection transforms",
-            ////     light->name()
-            //// );
             continue;
         }
 
-        const mat4 texture_from_world    = (light_projection_transforms != nullptr)
-            ? light_projection_transforms->texture_from_world.matrix()
-            : mat4{1.0f};
+        const mat4  texture_from_world   = light_projection_transforms->texture_from_world.matrix();
         const vec3  direction            = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-        const vec3  position             = (light_projection_transforms != nullptr)
-            ? vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}}
-            : vec3{light->world_from_node() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-
+        const vec3  position             = vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         const vec4  radiance             = vec4{light->intensity * light->color, light->range};
         const auto  inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
         const auto  outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
@@ -229,14 +220,6 @@ auto Light_buffer::update(
         const auto  light_offset         = light_array_offset + light_index * light_struct_size;
         ERHE_VERIFY(light_offset < buffer.capacity_byte_count());
         max_light_index = std::max(max_light_index, light_index);
-        //log_render->info(
-        //    "light {} index = {} light_offset = {} color = {}",
-        //    light->name(),
-        //    light_index,
-        //    light_offset,
-        //    light->color
-        //);
-
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
         write(light_gpu_data, light_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));

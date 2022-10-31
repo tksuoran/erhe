@@ -120,15 +120,59 @@ auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
     };
 }
 
+
+void Node_physics::set_world_from_rigidbody(
+    const glm::mat4& world_from_rigidbody
+)
+{
+    const auto& m = m_rigidbody_from_node.basis;
+    glm::mat4 rigidbody_from_node{m};
+    rigidbody_from_node[3] = glm::vec4{
+        m_rigidbody_from_node.origin.x,
+        m_rigidbody_from_node.origin.y,
+        m_rigidbody_from_node.origin.z,
+        1.0f
+    };
+
+    set_world_from_node(world_from_rigidbody * rigidbody_from_node);
+}
+
 void Node_physics::set_world_from_rigidbody(
     const erhe::physics::Transform world_from_rigidbody
 )
 {
-    //log_physics->trace("{} pos = {}", m_rigid_body->get_debug_label(), world_from_rigidbody.origin);
     set_world_from_node(world_from_rigidbody * m_rigidbody_from_node);
 }
 
 // This is intended to be called from physics backend
+void Node_physics::set_world_from_node(
+    const glm::mat4& world_from_node
+)
+{
+    ERHE_PROFILE_FUNCTION
+
+    ERHE_VERIFY(m_node != nullptr);
+
+    // TODO Take center of mass into account
+
+    const glm::vec3 world_position = glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    if (world_position.y < -100.0f)
+    {
+        const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
+        m_rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{world_from_node}, respawn_location});
+        m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
+        m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+    }
+
+    m_transform_change_from_physics = true;
+
+    const glm::mat4& matrix{world_from_node};
+    // TODO don't unparent, call set_world_from_node() instead?
+    get_node()->unparent();
+    get_node()->set_parent_from_node(matrix);
+
+    m_transform_change_from_physics = false;
+}
 void Node_physics::set_world_from_node(
     const erhe::physics::Transform world_from_node
 )
