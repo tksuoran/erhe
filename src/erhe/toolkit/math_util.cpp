@@ -567,7 +567,7 @@ void calculate_bounding_volume(
 
     const float x_diff = bounding_box.max.x - bounding_box.min.x;
     const float y_diff = bounding_box.max.y - bounding_box.min.y;
-    const float z_diff = bounding_box.max.z - bounding_box.min.y;
+    const float z_diff = bounding_box.max.z - bounding_box.min.z;
 
     const glm::vec3 mid = (bounding_box.max + bounding_box.min) * (0.5f);
 

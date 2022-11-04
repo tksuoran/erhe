@@ -308,18 +308,18 @@ void Commands::on_update()
                 auto*      drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
                 Command*   command      = binding->get_command();
                 const auto state        = command->get_command_state();
-                log_frame->info(
-                    "{} state = {}",
-                    command->get_name(),
-                    c_state_str[static_cast<int>(state)]
-                );
+                // log_frame->trace(
+                //     "{} state = {}",
+                //     command->get_name(),
+                //     c_state_str[static_cast<int>(state)]
+                // );
                 if ((state == State::Ready) || (state == State::Active))
                 {
                     const auto     button = drag_binding->get_button();
                     const uint32_t bit    = (1 << button);
                     if ((m_last_mouse_button_bits & bit) == bit)
                     {
-                        log_frame->info("calling {} on_motion", command->get_name());
+                        // log_frame->trace("calling {} on_motion", command->get_name());
                         drag_binding->on_motion(context);
                     }
                 }

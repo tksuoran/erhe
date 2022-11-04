@@ -382,19 +382,21 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("hud"))
         {
             const auto& section = ini["hud"];
-            ini_get(section, "show",   hud.show);
-            ini_get(section, "locked", hud.locked);
-            ini_get(section, "width",  hud.width);
-            ini_get(section, "height", hud.height);
-            ini_get(section, "ppm",    hud.ppm);
-            ini_get(section, "x",      hud.x);
-            ini_get(section, "y",      hud.y);
-            ini_get(section, "z",      hud.z);
+            ini_get(section, "enabled", hud.enabled);
+            ini_get(section, "show",    hud.show);
+            ini_get(section, "locked",  hud.locked);
+            ini_get(section, "width",   hud.width);
+            ini_get(section, "height",  hud.height);
+            ini_get(section, "ppm",     hud.ppm);
+            ini_get(section, "x",       hud.x);
+            ini_get(section, "y",       hud.y);
+            ini_get(section, "z",       hud.z);
         }
 
         if (ini.has("hotbar"))
         {
             const auto& section = ini["hotbar"];
+            ini_get(section, "enabled",   hotbar.enabled);
             ini_get(section, "show",      hotbar.show);
             ini_get(section, "icon_size", hotbar.icon_size);
             ini_get(section, "x",         hotbar.x);

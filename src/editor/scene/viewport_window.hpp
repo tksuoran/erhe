@@ -51,6 +51,7 @@ class Grid_tool;
 class Id_renderer;
 class Light_projections;
 class Node_raytrace;
+class Physics_window;
 class Post_processing;
 class Post_processing_node;
 class Render_context;
@@ -146,6 +147,7 @@ private:
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
     std::shared_ptr<Grid_tool>                            m_grid_tool;
+    std::shared_ptr<Physics_window>                       m_physics_window;
     std::shared_ptr<Post_processing>                      m_post_processing;
     std::shared_ptr<Programs>                             m_programs;
     std::shared_ptr<Trs_tool>                             m_trs_tool;

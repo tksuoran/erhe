@@ -37,6 +37,78 @@ void Node_transform_operation::undo(const Operation_context&)
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
 }
 
+//
+auto Node_insert_remove_operation::describe() const -> std::string
+{
+    std::stringstream ss;
+    switch (m_parameters.mode)
+    {
+        //using enum Mode;
+        case Mode::insert: ss << "Node_insert "; break;
+        case Mode::remove: ss << "Node_remove "; break;
+        default: break;
+    }
+    ss << m_parameters.node->name();
+    return ss.str();
+}
+
+Node_insert_remove_operation::Node_insert_remove_operation(const Parameters& parameters)
+    : m_parameters{parameters}
+{
+}
+
+Node_insert_remove_operation::~Node_insert_remove_operation() noexcept
+{
+}
+
+void Node_insert_remove_operation::execute(const Operation_context& context)
+{
+    execute(context, m_parameters.mode);
+}
+
+void Node_insert_remove_operation::undo(const Operation_context& context)
+{
+    execute(context, inverse(m_parameters.mode));
+}
+
+void Node_insert_remove_operation::execute(
+    const Operation_context& context,
+    const Mode               mode
+) const
+{
+    ERHE_VERIFY(m_parameters.node);
+
+    auto* scene_root = m_parameters.scene_root;
+    auto& scene      = scene_root->scene();
+    scene.sanity_check();
+
+    if (mode == Mode::insert)
+    {
+        if (m_parameters.parent)
+        {
+            m_parameters.parent->attach(m_parameters.node);
+        }
+    }
+    else
+    {
+        //m_context.selection_tool->remove_from_selection(m_context.mesh);
+        scene.remove_node(m_parameters.node);
+        if (m_parameters.parent)
+        {
+            m_parameters.parent->detach(m_parameters.node.get());
+        }
+    }
+
+    auto selection_tool = context.components->get<Selection_tool>();
+    if (selection_tool)
+    {
+        selection_tool->update_selection_from_node(m_parameters.node, mode == Mode::insert);
+    }
+    scene.sanity_check();
+}
+
+//
+
 auto Mesh_insert_remove_operation::describe() const -> std::string
 {
     std::stringstream ss;
@@ -76,7 +148,6 @@ void Mesh_insert_remove_operation::execute(
 ) const
 {
     ERHE_VERIFY(m_parameters.mesh);
-    ERHE_VERIFY(m_parameters.mesh);
 
     auto* scene_root     = m_parameters.scene_root;
     auto& scene          = scene_root->scene();
@@ -103,8 +174,8 @@ void Mesh_insert_remove_operation::execute(
     }
     else
     {
-        //m_context.selection_tool->remove_from_selection(m_context.mesh);
         scene.remove(m_parameters.mesh);
+        //m_context.selection_tool->remove_from_selection(m_context.mesh);
         if (m_parameters.node_physics)
         {
             remove_from_physics_world(physics_world, *m_parameters.node_physics.get());
@@ -115,7 +186,7 @@ void Mesh_insert_remove_operation::execute(
         }
         if (m_parameters.parent)
         {
-            m_parameters.parent->detach(m_parameters.mesh.get());
+            m_parameters.parent->detach(m_parameters.mesh.get(), true, true);
         }
     }
 

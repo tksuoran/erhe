@@ -119,6 +119,7 @@ public:
     [[nodiscard]] auto parent                    () const -> std::weak_ptr<Node>;
     [[nodiscard]] auto depth                     () const -> size_t;
     [[nodiscard]] auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
+    [[nodiscard]] auto mutable_children          () -> std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto attachments               () const -> const std::vector<std::shared_ptr<INode_attachment>>&;
     [[nodiscard]] auto get_visibility_mask       () const -> uint64_t;
                   void set_visibility_mask       (const uint64_t value);
@@ -160,11 +161,12 @@ public:
     void set_node_from_parent  (const Transform& transform);
     void set_world_from_node   (const glm::mat4 matrix);
     void set_world_from_node   (const Transform& transform);
-    void attach                (const std::shared_ptr<Node>& node, std::size_t position = 0, bool primary_operation = true);
-    auto detach                (Node* node, const bool primary_operation = true) -> bool;
+    void attach                (const std::shared_ptr<Node>& node, std::size_t position = 0, bool call_on_attached = true);
+    auto detach                (Node* node, bool call_on_detached = true, bool remove_from_scene = false) -> bool;
     void attach                (const std::shared_ptr<INode_attachment>& attachment);
     auto detach                (INode_attachment* attachment) -> bool;
     void unparent              ();
+    void remove_from_scene     ();
     void set_name              (const std::string_view name);
 
     Node_data node_data;

@@ -15,6 +15,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
+#include "windows/physics_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -77,6 +78,7 @@ Viewport_window::Viewport_window(
     , m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
     , m_editor_rendering      {components.get<Editor_rendering>()}
     , m_grid_tool             {components.get<Grid_tool       >()}
+    , m_physics_window        {components.get<Physics_window  >()}
     , m_post_processing       {components.get<Post_processing >()}
     , m_programs              {components.get<Programs        >()}
     , m_trs_tool              {components.get<Trs_tool        >()}
@@ -491,6 +493,11 @@ void Viewport_window::imgui_toolbar()
     if (m_grid_tool)
     {
         m_grid_tool->viewport_toolbar();
+    }
+
+    if (m_physics_window)
+    {
+        m_physics_window->viewport_toolbar();
     }
 
     const float  rounding        {3.0f};

@@ -47,7 +47,7 @@ enum class Primitive_color_source : unsigned int
 
 enum class Primitive_size_source : unsigned int
 {
-    mesh_point_size,
+    mesh_point_size = 0,
     mesh_line_width,
     constant_size
 };

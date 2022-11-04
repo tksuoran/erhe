@@ -772,23 +772,23 @@ public:
 
     void add_box(const glm::mat4& transform, const glm::vec3 min_corner, const glm::vec3 max_corner)
     {
-        const glm::vec3 a = glm::vec3{transform * glm::vec4{min_corner, 1.0f}};
-        const glm::vec3 b = glm::vec3{transform * glm::vec4{max_corner, 1.0f}};
+        const glm::vec3& a = min_corner;
+        const glm::vec3& b = max_corner;
         m_offsets.push_back(m_points.size());
         m_sizes.push_back(8);
-        m_points.push_back(glm::vec3{a.x, a.y, a.z});
-        m_points.push_back(glm::vec3{a.x, a.y, b.z});
-        m_points.push_back(glm::vec3{a.x, b.y, a.z});
-        m_points.push_back(glm::vec3{a.x, b.y, b.z});
-        m_points.push_back(glm::vec3{b.x, a.y, a.z});
-        m_points.push_back(glm::vec3{b.x, a.y, b.z});
-        m_points.push_back(glm::vec3{b.x, b.y, a.z});
-        m_points.push_back(glm::vec3{b.x, b.y, b.z});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x, a.y, a.z, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x, a.y, b.z, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x, b.y, a.z, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x, b.y, b.z, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x, a.y, a.z, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x, a.y, b.z, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x, b.y, a.z, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x, b.y, b.z, 1.0f}});
     }
 
     void add_sphere(const glm::mat4& transform, const glm::vec3 center, const float radius)
     {
-        const glm::vec3 o = glm::vec3{transform * glm::vec4{center, 1.0f}};
+        const glm::vec3 o = center;
         const float     r = radius;
         const float     k = std::sqrt(3.0f) / 3.0f;
         const float     c = k * r;
@@ -796,20 +796,20 @@ public:
         const glm::vec3 b = o + glm::vec3{c, c, c};
         m_offsets.push_back(m_points.size());
         m_sizes.push_back(14);
-        m_points.push_back(glm::vec3{o.x, o.y, o.z - r});
-        m_points.push_back(glm::vec3{o.x, o.y, o.z + r});
-        m_points.push_back(glm::vec3{o.x, o.y - r, o.z});
-        m_points.push_back(glm::vec3{o.x, o.y + r, o.z});
-        m_points.push_back(glm::vec3{o.x - r, o.y, o.z});
-        m_points.push_back(glm::vec3{o.x + r, o.y, o.z});
-        m_points.push_back(glm::vec3{a.x, a.y, a.z});
-        m_points.push_back(glm::vec3{a.x, a.y, b.z});
-        m_points.push_back(glm::vec3{a.x, b.y, a.z});
-        m_points.push_back(glm::vec3{a.x, b.y, b.z});
-        m_points.push_back(glm::vec3{b.x, a.y, a.z});
-        m_points.push_back(glm::vec3{b.x, a.y, b.z});
-        m_points.push_back(glm::vec3{b.x, b.y, a.z});
-        m_points.push_back(glm::vec3{b.x, b.y, b.z});
+        m_points.push_back(glm::vec3{transform * glm::vec4{o.x,     o.y,     o.z - r, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{o.x,     o.y,     o.z + r, 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{o.x,     o.y - r, o.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{o.x,     o.y + r, o.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{o.x - r, o.y,     o.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{o.x + r, o.y,     o.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x,     a.y,     a.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x,     a.y,     b.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x,     b.y,     a.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{a.x,     b.y,     b.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x,     a.y,     a.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x,     a.y,     b.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x,     b.y,     a.z    , 1.0f}});
+        m_points.push_back(glm::vec3{transform * glm::vec4{b.x,     b.y,     b.z    , 1.0f}});
     }
 
     // Implements Bounding_volume_source

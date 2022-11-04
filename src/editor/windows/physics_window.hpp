@@ -41,6 +41,9 @@ public:
     // Implements Window
     void imgui() override;
 
+    // Public API
+    void viewport_toolbar();
+
     class Debug_draw_parameters
     {
     public:
@@ -57,8 +60,7 @@ public:
         erhe::physics::IDebug_draw::Colors colors;
     };
 
-    [[nodiscard]]
-    auto get_debug_draw_parameters() -> Debug_draw_parameters;
+    [[nodiscard]] auto get_debug_draw_parameters() -> Debug_draw_parameters;
 
 private:
     // Component dependencies

@@ -91,7 +91,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
     SPDLOG_LOGGER_TRACE(log_weld, "Secondary axis = {} {}", axis1, c_str(axis1));
     SPDLOG_LOGGER_TRACE(log_weld, "Tertiary  axis = {} {}", axis2, c_str(axis2));
 
-    //debug_trace();
+    debug_trace();
     sanity_check();
 
     SPDLOG_LOGGER_TRACE(log_weld, "Polygon processing:");
@@ -131,7 +131,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
         polygon_remapper.create_new_from_old_mapping();
 
-        //SPDLOG_LOGGER_TRACE(log_weld, "Sorted polygon centroids:");
+        SPDLOG_LOGGER_TRACE(log_weld, "Sorted polygon centroids:");
         for (Polygon_id new_polygon_id = 0; new_polygon_id < m_next_polygon_id; ++new_polygon_id)
         {
             const Polygon_id old_polygon_id = polygon_remapper.old_id(new_polygon_id);
@@ -232,7 +232,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 {
                     SPDLOG_LOGGER_TRACE(
                         log_weld,
-                        "primary new {:2} old {:2} secondary new {:2} old {:2} centroid distance {}",
+                        "primary    new {:2} old {:2} secondary new {:2} old {:2} centroid distance {}",
                         primary_new_id,
                         primary_old_id,
                         secondary_new_id,
@@ -246,7 +246,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 {
                     SPDLOG_LOGGER_TRACE(
                         log_weld,
-                        "primary new {:2} old {:2} secondary new {:2} old {:2} normal dot product {}",
+                        "primary    new {:2} old {:2} secondary new {:2} old {:2} normal dot product {}",
                         primary_new_id,
                         primary_old_id,
                         secondary_new_id,
@@ -489,21 +489,21 @@ void Geometry::weld(const Weld_settings& weld_settings)
             }
         );
 
-        // log_weld.trace("Points after sort:\n");
-        // for (Point_id new_point_id = 0; new_point_id < m_next_point_id; ++new_point_id)
-        // {
-        //     Point_id old_point_id = new_to_old_point_id[new_point_id];
-        //     if (!point_attribute_maps.locations->has(old_point_id))
-        //     {
-        //         continue;
-        //     }
-        //     vec3 position = point_attribute_maps.locations->get(old_point_id);
-        //     log_weld.trace("    new {:2} old {:2}: {}\n", new_point_id, old_point_id, position);
-        // }
+        log_weld->trace("Points after sort:");
+        for (Point_id new_point_id = 0; new_point_id < m_next_point_id; ++new_point_id)
+        {
+            Point_id old_point_id = point_remapper.old_from_new[new_point_id];
+            if (!point_attribute_maps.locations->has(old_point_id))
+            {
+                continue;
+            }
+            vec3 position = point_attribute_maps.locations->get(old_point_id);
+            log_weld->trace("    new {:2} old {:2}: {}", new_point_id, old_point_id, position);
+        }
         point_remapper.create_new_from_old_mapping();
 
-        //log_weld.trace("Point remapping after sort, before merging:\n");
-        //point_remapper.dump();
+        log_weld->trace("Point remapping after sort, before merging:");
+        point_remapper.dump();
 
         // Scan for mergable points
         class Point_data
@@ -530,15 +530,19 @@ void Geometry::weld(const Weld_settings& weld_settings)
 
             if (point_remapper.merge.find_secondary(primary_new_id) != nullptr)
             {
-                //log_weld.trace(
-                //    "Span start {} old point {} has already been removed/merged\n",
-                //    span_start, old_reference_point_id
-                //);
+                log_weld->trace(
+                    "Span / Primary new point {} old point {} has already been removed/merged",
+                    primary_new_id, primary_old_id
+                );
                 continue;
             }
 
             const Point_data primary_attributes{primary_old_id, point_attribute_maps};
-            //log_weld.trace("span start: new {:2} old {:2} position {}\n", span_start, new_to_old_point_id[span_start], reference.position.value());
+            log_weld->trace(
+                "Span / Primay new point {:2} old point {:2} position {}",
+                primary_new_id,
+                point_remapper.old_from_new[primary_new_id], primary_attributes.position.value()
+            );
             for (
                 Point_id secondary_new_id = primary_new_id + 1;
                 secondary_new_id < m_next_point_id;
@@ -548,16 +552,23 @@ void Geometry::weld(const Weld_settings& weld_settings)
                 const Point_id secondary_old_id = point_remapper.old_id(secondary_new_id);
                 if (point_remapper.merge.find_secondary(secondary_new_id) != nullptr)
                 {
-                    //log_weld.trace(
-                    //    "New point {} old point {} has already been removed/merged\n",
-                    //    secondary_new_id, secondary_old_id
-                    //);
+                    log_weld->trace(
+                        "New point {} old point {} has already been removed/merged",
+                        secondary_new_id, secondary_old_id
+                    );
                     continue;
                 }
                 const Point_data secondary_attributes{secondary_old_id, point_attribute_maps};
-                //log_weld.trace("new {:2} old {:2} current position {}\n", secondary_new_id, secondary_old_id, secondary_attributes.position.value());
+                log_weld->trace(
+                    "new {:2} old {:2} current position {}",
+                    secondary_new_id,
+                    secondary_old_id,
+                    secondary_attributes.position.value()
+                );
 
-                const float diff = std::abs(primary_attributes.position.value()[axis0] - secondary_attributes.position.value()[axis0]);
+                const float diff = std::abs(
+                    primary_attributes.position.value()[axis0] - secondary_attributes.position.value()[axis0]
+                );
                 if (diff > 0.001f)
                 {
                     //log_weld.trace("span {:2} .. {:2}  {} .. {}\n", span_start, new_point_id, reference.position.value(), current.position.value());
@@ -641,23 +652,25 @@ void Geometry::weld(const Weld_settings& weld_settings)
         }
 
         log_weld->trace("Merged {} points", point_remapper.merge.size());
-        //log_weld.trace("Point remapping after merge, before removing duplicate points:\n");
-        //point_remapper.dump();
-        //debug_trace();
-        //sanity_check();
+        log_weld->trace("Point remapping after merge, before removing duplicate points:");
+        point_remapper.dump();
+        debug_trace();
+        sanity_check();
 
+        log_weld->trace("Reorder to drop duplicates");
         point_remapper.reorder_to_drop_duplicates();
-        //point_remapper.dump();
-        //debug_trace();
-        //sanity_check();
+        point_remapper.dump();
+        debug_trace();
+        sanity_check();
 
+        log_weld->trace("Update secondary new from old");
         point_remapper.update_secondary_new_from_old();
-        //log_weld.trace("Points before trim:\n");
-        //point_remapper.dump();
+        log_weld->trace("Points before trim:");
+        point_remapper.dump();
         point_remapper.trim();
         m_next_point_id = point_remapper.new_size;
-        //log_weld.trace("Points after trim:\n");
-        //point_remapper.dump();
+        log_weld->trace("Points after trim:");
+        point_remapper.dump();
 
         // Remap points
         auto old_points        = points;        // copy intended
@@ -745,11 +758,11 @@ void Geometry::weld(const Weld_settings& weld_settings)
         point_attributes().trim(get_point_count());
     }
 
-    //debug_trace();
-    //sanity_check();
+    debug_trace();
+    sanity_check();
 
     // Remove unused corners
-    //log_weld.trace("Corner processing:\n");
+    log_weld->trace("Corner processing:");
     {
         //const log::Indenter scope_indent;
 
@@ -814,8 +827,8 @@ void Geometry::weld(const Weld_settings& weld_settings)
         );
 
         corner_remapper.create_new_from_old_mapping();
-        //log_weld.trace("\nInitial corner remapping:\n");
-        //corner_remapper.dump();
+        log_weld->trace("Initial corner remapping:");
+        corner_remapper.dump();
         corner_remapper.reorder_to_drop_unused();
         //log_weld.trace("\nCorner remapping after reorder_to_drop_unused():\n");
         //corner_remapper.dump();

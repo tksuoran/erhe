@@ -87,6 +87,36 @@ public:
     }
 };
 
+class Node_insert_remove_operation
+    : public Scene_item_operation
+{
+public:
+    class Parameters
+    {
+    public:
+        Scene_root*                        scene_root;
+        std::shared_ptr<erhe::scene::Node> node;
+        std::shared_ptr<erhe::scene::Node> parent;
+        Mode                               mode;
+    };
+
+    explicit Node_insert_remove_operation(const Parameters& parameters);
+    ~Node_insert_remove_operation() noexcept override;
+
+    // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
+
+private:
+    void execute(
+        const Operation_context& context,
+        const Mode               mode
+    ) const;
+
+    Parameters m_parameters;
+};
+
 class Mesh_insert_remove_operation
     : public Scene_item_operation
 {

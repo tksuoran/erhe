@@ -232,7 +232,7 @@ void Brushes::remove_brush_mesh()
             //*m_scene_root->brush_layer(),
             m_brush_mesh
         );
-        m_brush_mesh->unparent();
+        m_brush_mesh->remove_from_scene();
         m_brush_mesh.reset();
     }
 }
@@ -503,7 +503,7 @@ void Brushes::add_brush_mesh()
 
     const auto& brush_scaled = m_brush->get_scaled(m_transform_scale);
     m_brush_mesh = std::make_shared<erhe::scene::Mesh>(
-        m_brush->name(),
+        fmt::format("brush-{}", m_brush->name()),
         erhe::primitive::Primitive{
             .material              = material,
             .gl_primitive_geometry = brush_scaled.gl_primitive_geometry,
@@ -529,6 +529,15 @@ void Brushes::update_mesh()
 {
     if (!m_brush_mesh)
     {
+        if (
+            (m_brush == nullptr) ||
+            !m_hover_position.has_value() ||
+            !m_hover_mesh
+        )
+        {
+            return;
+        }
+
         add_brush_mesh();
         return;
     }

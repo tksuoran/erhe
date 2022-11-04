@@ -66,14 +66,7 @@ Node::~Node() noexcept
         attachment->on_detached_from(this);
         attachment->set_node(nullptr);
     }
-    unparent();
-
-    const auto& root_node = root().lock();
-    if (root_node.get() != this)
-    {
-        root_node->detach(this);
-    }
-
+    remove_from_scene();
     sanity_check();
 }
 
@@ -250,7 +243,7 @@ auto Node::is_ancestor(const Node* ancestor_candidate) const -> bool
 void Node::attach(
     const std::shared_ptr<Node>& child_node,
     const std::size_t            position,
-    const bool                   primary_operation
+    const bool                   call_on_attached
 )
 {
     if (child_node.get() == this)
@@ -301,8 +294,8 @@ void Node::attach(
     // Attached child transform is as good as parent transform
     child_node->node_data.transforms.update_serial = node_data.transforms.update_serial;
 
-    child_node->set_depth_recursive (depth() + 1);
-    if (primary_operation)
+    child_node->set_depth_recursive(depth() + 1);
+    if (call_on_attached)
     {
         child_node->on_attached();
     }
@@ -311,7 +304,8 @@ void Node::attach(
 
 auto Node::detach(
     Node*      child_node,
-    const bool primary_operation
+    const bool call_on_detached,
+    const bool remove_from_scene
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION
@@ -327,7 +321,8 @@ auto Node::detach(
     // Detaching from the implicit root is nop.
     // However as secondary (temporary) operation, it is allowed.
     if (
-        primary_operation &&
+        !remove_from_scene &&
+        call_on_detached &&
         (root_node.get() == this)
     )
     {
@@ -392,7 +387,8 @@ auto Node::detach(
 
         // Attach to the implicit root node,
         if (
-            primary_operation &&
+            !remove_from_scene &&
+            call_on_detached &&
             (root_node.get() != this)
         )
         {
@@ -400,7 +396,7 @@ auto Node::detach(
         }
         child_node->set_world_from_node(world_from_node);
 
-        if (primary_operation)
+        if (call_on_detached)
         {
             child_node->on_detached_from(*this);
         }
@@ -465,6 +461,15 @@ void Node::on_visibility_mask_changed()
     for (const auto& attachment : node_data.attachments)
     {
         attachment->on_node_visibility_mask_changed(node_data.visibility_mask);
+    }
+}
+
+void Node::remove_from_scene()
+{
+    const auto& current_parent = parent().lock();
+    if (current_parent)
+    {
+        current_parent->detach(this, true, true);
     }
 }
 
@@ -632,6 +637,11 @@ auto Node::depth() const -> std::size_t
 }
 
 auto Node::children() const -> const std::vector<std::shared_ptr<Node>>&
+{
+    return node_data.children;
+}
+
+auto Node::mutable_children() -> std::vector<std::shared_ptr<Node>>&
 {
     return node_data.children;
 }

@@ -214,7 +214,7 @@ void Grid_tool::tool_render(
 void Grid_tool::viewport_toolbar()
 {
     ImGui::SameLine();
-    const bool grid_pressed =erhe::application::make_button(
+    const bool grid_pressed = erhe::application::make_button(
         "G",
         (m_enable)
             ? erhe::application::Item_mode::active

@@ -58,6 +58,13 @@ void Hotbar::declare_required_components()
 
 void Hotbar::initialize_component()
 {
+    const auto& configuration = get<erhe::application::Configuration>();
+    const auto& hotbar        = configuration->hotbar;
+    if (!hotbar.enabled)
+    {
+        return;
+    }
+
     const erhe::application::Scoped_gl_context gl_context{
         get<erhe::application::Gl_context_provider>()
     };
@@ -65,17 +72,13 @@ void Hotbar::initialize_component()
     get<Tools                           >()->register_background_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
-    const auto& configuration = get<erhe::application::Configuration>();
-    const auto& hotbar        = configuration->hotbar;
     m_show = hotbar.show;
     m_x    = hotbar.x;
     m_y    = hotbar.y;
     m_z    = hotbar.z;
 
-    //const auto& rendergraph             = get<erhe::application::Rendergraph  >();
     const auto& imgui_windows           = get<erhe::application::Imgui_windows>();
     const auto& scene_builder           = get<Scene_builder   >();
-    //const auto& viewport_windows        = get<Viewport_windows>();
     const auto& primary_viewport_window = scene_builder->get_primary_viewport_window();
     const auto& scene_root              = scene_builder->get_scene_root();
 
@@ -167,6 +170,11 @@ void Hotbar::update_once_per_frame(
 
 void Hotbar::update_node_transform(const glm::mat4& world_from_camera)
 {
+    if (!m_rendertarget_node)
+    {
+        return;
+    }
+
     const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}};
     const glm::vec3 eye_position{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
     const glm::vec3 up_direction{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};

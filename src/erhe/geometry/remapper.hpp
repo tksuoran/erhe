@@ -1,3 +1,5 @@
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -167,7 +169,7 @@ public:
             }
         }
         ss << "  < old from new\n";
-        SPDLOG_LOGGER_TRACE(log_weld, "{}", ss.str());
+        SPDLOG_LOGGER_TRACE(log_weld, "---------------------------------\n{}", ss.str());
         if (error)
         {
             log_weld->error("Errors detected\n");
@@ -383,7 +385,7 @@ public:
         {
             return;
         }
-        for (size_t i = 0, end = merge.size(); i < end; ++i)
+        for (std::size_t i = 0, end = merge.size(); i < end; ++i)
         {
             const auto& entry = merge.entries[i];
             if (entry.primary != primary_new_id)
@@ -413,7 +415,7 @@ public:
         {
             return;
         }
-        for (size_t i = 0, end = merge.size(); i < end; ++i)
+        for (std::size_t i = 0, end = merge.size(); i < end; ++i)
         {
             const auto& entry = merge.entries[i];
             const T primary_new_id   = entry.primary;
@@ -426,7 +428,7 @@ public:
 
     void update_secondary_new_from_old()
     {
-        for (size_t i = 0, end = merge.size(); i < end; ++i)
+        for (std::size_t i = 0, end = merge.size(); i < end; ++i)
         {
             const auto& entry = merge.entries[i];
             const T primary_new_id   = entry.primary;
@@ -441,15 +443,42 @@ public:
     {
         if (remove_callback)
         {
+            std::vector<T> failed;
             for (T new_id = new_end; new_id < old_size; ++new_id)
             {
                 SPDLOG_LOGGER_TRACE(log_weld, "Removing new {} old {}", new_id, old_id(new_id));
+                bool ok{true};
                 for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
                 {
-                    ERHE_VERIFY(new_id != keep_id);
+                    if (new_id == keep_id)
+                    {
+                        failed.push_back(new_id);
+                        ok = false;
+                    }
                 }
-                remove_callback(new_id, old_id(new_id));
+                if (ok)
+                {
+                    remove_callback(new_id, old_id(new_id));
+                }
             }
+            if (!failed.empty())
+            {
+                std::stringstream ss;
+                ss << "Failed: ";
+                bool empty{true};
+
+                for (T fail : failed)
+                {
+                    if (!empty)
+                    {
+                        ss << ", ";
+                    }
+                    ss << fail;
+                    empty = false;
+                }
+                log_weld->error("{}", ss.str());
+            }
+
         }
         trim();
     }

@@ -8,6 +8,7 @@
 
 #include "robin_hood.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -23,6 +24,19 @@ class Editor_scenes;
 class IOperation;
 class Icon_set;
 class Selection_tool;
+
+enum class Placement : unsigned int
+{
+    Before_anchor = 0, // Place node before anchor
+    After_anchor,      // Place node after anchor
+    Last               // Place node as last child of parent, ignore anchor
+};
+
+enum class Selection_usage : unsigned int
+{
+    Selection_ignored = 0,
+    Selection_used
+};
 
 class Node_tree_window
     : public erhe::components::Component
@@ -48,21 +62,38 @@ public:
     void on_end  () override;
 
 private:
-    void clear_selection           ();
-    void recursive_add_to_selection(const std::shared_ptr<erhe::scene::Node>& node);
-    void select_all                ();
-    void move_selection_before     (const std::shared_ptr<erhe::scene::Node>& target_node, const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id);
-    void move_selection_after      (const std::shared_ptr<erhe::scene::Node>& target_node, const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id);
-    void attach_selection_to       (const std::shared_ptr<erhe::scene::Node>& target_node, const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id);
+    void clear_selection            ();
+    void recursive_add_to_selection (const std::shared_ptr<erhe::scene::Node>& node);
+    void select_all                 ();
 
-    auto node_items       (const std::shared_ptr<erhe::scene::Node>& node, const bool update) -> bool;
+    void move_selection(
+        const std::shared_ptr<erhe::scene::Node>&            target_node,
+        erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id,
+        Placement                                            placement
+    );
+    void attach_selection_to(
+        const std::shared_ptr<erhe::scene::Node>&            target_node,
+        erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
+    );
+
+    auto node_items       (const std::shared_ptr<erhe::scene::Node>& node, bool update) -> bool;
     void imgui_node_update(const std::shared_ptr<erhe::scene::Node>& node);
     void imgui_tree_node  (const std::shared_ptr<erhe::scene::Node>& node);
+
     auto get_node_by_id   (const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type id) -> std::shared_ptr<erhe::scene::Node>;
     void try_add_to_attach(
         Compound_operation::Parameters&           compound_parameters,
         const std::shared_ptr<erhe::scene::Node>& target_node,
-        const std::shared_ptr<erhe::scene::Node>& node
+        const std::shared_ptr<erhe::scene::Node>& node,
+        Selection_usage                           selection_usage
+    );
+
+    void reposition(
+        Compound_operation::Parameters&           compound_parameters,
+        const std::shared_ptr<erhe::scene::Node>& anchor_node,
+        const std::shared_ptr<erhe::scene::Node>& child_node,
+        Placement                                 placement,
+        Selection_usage                           selection_usage
     );
     void drag_and_drop_source (const std::shared_ptr<erhe::scene::Node>& node);
     auto drag_and_drop_target (const std::shared_ptr<erhe::scene::Node>& node) -> bool;
@@ -82,9 +113,14 @@ private:
         std::shared_ptr<erhe::scene::Node>
     > m_tree_nodes_last_frame;
 
-    std::shared_ptr<IOperation> m_drag_and_drop_operation;
+    std::shared_ptr<IOperation> m_operation;
 
     std::weak_ptr<erhe::scene::Node> m_last_focus_node;
+
+    std::vector<std::function<void()>> m_operations;
+    std::shared_ptr<erhe::scene::Node> m_popup_node;
+    std::string                        m_popup_id_string;
+    unsigned int                       m_popup_id{0};
 };
 
 } // namespace editor

@@ -15,10 +15,12 @@
 #include "windows/viewport_config.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/scene/camera.hpp"
@@ -63,6 +65,7 @@ void Debug_visualizations::initialize_component()
 void Debug_visualizations::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_text_renderer     = get<erhe::application::Text_renderer    >();
     m_selection_tool    = get<Selection_tool >();
     m_trs_tool          = get<Trs_tool       >();
     m_viewport_config   = get<Viewport_config>();
@@ -555,6 +558,43 @@ void Debug_visualizations::tool_render(
 
         if (m_selection_bounding_volume.get_element_count() > 1)
         {
+            if (m_selection_bounding_points_visible)
+            {
+                const auto*     camera                = context.camera;
+                const auto      projection_transforms = camera->projection_transforms(context.viewport);
+                const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+
+                for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i)
+                {
+                    for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j)
+                    {
+                        const auto point = m_selection_bounding_volume.get_point(i, j);
+                        if (!point.has_value())
+                        {
+                            continue;
+                        }
+
+                        const auto point_in_window = context.viewport.project_to_screen_space(
+                            clip_from_world,
+                            point.value(),
+                            0.0f,
+                            1.0f
+                        );
+                        const uint32_t  text_color = 0xff88ff88u;
+                        const glm::vec3 point_in_window_z_negated{
+                             point_in_window.x,
+                             point_in_window.y,
+                            -point_in_window.z
+                        };
+                        m_text_renderer->print(
+                            point_in_window_z_negated,
+                            text_color,
+                            fmt::format("{}.{}", i, j)
+                        );
+                    }
+                }
+            }
+
             erhe::toolkit::Bounding_box    selection_bounding_box;
             erhe::toolkit::Bounding_sphere selection_bounding_sphere;
             erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
@@ -687,19 +727,31 @@ void Debug_visualizations::tool_render(
 void Debug_visualizations::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    //ImGui::Text("Cam X = %f, Y = %f, Z = %f", m_camera_position.x, m_camera_position.y, m_camera_position.z);
+    ImGui::Checkbox   ("Selection Axises",      &m_selection_node_axis_visible);
     ImGui::ColorEdit4 ("Selection Major Color", &m_selection_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Selection Minor Color", &m_selection_minor_color.x, ImGuiColorEditFlags_Float);
     ImGui::SliderFloat("Selection Major Width", &m_selection_major_width, 0.1f, 100.0f);
     ImGui::SliderFloat("Selection Minor Width", &m_selection_minor_width, 0.1f, 100.0f);
-    ImGui::SliderInt  ("Sphere Step Count", &m_sphere_step_count, 1, 200);
-    ImGui::SliderFloat("Gap", &m_gap, 0.0001f, 0.1f);
-    ImGui::Checkbox("Tool Hide", &m_tool_hide);
-    ImGui::Checkbox("Raytrace",  &m_raytrace);
-    ImGui::Checkbox("Physics",   &m_physics);
-    ImGui::Checkbox("Lights",    &m_lights);
-    ImGui::Checkbox("Cameras",   &m_cameras);
-    ImGui::Checkbox("Selection", &m_selection);
+    ImGui::SliderInt  ("Sphere Step Count",     &m_sphere_step_count, 1, 200);
+    ImGui::SliderFloat("Gap",                   &m_gap, 0.0001f, 0.1f);
+    ImGui::Checkbox   ("Tool Hide",             &m_tool_hide);
+    ImGui::Checkbox   ("Raytrace",              &m_raytrace);
+    ImGui::Checkbox   ("Physics",               &m_physics);
+    ImGui::Checkbox   ("Lights",                &m_lights);
+    ImGui::Checkbox   ("Cameras",               &m_cameras);
+    ImGui::Checkbox   ("Selection",             &m_selection);
+    ImGui::Checkbox   ("Bounding points",       &m_selection_bounding_points_visible);
+    if (m_selection_bounding_points_visible)
+    {
+        erhe::toolkit::Bounding_box    selection_bounding_box;
+        erhe::toolkit::Bounding_sphere selection_bounding_sphere;
+        erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
+        const float    box_volume    = selection_bounding_box.volume();
+        const float    sphere_volume = selection_bounding_sphere.volume();
+        ImGui::Text("Box Volume: %f", box_volume);
+        ImGui::Text("Sphere radius: %f", selection_bounding_sphere.radius);
+        ImGui::Text("Sphere Volume: %f", sphere_volume);
+    }
 #endif
 }
 

@@ -282,20 +282,22 @@ public:
     class Hud
     {
     public:
-        bool  show  {true};
-        bool  locked{false};
-        int   width {1024};
-        int   height{1024};
-        float ppm   {5000.0f};
-        float x     {0.0f};
-        float y     {0.0f};
-        float z     {0.0f};
+        bool  enabled{true};
+        bool  show   {true};
+        bool  locked {false};
+        int   width  {1024};
+        int   height {1024};
+        float ppm    {5000.0f};
+        float x      {0.0f};
+        float y      {0.0f};
+        float z      {0.0f};
     };
     Hud hud;
 
     class Hotbar
     {
     public:
+        bool  enabled  {true};
         bool  show     {true};
         int   icon_size{128};
         float x        {0.0f};

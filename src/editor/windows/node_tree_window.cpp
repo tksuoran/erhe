@@ -6,6 +6,7 @@
 #include "editor_scenes.hpp"
 
 #include "operations/compound_operation.hpp"
+#include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/node_physics.hpp"
@@ -122,44 +123,58 @@ auto Node_tree_window::get_node_by_id(
     return i->second;
 }
 
-void Node_tree_window::move_selection_before(
+void Node_tree_window::move_selection(
     const std::shared_ptr<erhe::scene::Node>&                  target_node,
-    const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
+    const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id,
+    const Placement                                            placement
 )
 {
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "move_selection_before()"
+    log_node_properties->info(
+        "move_selection(anchor = {}, {})",
+        target_node ? target_node->name() : "(empty)",
+        (placement == Placement::Before_anchor)
+            ? "Before_anchor"
+            : "After_anchor"
     );
 
-    static_cast<void>(target_node);
-    static_cast<void>(payload_id);
+    const auto parent = target_node->parent().lock();
 
-    //// log_tools->warn(
-    ////     "TODO: move_selection_before(target_node = {}, payload_id = {})",
-    ////     target_node->name(),
-    ////     payload_id
-    //// );
-}
+    Compound_operation::Parameters compound_parameters;
+    const auto& selection = m_selection_tool->selection();
+    const auto& drag_node = get_node_by_id(payload_id);
 
-void Node_tree_window::move_selection_after(
-    const std::shared_ptr<erhe::scene::Node>&                  target_node,
-    const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
-)
-{
-    SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "move_selection_after()"
-    );
+    std::shared_ptr<erhe::scene::Node> anchor = target_node;
+    if (is_in(drag_node, selection))
+    {
+        // Dragging node which is part of the selection.
+        // In this case we apply reposition to whole selection.
+        if (placement == Placement::Before_anchor)
+        {
+            for (const auto& node : selection)
+            {
+                reposition(compound_parameters, anchor, node, placement, Selection_usage::Selection_used);
+            }
+        }
+        else // if (placement == Placement::After_anchor)
+        {
+            for (auto i = selection.rbegin(), end = selection.rend(); i < end; ++i)
+            {
+                const auto& node = *i;
+                reposition(compound_parameters, anchor, node, placement, Selection_usage::Selection_used);
+            }
+        }
+    }
+    else if (compound_parameters.operations.empty())
+    {
+        // Dragging a single node which is not part of the selection.
+        // In this case we ignore selection and apply operation only to dragged node.
+        reposition(compound_parameters, anchor, drag_node, placement, Selection_usage::Selection_ignored);
+    }
 
-    static_cast<void>(target_node);
-    static_cast<void>(payload_id);
-
-    //// log_tools->warn(
-    ////     "TODO: move_selection_after(target_node = {}, payload_id = {})",
-    ////     target_node->name(),
-    ////     payload_id
-    //// );
+    if (!compound_parameters.operations.empty())
+    {
+        m_operation = std::make_shared<Compound_operation>(std::move(compound_parameters));
+    }
 }
 
 namespace {
@@ -186,10 +201,94 @@ namespace {
 
 } // anonymous namespace
 
+void Node_tree_window::reposition(
+    Compound_operation::Parameters&           compound_parameters,
+    const std::shared_ptr<erhe::scene::Node>& anchor_node,
+    const std::shared_ptr<erhe::scene::Node>& node,
+    const Placement                           placement,
+    const Selection_usage                     selection_usage
+)
+{
+    SPDLOG_LOGGER_TRACE(
+        log_node_properties,
+        "reposition(anchor_node = {}, node = {}, placement = {})",
+        anchor_node ? anchor_node->name() : "(empty)",
+        node ? node->name() : "(empty)",
+        (placement == Placement::Before_anchor)
+            ? "Before_anchor"
+            : "After_anchor"
+    );
+
+    if (!node)
+    {
+        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty node");
+        return;
+    }
+
+    if (!anchor_node)
+    {
+        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty anchor node");
+        return;
+    }
+
+    // Nodes cannot be attached to themselves
+    if (node == anchor_node)
+    {
+        return;
+    }
+
+    // Ancestors cannot be attached to descendants
+    if (anchor_node->is_ancestor(node.get()))
+    {
+        SPDLOG_LOGGER_WARN(log_node_properties, "Ancestors cannot be attached to descendants");
+        return;
+    }
+
+    if (selection_usage == Selection_usage::Selection_used)
+    {
+        const auto& selection = m_selection_tool->selection();
+
+        // Ignore nodes if their ancestors is in selection
+        const auto ancestor_in_selection = get_ancestor_in(node, selection);
+        if (ancestor_in_selection)
+        {
+            SPDLOG_LOGGER_TRACE(
+                log_node_properties,
+                "Ignoring node {} because ancestor {} is in selection",
+                node->name(),
+                ancestor_in_selection->name()
+            );
+            return;
+        }
+    }
+
+    if (anchor_node->parent().lock() != node->parent().lock())
+    {
+        compound_parameters.operations.push_back(
+            std::make_shared<Node_attach_operation>(
+                anchor_node->parent().lock(),
+                node,
+                (placement == Placement::Before_anchor) ? anchor_node : std::shared_ptr<erhe::scene::Node>{},
+                (placement == Placement::After_anchor ) ? anchor_node : std::shared_ptr<erhe::scene::Node>{}
+            )
+        );
+        return;
+    }
+
+    compound_parameters.operations.push_back(
+        std::make_shared<Node_reposition_in_parent_operation>(
+            node,
+            (placement == Placement::Before_anchor) ? anchor_node : std::shared_ptr<erhe::scene::Node>{},
+            (placement == Placement::After_anchor ) ? anchor_node : std::shared_ptr<erhe::scene::Node>{}
+        )
+    );
+}
+
 void Node_tree_window::try_add_to_attach(
     Compound_operation::Parameters&           compound_parameters,
     const std::shared_ptr<erhe::scene::Node>& target_node,
-    const std::shared_ptr<erhe::scene::Node>& node
+    const std::shared_ptr<erhe::scene::Node>& node,
+    const Selection_usage                     selection_usage
 )
 {
     SPDLOG_LOGGER_TRACE(
@@ -225,25 +324,30 @@ void Node_tree_window::try_add_to_attach(
         return;
     }
 
-    const auto& selection = m_selection_tool->selection();
-
-    // Ignore nodes if their ancestors is in selection
-    const auto ancestor_in_selection = get_ancestor_in(node, selection);
-    if (ancestor_in_selection)
+    if (selection_usage == Selection_usage::Selection_used)
     {
-        SPDLOG_LOGGER_TRACE(
-            log_node_properties,
-            "Ignoring node {} because ancestor {} is in selection",
-            node->name(),
-            ancestor_in_selection->name()
-        );
-        return;
+        const auto& selection = m_selection_tool->selection();
+
+        // Ignore nodes if their ancestors is in selection
+        const auto ancestor_in_selection = get_ancestor_in(node, selection);
+        if (ancestor_in_selection)
+        {
+            SPDLOG_LOGGER_TRACE(
+                log_node_properties,
+                "Ignoring node {} because ancestor {} is in selection",
+                node->name(),
+                ancestor_in_selection->name()
+            );
+            return;
+        }
     }
 
     compound_parameters.operations.push_back(
         std::make_shared<Node_attach_operation>(
             target_node,
-            node
+            node,
+            std::shared_ptr<erhe::scene::Node>{},
+            std::shared_ptr<erhe::scene::Node>{}
         )
     );
 }
@@ -271,17 +375,17 @@ void Node_tree_window::attach_selection_to(
     {
         for (const auto& node : selection)
         {
-            try_add_to_attach(compound_parameters, target_node, node);
+            try_add_to_attach(compound_parameters, target_node, node, Selection_usage::Selection_used);
         }
     }
     else if (compound_parameters.operations.empty())
     {
-        try_add_to_attach(compound_parameters, target_node, drag_node);
+        try_add_to_attach(compound_parameters, target_node, drag_node, Selection_usage::Selection_ignored);
     }
 
     if (!compound_parameters.operations.empty())
     {
-        m_drag_and_drop_operation = std::make_shared<Compound_operation>(std::move(compound_parameters));
+        m_operation = std::make_shared<Compound_operation>(std::move(compound_parameters));
     }
 }
 
@@ -379,6 +483,11 @@ auto Node_tree_window::drag_and_drop_target(
 {
     ERHE_PROFILE_FUNCTION
 
+    if (!node)
+    {
+        return false;
+    }
+
     const auto  rect_min = ImGui::GetItemRectMin();
     const auto  rect_max = ImGui::GetItemRectMax();
     const float height   = rect_max.y - rect_min.y;
@@ -407,7 +516,7 @@ auto Node_tree_window::drag_and_drop_target(
         {
             IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
             const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
-            move_selection_before(node, payload_id);
+            move_selection(node, payload_id, Placement::Before_anchor);
         }
         ImGui::EndDragDropTarget();
         return true;
@@ -439,7 +548,7 @@ auto Node_tree_window::drag_and_drop_target(
         {
             IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
             const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
-            move_selection_after(node, payload_id);
+            move_selection(node, payload_id, Placement::After_anchor);
         }
         ImGui::EndDragDropTarget();
         return true;
@@ -578,6 +687,7 @@ auto Node_tree_window::node_items(
         ERHE_PROFILE_SCOPE("icon");
 
         std::optional<glm::vec2> icon;
+        glm::vec4 color = node->node_data.wireframe_color;
 
         if (is_empty(node))
         {
@@ -589,24 +699,21 @@ auto Node_tree_window::node_items(
         }
         else if (is_light(node))
         {
-            switch (as_light(node)->type)
+            const auto& light = as_light(node);
+            color = glm::vec4{light->color, 1.0f};
+            switch (light->type)
             {
                 //using enum erhe::scene::Light_type;
                 case erhe::scene::Light_type::spot:        icon = m_icon_set->icons.spot_light; break;
                 case erhe::scene::Light_type::directional: icon = m_icon_set->icons.directional_light; break;
                 case erhe::scene::Light_type::point:       icon = m_icon_set->icons.point_light; break;
-                default: return {};
+                default: break;
             }
         }
         else if (is_camera(node))
         {
             icon = m_icon_set->icons.camera;
         }
-        //else if (is_physics(node))
-        //{
-        //    //log_tools->info("P {}", node->name());
-        //    m_icon_set->icon(*node);
-        //}
         else
         {
             icon = m_icon_set->icons.node;
@@ -617,7 +724,7 @@ auto Node_tree_window::node_items(
             const auto& icon_rasterization = get_scale_value() < 1.5f
                 ? m_icon_set->get_small_rasterization()
                 : m_icon_set->get_large_rasterization();
-            icon_rasterization.icon(icon.value());
+            icon_rasterization.icon(icon.value(), color);
         }
     }
 
@@ -648,10 +755,119 @@ auto Node_tree_window::node_items(
         //node_open = ImGui::TreeNodeEx(label.c_str(), node_flags);
     }
 
+    //int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
+    if (
+        ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
+        !m_popup_node
+    )
+    {
+        m_popup_node = node;
+        m_popup_id_string = fmt::format("{}##Node{}-popup-menu", node->name(), node->get_id());
+        m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
+        ImGui::OpenPopupEx(
+            m_popup_id,
+            ImGuiPopupFlags_MouseButtonRight
+        );
+    }
+    if ((m_popup_node == node) && !m_popup_id_string.empty())
+    {
+        const bool begin_popup_context_item = ImGui::BeginPopupEx(
+            m_popup_id,
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
+        );
+        if (begin_popup_context_item)
+        {
+            auto* scene_root = reinterpret_cast<Scene_root*>(m_popup_node->node_data.host);
+            ERHE_VERIFY(scene_root);
+            auto parent_node = m_popup_node->parent().lock();
+
+            bool close{false};
+            if (ImGui::Button("Create New Empty Node"))
+            {
+                m_operations.push_back(
+                    [this, scene_root, parent_node]
+                    ()
+                    {
+                        auto new_empty_node = scene_root->create_new_empty_node();
+                        new_empty_node->set_name("new empty node");
+                        get<Operation_stack>()->push(
+                            std::make_shared<Node_insert_remove_operation>(
+                                Node_insert_remove_operation::Parameters{
+                                    .scene_root = scene_root,
+                                    .node       = new_empty_node,
+                                    .parent     = parent_node,
+                                    .mode       = Scene_item_operation::Mode::insert
+                                }
+                            )
+                        );
+                    }
+                );
+                close = true;
+            }
+            if (ImGui::Button("Create New Camera"))
+            {
+                m_operations.push_back(
+                    [this, scene_root, parent_node]
+                    ()
+                    {
+                        auto new_camera = scene_root->create_new_camera();
+                        new_camera->set_name("new camera");
+                        get<Operation_stack>()->push(
+                            std::make_shared<Camera_insert_remove_operation>(
+                                Camera_insert_remove_operation::Parameters{
+                                    .scene_root = scene_root,
+                                    .camera     = new_camera,
+                                    .parent     = parent_node,
+                                    .mode       = Scene_item_operation::Mode::insert
+                                }
+                            )
+                        );
+                    }
+                );
+                close = true;
+            }
+            if (ImGui::Button("Create New Light"))
+            {
+                m_operations.push_back(
+                    [this, scene_root, parent_node]
+                    ()
+                    {
+                        auto new_light = scene_root->create_new_light();
+                        new_light->set_name("new light");
+                        get<Operation_stack>()->push(
+                            std::make_shared<Light_insert_remove_operation>(
+                                Light_insert_remove_operation::Parameters{
+                                    .scene_root = scene_root,
+                                    .light      = new_light,
+                                    .parent     = parent_node,
+                                    .mode       = Scene_item_operation::Mode::insert
+                                }
+                            )
+                        );
+                    }
+                );
+                close = true;
+            }
+            ImGui::EndPopup();
+            if (close) {
+                m_popup_node.reset();
+                m_popup_id_string.clear();
+                m_popup_id = 0;
+            }
+        }
+        else
+        {
+            m_popup_node.reset();
+            m_popup_id_string.clear();
+            m_popup_id = 0;
+        }
+    }
+
     if (update)
     {
         ERHE_PROFILE_SCOPE("update");
-        const bool consumed_by_drag_and_drop = drag_and_drop_target(node);;
+        const bool consumed_by_drag_and_drop = drag_and_drop_target(node);
         if (!consumed_by_drag_and_drop)
         {
             imgui_node_update(node);
@@ -735,10 +951,16 @@ void Node_tree_window::imgui()
         }
     }
 
-    if (m_drag_and_drop_operation)
+    for (const auto& fun : m_operations)
     {
-        get<Operation_stack>()->push(m_drag_and_drop_operation);
-        m_drag_and_drop_operation.reset();
+        fun();
+    }
+    m_operations.clear();
+
+    if (m_operation)
+    {
+        get<Operation_stack>()->push(m_operation);
+        m_operation.reset();
     }
 
     if (m_selection_tool)

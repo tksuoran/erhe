@@ -22,6 +22,7 @@ namespace erhe::scene
 namespace erhe::application
 {
     class Line_renderer_set;
+    class Text_renderer;
 }
 
 namespace editor
@@ -94,12 +95,13 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
     std::shared_ptr<Viewport_config>                      m_viewport_config;
     std::shared_ptr<Selection_tool>                       m_selection_tool;
     std::shared_ptr<Trs_tool>                             m_trs_tool;
     erhe::toolkit::Bounding_volume_combiner               m_selection_bounding_volume;
 
-    float m_gap{0.005f};
+    float m_gap      {0.003f};
     bool  m_tool_hide{false};
     bool  m_physics  {false};
     bool  m_raytrace {false};
@@ -107,17 +109,18 @@ private:
     bool  m_lights   {false};
     bool  m_cameras  {false};
 
-    bool      m_selection_node_axis_visible{false};
-    float     m_selection_node_axis_width  {5.0f};
-    glm::vec4 m_selection_major_color      {1.0f, 1.0f, 0.0f, 1.0f};
-    glm::vec4 m_selection_minor_color      {1.0f, 1.0f, 0.0f, 0.5f};
-    glm::vec4 m_group_selection_major_color{1.0f, 0.8f, 0.0f, 1.0f};
-    glm::vec4 m_group_selection_minor_color{1.0f, 0.8f, 0.0f, 0.5f};
-    float     m_selection_major_width      {10.0f};
-    float     m_selection_minor_width      {5.0f};
-    float     m_camera_visualization_width {5.0f};
-    float     m_light_visualization_width  {5.0f};
-    int       m_sphere_step_count          {80};
+    bool      m_selection_bounding_points_visible{false};
+    bool      m_selection_node_axis_visible      {false};
+    float     m_selection_node_axis_width        {4.0f};
+    glm::vec4 m_selection_major_color            {1.0f, 1.0f, 0.0f, 1.0f};
+    glm::vec4 m_selection_minor_color            {1.0f, 1.0f, 0.0f, 0.5f};
+    glm::vec4 m_group_selection_major_color      {1.0f, 0.8f, 0.0f, 1.0f};
+    glm::vec4 m_group_selection_minor_color      {1.0f, 0.8f, 0.0f, 0.5f};
+    float     m_selection_major_width            {4.0f};
+    float     m_selection_minor_width            {2.0f};
+    float     m_camera_visualization_width       {4.0f};
+    float     m_light_visualization_width        {4.0f};
+    int       m_sphere_step_count                {80};
 };
 
 } // namespace editor

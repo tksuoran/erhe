@@ -13,6 +13,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/physics/icollision_shape.hpp"
@@ -85,6 +86,52 @@ void Physics_window::post_initialize()
 auto Physics_window::description() -> const char*
 {
     return c_title.data();
+}
+
+void Physics_window::viewport_toolbar()
+{
+    const auto viewport_window = m_viewport_windows->last_window();
+    if (!viewport_window)
+    {
+        return;
+    }
+
+    const auto scene_root = viewport_window->get_scene_root();
+    if (!scene_root)
+    {
+        return;
+    }
+
+    auto& physics_world   = scene_root->physics_world();
+    bool  physics_enabled = physics_world.is_physics_updates_enabled();
+
+    ImGui::SameLine();
+    const bool pressed = erhe::application::make_button(
+        "P",
+        (physics_enabled)
+            ? erhe::application::Item_mode::active
+            : erhe::application::Item_mode::normal
+    );
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(
+            physics_enabled
+                ? "Toggle physics on -> off"
+                : "Toggle physics off -> on"
+        );
+    };
+
+    if (pressed)
+    {
+        if (physics_enabled)
+        {
+            physics_world.disable_physics_updates();
+        }
+        else
+        {
+            physics_world.enable_physics_updates();
+        }
+    }
 }
 
 void Physics_window::imgui()

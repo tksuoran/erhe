@@ -63,14 +63,19 @@ void Hud::declare_required_components()
 
 void Hud::initialize_component()
 {
+    const auto& configuration = get<erhe::application::Configuration>();
+    const auto& hud           = configuration->hud;
+    if (!hud.enabled)
+    {
+        return;
+    }
+
     const erhe::application::Scoped_gl_context gl_context{
         get<erhe::application::Gl_context_provider>()
     };
 
     get<Tools>()->register_background_tool(this);
 
-    const auto& configuration = get<erhe::application::Configuration>();
-    const auto& hud           = configuration->hud;
     m_is_visible = hud.show;
     m_x          = hud.x;
     m_y          = hud.y;
@@ -128,6 +133,11 @@ auto Hud::description() -> const char*
 
 void Hud::update_node_transform(const glm::mat4& world_from_camera)
 {
+    if (!m_rendertarget_node)
+    {
+        return;
+    }
+
     const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}};
     const glm::vec3 eye_position{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
     const glm::vec3 up_direction{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
@@ -156,6 +166,11 @@ auto Hud::toggle_visibility() -> bool
 void Hud::set_visibility(const bool value)
 {
     m_is_visible = value;
+
+    if (!m_rendertarget_node)
+    {
+        return;
+    }
 
     if (m_is_visible)
     {
