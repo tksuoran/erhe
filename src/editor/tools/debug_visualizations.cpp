@@ -20,6 +20,7 @@
 #include "erhe/application/view.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
@@ -112,7 +113,7 @@ void Debug_visualizations::mesh_selection_visualization(
 
         const float box_volume             = primitive_geometry.bounding_box.volume();
         const float sphere_volume          = primitive_geometry.bounding_sphere.volume();
-        const bool  smallest_visualization = !m_viewport_config->selection_bounding_box && !m_viewport_config->selection_bounding_sphere;
+        //const bool  smallest_visualization = !m_viewport_config->selection_bounding_box && !m_viewport_config->selection_bounding_sphere;
         const bool  box_smaller            = box_volume < sphere_volume;
 
         if (box_smaller)
@@ -123,7 +124,13 @@ void Debug_visualizations::mesh_selection_visualization(
                 primitive_geometry.bounding_box.max
             );
         }
-        if ((box_smaller && smallest_visualization) || m_viewport_config->selection_bounding_box)
+        if (
+            m_selection_box ||
+            (
+                box_smaller &&
+                !m_selection_sphere
+            )
+        )
         {
             line_renderer.set_thickness(m_selection_major_width);
             line_renderer.add_cube(
@@ -141,7 +148,13 @@ void Debug_visualizations::mesh_selection_visualization(
                 primitive_geometry.bounding_sphere.radius
             );
         }
-        if ((!box_smaller && smallest_visualization) || m_viewport_config->selection_bounding_sphere)
+        if (
+            m_selection_sphere ||
+            (
+                !box_smaller &&
+                !m_selection_box
+            )
+        )
         {
             if (render_context.scene_view != nullptr)
             {
@@ -163,6 +176,10 @@ void Debug_visualizations::mesh_selection_visualization(
                 }
             }
         }
+    }
+
+    if (m_show_only_selection) {
+        mesh_labels(render_context, mesh);
     }
 }
 
@@ -500,11 +517,417 @@ void Debug_visualizations::camera_visualization(
     );
 }
 
+void Debug_visualizations::selection_visualization(const Render_context& context)
+{
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+
+    const auto& selection = m_selection_tool->selection();
+
+    m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
+    for (const auto& node : selection)
+    {
+        if (m_selection_node_axis_visible)
+        {
+            const uint32_t red   = 0xff0000ffu;
+            const uint32_t green = 0xff00ff00u;
+            const uint32_t blue  = 0xffff0000u;
+            const mat4 m{node->world_from_node()};
+            line_renderer.set_thickness(m_selection_node_axis_width);
+            line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+            line_renderer.add_lines( m, green, {{ O, axis_y }} );
+            line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+        }
+
+        if (is_mesh(node))
+        {
+            mesh_selection_visualization(context, as_mesh(node).get());
+        }
+
+        if (
+            is_camera(node) &&
+            (m_viewport_config->debug_visualizations.camera == Visualization_mode::selected)
+        )
+        {
+            camera_visualization(context, as_camera(node).get());
+        }
+    }
+
+    if (m_selection_bounding_volume.get_element_count() > 1)
+    {
+        if (m_selection_bounding_points_visible)
+        {
+            const auto*     camera                = context.camera;
+            const auto      projection_transforms = camera->projection_transforms(context.viewport);
+            const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+
+            for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i)
+            {
+                for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j)
+                {
+                    const auto point = m_selection_bounding_volume.get_point(i, j);
+                    if (!point.has_value())
+                    {
+                        continue;
+                    }
+
+                    const auto point_in_window = context.viewport.project_to_screen_space(
+                        clip_from_world,
+                        point.value(),
+                        0.0f,
+                        1.0f
+                    );
+                    const uint32_t  text_color = 0xff88ff88u;
+                    const glm::vec3 point_in_window_z_negated{
+                            point_in_window.x,
+                            point_in_window.y,
+                        -point_in_window.z
+                    };
+                    m_text_renderer->print(
+                        point_in_window_z_negated,
+                        text_color,
+                        fmt::format("{}.{}", i, j)
+                    );
+                }
+            }
+        }
+
+        erhe::toolkit::Bounding_box    selection_bounding_box;
+        erhe::toolkit::Bounding_sphere selection_bounding_sphere;
+        erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
+        const float    box_volume    = selection_bounding_box.volume();
+        const float    sphere_volume = selection_bounding_sphere.volume();
+        const uint32_t major_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_major_color);
+        const uint32_t minor_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_minor_color);
+        if (
+            m_selection_box ||
+            (
+                !m_selection_sphere &&
+                (box_volume > 0.0f) &&
+                (box_volume < sphere_volume)
+            )
+        )
+        {
+            line_renderer.set_thickness(m_selection_major_width);
+            line_renderer.add_cube(
+                glm::mat4{1.0f},
+                major_color,
+                selection_bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
+                selection_bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
+            );
+        }
+        if (
+            m_selection_sphere ||
+            (
+                !m_selection_box &&
+                (sphere_volume > 0.0f) &&
+                (sphere_volume < box_volume)
+            )
+        )
+        {
+            line_renderer.add_sphere(
+                erhe::scene::Transform{},
+                major_color,
+                minor_color,
+                m_selection_major_width,
+                m_selection_minor_width,
+                selection_bounding_sphere.center,
+                selection_bounding_sphere.radius + m_gap,
+                &(context.camera->world_from_node_transform()),
+                m_sphere_step_count
+            );
+        }
+    }
+}
+
+void Debug_visualizations::physics_nodes_visualization(const std::shared_ptr<Scene_root>& scene_root)
+{
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+
+    for (const auto& mesh : scene_root->layers().content()->meshes)
+    {
+        std::shared_ptr<Node_physics> node_physics = get_physics_node(mesh.get());
+        if (node_physics)
+        {
+            const erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+            if (rigid_body != nullptr)
+            {
+                const erhe::physics::Transform transform = rigid_body->get_world_transform();
+                {
+                    const uint32_t half_red  {0x880000ffu};
+                    const uint32_t half_green{0x8800ff00u};
+                    const uint32_t half_blue {0x88ff0000u};
+                    glm::mat4 m{transform.basis};
+                    m[3] = glm::vec4{
+                        transform.origin.x,
+                        transform.origin.y,
+                        transform.origin.z,
+                        1.0f
+                    };
+                    line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
+                    line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
+                    line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
+                }
+                {
+                    const uint32_t cyan{0xffffff00u};
+                    const glm::vec3 velocity = rigid_body->get_linear_velocity();
+                    glm::mat4 m{1.0f};
+                    m[3] = glm::vec4{
+                        transform.origin.x,
+                        transform.origin.y,
+                        transform.origin.z,
+                        1.0f
+                    };
+                    line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
+                }
+            }
+        }
+    }
+}
+
+void Debug_visualizations::raytrace_nodes_visualization(const std::shared_ptr<Scene_root>& scene_root)
+{
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+
+    const uint32_t red  {0xff0000ffu};
+    const uint32_t green{0xff00ff00u};
+    const uint32_t blue {0xffff0000u};
+
+    for (const auto& mesh : scene_root->layers().content()->meshes)
+    {
+        std::shared_ptr<Node_raytrace> node_raytrace = get_raytrace(mesh.get());
+        if (node_raytrace)
+        {
+            const erhe::raytrace::IInstance* instance = node_raytrace->raytrace_instance();
+            const auto m = instance->get_transform();
+            line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+            line_renderer.add_lines( m, green, {{ O, axis_y }} );
+            line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+        }
+    }
+}
+
+void Debug_visualizations::mesh_labels(
+    const Render_context& context,
+    erhe::scene::Mesh*    mesh
+)
+{
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+
+    if (mesh == nullptr)
+    {
+        return;
+    }
+    if (context.camera == nullptr)
+    {
+        return;
+    }
+    const auto*     camera                = context.camera;
+    const auto      projection_transforms = camera->projection_transforms(context.viewport);
+    const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+
+    const glm::mat4 world_from_node = mesh->world_from_node();
+    for (auto& primitive : mesh->mesh_data.primitives)
+    {
+        const auto& geometry = primitive.source_geometry;
+        if (!geometry)
+        {
+            continue;
+        }
+
+        const auto* point_locations = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations);
+        if ((point_locations != nullptr) && m_show_points)
+        {
+            auto* point_normals        = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals);
+            auto* point_normals_smooth = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals_smooth);
+
+            const uint32_t end = (std::min)(
+                static_cast<uint32_t>(m_max_labels),
+                geometry->get_point_count()
+            );
+            for (erhe::geometry::Point_id point_id = 0; point_id < end; ++point_id)
+            {
+                if (!point_locations->has(point_id))
+                {
+                    continue;
+                }
+
+                const auto p0 = point_locations->get(point_id);
+                glm::vec3  n{0.0f, 0.0f, 0.0f};
+                if ((point_normals_smooth == nullptr) || !point_normals_smooth->maybe_get(point_id, n))
+                {
+                    if (point_normals != nullptr)
+                    {
+                        point_normals->maybe_get(point_id, n);
+                    }
+                }
+                const auto p  = p0 + m_point_label_line_length * n;
+
+                const uint32_t line_color = erhe::toolkit::convert_float4_to_uint32(m_point_label_line_color);
+                line_renderer.set_thickness(m_point_label_line_width);
+                line_renderer.add_lines(
+                    world_from_node,
+                    line_color,
+                    {
+                        {
+                            p0,
+                            p
+                        }
+                    }
+                );
+
+                const std::string label_text = fmt::format("{}", point_id);
+                const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_point_label_text_color);
+                label(context, clip_from_world, world_from_node, p, text_color, label_text);
+            }
+        }
+
+        auto polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals  );
+        if (polygon_normals == nullptr)
+        {
+            geometry->compute_polygon_normals();
+            polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals  );
+        }
+
+        if ((point_locations != nullptr) && m_show_edges)
+        {
+            const uint32_t end = (std::min)(
+                static_cast<uint32_t>(m_max_labels),
+                geometry->get_edge_count()
+            );
+
+            const float t = m_edge_label_line_length;
+            for (erhe::geometry::Edge_id edge_id = 0; edge_id < end; ++edge_id)
+            {
+                const auto& edge = geometry->edges[edge_id];
+
+                if (!point_locations->has(edge.a) || !point_locations->has(edge.b))
+                {
+                    continue;
+                }
+
+                glm::vec3   normal_sum{0.0f, 0.0f, 0.0f};
+                std::size_t polygon_count{0};
+                edge.for_each_polygon_const(
+                    *geometry.get(),
+                    [&normal_sum, &polygon_normals, &polygon_count, this, edge_id]
+                    (erhe::geometry::Edge::Edge_polygon_context_const& context)
+                    {
+                        glm::vec3 polygon_normal;
+                        if (polygon_normals->maybe_get(context.polygon_id, polygon_normal))
+                        {
+                            normal_sum += polygon_normal;
+                            ++polygon_count;
+                        }
+                    }
+                );
+                const auto n  = glm::normalize(normal_sum);
+                const auto a  = point_locations->get(edge.a) + 0.001f * n;
+                const auto b  = point_locations->get(edge.b) + 0.001f * n;
+                const auto p0 = (a + b) / 2.0f;
+                const auto p  = p0 + m_edge_label_text_offset * n;
+
+                const uint32_t line_color = erhe::toolkit::convert_float4_to_uint32(m_edge_label_line_color);
+                line_renderer.set_thickness(m_edge_label_line_width);
+                line_renderer.add_lines(
+                    world_from_node,
+                    line_color,
+                    {
+                        {
+                            t * a + (1.0f - t) * p0,
+                            t * b + (1.0f - t) * p0
+                        },
+                        {
+                            p0,
+                            p
+                        }
+                    }
+                );
+
+                const std::string label_text = fmt::format("{}", edge_id);
+                const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_edge_label_text_color);
+                label(context, clip_from_world, world_from_node, p, text_color, label_text);
+            }
+        }
+
+        const auto polygon_centroids = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_centroids);
+        if ((polygon_centroids != nullptr) && m_show_polygons)
+        {
+            const uint32_t end = (std::min)(
+                static_cast<uint32_t>(m_max_labels),
+                geometry->get_polygon_count()
+            );
+            for (erhe::geometry::Polygon_id polygon_id = 0; polygon_id < end; ++polygon_id)
+            {
+                if (!polygon_centroids->has(polygon_id))
+                {
+                    continue;
+                }
+                if (!polygon_normals->has(polygon_id))
+                {
+                    continue;
+                }
+                const glm::vec3 p = polygon_centroids->get(polygon_id);
+                const glm::vec3 n = polygon_normals  ->get(polygon_id);
+
+                const uint32_t  line_color = erhe::toolkit::convert_float4_to_uint32(m_polygon_label_line_color);
+                line_renderer.set_thickness(m_polygon_label_line_width);
+                line_renderer.add_lines(
+                    world_from_node,
+                    line_color,
+                    {
+                        {
+                            p,
+                            p + m_polygon_label_line_length * n
+                        }
+                    }
+                );
+
+                const std::string label_text = fmt::format("{}", polygon_id);
+                const glm::vec4   p4_in_node = glm::vec4{p + m_polygon_label_line_length * n, 1.0f};
+                const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_polygon_label_text_color);
+
+                label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
+            }
+        }
+    }
+}
+
+void Debug_visualizations::label(
+    const Render_context&  context,
+    const glm::mat4&       clip_from_world,
+    const glm::mat4&       world_from_node,
+    const glm::vec3&       position_in_world,
+    const uint32_t         text_color,
+    const std::string_view label_text
+)
+{
+    const glm::vec4 p4_in_node   = glm::vec4{position_in_world, 1.0f};
+    const glm::vec4 p4_in_world  = world_from_node * p4_in_node;
+    const glm::vec3 p3_in_window = context.viewport.project_to_screen_space(
+        clip_from_world,
+        glm::vec3{p4_in_world},
+        0.0f,
+        1.0f
+    );
+    const glm::vec2 label_size = m_text_renderer->measure(label_text).size();
+    const glm::vec3 p3_in_window_z_negated{
+         p3_in_window.x - label_size.x * 0.5,
+         p3_in_window.y - label_size.x * 0.5,
+        -p3_in_window.z
+    };
+    m_text_renderer->print(
+        p3_in_window_z_negated,
+        text_color,
+        label_text
+    );
+}
+
+
 void Debug_visualizations::tool_render(
     const Render_context& context
 )
 {
-    if (m_line_renderer_set == nullptr)
+    if (!m_line_renderer_set)
     {
         return;
     }
@@ -514,7 +937,6 @@ void Debug_visualizations::tool_render(
         return;
     }
 
-    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
     std::shared_ptr<erhe::scene::Camera> selected_camera;
     const auto& selection = m_selection_tool->selection();
     for (const auto& node : selection)
@@ -527,109 +949,7 @@ void Debug_visualizations::tool_render(
 
     if (m_selection)
     {
-        m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
-        for (const auto& node : selection)
-        {
-            if (m_selection_node_axis_visible)
-            {
-                const uint32_t red   = 0xff0000ffu;
-                const uint32_t green = 0xff00ff00u;
-                const uint32_t blue  = 0xffff0000u;
-                const mat4 m{node->world_from_node()};
-                line_renderer.set_thickness(m_selection_node_axis_width);
-                line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-                line_renderer.add_lines( m, green, {{ O, axis_y }} );
-                line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
-            }
-
-            if (is_mesh(node))
-            {
-                mesh_selection_visualization(context, as_mesh(node).get());
-            }
-
-            if (
-                is_camera(node) &&
-                (m_viewport_config->debug_visualizations.camera == Visualization_mode::selected)
-            )
-            {
-                camera_visualization(context, as_camera(node).get());
-            }
-        }
-
-        if (m_selection_bounding_volume.get_element_count() > 1)
-        {
-            if (m_selection_bounding_points_visible)
-            {
-                const auto*     camera                = context.camera;
-                const auto      projection_transforms = camera->projection_transforms(context.viewport);
-                const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
-
-                for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i)
-                {
-                    for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j)
-                    {
-                        const auto point = m_selection_bounding_volume.get_point(i, j);
-                        if (!point.has_value())
-                        {
-                            continue;
-                        }
-
-                        const auto point_in_window = context.viewport.project_to_screen_space(
-                            clip_from_world,
-                            point.value(),
-                            0.0f,
-                            1.0f
-                        );
-                        const uint32_t  text_color = 0xff88ff88u;
-                        const glm::vec3 point_in_window_z_negated{
-                             point_in_window.x,
-                             point_in_window.y,
-                            -point_in_window.z
-                        };
-                        m_text_renderer->print(
-                            point_in_window_z_negated,
-                            text_color,
-                            fmt::format("{}.{}", i, j)
-                        );
-                    }
-                }
-            }
-
-            erhe::toolkit::Bounding_box    selection_bounding_box;
-            erhe::toolkit::Bounding_sphere selection_bounding_sphere;
-            erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
-            const float    box_volume    = selection_bounding_box.volume();
-            const float    sphere_volume = selection_bounding_sphere.volume();
-            const uint32_t major_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_major_color);
-            const uint32_t minor_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_minor_color);
-            if (
-                (box_volume > 0.0f) &&
-                (box_volume < sphere_volume)
-            )
-            {
-                line_renderer.set_thickness(m_selection_major_width);
-                line_renderer.add_cube(
-                    glm::mat4{1.0f},
-                    major_color,
-                    selection_bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
-                    selection_bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
-                );
-            }
-            else if (sphere_volume > 0.0f)
-            {
-                line_renderer.add_sphere(
-                    erhe::scene::Transform{},
-                    major_color,
-                    minor_color,
-                    m_selection_major_width,
-                    m_selection_minor_width,
-                    selection_bounding_sphere.center,
-                    selection_bounding_sphere.radius + m_gap,
-                    &(context.camera->world_from_node_transform()),
-                    m_sphere_step_count
-                );
-            }
-        }
+        selection_visualization(context);
     }
 
     if (context.scene_view == nullptr)
@@ -641,6 +961,14 @@ void Debug_visualizations::tool_render(
     if (!scene_root)
     {
         return;
+    }
+
+    if (!m_show_only_selection)
+    {
+        for (const auto& mesh : scene_root->layers().content()->meshes)
+        {
+            mesh_labels(context, mesh.get());
+        }
     }
 
     if (m_lights)
@@ -662,72 +990,26 @@ void Debug_visualizations::tool_render(
 
     if (m_physics)
     {
-        for (const auto& mesh : scene_root->layers().content()->meshes)
-        {
-            std::shared_ptr<Node_physics> node_physics = get_physics_node(mesh.get());
-            if (node_physics)
-            {
-                const erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
-                if (rigid_body != nullptr)
-                {
-                    const erhe::physics::Transform transform = rigid_body->get_world_transform();
-                    {
-                        const uint32_t half_red  {0x880000ffu};
-                        const uint32_t half_green{0x8800ff00u};
-                        const uint32_t half_blue {0x88ff0000u};
-                        glm::mat4 m{transform.basis};
-                        m[3] = glm::vec4{
-                            transform.origin.x,
-                            transform.origin.y,
-                            transform.origin.z,
-                            1.0f
-                        };
-                        line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
-                        line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
-                        line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
-                    }
-                    {
-                        const uint32_t cyan{0xffffff00u};
-                        const glm::vec3 velocity = rigid_body->get_linear_velocity();
-                        glm::mat4 m{1.0f};
-                        m[3] = glm::vec4{
-                            transform.origin.x,
-                            transform.origin.y,
-                            transform.origin.z,
-                            1.0f
-                        };
-                        line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
-                    }
-                }
-            }
-        }
+        physics_nodes_visualization(scene_root);
     }
 
     if (m_raytrace)
     {
-        const uint32_t red  {0xff0000ffu};
-        const uint32_t green{0xff00ff00u};
-        const uint32_t blue {0xffff0000u};
-
-        for (const auto& mesh : scene_root->layers().content()->meshes)
-        {
-            std::shared_ptr<Node_raytrace> node_raytrace = get_raytrace(mesh.get());
-            if (node_raytrace)
-            {
-                const erhe::raytrace::IInstance* instance = node_raytrace->raytrace_instance();
-                const auto m = instance->get_transform();
-                line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-                line_renderer.add_lines( m, green, {{ O, axis_y }} );
-                line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
-            }
-        }
+        raytrace_nodes_visualization(scene_root);
     }
 }
 
 void Debug_visualizations::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+    //// for (const auto& line : m_lines)
+    //// {
+    ////     ImGui::TextUnformatted(line.c_str());
+    //// }
+    //// m_lines.clear();
     ImGui::Checkbox   ("Selection Axises",      &m_selection_node_axis_visible);
+    ImGui::Checkbox   ("Selection Box",         &m_selection_box);
+    ImGui::Checkbox   ("Selection Sphere",      &m_selection_sphere);
     ImGui::ColorEdit4 ("Selection Major Color", &m_selection_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Selection Minor Color", &m_selection_minor_color.x, ImGuiColorEditFlags_Float);
     ImGui::SliderFloat("Selection Major Width", &m_selection_major_width, 0.1f, 100.0f);
@@ -752,6 +1034,24 @@ void Debug_visualizations::imgui()
         ImGui::Text("Sphere radius: %f", selection_bounding_sphere.radius);
         ImGui::Text("Sphere Volume: %f", sphere_volume);
     }
+    ImGui::SliderInt("Max Labels",     &m_max_labels, 0, 2000);
+    ImGui::Checkbox ("Only Selection", &m_show_only_selection);
+    ImGui::Checkbox ("Show Points",    &m_show_points);
+    ImGui::Checkbox ("Show Polygons",  &m_show_polygons);
+    ImGui::Checkbox ("Show Edges",     &m_show_edges);
+    ImGui::ColorEdit4 ("Point Label Text Color",    &m_point_label_text_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Point Label Line Color",    &m_point_label_line_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Point Label Line Width",    &m_point_label_line_width,   0.0f, 4.0f);
+    ImGui::SliderFloat("Point Label Line Length",   &m_point_label_line_length,  0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Edge Label Text Color",     &m_edge_label_text_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Edge Label Text Offset",    &m_edge_label_text_offset,  0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Edge Label Line Color",     &m_edge_label_line_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Edge Label Line Width",     &m_edge_label_line_width,   0.0f, 4.0f);
+    ImGui::SliderFloat("Edge Label Line Length",    &m_edge_label_line_length,  0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Polygon Label Text Color",  &m_polygon_label_text_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Polygon Label Line Color",  &m_polygon_label_line_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Polygon Label Line Width",  &m_polygon_label_line_width,   0.0f, 4.0f);
+    ImGui::SliderFloat("Polygon Label Line Length", &m_polygon_label_line_length,  0.0f, 1.0f);
 #endif
 }
 

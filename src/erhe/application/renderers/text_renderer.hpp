@@ -77,7 +77,8 @@ public:
         const uint32_t         text_color,
         const std::string_view text
     );
-    auto measure(const std::string_view text) const -> erhe::ui::Rectangle;
+    [[nodiscard]] auto font_size() -> float;
+    [[nodiscard]] auto measure  (const std::string_view text) const -> erhe::ui::Rectangle;
 
     void render    (erhe::scene::Viewport viewport);
     void next_frame();
@@ -89,12 +90,13 @@ private:
     {
     public:
         Frame_resources(
-            const std::size_t                         vertex_count,
+            bool                                      reverse_depth,
+            std::size_t                               vertex_count,
             erhe::graphics::Shader_stages*            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format,
             erhe::graphics::Buffer*                   index_buffer,
-            const std::size_t                         slot
+            std::size_t                               slot
         );
 
         Frame_resources(const Frame_resources&) = delete;

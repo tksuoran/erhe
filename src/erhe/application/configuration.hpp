@@ -115,6 +115,7 @@ public:
     {
     public:
         bool enabled{true};
+        int  font_size{14};
     };
     Text_renderer text_renderer;
 
@@ -191,7 +192,6 @@ public:
         Window_entry log                 {false};
         Window_entry materials           {false};
         Window_entry material_properties {false};
-        Window_entry mesh_properties     {false};
         Window_entry node_properties     {false};
         Window_entry node_tree           {false};
         Window_entry operation_stack     {false};

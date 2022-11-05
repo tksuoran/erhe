@@ -240,7 +240,8 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("text_renderer"))
         {
             const auto& section = ini["text_renderer"];
-            ini_get(section, "enabled", text_renderer.enabled);
+            ini_get(section, "enabled",   text_renderer.enabled);
+            ini_get(section, "font_size", text_renderer.font_size);
         }
 
         if (ini.has("renderer"))
@@ -272,7 +273,6 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "log",                  windows.log                 );
         get_window(ini, "materials",            windows.materials           );
         get_window(ini, "material_properties",  windows.material_properties );
-        get_window(ini, "mesh_properties",      windows.mesh_properties     );
         get_window(ini, "node_properties",      windows.node_properties     );
         get_window(ini, "node_tree",            windows.node_tree           );
         get_window(ini, "operation_stack",      windows.operation_stack     );

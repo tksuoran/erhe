@@ -48,7 +48,7 @@ void Shader_monitor::initialize_component()
     m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
 }
 
-void Shader_monitor::set_enabled(bool enabled)
+void Shader_monitor::set_enabled(const bool enabled)
 {
     set_run(enabled);
 }

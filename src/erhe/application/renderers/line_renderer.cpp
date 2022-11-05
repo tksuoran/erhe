@@ -125,8 +125,8 @@ void Line_renderer_set::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
     require<Gl_context_provider>();
-    require<Configuration>();
-    require<Shader_monitor>();
+    require<Configuration      >();
+    require<Shader_monitor     >();
 }
 
 static constexpr std::string_view c_line_renderer_initialize_component{"Line_renderer_set::initialize_component()"};

@@ -1,6 +1,7 @@
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/application/application_log.hpp"
 
 #include "erhe/gl/enum_bit_mask_operators.hpp"
@@ -52,6 +53,7 @@ static constexpr gl::Map_buffer_access_mask access_mask{
 }
 
 Text_renderer::Frame_resources::Frame_resources(
+    const bool                                reverse_depth,
     const std::size_t                         vertex_count,
     erhe::graphics::Shader_stages*            shader_stages,
     erhe::graphics::Vertex_attribute_mappings attribute_mappings,
@@ -86,7 +88,7 @@ Text_renderer::Frame_resources::Frame_resources(
             .vertex_input   = &vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
             .color_blend    = erhe::graphics::Color_blend_state::color_blend_premultiplied,
         }
     }
@@ -183,6 +185,7 @@ void Text_renderer::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<Gl_context_provider>();
+    require<Shader_monitor     >();
 }
 
 static constexpr std::string_view c_text_renderer_initialize_component{"Text_renderer::initialize_component()"};
@@ -252,7 +255,11 @@ void Text_renderer::initialize_component()
     m_u_texture_size            = texture->size_bytes();
     m_u_texture_offset          = texture->offset_in_parent();
 
-    m_font = std::make_unique<erhe::ui::Font>("res/fonts/SourceSansPro-Regular.otf", 12, 0.4f);
+    m_font = std::make_unique<erhe::ui::Font>(
+        "res/fonts/SourceSansPro-Regular.otf",
+        config->text_renderer.font_size,
+        1.0f
+    );
 
     {
         ERHE_PROFILE_SCOPE("shader");
@@ -298,6 +305,11 @@ void Text_renderer::initialize_component()
         }
 
         m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
+        const auto shader_monitor = get<Shader_monitor>();
+        if (shader_monitor)
+        {
+            shader_monitor->add(create_info, m_shader_stages.get());
+        }
     }
 
     create_frame_resources();
@@ -312,10 +324,12 @@ void Text_renderer::create_frame_resources()
 {
     ERHE_PROFILE_FUNCTION
 
-    constexpr std::size_t vertex_count{65536};
+    constexpr std::size_t vertex_count{65536 * 8};
+    const bool reverse_depth = get<erhe::application::Configuration>()->graphics.reverse_depth;
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
+            reverse_depth,
             vertex_count,
             m_shader_stages.get(),
             m_attribute_mappings,
@@ -344,7 +358,8 @@ void Text_renderer::next_frame()
 void Text_renderer::print(
     const glm::vec3        text_position,
     const uint32_t         text_color,
-    const std::string_view text)
+    const std::string_view text
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -379,6 +394,11 @@ void Text_renderer::print(
     m_vertex_writer.write_offset += quad_count * 4 * m_vertex_format.stride();
     m_vertex_writer.end();
     m_index_count += quad_count * 5;
+}
+
+auto Text_renderer::font_size() -> float
+{
+    return static_cast<float>(get<erhe::application::Configuration>()->text_renderer.font_size);
 }
 
 auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rectangle
@@ -441,9 +461,6 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     m_projection_writer.end();
 
     const auto& pipeline = current_frame_resources().pipeline;
-
-    m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     m_pipeline_state_tracker->execute(pipeline);

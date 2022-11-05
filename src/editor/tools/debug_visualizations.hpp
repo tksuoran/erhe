@@ -87,10 +87,25 @@ private:
     void directional_light_visualization(Light_visualization_context& context);
     void point_light_visualization      (Light_visualization_context& context);
     void spot_light_visualization       (Light_visualization_context& context);
-
     void camera_visualization(
         const Render_context&      render_context,
         const erhe::scene::Camera* camera
+    );
+    void selection_visualization     (const Render_context& context);
+    void physics_nodes_visualization (const std::shared_ptr<Scene_root>& scene_root);
+    void raytrace_nodes_visualization(const std::shared_ptr<Scene_root>& scene_root);
+    void mesh_labels(
+        const Render_context& context,
+        erhe::scene::Mesh*    mesh
+    );
+
+    void label(
+        const Render_context&  context,
+        const glm::mat4&       clip_from_world,
+        const glm::mat4&       world_from_node,
+        const glm::vec3&       position_in_world,
+        const uint32_t         text_color,
+        const std::string_view label_text
     );
 
     // Component dependencies
@@ -111,6 +126,8 @@ private:
 
     bool      m_selection_bounding_points_visible{false};
     bool      m_selection_node_axis_visible      {false};
+    bool      m_selection_box                    {false};
+    bool      m_selection_sphere                 {false};
     float     m_selection_node_axis_width        {4.0f};
     glm::vec4 m_selection_major_color            {1.0f, 1.0f, 0.0f, 1.0f};
     glm::vec4 m_selection_minor_color            {1.0f, 1.0f, 0.0f, 0.5f};
@@ -121,6 +138,26 @@ private:
     float     m_camera_visualization_width       {4.0f};
     float     m_light_visualization_width        {4.0f};
     int       m_sphere_step_count                {80};
+
+    int       m_max_labels               {400};
+    bool      m_show_only_selection      {true};
+    bool      m_show_points              {false};
+    bool      m_show_polygons            {false};
+    bool      m_show_edges               {false};
+    glm::vec4 m_point_label_text_color   {0.0f, 1.0f, 0.0f, 1.0f};
+    glm::vec4 m_point_label_line_color   {0.0f, 0.8f, 0.0f, 1.0f};
+    float     m_point_label_line_width   {1.5f};
+    float     m_point_label_line_length  {0.1f};
+    glm::vec4 m_edge_label_text_color    {1.0f, 0.0f, 0.0f, 1.0f};
+    float     m_edge_label_text_offset   {0.1f};
+    glm::vec4 m_edge_label_line_color    {0.8f, 0.0f, 0.0f, 1.0f};
+    float     m_edge_label_line_width    {1.5f};
+    float     m_edge_label_line_length   {0.5f};
+    glm::vec4 m_polygon_label_text_color {1.0f, 1.0f, 0.0f, 1.0f};
+    glm::vec4 m_polygon_label_line_color {1.0f, 0.5f, 0.0f, 1.0f};
+    float     m_polygon_label_line_width {1.5f};
+    float     m_polygon_label_line_length{0.1f};
+    //// std::vector<std::string> m_lines;
 };
 
 } // namespace editor

@@ -40,7 +40,6 @@
 #include "windows/layers_window.hpp"
 #include "windows/material_properties.hpp"
 #include "windows/materials_window.hpp"
-#include "windows/mesh_properties.hpp"
 #include "windows/node_properties.hpp"
 #include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
@@ -191,7 +190,6 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Material_properties   >());
         m_components.add(make_shared<editor::Materials_window      >());
         m_components.add(make_shared<editor::Mesh_memory           >());
-        m_components.add(make_shared<editor::Mesh_properties       >());
         m_components.add(make_shared<editor::Node_properties       >());
         m_components.add(make_shared<editor::Node_tree_window      >());
         m_components.add(make_shared<editor::Operation_stack       >());
@@ -265,7 +263,6 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<editor::Layers_window         >(), config.layers              );
     init_window(m_components.get<editor::Material_properties   >(), config.material_properties );
     init_window(m_components.get<editor::Materials_window      >(), config.materials           );
-    init_window(m_components.get<editor::Mesh_properties       >(), config.mesh_properties     );
     init_window(m_components.get<editor::Node_properties       >(), config.node_properties     );
     init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree           );
     init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack     );

@@ -138,8 +138,6 @@ erhe_target_sources_grouped(
     windows/materials_window.hpp
     windows/material_properties.cpp
     windows/material_properties.hpp
-    windows/mesh_properties.cpp
-    windows/mesh_properties.hpp
     windows/node_properties.cpp
     windows/node_properties.hpp
     windows/node_tree_window.cpp
@@ -156,8 +154,6 @@ erhe_target_sources_grouped(
     windows/tool_properties_window.hpp
     windows/viewport_config.cpp
     windows/viewport_config.hpp
-    # windows/viewport_windows.cpp
-    # windows/viewport_windows.hpp
 
     editor_log.cpp
     editor_log.hpp
