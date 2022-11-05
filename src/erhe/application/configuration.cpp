@@ -260,8 +260,9 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "enabled", physics.enabled);
         }
 
-        get_window(ini, "brushes",              windows.brushes             );
+        get_window(ini, "brush_palette",        windows.brush_palette       );
         get_window(ini, "commands",             windows.commands            );
+        get_window(ini, "create",               windows.create              );
         get_window(ini, "debug_view",           windows.debug_view          );
         get_window(ini, "debug_visualizations", windows.debug_visualizations);
         get_window(ini, "fly_camera",           windows.fly_camera          );

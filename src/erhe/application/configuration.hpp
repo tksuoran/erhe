@@ -179,8 +179,9 @@ public:
     class Windows
     {
     public:
-        Window_entry brushes             {false};
+        Window_entry brush_palette       {false};
         Window_entry commands            {false};
+        Window_entry create              {false};
         Window_entry debug_view          {false};
         Window_entry debug_visualizations{false};
         Window_entry fly_camera          {false};

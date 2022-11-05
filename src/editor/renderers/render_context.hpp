@@ -2,6 +2,11 @@
 
 #include "erhe/scene/viewport.hpp"
 
+namespace erhe::graphics
+{
+    class Shader_stages;
+}
+
 namespace erhe::scene
 {
     class Camera;

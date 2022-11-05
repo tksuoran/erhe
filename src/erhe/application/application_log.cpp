@@ -14,7 +14,6 @@ std::shared_ptr<spdlog::logger> log_performance             ;
 std::shared_ptr<spdlog::logger> log_rendergraph             ;
 std::shared_ptr<spdlog::logger> log_renderdoc               ;
 std::shared_ptr<spdlog::logger> log_startup                 ;
-std::shared_ptr<spdlog::logger> log_tools                   ;
 std::shared_ptr<spdlog::logger> log_windows                 ;
 std::shared_ptr<spdlog::logger> log_shader_monitor          ;
 std::shared_ptr<spdlog::logger> log_imgui                   ;
@@ -35,7 +34,6 @@ void initialize_logging()
     log_rendergraph              = erhe::log::make_logger("erhe::application::rendergraph",              spdlog::level::info);
     log_renderdoc                = erhe::log::make_logger("erhe::application::renderdoc",                spdlog::level::info);
     log_startup                  = erhe::log::make_logger("erhe::application::startup",                  spdlog::level::info);
-    log_tools                    = erhe::log::make_logger("erhe::application::tools",                    spdlog::level::info);
     log_windows                  = erhe::log::make_logger("erhe::application::windows",                  spdlog::level::info);
     log_shader_monitor           = erhe::log::make_logger("erhe::application::shader_monitor",           spdlog::level::info);
     log_imgui                    = erhe::log::make_logger("erhe::application::imgui",                    spdlog::level::info);

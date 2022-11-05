@@ -5,6 +5,15 @@ add_executable(${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    brushes/brush.cpp
+    brushes/brush.hpp
+    brushes/brushes.cpp
+    brushes/brushes.hpp
+    brushes/brush_palette.cpp
+    brushes/brush_palette.hpp
+    brushes/create.cpp
+    brushes/create.hpp
+
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_set.cpp
@@ -73,8 +82,6 @@ erhe_target_sources_grouped(
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
 
-    scene/brush.cpp
-    scene/brush.hpp
     scene/debug_draw.cpp
     scene/debug_draw.hpp
     scene/frame_controller.cpp
@@ -126,8 +133,6 @@ erhe_target_sources_grouped(
     tools/trs_tool_visualization.cpp
     tools/trs_tool.hpp
 
-    windows/brushes.cpp
-    windows/brushes.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
     windows/imgui_viewport_window.cpp

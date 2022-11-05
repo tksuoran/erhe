@@ -1,12 +1,12 @@
 
-#include "windows/brushes.hpp"
+#include "brushes/brushes.hpp"
 
+#include "brushes/brush.hpp"
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
-#include "scene/brush.hpp"
 #include "scene/helpers.hpp"
 #include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
@@ -15,7 +15,6 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/grid_tool.hpp"
-#include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/materials_window.hpp"
 #include "windows/operations.hpp"
@@ -23,11 +22,11 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/operation/clone.hpp"
+#include "erhe/physics/icollision_shape.hpp"
+#include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -93,7 +92,6 @@ auto Brush_tool_insert_command::try_call(
 
 Brushes::Brushes()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
     , m_preview_command          {*this}
     , m_insert_command           {*this}
 {
@@ -105,10 +103,9 @@ Brushes::~Brushes() noexcept
 
 void Brushes::declare_required_components()
 {
-    require<erhe::application::Commands     >();
-    require<erhe::application::Imgui_windows>();
-    require<Operations                      >();
-    require<Tools                           >();
+    require<erhe::application::Commands>();
+    require<Operations                 >();
+    require<Tools                      >();
 }
 
 void Brushes::initialize_component()
@@ -116,7 +113,6 @@ void Brushes::initialize_component()
     m_selected_brush_index = 0;
 
     get<Tools>()->register_tool(this);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_preview_command);
@@ -129,12 +125,11 @@ void Brushes::initialize_component()
 
 void Brushes::post_initialize()
 {
-    m_editor_scenes    = get<Editor_scenes   >();
-    m_grid_tool        = get<Grid_tool       >();
-    m_materials_window = get<Materials_window>();
-    m_operation_stack  = get<Operation_stack >();
-    m_selection_tool   = get<Selection_tool  >();
-    m_viewport_windows = get<Viewport_windows>();
+    m_editor_scenes     = get<Editor_scenes   >();
+    m_grid_tool         = get<Grid_tool       >();
+    m_materials_window  = get<Materials_window>();
+    m_operation_stack   = get<Operation_stack >();
+    m_viewport_windows  = get<Viewport_windows>();
 }
 
 auto Brushes::allocate_brush(
@@ -438,8 +433,6 @@ void Brushes::do_insert_operation()
     );
 
     const auto hover_from_brush = get_brush_transform();
-    //const auto world_from_brush = m_hover_mesh->world_from_node() * hover_from_brush;
-    //const auto material         = m_materials->selected_material();
     const uint64_t visibility_flags =
         erhe::scene::Node_visibility::visible     |
         erhe::scene::Node_visibility::content     |
@@ -573,30 +566,25 @@ void Brushes::tool_properties()
 #endif
 }
 
-void Brushes::imgui()
+void Brushes::brush_palette()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
-
     const std::size_t brush_count = m_brushes.size();
-
+    const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
+    for (int i = 0; i < static_cast<int>(brush_count); ++i)
     {
-        const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
-        for (int i = 0; i < static_cast<int>(brush_count); ++i)
+        auto* brush = m_brushes[i].get();
+        const bool button_pressed = erhe::application::make_button(
+            brush->geometry->name.c_str(),
+            (m_selected_brush_index == i)
+                ? erhe::application::Item_mode::active
+                : erhe::application::Item_mode::normal,
+            button_size
+        );
+        if (button_pressed)
         {
-            auto* brush = m_brushes[i].get();
-            const bool button_pressed = erhe::application::make_button(
-                brush->geometry->name.c_str(),
-                (m_selected_brush_index == i)
-                    ? erhe::application::Item_mode::active
-                    : erhe::application::Item_mode::normal,
-                button_size
-            );
-            if (button_pressed)
-            {
-                m_selected_brush_index = i;
-                m_brush = brush;
-            }
+            m_selected_brush_index = i;
+            m_brush = brush;
         }
     }
 #endif

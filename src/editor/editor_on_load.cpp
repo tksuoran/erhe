@@ -1,6 +1,8 @@
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "editor_view_client.hpp"
+#include "brushes/create.hpp"
+#include "brushes/brush_palette.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/image_transfer.hpp"
 #include "operations/operation_stack.hpp"
@@ -34,7 +36,6 @@
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
 
-#include "windows/brushes.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #include "windows/layers_window.hpp"
@@ -172,6 +173,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Programs              >());
         m_components.add(make_shared<editor::Image_transfer        >());
         m_components.add(make_shared<editor::Brushes               >());
+        m_components.add(make_shared<editor::Brush_palette         >());
+        m_components.add(make_shared<editor::Create                >());
         m_components.add(make_shared<editor::Debug_draw            >());
         m_components.add(make_shared<editor::Debug_view_window     >());
         m_components.add(make_shared<editor::Debug_visualizations  >());
@@ -251,7 +254,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<erhe::application::Performance_window>(), config.performance  );
     init_window(m_components.get<erhe::application::Pipelines         >(), config.pipelines    );
 
-    init_window(m_components.get<editor::Brushes               >(), config.brushes             );
+    init_window(m_components.get<editor::Brush_palette         >(), config.brush_palette       );
+    init_window(m_components.get<editor::Create                >(), config.create              );
     init_window(m_components.get<editor::Debug_view_window     >(), config.debug_view          );
     init_window(m_components.get<editor::Debug_visualizations  >(), config.debug_visualizations);
     init_window(m_components.get<editor::Fly_camera_tool       >(), config.fly_camera          );

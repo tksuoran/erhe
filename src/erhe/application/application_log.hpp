@@ -17,7 +17,6 @@ extern std::shared_ptr<spdlog::logger> log_performance;
 extern std::shared_ptr<spdlog::logger> log_rendergraph;
 extern std::shared_ptr<spdlog::logger> log_renderdoc;
 extern std::shared_ptr<spdlog::logger> log_startup;
-extern std::shared_ptr<spdlog::logger> log_tools;
 extern std::shared_ptr<spdlog::logger> log_windows;
 extern std::shared_ptr<spdlog::logger> log_shader_monitor;
 extern std::shared_ptr<spdlog::logger> log_imgui;

@@ -25,8 +25,8 @@ namespace erhe::application
 {
     class Line_renderer_set;
     class Text_renderer;
-
 }
+
 namespace editor
 {
 
@@ -82,8 +82,8 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
+    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;

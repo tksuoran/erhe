@@ -1,4 +1,4 @@
-#include "scene/brush.hpp"
+#include "brushes/brush.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "editor_log.hpp"

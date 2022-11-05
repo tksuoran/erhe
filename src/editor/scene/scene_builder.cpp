@@ -6,6 +6,8 @@
 #include "rendertarget_imgui_viewport.hpp"
 #include "task_queue.hpp"
 
+#include "brushes/brush.hpp"
+#include "brushes/brushes.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
@@ -13,7 +15,6 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
-#include "scene/brush.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/helpers.hpp"
 #include "scene/material_library.hpp"
@@ -24,7 +25,6 @@
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/trs_tool.hpp"
-#include "windows/brushes.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)

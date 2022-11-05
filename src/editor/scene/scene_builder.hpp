@@ -1,8 +1,8 @@
 #pragma once
 
+#include "brushes/brushes.hpp"
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
-#include "windows/brushes.hpp"
 
 #include "erhe/components/components.hpp"
 
@@ -27,8 +27,9 @@ namespace erhe::graphics
 
 namespace erhe::primitive
 {
+    class Build_info;
     class Primitive;
-    class Primitive_eometry;
+    class Primitive_geometry;
 }
 
 namespace erhe::scene
@@ -44,6 +45,7 @@ namespace editor
 {
 
 class Brush;
+class Brushes;
 class Debug_draw;
 class Materials;
 class Mesh_memory;

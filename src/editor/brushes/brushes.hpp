@@ -25,6 +25,11 @@ namespace Physics
     class ICollision_shape;
 }
 
+namespace erhe::application
+{
+    class Line_renderer_set;
+}
+
 namespace erhe::primitive
 {
     class Build_info;
@@ -36,6 +41,7 @@ namespace erhe::scene
 {
     class Mesh;
     class Node;
+    class Transform;
 }
 
 namespace editor
@@ -47,9 +53,10 @@ class Editor;
 class Editor_scenes;
 class Grid_tool;
 class Materials_window;
+class Mesh_memory;
 class Operation_stack;
+class Render_context;
 class Scene_root;
-class Selection_tool;
 class Viewport_windows;
 
 class Brush_tool_preview_command
@@ -102,12 +109,11 @@ public:
 class Brushes
     : public erhe::components::Component
     , public Tool
-    , public erhe::application::Imgui_window
 {
 public:
-    static constexpr int              c_priority{4};
-    static constexpr std::string_view c_type_name   {"Brushes"};
-    static constexpr std::string_view c_title   {"Brushes"};
+    static constexpr int              c_priority {4};
+    static constexpr std::string_view c_type_name{"Brushes"};
+    static constexpr std::string_view c_title    {"Brushes"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Brushes ();
@@ -119,16 +125,14 @@ public:
     void initialize_component       () override;
     void post_initialize            () override;
 
-    // Implements erhe::application::Tool
+    // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override { return c_title.data(); }
     void tool_properties        () override;
     void on_enable_state_changed() override;
 
-    // Implements erhe::application::Imgui_window
-    void imgui() override;
-
     // Public API
+    void brush_palette();
 
     // Commands
     auto try_insert_ready() -> bool;
@@ -173,12 +177,11 @@ private:
     Brush_tool_insert_command  m_insert_command;
 
     // Component dependencies
-    std::shared_ptr<Editor_scenes>      m_editor_scenes;
-    std::shared_ptr<Grid_tool>          m_grid_tool;
-    std::shared_ptr<Materials_window>   m_materials_window;
-    std::shared_ptr<Operation_stack>    m_operation_stack;
-    std::shared_ptr<Selection_tool>     m_selection_tool;
-    std::shared_ptr<Viewport_windows>   m_viewport_windows;
+    std::shared_ptr<Editor_scenes   > m_editor_scenes;
+    std::shared_ptr<Grid_tool       > m_grid_tool;
+    std::shared_ptr<Materials_window> m_materials_window;
+    std::shared_ptr<Operation_stack > m_operation_stack;
+    std::shared_ptr<Viewport_windows> m_viewport_windows;
 
     std::mutex                          m_brush_mutex;
     std::vector<std::shared_ptr<Brush>> m_brushes;
