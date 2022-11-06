@@ -268,9 +268,9 @@ void Hover_tool::tool_render(
         {
             const auto p0 = hover_position_world.value();
             const auto p1 = hover_position_world.value() + content.normal.value();
-            line_renderer.set_line_color(0xff0000ffu);
             line_renderer.set_thickness(10.0f);
             line_renderer.add_lines(
+                glm::vec4{1.0f, 0.0f, 0.0f, 1.0f},
                 {
                     {
                         glm::vec3{p0},

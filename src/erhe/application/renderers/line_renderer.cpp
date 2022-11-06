@@ -102,8 +102,7 @@ Line_renderer_pipeline::Line_renderer_pipeline()
             .shader_type    = gl::Attribute_type::float_vec4,
             .data_type =
             {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
+                .type       = gl::Vertex_attrib_type::float_,
                 .dimension  = 4
             }
         }
@@ -412,23 +411,25 @@ void Line_renderer::end()
 }
 
 void Line_renderer::put(
-    const glm::vec3            point,
-    const float                thickness,
-    const uint32_t             color,
-    const gsl::span<float>&    gpu_float_data,
-    const gsl::span<uint32_t>& gpu_uint_data,
-    size_t&                    word_offset
+    const glm::vec3&        point,
+    const float             thickness,
+    const glm::vec4&        color,
+    const gsl::span<float>& gpu_float_data,
+    std::size_t&            word_offset
 )
 {
     gpu_float_data[word_offset++] = point.x;
     gpu_float_data[word_offset++] = point.y;
     gpu_float_data[word_offset++] = point.z;
     gpu_float_data[word_offset++] = thickness;
-    gpu_uint_data [word_offset++] = color;
+    gpu_float_data[word_offset++] = color.r;
+    gpu_float_data[word_offset++] = color.g;
+    gpu_float_data[word_offset++] = color.b;
+    gpu_float_data[word_offset++] = color.a;
 }
 
 void Line_renderer::add_lines(
-    const glm::mat4                   transform,
+    const glm::mat4&                  transform,
     const std::initializer_list<Line> lines
 )
 {
@@ -436,19 +437,18 @@ void Line_renderer::add_lines(
 
     auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
-    std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const std::size_t         byte_count = vertex_gpu_data.size_bytes();
-    const std::size_t         word_count = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    std::byte* const       start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const std::size_t      byte_count = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count = byte_count / sizeof(float);
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float*   >(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines)
     {
         const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
         const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
-        put(vec3{p0} / p0.w, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
-        put(vec3{p1} / p1.w, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(vec3{p0} / p0.w, m_line_thickness, m_line_color, gpu_float_data, word_offset);
+        put(vec3{p1} / p1.w, m_line_thickness, m_line_color, gpu_float_data, word_offset);
     }
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
@@ -456,7 +456,7 @@ void Line_renderer::add_lines(
 }
 
 void Line_renderer::add_lines(
-    const glm::mat4                    transform,
+    const glm::mat4&                   transform,
     const std::initializer_list<Line4> lines
 )
 {
@@ -464,42 +464,41 @@ void Line_renderer::add_lines(
 
     auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
-    std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const std::size_t         byte_count = vertex_gpu_data.size_bytes();
-    const std::size_t         word_count = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    std::byte* const       start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const std::size_t      byte_count = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count = byte_count / sizeof(float);
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float*   >(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line4& line : lines)
     {
         const glm::vec4 p0{transform * glm::vec4{glm::vec3{line.p0}, 1.0f}};
         const glm::vec4 p1{transform * glm::vec4{glm::vec3{line.p1}, 1.0f}};
-        put(vec3{p0} / p0.w, line.p0.w, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
-        put(vec3{p1} / p1.w, line.p1.w, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(vec3{p0} / p0.w, line.p0.w, m_line_color, gpu_float_data, word_offset);
+        put(vec3{p1} / p1.w, line.p1.w, m_line_color, gpu_float_data, word_offset);
     }
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
 }
 
-void Line_renderer::set_line_color(const uint32_t color)
-{
-    ERHE_VERIFY(m_inside_begin_end);
-
-    m_line_color = color;
-}
-
 void Line_renderer::set_line_color(const float r, const float g, const float b, const float a)
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    m_line_color = erhe::toolkit::convert_float4_to_uint32(glm::vec4{r, g, b, a});
+    m_line_color = glm::vec4{r, g, b, a};
 }
 
-void Line_renderer::set_line_color(const glm::vec3 color)
+void Line_renderer::set_line_color(const glm::vec3& color)
 {
-    m_line_color = erhe::toolkit::convert_float4_to_uint32(color);
+    ERHE_VERIFY(m_inside_begin_end);
+
+    m_line_color = glm::vec4{color, 1.0f};
+}
+
+void Line_renderer::set_line_color(const glm::vec4& color)
+{
+    m_line_color = color;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -507,7 +506,7 @@ void Line_renderer::set_line_color(const ImVec4 color)
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    m_line_color = ImGui::ColorConvertFloat4ToU32(color);
+    m_line_color = glm::vec4{color.x, color.y, color.z, color.w};
 }
 #endif
 
@@ -526,17 +525,16 @@ void Line_renderer::add_lines(
 
     auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
 
-    std::byte* const          start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const std::size_t         byte_count = vertex_gpu_data.size_bytes();
-    const std::size_t         word_count = byte_count / sizeof(float);
-    const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
-    const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
+    std::byte* const       start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
+    const std::size_t      byte_count = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count = byte_count / sizeof(float);
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float*   >(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines)
     {
-        put(line.p0, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
-        put(line.p1, m_line_thickness, m_line_color, gpu_float_data, gpu_uint_data, word_offset);
+        put(line.p0, m_line_thickness, m_line_color, gpu_float_data, word_offset);
+        put(line.p1, m_line_thickness, m_line_color, gpu_float_data, word_offset);
     }
 
     m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
@@ -544,11 +542,11 @@ void Line_renderer::add_lines(
 }
 
 void Line_renderer::add_cube(
-    const glm::mat4 transform,
-    const uint32_t  color,
-    const glm::vec3 min_corner,
-    const glm::vec3 max_corner,
-    const bool      z_cross
+    const glm::mat4& transform,
+    const glm::vec4& color,
+    const glm::vec3& min_corner,
+    const glm::vec3& max_corner,
+    const bool       z_cross
 )
 {
     const auto a = min_corner;
@@ -641,11 +639,11 @@ void Line_renderer::imgui()
 
 void Line_renderer::add_sphere(
     const erhe::scene::Transform&       transform,
-    const uint32_t                      edge_color,
-    const uint32_t                      great_circle_color,
+    const glm::vec4&                    edge_color,
+    const glm::vec4&                    great_circle_color,
     const float                         edge_thickness,
     const float                         great_circle_thickness,
-    const glm::vec3                     local_center,
+    const glm::vec3&                    local_center,
     const float                         radius,
     const erhe::scene::Transform* const camera_world_from_node,
     const int                           step_count

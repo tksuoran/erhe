@@ -330,7 +330,7 @@ private:
     [[nodiscard]] auto get_axis_direction      () const -> glm::dvec3;
     [[nodiscard]] auto get_plane_normal        (const bool world) const -> glm::dvec3;
     [[nodiscard]] auto get_plane_side          (const bool world) const -> glm::dvec3;
-    [[nodiscard]] auto get_axis_color          (Handle handle) const -> uint32_t;
+    [[nodiscard]] auto get_axis_color          (Handle handle) const -> glm::vec4;
     [[nodiscard]] auto get_target_node         () const -> std::shared_ptr<erhe::scene::Node>;
 
     void set_local                  (bool local);
@@ -381,6 +381,7 @@ private:
     float                                      m_rotate_snap          {15.0f};
     erhe::scene::Transform                     m_parent_from_node_before;
 
+    bool             m_cast_rays{false};
     Debug_rendering  m_debug_rendering;
     Drag             m_drag;
     Rotation_context m_rotation;

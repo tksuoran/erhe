@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tools/tool.hpp"
+#include "scene/node_raytrace.hpp"
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
@@ -120,18 +121,6 @@ private:
     void move_drag_point_instant  (glm::vec3 position);
     void move_drag_point_kinematic(glm::vec3 position);
 
-    void draw_projection_ray(
-        const erhe::raytrace::Ray& ray,
-        const erhe::raytrace::Hit& hit
-    );
-
-    [[nodiscard]] auto project_ray(
-        erhe::raytrace::IScene* const raytrace_scene,
-        const glm::vec3               direction_in_world,
-        erhe::raytrace::Ray&          ray,
-        erhe::raytrace::Hit&          hit
-    ) -> bool;
-
     [[nodiscard]] auto get_scene_root    () const -> Scene_root*;
     [[nodiscard]] auto get_raytrace_scene() const -> erhe::raytrace::IScene*;
     [[nodiscard]] auto get_physics_world () const -> erhe::physics::IWorld*;
@@ -181,6 +170,16 @@ private:
     double     m_target_mesh_size  {0.0};
 
     bool       m_show_drag_body{false};
+
+    Ray_hit_style m_ray_hit_style
+    {
+        .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
+        .ray_thickness = 8.0f,
+        .ray_length    = 1.0f,
+        .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
+        .hit_thickness = 8.0f,
+        .hit_size      = 0.5f
+    };
 };
 
 } // namespace editor

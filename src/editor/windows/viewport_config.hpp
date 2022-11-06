@@ -35,9 +35,9 @@ public:
     glm::vec4 corner_color         {0.00f, 0.00f, 1.00f, 1.0f};
     glm::vec4 centroid_color       {0.00f, 0.00f, 1.00f, 1.0f};
 
-    Primitive_color_source edge_lines_color_source       {Primitive_color_source::constant_color};
-    Primitive_color_source polygon_centroids_color_source{Primitive_color_source::constant_color};
-    Primitive_color_source corner_points_color_source    {Primitive_color_source::constant_color};
+    Primitive_color_source edge_lines_color_source       {Primitive_color_source::mesh_wireframe_color};
+    Primitive_color_source polygon_centroids_color_source{Primitive_color_source::mesh_wireframe_color};
+    Primitive_color_source corner_points_color_source    {Primitive_color_source::mesh_wireframe_color};
 };
 
 enum class Visualization_mode : unsigned int

@@ -85,9 +85,6 @@ void Grid_tool::tool_render(
     }
 
     const glm::vec3 camera_position = context.camera->position_in_world();
-
-    const uint32_t  cell_major_color = erhe::toolkit::convert_float4_to_uint32(m_major_color);
-    const uint32_t  cell_minor_color = erhe::toolkit::convert_float4_to_uint32(m_minor_color);
     const glm::mat4 m = erhe::toolkit::create_translation<float>(m_center);
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
@@ -101,8 +98,8 @@ void Grid_tool::tool_render(
         : *m_line_renderer_set->hidden .at(0).get();
     major_renderer.set_thickness(m_major_width);
     minor_renderer.set_thickness(m_minor_width);
-    major_renderer.set_line_color(cell_major_color);
-    minor_renderer.set_line_color(cell_minor_color);
+    major_renderer.set_line_color(m_major_color);
+    minor_renderer.set_line_color(m_minor_color);
 
     //const float x_split  = (camera_position.x > -extent) && (camera_position.x < extent) ? camera_position.x : 0.0f;
     //const float x_split0 = -extent * 0.2f + x_split * 0.8f;

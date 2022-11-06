@@ -47,10 +47,10 @@ void Create_uv_sphere::render_preview(
         //const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
 
         auto& line_renderer = *line_renderer_set.hidden.at(2).get();
-        const uint32_t edge_color             = 0xffffffffu;
-        const uint32_t great_circle_color     = 0x88888888u;
-        const float    edge_thickness         = 4.0f;
-        const float    great_circle_thickness = 2.0f;
+        const glm::vec4 edge_color            {1.0f, 1.0f, 1.0f, 1.0f};
+        const glm::vec4 great_circle_color    {0.5f, 0.5f, 0.5f, 0.5f};
+        const float     edge_thickness        {6.0f};
+        const float     great_circle_thickness{4.0f};
         line_renderer.add_sphere(
             transform,
             edge_color,

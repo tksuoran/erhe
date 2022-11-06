@@ -6,6 +6,11 @@
 
 #include <functional>
 
+namespace erhe::application
+{
+    class Line_renderer;
+}
+
 namespace erhe::geometry
 {
     class Geometry;
@@ -18,6 +23,12 @@ namespace erhe::raytrace
     class IInstance;
     class IScene;
     class Hit;
+    class Ray;
+}
+
+namespace erhe::scene
+{
+    class Mesh;
 }
 
 namespace editor
@@ -82,5 +93,30 @@ auto as_raytrace(erhe::scene::INode_attachment* attachment) -> Node_raytrace*;
 auto as_raytrace(const std::shared_ptr<erhe::scene::INode_attachment>& attachment) -> std::shared_ptr<Node_raytrace>;
 
 auto get_raytrace(erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>;
+
+class Ray_hit_style
+{
+public:
+    glm::vec4 ray_color    {1.0f, 1.0f, 1.0f, 1.0f};
+    float     ray_thickness{4.0f};
+    float     ray_length   {1.0f};
+    glm::vec4 hit_color    {1.0f, 1.0f, 1.0f, 1.0f};
+    float     hit_thickness{2.0f};
+    float     hit_size     {0.5f};
+};
+
+void draw_ray_hit(
+    erhe::application::Line_renderer& line_renderer,
+    const erhe::raytrace::Ray&        ray,
+    const erhe::raytrace::Hit&        hit,
+    const Ray_hit_style&              style = {}
+);
+
+[[nodiscard]] auto project_ray(
+    erhe::raytrace::IScene* const raytrace_scene,
+    erhe::scene::Mesh*            ignore_mesh,
+    erhe::raytrace::Ray&          ray,
+    erhe::raytrace::Hit&          hit
+) -> bool;
 
 } // namespace editor

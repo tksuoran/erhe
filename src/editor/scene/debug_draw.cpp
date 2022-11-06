@@ -65,10 +65,9 @@ void Debug_draw::set_colors(const Colors& colors)
 
 void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::vec3 color)
 {
-    auto color_ui32 = erhe::toolkit::convert_float4_to_uint32(color);
     auto& line_renderer = *m_line_renderer_set->visible.at(2).get();
     line_renderer.set_thickness(line_width);
-    line_renderer.add_lines(color_ui32, { {from, to} });
+    line_renderer.add_lines(glm::vec4{color, 1.0f}, { {from, to} });
 }
 
 void Debug_draw::draw_3d_text(const glm::vec3 location, const char* text)

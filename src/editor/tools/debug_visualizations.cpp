@@ -99,9 +99,7 @@ void Debug_visualizations::mesh_selection_visualization(
     erhe::scene::Mesh*    mesh
 )
 {
-    auto&          line_renderer = *m_line_renderer_set->hidden.at(2).get();
-    const uint32_t major_color   = erhe::toolkit::convert_float4_to_uint32(m_selection_major_color);
-    const uint32_t minor_color   = erhe::toolkit::convert_float4_to_uint32(m_selection_minor_color);
+    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
     for (const auto& primitive : mesh->mesh_data.primitives)
     {
@@ -135,7 +133,7 @@ void Debug_visualizations::mesh_selection_visualization(
             line_renderer.set_thickness(m_selection_major_width);
             line_renderer.add_cube(
                 mesh->world_from_node(),
-                major_color,
+                m_selection_major_color,
                 primitive_geometry.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
                 primitive_geometry.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
             );
@@ -164,8 +162,8 @@ void Debug_visualizations::mesh_selection_visualization(
                     const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
                     line_renderer.add_sphere(
                         mesh->world_from_node_transform(),
-                        major_color,
-                        minor_color,
+                        m_selection_major_color,
+                        m_selection_minor_color,
                         m_selection_major_width,
                         m_selection_minor_width,
                         primitive_geometry.bounding_sphere.center,
@@ -208,10 +206,8 @@ void Debug_visualizations::light_visualization(
         .render_context   = render_context,
         .selected_camera  = selected_camera,
         .light            = light,
-        .light_color      = erhe::toolkit::convert_float4_to_uint32(light->color),
-        .half_light_color = erhe::toolkit::convert_float4_to_uint32(
-            glm::vec4{0.5f * light->color, 0.5f}
-        )
+        .light_color      = glm::vec4{light->color, 1.0f},
+        .half_light_color = glm::vec4{0.5f * light->color, 0.5f}
     };
 
     switch (light->type)
@@ -501,16 +497,11 @@ void Debug_visualizations::camera_visualization(
     const mat4 node_from_clip  = inverse(clip_from_node);
     const mat4 world_from_clip = camera->world_from_node() * node_from_clip;
 
-    const uint32_t color      = erhe::toolkit::convert_float4_to_uint32(camera->node_data.wireframe_color);
-    //const uint32_t half_color = erhe::toolkit::convert_float4_to_uint32(
-    //    vec4{0.5f * vec3{camera->node_data.wireframe_color}, 0.5f}
-    //);
-
     auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
     line_renderer.set_thickness(m_camera_visualization_width);
     line_renderer.add_cube(
         world_from_clip,
-        color,
+        camera->node_data.wireframe_color,
         clip_min_corner,
         clip_max_corner,
         true
@@ -528,9 +519,9 @@ void Debug_visualizations::selection_visualization(const Render_context& context
     {
         if (m_selection_node_axis_visible)
         {
-            const uint32_t red   = 0xff0000ffu;
-            const uint32_t green = 0xff00ff00u;
-            const uint32_t blue  = 0xffff0000u;
+            const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+            const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+            const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
             const mat4 m{node->world_from_node()};
             line_renderer.set_thickness(m_selection_node_axis_width);
             line_renderer.add_lines( m, red,   {{ O, axis_x }} );
@@ -594,10 +585,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         erhe::toolkit::Bounding_box    selection_bounding_box;
         erhe::toolkit::Bounding_sphere selection_bounding_sphere;
         erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
-        const float    box_volume    = selection_bounding_box.volume();
-        const float    sphere_volume = selection_bounding_sphere.volume();
-        const uint32_t major_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_major_color);
-        const uint32_t minor_color   = erhe::toolkit::convert_float4_to_uint32(m_group_selection_minor_color);
+        const float box_volume    = selection_bounding_box.volume();
+        const float sphere_volume = selection_bounding_sphere.volume();
         if (
             m_selection_box ||
             (
@@ -610,7 +599,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             line_renderer.set_thickness(m_selection_major_width);
             line_renderer.add_cube(
                 glm::mat4{1.0f},
-                major_color,
+                m_group_selection_major_color,
                 selection_bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
                 selection_bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
             );
@@ -626,8 +615,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         {
             line_renderer.add_sphere(
                 erhe::scene::Transform{},
-                major_color,
-                minor_color,
+                m_group_selection_major_color,
+                m_group_selection_minor_color,
                 m_selection_major_width,
                 m_selection_minor_width,
                 selection_bounding_sphere.center,
@@ -653,9 +642,9 @@ void Debug_visualizations::physics_nodes_visualization(const std::shared_ptr<Sce
             {
                 const erhe::physics::Transform transform = rigid_body->get_world_transform();
                 {
-                    const uint32_t half_red  {0x880000ffu};
-                    const uint32_t half_green{0x8800ff00u};
-                    const uint32_t half_blue {0x88ff0000u};
+                    const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
+                    const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
+                    const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
                     glm::mat4 m{transform.basis};
                     m[3] = glm::vec4{
                         transform.origin.x,
@@ -668,7 +657,7 @@ void Debug_visualizations::physics_nodes_visualization(const std::shared_ptr<Sce
                     line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
                 }
                 {
-                    const uint32_t cyan{0xffffff00u};
+                    const glm::vec4 cyan{0.0f, 1.0f, 1.0f, 1.0f};
                     const glm::vec3 velocity = rigid_body->get_linear_velocity();
                     glm::mat4 m{1.0f};
                     m[3] = glm::vec4{
@@ -688,9 +677,9 @@ void Debug_visualizations::raytrace_nodes_visualization(const std::shared_ptr<Sc
 {
     auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
-    const uint32_t red  {0xff0000ffu};
-    const uint32_t green{0xff00ff00u};
-    const uint32_t blue {0xffff0000u};
+    const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+    const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+    const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
 
     for (const auto& mesh : scene_root->layers().content()->meshes)
     {
@@ -762,11 +751,10 @@ void Debug_visualizations::mesh_labels(
                 }
                 const auto p  = p0 + m_point_label_line_length * n;
 
-                const uint32_t line_color = erhe::toolkit::convert_float4_to_uint32(m_point_label_line_color);
                 line_renderer.set_thickness(m_point_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    line_color,
+                    m_point_label_line_color,
                     {
                         {
                             p0,
@@ -826,11 +814,10 @@ void Debug_visualizations::mesh_labels(
                 const auto p0 = (a + b) / 2.0f;
                 const auto p  = p0 + m_edge_label_text_offset * n;
 
-                const uint32_t line_color = erhe::toolkit::convert_float4_to_uint32(m_edge_label_line_color);
                 line_renderer.set_thickness(m_edge_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    line_color,
+                    m_edge_label_line_color,
                     {
                         {
                             t * a + (1.0f - t) * p0,
@@ -869,11 +856,10 @@ void Debug_visualizations::mesh_labels(
                 const glm::vec3 p = polygon_centroids->get(polygon_id);
                 const glm::vec3 n = polygon_normals  ->get(polygon_id);
 
-                const uint32_t  line_color = erhe::toolkit::convert_float4_to_uint32(m_polygon_label_line_color);
                 line_renderer.set_thickness(m_polygon_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
-                    line_color,
+                    m_polygon_label_line_color,
                     {
                         {
                             p,

@@ -143,16 +143,16 @@ void Headset_view::tool_render(const Render_context& context)
 
     auto& line_renderer = *m_line_renderer_set->visible.at(2).get();
 
-    constexpr uint32_t red   = 0xff0000ffu;
-    constexpr uint32_t green = 0xff00ff00u;
-    constexpr uint32_t blue  = 0xffff0000u;
-    constexpr uint32_t cyan  = 0xffffff00u;
-    constexpr uint32_t gray  = 0x8888ccffu;
+    constexpr glm::vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 green {0.0f, 1.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 blue  {0.0f, 0.0f, 1.0f, 1.0f};
+    constexpr glm::vec4 cyan  {0.0f, 1.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 orange{1.0f, 0.8f, 0.5f, 0.5f};
 
     line_renderer.set_thickness(4.0f);
     for (const auto& finger_input : m_finger_inputs)
     {
-        const uint32_t color = m_mouse_down
+        const glm::vec4 color = m_mouse_down
             ? green
             : red;
         line_renderer.set_line_color(color);
@@ -161,8 +161,8 @@ void Headset_view::tool_render(const Render_context& context)
 
     for (const auto& controller_input : m_controller_inputs)
     {
-        line_renderer.set_line_color(m_mouse_down ? cyan : blue);
         line_renderer.add_lines(
+            m_mouse_down ? cyan : blue,
             {
                 {
                     controller_input.position,
@@ -172,8 +172,8 @@ void Headset_view::tool_render(const Render_context& context)
         );
         if (controller_input.trigger_value < 1.0f)
         {
-            line_renderer.set_line_color(gray);
             line_renderer.add_lines(
+                orange,
                 {
                     {
                         controller_input.position + controller_input.trigger_value * controller_input.direction,

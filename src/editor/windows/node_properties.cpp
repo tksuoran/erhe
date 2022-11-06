@@ -886,7 +886,7 @@ void Node_properties::imgui()
             ImGui::TreePop();
         }
 
-        ImGui::ColorEdit3(
+        ImGui::ColorEdit4(
             "Wireframe Color",
             &node->node_data.wireframe_color.x,
             ImGuiColorEditFlags_Float |

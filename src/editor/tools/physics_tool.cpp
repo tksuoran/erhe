@@ -555,128 +555,6 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
     return true;
 }
 
-
-auto safe_normalize_cross(const glm::vec3& lhs, const glm::vec3& rhs)
-{
-    const float d = glm::dot(lhs, rhs);
-    if (std::abs(d) > 0.999f)
-    {
-        return erhe::toolkit::min_axis(lhs);
-    }
-
-    const glm::vec3 c0 = glm::cross(lhs, rhs);
-    if (glm::length(c0) < glm::epsilon<float>())
-    {
-        return erhe::toolkit::min_axis(lhs);
-    }
-    return glm::normalize(c0);
-}
-
-void Physics_tool::draw_projection_ray(
-    const erhe::raytrace::Ray& ray,
-    const erhe::raytrace::Hit& hit
-)
-{
-    void* user_data     = hit.instance->get_user_data();
-    auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
-    if (raytrace_node == nullptr)
-    {
-        return;
-    }
-
-    const auto local_normal_opt = raytrace_node->get_hit_normal(hit);
-    if (!local_normal_opt.has_value())
-    {
-        return;
-    }
-
-    const glm::vec3 position        = ray.origin + ray.t_far * ray.direction;
-    const glm::vec3 local_normal    = local_normal_opt.value();
-    const glm::mat4 world_from_node = raytrace_node->get_node()->world_from_node();
-    const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
-    const glm::vec3 T = safe_normalize_cross(N, ray.direction);
-    const glm::vec3 B = safe_normalize_cross(T, N);
-
-    constexpr uint32_t red   = 0xff0000ffu;
-    constexpr uint32_t green = 0xff00ff00u;
-    constexpr uint32_t blue  = 0xffff0000u;
-    erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
-    line_renderer.set_thickness(20.0f);
-    line_renderer.set_line_color(red);
-    line_renderer.add_lines(
-        {
-            {
-                position + 0.01f * N - 0.25f * T,
-                position + 0.01f * N + 0.75f * T
-            }
-        }
-    );
-    line_renderer.set_line_color(green);
-    line_renderer.add_lines(
-        {
-            {
-                position + 0.01f * N - 0.25f * B,
-                position + 0.01f * N + 0.75f * B
-            }
-        }
-    );
-    line_renderer.set_line_color(blue);
-    line_renderer.add_lines(
-        {
-            {
-                position,
-                position + 1.0f * N
-            }
-        }
-    );
-}
-
-[[nodiscard]] auto Physics_tool::project_ray(
-    erhe::raytrace::IScene* const raytrace_scene,
-    const glm::vec3               ray_direction_in_world,
-    erhe::raytrace::Ray&          ray,
-    erhe::raytrace::Hit&          hit
-) -> bool
-{
-    std::size_t count{0};
-    ray = erhe::raytrace::Ray{
-        .origin    = m_target_mesh->position_in_world(),
-        .t_near    = 0.0f,
-        .direction = ray_direction_in_world,
-        .time      = 0.0f,
-        .t_far     = 9999.0f,
-        .mask      = Raytrace_node_mask::content,
-        .id        = 0,
-        .flags     = 0
-    };
-    for (;;)
-    {
-        raytrace_scene->intersect(ray, hit);
-        if (hit.instance == nullptr)
-        {
-            return false;
-        }
-        void* user_data     = hit.instance->get_user_data();
-        auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
-        if (raytrace_node == nullptr)
-        {
-            return false;
-        }
-        auto* node = raytrace_node->get_node();
-        if (node == m_target_mesh.get())
-        {
-            ray.origin = ray.origin + ray.t_far * ray.direction + 0.001f * ray_direction_in_world;
-            ++count;
-            if (count > 100)
-            {
-                return false;
-            }
-            continue;
-        }
-        return true;
-    }
-}
-
 void Physics_tool::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
@@ -688,21 +566,31 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
         auto* raytrace_scene = get_raytrace_scene();
         if (raytrace_scene != nullptr)
         {
-            erhe::raytrace::Ray ray;
+            erhe::raytrace::Ray ray{
+                .origin    = m_target_mesh->position_in_world(),
+                .t_near    = 0.0f,
+                .direction = glm::vec3{0.0f, -1.0f, 0.0f},
+                .time      = 0.0f,
+                .t_far     = 9999.0f,
+                .mask      = Raytrace_node_mask::content,
+                .id        = 0,
+                .flags     = 0
+            };
+
             erhe::raytrace::Hit hit;
-            if (project_ray(raytrace_scene, glm::vec3{0.0f, -1.0f, 0.0f}, ray, hit))
+            if (project_ray(raytrace_scene, m_target_mesh.get(), ray, hit))
             {
-                draw_projection_ray(ray, hit);
+                draw_ray_hit(line_renderer, ray, hit, m_ray_hit_style);
             }
         }
     }
 
     if (m_target_constraint)
     {
-        constexpr uint32_t white = 0xffffffffu;
-        line_renderer.set_line_color(white);
+        constexpr glm::vec4 white{1.0f, 1.0f, 1.0f, 1.0f};
         line_renderer.set_thickness(4.0f);
         line_renderer.add_lines(
+            white,
             {
                 {
                     m_target_position_start,
@@ -716,31 +604,31 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
     constexpr glm::vec3 axis_y{ 0.0f,  1.0f, 0.0f};
     constexpr glm::vec3 axis_z{ 0.0f,  0.0f, 1.0f};
 
-    if (m_target_mesh)
-    {
-        constexpr uint32_t  white {0xffff00ffu};
-        const glm::mat4 m = erhe::toolkit::create_translation<float>(
-            glm::vec3{m_target_mesh->position_in_world()}
-        );
-        line_renderer.set_line_color(white);
-        line_renderer.set_thickness(10.0f);
-        line_renderer.add_lines(
-            m,
-            {
-                //{ -20.0f * axis_x, 20.0f * axis_x},
-                { -20.0f * axis_y, 20.0f * axis_y}
-                //{ -20.0f * axis_z, 20.0f * axis_z}
-            }
-        );
-    }
+    //if (m_target_mesh)
+    //{
+    //    constexpr uint32_t  white {0xffff00ffu};
+    //    const glm::mat4 m = erhe::toolkit::create_translation<float>(
+    //        glm::vec3{m_target_mesh->position_in_world()}
+    //    );
+    //    line_renderer.set_line_color(white);
+    //    line_renderer.set_thickness(10.0f);
+    //    line_renderer.add_lines(
+    //        m,
+    //        {
+    //            //{ -20.0f * axis_x, 20.0f * axis_x},
+    //            { -20.0f * axis_y, 20.0f * axis_y}
+    //            //{ -20.0f * axis_z, 20.0f * axis_z}
+    //        }
+    //    );
+    //}
 
     if (m_show_drag_body)
     {
         const erhe::physics::Transform transform = m_constraint_world_point_rigid_body->get_world_transform();
         {
-            const uint32_t half_red  {0x880000ffu};
-            const uint32_t half_green{0x8800ff00u};
-            const uint32_t half_blue {0x88ff0000u};
+            const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
+            const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
+            const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
             constexpr glm::vec3 O{ 0.0f };
             glm::mat4 m{transform.basis};
             m[3] = glm::vec4{
@@ -837,6 +725,12 @@ void Physics_tool::tool_properties()
         ImGui::Text("Object: %s", object_position.c_str());
         ImGui::Text("World: %s",  world_position.c_str());
     }
+    ImGui::ColorEdit4 ("Ray Color",     &m_ray_hit_style.ray_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Ray Length",    &m_ray_hit_style.ray_length,    0.0f,  1.0f);
+    ImGui::SliderFloat("Ray Thickness", &m_ray_hit_style.ray_thickness, 0.0f, 10.0f);
+    ImGui::ColorEdit4 ("Hit Color",     &m_ray_hit_style.hit_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Hit Size",      &m_ray_hit_style.hit_size,      0.0f,  1.0f);
+    ImGui::SliderFloat("Hit Thickness", &m_ray_hit_style.hit_thickness, 0.0f, 10.0f);
 #endif
 }
 

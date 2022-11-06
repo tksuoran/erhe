@@ -69,8 +69,8 @@ private:
         const Render_context&                render_context;
         std::shared_ptr<erhe::scene::Camera> selected_camera;
         const erhe::scene::Light*            light           {nullptr};
-        uint32_t                             light_color     {0};
-        uint32_t                             half_light_color{0};
+        glm::vec4                            light_color     {0};
+        glm::vec4                            half_light_color{0};
     };
 
     void mesh_selection_visualization(

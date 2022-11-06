@@ -314,8 +314,8 @@ void Theremin::tool_render(const Render_context& context)
     const auto& left_hand  = m_hand_tracker->get_hand(Hand_name::Left);
     const auto& right_hand = m_hand_tracker->get_hand(Hand_name::Right);
 
-    constexpr uint32_t green      = 0xff00ff00u;
-    constexpr uint32_t half_green = 0x88008800u;
+    constexpr glm::vec4 green     {0.0f, 1.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
 
     const glm::vec3 antenna_p0{0.0f, 0.0f, 0.0f};
     const glm::vec3 antenna_p1{0.0f, 2.0f, 0.0f};

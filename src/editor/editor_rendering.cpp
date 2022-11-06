@@ -893,7 +893,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         ERHE_PROFILE_SCOPE("selection edge lines");
 
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
-        primitive_settings.color_source   = Primitive_color_source::constant_color;
+        primitive_settings.color_source   = render_style.edge_lines_color_source;;
         primitive_settings.constant_color = render_style.line_color;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_size  = render_style.line_width;
@@ -915,7 +915,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
     {
         ERHE_PROFILE_SCOPE("selection polygon centroids");
 
-        primitive_settings.color_source   = Primitive_color_source::constant_color;
+        primitive_settings.color_source   = render_style.polygon_centroids_color_source;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_color = render_style.centroid_color;
         primitive_settings.constant_size  = render_style.point_size;
@@ -934,7 +934,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
     {
         ERHE_PROFILE_SCOPE("selection corner points");
 
-        primitive_settings.color_source   = Primitive_color_source::constant_color;
+        primitive_settings.color_source   = render_style.corner_points_color_source;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_color = render_style.corner_color;
         primitive_settings.constant_size  = render_style.point_size;

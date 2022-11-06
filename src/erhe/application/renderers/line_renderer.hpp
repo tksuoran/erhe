@@ -112,9 +112,9 @@ public:
     );
     void imgui();
 
-    void set_line_color(const uint32_t color);
     void set_line_color(const float r, const float g, const float b, const float a);
-    void set_line_color(const glm::vec3 color);
+    void set_line_color(const glm::vec3& color);
+    void set_line_color(const glm::vec4& color);
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     void set_line_color(const ImVec4 color);
 #endif
@@ -125,18 +125,18 @@ public:
     );
 
     void add_lines(
-        const glm::mat4                   transform,
+        const glm::mat4&                  transform,
         const std::initializer_list<Line> lines
     );
 
     void add_lines(
-        const glm::mat4                    transform,
+        const glm::mat4&                   transform,
         const std::initializer_list<Line4> lines
     );
 
     void add_lines(
         const glm::mat4                   transform,
-        const uint32_t                    color,
+        const glm::vec4&                  color,
         const std::initializer_list<Line> lines
     )
     {
@@ -146,7 +146,7 @@ public:
 
 
     void add_lines(
-        const uint32_t                    color,
+        const glm::vec4&                  color,
         const std::initializer_list<Line> lines
     )
     {
@@ -155,20 +155,20 @@ public:
     }
 
     void add_cube(
-        const glm::mat4 transform,
-        const uint32_t  color,
-        const glm::vec3 min_corner,
-        const glm::vec3 max_corner,
-        const bool      z_cross = false
+        const glm::mat4& transform,
+        const glm::vec4& color,
+        const glm::vec3& min_corner,
+        const glm::vec3& max_corner,
+        const bool       z_cross = false
     );
 
     void add_sphere(
         const erhe::scene::Transform& transform,
-        uint32_t                      edge_color,
-        uint32_t                      great_circle_color,
+        const glm::vec4&              edge_color,
+        const glm::vec4&              great_circle_color,
         float                         edge_thickness,
         float                         great_circle_thickness,
-        const glm::vec3               local_center,
+        const glm::vec3&              local_center,
         float                         radius,
         const erhe::scene::Transform* camera_world_from_node = nullptr,
         int                           step_count = 40
@@ -246,24 +246,23 @@ private:
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
 
     void put(
-        const glm::vec3            point,
-        const float                thickness,
-        const uint32_t             color,
-        const gsl::span<float>&    gpu_float_data,
-        const gsl::span<uint32_t>& gpu_uint_data,
-        size_t&                    word_offset
+        const glm::vec3&        point,
+        const float             thickness,
+        const glm::vec4&        color,
+        const gsl::span<float>& gpu_float_data,
+        std::size_t&            word_offset
     );
 
-    std::deque<Frame_resources> m_frame_resources;
-    std::string                 m_name;
-    Line_renderer_pipeline*     m_pipeline                   {nullptr};
-    std::size_t                 m_line_count                 {0};
-    Buffer_writer               m_view_writer;
-    Buffer_writer               m_vertex_writer;
-    std::size_t                 m_current_frame_resource_slot{0};
-    uint32_t                    m_line_color                 {0xffffffffu};
-    float                       m_line_thickness             {1.0f};
-    bool                        m_inside_begin_end           {false};
+    std::deque<Frame_resources>        m_frame_resources;
+    std::string                        m_name;
+    Line_renderer_pipeline*            m_pipeline                   {nullptr};
+    std::size_t                        m_line_count                 {0};
+    Buffer_writer                      m_view_writer;
+    Buffer_writer                      m_vertex_writer;
+    std::size_t                        m_current_frame_resource_slot{0};
+    glm::vec4                          m_line_color                 {1.0f, 1.0f, 1.0f, 1.0f};
+    float                              m_line_thickness             {1.0f};
+    bool                               m_inside_begin_end           {false};
     std::vector<std::function<void()>> m_imgui;
 };
 
@@ -273,7 +272,7 @@ class Line_renderer_set
 {
 public:
     static constexpr std::string_view c_type_name{"Line_renderer_set"};
-    static constexpr std::string_view c_title{"Line Renderer"};
+    static constexpr std::string_view c_title    {"Line Renderer"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Line_renderer_set ();

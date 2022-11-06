@@ -9,8 +9,10 @@
 #include "renderers/mesh_memory.hpp" // need to be able to pass to visualization
 #include "renderers/render_context.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
@@ -25,7 +27,9 @@
 #include "erhe/application/view.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/raytrace/iscene.hpp"
+#include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -439,6 +443,8 @@ void Trs_tool::imgui()
     const bool   show_translate = m_visualization.show_translate;
     const bool   show_rotate    = m_visualization.show_rotate;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
+
+    ImGui::Checkbox("Cast Rays", &m_cast_rays);
 
     ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
     ImGui::Text("Active handle: %s", c_str(m_active_handle));
@@ -1284,6 +1290,57 @@ void Trs_tool::tool_render(
 {
     ERHE_PROFILE_FUNCTION
 
+    erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+
+    if (m_cast_rays)
+    {
+    std::shared_ptr<erhe::scene::Mesh> mesh = as_mesh(m_target_node);
+    if (mesh)
+    {
+        auto* scene_root = reinterpret_cast<Scene_root*>(mesh->node_data.host);
+        if (scene_root != nullptr)
+            {
+                glm::vec3 directions[] = {
+                    { 0.0f, -1.0f,  0.0f},
+                    { 1.0f,  0.0f,  0.0f},
+                    {-1.0f,  0.0f,  0.0f},
+                    { 0.0f,  0.0f,  1.0f},
+                    { 0.0f,  0.0f, -1.0f}
+                };
+                for (auto& d : directions)
+                {
+                    auto& raytrace_scene = scene_root->raytrace_scene();
+                    erhe::raytrace::Ray ray{
+                        .origin    = mesh->position_in_world(),
+                        .t_near    = 0.0f,
+                        .direction = d,
+                        .time      = 0.0f,
+                        .t_far     = 9999.0f,
+                        .mask      = Raytrace_node_mask::content,
+                        .id        = 0,
+                        .flags     = 0
+                    };
+
+                    erhe::raytrace::Hit hit;
+                    if (project_ray(&raytrace_scene, mesh.get(), ray, hit))
+                    {
+                        Ray_hit_style ray_hit_style
+                        {
+                            .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
+                            .ray_thickness = 8.0f,
+                            .ray_length    = 0.5f,
+                            .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
+                            .hit_thickness = 8.0f,
+                            .hit_size      = 0.10f
+                        };
+
+                        draw_ray_hit(line_renderer, ray, hit, ray_hit_style);
+                    }
+                }
+            }
+        }
+    }
+
     if (
         (m_line_renderer_set == nullptr) ||
         (get_handle_type(m_active_handle) != Handle_type::e_handle_type_rotate) ||
@@ -1294,8 +1351,6 @@ void Trs_tool::tool_render(
         return;
     }
 
-    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
-
     const dvec3  p                 = m_rotation.center_of_rotation;
     const dvec3  n                 = m_rotation.normal;
     const dvec3  side1             = m_rotation.reference_direction;
@@ -1305,9 +1360,9 @@ void Trs_tool::tool_render(
     const double scale             = m_visualization.scale * distance / 100.0;
     const double r1                = scale * 6.0;
 
-    constexpr uint32_t red       = 0xff0000ffu;
-    constexpr uint32_t blue      = 0xffff0000u;
-    constexpr uint32_t orange    = 0xcc0088ffu;
+    constexpr glm::vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
+    constexpr glm::vec4 blue  {0.0f, 0.0f, 1.0f, 1.0f};
+    constexpr glm::vec4 orange{1.0f, 0.5f, 0.0f, 0.8f};
 
     {
         const int sector_count = m_rotate_snap_enable
@@ -1432,17 +1487,17 @@ auto Trs_tool::get_handle_type(const Handle handle) const -> Handle_type
     }
 }
 
-auto Trs_tool::get_axis_color(const Handle handle) const -> uint32_t
+auto Trs_tool::get_axis_color(const Handle handle) const -> glm::vec4
 {
     switch (handle)
     {
         //using enum Handle;
-        case Handle::e_handle_translate_x: return 0xff0000ff;
-        case Handle::e_handle_translate_y: return 0xff00ff00;
-        case Handle::e_handle_translate_z: return 0xffff0000;
-        case Handle::e_handle_rotate_x:    return 0xff0000ff;
-        case Handle::e_handle_rotate_y:    return 0xff00ff00;
-        case Handle::e_handle_rotate_z:    return 0xffff0000;
+        case Handle::e_handle_translate_x: return glm::vec4{1.0f, 0.0f, 0.0f, 1.0f};
+        case Handle::e_handle_translate_y: return glm::vec4{0.0f, 1.0f, 0.0f, 1.0f};
+        case Handle::e_handle_translate_z: return glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
+        case Handle::e_handle_rotate_x:    return glm::vec4{1.0f, 0.0f, 0.0f, 1.0f};
+        case Handle::e_handle_rotate_y:    return glm::vec4{0.0f, 1.0f, 0.0f, 1.0f};
+        case Handle::e_handle_rotate_z:    return glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
         case Handle::e_handle_none:
         default:
         {

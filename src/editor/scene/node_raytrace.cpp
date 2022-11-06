@@ -1,6 +1,7 @@
 #include "scene/node_raytrace.hpp"
 #include "editor_log.hpp"
 
+#include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
@@ -353,6 +354,115 @@ auto get_raytrace(erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
         }
     }
     return {};
+}
+
+auto safe_normalize_cross(const glm::vec3& lhs, const glm::vec3& rhs)
+{
+    const float d = glm::dot(lhs, rhs);
+    if (std::abs(d) > 0.999f)
+    {
+        return erhe::toolkit::min_axis(lhs);
+    }
+
+    const glm::vec3 c0 = glm::cross(lhs, rhs);
+    if (glm::length(c0) < glm::epsilon<float>())
+    {
+        return erhe::toolkit::min_axis(lhs);
+    }
+    return glm::normalize(c0);
+}
+
+void draw_ray_hit(
+    erhe::application::Line_renderer& line_renderer,
+    const erhe::raytrace::Ray&        ray,
+    const erhe::raytrace::Hit&        hit,
+    const Ray_hit_style&              style
+)
+{
+    void* user_data     = hit.instance->get_user_data();
+    auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+    if (raytrace_node == nullptr)
+    {
+        return;
+    }
+
+    const auto local_normal_opt = raytrace_node->get_hit_normal(hit);
+    if (!local_normal_opt.has_value())
+    {
+        return;
+    }
+
+    const glm::vec3 position        = ray.origin + ray.t_far * ray.direction;
+    const glm::vec3 local_normal    = local_normal_opt.value();
+    const glm::mat4 world_from_node = raytrace_node->get_node()->world_from_node();
+    const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
+    const glm::vec3 T = safe_normalize_cross(N, ray.direction);
+    const glm::vec3 B = safe_normalize_cross(T, N);
+
+    line_renderer.set_thickness(style.hit_thickness);
+    line_renderer.add_lines(
+        style.hit_color,
+        {
+            {
+                position + 0.01f * N - style.hit_size * T,
+                position + 0.01f * N + style.hit_size * T
+            },
+            {
+                position + 0.01f * N - style.hit_size * B,
+                position + 0.01f * N + style.hit_size * B
+            },
+            {
+                position,
+                position + style.hit_size * N
+            }
+        }
+    );
+    line_renderer.set_thickness(style.ray_thickness);
+    line_renderer.add_lines(
+        style.ray_color,
+        {
+            {
+                position,
+                position - style.ray_length * ray.direction
+            }
+        }
+    );
+}
+
+[[nodiscard]] auto project_ray(
+    erhe::raytrace::IScene* const raytrace_scene,
+    erhe::scene::Mesh*            ignore_mesh,
+    erhe::raytrace::Ray&          ray,
+    erhe::raytrace::Hit&          hit
+) -> bool
+{
+    std::size_t count{0};
+    for (;;)
+    {
+        raytrace_scene->intersect(ray, hit);
+        if (hit.instance == nullptr)
+        {
+            return false;
+        }
+        void* user_data     = hit.instance->get_user_data();
+        auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+        if (raytrace_node == nullptr)
+        {
+            return false;
+        }
+        auto* node = raytrace_node->get_node();
+        if (node == ignore_mesh)
+        {
+            ray.origin = ray.origin + ray.t_far * ray.direction + 0.001f * ray.direction;
+            ++count;
+            if (count > 100)
+            {
+                return false;
+            }
+            continue;
+        }
+        return true;
+    }
 }
 
 }
