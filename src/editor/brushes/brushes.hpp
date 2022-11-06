@@ -132,7 +132,7 @@ public:
     void on_enable_state_changed() override;
 
     // Public API
-    void brush_palette();
+    void brush_palette(int& selected_brush_index);
 
     // Commands
     auto try_insert_ready() -> bool;
@@ -187,7 +187,6 @@ private:
     std::vector<std::shared_ptr<Brush>> m_brushes;
 
     Brush*                              m_brush{nullptr};
-    int                                 m_selected_brush_index{0};
     bool                                m_snap_to_hover_polygon{true};
     bool                                m_snap_to_grid         {false};
     bool                                m_hover_content        {false};

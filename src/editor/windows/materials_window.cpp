@@ -36,6 +36,7 @@ auto Materials_window::selected_material() const -> std::shared_ptr<erhe::primit
 void Materials_window::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
+    require<Editor_scenes>();
 }
 
 void Materials_window::initialize_component()
@@ -46,6 +47,20 @@ void Materials_window::initialize_component()
 void Materials_window::post_initialize()
 {
     m_editor_scenes = get<Editor_scenes>();
+
+    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    for (const auto& scene_root : scene_roots)
+    {
+        const auto& material_library = scene_root->material_library();
+        const auto& materials        = material_library->materials();
+
+        if (materials.empty())
+        {
+            continue;
+        }
+        m_selected_material = materials.front();
+        break;
+    }
 }
 
 void Materials_window::imgui()

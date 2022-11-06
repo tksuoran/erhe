@@ -264,11 +264,11 @@ void Geometry::sort_point_corners()
             }
             if (!found)
             {
-                // log_geometry->warn(
-                //     "Could not sort point corners for point_id = {} head.prev_point_id = {}",
-                //     i.point_id,
-                //     head.prev_point_id
-                // );
+                log_geometry->warn(
+                    "Could not sort point corners for point_id = {} head.prev_point_id = {}",
+                    i.point_id,
+                    head.prev_point_id
+                );
                 failures = true;
             }
             const Point_corner_id point_corner_id = i.point.first_point_corner_id + j;
@@ -279,9 +279,13 @@ void Geometry::sort_point_corners()
     ///// TODO
     if (failures)
     {
-        log_geometry->warn("Could not sort point corners");
+        log_geometry->error("Could not sort point corners");
         debug_trace();
     }
+
+    log_weld->trace("after sort point corners:");
+    debug_trace();
+    sanity_check();
 }
 
 // Allocates new edge polygon.

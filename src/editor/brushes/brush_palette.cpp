@@ -39,7 +39,7 @@ void Brush_palette::post_initialize()
 void Brush_palette::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    m_brushes->brush_palette();
+    m_brushes->brush_palette(m_selected_brush_index);
 #endif
 }
 

@@ -110,8 +110,6 @@ void Brushes::declare_required_components()
 
 void Brushes::initialize_component()
 {
-    m_selected_brush_index = 0;
-
     get<Tools>()->register_tool(this);
 
     const auto commands = get<erhe::application::Commands>();
@@ -139,6 +137,10 @@ auto Brushes::allocate_brush(
     const std::lock_guard<std::mutex> lock{m_brush_mutex};
 
     const auto brush = std::make_shared<Brush>(build_info);
+    if (m_brushes.empty())
+    {
+        m_brush = brush.get();
+    }
     m_brushes.push_back(brush);
     return brush;
 }
@@ -566,7 +568,7 @@ void Brushes::tool_properties()
 #endif
 }
 
-void Brushes::brush_palette()
+void Brushes::brush_palette(int& selected_brush_index)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::size_t brush_count = m_brushes.size();
@@ -576,14 +578,14 @@ void Brushes::brush_palette()
         auto* brush = m_brushes[i].get();
         const bool button_pressed = erhe::application::make_button(
             brush->geometry->name.c_str(),
-            (m_selected_brush_index == i)
+            (selected_brush_index == i)
                 ? erhe::application::Item_mode::active
                 : erhe::application::Item_mode::normal,
             button_size
         );
         if (button_pressed)
         {
-            m_selected_brush_index = i;
+            selected_brush_index = i;
             m_brush = brush;
         }
     }

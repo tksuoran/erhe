@@ -855,17 +855,13 @@ void Debug_visualizations::mesh_labels(
                 }
                 const glm::vec3 p = polygon_centroids->get(polygon_id);
                 const glm::vec3 n = polygon_normals  ->get(polygon_id);
+                const glm::vec3 l = p + m_polygon_label_line_length * n;
 
                 line_renderer.set_thickness(m_polygon_label_line_width);
                 line_renderer.add_lines(
                     world_from_node,
                     m_polygon_label_line_color,
-                    {
-                        {
-                            p,
-                            p + m_polygon_label_line_length * n
-                        }
-                    }
+                    { { p, l } }
                 );
 
                 const std::string label_text = fmt::format("{}", polygon_id);
@@ -873,6 +869,28 @@ void Debug_visualizations::mesh_labels(
                 const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_polygon_label_text_color);
 
                 label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
+
+                if (m_show_corners)
+                {
+                    const erhe::geometry::Polygon polygon = geometry->polygons.at(polygon_id);
+                    polygon.for_each_corner_const(*geometry.get(), [&](auto& i)
+                    {
+                        const auto corner_p    = point_locations->get(i.corner.point_id);
+                        const auto to_centroid = glm::normalize(l - corner_p);
+                        const auto label_p     = corner_p + m_corner_label_line_length * to_centroid;
+
+                        line_renderer.set_thickness(m_corner_label_line_width);
+                        line_renderer.add_lines(
+                            world_from_node,
+                            m_corner_label_line_color,
+                            { { corner_p, label_p } }
+                        );
+
+                        const std::string label_text = fmt::format("{}", i.corner_id);
+                        const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_corner_label_text_color);
+                        label(context, clip_from_world, world_from_node, label_p, text_color, label_text);
+                    });
+                }
             }
         }
     }
@@ -998,6 +1016,8 @@ void Debug_visualizations::imgui()
     ImGui::Checkbox   ("Selection Sphere",      &m_selection_sphere);
     ImGui::ColorEdit4 ("Selection Major Color", &m_selection_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Selection Minor Color", &m_selection_minor_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Group Major Color",     &m_group_selection_major_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Group Minor Color",     &m_group_selection_minor_color.x, ImGuiColorEditFlags_Float);
     ImGui::SliderFloat("Selection Major Width", &m_selection_major_width, 0.1f, 100.0f);
     ImGui::SliderFloat("Selection Minor Width", &m_selection_minor_width, 0.1f, 100.0f);
     ImGui::SliderInt  ("Sphere Step Count",     &m_sphere_step_count, 1, 200);
@@ -1025,6 +1045,7 @@ void Debug_visualizations::imgui()
     ImGui::Checkbox ("Show Points",    &m_show_points);
     ImGui::Checkbox ("Show Polygons",  &m_show_polygons);
     ImGui::Checkbox ("Show Edges",     &m_show_edges);
+    ImGui::Checkbox ("Show Corners",   &m_show_corners);
     ImGui::ColorEdit4 ("Point Label Text Color",    &m_point_label_text_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Point Label Line Color",    &m_point_label_line_color.x, ImGuiColorEditFlags_Float);
     ImGui::SliderFloat("Point Label Line Width",    &m_point_label_line_width,   0.0f, 4.0f);
@@ -1038,6 +1059,10 @@ void Debug_visualizations::imgui()
     ImGui::ColorEdit4 ("Polygon Label Line Color",  &m_polygon_label_line_color.x, ImGuiColorEditFlags_Float);
     ImGui::SliderFloat("Polygon Label Line Width",  &m_polygon_label_line_width,   0.0f, 4.0f);
     ImGui::SliderFloat("Polygon Label Line Length", &m_polygon_label_line_length,  0.0f, 1.0f);
+    ImGui::ColorEdit4 ("Corner Label Text Color",  &m_corner_label_text_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Corner Label Line Color",  &m_corner_label_line_color.x, ImGuiColorEditFlags_Float);
+    ImGui::SliderFloat("Corner Label Line Width",  &m_corner_label_line_width,   0.0f, 4.0f);
+    ImGui::SliderFloat("Corner Label Line Length", &m_corner_label_line_length,  0.0f, 1.0f);
 #endif
 }
 

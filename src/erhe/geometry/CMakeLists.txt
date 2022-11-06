@@ -47,6 +47,7 @@ erhe_target_sources_grouped(
     property_map_collection.inl
     property_map.hpp
     property_map.inl
+    remapper.hpp
     shapes/box.cpp
     shapes/box.hpp
     shapes/cone.cpp
@@ -61,6 +62,7 @@ erhe_target_sources_grouped(
     shapes/regular_polygon.hpp
     shapes/regular_polyhedron.cpp
     shapes/regular_polyhedron.hpp
+    types.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})

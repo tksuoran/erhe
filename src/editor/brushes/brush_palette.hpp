@@ -36,6 +36,7 @@ public:
 private:
     // Component dependencies
     std::shared_ptr<Brushes> m_brushes;
+    int                      m_selected_brush_index{0};
 };
 
 } // namespace editor

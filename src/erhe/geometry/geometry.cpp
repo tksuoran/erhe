@@ -391,7 +391,7 @@ void Geometry::debug_trace() const
             ss << fmt::format("point {:2} corners  = ", i.point_id);
             i.point.for_each_corner_const(*this, [&](auto& j)
             {
-                if (j.corner_id > i.point.first_point_corner_id)
+                if (j.point_corner_id > i.point.first_point_corner_id)
                 {
                     ss << ", ";
                 }
@@ -405,7 +405,7 @@ void Geometry::debug_trace() const
             ss << fmt::format("point {:2} polygons = ", i.point_id);
             i.point.for_each_corner_const(*this, [&](auto& j)
             {
-                if (j.corner_id > i.point.first_point_corner_id)
+                if (j.point_corner_id > i.point.first_point_corner_id)
                 {
                     ss << ", ";
                 }

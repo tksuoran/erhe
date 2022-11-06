@@ -1,5 +1,6 @@
 #include "erhe/application/windows/log_window.hpp"
 
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/application_log.hpp"
@@ -104,6 +105,9 @@ void Log_window::imgui()
         {
             tail->set_paused(m_paused);
         }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100.0f);
+        ImGui::Checkbox("Last on Top", &m_last_on_top);
 
         const auto trim_size = static_cast<size_t>(m_tail_buffer_trim_size);
         tail->trim(trim_size);
@@ -114,32 +118,67 @@ void Log_window::imgui()
             static_cast<size_t>(m_tail_buffer_show_size),
             tail_entries.size()
         );
-        for (
-            auto i = tail_entries.rbegin(),
-            end = tail_entries.rbegin() + visible_count;
-            i != end;
-            ++i
-        )
+        ImGui::PushFont(get<Imgui_renderer>()->mono_font());
+        if (m_last_on_top)
         {
-            auto& entry = *i;
-            ImGui::SetNextItemWidth(100.0f);
-            ImGui::TextColored(
-                ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                "%s",
-                entry.timestamp.c_str()
-            );
-            ImGui::SameLine();
-            //ImGui::TextColored(entry.color, "%s", entry.message.c_str());
-            ImGui::TextUnformatted(entry.message.c_str());
-            //if (entry.repeat_count > 0)
-            //{
-            //    ImGui::TextColored(
-            //        ImVec4{0.55f, 0.55f, 0.55f, 1.0f},
-            //        "Message repeated %u times",
-            //        entry.repeat_count
-            //    );
-            //}
+            for (
+                auto i = tail_entries.rbegin(),
+                end = tail_entries.rbegin() + visible_count;
+                i != end;
+                ++i
+            )
+            {
+                auto& entry = *i;
+                ImGui::SetNextItemWidth(100.0f);
+                ImGui::TextColored(
+                    ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                    "%s",
+                    entry.timestamp.c_str()
+                );
+                ImGui::SameLine();
+                //ImGui::TextColored(entry.color, "%s", entry.message.c_str());
+                ImGui::TextUnformatted(entry.message.c_str());
+                //if (entry.repeat_count > 0)
+                //{
+                //    ImGui::TextColored(
+                //        ImVec4{0.55f, 0.55f, 0.55f, 1.0f},
+                //        "Message repeated %u times",
+                //        entry.repeat_count
+                //    );
+                //}
+            }
+
         }
+        else
+        {
+            for (
+                auto i = tail_entries.begin(),
+                end = tail_entries.begin() + visible_count;
+                i != end;
+                ++i
+            )
+            {
+                auto& entry = *i;
+                ImGui::SetNextItemWidth(100.0f);
+                ImGui::TextColored(
+                    ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                    "%s",
+                    entry.timestamp.c_str()
+                );
+                ImGui::SameLine();
+                //ImGui::TextColored(entry.color, "%s", entry.message.c_str());
+                ImGui::TextUnformatted(entry.message.c_str());
+                //if (entry.repeat_count > 0)
+                //{
+                //    ImGui::TextColored(
+                //        ImVec4{0.55f, 0.55f, 0.55f, 1.0f},
+                //        "Message repeated %u times",
+                //        entry.repeat_count
+                //    );
+                //}
+            }
+        }
+        ImGui::PopFont();
         ImGui::TreePop();
     }
 

@@ -2,6 +2,7 @@
 
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/property_map_collection.hpp"
+#include "erhe/geometry/remapper.hpp"
 #include "erhe/geometry/types.hpp"
 
 #include <glm/glm.hpp>
@@ -245,20 +246,17 @@ public:
         const bool                                 overwrite = false
     ) const;
 
-    [[nodiscard]]
-    auto corner(
+    [[nodiscard]] auto corner(
         const Geometry& geometry,
         const Point_id  point_id
     ) const -> Corner_id;
 
-    [[nodiscard]]
-    auto next_corner(
+    [[nodiscard]] auto next_corner(
         const Geometry& geometry,
         const Corner_id anchor_corner_id
     ) const -> Corner_id;
 
-    [[nodiscard]]
-    auto prev_corner(
+    [[nodiscard]] auto prev_corner(
         const Geometry& geometry,
         const Corner_id corner_id
     ) const -> Corner_id;
@@ -709,9 +707,22 @@ public:
 
     void weld(const Weld_settings& weld_settings);
 
+    // used by weld
+    void reallocate_point_corners(Remapper<Point_id>& point_remapper);
+    void reallocate_point_corners();
+    void remap_corner_polygons   (Remapper<Polygon_id>& polygon_remapper);
+    void remap_corners           (Remapper<Corner_id>& corner_remapper);
+
+    // used by weld
+    void rotate_polygons_to_least_point_first();
+
     void connect(const Weld_settings& weld_settings);
 
     void sanity_check() const;
+
+    void trace_points(spdlog::logger& logger) const;
+
+    void compute_bounding_box(glm::vec3& min_corner, glm::vec3& max_corner) const;
 
     [[nodiscard]] auto get_mass_properties() -> Mass_properties;
 

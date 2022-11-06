@@ -96,7 +96,7 @@ public:
     uint64_t                                       visibility_mask{Node_visibility::none};
     uint64_t                                       flag_bits      {Node_flag_bit::show_debug_visualizations};
     std::size_t                                    depth          {0};
-    glm::vec4                                      wireframe_color{0.0f, 0.0f, 0.0f, 0.7f};
+    glm::vec4                                      wireframe_color{0.6f, 0.7f, 0.8f, 0.7f};
     std::string                                    name;
     std::string                                    label;
 };

@@ -76,9 +76,10 @@ private:
     //};
 
     Log_window_toggle_pause_command m_toggle_pause_command;
-    int                             m_tail_buffer_show_size{25};
-    int                             m_tail_buffer_trim_size{1000};
-    bool                            m_paused{false};
+    int                             m_tail_buffer_show_size{10000};
+    int                             m_tail_buffer_trim_size{10000};
+    bool                            m_paused     {false};
+    bool                            m_last_on_top{false};
 };
 
 } // namespace erhe::application

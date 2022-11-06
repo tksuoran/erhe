@@ -754,6 +754,7 @@ void Scene_builder::make_brushes()
                     instantiate,
                     std::move(cone_geometry),
                     context
+                    // Sadly, Jolt does not have cone shape
                     //erhe::physics::ICollision_shape::create_cone_shape_shared(
                     //    erhe::physics::Axis::Y,
                     //    object_scale,
