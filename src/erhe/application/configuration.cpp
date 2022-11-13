@@ -257,7 +257,8 @@ Configuration::Configuration(int argc, char** argv)
         if (ini.has("physics"))
         {
             const auto& section = ini["physics"];
-            ini_get(section, "enabled", physics.enabled);
+            ini_get(section, "static_enable",  physics.static_enable);
+            ini_get(section, "dynamic_enable", physics.dynamic_enable);
         }
 
         get_window(ini, "brush_palette",        windows.brush_palette       );
@@ -299,6 +300,7 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "spot_light_radius",           scene.spot_light_radius);
             ini_get(section, "spot_light_height",           scene.spot_light_height);
             ini_get(section, "spot_light_count",            scene.spot_light_count);
+            ini_get(section, "floor_div",                   scene.floor_div);
             ini_get(section, "floor_size",                  scene.floor_size);
             ini_get(section, "instance_count",              scene.instance_count);
             ini_get(section, "instance_gap",                scene.instance_gap);
@@ -321,6 +323,7 @@ Configuration::Configuration(int argc, char** argv)
             const auto& section = ini["viewport"];
             ini_get(section, "polygon_fill",              viewport.polygon_fill);
             ini_get(section, "edge_lines",                viewport.edge_lines);
+            ini_get(section, "edge_color",                viewport.edge_color);
             ini_get(section, "selection_polygon_fill",    viewport.selection_polygon_fill);
             ini_get(section, "selection_edge_lines",      viewport.selection_edge_lines);
             ini_get(section, "corner_points",             viewport.corner_points);

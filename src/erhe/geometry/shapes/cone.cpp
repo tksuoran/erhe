@@ -88,6 +88,8 @@ public:
 
     auto make_point_data(const double rel_slice, const double rel_stack) const -> Point_data
     {
+        ERHE_PROFILE_FUNCTION
+
         const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
         const double sin_phi             = std::sin(phi);
         const double cos_phi             = std::cos(phi);
@@ -142,6 +144,8 @@ public:
         const double rel_stack
     ) -> Point_id
     {
+        ERHE_PROFILE_FUNCTION
+
         const Point_id point_id = geometry.make_point();
 
         const auto data = make_point_data(rel_slice, rel_stack);
@@ -178,6 +182,8 @@ public:
         const int stack
     )
     {
+        ERHE_PROFILE_FUNCTION
+
         if ((stack == 0) && bottom_singular)
         {
             return bottom_point_id;
@@ -203,6 +209,8 @@ public:
         const bool       base
     ) -> Corner_id
     {
+        ERHE_PROFILE_FUNCTION
+
         const auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
         const auto rel_stack = static_cast<double>(stack) / static_cast<double>(stack_count);
 
@@ -361,6 +369,8 @@ public:
         , bottom_singular{bottom_radius == 0.0}
         , top_singular   {top_radius    == 0.0}
     {
+        ERHE_PROFILE_FUNCTION
+
         ERHE_VERIFY(slice_count != 0);
         ERHE_VERIFY(stack_count != 0);
         point_locations   = geometry.point_attributes  ().create<vec3>(c_point_locations  );
@@ -380,6 +390,8 @@ public:
 
     void build()
     {
+        ERHE_PROFILE_FUNCTION
+
         // red channel   = anisotropy strength
         // green channel = apply texture coordinate to anisotropy
         const glm::vec4 non_anisotropic          {0.0f, 0.0f, 0.0f, 0.0f}; // Used on tips

@@ -32,6 +32,8 @@ void Imgui_windows::declare_required_components()
 
 void Imgui_windows::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& configuration = get<Configuration>();
 
     if (configuration->imgui.window_viewport)

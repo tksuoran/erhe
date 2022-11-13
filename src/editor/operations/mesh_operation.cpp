@@ -1,4 +1,6 @@
 #include "operations/mesh_operation.hpp"
+
+#include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -41,6 +43,8 @@ Mesh_operation::~Mesh_operation() noexcept
 
 void Mesh_operation::execute(const Operation_context&)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     for (const auto& entry : m_entries)
     {
         auto* scene_root = reinterpret_cast<Scene_root*>(entry.mesh->node_data.host);
@@ -54,6 +58,8 @@ void Mesh_operation::execute(const Operation_context&)
 
 void Mesh_operation::undo(const Operation_context&)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     for (const auto& entry : m_entries)
     {
         auto* scene_root = reinterpret_cast<Scene_root*>(entry.mesh->node_data.host);

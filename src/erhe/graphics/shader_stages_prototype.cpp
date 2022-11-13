@@ -354,85 +354,164 @@ template <typename T>
 
 }
 
-[[nodiscard]] auto Shader_stages::Prototype::try_compile_shader(
-    const Shader_stages::Create_info&               create_info,
+[[nodiscard]] auto Shader_stages::Prototype::compile(
     const Shader_stages::Create_info::Shader_stage& shader
-) -> std::optional<Gl_shader>
+) -> Gl_shader
 {
     Gl_shader gl_shader{shader.type};
+
+    if (m_state == state_fail)
+    {
+        return gl_shader;
+    }
+    ERHE_VERIFY((m_state == state_init) || (m_state == state_shader_compilation_started));
     const auto gl_name = gl_shader.gl_name();
 
-    const std::string source{create_info.final_source(shader)};
+    const std::string source{m_create_info.final_source(shader)};
+    if (source.empty())
+    {
+        m_state = state_fail;
+        return gl_shader;
+    }
     ERHE_VERIFY(source.length() > 0);
     const char* const c_source = source.c_str();
     std::array<const char* , 1> sources{ c_source };
 
     log_glsl->trace(
         "Shader_stage source:\n{}\n",
-        format(create_info.final_source(shader))
+        format(m_create_info.final_source(shader))
     );
 
     gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
     gl::compile_shader(gl_name);
 
+    m_state = state_shader_compilation_started;
+
+    return gl_shader;
+}
+
+[[nodiscard]] auto Shader_stages::Prototype::post_compile(
+    const Shader_stages::Create_info::Shader_stage& shader,
+    Gl_shader&                                      gl_shader
+) -> bool
+{
+    ERHE_VERIFY(m_state == state_shader_compilation_started);
+
+    const auto gl_name = gl_shader.gl_name();
+
     int delete_status {0};
     int compile_status{0};
     gl::get_shader_iv(gl_name, gl::Shader_parameter_name::compile_status, &compile_status);
     gl::get_shader_iv(gl_name, gl::Shader_parameter_name::delete_status,  &delete_status);
+
     if (compile_status != GL_TRUE)
     {
         int length{0};
         gl::get_shader_iv(gl_name, gl::Shader_parameter_name::info_log_length, &length);
         std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
         gl::get_shader_info_log(gl_name, length, nullptr, &log[0]);
-        const std::string f_source = format(sources[0]);
+        const std::string source{m_create_info.final_source(shader)};
+        const std::string f_source = format(source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
         log_glsl->error("{}", f_source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
-        return {};
+        return false;
     }
-    return {std::move(gl_shader)};
+    return true;
 }
 
 Shader_stages::Prototype::Prototype(
     const Shader_stages::Create_info& create_info
 )
-    : m_name{create_info.name}
+    : m_create_info{create_info}
 {
     Expects(m_handle.gl_name() != 0);
+}
 
-    const auto gl_name = m_handle.gl_name();
-    for (const auto& shader : create_info.shaders)
+void Shader_stages::Prototype::compile_shaders()
+{
+    ERHE_VERIFY(m_state == state_init);
+    for (const auto& shader : m_create_info.shaders)
     {
-        auto gl_shader = try_compile_shader(create_info, shader);
-        if (!gl_shader.has_value())
+        m_shaders.emplace_back(compile(shader));
+        if (m_state == state_fail)
         {
-            return;
+            break;
         }
-        gl::attach_shader(gl_name, gl_shader->gl_name());
-        m_attached_shaders.emplace_back(std::move(gl_shader.value()));
+    }
+}
+
+auto Shader_stages::Prototype::link_program() -> bool
+{
+    if (m_state == state_fail)
+    {
+        return false;
     }
 
-    if (!create_info.transform_feedback_varyings.empty())
+    if (m_state == state_init)
     {
-        std::vector<char const *> c_array{create_info.transform_feedback_varyings.size()};
-        for (size_t i = 0; i < create_info.transform_feedback_varyings.size(); ++i)
+        compile_shaders();
+    }
+
+    if (m_state == state_fail)
+    {
+        return false;
+    }
+
+    ERHE_VERIFY(m_state == state_shader_compilation_started);
+
+    const auto gl_name = m_handle.gl_name();
+    ERHE_VERIFY(m_shaders.size() == m_create_info.shaders.size());
+    for (std::size_t i = 0, end = m_shaders.size(); i < end; ++i)
+    {
+        if (!post_compile(m_create_info.shaders[i], m_shaders[i]))
         {
-            c_array[i] = create_info.transform_feedback_varyings[i].c_str();
+            m_state = state_fail;
+            return false;
+        }
+        gl::attach_shader(gl_name, m_shaders[i].gl_name());
+    }
+
+    if (!m_create_info.transform_feedback_varyings.empty())
+    {
+        std::vector<char const *> c_array{m_create_info.transform_feedback_varyings.size()};
+        for (size_t i = 0; i < m_create_info.transform_feedback_varyings.size(); ++i)
+        {
+            c_array[i] = m_create_info.transform_feedback_varyings[i].c_str();
         }
 
         gl::transform_feedback_varyings(
             gl_name,
             static_cast<GLsizei>(c_array.size()),
             c_array.data(),
-            create_info.transform_feedback_buffer_mode
+            m_create_info.transform_feedback_buffer_mode
         );
     }
 
     gl::link_program(gl_name);
+    m_state = state_program_link_started;
+    return true;
+}
 
+void Shader_stages::Prototype::post_link()
+{
+    if (m_state == state_fail)
+    {
+        return;
+    }
+
+    if (m_state != state_program_link_started)
+    {
+        link_program();
+        if (m_state == state_fail)
+        {
+            return;
+        }
+    }
+
+    ERHE_VERIFY(m_state == state_program_link_started);
     int link_status                          {0};
     int validate_status                      {0};
     int info_log_length                      {0};
@@ -446,6 +525,8 @@ Shader_stages::Prototype::Prototype(
     int transform_feedback_buffer_mode       {static_cast<int>(gl::Transform_feedback_buffer_mode::interleaved_attribs)};
     int transform_feedback_varyings          {0};
     int transform_feedback_varying_max_length{0};
+
+    const auto gl_name = m_handle.gl_name();
 
     gl::get_program_iv(gl_name, gl::Program_property::link_status,                           &link_status);
     gl::get_program_iv(gl_name, gl::Program_property::validate_status,                       &validate_status);
@@ -467,13 +548,14 @@ Shader_stages::Prototype::Prototype(
 
     if (link_status != GL_TRUE)
     {
+        m_state = state_fail;
         std::string log(static_cast<std::size_t>(info_log_length) + 1, 0);
         gl::get_program_info_log(gl_name, info_log_length, nullptr, &log[0]);
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
-        for (const auto& s : create_info.shaders)
+        for (const auto& s : m_create_info.shaders)
         {
-            const std::string f_source = format(create_info.final_source(s));
+            const std::string f_source = format(m_create_info.final_source(s));
             log_glsl->error("\n{}", f_source);
         }
         log_program->error("Shader_stages linking failed:");
@@ -482,30 +564,46 @@ Shader_stages::Prototype::Prototype(
     }
     else
     {
+        m_state = state_ready;
         log_program->trace("Shader_stages linking succeeded:");
-        for (const auto& s : create_info.shaders)
+        for (const auto& s : m_create_info.shaders)
         {
-            const std::string f_source = format(create_info.final_source(s));
+            const std::string f_source = format(m_create_info.final_source(s));
             log_glsl->trace("\n{}", f_source);
         }
-        m_link_succeeded = true;
-        if (create_info.dump_reflection)
+        if (m_create_info.dump_reflection)
         {
             dump_reflection();
         }
-        if (create_info.dump_interface)
+        if (m_create_info.dump_interface)
         {
-            const std::string f_source = format(create_info.interface_source());
+            const std::string f_source = format(m_create_info.interface_source());
             log_glsl->info("\n{}", f_source);
         }
-        if (create_info.dump_final_source)
+        if (m_create_info.dump_final_source)
         {
-            for (const auto& s : create_info.shaders)
+            for (const auto& s : m_create_info.shaders)
             {
-                const std::string f_source = format(create_info.final_source(s));
+                const std::string f_source = format(m_create_info.final_source(s));
                 log_glsl->info("\n{}", f_source);
             }
         }
+    }
+}
+
+[[nodiscard]] auto Shader_stages::Prototype::is_valid() -> bool
+{
+    if ((m_state != state_ready) && (m_state != state_fail))
+    {
+        post_link();
+    }
+    if (m_state == state_ready)
+    {
+        return true;
+    }
+    //if (m_state == state_fail)
+    {
+        return false;
     }
 }
 
@@ -824,6 +922,16 @@ void Shader_stages::Prototype::dump_reflection() const
     ///         }
     ///     }
     /// }
+}
+
+auto Shader_stages::Prototype::create_info() const -> const Shader_stages::Create_info&
+{
+    return m_create_info;
+}
+
+auto Shader_stages::Prototype::name() const -> const std::string&
+{
+    return m_create_info.name;
 }
 
 } // namespace erhe::graphics

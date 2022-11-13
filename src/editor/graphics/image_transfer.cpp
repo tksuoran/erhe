@@ -4,6 +4,7 @@
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor
@@ -25,6 +26,8 @@ void Image_transfer::declare_required_components()
 
 void Image_transfer::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };

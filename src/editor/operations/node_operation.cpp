@@ -1,4 +1,6 @@
 #include "operations/node_operation.hpp"
+
+#include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -26,12 +28,27 @@ auto Node_operation::describe() const -> std::string
             ss << ", ";
         }
         ss << entry.node->name();
+        using erhe::scene::Node_data;
+        const auto changed = Node_data::diff_mask(entry.before, entry.after);
+        if (changed & Node_data::bit_transform      ) ss << " transform";
+        if (changed & Node_data::bit_host           ) ss << " host";
+        if (changed & Node_data::bit_parent         ) ss << " parent";
+        if (changed & Node_data::bit_children       ) ss << " children";
+        if (changed & Node_data::bit_attachments    ) ss << " attachments";
+        if (changed & Node_data::bit_visibility_mask) ss << " visibility";
+        if (changed & Node_data::bit_flag_bits      ) ss << " flag-bits";
+        if (changed & Node_data::bit_depth          ) ss << " depth";
+        if (changed & Node_data::bit_wireframe_color) ss << " wireframe-color";
+        if (changed & Node_data::bit_name           ) ss << " name";
+        if (changed & Node_data::bit_label          ) ss << " label";
     }
     return ss.str();
 }
 
 void Node_operation::execute(const Operation_context&)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     for (auto& entry : m_entries)
     {
         entry.node->node_data = entry.after;
@@ -40,6 +57,8 @@ void Node_operation::execute(const Operation_context&)
 
 void Node_operation::undo(const Operation_context&)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     for (const auto& entry : m_entries)
     {
         entry.node->node_data = entry.before;
@@ -81,6 +100,8 @@ Node_attach_operation::Node_attach_operation(
 
 void Node_attach_operation::execute(const Operation_context& context)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     ERHE_VERIFY(m_child_node->parent().lock() == m_parent_before);
 
     m_parent_before_index = m_child_node->get_index_in_parent();
@@ -111,6 +132,8 @@ void Node_attach_operation::execute(const Operation_context& context)
 
 void Node_attach_operation::undo(const Operation_context& context)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     ERHE_VERIFY(m_child_node->parent().lock() == m_parent_after);
 
     if (m_parent_before)
@@ -161,6 +184,8 @@ auto Node_reposition_in_parent_operation::describe() const -> std::string
 
 void Node_reposition_in_parent_operation::execute(const Operation_context& context)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     auto parent = m_child_node->parent().lock();
     ERHE_VERIFY(parent);
 
@@ -191,6 +216,8 @@ void Node_reposition_in_parent_operation::execute(const Operation_context& conte
 
 void Node_reposition_in_parent_operation::undo(const Operation_context& context)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     auto parent = m_child_node->parent().lock();
     ERHE_VERIFY(parent);
 

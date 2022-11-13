@@ -283,9 +283,9 @@ void Geometry::sort_point_corners()
         debug_trace();
     }
 
-    log_weld->trace("after sort point corners:");
-    debug_trace();
-    sanity_check();
+    //// log_weld->trace("after sort point corners:");
+    //// debug_trace();
+    //// sanity_check();
 }
 
 // Allocates new edge polygon.

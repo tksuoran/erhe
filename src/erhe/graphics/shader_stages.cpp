@@ -50,11 +50,11 @@ Shader_stages::Shader_stages(Prototype&& prototype)
 {
     Expects(prototype.is_valid());
     Expects(prototype.m_handle.gl_name() != 0);
-    Expects(!prototype.m_attached_shaders.empty());
+    Expects(!prototype.m_shaders.empty());
 
-    m_name             = std::move(prototype.m_name);
+    m_name             = prototype.name();
     m_handle           = std::move(prototype.m_handle);
-    m_attached_shaders = std::move(prototype.m_attached_shaders);
+    m_attached_shaders = std::move(prototype.m_shaders);
 
     gl::object_label(
         gl::Object_identifier::program,
@@ -69,15 +69,14 @@ void Shader_stages::reload(Prototype&& prototype)
     if (
         !prototype.is_valid()               ||
         (prototype.m_handle.gl_name() == 0) ||
-        prototype.m_attached_shaders.empty()
+        prototype.m_shaders.empty()
     )
     {
         return;
     }
 
-    m_name             = std::move(prototype.m_name);
     m_handle           = std::move(prototype.m_handle);
-    m_attached_shaders = std::move(prototype.m_attached_shaders);
+    m_attached_shaders = std::move(prototype.m_shaders);
 
     gl::object_label(
         gl::Object_identifier::program,

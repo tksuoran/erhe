@@ -89,6 +89,7 @@ void Bvh_instance::intersect(Ray& ray, Hit& hit)
     ray.t_far = local_ray.t_far;
 }
 
+#if 0
 void Bvh_instance::collect_spheres(
     std::vector<bvh::Sphere<float>>& spheres,
     std::vector<Bvh_instance*>&      instances
@@ -98,6 +99,7 @@ void Bvh_instance::collect_spheres(
     auto* bvh_scene      = reinterpret_cast<Bvh_scene*>(instance_scene);
     bvh_scene->collect_spheres(spheres, instances, this);
 }
+#endif
 
 auto Bvh_instance::get_transform() const -> glm::mat4
 {

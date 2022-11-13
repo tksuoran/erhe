@@ -34,7 +34,7 @@ Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(
 {
 }
 
-Fly_camera_space_mouse_listener::~Fly_camera_space_mouse_listener()
+Fly_camera_space_mouse_listener::~Fly_camera_space_mouse_listener() noexcept
 {
 }
 
@@ -157,10 +157,6 @@ auto Fly_camera_move_command::try_call(
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
-#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
-    , m_space_mouse_listener         {*this}
-    , m_space_mouse_controller       {m_space_mouse_listener}
-#endif
     , m_turn_command                  {*this}
     , m_move_up_active_command        {*this, Control::translate_y, erhe::application::Controller_item::more, true }
     , m_move_up_inactive_command      {*this, Control::translate_y, erhe::application::Controller_item::more, false}
@@ -174,6 +170,10 @@ Fly_camera_tool::Fly_camera_tool()
     , m_move_forward_inactive_command {*this, Control::translate_z, erhe::application::Controller_item::less, false}
     , m_move_backward_active_command  {*this, Control::translate_z, erhe::application::Controller_item::more, true }
     , m_move_backward_inactive_command{*this, Control::translate_z, erhe::application::Controller_item::more, false}
+#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
+    , m_space_mouse_listener  {*this}
+    , m_space_mouse_controller{m_space_mouse_listener}
+#endif
 {
 }
 

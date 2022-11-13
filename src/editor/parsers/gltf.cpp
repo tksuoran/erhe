@@ -276,14 +276,14 @@ private:
             .type             = cgltf_file_type_invalid, // auto
             .json_token_count = 0, // 0 == auto
             .memory = {
-                .alloc     = nullptr,
-                .free      = nullptr,
-                .user_data = nullptr
+                .alloc_func   = nullptr,
+                .free_func    = nullptr,
+                .user_data    = nullptr
             },
             .file = {
-                .read      = nullptr,
-                .release   = nullptr,
-                .user_data = nullptr
+                .read         = nullptr,
+                .release      = nullptr,
+                .user_data    = nullptr
             }
         };
 

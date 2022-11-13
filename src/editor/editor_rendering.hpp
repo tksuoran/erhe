@@ -113,6 +113,8 @@ public:
     void end_frame  ();
 
 private:
+    void setup_renderpasses();
+
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 

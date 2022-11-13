@@ -1111,6 +1111,8 @@ auto make_primitive(
     const Normal_style              normal_style
 ) -> Primitive_geometry
 {
+    ERHE_PROFILE_FUNCTION
+
     Primitive_builder builder{geometry, build_info, normal_style};
     return builder.build();
 }

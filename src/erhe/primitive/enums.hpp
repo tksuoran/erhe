@@ -43,4 +43,4 @@ static constexpr const char* c_normal_style_strings[] =
 [[nodiscard]] auto c_str(const Primitive_mode primitive_mode) -> const char*;
 [[nodiscard]] auto c_str(const Normal_style normal_style) -> const char*;
 
-}
+} // namespace erhe::primitive

@@ -55,7 +55,7 @@ Node::Node(std::string_view name)
 
 Node::~Node() noexcept
 {
-    sanity_check();
+    sanity_check(nullptr);
 
     for (auto& child : node_data.children)
     {
@@ -67,7 +67,7 @@ Node::~Node() noexcept
         attachment->set_node(nullptr);
     }
     remove_from_scene();
-    sanity_check();
+    sanity_check(nullptr);
 }
 
 auto Node::node_type() const -> const char*
@@ -122,9 +122,9 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
     attachment->set_node(this);
     attachment->on_attached_to(this);
     attachment->on_node_transform_changed();
-    sanity_check();
+    sanity_check(node_data.host);
     on_visibility_mask_changed();
-    sanity_check();
+    sanity_check(node_data.host);
 }
 
 auto Node::detach(INode_attachment* attachment) -> bool
@@ -176,7 +176,7 @@ auto Node::detach(INode_attachment* attachment) -> bool
         node_data.attachments.erase(i, node_data.attachments.end());
         attachment->on_detached_from(this);
         attachment->set_node(nullptr);
-        sanity_check();
+        sanity_check(node_data.host);
         return true;
     }
 
@@ -299,7 +299,7 @@ void Node::attach(
     {
         child_node->on_attached();
     }
-    sanity_check();
+    sanity_check(node_data.host);
 }
 
 auto Node::detach(
@@ -400,7 +400,7 @@ auto Node::detach(
         {
             child_node->on_detached_from(*this);
         }
-        sanity_check();
+        sanity_check(node_data.host);
         return true;
     }
 
@@ -415,7 +415,7 @@ void Node::set_parent(const std::weak_ptr<Node>& new_parent_node)
 
 void Node::on_attached()
 {
-    sanity_check();
+    sanity_check(node_data.host);
 }
 
 void Node::set_depth_recursive(const std::size_t depth)
@@ -436,7 +436,7 @@ void Node::set_depth_recursive(const std::size_t depth)
 void Node::on_detached_from(Node& node)
 {
     static_cast<void>(node);
-    sanity_check();
+    sanity_check(node_data.host);
 }
 
 void Node::on_transform_changed(uint64_t serial) const
@@ -483,7 +483,7 @@ void Node::unparent()
     )
     {
         current_parent->detach(this);
-        root_node->attach(shared_from_this());
+        //root_node->attach(shared_from_this()); //// TODO Remove? already done by detach()
         //current_parent->detach(this);
     }
 }
@@ -539,9 +539,10 @@ void Node::update_world_from_node()
     }
 }
 
-void Node::sanity_check() const
+void Node::sanity_check(const void* host) const
 {
 #if 1
+    ERHE_VERIFY((host == nullptr) || (node_data.host == host));
     sanity_check_root_path(this);
 
     const auto& current_parent = parent().lock();
@@ -589,7 +590,7 @@ void Node::sanity_check() const
                 child->depth()
             );
         }
-        child->sanity_check();
+        child->sanity_check(host);
     }
 
     for (const auto& attachment : node_data.attachments)
@@ -833,6 +834,25 @@ auto is_transform(Node* const node) -> bool
 auto is_transform(const std::shared_ptr<Node>& node) -> bool
 {
     return is_transform(node.get());
+}
+
+auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs) -> unsigned int
+{
+    unsigned int mask{0};
+
+    if (lhs.transforms.parent_from_node != rhs.transforms.parent_from_node) mask |= Node_data::bit_transform;
+    if (lhs.transforms.world_from_node  != rhs.transforms.world_from_node ) mask |= Node_data::bit_transform;
+    if (lhs.host                        != rhs.host                       ) mask |= Node_data::bit_host;
+    // if (lhs.parent                      != rhs.parent                     ) mask |= Node_data::bit_parent;
+    // children
+    // attachments
+    if (lhs.visibility_mask             != rhs.visibility_mask            ) mask |= Node_data::bit_visibility_mask;
+    if (lhs.flag_bits                   != rhs.flag_bits                  ) mask |= Node_data::bit_flag_bits;
+    if (lhs.depth                       != rhs.depth                      ) mask |= Node_data::bit_depth;
+    if (lhs.wireframe_color             != rhs.wireframe_color            ) mask |= Node_data::bit_wireframe_color;
+    if (lhs.name                        != rhs.name                       ) mask |= Node_data::bit_name;
+    if (lhs.label                       != rhs.label                      ) mask |= Node_data::bit_label;
+    return mask;
 }
 
 } // namespace erhe::scene

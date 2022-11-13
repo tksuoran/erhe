@@ -61,6 +61,8 @@ private:
     glm::mat4 m_inverse_matrix{1.0f};
 };
 
-auto operator*(const Transform& lhs, const Transform& rhs) -> Transform;
+auto operator* (const Transform& lhs, const Transform& rhs) -> Transform;
+auto operator==(const Transform& lhs, const Transform& rhs) -> bool;
+auto operator!=(const Transform& lhs, const Transform& rhs) -> bool;
 
 } // namespace erhe::scene

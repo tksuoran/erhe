@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace erhe::scene
 {
@@ -23,13 +24,14 @@ class IRigid_body_create_info
 {
 public:
     IWorld&                           world;
-    float                             mass             {1.0f};
     float                             friction         {0.5f};
     float                             restitution      {0.2f};
     float                             linear_damping   {0.05f};
     float                             angular_damping  {0.05f};
     std::shared_ptr<ICollision_shape> collision_shape  {};
-    glm::mat4                         local_inertia    {0.0f};
+    std::optional<float>              density          {};
+    std::optional<float>              mass             {};
+    std::optional<glm::mat4>          inertia_override {};
     const char*                       debug_label      {nullptr};
     bool                              enable_collisions{true};
 };
@@ -68,7 +70,6 @@ public:
     virtual void move_world_transform        (const Transform transform, float delta_time)              = 0;
     virtual void set_angular_velocity        (const glm::vec3 velocity)                                 = 0;
     virtual void set_center_of_mass_transform(const Transform transform)                                = 0;
-    virtual void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape) = 0;
     virtual void set_damping                 (float linear_damping, float angular_damping)              = 0;
     virtual void set_friction                (float friction)                                           = 0;
     virtual void set_gravity_factor          (float gravity_factor)                                     = 0;

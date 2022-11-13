@@ -2,8 +2,10 @@
 
 #include "tools/tool.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/primitive/enums.hpp"
 #include "erhe/scene/transform.hpp"
 
 #include <glm/glm.hpp>
@@ -20,7 +22,7 @@ namespace editor
 
 class Brush;
 class Brushes;
-class Brush_create_context;
+class Brush_data;
 class Editor_scenes;
 class Materials_window;
 class Mesh_memory;
@@ -36,7 +38,7 @@ public:
         const erhe::scene::Transform&         transform
     );
 
-    [[nodiscard]] auto imgui(const Brush_create_context& context) -> std::shared_ptr<Brush>;
+    [[nodiscard]] auto imgui(Brush_data& brush_create_info) -> std::shared_ptr<Brush>;
 
 private:
     bool  m_preview    {false};
@@ -82,6 +84,9 @@ private:
     std::shared_ptr<Mesh_memory     > m_mesh_memory;
     std::shared_ptr<Operation_stack > m_operation_stack;
     std::shared_ptr<Selection_tool  > m_selection_tool;
+
+    erhe::primitive::Normal_style m_normal_style{erhe::primitive::Normal_style::point_normals};
+    float                         m_density     {1.0f};
 
     Create_uv_sphere m_create_uv_sphere;
 };

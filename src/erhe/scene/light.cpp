@@ -19,6 +19,7 @@ Light::Light(const std::string_view name)
     : Node{name}
 {
     node_data.flag_bits |= (Node_flag_bit::is_light | Node_flag_bit::is_transform);
+    node_data.visibility_mask = Node_visibility::content;
 }
 
 Light::~Light() noexcept

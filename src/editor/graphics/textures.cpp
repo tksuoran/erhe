@@ -5,6 +5,7 @@
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor {
@@ -30,6 +31,8 @@ void Textures::declare_required_components()
 
 void Textures::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };

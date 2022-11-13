@@ -1,4 +1,6 @@
 #include "operations/attach_detach_operation.hpp"
+
+#include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
@@ -94,11 +96,15 @@ auto Attach_detach_operation::describe() const -> std::string
 
 void Attach_detach_operation::execute(const Operation_context&)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     execute(m_parameters.attach);
 }
 
 void Attach_detach_operation::undo(const Operation_context&)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     execute(!m_parameters.attach);
 }
 

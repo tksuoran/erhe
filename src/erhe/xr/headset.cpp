@@ -8,6 +8,8 @@ namespace erhe::xr {
 
 Headset::Headset(erhe::toolkit::Context_window* context_window, const Xr_configuration& configuration)
 {
+    ERHE_PROFILE_FUNCTION
+
     ERHE_VERIFY(context_window != nullptr);
 
     m_xr_instance = std::make_unique<Xr_instance>(configuration);

@@ -158,6 +158,7 @@ void Bvh_scene::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* in_instance
 }
 
 // WIP - not ready / used
+#if 0
 void Bvh_scene::collect_spheres(
     std::vector<bvh::Sphere<float>>& spheres,
     std::vector<Bvh_instance*>&      instances,
@@ -186,6 +187,7 @@ void Bvh_scene::collect_spheres(
         }
     }
 }
+#endif
 
 auto Bvh_scene::debug_label() const -> std::string_view
 {

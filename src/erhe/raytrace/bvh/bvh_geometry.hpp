@@ -22,7 +22,7 @@ class Hit;
 
 class Bvh_geometry
     : public IGeometry
-    , public erhe::toolkit::Bounding_volume_source
+    ////, public erhe::toolkit::Bounding_volume_source
 {
 public:
     explicit Bvh_geometry(
@@ -54,12 +54,12 @@ public:
 
     // Bvh_geometry public API
     auto intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool;
-    [[nodiscard]] auto get_sphere() const -> const erhe::toolkit::Bounding_sphere&;
+    ////[[nodiscard]] auto get_sphere() const -> const erhe::toolkit::Bounding_sphere&;
 
     // Implements erhe::toolkit::Bounding_volume_source
-    auto get_element_count      () const -> std::size_t override;
-    auto get_element_point_count(std::size_t element_index) const -> std::size_t override;
-    auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> override;
+    //// auto get_element_count      () const -> std::size_t override;
+    //// auto get_element_point_count(std::size_t element_index) const -> std::size_t override;
+    //// auto get_point              (std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3> override;
 
 private:
     class Buffer_info
@@ -84,7 +84,7 @@ private:
     std::vector<Buffer_info> m_buffer_infos;
 
     std::vector<bvh::Triangle<float>>          m_triangles;
-    std::vector<glm::vec3>                     m_points;
+    ////std::vector<glm::vec3>                     m_points;
     std::unique_ptr<bvh::BoundingBox<float>[]> m_bounding_boxes;
     std::unique_ptr<bvh::Vector3<float>[]>     m_centers;
     bvh::BoundingBox<float>                    m_global_bbox;

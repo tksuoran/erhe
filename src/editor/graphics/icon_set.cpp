@@ -67,6 +67,8 @@ void Icon_set::declare_required_components()
 
 void Icon_set::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& config = get<erhe::application::Configuration>();
     m_row_count    = 16;
     m_column_count = 16;

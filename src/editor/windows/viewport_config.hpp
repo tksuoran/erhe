@@ -31,11 +31,11 @@ public:
     float     polygon_offset_clamp {0.0001f};
     float     point_size           {4.0f};
     float     line_width           {1.0f};
-    glm::vec4 line_color           {1.00f, 0.60f, 0.00f, 1.0f};
+    glm::vec4 line_color           {0.00f, 0.00f, 0.00f, 0.5f};
     glm::vec4 corner_color         {0.00f, 0.00f, 1.00f, 1.0f};
     glm::vec4 centroid_color       {0.00f, 0.00f, 1.00f, 1.0f};
 
-    Primitive_color_source edge_lines_color_source       {Primitive_color_source::mesh_wireframe_color};
+    Primitive_color_source edge_lines_color_source       {Primitive_color_source::constant_color};
     Primitive_color_source polygon_centroids_color_source{Primitive_color_source::mesh_wireframe_color};
     Primitive_color_source corner_points_color_source    {Primitive_color_source::mesh_wireframe_color};
 };

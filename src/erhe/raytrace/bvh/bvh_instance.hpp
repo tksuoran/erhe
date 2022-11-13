@@ -38,10 +38,10 @@ public:
 
     // Bvh_instance public API
     void intersect      (Ray& ray, Hit& hit);
-    void collect_spheres(
-        std::vector<bvh::Sphere<float>>& spheres,
-        std::vector<Bvh_instance*>&      instances
-    );
+    //// void collect_spheres(
+    ////     std::vector<bvh::Sphere<float>>& spheres,
+    ////     std::vector<Bvh_instance*>&      instances
+    //// );
 
 private:
     glm::mat4   m_transform{1.0f};

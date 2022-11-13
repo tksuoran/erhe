@@ -64,34 +64,38 @@ public:
     glm::vec3                  N           {0.0f, 1.0f, 0.0f};
 };
 
-class Brush_create_info final
+using Geometry_generator = std::function<std::shared_ptr<erhe::geometry::Geometry>()>;
+
+class Brush_data
 {
 public:
-    std::shared_ptr<erhe::geometry::Geometry>        geometry;
-    erhe::primitive::Build_info&                     build_info;
-    erhe::primitive::Normal_style                    normal_style;
-    float                                            density{1.0f};
-    float                                            volume {1.0f};
-    std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
+    std::string                                      name;
+    erhe::primitive::Build_info                      build_info;
+    erhe::primitive::Normal_style                    normal_style               {erhe::primitive::Normal_style::corner_normals};
+    std::shared_ptr<erhe::geometry::Geometry>        geometry                   {};
+    Geometry_generator                               geometry_generator         {};
+    float                                            density                    {1.0f};
+    float                                            volume                     {1.0f};
     Collision_volume_calculator                      collision_volume_calculator{};
+    std::shared_ptr<erhe::physics::ICollision_shape> collision_shape            {};
     Collision_shape_generator                        collision_shape_generator  {};
+    bool                                             physics_enabled            {true};
 };
 
 class Instance_create_info final
 {
 public:
     uint64_t                                   node_visibility_flags{0};
-    Scene_root*                                scene_root;
-    glm::mat4                                  world_from_node;
+    Scene_root*                                scene_root           {nullptr};
+    glm::mat4                                  world_from_node      {1.0f};
     std::shared_ptr<erhe::primitive::Material> material;
-    float                                      scale;
+    float                                      scale                {1.0f};
+    bool                                       physics_enabled      {true};
 };
 
 class Brush final
 {
 public:
-    using Create_info = Brush_create_info;
-
     static constexpr float c_scale_factor = 65536.0f;
 
     class Scaled
@@ -106,33 +110,27 @@ public:
         glm::mat4                                        local_inertia;
     };
 
-    explicit Brush(erhe::primitive::Build_info& build_info);
-    explicit Brush(const Create_info& create_info);
+    explicit Brush(const Brush_data& create_info);
     Brush         (const Brush&) = delete;
     void operator=(const Brush&) = delete;
     Brush         (Brush&& other) noexcept;
     void operator=(Brush&&)      = delete;
 
     // Public API
-    void initialize(const Create_info& create_info);
+    void late_initialize();
     [[nodiscard]] auto name               () const -> const std::string&;
     [[nodiscard]] auto get_reference_frame(const uint32_t corner_count) -> Reference_frame;
     [[nodiscard]] auto get_scaled         (const float scale) -> const Scaled&;
     [[nodiscard]] auto create_scaled      (const int scale_key) -> Scaled;
     [[nodiscard]] auto make_instance      (const Instance_create_info& instance_create_info) -> Instance;
+    [[nodiscard]] auto get_bounding_box   () -> erhe::toolkit::Bounding_box;
+    [[nodiscard]] auto get_geometry       () -> std::shared_ptr<erhe::geometry::Geometry>;
 
-    std::shared_ptr<erhe::geometry::Geometry>        geometry;
-    erhe::primitive::Build_info                      build_info;
-    erhe::primitive::Primitive_geometry              gl_primitive_geometry;
-    std::shared_ptr<Raytrace_primitive>              rt_primitive;
-    erhe::primitive::Normal_style                    normal_style{erhe::primitive::Normal_style::corner_normals};
-    std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
-    Collision_volume_calculator                      collision_volume_calculator;
-    Collision_shape_generator                        collision_shape_generator;
-    float                                            volume {0.0f};
-    float                                            density{1.0f};
-    std::vector<Reference_frame>                     reference_frames;
-    std::vector<Scaled>                              scaled_entries;
+    Brush_data                                           data;
+    std::unique_ptr<erhe::primitive::Primitive_geometry> gl_primitive_geometry;
+    std::shared_ptr<Raytrace_primitive>                  rt_primitive;
+    std::vector<Reference_frame>                         reference_frames;
+    std::vector<Scaled>                                  scaled_entries;
 };
 
 }

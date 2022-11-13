@@ -16,6 +16,7 @@
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor
 {
@@ -63,6 +64,8 @@ void Hud::declare_required_components()
 
 void Hud::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& configuration = get<erhe::application::Configuration>();
     const auto& hud           = configuration->hud;
     if (!hud.enabled)

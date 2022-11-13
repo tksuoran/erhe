@@ -69,13 +69,7 @@ Jolt_rigid_body::Jolt_rigid_body(
             .GetBodyInterface()
     }
     , m_collision_shape{std::dynamic_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
-    , m_mass           {create_info.mass > 0.0f ? create_info.mass : 1.0f}
-    , m_local_inertia  {create_info.local_inertia}
     , m_motion_mode    {motion_state->get_motion_mode()}
-    , m_friction       {create_info.friction}
-    , m_restitution    {create_info.restitution}
-    , m_linear_damping {create_info.linear_damping}
-    , m_angular_damping{create_info.angular_damping}
     , m_debug_label    {create_info.debug_label}
 {
     if (!m_collision_shape)
@@ -83,9 +77,9 @@ Jolt_rigid_body::Jolt_rigid_body(
         return;
     }
 
-    const JPH::Shape* shape     = m_collision_shape->get_jolt_shape().GetPtr();
-    const auto        transform = motion_state->get_world_from_rigidbody();
-    const JPH::Vec3   position  = to_jolt(transform.origin);
+    const JPH::Shape* jolt_shape = m_collision_shape->get_jolt_shape().GetPtr();
+    const auto        transform  = motion_state->get_world_from_rigidbody();
+    const JPH::Vec3   position   = to_jolt(transform.origin);
 
     SPDLOG_LOGGER_TRACE(
         log_physics,
@@ -98,7 +92,7 @@ Jolt_rigid_body::Jolt_rigid_body(
     const auto      motion_mode = motion_state->get_motion_mode();
     JPH::BodyCreationSettings creation_settings
     {
-        shape,
+        jolt_shape,
         position,
         rotation,
         to_jolt(motion_mode),
@@ -106,15 +100,51 @@ Jolt_rigid_body::Jolt_rigid_body(
             ? Layers::get_layer(motion_mode)
             : Layers::NON_COLLIDING
     };
-    creation_settings.mAllowDynamicOrKinematic         = true;
-    creation_settings.mFriction                        = create_info.friction;
-    creation_settings.mRestitution                     = create_info.restitution;
-    creation_settings.mOverrideMassProperties          = JPH::EOverrideMassProperties::CalculateMassAndInertia; // JPH::EOverrideMassProperties::MassAndInertiaProvided;
-    creation_settings.mMassPropertiesOverride.mMass    = create_info.mass > 0.0f ? create_info.mass : 1.0f;
-    creation_settings.mMassPropertiesOverride.mInertia = to_jolt(create_info.local_inertia);
-    creation_settings.mLinearDamping                   = create_info.linear_damping;
-    creation_settings.mAngularDamping                  = create_info.angular_damping;
-    creation_settings.mLinearDamping                   = 0.001f;
+
+    m_mass_properties = jolt_shape->GetMassProperties();
+    if (create_info.inertia_override.has_value())
+    {
+        m_mass_properties.mInertia = to_jolt(create_info.inertia_override.value());
+        if (create_info.mass.has_value())
+        {
+            m_mass_properties.mMass = create_info.mass.value();
+        }
+        else if (create_info.density.has_value())
+        {
+            m_mass_properties.ScaleToMass(
+                m_mass_properties.mMass * create_info.density.value()
+            );
+        }
+    }
+    else
+    {
+        if (create_info.mass.has_value())
+        {
+            m_mass_properties.ScaleToMass(
+                create_info.mass.value()
+            );
+        }
+        else if (create_info.density.has_value())
+        {
+            m_mass_properties.ScaleToMass(
+                m_mass_properties.mMass * create_info.density.value()
+            );
+        }
+    }
+
+    if (m_mass_properties.mMass == 0.0f)
+    {
+        m_mass_properties.mMass = 1.0f;
+    }
+
+    creation_settings.mAllowDynamicOrKinematic = true;
+    creation_settings.mFriction                = create_info.friction;
+    creation_settings.mRestitution             = create_info.restitution;
+    creation_settings.mOverrideMassProperties  = JPH::EOverrideMassProperties::MassAndInertiaProvided; //EOverrideMassProperties::CalculateMassAndInertia; // JPH::EOverrideMassProperties::MassAndInertiaProvided;
+    creation_settings.mMassPropertiesOverride  = m_mass_properties;
+    creation_settings.mLinearDamping           = create_info.linear_damping;
+    creation_settings.mAngularDamping          = create_info.angular_damping;
+    creation_settings.mLinearDamping           = 0.001f;
 
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
     creation_settings.mUserData = static_cast<JPH::uint64>(reinterpret_cast<uintptr_t>(this));
@@ -128,11 +158,6 @@ auto Jolt_rigid_body::get_motion_mode() const -> Motion_mode
     return m_motion_mode;
 }
 
-void Jolt_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
-{
-    m_collision_shape = std::dynamic_pointer_cast<Jolt_collision_shape>(collision_shape);
-}
-
 auto Jolt_rigid_body::get_collision_shape() const -> std::shared_ptr<ICollision_shape>
 {
     return m_collision_shape;
@@ -140,7 +165,7 @@ auto Jolt_rigid_body::get_collision_shape() const -> std::shared_ptr<ICollision_
 
 auto Jolt_rigid_body::get_friction() const -> float
 {
-    return m_friction;
+    return m_body->GetFriction();
 }
 
 void Jolt_rigid_body::set_friction(const float friction)
@@ -150,17 +175,12 @@ void Jolt_rigid_body::set_friction(const float friction)
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
-    if (m_friction == friction)
-    {
-        return;
-    }
     SPDLOG_LOGGER_TRACE(
         log_physics,
         "{} set friction {}",
         m_debug_label,
         friction
     );
-    m_friction = friction;
     m_body->SetFriction(friction);
 }
 
@@ -190,7 +210,7 @@ void Jolt_rigid_body::set_gravity_factor(const float gravity_factor)
 
 auto Jolt_rigid_body::get_restitution() const -> float
 {
-    return m_restitution;
+    return m_body->GetRestitution();
 }
 
 void Jolt_rigid_body::set_restitution(float restitution)
@@ -200,11 +220,6 @@ void Jolt_rigid_body::set_restitution(float restitution)
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
-    if (m_restitution == restitution)
-    {
-        return;
-    }
-    m_restitution = restitution;
     m_body->SetRestitution(restitution);
 }
 
@@ -239,10 +254,10 @@ auto c_str(const Motion_mode motion_mode) -> const char*
 {
     switch (motion_mode)
     {
-        case Motion_mode::e_static: return "Static";
+        case Motion_mode::e_static:                 return "Static";
         case Motion_mode::e_kinematic_non_physical: return "Kinematic Non-Physical";
-        case Motion_mode::e_kinematic_physical: return "Kinematic Physical";
-        case Motion_mode::e_dynamic: return "Dynamic";
+        case Motion_mode::e_kinematic_physical:     return "Kinematic Physical";
+        case Motion_mode::e_dynamic:                return "Dynamic";
         default: return "?";
     }
 }
@@ -365,7 +380,7 @@ void Jolt_rigid_body::set_world_transform(const Transform transform)
         //}
         case Motion_mode::e_kinematic_non_physical:
         {
-            SPDLOG_LOGGER_TRACE(log_physics, "{} KNP SetPositionAndRotation {}", m_debug_label, transform.origin);
+            //// SPDLOG_LOGGER_TRACE(log_physics, "{} KNP SetPositionAndRotation {}", m_debug_label, transform.origin);
             m_body_interface.SetPositionAndRotation(
                 m_body->GetID(),
                 to_jolt(transform.origin),
@@ -379,7 +394,7 @@ void Jolt_rigid_body::set_world_transform(const Transform transform)
         }
         case Motion_mode::e_kinematic_physical:
         {
-            SPDLOG_LOGGER_TRACE(log_physics, "{} KP MoveKinematic {}", m_debug_label, transform.origin);
+            //// SPDLOG_LOGGER_TRACE(log_physics, "{} KP MoveKinematic {}", m_debug_label, transform.origin);
             m_body_interface.MoveKinematic(
                 m_body->GetID(),
                 to_jolt(transform.origin),
@@ -391,7 +406,7 @@ void Jolt_rigid_body::set_world_transform(const Transform transform)
         case Motion_mode::e_static:
         case Motion_mode::e_dynamic:
         {
-            SPDLOG_LOGGER_TRACE(log_physics, "{} S/D SetPositionAndRotation {}", m_debug_label, transform.origin);
+            //// SPDLOG_LOGGER_TRACE(log_physics, "{} S/D SetPositionAndRotation {}", m_debug_label, transform.origin);
             m_body_interface.SetPositionAndRotation(
                 m_body->GetID(),
                 to_jolt(transform.origin),
@@ -507,16 +522,22 @@ auto Jolt_rigid_body::get_angular_damping() const -> float
 
 auto Jolt_rigid_body::get_local_inertia() const -> glm::mat4
 {
-    return m_local_inertia;
+    return from_jolt(m_mass_properties.mInertia);
 }
 
 auto Jolt_rigid_body::get_mass() const -> float
 {
-    return m_mass;
+    return m_mass_properties.mMass;
 }
 
-void Jolt_rigid_body::set_mass_properties(const float mass, const glm::mat4 local_inertia)
+void Jolt_rigid_body::set_mass_properties(
+    const float     mass,
+    const glm::mat4 inertia_tensor
+)
 {
+    m_mass_properties.mMass    = mass;
+    m_mass_properties.mInertia = to_jolt(inertia_tensor);
+
     if (m_body == nullptr)
     {
         log_physics->error("Fixed world body cannot be modified");
@@ -530,14 +551,7 @@ void Jolt_rigid_body::set_mass_properties(const float mass, const glm::mat4 loca
     {
         return;
     }
-    JPH::MassProperties mass_properties
-    {
-        .mMass    = mass,
-        .mInertia = to_jolt(local_inertia)
-    };
-    motion_properties->SetMassProperties(mass_properties);
-    m_mass          = mass;
-    m_local_inertia = local_inertia;
+    motion_properties->SetMassProperties(m_mass_properties);
 }
 
 auto Jolt_rigid_body::get_debug_label() const -> const char*

@@ -56,6 +56,7 @@ Camera::Camera(const std::string_view name)
     : Node{name}
 {
     node_data.flag_bits |= (Node_flag_bit::is_camera | Node_flag_bit::is_transform);
+    node_data.visibility_mask = Node_visibility::content;
 }
 
 Camera::~Camera() noexcept

@@ -15,6 +15,7 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -114,6 +115,8 @@ void Material_paint_tool::declare_required_components()
 
 void Material_paint_tool::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     get<Tools>()->register_tool(this);
 
     const auto commands = get<erhe::application::Commands>();

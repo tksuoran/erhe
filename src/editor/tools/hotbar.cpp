@@ -24,6 +24,7 @@
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -58,6 +59,8 @@ void Hotbar::declare_required_components()
 
 void Hotbar::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& configuration = get<erhe::application::Configuration>();
     const auto& hotbar        = configuration->hotbar;
     if (!hotbar.enabled)

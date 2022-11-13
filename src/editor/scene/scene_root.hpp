@@ -109,7 +109,7 @@ private:
 class Scene_root
 {
 public:
-    explicit Scene_root(const std::string_view& name);
+    explicit Scene_root(const std::string_view name);
     ~Scene_root() noexcept;
 
     // Public API
@@ -164,6 +164,8 @@ public:
     ) -> std::shared_ptr<Rendertarget_node>;
 
     void update_pointer_for_rendertarget_nodes();
+
+    void sanity_check();
 
 private:
     std::string                                     m_name;

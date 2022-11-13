@@ -281,60 +281,111 @@ void Jolt_world::update_fixed_step(const double dt)
 
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 {
-    log_physics->trace("add rigid body {}", rigid_body->get_debug_label());
     auto& body_interface  = m_physics_system.GetBodyInterface();
     auto* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(rigid_body);
-    auto* jolt_body       = jolt_rigid_body->get_jolt_body();
-    body_interface.AddBody(
-        jolt_body->GetID(),
-        JPH::EActivation::DontActivate
-    );
-    m_rigid_bodies.push_back(jolt_rigid_body);
+
+    ERHE_VERIFY(jolt_rigid_body != nullptr);
+
+    auto* jolt_body = jolt_rigid_body->get_jolt_body();
+    ERHE_VERIFY(jolt_body != nullptr);
+    if (jolt_body == &JPH::Body::sFixedToWorld)
+    {
+        return;
+    }
+
+    log_physics->trace("add rigid body {} id = {}", rigid_body->get_debug_label(), jolt_body->GetID().GetIndex());
+
+#ifndef NDEBUG
+    const auto i = std::find(m_rigid_bodies.begin(), m_rigid_bodies.end(), jolt_rigid_body);
+    if (i != m_rigid_bodies.end())
+    {
+        log_physics->error("rigid body {} already in world", rigid_body->get_debug_label());
+    }
+    else
+#endif
+    {
+        body_interface.AddBody(
+            jolt_body->GetID(),
+            JPH::EActivation::DontActivate
+        );
+        m_rigid_bodies.push_back(jolt_rigid_body);
+    }
 }
 
 void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
 {
-    log_physics->trace("remove rigid body {}", rigid_body->get_debug_label());
     auto& body_interface  = m_physics_system.GetBodyInterface();
     auto* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(rigid_body);
-    auto* jolt_body       = jolt_rigid_body->get_jolt_body();
-    body_interface.RemoveBody(jolt_body->GetID());
-    m_rigid_bodies.erase(
-        std::remove(
-            m_rigid_bodies.begin(),
-            m_rigid_bodies.end(),
-            jolt_rigid_body
-        ),
-        m_rigid_bodies.end()
+
+    ERHE_VERIFY(jolt_rigid_body != nullptr);
+
+    auto* jolt_body = jolt_rigid_body->get_jolt_body();
+    ERHE_VERIFY(jolt_body != nullptr);
+    if (jolt_body == &JPH::Body::sFixedToWorld)
+    {
+        return;
+    }
+
+    log_physics->trace("remove rigid body {} id = {}", rigid_body->get_debug_label(), jolt_body->GetID().GetIndex());
+
+    const auto i = std::remove(
+        m_rigid_bodies.begin(),
+        m_rigid_bodies.end(),
+        jolt_rigid_body
     );
+    if (i == m_rigid_bodies.end())
+    {
+        log_physics->error("rigid body {} not in world", rigid_body->get_debug_label());
+    }
+    else
+    {
+        body_interface.RemoveBody(jolt_body->GetID());
+        m_rigid_bodies.erase(i, m_rigid_bodies.end());
+    }
 }
 
 void Jolt_world::add_constraint(IConstraint* constraint)
 {
     log_physics->trace("add constraint");
     auto* jolt_constraint = reinterpret_cast<Jolt_constraint*>(constraint);
-    m_physics_system.AddConstraint(jolt_constraint->get_jolt_constraint());
-    m_constraints.push_back(jolt_constraint);
+
+#ifndef NDEBUG
+    const auto i = std::find(m_constraints.begin(), m_constraints.end(), jolt_constraint);
+    if (i != m_constraints.end())
+    {
+        log_physics->error("constraint is already in world");
+    }
+    else
+#endif
+    {
+        m_physics_system.AddConstraint(jolt_constraint->get_jolt_constraint());
+        m_constraints.push_back(jolt_constraint);
+    }
 }
 
 void Jolt_world::remove_constraint(IConstraint* constraint)
 {
     log_physics->trace("remove constraint");
     auto* jolt_constraint = reinterpret_cast<Jolt_constraint*>(constraint);
-    m_physics_system.RemoveConstraint(jolt_constraint->get_jolt_constraint());
-    m_constraints.erase(
-        std::remove(
-            m_constraints.begin(),
-            m_constraints.end(),
-            jolt_constraint
-        ),
-        m_constraints.end()
+    const auto i = std::remove(
+        m_constraints.begin(),
+        m_constraints.end(),
+        jolt_constraint
     );
+    if (i != m_constraints.end())
+    {
+        m_physics_system.RemoveConstraint(jolt_constraint->get_jolt_constraint());
+        m_constraints.erase(i, m_constraints.end());
+    }
+    else
+    {
+        log_physics->error("constraint is not in world");
+    }
 }
 
 void Jolt_world::set_gravity(const glm::vec3 gravity)
 {
-    log_physics->trace("set gravity {}", gravity);
+    log_physics->trace("set gravity from {} to {}", m_gravity, gravity);
     m_gravity = gravity;
     m_physics_system.SetGravity(to_jolt(gravity));
 }
@@ -446,6 +497,10 @@ void Jolt_world::OnContactRemoved(
     //    (jolt_body1 != nullptr) ? jolt_body1->get_debug_label() : "()",
     //    (jolt_body2 != nullptr) ? jolt_body2->get_debug_label() : "()"
     //);
+}
+
+void Jolt_world::sanity_check()
+{
 }
 
 } // namespace erhe::physics

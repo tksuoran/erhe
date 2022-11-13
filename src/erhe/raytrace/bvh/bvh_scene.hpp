@@ -33,18 +33,18 @@ public:
 
     // Bvh_scene public API
     void intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance);
-    void collect_spheres   (
-        std::vector<bvh::Sphere<float>>& spheres,
-        std::vector<Bvh_instance*>&      instances,
-        Bvh_instance*                    instance
-    );
+    //// void collect_spheres   (
+    ////     std::vector<bvh::Sphere<float>>& spheres,
+    ////     std::vector<Bvh_instance*>&      instances,
+    ////     Bvh_instance*                    instance
+    //// );
 
 private:
     std::vector<Bvh_geometry*> m_geometries;
     std::vector<Bvh_instance*> m_instances;
     std::string                m_debug_label;
 
-    std::vector<bvh::Sphere<float>> m_collected_spheres;   // flat
+    //// std::vector<bvh::Sphere<float>> m_collected_spheres;   // flat
     std::vector<Bvh_instance*>      m_collected_instances; // flat
     bvh::BoundingBox<float>         m_global_bbox;
     bvh::Bvh<float>                 m_bvh;

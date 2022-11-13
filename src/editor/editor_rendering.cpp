@@ -74,27 +74,20 @@ void Editor_rendering::declare_required_components()
     m_configuration = require<erhe::application::Configuration>();
 }
 
-void Editor_rendering::initialize_component()
+void Editor_rendering::setup_renderpasses()
 {
-    const auto& commands = get<erhe::application::Commands>();
+    ERHE_PROFILE_FUNCTION
 
-    commands->register_command(&m_capture_frame_command);
-    commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+    const bool reverse_depth = m_configuration->graphics.reverse_depth;
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    auto& programs     = *get<Programs>().get();
+    auto* vertex_input = get<Mesh_memory>()->vertex_input.get();
 
     using erhe::graphics::Vertex_input_state;
     using erhe::graphics::Input_assembly_state;
     using erhe::graphics::Rasterization_state;
     using erhe::graphics::Depth_stencil_state;
     using erhe::graphics::Color_blend_state;
-
-    auto& programs     = *get<Programs>().get();
-    auto* vertex_input = get<Mesh_memory>()->vertex_input.get();
-
-    const bool reverse_depth = m_configuration->graphics.reverse_depth;
 
     m_rp_polygon_fill_standard.pipeline.data = {
         .name           = "Polygon Fill",
@@ -421,15 +414,31 @@ void Editor_rendering::initialize_component()
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
-    m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>("Content");
+    // const erhe::application::Scoped_gl_context gl_context{
+    //     Component::get<erhe::application::Gl_context_provider>()
+    // };
+    //
+    // m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>("Content");
     //m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>("Selection");
     //m_gui_timer       = std::make_unique<erhe::graphics::Gpu_timer>("Gui");
     //m_brush_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Brush");
     //m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 }
 
+void Editor_rendering::initialize_component()
+{
+    ERHE_PROFILE_FUNCTION
+
+    const auto& commands = get<erhe::application::Commands>();
+
+    commands->register_command(&m_capture_frame_command);
+    commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+}
+
 void Editor_rendering::post_initialize()
 {
+    ERHE_PROFILE_FUNCTION
+
     m_imgui_windows          = get<erhe::application::Imgui_windows    >();
     m_view                   = get<erhe::application::View             >();
     m_time                   = get<erhe::application::Time             >();
@@ -447,6 +456,11 @@ void Editor_rendering::post_initialize()
     m_post_processing        = get<Post_processing >();
     m_shadow_renderer        = get<Shadow_renderer >();
     m_viewport_windows       = get<Viewport_windows>();
+
+    setup_renderpasses();
+
+    // Init here (in main thread) so no scoped GL context needed
+    m_content_timer = std::make_unique<erhe::graphics::Gpu_timer>("Content");
 }
 
 void Editor_rendering::update_once_per_frame(const erhe::components::Time_context&)

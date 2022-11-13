@@ -12,7 +12,9 @@
 #include "tools/selection_tool.hpp"
 #include "windows/materials_window.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
@@ -66,7 +68,7 @@ void Create_uv_sphere::render_preview(
 }
 
 [[nodiscard]] auto Create_uv_sphere::imgui(
-    const Brush_create_context& context
+    Brush_data& brush_create_info
 ) -> std::shared_ptr<Brush>
 {
     ImGui::Checkbox   ("Preview", &m_preview);
@@ -75,35 +77,23 @@ void Create_uv_sphere::render_preview(
     ImGui::SliderInt  ("Stacks", &m_stack_count, 1, 100);
     if (ImGui::Button("Create"))
     {
-        const auto geometry = std::make_shared<erhe::geometry::Geometry>(
-            std::move(
-                erhe::geometry::shapes::make_sphere(
-                    m_radius,
-                    std::max(1, m_slice_count), // slice count
-                    std::max(1, m_stack_count)  // stack count
-                )
+        brush_create_info.geometry = std::make_shared<erhe::geometry::Geometry>(
+            erhe::geometry::shapes::make_sphere(
+                m_radius,
+                std::max(1, m_slice_count), // slice count
+                std::max(1, m_stack_count)  // stack count
             )
         );
 
-        geometry->build_edges();
-        geometry->compute_polygon_normals();
-        geometry->compute_tangents();
-        geometry->compute_polygon_centroids();
-        geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+        brush_create_info.geometry->build_edges();
+        brush_create_info.geometry->compute_polygon_normals();
+        brush_create_info.geometry->compute_tangents();
+        brush_create_info.geometry->compute_polygon_centroids();
+        brush_create_info.geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
 
         const auto collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(m_radius);
 
-        std::shared_ptr<Brush> brush = std::make_shared<Brush>(context.build_info);
-        brush->initialize(
-            Brush::Create_info{
-                .geometry        = geometry,
-                .build_info      = context.build_info,
-                .normal_style    = context.normal_style,
-                .density         = context.density,
-                .volume          = geometry->get_mass_properties().volume,
-                .collision_shape = collision_shape
-            }
-        );
+        std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_create_info);
         return brush;
     }
     return {};
@@ -127,6 +117,8 @@ void Create::declare_required_components()
 
 void Create::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     get<Tools>()->register_background_tool(this);
 }
@@ -134,31 +126,20 @@ void Create::initialize_component()
 void Create::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_brushes          = get<Brushes         >();
-    m_editor_scenes    = get<Editor_scenes   >();
-    m_materials_window = get<Materials_window>();
-    m_mesh_memory      = get<Mesh_memory     >();
-    m_operation_stack  = get<Operation_stack >();
-    m_selection_tool   = get<Selection_tool  >();
+    m_brushes           = get<Brushes         >();
+    m_editor_scenes     = get<Editor_scenes   >();
+    m_materials_window  = get<Materials_window>();
+    m_mesh_memory       = get<Mesh_memory     >();
+    m_operation_stack   = get<Operation_stack >();
+    m_selection_tool    = get<Selection_tool  >();
 }
 
 void Create::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const Brush_create_context context{
-        .build_info   = m_mesh_memory->build_info,
-        .normal_style = erhe::primitive::Normal_style::corner_normals,
-        .density      = 1.0f
-    };
-
     const auto parent = m_selection_tool->selection().empty()
         ? std::shared_ptr<erhe::scene::Node>()
         : m_selection_tool->selection().front();
-    const uint64_t visibility_flags =
-        erhe::scene::Node_visibility::visible     |
-        erhe::scene::Node_visibility::content     |
-        erhe::scene::Node_visibility::shadow_cast |
-        erhe::scene::Node_visibility::id;
 
     Scene_root* scene_root = parent
         ? reinterpret_cast<Scene_root*>(parent->node_data.host)
@@ -172,18 +153,11 @@ void Create::imgui()
         ? parent->world_from_node()
         : glm::mat4{1.0f};
 
-    const Instance_create_info brush_instance_create_info
-    {
-        .node_visibility_flags = visibility_flags,
-        .scene_root            = scene_root,
-        .world_from_node       = world_from_node,
-        .material              = m_materials_window->selected_material(),
-        .scale                 = 1.0
-    };
     if (ImGui::Button("Empty Node"))
     {
         auto new_empty_node = scene_root->create_new_empty_node();
         new_empty_node->set_name("new empty node");
+        new_empty_node->node_data.visibility_mask = erhe::scene::Node_visibility::content;
         get<Operation_stack>()->push(
             std::make_shared<Node_insert_remove_operation>(
                 Node_insert_remove_operation::Parameters{
@@ -195,27 +169,60 @@ void Create::imgui()
             )
         );
     }
+
+    erhe::application::make_combo(
+        "Normal Style",
+        m_normal_style,
+        erhe::primitive::c_normal_style_strings,
+        IM_ARRAYSIZE(erhe::primitive::c_normal_style_strings)
+    );
+
+    Brush_data brush_create_info{
+        .build_info      = m_mesh_memory->build_info,
+        .normal_style    = m_normal_style,
+        .density         = m_density,
+        .physics_enabled = get<erhe::application::Configuration>()->physics.static_enable
+    };
+
+    std::shared_ptr<Brush> brush;
+
     if (ImGui::TreeNodeEx("UV Sphere", ImGuiTreeNodeFlags_Framed))
     {
-        const auto brush = m_create_uv_sphere.imgui(context);
-        if (brush)
-        {
-            const auto instance = brush->make_instance(brush_instance_create_info);
-
-            auto op = std::make_shared<Mesh_insert_remove_operation>(
-                Mesh_insert_remove_operation::Parameters{
-                    .scene_root     = scene_root,
-                    .mesh           = instance.mesh,
-                    .node_physics   = instance.node_physics,
-                    .node_raytrace  = instance.node_raytrace,
-                    .parent         = parent,
-                    .mode           = Scene_item_operation::Mode::insert
-                }
-            );
-            m_operation_stack->push(op);
-        }
+        brush = m_create_uv_sphere.imgui(brush_create_info);
         ImGui::TreePop();
     }
+
+    if (brush)
+    {
+        const uint64_t visibility_flags =
+            erhe::scene::Node_visibility::visible     |
+            erhe::scene::Node_visibility::content     |
+            erhe::scene::Node_visibility::shadow_cast |
+            erhe::scene::Node_visibility::id;
+
+        const Instance_create_info brush_instance_create_info
+        {
+            .node_visibility_flags = visibility_flags,
+            .scene_root            = scene_root,
+            .world_from_node       = world_from_node,
+            .material              = m_materials_window->selected_material(),
+            .scale                 = 1.0
+        };
+        const auto instance = brush->make_instance(brush_instance_create_info);
+
+        auto op = std::make_shared<Mesh_insert_remove_operation>(
+            Mesh_insert_remove_operation::Parameters{
+                .scene_root     = scene_root,
+                .mesh           = instance.mesh,
+                .node_physics   = instance.node_physics,
+                .node_raytrace  = instance.node_raytrace,
+                .parent         = parent,
+                .mode           = Scene_item_operation::Mode::insert
+            }
+        );
+        m_operation_stack->push(op);
+    }
+
     //// if (ImGui::TreeNodeEx("Cone", ImGuiTreeNodeFlags_Framed))
     //// {
     ////     ImGui::TreePop();

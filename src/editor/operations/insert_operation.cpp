@@ -1,4 +1,6 @@
 #include "operations/insert_operation.hpp"
+
+#include "editor_log.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/helpers.hpp"
 #include "scene/scene_root.hpp"
@@ -29,11 +31,15 @@ auto Node_transform_operation::describe() const -> std::string
 
 void Node_transform_operation::execute(const Operation_context&)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
 }
 
 void Node_transform_operation::undo(const Operation_context&)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
 }
 
@@ -63,11 +69,15 @@ Node_insert_remove_operation::~Node_insert_remove_operation() noexcept
 
 void Node_insert_remove_operation::execute(const Operation_context& context)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     execute(context, m_parameters.mode);
 }
 
 void Node_insert_remove_operation::undo(const Operation_context& context)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     execute(context, inverse(m_parameters.mode));
 }
 
@@ -134,11 +144,15 @@ Mesh_insert_remove_operation::~Mesh_insert_remove_operation() noexcept
 
 void Mesh_insert_remove_operation::execute(const Operation_context& context)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     execute(context, m_parameters.mode);
 }
 
 void Mesh_insert_remove_operation::undo(const Operation_context& context)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     execute(context, inverse(m_parameters.mode));
 }
 
@@ -226,11 +240,15 @@ Light_insert_remove_operation::~Light_insert_remove_operation() noexcept
 
 void Light_insert_remove_operation::execute(const Operation_context& context)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     execute(context, m_parameters.mode);
 }
 
 void Light_insert_remove_operation::undo(const Operation_context& context)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     execute(context, inverse(m_parameters.mode));
 }
 
@@ -300,11 +318,15 @@ Camera_insert_remove_operation::~Camera_insert_remove_operation() noexcept
 
 void Camera_insert_remove_operation::execute(const Operation_context& context)
 {
+    log_operations->trace("Op Execute {}", describe());
+
     execute(context, m_parameters.mode);
 }
 
 void Camera_insert_remove_operation::undo(const Operation_context& context)
 {
+    log_operations->trace("Op Undo {}", describe());
+
     execute(context, inverse(m_parameters.mode));
 }
 

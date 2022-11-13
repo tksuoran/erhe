@@ -27,6 +27,7 @@ namespace Physics
 
 namespace erhe::application
 {
+    class Configuration;
     class Line_renderer_set;
 }
 
@@ -57,6 +58,7 @@ class Mesh_memory;
 class Operation_stack;
 class Render_context;
 class Scene_root;
+class Selection_tool;
 class Viewport_windows;
 
 class Brush_tool_preview_command
@@ -92,19 +94,7 @@ private:
     Brushes& m_brushes;
 };
 
-class Brush_create_context
-{
-public:
-    erhe::primitive::Build_info&  build_info;
-    erhe::primitive::Normal_style normal_style{erhe::primitive::Normal_style::corner_normals};
-    float                         density{1.0f};
-};
-
-class Brush_context
-{
-public:
-    Scene_root& scene_root;
-};
+class Brush_data;
 
 class Brushes
     : public erhe::components::Component
@@ -140,27 +130,10 @@ public:
     void on_motion       ();
 
     [[nodiscard]] auto allocate_brush(
-        erhe::primitive::Build_info& build_info
+        const erhe::primitive::Build_info& build_info
     ) -> std::shared_ptr<Brush>;
 
-    [[nodiscard]] auto make_brush(
-        erhe::geometry::Geometry&&                              geometry,
-        const Brush_create_context&                             context,
-        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {}
-    ) -> std::shared_ptr<Brush>;
-
-    [[nodiscard]] auto make_brush(
-        const std::shared_ptr<erhe::geometry::Geometry>&        geometry,
-        const Brush_create_context&                             context,
-        const std::shared_ptr<erhe::physics::ICollision_shape>& collision_shape = {}
-    ) -> std::shared_ptr<Brush>;
-
-    [[nodiscard]] auto make_brush(
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
-        const Brush_create_context&                      context,
-        const Collision_volume_calculator                collision_volume_calculator,
-        const Collision_shape_generator                  collision_shape_generator
-    ) -> std::shared_ptr<Brush>;
+    [[nodiscard]] auto make_brush(const Brush_data& create_info) -> std::shared_ptr<Brush>;
 
 private:
     void update_mesh               ();
@@ -177,18 +150,20 @@ private:
     Brush_tool_insert_command  m_insert_command;
 
     // Component dependencies
+    std::shared_ptr<erhe::application::Configuration> m_configuration;
     std::shared_ptr<Editor_scenes   > m_editor_scenes;
     std::shared_ptr<Grid_tool       > m_grid_tool;
     std::shared_ptr<Materials_window> m_materials_window;
     std::shared_ptr<Operation_stack > m_operation_stack;
+    std::shared_ptr<Selection_tool  > m_selection_tool;
     std::shared_ptr<Viewport_windows> m_viewport_windows;
 
     std::mutex                          m_brush_mutex;
     std::vector<std::shared_ptr<Brush>> m_brushes;
 
-    Brush*                              m_brush{nullptr};
+    std::weak_ptr<Brush>                m_brush                {};
     bool                                m_snap_to_hover_polygon{true};
-    bool                                m_snap_to_grid         {false};
+    bool                                m_snap_to_grid         {true};
     bool                                m_hover_content        {false};
     bool                                m_hover_tool           {false};
     std::optional<glm::vec3>            m_hover_position;
@@ -198,6 +173,7 @@ private:
     std::size_t                         m_hover_primitive  {0};
     std::size_t                         m_hover_local_index{0};
     std::shared_ptr<erhe::scene::Mesh>  m_brush_mesh;
+    bool                                m_with_physics{true};
     float                               m_scale            {1.0f};
     float                               m_transform_scale  {1.0f};
 

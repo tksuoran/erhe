@@ -102,24 +102,22 @@ private:
         const glm::vec2        spot_cone_angle
     ) -> std::shared_ptr<erhe::scene::Light>;
 
-    template <typename ...Args>
     auto make_brush(
-        const bool instantiate_to_scene,
-        Args&& ...args
-    ) -> std::shared_ptr<Brush>
-    {
-        // cppcheck-suppress redundantAssignment
-        const auto brush = m_brushes->make_brush(std::forward<Args>(args)...);
-        if (instantiate_to_scene)
-        {
-            const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
+        Brush_data&& brush_create_info,
+        const bool   instantiate_to_scene
+    ) -> std::shared_ptr<Brush>;
 
-            m_scene_brushes.push_back(brush);
-        }
-        return brush;
-    }
+    auto make_brush(
+        erhe::geometry::Geometry&& geometry,
+        const bool                 instantiate_to_scene
+    ) -> std::shared_ptr<Brush>;
 
-    [[nodiscard]] auto build_info           () -> erhe::primitive::Build_info&;
+    auto make_brush(
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+        const bool                                       instantiate_to_scene
+    ) -> std::shared_ptr<Brush>;
+
+    [[nodiscard]] auto build_info() -> erhe::primitive::Build_info&;
 
     void setup_cameras      ();
     void animate_lights     (const double time_d);

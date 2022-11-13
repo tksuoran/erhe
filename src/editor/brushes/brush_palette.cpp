@@ -3,6 +3,7 @@
 #include "brushes/brushes.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -28,6 +29,8 @@ void Brush_palette::declare_required_components()
 
 void Brush_palette::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 

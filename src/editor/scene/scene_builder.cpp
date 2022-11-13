@@ -129,7 +129,7 @@ void Scene_builder::initialize_component()
             Component::get<erhe::application::Gl_context_provider>()
         };
 
-        m_scene_root = std::make_shared<Scene_root>("Test scene");
+        m_scene_root = std::make_shared<Scene_root>("Scene");
         m_scene_root->material_library()->add_default_materials();
 
         setup_scene();
@@ -377,6 +377,59 @@ auto Scene_builder::build_info() -> erhe::primitive::Build_info&
     return m_mesh_memory->build_info;
 };
 
+auto Scene_builder::make_brush(
+    Brush_data&& brush_create_info,
+    const bool   instantiate_to_scene
+) -> std::shared_ptr<Brush>
+{
+    const auto brush = m_brushes->make_brush(brush_create_info);
+    if (instantiate_to_scene)
+    {
+        const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
+
+        m_scene_brushes.push_back(brush);
+    }
+    return brush;
+}
+
+auto Scene_builder::make_brush(
+    erhe::geometry::Geometry&& geometry,
+    const bool                 instantiate_to_scene
+) -> std::shared_ptr<Brush>
+{
+    const auto& configuration = get<erhe::application::Configuration>();
+    return make_brush(
+        Brush_data{
+            .build_info      = build_info(),
+            .normal_style    = Normal_style::polygon_normals,
+            .geometry        = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
+            .density         = configuration->scene.mass_scale,
+            .physics_enabled = configuration->physics.static_enable
+        },
+        instantiate_to_scene
+    );
+
+}
+
+auto Scene_builder::make_brush(
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+    const bool                                       instantiate_to_scene
+) -> std::shared_ptr<Brush>
+{
+    const auto& configuration = get<erhe::application::Configuration>();
+    return make_brush(
+        Brush_data{
+            .build_info      = build_info(),
+            .normal_style    = Normal_style::polygon_normals,
+            .geometry        = geometry,
+            .density         = configuration->scene.mass_scale,
+            .physics_enabled = configuration->physics.static_enable
+        },
+        instantiate_to_scene
+    );
+
+}
+
 void Scene_builder::make_brushes()
 {
     ERHE_PROFILE_FUNCTION
@@ -402,32 +455,21 @@ void Scene_builder::make_brushes()
     auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
         0.5f * vec3{config.floor_size, 1.0f, config.floor_size}
     );
-    //auto table_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(vec3{1.0f, 0.5f, 0.5f});
 
     // Otherwise it will be destructed when leave add_floor() scope
     m_collision_shapes.push_back(floor_box_shape);
-    //m_collision_shapes.push_back(table_box_shape);
-    //m_scene_root->physics_world().collision_shapes.push_back(floor_box_shape);
 
     // Floor
     if (config.floor)
     {
         execution_queue->enqueue(
-            [this, /*floor_size,*/ &floor_box_shape/*, &table_box_shape*/, &config]()
+            [this, &floor_box_shape, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Floor brush");
-
-                Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals,
-                    .density      = config.mass_scale
-                };
-                context.normal_style = Normal_style::polygon_normals;
 
                 auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
                     make_box(
                         vec3{config.floor_size, 1.0f, config.floor_size},
-                        //ivec3{static_cast<int>(floor_size), 1, static_cast<int>(floor_size)}
                         ivec3{config.floor_div, 1, config.floor_div}
                     )
                 );
@@ -435,34 +477,16 @@ void Scene_builder::make_brushes()
                 floor_geometry->build_edges();
 
                 m_floor_brush = std::make_unique<Brush>(
-                    Brush::Create_info{
-                        .geometry        = floor_geometry,
+                    Brush_data{
                         .build_info      = build_info(),
                         .normal_style    = Normal_style::polygon_normals,
+                        .geometry        = floor_geometry,
                         .density         = 0.0f,
                         .volume          = 0.0f,
-                        .collision_shape = floor_box_shape
+                        .collision_shape = floor_box_shape,
+                        .physics_enabled = configuration->physics.static_enable
                     }
                 );
-
-                //auto table_geometry = std::make_shared<erhe::geometry::Geometry>(
-                //    make_box(
-                //        vec3{2.0f, 1.0f, 1.0f},
-                //        ivec3{10, 1, 10}
-                //    )
-                //);
-                //table_geometry->name = "table";
-                //table_geometry->build_edges();
-                //m_table_brush = make_unique<Brush>(
-                //    Brush::Create_info{
-                //        .geometry        = table_geometry,
-                //        .build_info_set  = build_info_set(),
-                //        .normal_style    = Normal_style::polygon_normals,
-                //        .density         = 0.0f,
-                //        .volume          = 0.0f,
-                //        .collision_shape = table_box_shape
-                //    }
-                //);
             }
         );
     }
@@ -503,15 +527,10 @@ void Scene_builder::make_brushes()
     if (config.obj_files)
     {
         execution_queue->enqueue(
-            [this, &config]()
+            [this, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("parse .obj files");
 
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::polygon_normals,
-                    .density      = config.mass_scale
-                };
                 constexpr bool instantiate = true;
 
                 const char* obj_files_names[] = {
@@ -534,7 +553,17 @@ void Scene_builder::make_brushes()
                         const mat4 scale_t = erhe::toolkit::create_scale(0.01f);
                         geometry->transform(scale_t);
                         geometry->flip_reversed_polygons();
-                        make_brush(instantiate, geometry, context);
+                        make_brush(
+                            Brush_data
+                            {
+                                .build_info      = build_info(),
+                                .normal_style    = Normal_style::polygon_normals,
+                                .geometry        = geometry,
+                                .density         = config.mass_scale,
+                                .physics_enabled = configuration->physics.static_enable
+                            },
+                            instantiate
+                        );
                     }
                 }
             }
@@ -544,30 +573,30 @@ void Scene_builder::make_brushes()
     if (config.platonic_solids)
     {
         execution_queue->enqueue(
-            [this, &config]()
+            [this, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::polygon_normals,
-                    .density      = config.mass_scale
-                };
-                constexpr bool instantiate = true;
+                constexpr bool instantiate = false;
                 const auto scale = config.object_scale;
 
-                make_brush(instantiate, make_dodecahedron (scale), context);
-                make_brush(instantiate, make_icosahedron  (scale), context);
-                make_brush(instantiate, make_octahedron   (scale), context);
-                make_brush(instantiate, make_tetrahedron  (scale), context);
-                make_brush(instantiate, make_cuboctahedron(scale), context);
+                make_brush(make_dodecahedron (scale), instantiate);
+                make_brush(make_icosahedron  (scale), instantiate);
+                make_brush(make_octahedron   (scale), instantiate);
+                make_brush(make_tetrahedron  (scale), instantiate);
+                make_brush(make_cuboctahedron(scale), instantiate);
                 make_brush(
-                    instantiate,
-                    make_cube(scale),
-                    context,
-                    erhe::physics::ICollision_shape::create_box_shape_shared(
-                        vec3{scale * 0.5f}
-                    )
+                    Brush_data{
+                        .build_info      = build_info(),
+                        .normal_style    = Normal_style::polygon_normals,
+                        .geometry        = std::make_shared<erhe::geometry::Geometry>(make_cube(scale)),
+                        .density         = config.mass_scale,
+                        .collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+                            vec3{scale * 0.5f}
+                        ),
+                        .physics_enabled = configuration->physics.static_enable
+                    },
+                    instantiate
                 );
             }
         );
@@ -576,27 +605,29 @@ void Scene_builder::make_brushes()
     if (config.sphere)
     {
         execution_queue->enqueue(
-            [this, &config]()
+            [this, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Sphere");
-
-                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals,
-                    .density      = config.mass_scale
-                };
                 constexpr bool instantiate = true;
 
                 make_brush(
-                    instantiate,
-                    make_sphere(
-                        config.object_scale,
-                        8 * std::max(1, config.detail), // slice count
-                        6 * std::max(1, config.detail)  // stack count
-                    ),
-                    context,
-                    erhe::physics::ICollision_shape::create_sphere_shape_shared(config.object_scale)
+                    Brush_data{
+                        .build_info      = build_info(),
+                        .normal_style    = Normal_style::corner_normals,
+                        .geometry        = std::make_shared<erhe::geometry::Geometry>(
+                            make_sphere(
+                                config.object_scale,
+                                8 * std::max(1, config.detail), // slice count
+                                6 * std::max(1, config.detail)  // stack count
+                            )
+                        ),
+                        .density         = config.mass_scale,
+                        .collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(
+                            config.object_scale
+                        ),
+                        .physics_enabled = configuration->physics.static_enable
+                    },
+                    instantiate
                 );
             }
         );
@@ -605,16 +636,10 @@ void Scene_builder::make_brushes()
     if (config.torus)
     {
         execution_queue->enqueue(
-            [this, &config]()
+            [this, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Torus");
 
-                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals,
-                    .density      = config.mass_scale
-                };
                 constexpr bool instantiate = true;
 
                 const float major_radius = 1.0f  * config.object_scale;
@@ -670,21 +695,27 @@ void Scene_builder::make_brushes()
                     }
                     return erhe::physics::ICollision_shape::create_compound_shape_shared(torus_shape_create_info);
                 };
-
-                make_brush(
-                    instantiate,
-                    std::make_shared<erhe::geometry::Geometry>(
-                        make_torus(
-                            major_radius,
-                            minor_radius,
-                            10 * std::max(1, config.detail),
-                             8 * std::max(1, config.detail)
-                        )
-                    ),
-                    context,
-                    torus_collision_volume_calculator,
-                    torus_collision_shape_generator
+                const auto torus_geometry = std::make_shared<erhe::geometry::Geometry>(
+                    make_torus(
+                        major_radius,
+                        minor_radius,
+                        10 * std::max(1, config.detail),
+                            8 * std::max(1, config.detail)
+                    )
                 );
+                make_brush(
+                    Brush_data{
+                        .build_info                  = build_info(),
+                        .normal_style                = Normal_style::corner_normals,
+                        .geometry                    = torus_geometry,
+                        .density                     = config.mass_scale,
+                        .collision_volume_calculator = torus_collision_volume_calculator,
+                        .collision_shape_generator   = torus_collision_shape_generator,
+                        .physics_enabled = configuration->physics.static_enable
+                    },
+                    instantiate
+                );
+
             }
         );
     }
@@ -692,15 +723,10 @@ void Scene_builder::make_brushes()
     if (config.cylinder)
     {
         execution_queue->enqueue(
-            [this, &config]()
+            [this, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals, // Normal_style::polygon_normals
-                    .density      = config.mass_scale
-                };
                 constexpr bool instantiate = true;
                 const float scale = config.object_scale;
                 auto cylinder_geometry = make_cylinder(
@@ -715,13 +741,20 @@ void Scene_builder::make_brushes()
                 cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);
 
                 make_brush(
-                    instantiate,
-                    std::move(cylinder_geometry),
-                    context,
-                    erhe::physics::ICollision_shape::create_cylinder_shape_shared(
-                        erhe::physics::Axis::Y,
-                        vec3{scale, scale, scale}
-                    )
+                    Brush_data{
+                        .build_info      = build_info(),
+                        .normal_style    = Normal_style::corner_normals,
+                        .geometry        = std::make_shared<erhe::geometry::Geometry>(
+                            std::move(cylinder_geometry)
+                        ),
+                        .density         = config.mass_scale,
+                        .collision_shape = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
+                            erhe::physics::Axis::Y,
+                            vec3{scale, scale, scale}
+                        ),
+                        .physics_enabled = configuration->physics.static_enable
+                    },
+                    instantiate
                 );
             }
         );
@@ -730,15 +763,10 @@ void Scene_builder::make_brushes()
     if (config.cone)
     {
         execution_queue->enqueue(
-            [this, &config]()
+            [this, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Cone");
 
-                const Brush_create_context context{
-                    .build_info   = build_info(),
-                    .normal_style = Normal_style::corner_normals,
-                    .density      = config.mass_scale
-                };
                 constexpr bool instantiate = true;
                 auto cone_geometry = make_cone( // always axis = x
                     -config.object_scale,             // min x
@@ -751,15 +779,22 @@ void Scene_builder::make_brushes()
                 cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
 
                 make_brush(
-                    instantiate,
-                    std::move(cone_geometry),
-                    context
-                    // Sadly, Jolt does not have cone shape
-                    //erhe::physics::ICollision_shape::create_cone_shape_shared(
-                    //    erhe::physics::Axis::Y,
-                    //    object_scale,
-                    //    2.0f * object_scale
-                    //)
+                    Brush_data{
+                        .build_info      = build_info(),
+                        .normal_style    = Normal_style::corner_normals,
+                        .geometry        = std::make_shared<erhe::geometry::Geometry>(
+                            std::move(cone_geometry)
+                        ),
+                        .density         = config.mass_scale,
+                        // Sadly, Jolt does not have cone shape
+                        //erhe::physics::ICollision_shape::create_cone_shape_shared(
+                        //    erhe::physics::Axis::Y,
+                        //    object_scale,
+                        //    2.0f * object_scale
+                        //)
+                        .physics_enabled = configuration->physics.static_enable
+                    },
+                    instantiate
                 );
             }
         );
@@ -789,7 +824,6 @@ void Scene_builder::make_brushes()
         auto make_mesh_node =
         [
             &aniso_material,
-            //&ring_geometry,
             &rotate_ring_pg,
             &shared_geometry,
             this
@@ -836,21 +870,14 @@ void Scene_builder::make_brushes()
         {
             ERHE_PROFILE_SCOPE("Johnson solids");
 
-            const Brush_create_context context{
-                .build_info   = build_info(),
-                .normal_style = Normal_style::polygon_normals,
-                .density      = config.mass_scale
-            };
-
             {
                 ERHE_PROFILE_SCOPE("make brushes");
 
                 for (const auto& key_name : library.names)
                 {
                     execution_queue->enqueue(
-                        [this, &library, &key_name, &context]()
+                        [this, &library, &key_name, &config, &configuration]()
                         {
-                            constexpr bool instantiate = true;
                             auto geometry = library.make_geometry(key_name);
                             if (geometry.get_polygon_count() == 0)
                             {
@@ -858,7 +885,21 @@ void Scene_builder::make_brushes()
                             }
                             geometry.compute_polygon_normals();
 
-                            make_brush(instantiate, std::move(geometry), context);
+                            const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
+                                std::move(geometry)
+                            );
+
+                            make_brush(
+                                Brush_data{
+                                    .name               = shared_geometry->name,
+                                    .build_info         = build_info(),
+                                    .normal_style       = Normal_style::polygon_normals,
+                                    .geometry_generator = [shared_geometry](){ return shared_geometry; },
+                                    .density            = config.mass_scale,
+                                    .physics_enabled = configuration->physics.static_enable
+                                },
+                                false
+                            );
                         }
                     );
                 }
@@ -897,12 +938,6 @@ void Scene_builder::add_room()
         glm::vec2{0.9f, 0.9f},
         0.01f
     );
-    //auto table_material = m_scene_root->make_material(
-    //    "Table",
-    //    vec4{0.2f, 0.2f, 0.2f, 1.0f},
-    //    0.5f,
-    //    0.8f
-    //);
 
     // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info
@@ -917,38 +952,20 @@ void Scene_builder::add_room()
     auto floor_instance = m_floor_brush->make_instance(
         floor_brush_instance_create_info
     );
-    //auto table_instance = m_table_brush->make_instance(
-    //    erhe::toolkit::create_translation<float>(0.0f, 0.5f, 0.0f),
-    //    table_material,
-    //    1.0f
-    //);
-    //floor_instance.mesh->visibility_mask() |=
-    //    (Node_visibility::content     |
-    //     //Node_visibility::shadow_cast |
-    //     Node_visibility::id);
 
     m_scene_root->scene().add_to_mesh_layer(
         *layers.content(),
         floor_instance.mesh
     );
 
-    //add_to_scene_layer(m_scene_root->scene(), m_scene_root->content_layer(), table_instance.mesh);
     if (floor_instance.node_physics)
     {
         add_to_physics_world(m_scene_root->physics_world(), floor_instance.node_physics);
     }
-    //if (table_instance.node_physics)
-    //{
-    //    add_to_physics_world(m_scene_root->physics_world(), table_instance.node_physics);
-    //}
     if (floor_instance.node_raytrace)
     {
         add_to_raytrace_scene(m_scene_root->raytrace_scene(), floor_instance.node_raytrace);
     }
-    //if (table_instance.node_raytrace)
-    //{
-    //    add_to_raytrace_scene(m_scene_root->raytrace_scene(), table_instance.node_raytrace);
-    //}
 }
 
 void Scene_builder::make_mesh_nodes()
@@ -1023,10 +1040,10 @@ void Scene_builder::make_mesh_nodes()
             bool pack_failed = false;
             for (auto& entry : pack_entries)
             {
-                const auto* brush = entry.brush;
-                const vec3  size  = brush->gl_primitive_geometry.bounding_box.diagonal();
-                const int   width = static_cast<int>(256.0f * (size.x + gap));
-                const int   depth = static_cast<int>(256.0f * (size.z + gap));
+                auto*      brush = entry.brush;
+                const vec3 size  = brush->get_bounding_box().diagonal();
+                const int  width = static_cast<int>(256.0f * (size.x + gap));
+                const int  depth = static_cast<int>(256.0f * (size.z + gap));
                 entry.rectangle = packer.Insert(
                     width + 1,
                     depth + 1,
@@ -1085,7 +1102,7 @@ void Scene_builder::make_mesh_nodes()
                   z    += 0.5f * static_cast<float>(entry.rectangle.height) / 256.0f;
                   x    -= 0.5f * static_cast<float>(max_corner.x) / 256.0f;
                   z    -= 0.5f * static_cast<float>(max_corner.y) / 256.0f;
-            float y     = bottom_y_pos - brush->gl_primitive_geometry.bounding_box.min.y;
+            float y     = bottom_y_pos - brush->get_bounding_box().min.y;
             //x -= 0.5f * static_cast<float>(group_width);
             //z -= 0.5f * static_cast<float>(group_depth);
             //const auto& material = m_scene_root->materials().at(material_index);
@@ -1162,17 +1179,10 @@ auto Scene_builder::make_directional_light(
 ) -> std::shared_ptr<Light>
 {
     auto light = std::make_shared<Light>(name);
-    light->type                          = Light::Type::directional;
-    light->color                         = color;
-    light->intensity                     = intensity;
-    light->range                         =   0.0f;
-    //light->projection()->projection_type = Projection::Type::orthogonal;
-    //light->projection()->ortho_left      = -10.0f;
-    //light->projection()->ortho_width     =  20.0f;
-    //light->projection()->ortho_bottom    = -10.0f;
-    //light->projection()->ortho_height    =  20.0f;
-    //light->projection()->z_near          =   5.0f;
-    //light->projection()->z_far           =  20.0f;
+    light->type      = Light::Type::directional;
+    light->color     = color;
+    light->intensity = intensity;
+    light->range     =   0.0f;
 
     const auto& layers = m_scene_root->layers();
     m_scene_root->scene().add_to_light_layer(
@@ -1355,7 +1365,6 @@ void Scene_builder::setup_scene()
     make_brushes();
     make_mesh_nodes();
     add_room();
-    //make_cube_benchmark();
 }
 
 [[nodiscard]] auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>

@@ -16,6 +16,7 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor
 {
@@ -110,6 +111,7 @@ auto Trs_tool::Visualization::make_mesh(
     const Part&                                       part
 ) -> std::shared_ptr<erhe::scene::Mesh>
 {
+    ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(tool_scene_root != nullptr);
 
     auto mesh = std::make_shared<erhe::scene::Mesh>(
@@ -164,6 +166,8 @@ auto Trs_tool::Visualization::make_arrow_cylinder(
     Mesh_memory& mesh_memory
 ) -> Part
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_cylinder(
             -arrow_cylinder_length,
@@ -187,7 +191,9 @@ auto Trs_tool::Visualization::make_arrow_cone(
     Mesh_memory& mesh_memory
 ) -> Part
 {
-    const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
+    ERHE_PROFILE_FUNCTION
+
+        const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_cone(
             arrow_cylinder_length,
             arrow_tip,
@@ -209,6 +215,8 @@ auto Trs_tool::Visualization::make_box(
     Mesh_memory& mesh_memory
 ) -> Part
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_box(
             -box_length,
@@ -231,6 +239,8 @@ auto Trs_tool::Visualization::make_rotate_ring(
     Mesh_memory& mesh_memory
 ) -> Part
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_torus(
             rotate_ring_major_radius,

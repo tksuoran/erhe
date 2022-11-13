@@ -146,6 +146,8 @@ Program_interface::Shader_resources::Shader_resources(
 
 void Program_interface::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& config = get<erhe::application::Configuration>();
 
     shader_resources = std::make_unique<Shader_resources>(

@@ -1,7 +1,9 @@
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/commands/commands.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
+
+#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/application/commands/commands.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -68,6 +70,8 @@ void Operation_stack::declare_required_components()
 
 void Operation_stack::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const auto commands = get<erhe::application::Commands>();

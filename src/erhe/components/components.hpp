@@ -3,6 +3,7 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/xxhash.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -89,7 +90,7 @@ public:
     [[nodiscard]] auto name                    () const -> std::string_view;
     [[nodiscard]] auto get_state               () const -> Component_state;
     [[nodiscard]] auto is_registered           () const -> bool;
-    [[nodiscard]] auto is_ready_to_initialize  (const bool in_worker_thread) const -> bool;
+    [[nodiscard]] auto is_ready_to_initialize  (bool in_worker_thread, bool parallel) const -> bool;
     [[nodiscard]] auto is_ready_to_deinitialize() const -> bool;
     [[nodiscard]] auto dependencies            () -> const std::vector<std::shared_ptr<Component>>&;
     void register_as_component(Components* components);
@@ -183,6 +184,7 @@ private:
     std::unique_ptr<IExecution_queue>       m_execution_queue;
     std::size_t                             m_initialize_component_count_worker_thread{0};
     std::size_t                             m_initialize_component_count_main_thread  {0};
+    std::atomic<int>                        m_count_initialized_in_worker_thread      {0};
 };
 
 template<typename T>

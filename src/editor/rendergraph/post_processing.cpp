@@ -158,7 +158,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
         (viewport.height < 1)
     )
     {
-        log_post_processing->info(
+        log_post_processing->trace(
             "Resizing Post_processing_node '{}' to 0 x 0",
             name()
         );
@@ -180,7 +180,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     int width  = m_width;
     int height = m_height;
 
-    log_post_processing->info(
+    log_post_processing->trace(
         "Resizing Post_processing_node '{}' to {} x {}",
         name(),
         m_width,
@@ -412,6 +412,14 @@ void Post_processing::initialize_component()
         Shader_stages::Prototype x_prototype      {x_create_info};
         Shader_stages::Prototype y_prototype      {y_create_info};
         Shader_stages::Prototype compose_prototype{compose_create_info};
+        {
+            x_prototype.      compile_shaders();
+            y_prototype.      compile_shaders();
+            compose_prototype.compile_shaders();
+            x_prototype.      link_program();
+            y_prototype.      link_program();
+            compose_prototype.link_program();
+        }
         m_downsample_x_shader_stages = std::make_unique<Shader_stages>(std::move(x_prototype));
         m_downsample_y_shader_stages = std::make_unique<Shader_stages>(std::move(y_prototype));
         m_compose_shader_stages      = std::make_unique<Shader_stages>(std::move(compose_prototype));

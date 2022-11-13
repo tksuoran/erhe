@@ -129,10 +129,10 @@ private:
     bool      m_selection_box                    {false};
     bool      m_selection_sphere                 {true};
     float     m_selection_node_axis_width        {4.0f};
-    glm::vec4 m_selection_major_color            {1.0f, 1.0f, 0.0f, 0.3f};
-    glm::vec4 m_selection_minor_color            {1.0f, 1.0f, 0.0f, 0.2f};
-    glm::vec4 m_group_selection_major_color      {1.0f, 0.8f, 0.0f, 0.3f};
-    glm::vec4 m_group_selection_minor_color      {1.0f, 0.8f, 0.0f, 0.2f};
+    glm::vec4 m_selection_major_color            {2.0f, 1.6f, 0.1f, 1.0f};
+    glm::vec4 m_selection_minor_color            {2.0f, 1.6f, 0.1f, 0.5f};
+    glm::vec4 m_group_selection_major_color      {2.0f, 1.2f, 0.1f, 1.0f};
+    glm::vec4 m_group_selection_minor_color      {2.0f, 1.2f, 0.1f, 0.5f};
     float     m_selection_major_width            {4.0f};
     float     m_selection_minor_width            {2.0f};
     float     m_camera_visualization_width       {4.0f};
@@ -141,10 +141,10 @@ private:
 
     int       m_max_labels               {400};
     bool      m_show_only_selection      {true};
-    bool      m_show_points              {true};
-    bool      m_show_polygons            {true};
+    bool      m_show_points              {false};
+    bool      m_show_polygons            {false};
     bool      m_show_edges               {false};
-    bool      m_show_corners             {true};
+    bool      m_show_corners             {false};
     glm::vec4 m_point_label_text_color   {0.3f, 1.0f, 0.3f, 1.0f};
     glm::vec4 m_point_label_line_color   {0.0f, 0.8f, 0.0f, 1.0f};
     float     m_point_label_line_width   {1.5f};

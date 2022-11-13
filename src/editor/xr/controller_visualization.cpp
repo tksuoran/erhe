@@ -8,6 +8,7 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/xr/headset.hpp"
 
 namespace editor
@@ -19,6 +20,8 @@ Controller_visualization::Controller_visualization(
     erhe::scene::Node* view_root
 )
 {
+    ERHE_PROFILE_FUNCTION
+
     auto controller_material = scene_root.material_library()->make_material(
         "Controller",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}

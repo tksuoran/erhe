@@ -41,6 +41,7 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/xr/headset.hpp"
 #include "erhe/xr/xr_instance.hpp"
 
@@ -80,6 +81,8 @@ void Headset_view::declare_required_components()
 
 void Headset_view::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const auto scene_builder = get<Scene_builder>();
@@ -102,17 +105,25 @@ void Headset_view::initialize_component()
         .hand_tracking   = config.hand_tracking
     };
 
-    m_headset = std::make_unique<erhe::xr::Headset>(
-        get<erhe::application::Window>()->get_context_window(),
-        configuration
-    );
+    {
+        ERHE_PROFILE_SCOPE("make xr::Headset");
 
-    const auto mesh_memory = get<Mesh_memory>();
-    m_controller_visualization = std::make_unique<Controller_visualization>(
-        *mesh_memory,
-        *m_scene_root,
-        m_root_camera.get()
-    );
+        m_headset = std::make_unique<erhe::xr::Headset>(
+            get<erhe::application::Window>()->get_context_window(),
+            configuration
+        );
+    }
+
+    {
+        ERHE_PROFILE_SCOPE("make Controller_visualization");
+
+        const auto mesh_memory = get<Mesh_memory>();
+        m_controller_visualization = std::make_unique<Controller_visualization>(
+            *mesh_memory,
+            *m_scene_root,
+            m_root_camera.get()
+        );
+    }
 
     get<Tools>()->register_background_tool(this);
 
@@ -139,6 +150,8 @@ auto Headset_view::description() -> const char*
 
 void Headset_view::tool_render(const Render_context& context)
 {
+    ERHE_PROFILE_FUNCTION
+
     static_cast<void>(context);
 
     auto& line_renderer = *m_line_renderer_set->visible.at(2).get();
@@ -189,6 +202,8 @@ auto Headset_view::get_headset_view_resources(
     erhe::xr::Render_view& render_view
 ) -> std::shared_ptr<Headset_view_resources>
 {
+    ERHE_PROFILE_FUNCTION
+
     auto match_color_texture = [&render_view](const auto& i)
     {
         return i->color_texture->gl_name() == render_view.color_texture;
@@ -236,6 +251,8 @@ static constexpr std::string_view c_id_headset_render_content{"HS render content
 
 void Headset_view::update_pointer_context_from_controller()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& pose                   = m_headset->controller_pose();
     const auto  controller_orientation = glm::mat4_cast(pose.orientation);
     const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
@@ -392,6 +409,8 @@ void Headset_view::execute_rendergraph_node()
 
 void Headset_view::setup_root_camera()
 {
+    ERHE_PROFILE_FUNCTION
+
     m_root_camera = std::make_shared<erhe::scene::Camera>(
         "Headset Root Camera"
     );
@@ -454,6 +473,8 @@ void Headset_view::add_controller_input(const Controller_input& controller_input
 
 void Headset_view::begin_frame()
 {
+    ERHE_PROFILE_FUNCTION
+
     if (!m_headset)
     {
         return;

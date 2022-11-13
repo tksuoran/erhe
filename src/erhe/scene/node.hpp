@@ -99,6 +99,20 @@ public:
     glm::vec4                                      wireframe_color{0.6f, 0.7f, 0.8f, 0.7f};
     std::string                                    name;
     std::string                                    label;
+
+    static constexpr unsigned int bit_transform      {1u << 0};
+    static constexpr unsigned int bit_host           {1u << 1};
+    static constexpr unsigned int bit_parent         {1u << 2};
+    static constexpr unsigned int bit_children       {1u << 3};
+    static constexpr unsigned int bit_attachments    {1u << 4};
+    static constexpr unsigned int bit_visibility_mask{1u << 5};
+    static constexpr unsigned int bit_flag_bits      {1u << 6};
+    static constexpr unsigned int bit_depth          {1u << 7};
+    static constexpr unsigned int bit_wireframe_color{1u << 8};
+    static constexpr unsigned int bit_name           {1u << 9};
+    static constexpr unsigned int bit_label          {1u << 10};
+
+    static auto diff_mask(const Node_data& lhs, const Node_data& rhs) -> unsigned int;
 };
 
 class Node
@@ -153,7 +167,7 @@ public:
     void set_depth_recursive   (std::size_t depth);
     void update_world_from_node();
     void update_transform      (uint64_t serial) const;
-    void sanity_check          () const;
+    void sanity_check          (const void* host) const;
     void sanity_check_root_path(const Node* node) const;
     void set_parent_from_node  (const glm::mat4 matrix);
     void set_parent_from_node  (const Transform& transform);
@@ -165,8 +179,8 @@ public:
     auto detach                (Node* node, bool call_on_detached = true, bool remove_from_scene = false) -> bool;
     void attach                (const std::shared_ptr<INode_attachment>& attachment);
     auto detach                (INode_attachment* attachment) -> bool;
-    void unparent              ();
-    void remove_from_scene     ();
+    void unparent              (); // new parent = scene root
+    void remove_from_scene     (); // new parent = none
     void set_name              (const std::string_view name);
 
     Node_data node_data;

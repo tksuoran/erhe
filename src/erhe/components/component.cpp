@@ -160,7 +160,8 @@ auto Component::get_state() const -> Component_state
 }
 
 auto Component::is_ready_to_initialize(
-    const bool in_worker_thread
+    const bool in_worker_thread,
+    const bool parallel
 ) const -> bool
 {
     if (m_state != Component_state::Initialization_requirements_declared)
@@ -173,19 +174,21 @@ auto Component::is_ready_to_initialize(
         return false;
     }
 
+    const bool requires_main = processing_requires_main_thread();
     const bool is_ready =
         m_dependencies.empty() &&
         (
-            //Components::serial_component_initialization() ||
-            !processing_requires_main_thread() ||
-            (in_worker_thread != processing_requires_main_thread())
+            !parallel ||
+            //!requires_main ||
+            (in_worker_thread != requires_main)
         );
-    if (!is_ready)
+    if (!is_ready && !m_dependencies.empty())
     {
         log_components->trace(
-            "{} is not ready: requires main thread = {}, dependencies:",
+            "dependencies:",
             name(),
-            processing_requires_main_thread()
+            requires_main,
+            in_worker_thread ? "worker-thread" : "main-thread"
         );
         for (const auto& component : m_dependencies)
         {
@@ -196,6 +199,13 @@ auto Component::is_ready_to_initialize(
             );
         }
     }
+    log_components->trace(
+        "{} {} {} {}",
+        name(),
+        is_ready         ? "is-ready" : "is-waiting",
+        requires_main    ? "init-in-main" : "init-in-worker",
+        in_worker_thread ? "thread-is-worker" : "thread-is-main"
+    );
     return is_ready;
 }
 

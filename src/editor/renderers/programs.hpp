@@ -1,7 +1,5 @@
 #pragma once
 
-#include "task_queue.hpp"
-
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/shader_stages.hpp"
@@ -101,19 +99,34 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> debug_misc;
 
 private:
-    void queue(
-        std::unique_ptr<erhe::graphics::Shader_stages>& program,
-        erhe::graphics::Shader_stages::Create_info      create_info
-    );
+   class Program_prototype
+    {
+    public:
+        Program_prototype();
 
-    [[nodiscard]] auto make_program(erhe::graphics::Shader_stages::Create_info create_info) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+        Program_prototype(
+            std::unique_ptr<erhe::graphics::Shader_stages>*             program,
+            std::unique_ptr<erhe::graphics::Shader_stages::Prototype>&& prototype
+        );
+
+        std::unique_ptr<erhe::graphics::Shader_stages>*           program{nullptr};
+        std::unique_ptr<erhe::graphics::Shader_stages::Prototype> prototype;
+    };
+
+    void queue(Program_prototype& program_prototype);
+
+    [[nodiscard]] auto make_prototype(
+        erhe::graphics::Shader_stages::Create_info create_info
+    ) -> std::unique_ptr<erhe::graphics::Shader_stages::Prototype>;
+
+    [[nodiscard]] auto make_program(
+        erhe::graphics::Shader_stages::Prototype& prototype
+    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
     // Component dependencies
     std::shared_ptr<Program_interface>                 m_program_interface;
     std::shared_ptr<erhe::application::Shader_monitor> m_shader_monitor;
-    std::filesystem::path m_shader_path;
-
-    std::unique_ptr<ITask_queue> m_queue;
+    std::filesystem::path                              m_shader_path;
 };
 
 }

@@ -137,11 +137,7 @@ void Imgui_renderer::declare_required_components()
 
 void Imgui_renderer::initialize_component()
 {
-    //const auto& config = get<erhe::application::Configuration>();
-    //if (!config->imgui.enabled)
-    //{
-    //    return;
-    //}
+    ERHE_PROFILE_FUNCTION
 
     const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
 

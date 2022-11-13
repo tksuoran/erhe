@@ -47,5 +47,13 @@ void Editor_scenes::update_once_per_frame(const erhe::components::Time_context&)
     return m_current_scene_root;
 }
 
+void Editor_scenes::sanity_check()
+{
+    for (const auto& scene_root : m_scene_roots)
+    {
+        scene_root->sanity_check();
+    }
+}
+
 } // namespace hextiles
 

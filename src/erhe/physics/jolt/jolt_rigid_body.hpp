@@ -47,7 +47,6 @@ public:
     void move_world_transform        (const Transform transform, float delta_time)             override;
     void set_angular_velocity        (const glm::vec3 velocity)                                override;
     void set_center_of_mass_transform(const Transform transform)                               override;
-    void set_collision_shape         (const std::shared_ptr<ICollision_shape>& collision_shape)override;
     void set_damping                 (const float linear_damping, const float angular_damping) override;
     void set_friction                (const float friction)                                    override;
     void set_gravity_factor          (const float gravity_factor)                              override;
@@ -63,17 +62,11 @@ public:
 
 private:
     JPH::Body*                            m_body            {nullptr};
+    JPH::MassProperties                   m_mass_properties;
     IMotion_state*                        m_motion_state    {nullptr};
     JPH::BodyInterface&                   m_body_interface;
     std::shared_ptr<Jolt_collision_shape> m_collision_shape;
-    float                                 m_mass            {1.0f};
-    glm::mat4                             m_local_inertia   {0.0f};
     Motion_mode                           m_motion_mode     {Motion_mode::e_kinematic_non_physical};
-    float                                 m_friction        {0.5f};
-    float                                 m_gravity_factor  {1.0f};
-    float                                 m_restitution     {1.0f};
-    float                                 m_linear_damping  {0.05f};
-    float                                 m_angular_damping {0.05f};
     std::string                           m_debug_label;
 };
 

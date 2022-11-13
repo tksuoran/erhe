@@ -28,29 +28,12 @@ public:
     ~Jolt_collision_shape() noexcept override = default;
 
     // Implements ICollision_shape
-    void calculate_local_inertia(float mass, glm::mat4& inertia) const override
-    {
-        JPH::MassProperties mass_properties = m_jolt_shape->GetMassProperties();
-        mass_properties.ScaleToMass(mass);
-        inertia = from_jolt(mass_properties.mInertia);
-    }
+    void calculate_local_inertia(float mass, glm::mat4& inertia) const override;
+    [[nodiscard]] auto is_convex          () const -> bool override;
+    [[nodiscard]] auto get_center_of_mass () const -> glm::vec3 override;
+    [[nodiscard]] auto get_mass_properties() const -> Mass_properties override;
 
-    auto is_convex() const -> bool override
-    {
-        return true;
-    }
-
-    auto get_jolt_shape() -> JPH::ShapeRefC
-    {
-        return m_jolt_shape;
-    }
-
-    [[nodiscard]] auto get_center_of_mass() const -> glm::vec3
-    {
-        const JPH::Vec3 jolt_center_of_mass = m_jolt_shape->GetCenterOfMass();
-        const glm::vec3 center_of_mass = from_jolt(jolt_center_of_mass);
-        return center_of_mass;
-    }
+    [[nodiscard]] auto get_jolt_shape() -> JPH::ShapeRefC;
 
     virtual auto get_shape_settings() -> JPH::ShapeSettings& = 0;
 

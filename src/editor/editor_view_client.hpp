@@ -6,6 +6,7 @@
 namespace erhe::application
 {
     class Commands;
+    class Configuration;
     class Imgui_renderer;
     class Rendergraph;
 }
@@ -50,6 +51,7 @@ public:
 
 private:
     std::shared_ptr<erhe::application::Commands      > m_commands;
+    std::shared_ptr<erhe::application::Configuration > m_configuration;
     std::shared_ptr<erhe::application::Imgui_windows > m_imgui_windows;
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
     std::shared_ptr<erhe::application::Rendergraph   > m_render_graph;

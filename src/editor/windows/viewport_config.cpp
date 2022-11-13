@@ -39,7 +39,7 @@ void Viewport_config::initialize_component()
     render_style_not_selected.edge_lines        = config.edge_lines;
     render_style_not_selected.corner_points     = config.corner_points;
     render_style_not_selected.polygon_centroids = config.polygon_centroids;
-    render_style_not_selected.line_color        = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    render_style_not_selected.line_color        = config.edge_color;
     render_style_not_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
     render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
 

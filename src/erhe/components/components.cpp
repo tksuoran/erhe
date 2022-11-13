@@ -283,12 +283,25 @@ void Components::collect_uninitialized_depended_by(Component* component, std::se
 
 void Components::initialize_component(const bool in_worker_thread)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_SCOPE("initialize_component");
 
-    auto component = get_component_to_initialize(in_worker_thread);
-    if (!component)
+    Component* component;
     {
-        return;
+        component = get_component_to_initialize(in_worker_thread);
+        if (!component)
+        {
+            return;
+        }
+
+        const std::string message_text = fmt::format(
+            "Initializing {} {}",
+            component->name(),
+            in_worker_thread
+                ? "in worker thread"
+                : "in main thread"
+        );
+        ERHE_PROFILE_MESSAGE(message_text.c_str(), message_text.length());
+        log_components->trace(message_text);
     }
 
     log_components->info(
@@ -302,23 +315,34 @@ void Components::initialize_component(const bool in_worker_thread)
     component->set_state(Component_state::Initialized);
 
     {
-        ERHE_PROFILE_DATA("init component", component->name().data(), component->name().length())
+        //ERHE_PROFILE_DATA("init component", component->name().data(), component->name().length())
 
         const std::lock_guard<std::mutex> lock{m_mutex};
+
+        m_components_to_process.erase(component);
+
+        //// log_components->trace("remaining components to process:");
+        //// for (auto component_ : m_components_to_process)
+        //// {
+        ////     log_components->trace("    {}", component_->name());
+        //// }
 
         m_components_to_process.erase(component);
         for (auto component_ : m_components_to_process)
         {
             component_->component_initialized(component);
         }
-        const std::string message_text = fmt::format("{} initialized", component->name());
+        ++m_count_initialized_in_worker_thread;
+        const std::string message_text = fmt::format("{} initialized (total {})", component->name(), m_count_initialized_in_worker_thread);
         ERHE_PROFILE_MESSAGE(message_text.c_str(), message_text.length());
+        log_components->trace(message_text);
         m_component_processed.notify_all();
         if (m_components_to_process.empty())
         {
             m_is_ready = true;
             ERHE_PROFILE_MESSAGE_LITERAL("all components initialized");
         }
+
     }
 }
 
@@ -375,8 +399,10 @@ void Components::launch_component_initialization(const bool parallel)
     queue_all_components_to_be_processed();
 
     log_components->info(
-        "Initializing {} Components:",
-        m_components_to_process.size()
+        "Initializing {} components - {} in worker thread, {} in main thread:",
+        m_components_to_process.size(),
+        m_initialize_component_count_worker_thread,
+        m_initialize_component_count_main_thread
     );
 
     if (parallel)
@@ -410,6 +436,8 @@ void Components::launch_component_initialization(const bool parallel)
 
 auto Components::get_component_to_initialize(const bool in_worker_thread) -> Component*
 {
+    ERHE_PROFILE_FUNCTION
+
     {
         const std::lock_guard<std::mutex> lock{m_mutex};
 
@@ -429,7 +457,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
 
             for (Component* component : m_components_to_process)
             {
-                if (!component->is_ready_to_initialize(in_worker_thread))
+                if (!component->is_ready_to_initialize(in_worker_thread, m_parallel_initialization))
                 {
                     continue;
                 }
@@ -446,6 +474,13 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
             }
             if (selected_component != nullptr)
             {
+                log_components->trace(
+                    "selected component {} for {}",
+                    selected_component->name(),
+                    in_worker_thread
+                        ? "worker thread"
+                        : "main thread"
+                );
                 selected_component->set_state(Component_state::Initializing);
                 return selected_component;
             }

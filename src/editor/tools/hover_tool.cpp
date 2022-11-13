@@ -57,6 +57,8 @@ void Hover_tool::declare_required_components()
 
 void Hover_tool::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& imgui_windows = get<erhe::application::Imgui_windows>();
     imgui_windows->register_imgui_window(this);
 

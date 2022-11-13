@@ -28,6 +28,7 @@ public:
 
     // Public API
     void register_scene_root(const std::shared_ptr<Scene_root>& scene_root);
+    void sanity_check       ();
 
     [[nodiscard]] auto get_scene_roots       () -> const std::vector<std::shared_ptr<Scene_root>>&;
     [[nodiscard]] auto get_current_scene_root() -> const std::shared_ptr<Scene_root>&;

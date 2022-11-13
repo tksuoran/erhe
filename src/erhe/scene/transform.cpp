@@ -214,4 +214,16 @@ auto operator*(const Transform& lhs, const Transform& rhs) -> Transform
     };
 }
 
+auto operator==(const Transform& lhs, const Transform& rhs) -> bool
+{
+    const bool matrix_equality  = lhs.matrix() == rhs.matrix();
+    const bool inverse_equality = lhs.inverse_matrix() == rhs.inverse_matrix();
+    return matrix_equality && inverse_equality;
+}
+
+auto operator!=(const Transform& lhs, const Transform& rhs) -> bool
+{
+    return !(lhs == rhs);
+}
+
 } // namespace erhe::scene

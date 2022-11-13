@@ -2,6 +2,8 @@
 
 #include "erhe/physics/transform.hpp"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 #include <vector>
 
@@ -28,6 +30,13 @@ class Compound_shape_create_info
 {
 public:
     std::vector<Compound_child> children;
+};
+
+class Mass_properties
+{
+public:
+    float     mass          {0.0f};
+    glm::mat4 inertia_tensor{0.0f};
 };
 
 class ICollision_shape
@@ -67,6 +76,7 @@ public:
                   virtual void calculate_local_inertia           (const float mass, glm::mat4& inertia) const = 0;
     [[nodiscard]] virtual auto is_convex                         () const -> bool = 0;
     [[nodiscard]] virtual auto get_center_of_mass                () const -> glm::vec3 = 0;
+    [[nodiscard]] virtual auto get_mass_properties               () const -> Mass_properties = 0;
 
     //virtual void calculate_principal_axis_transform(
     //    const std::vector<float>& child_masses,

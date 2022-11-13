@@ -33,6 +33,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Node_physics;
 class Scene_root;
 class Selection_tool;
 
@@ -55,38 +56,20 @@ public:
     void undo   (const Operation_context& context) override;
 
 private:
-    class Source_entry
+    class Entry
     {
     public:
-        Source_entry(
-            const std::shared_ptr<erhe::scene::Mesh>&      mesh,
-            const std::vector<erhe::primitive::Primitive>& primitives
-        )
-        :   mesh      {mesh}
-        ,   primitives{primitives}
-        {
-        }
-
         std::shared_ptr<erhe::scene::Mesh>      mesh;
+        std::shared_ptr<Node_physics>           node_physics;
         std::vector<erhe::primitive::Primitive> primitives;
-    };
-
-    class State_data
-    {
-    public:
-        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
-        float                                            mass         {0.0f};
-        glm::mat4                                        local_inertia{0.0f};
-        erhe::physics::Transform                         rigidbody_from_node;
-        std::vector<std::shared_ptr<erhe::scene::Node>>  selection;
     };
 
     Parameters                                                  m_parameters;
     std::shared_ptr<erhe::scene::Node>                          m_parent;
-    std::vector<Source_entry>                                   m_source_entries;
-    erhe::primitive::Primitive                                  m_combined_primitive;
-    State_data                                                  m_state_before;
-    State_data                                                  m_state_after;
+    std::vector<Entry>                                          m_sources;
+    Entry                                                       m_combined;
+    std::vector<std::shared_ptr<erhe::scene::Node>>             m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Node>>             m_selection_after;
     std::vector<std::shared_ptr<erhe::scene::Node>>             m_hold_nodes;
     std::vector<std::shared_ptr<erhe::scene::INode_attachment>> m_hold_node_attachments;
 };

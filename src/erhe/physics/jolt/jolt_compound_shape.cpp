@@ -28,12 +28,14 @@ auto make_static_compound_shape_settings(
     JPH::StaticCompoundShapeSettings shape_settings;
     for (const auto& entry : create_info.children)
     {
-        auto collision_shape = dynamic_pointer_cast<Jolt_collision_shape>(entry.shape);
+        std::shared_ptr<ICollision_shape>     icollision_shape = entry.shape;
+        std::shared_ptr<Jolt_collision_shape> jolt_shape       = dynamic_pointer_cast<Jolt_collision_shape>(icollision_shape);
+        JPH::ShapeRefC                        shape_ref        = jolt_shape->get_jolt_shape();
         const auto basis = glm::quat{entry.transform.basis};
         shape_settings.AddShape(
             to_jolt(entry.transform.origin),
             to_jolt(basis),
-            collision_shape->get_jolt_shape()
+            shape_ref
         );
     }
     return shape_settings;

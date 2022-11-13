@@ -4,6 +4,7 @@
 
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
 #include "robin_hood.h"
@@ -121,6 +122,7 @@ private:
     std::shared_ptr<erhe::scene::Node> m_popup_node;
     std::string                        m_popup_id_string;
     unsigned int                       m_popup_id{0};
+    erhe::scene::Visibility_filter     m_filter;
 };
 
 } // namespace editor

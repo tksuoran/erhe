@@ -34,6 +34,7 @@ public:
     virtual void set_gravity            (const glm::vec3 gravity) = 0;
     virtual void set_debug_drawer       (IDebug_draw* debug_draw) = 0;
     virtual void debug_draw             ()                        = 0;
+    virtual void sanity_check           ()                        = 0;
 };
 
 } // namespace erhe::physics

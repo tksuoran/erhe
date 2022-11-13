@@ -118,7 +118,7 @@ void Scene::sanity_check() const
     //{
     //    node->sanity_check();
     //}
-    root_node->sanity_check();
+    root_node->sanity_check(host);
 }
 
 void Scene::sort_transform_nodes()
@@ -156,6 +156,7 @@ Scene::Scene(void* host)
     , root_node{std::make_shared<erhe::scene::Node>("root")}
 {
     // The implicit root node has a valid (identity) transform
+    root_node->node_data.host = host;
     root_node->node_data.transforms.update_serial = 1;
 }
 
@@ -299,12 +300,14 @@ void Scene::remove_node(
         node->node_data.host = nullptr;
         flat_node_vector.erase(i, flat_node_vector.end());
     }
+    sanity_check();
 }
 
 void Scene::remove(
     const std::shared_ptr<erhe::scene::Mesh>& mesh
 )
 {
+    mesh->remove_from_scene();
     for (auto& layer : mesh_layers)
     {
         auto& meshes = layer->meshes;

@@ -96,26 +96,39 @@ public:
         Prototype         (const Prototype&) = delete;
         void operator=    (const Prototype&) = delete;
 
-        [[nodiscard]] auto is_valid() const -> bool
-        {
-            return m_link_succeeded;
-        }
+        [[nodiscard]] auto name       () const -> const std::string&;
+        [[nodiscard]] auto create_info() const -> const Create_info&;
+        [[nodiscard]] auto is_valid   () -> bool;
 
+        auto link_program() -> bool;
+
+        void compile_shaders();
         void dump_reflection() const;
 
     private:
-        [[nodiscard]] static auto try_compile_shader(
-            const Shader_stages::Create_info&               create_info,
-            const Shader_stages::Create_info::Shader_stage& shader
-        ) -> std::optional<Gl_shader>;
+        void post_link();
+
+        [[nodiscard]] auto compile(
+            const Create_info::Shader_stage& shader
+        ) -> Gl_shader;
+
+        [[nodiscard]] auto post_compile(
+            const Shader_stages::Create_info::Shader_stage& shader,
+            Gl_shader&                                      gl_shader
+        ) -> bool;
 
         friend class Shader_stages;
 
-        std::string            m_name;
-        Gl_program             m_handle;
-        std::vector<Gl_shader> m_attached_shaders;
-        bool                   m_link_succeeded{false};
+        static constexpr int state_init                       = 0;
+        static constexpr int state_shader_compilation_started = 1;
+        static constexpr int state_program_link_started       = 2;
+        static constexpr int state_ready                      = 3;
+        static constexpr int state_fail                       = 4;
 
+        Create_info            m_create_info;
+        Gl_program             m_handle;
+        std::vector<Gl_shader> m_shaders;
+        int                    m_state{state_init};
         Shader_resource        m_default_uniform_block;
         std::map<std::string, Shader_resource, std::less<>> m_resources;
     };

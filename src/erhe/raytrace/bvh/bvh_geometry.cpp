@@ -9,6 +9,7 @@
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timer.hpp"
 
 #include <bvh/sphere.hpp>
@@ -57,33 +58,35 @@ Bvh_geometry::Bvh_geometry(
 
 Bvh_geometry::~Bvh_geometry() noexcept = default;
 
-auto Bvh_geometry::get_element_count() const -> std::size_t
-{
-    return 1;
-}
-
-auto Bvh_geometry::get_element_point_count(std::size_t element_index) const -> std::size_t
-{
-    static_cast<void>(element_index);
-    return m_points.size();
-}
-
-auto Bvh_geometry::get_point(std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3>
-{
-    static_cast<void>(element_index);
-    if (point_index < m_points.size())
-    {
-        return m_points[point_index];
-    }
-    return {};
-}
+//// auto Bvh_geometry::get_element_count() const -> std::size_t
+//// {
+////     return 1;
+//// }
+//// 
+//// auto Bvh_geometry::get_element_point_count(std::size_t element_index) const -> std::size_t
+//// {
+////     static_cast<void>(element_index);
+////     return m_points.size();
+//// }
+//// 
+//// auto Bvh_geometry::get_point(std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3>
+//// {
+////     static_cast<void>(element_index);
+////     if (point_index < m_points.size())
+////     {
+////         return m_points[point_index];
+////     }
+////     return {};
+//// }
 
 void Bvh_geometry::commit()
 {
-    erhe::toolkit::Timer build_timer{"Bvh_geometry::commit()"};
+    ERHE_PROFILE_FUNCTION
+
+    //// erhe::toolkit::Timer build_timer{"Bvh_geometry::commit()"};
 
     {
-        erhe::toolkit::Scoped_timer scoped_timer{build_timer};
+        //// erhe::toolkit::Scoped_timer scoped_timer{build_timer};
 
         const Buffer_info* index_buffer_info{nullptr};
         const Buffer_info* vertex_buffer_info{nullptr};
@@ -132,85 +135,102 @@ void Bvh_geometry::commit()
         const char* raw_vertex_ptr = reinterpret_cast<char*>(vertex_buffer->span().data()) + vertex_buffer_info->byte_offset;
 
         m_triangles.clear();
-        std::set<uint32_t> unique_indices;
-        for (std::size_t i = 0; i < index_buffer_info->item_count; ++i)
+        m_triangles.reserve(index_buffer_info->item_count / 3);
+        ////std::set<uint32_t> unique_indices;
         {
-            const uint32_t i0 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(uint32_t));
-            const uint32_t i1 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(uint32_t));
-            const uint32_t i2 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(uint32_t));
+            ERHE_PROFILE_SCOPE("collect indices")
 
-            unique_indices.insert(i0);
-            unique_indices.insert(i1);
-            unique_indices.insert(i2);
+            for (std::size_t i = 0; i < index_buffer_info->item_count; ++i)
+            {
+                const uint32_t i0 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(uint32_t));
+                const uint32_t i1 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(uint32_t));
+                const uint32_t i2 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(uint32_t));
 
-            const float p0_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 0 * sizeof(float));
-            const float p0_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 1 * sizeof(float));
-            const float p0_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 2 * sizeof(float));
+                ////unique_indices.insert(i0);
+                ////unique_indices.insert(i1);
+                ////unique_indices.insert(i2);
 
-            const float p1_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 0 * sizeof(float));
-            const float p1_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 1 * sizeof(float));
-            const float p1_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 2 * sizeof(float));
+                const float p0_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 0 * sizeof(float));
+                const float p0_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 1 * sizeof(float));
+                const float p0_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 2 * sizeof(float));
 
-            const float p2_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 0 * sizeof(float));
-            const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 1 * sizeof(float));
-            const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 2 * sizeof(float));
+                const float p1_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 0 * sizeof(float));
+                const float p1_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 1 * sizeof(float));
+                const float p1_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i1 * index_buffer_info->byte_stride + 2 * sizeof(float));
 
-            m_triangles.emplace_back(
-                bvh::Vector3<float>(p0_x, p0_y, p0_z),
-                bvh::Vector3<float>(p1_x, p1_y, p1_z),
-                bvh::Vector3<float>(p2_x, p2_y, p2_z)
+                const float p2_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 0 * sizeof(float));
+                const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 1 * sizeof(float));
+                const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 2 * sizeof(float));
+
+                m_triangles.emplace_back(
+                    bvh::Vector3<float>(p0_x, p0_y, p0_z),
+                    bvh::Vector3<float>(p1_x, p1_y, p1_z),
+                    bvh::Vector3<float>(p2_x, p2_y, p2_z)
+                );
+            }
+        }
+
+        //// {
+        ////     ERHE_PROFILE_SCOPE("collect vertices")
+        ////     for (const auto i : unique_indices)
+        ////     {
+        ////         const float x = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(float));
+        ////         const float y = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(float));
+        ////         const float z = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(float));
+        //// 
+        ////         m_points.emplace_back(x, y, z);
+        ////     }
+        //// }
+
+        {
+            ERHE_PROFILE_SCOPE("bbox")
+            auto [bboxes, centers] = bvh::compute_bounding_boxes_and_centers<bvh::Triangle<float>>(
+                m_triangles.data(),
+                m_triangles.size()
+            );
+            m_bounding_boxes = std::move(bboxes);
+            m_centers        = std::move(centers);
+        }
+        {
+            ERHE_PROFILE_SCOPE("bbox union")
+            m_global_bbox    = bvh::compute_bounding_boxes_union<float>(
+                m_bounding_boxes.get(),
+                m_triangles.size()
             );
         }
 
-        for (const auto i : unique_indices)
+        // Create an acceleration data structure on the primitives
         {
-            const float x = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(float));
-            const float y = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(float));
-            const float z = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(float));
-
-            m_points.emplace_back(x, y, z);
+            ERHE_PROFILE_SCOPE("SweepSahBuilder")
+            bvh::SweepSahBuilder<bvh::Bvh<float>> builder{m_bvh};
+            builder.build(
+                m_global_bbox,
+                m_bounding_boxes.get(),
+                m_centers.get(),
+                m_triangles.size()
+            );
         }
 
-        auto [bboxes, centers] = bvh::compute_bounding_boxes_and_centers<bvh::Triangle<float>>(
-            m_triangles.data(),
-            m_triangles.size()
-        );
-        m_bounding_boxes = std::move(bboxes);
-        m_centers        = std::move(centers);
-        m_global_bbox    = bvh::compute_bounding_boxes_union<float>(
-            m_bounding_boxes.get(),
-            m_triangles.size()
-        );
-
-        // Create an acceleration data structure on the primitives
-        bvh::SweepSahBuilder<bvh::Bvh<float>> builder{m_bvh};
-        builder.build(
-            m_global_bbox,
-            m_bounding_boxes.get(),
-            m_centers.get(),
-            m_triangles.size()
-        );
-
-        erhe::toolkit::calculate_bounding_volume(*this, m_bounding_box, m_bounding_sphere);
+        //// erhe::toolkit::calculate_bounding_volume(*this, m_bounding_box, m_bounding_sphere);
     }
 
-    const auto duration = build_timer.duration().value();
-    if (duration >= std::chrono::milliseconds(1))
-    {
-        log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
-    }
-    else if (duration >= std::chrono::microseconds(1))
-    {
-        log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
-    }
-    else
-    {
-        log_geometry->trace("build time:             {}", build_timer.duration().value());
-    }
-    log_geometry->trace("bvh triangle count:     {}", m_triangles.size());
-    log_geometry->trace("bvh point count:        {}", m_points.size());
-    log_geometry->trace("bounding box volume:    {}", m_bounding_box.volume());
-    log_geometry->trace("bounding sphere volume: {}", m_bounding_sphere.volume());
+    //// const auto duration = build_timer.duration().value();
+    //// if (duration >= std::chrono::milliseconds(1))
+    //// {
+    ////     log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
+    //// }
+    //// else if (duration >= std::chrono::microseconds(1))
+    //// {
+    ////     log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
+    //// }
+    //// else
+    //// {
+    ////     log_geometry->trace("build time:             {}", build_timer.duration().value());
+    //// }
+    //// log_geometry->trace("bvh triangle count:     {}", m_triangles.size());
+    //// log_geometry->trace("bvh point count:        {}", m_points.size());
+    //// log_geometry->trace("bounding box volume:    {}", m_bounding_box.volume());
+    //// log_geometry->trace("bounding sphere volume: {}", m_bounding_sphere.volume());
 }
 
 void Bvh_geometry::enable()
@@ -305,10 +325,10 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
     return false;
 }
 
-auto Bvh_geometry::get_sphere() const -> const erhe::toolkit::Bounding_sphere&
-{
-    return m_bounding_sphere;
-}
+/// auto Bvh_geometry::get_sphere() const -> const erhe::toolkit::Bounding_sphere&
+/// {
+///     return m_bounding_sphere;
+/// }
 
 auto Bvh_geometry::get_mask() const -> uint32_t
 {

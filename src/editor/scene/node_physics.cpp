@@ -27,8 +27,8 @@ Node_physics::Node_physics(
             ? erhe::physics::Motion_mode::e_static
             : erhe::physics::Motion_mode::e_dynamic
     }
-    , m_rigid_body         {IRigid_body::create_rigid_body_shared(create_info, this)}
-    , m_collision_shape    {create_info.collision_shape}
+    , m_rigid_body     {IRigid_body::create_rigid_body_shared(create_info, this)}
+    , m_collision_shape{create_info.collision_shape}
 {
     log_physics->trace("Created Node_physics {}", create_info.debug_label);
     m_flag_bits |= INode_attachment::c_flag_bit_is_physics;

@@ -5,8 +5,8 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_windows.hpp"
 
-#include "erhe/application/configuration.hpp"
 #include "erhe/application/commands/commands.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
@@ -15,6 +15,7 @@
 #include "erhe/graphics/debug.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor
 {
@@ -35,12 +36,15 @@ void Editor_view_client::declare_required_components()
 
 void Editor_view_client::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     get<erhe::application::View>()->set_client(this);
 }
 
 void Editor_view_client::post_initialize()
 {
     m_commands         = get<erhe::application::Commands      >();
+    m_configuration    = get<erhe::application::Configuration >();
     m_imgui_windows    = get<erhe::application::Imgui_windows >();
     m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
     m_render_graph     = get<erhe::application::Rendergraph   >();
@@ -54,7 +58,10 @@ void Editor_view_client::update_fixed_step(const erhe::components::Time_context&
     const auto& scene_builder   = get<Scene_builder>();
     const auto& test_scene_root = scene_builder->get_scene_root();
 
-    test_scene_root->physics_world().update_fixed_step(time_context.dt);
+    if (m_configuration->physics.static_enable)
+    {
+        test_scene_root->physics_world().update_fixed_step(time_context.dt);
+    }
 }
 
 void Editor_view_client::update()

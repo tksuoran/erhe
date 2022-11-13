@@ -4,6 +4,7 @@
 #include "editor_scenes.hpp"
 
 #include "erhe/application/commands/commands.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace editor
 {
@@ -54,6 +55,8 @@ void Scene_commands::declare_required_components()
 
 void Scene_commands::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto commands = get<erhe::application::Commands>();
 
     commands->register_command   (&m_create_new_camera_command);

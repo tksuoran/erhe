@@ -133,7 +133,8 @@ public:
     class Physics
     {
     public:
-        bool enabled{false};
+        bool static_enable {false};
+        bool dynamic_enable{false};
     };
     Physics physics;
 
@@ -220,7 +221,8 @@ public:
         bool      polygon_centroids        {false};
         bool      selection_bounding_sphere{true};
         bool      selection_bounding_box   {true};
-        glm::vec4 selection_edge_color     {0.0f, 0.0f, 0.0f, 1.0f};
+        glm::vec4 edge_color               {0.0f, 0.0f, 0.0f, 0.5f};
+        glm::vec4 selection_edge_color     {0.0f, 0.0f, 0.0f, 0.5f};
         glm::vec4 clear_color              {0.1f, 0.2f, 0.4f, 1.0f};
     };
     Viewport viewport;

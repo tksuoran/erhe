@@ -61,6 +61,7 @@ public:
     void remove_constraint      (IConstraint* constraint) override;
     void set_debug_drawer       (IDebug_draw* debug_draw) override;
     void debug_draw             ()                        override;
+    void sanity_check           ()                        override;
 
     // Implements BodyActivationListener
     void OnBodyActivated  (const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;

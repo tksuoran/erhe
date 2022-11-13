@@ -165,6 +165,8 @@ void Physics_tool::declare_required_components()
 
 void Physics_tool::initialize_component()
 {
+    ERHE_PROFILE_FUNCTION
+
     const auto& tools = get<Tools>();
     tools->register_tool(this);
     tools->register_hover_tool(this);
@@ -194,8 +196,8 @@ void Physics_tool::initialize_component()
         erhe::physics::IRigid_body_create_info
         {
             .world             = *world,
-            .mass              = 10.0f,
             .collision_shape   = erhe::physics::ICollision_shape::create_empty_shape_shared(),
+            .mass              = 10.0f,
             .debug_label       = "Physics Tool",
             .enable_collisions = false
         },

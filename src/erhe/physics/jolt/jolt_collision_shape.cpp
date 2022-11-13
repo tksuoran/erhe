@@ -46,7 +46,7 @@ public:
         return JPH::AABox{JPH::Vec3{0.0f, 0.0f, 0.0f}, 0.0f};
     }
 
-    JPH::uint GetSubShapeIDBitsRecursive() const
+    JPH::uint GetSubShapeIDBitsRecursive() const override
     {
         return 0;
     }
@@ -73,20 +73,30 @@ public:
         return p;
     }
 
-    const JPH::PhysicsMaterial* GetMaterial(const JPH::SubShapeID& inSubShapeID) const
+    const JPH::PhysicsMaterial* GetMaterial(const JPH::SubShapeID& inSubShapeID) const override
     {
         static_cast<void>(inSubShapeID);
         return nullptr;
     }
 
-    JPH::Vec3 GetSurfaceNormal(const JPH::SubShapeID& inSubShapeID, JPH::Vec3Arg inLocalSurfacePosition) const override
+    JPH::Vec3 GetSurfaceNormal(
+        const JPH::SubShapeID& inSubShapeID,
+        JPH::Vec3Arg           inLocalSurfacePosition
+    ) const override
     {
         static_cast<void>(inSubShapeID);
         static_cast<void>(inLocalSurfacePosition);
         return {};
     }
 
-    void GetSubmergedVolume(JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, const JPH::Plane& inSurface, float& outTotalVolume, float& outSubmergedVolume, JPH::Vec3& outCenterOfBuoyancy) const override
+    void GetSubmergedVolume(
+        JPH::Mat44Arg     inCenterOfMassTransform,
+        JPH::Vec3Arg      inScale,
+        const JPH::Plane& inSurface,
+        float&            outTotalVolume,
+        float&            outSubmergedVolume,
+        JPH::Vec3&        outCenterOfBuoyancy
+    ) const override
     {
         static_cast<void>(inCenterOfMassTransform);
         static_cast<void>(inScale);
@@ -98,7 +108,14 @@ public:
 
 #ifdef JPH_DEBUG_RENDERER
     // See Shape::Draw
-    void Draw(JPH::DebugRenderer* inRenderer, JPH::Mat44Arg inCenterOfMassTransform, JPH::Vec3Arg inScale, JPH::ColorArg inColor, bool inUseMaterialColors, bool inDrawWireframe) const override
+    void Draw(
+        JPH::DebugRenderer* inRenderer,
+        JPH::Mat44Arg       inCenterOfMassTransform,
+        JPH::Vec3Arg        inScale,
+        JPH::ColorArg       inColor,
+        const bool          inUseMaterialColors,
+        const bool          inDrawWireframe
+    ) const override
     {
 static_cast<void>(inRenderer);
         static_cast<void>(inCenterOfMassTransform);
@@ -110,14 +127,24 @@ static_cast<void>(inRenderer);
 #endif // JPH_DEBUG_RENDERER
 
     // See Shape::CastRay
-    bool CastRay(const JPH::RayCast& inRay, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::RayCastResult& ioHit) const override
+    bool CastRay(
+        const JPH::RayCast&           inRay,
+        const JPH::SubShapeIDCreator& inSubShapeIDCreator,
+        JPH::RayCastResult&           ioHit
+    ) const override
     {
         static_cast<void>(inRay);
         static_cast<void>(inSubShapeIDCreator);
         static_cast<void>(ioHit);
         return false;
     }
-    void CastRay(const JPH::RayCast& inRay, const JPH::RayCastSettings& inRayCastSettings, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::CastRayCollector &ioCollector, const JPH::ShapeFilter& inShapeFilter = { }) const override
+    void CastRay(
+        const JPH::RayCast&           inRay,
+        const JPH::RayCastSettings&   inRayCastSettings,
+        const JPH::SubShapeIDCreator& inSubShapeIDCreator,
+        JPH::CastRayCollector&        ioCollector,
+        const JPH::ShapeFilter&       inShapeFilter = {}
+    ) const override
     {
         static_cast<void>(inRay);
         static_cast<void>(inRayCastSettings);
@@ -126,7 +153,12 @@ static_cast<void>(inRenderer);
         static_cast<void>(inShapeFilter);
     }
 
-    void CollidePoint(JPH::Vec3Arg inPoint, const JPH::SubShapeIDCreator& inSubShapeIDCreator, JPH::CollidePointCollector& ioCollector, const JPH::ShapeFilter& inShapeFilter = { }) const override
+    void CollidePoint(
+        JPH::Vec3Arg                  inPoint,
+        const JPH::SubShapeIDCreator& inSubShapeIDCreator,
+        JPH::CollidePointCollector&   ioCollector,
+        const JPH::ShapeFilter&       inShapeFilter = {}
+    ) const override
     {
         static_cast<void>(inPoint);
         static_cast<void>(inSubShapeIDCreator);
@@ -134,7 +166,13 @@ static_cast<void>(inRenderer);
         static_cast<void>(inShapeFilter);
     }
 
-    void GetTrianglesStart(GetTrianglesContext& ioContext, const JPH::AABox& inBox, JPH::Vec3Arg inPositionCOM, JPH::QuatArg inRotation, JPH::Vec3Arg inScale) const override
+    void GetTrianglesStart(
+        GetTrianglesContext& ioContext,
+        const JPH::AABox&    inBox,
+        JPH::Vec3Arg         inPositionCOM,
+        JPH::QuatArg         inRotation,
+        JPH::Vec3Arg         inScale
+    ) const override
     {
         static_cast<void>(ioContext);
         static_cast<void>(inBox);
@@ -143,7 +181,12 @@ static_cast<void>(inRenderer);
         static_cast<void>(inScale);
     }
 
-    int GetTrianglesNext(GetTrianglesContext& ioContext, int inMaxTrianglesRequested, JPH::Float3* outTriangleVertices, const JPH::PhysicsMaterial** outMaterials = nullptr) const
+    int GetTrianglesNext(
+        GetTrianglesContext&         ioContext,
+        int                          inMaxTrianglesRequested,
+        JPH::Float3*                 outTriangleVertices,
+        const JPH::PhysicsMaterial** outMaterials = nullptr
+    ) const override
     {
         static_cast<void>(ioContext);
         static_cast<void>(inMaxTrianglesRequested);
@@ -152,12 +195,12 @@ static_cast<void>(inRenderer);
         return 0;
     }
 
-    Stats GetStats() const
+    Stats GetStats() const override
     {
         return Stats{0, 0};
     }
 
-    float GetVolume() const
+    float GetVolume() const override
     {
         return 0.0f;
     }
@@ -294,6 +337,42 @@ auto ICollision_shape::create_sphere_shape_shared(const float radius)
     -> std::shared_ptr<ICollision_shape>
 {
     return std::make_shared<Jolt_sphere_shape>(radius);
+}
+
+void Jolt_collision_shape::calculate_local_inertia(
+    const float mass,
+    glm::mat4&  inertia
+) const
+{
+    JPH::MassProperties mass_properties = m_jolt_shape->GetMassProperties();
+    mass_properties.ScaleToMass(mass);
+    inertia = from_jolt(mass_properties.mInertia);
+}
+
+auto Jolt_collision_shape::is_convex() const -> bool
+{
+    return true;
+}
+
+auto Jolt_collision_shape::get_jolt_shape() -> JPH::ShapeRefC
+{
+    return m_jolt_shape;
+}
+
+[[nodiscard]] auto Jolt_collision_shape::get_center_of_mass() const -> glm::vec3
+{
+    const JPH::Vec3 jolt_center_of_mass = m_jolt_shape->GetCenterOfMass();
+    const glm::vec3 center_of_mass = from_jolt(jolt_center_of_mass);
+    return center_of_mass;
+}
+
+[[nodiscard]] auto Jolt_collision_shape::get_mass_properties() const -> Mass_properties
+{
+    const auto jolt_mass_properties = m_jolt_shape->GetMassProperties();
+    return Mass_properties{
+        .mass           = jolt_mass_properties.mMass,
+        .inertia_tensor = from_jolt(jolt_mass_properties.mInertia)
+    };
 }
 
 } // namespace erhe::physics

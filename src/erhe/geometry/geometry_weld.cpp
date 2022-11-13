@@ -82,19 +82,28 @@ public:
 class Point_data
 {
 public:
-    Point_data(const Point_id old_id, const Point_attribute_maps& attribute_maps)
+    Point_data(
+        const Point_id              old_id,
+        const Point_attribute_maps& attribute_maps
+    )
     {
-        if ((attribute_maps.locations  != nullptr) && attribute_maps.locations ->has(old_id)) position  = attribute_maps.locations ->get(old_id);
-        if ((attribute_maps.normals    != nullptr) && attribute_maps.normals   ->has(old_id)) normal    = attribute_maps.normals   ->get(old_id);
-        if ((attribute_maps.tangents   != nullptr) && attribute_maps.tangents  ->has(old_id)) tangent   = attribute_maps.tangents  ->get(old_id);
-        if ((attribute_maps.bitangents != nullptr) && attribute_maps.bitangents->has(old_id)) bitangent = attribute_maps.bitangents->get(old_id);
-        if ((attribute_maps.texcoords  != nullptr) && attribute_maps.texcoords ->has(old_id)) texcoord  = attribute_maps.texcoords ->get(old_id);
+        if (
+            (attribute_maps.locations != nullptr) &&
+            attribute_maps.locations->has(old_id)
+        )
+        {
+            position = attribute_maps.locations->get(old_id);
+        }
+        //// if ((attribute_maps.normals    != nullptr) && attribute_maps.normals   ->has(old_id)) normal    = attribute_maps.normals   ->get(old_id);
+        //// if ((attribute_maps.tangents   != nullptr) && attribute_maps.tangents  ->has(old_id)) tangent   = attribute_maps.tangents  ->get(old_id);
+        //// if ((attribute_maps.bitangents != nullptr) && attribute_maps.bitangents->has(old_id)) bitangent = attribute_maps.bitangents->get(old_id);
+        //// if ((attribute_maps.texcoords  != nullptr) && attribute_maps.texcoords ->has(old_id)) texcoord  = attribute_maps.texcoords ->get(old_id);
     }
     std::optional<vec3> position;
-    std::optional<vec3> normal;
-    std::optional<vec3> tangent;
-    std::optional<vec3> bitangent;
-    std::optional<vec2> texcoord;
+    //// std::optional<vec3> normal;
+    //// std::optional<vec3> tangent;
+    //// std::optional<vec3> bitangent;
+    //// std::optional<vec2> texcoord;
 };
 
 auto get_sorting_axises(const vec3& min_corner, const vec3& max_corner) -> std::array<glm::length_t, 3>
@@ -129,8 +138,8 @@ void sort_points_by_location(
 
     const auto sorting_axises = get_sorting_axises(min_corner, max_corner);
 
-    geometry.debug_trace();
-    geometry.sanity_check();
+    //// geometry.debug_trace();
+    //// geometry.sanity_check();
 
     std::sort(
         point_remapper.old_from_new.begin(),
@@ -185,7 +194,7 @@ void merge_sorted_points(
 {
     log_weld->trace("\n\nSTEP 2\n\n");
 
-    geometry.debug_trace();
+    //// geometry.debug_trace();
 
     //  - Scanning is done with a sliding window
     //  - The window start position is called primary
@@ -209,11 +218,16 @@ void merge_sorted_points(
         }
 
         const Point_data primary_attributes{primary_old_id, point_attribute_maps};
+        if (!primary_attributes.position.has_value())
+        {
+            continue;
+        }
         log_weld->trace(
             "Span / Primay new point {:2} old point {:2} position {}",
             primary_new_id,
             point_remapper.old_from_new[primary_new_id], primary_attributes.position.value()
         );
+
         for (
             Point_id secondary_new_id = primary_new_id + 1;
             secondary_new_id < point_remapper.new_size;
@@ -226,14 +240,14 @@ void merge_sorted_points(
                 continue;
             }
             const Point_data secondary_attributes{secondary_old_id, point_attribute_maps};
-
-            if (primary_attributes.position.has_value() && secondary_attributes.position.has_value())
+            if (!secondary_attributes.position.has_value())
             {
-                const float distance = glm::distance(primary_attributes.position.value(), secondary_attributes.position.value());
-                if (distance > weld_settings.max_point_distance)
-                {
-                    continue;
-                }
+                continue;
+            }
+            const float distance = glm::distance(primary_attributes.position.value(), secondary_attributes.position.value());
+            if (distance > weld_settings.max_point_distance)
+            {
+                continue;
             }
 
             log_weld->trace(
@@ -253,7 +267,7 @@ void merge_sorted_points(
 
     log_weld->trace("Merged {} points", point_remapper.merge.size());
     log_weld->trace("Point remapping after merge, before removing duplicate points:");
-    geometry.debug_trace();
+    //// geometry.debug_trace();
     point_remapper.dump();
 
     point_remapper.reorder_to_drop_merge_duplicates_and_elimitated();
@@ -262,7 +276,7 @@ void merge_sorted_points(
     geometry.m_next_point_id = point_remapper.new_size;
 
     log_weld->trace("Points after trim:");
-    geometry.debug_trace();
+    //// geometry.debug_trace();
     point_remapper.dump();
 
     // Remap points
@@ -291,7 +305,7 @@ void sort_polygons(Geometry& geometry, Remapper<Polygon_id>& polygon_remapper)
     log_weld->trace("\n\nSTEP 4\n\n");
     log_weld->trace("Sort polygons based on first corner (least) point id");
 
-    geometry.debug_trace();
+    //// geometry.debug_trace();
 
     std::sort(
         polygon_remapper.old_from_new.begin(),
@@ -383,7 +397,6 @@ void Geometry::reallocate_point_corners(Remapper<Point_id>& point_remapper)
                 ERHE_VERIFY(new_point_id == primary_new_id);
                       Point& primary_new   = points    [primary_new_id  ];
                 const Point& secondary_old = old_points[secondary_old_id];
-                ERHE_VERIFY(secondary_old.corner_count > 0);
                 std::stringstream ss;
                 for (uint32_t i = 0, end = secondary_old.corner_count; i < end; ++i)
                 {
@@ -538,7 +551,7 @@ void scan_for_equal_and_opposite_polygons(
 )
 {
     log_weld->trace("\n\nSTEP 5\n\n");
-    geometry.debug_trace();
+    //// geometry.debug_trace();
     for (
         Polygon_id primary_new_id = 0;
         primary_new_id < geometry.m_next_polygon_id;
@@ -619,9 +632,11 @@ void scan_for_equal_and_opposite_polygons(
                 continue;
             }
 
-            bool polygons_are_equal    = true;
-            bool polygons_are_opposite = true;
             const uint32_t corner_count = primary_polygon.corner_count;
+
+            bool polygons_are_equal    = (corner_count >= 1);
+            bool polygons_are_opposite = (corner_count >= 3);
+
             for (uint32_t i = 0; i < corner_count; ++i)
             {
                 const Corner_id primary_corner_id = geometry.polygon_corners[primary_polygon.first_polygon_corner_id + i];
@@ -709,7 +724,7 @@ void drop_dead_polygons(
 {
     log_weld->trace("\n\nSTEP 6\n\n");
 
-    geometry.debug_trace();
+    //// geometry.debug_trace();
 
     auto old_polygons = geometry.polygons; // intentional copy
 
@@ -849,7 +864,7 @@ void drop_dead_corners_and_remap_corners(
 )
 {
     log_weld->trace("\n\nSTEP 8\n\n");
-    geometry.debug_trace();
+    //// geometry.debug_trace();
 
     auto old_corners = geometry.corners; // intentional copy
 
@@ -953,7 +968,7 @@ void Geometry::remap_corners(Remapper<Corner_id>& corner_remapper)
     }
 
     log_weld->trace("after corner renaming:");
-    debug_trace();
+    //// debug_trace();
 }
 
 void Geometry::weld(const Weld_settings& weld_settings)
@@ -986,7 +1001,7 @@ void Geometry::weld(const Weld_settings& weld_settings)
     drop_dead_corners_and_remap_corners (*this, corner_remapper);                        // STEP 8
 
     log_weld->trace("\n\nSTEP 9\n\n");
-    debug_trace();
+    //// debug_trace();
     remap_corners                       (corner_remapper);                               // STEP 9
 
     log_weld->trace("\n\nSTEP 10\n\n");

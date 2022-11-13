@@ -282,8 +282,15 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
     ERHE_PROFILE_FUNCTION
 
-    auto&       mesh_data        = mesh.mesh_data;
-    auto*       scene_root       = reinterpret_cast<Scene_root*>(mesh.node_data.host);
+    //ERHE_VERIFY(mesh.node_data.host != nullptr);
+
+    auto& mesh_data  = mesh.mesh_data;
+    auto* scene_root = reinterpret_cast<Scene_root*>(mesh.node_data.host);
+    if (scene_root == nullptr)
+    {
+        ImGui::Text("Mesh host not set");
+        return;
+    }
     const auto& material_library = scene_root->material_library();
 
     ImGui::PushID("##mesh_properties");

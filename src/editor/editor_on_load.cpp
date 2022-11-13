@@ -278,7 +278,10 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<editor::Tool_properties_window>(), config.tool_properties     );
     init_window(m_components.get<editor::Viewport_config       >(), config.viewport_config     );
 
-    if (configuration->physics.enabled)
+    if (
+        configuration->physics.static_enable &&
+        configuration->physics.dynamic_enable
+    )
     {
         const auto& scene_builder   = m_components.get<editor::Scene_builder   >();
         const auto& test_scene_root = scene_builder->get_scene_root();

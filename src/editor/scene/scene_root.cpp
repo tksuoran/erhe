@@ -107,7 +107,9 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
     return m_light.get();
 }
 
-Scene_root::Scene_root(const std::string_view& name)
+Scene_root::Scene_root(
+    const std::string_view name
+)
     : m_name  {name}
     , m_scene {std::make_unique<Scene>(this)}
     , m_layers(*m_scene.get())
@@ -142,28 +144,6 @@ Scene_root::~Scene_root() noexcept
 {
 }
 
-//// void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node)
-//// {
-////     auto selection_tool = try_get<Selection_tool>();
-////     if (selection_tool && !selection_tool->selection().empty())
-////     {
-////         const auto& entry = selection_tool->selection().front();
-////         entry->attach(node);
-////         node->set_parent_from_node(erhe::scene::Transform{});
-////     }
-//// }
-////
-//// void Scene_root::attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node)
-//// {
-////     auto selection_tool = try_get<Selection_tool>();
-////     if (selection_tool && !selection_tool->selection().empty())
-////     {
-////         const auto& entry = selection_tool->selection().front();
-////         entry->attach(node);
-////         node->set_parent_from_node(erhe::scene::Transform{});
-////     }
-//// }
-
 auto Scene_root::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
 {
     auto camera = std::make_shared<erhe::scene::Camera>("Camera");
@@ -172,7 +152,6 @@ auto Scene_root::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 200.0f;
     scene().add(camera);
-    //// attach_to_selection(camera);
     return camera;
 }
 
@@ -180,7 +159,6 @@ auto Scene_root::create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>
 {
     auto node = std::make_shared<erhe::scene::Node>("Empty Node");
     scene().add_node(node);
-    //// attach_to_selection(node);
     return node;
 }
 
@@ -191,25 +169,12 @@ auto Scene_root::create_new_light() -> std::shared_ptr<erhe::scene::Light>
     light->color     = glm::vec3{1.0, 1.0f, 1.0};
     light->intensity =  1.0f;
     light->range     =  0.0f;
-    //// attach_to_selection(light);
     scene().add_to_light_layer(
         *m_layers.light(),
         light
     );
     return light;
 }
-
-// TODO This is not thread safe
-//// auto Scene_root::materials() -> std::vector<std::shared_ptr<Material>>&
-//// {
-////     return m_materials;
-//// }
-////
-//// // TODO This is not thread safe
-//// auto Scene_root::materials() const -> const std::vector<std::shared_ptr<Material>>&
-//// {
-////     return m_materials;
-//// }
 
 auto Scene_root::material_library() const -> const std::shared_ptr<Material_library>&
 {
@@ -492,6 +457,11 @@ void Scene_root::update_pointer_for_rendertarget_nodes()
     );
     m_rendertarget_nodes.push_back(rendertarget_node);
     return rendertarget_node;
+}
+
+void Scene_root::sanity_check()
+{
+    m_scene->sanity_check();
 }
 
 } // namespace editor

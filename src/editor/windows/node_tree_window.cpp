@@ -37,6 +37,12 @@ using Light_type = erhe::scene::Light_type;
 Node_tree_window::Node_tree_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
+    , m_filter{
+        .require_all_bits_set           = erhe::scene::Node_visibility::content,
+        .require_at_least_one_bit_set   = 0,
+        .require_all_bits_clear         = erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::brush,
+        .require_at_least_one_bit_clear = 0
+    }
 {
 }
 
@@ -129,7 +135,7 @@ void Node_tree_window::move_selection(
     const Placement                                            placement
 )
 {
-    log_node_properties->info(
+    log_node_properties->trace(
         "move_selection(anchor = {}, {})",
         target_node ? target_node->name() : "(empty)",
         (placement == Placement::Before_anchor)
@@ -883,6 +889,11 @@ void Node_tree_window::imgui_tree_node(
 {
     ERHE_PROFILE_FUNCTION
 
+    if (!m_filter(node->node_data.visibility_mask))
+    {
+        return;
+    }
+
     if (m_selection_tool)
     {
         m_selection_tool->range_selection().entry(node);
@@ -967,6 +978,8 @@ void Node_tree_window::imgui()
     {
         m_selection_tool->range_selection().end();
     }
+
+    get<Editor_scenes>()->sanity_check();
 #endif
 }
 
