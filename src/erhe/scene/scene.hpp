@@ -50,10 +50,11 @@ public:
 };
 
 class Scene
-    : Message_bus_node
+    : public Message_bus_node
 {
 public:
-    Scene(Message_bus* message_bus, void* host = nullptr);
+    explicit Scene(Message_bus* message_bus, void* host = nullptr);
+    ~Scene() override;
 
     void sanity_check          () const;
     void sort_transform_nodes  ();

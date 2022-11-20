@@ -159,6 +159,8 @@ Scene::Scene(Message_bus* message_bus, void* host)
     root_node->node_data.transforms.update_serial = 1;
 }
 
+Scene::~Scene() = default;
+
 void Scene::add_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )

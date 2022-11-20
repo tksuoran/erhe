@@ -98,12 +98,10 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
         if (node_physics)
         {
-            auto rigid_body = node_physics->rigid_body();
-            if (rigid_body)
+            auto* rigid_body = node_physics->rigid_body();
+            if (rigid_body != nullptr)
             {
-                auto collision_shape = (rigid_body != nullptr)
-                    ? rigid_body->get_collision_shape()
-                    : std::shared_ptr<erhe::physics::ICollision_shape>{};
+                auto collision_shape = rigid_body->get_collision_shape();
 
                 erhe::physics::Compound_child child{
                     .shape     = collision_shape,

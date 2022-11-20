@@ -9,6 +9,8 @@ Message_bus_node::Message_bus_node(Message_bus* message_bus)
     m_message_bus->add_receiver(get_notify_func());
 }
 
+Message_bus_node::~Message_bus_node() = default;
+
 std::function<void (Message&)> Message_bus_node::get_notify_func()
 {
     auto message_listener = [=](Message& message) -> void

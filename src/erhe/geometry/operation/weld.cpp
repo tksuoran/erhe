@@ -1,8 +1,10 @@
 #include "erhe/geometry/operation/weld.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/geometry_log.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/geometry/operation/octree.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/norm.hpp>
@@ -17,101 +19,54 @@ namespace erhe::geometry::operation
 
 using vec3 = glm::vec3;
 
-auto get_sorting_axises(const vec3& min_corner, const vec3& max_corner) -> std::array<glm::length_t, 3>
-{
-    const vec3 bounding_box_size0 = max_corner - min_corner;
-    const auto axis0 = erhe::toolkit::max_axis_index(bounding_box_size0);
-    vec3       bounding_box_size1 = bounding_box_size0;
-    bounding_box_size1[axis0] = 0.0f;
-    const auto axis1 = erhe::toolkit::max_axis_index(bounding_box_size1);
-    vec3       bounding_box_size2 = bounding_box_size1;
-    bounding_box_size2[axis1] = 0.0f;
-    const auto axis2 = erhe::toolkit::max_axis_index(bounding_box_size2);
-
-    return std::array<glm::length_t, 3>{axis0, axis1, axis2};
-}
-
-// Points are sorted spatially, so that nearby points can be identified
-void Weld::sort_points_by_location()
-{
-    vec3 min_corner;
-    vec3 max_corner;
-    source.compute_bounding_box(min_corner, max_corner);
-    const auto sorting_axises = get_sorting_axises(min_corner, max_corner);
-
-    const auto* point_locations = source.point_attributes().find<vec3>(c_point_locations);
-    std::sort(
-        m_point_id_sorted.begin(),
-        m_point_id_sorted.end(),
-        [sorting_axises, point_locations]
-        (const Point_id lhs, const Point_id rhs)
-        {
-            const vec3 position_lhs = point_locations->get(lhs);
-            const vec3 position_rhs = point_locations->get(rhs);
-            if (position_lhs[sorting_axises[0]] != position_rhs[sorting_axises[0]])
-            {
-                return position_lhs[sorting_axises[0]] < position_rhs[sorting_axises[0]];
-            }
-            if (position_lhs[sorting_axises[1]] != position_rhs[sorting_axises[1]])
-            {
-                return position_lhs[sorting_axises[1]] < position_rhs[sorting_axises[1]];
-            }
-            return position_lhs[sorting_axises[2]] < position_rhs[sorting_axises[2]];
-        }
-    );
-}
-
-// The sliding window scan used by find_point_merge_candidates()
-// and scan_for_equal_and_opposite_polygons():
-//
-// - Scanning is done with a "sliding window"
-// - The window start position is called left
-// - The window end position is called right
-// - Steps:
-//   1. Left is initialized to first element (after sorting)
-//   2. Right is initialized to left + 1
-//   3. Right moves forward as long as point locations are within merge threshold
-//   4. When right point is different from left, left is advanced by one and goto step 2
-
 void Weld::find_point_merge_candidates()
 {
     const auto* point_locations = source.point_attributes().find<vec3>(c_point_locations);
-    for (
-        std::size_t left_sort_index = 0, end = m_point_id_sorted.size();
-        left_sort_index < end;
-        ++left_sort_index
-    )
-    {
-        const Point_id left_point_id = m_point_id_sorted[left_sort_index];
-        if (m_point_id_merge_candidates[left_point_id] != left_point_id)
+
+    std::vector<glm::vec3> points;
+    points.resize(source.get_point_count());
+    source.for_each_point_const(
+        [&](const auto& i)
         {
-            continue; // already marked
+            points[i.point_id] = point_locations->get(i.point_id);
         }
+    );
 
-        const vec3 left_location = point_locations->get(left_point_id);
+    unibn::Octree<glm::vec3> octree;
+    unibn::OctreeParams params;
+    octree.initialize(points);
 
-        for (
-            std::size_t right_sort_index = left_sort_index + 1;
-            right_sort_index < end;
-            ++right_sort_index
-        )
+    source.for_each_point_const(
+        [&](const auto& i)
         {
-            const Point_id right_point_id = m_point_id_sorted[right_sort_index];
-            if (m_point_id_merge_candidates[right_point_id] != right_point_id)
+            if (m_point_id_merge_candidates[i.point_id] != i.point_id)
             {
-                continue; // already marked
+                //// log_merge->info("Point {} is already marked to be merged", i.point_id);
+                return; // continue already marked
             }
 
-            const vec3  right_location   = point_locations->get(right_point_id);
-            const float distance_squared = glm::distance2(left_location, right_location);
-            if (distance_squared > m_max_distance_squared)
-            {
-                break; // Sliding widnow: Advance left
-            }
+            const glm::vec3 query_location = points[i.point_id];
 
-            m_point_id_merge_candidates[right_point_id] = left_point_id;
+            std::vector<uint32_t> nearby_point_indices;
+            octree.radiusNeighbors<unibn::L2Distance<glm::vec3>>(
+                query_location,
+                m_max_distance,
+                nearby_point_indices
+            );
+
+            for (const auto merge_point_id : nearby_point_indices)
+            {
+                m_point_id_merge_candidates[merge_point_id] = i.point_id;
+            }
         }
-    }
+    );
+
+    //// std::stringstream ss;
+    //// for (const auto id : m_point_id_merge_candidates)
+    //// {
+    ////     ss << " " << id;
+    //// }
+    //// log_merge->info("Point merge candidates:{}", ss.str());
 }
 
 // Rotate polygon corners so that the corner with smallest point
@@ -187,6 +142,16 @@ void Weld::sort_polygons()
             return lhs_point_id < rhs_point_id;
         }
     );
+
+    //// log_merge->info("Sorted polygons:");
+    //// for (const auto id : m_polygon_id_sorted)
+    //// {
+    ////     log_merge->info(
+    ////         "   {}: {}",
+    ////         id,
+    ////         format_polygon_points(source.polygons.at(id))
+    ////     );
+    //// }
 }
 
 auto Weld::format_polygon_points(const Polygon& polygon) const -> std::string
@@ -209,6 +174,17 @@ auto Weld::format_polygon_points(const Polygon& polygon) const -> std::string
 //
 // The test is purely based on topology, by comparing
 // (merged) Point_ids.
+//
+// The sliding window scan:
+//
+// - Scanning is done with a "sliding window"
+// - The window start position is called left
+// - The window end position is called right
+// - Steps:
+//   1. Left is initialized to first element (after sorting)
+//   2. Right is initialized to left + 1
+//   3. Right moves forward as long as point locations are within merge threshold
+//   4. When right point is different from left, left is advanced by one and goto step 2
 void Weld::scan_for_equal_and_opposite_polygons()
 {
     for (
@@ -309,6 +285,16 @@ void Weld::scan_for_equal_and_opposite_polygons()
             }
         }
     }
+
+    //// std::stringstream ss;
+    //// for (const auto id : m_polygon_id_sorted)
+    //// {
+    ////     if (m_polygon_id_remove[id])
+    ////     {
+    ////         ss << " " << id;
+    ////     }
+    //// }
+    //// log_merge->info("Polygons to remove:{}", ss.str());
 }
 
 // Collect points that are used be polygons that are not removed.
@@ -335,6 +321,16 @@ void Weld::mark_used_points()
             m_point_id_used[point_id] = true;
         }
     }
+
+    //// std::stringstream ss;
+    //// for (std::size_t i = 0; i < m_point_id_used.size(); ++i)
+    //// {
+    ////     if (m_point_id_used[i])
+    ////     {
+    ////         ss << " " << i;
+    ////     }
+    //// }
+    //// log_merge->info("Used points:{}", ss.str());
 }
 
 void Weld::count_used_points()
@@ -347,6 +343,7 @@ void Weld::count_used_points()
             ++m_used_point_count;
         }
     }
+    //// log_merge->info("Used point count = {}", m_used_point_count);
 }
 
 Weld::Weld(
@@ -359,18 +356,15 @@ Weld::Weld(
 
     const uint32_t point_count   = source.get_point_count();
     const uint32_t polygon_count = source.get_polygon_count();
-    m_point_id_sorted          .resize(point_count);
     m_point_id_merge_candidates.resize(point_count);
     m_point_id_used            .resize(point_count);
     m_polygon_id_sorted        .resize(polygon_count);
     m_polygon_id_remove        .resize(polygon_count);
-    std::iota(m_point_id_sorted.begin(), m_point_id_sorted.end(), Point_id{0});
     std::iota(m_point_id_merge_candidates.begin(), m_point_id_merge_candidates.end(), Point_id{0});
     std::iota(m_polygon_id_sorted.begin(), m_polygon_id_sorted.end(), Polygon_id{0});
 
-    m_max_distance_squared = 1.0f / 32768.0f, // sqrt() is .0055 ~ 5.5mm
+    m_max_distance = 0.005f; // 5mm
 
-    sort_points_by_location             ();
     find_point_merge_candidates         ();
     rotate_polygons_to_least_point_first();
     sort_polygons                       ();

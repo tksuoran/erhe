@@ -33,9 +33,8 @@ private:
     auto format_polygon_points(const Polygon& polygon) const -> std::string;
 
 
-    float                   m_max_distance_squared;
+    float                   m_max_distance;
     uint32_t                m_used_point_count;
-    std::vector<Point_id>   m_point_id_sorted          ;
     std::vector<Point_id>   m_point_id_merge_candidates;
     std::vector<bool>       m_point_id_used            ;
     std::vector<Polygon_id> m_polygon_id_sorted        ;

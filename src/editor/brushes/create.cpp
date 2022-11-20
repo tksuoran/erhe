@@ -68,7 +68,7 @@ void Create_uv_sphere::render_preview(
     }
 }
 
-[[nodiscard]] void Create_uv_sphere::imgui()
+void Create_uv_sphere::imgui()
 {
     ImGui::Text("Sphere Parameters");
 
@@ -140,7 +140,7 @@ void Create_cone::render_preview(
     }
 }
 
-[[nodiscard]] void Create_cone::imgui()
+void Create_cone::imgui()
 {
     ImGui::Text("Cone Parameters");
 
@@ -224,7 +224,7 @@ void Create_torus::render_preview(
     }
 }
 
-[[nodiscard]] void Create_torus::imgui()
+void Create_torus::imgui()
 {
     ImGui::Text("Torus Parameters");
 
@@ -299,7 +299,7 @@ void Create_box::render_preview(
     }
 }
 
-[[nodiscard]] void Create_box::imgui()
+void Create_box::imgui()
 {
     ImGui::Text("Box Parameters");
 

@@ -39,8 +39,8 @@ Reference_frame::Reference_frame(
     const uint32_t                   in_face_offset,
     const uint32_t                   in_corner_offset
 )
-    : polygon_id{polygon_id}
-    , face_offset{in_face_offset}
+    : face_offset{in_face_offset}
+    , polygon_id {polygon_id}
 {
     const auto* const polygon_centroids = geometry.polygon_attributes().find<vec3>(c_polygon_centroids);
     const auto* const polygon_normals   = geometry.polygon_attributes().find<vec3>(c_polygon_normals);

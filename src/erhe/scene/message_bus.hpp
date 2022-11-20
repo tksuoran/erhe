@@ -32,7 +32,8 @@ public:
 class Message_bus_node
 {
 public:
-    Message_bus_node(Message_bus* message_bus);
+    explicit Message_bus_node(Message_bus* message_bus);
+    virtual ~Message_bus_node();
 
 protected:
     Message_bus* m_message_bus;

@@ -38,7 +38,8 @@ public:
         const erhe::scene::Transform&         transform
     ) = 0;
 
-    [[nodiscard]] virtual void imgui () = 0;
+    virtual void imgui() = 0;
+
     [[nodiscard]] virtual auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> = 0;
 };
 
@@ -52,7 +53,8 @@ public:
         const erhe::scene::Transform&         transform
     ) override;
 
-    [[nodiscard]] void imgui () override;
+    void imgui() override;
+
     [[nodiscard]] auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
@@ -71,7 +73,8 @@ public:
         const erhe::scene::Transform&         transform
     ) override;
 
-    [[nodiscard]] void imgui () override;
+    void imgui() override;
+
     [[nodiscard]] auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
@@ -92,7 +95,8 @@ public:
         const erhe::scene::Transform&         transform
     ) override;
 
-    [[nodiscard]] void imgui () override;
+    void imgui() override;
+
     [[nodiscard]] auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
@@ -118,7 +122,8 @@ public:
         const erhe::scene::Transform&         transform
     ) override;
 
-    [[nodiscard]] void imgui () override;
+    void imgui() override;
+
     [[nodiscard]] auto create(Brush_data& brush_create_info) const -> std::shared_ptr<Brush> override;
 
 private:
