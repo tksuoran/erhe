@@ -34,6 +34,7 @@ namespace editor
 {
 
 class Node_physics;
+class Node_raytrace;
 class Scene_root;
 class Selection_tool;
 
@@ -61,6 +62,7 @@ private:
     public:
         std::shared_ptr<erhe::scene::Mesh>      mesh;
         std::shared_ptr<Node_physics>           node_physics;
+        std::shared_ptr<Node_raytrace>          node_raytrace;
         std::vector<erhe::primitive::Primitive> primitives;
     };
 

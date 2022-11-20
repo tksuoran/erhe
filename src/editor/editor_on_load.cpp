@@ -31,6 +31,7 @@
 #include "tools/hover_tool.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "tools/hud.hpp"
+#include "tools/paint_tool.hpp"
 #include "tools/physics_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -198,6 +199,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Operation_stack       >());
         m_components.add(make_shared<editor::Operations            >());
         m_components.add(make_shared<editor::Hud                   >());
+        m_components.add(make_shared<editor::Paint_tool            >());
         m_components.add(make_shared<editor::Physics_tool          >());
         m_components.add(make_shared<editor::Physics_window        >());
         m_components.add(make_shared<editor::Post_processing       >());

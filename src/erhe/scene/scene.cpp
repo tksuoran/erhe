@@ -114,11 +114,9 @@ auto Scene::get_light_by_id(
 
 void Scene::sanity_check() const
 {
-    //for (auto& node : nodes)
-    //{
-    //    node->sanity_check();
-    //}
+#if !defined(NDEBUG)
     root_node->sanity_check(host);
+#endif
 }
 
 void Scene::sort_transform_nodes()
@@ -151,9 +149,10 @@ void Scene::update_node_transforms()
     }
 }
 
-Scene::Scene(void* host)
-    : host     {host}
-    , root_node{std::make_shared<erhe::scene::Node>("root")}
+Scene::Scene(Message_bus* message_bus, void* host)
+    : Message_bus_node{message_bus}
+    , host            {host}
+    , root_node       {std::make_shared<erhe::scene::Node>("root")}
 {
     // The implicit root node has a valid (identity) transform
     root_node->node_data.host = host;
@@ -185,6 +184,11 @@ void Scene::add_node(
     if (node->parent().expired())
     {
         root_node->attach(node);
+    }
+
+    if ((node->node_data.flag_bits & Node_flag_bit::no_message) == 0)
+    {
+        send(Message{.event_type = Node_event_type::node_added_to_scene, .lhs = node});
     }
 }
 
@@ -301,6 +305,11 @@ void Scene::remove_node(
         flat_node_vector.erase(i, flat_node_vector.end());
     }
     sanity_check();
+
+    if ((node->node_data.flag_bits & Node_flag_bit::no_message) == 0)
+    {
+        send(Message{.event_type = Node_event_type::node_removed_from_scene, .lhs = node});
+    }
 }
 
 void Scene::remove(

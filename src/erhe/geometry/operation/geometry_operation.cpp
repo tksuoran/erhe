@@ -551,6 +551,8 @@ void Geometry_operation::build_destination_edges_with_sourcing()
 
 void Geometry_operation::interpolate_all_property_maps()
 {
+    ERHE_PROFILE_FUNCTION
+
     new_point_sources  .resize(destination.get_point_count());
     new_polygon_sources.resize(destination.get_polygon_count());
     new_corner_sources .resize(destination.get_corner_count());

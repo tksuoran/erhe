@@ -5,62 +5,21 @@
 #include "tools/selection_tool.hpp"
 #include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/geometry/operation/weld.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/defer.hpp"
 
 #include <memory>
 #include <sstream>
 
 namespace editor
 {
-
-// https://github.com/bulletphysics/bullet3/issues/1352
-//
-// The btRigidBody is aligned with the center of mass.
-// You need to recompute the shift to make sure the compound shape is re-aligned.
-//
-// https://github.com/bulletphysics/bullet3/blob/master/examples/ExtendedTutorials/CompoundBoxes.cpp
-//
-// https://pybullet.org/Bullet/phpBB3/viewtopic.php?t=11004
-//
-//static btTransform RigidBody_TransformCompoundRecursive(btCompoundShape* compound, btScalar mass)
-//{
-//    btScalar* masses = RigidBody_CalculateMasses(compound, mass);
-//
-//    // Recurse down the compound tree, transforming each compound and their children so that the
-//    // compound is positioned at its centre of mass and with its axes aligned with those of the
-//    // principal inertia tensor.
-//    for (int i = 0; i < compound->getNumChildShapes(); ++i)
-//    {
-//        btCollisionShape* childShape = compound->getChildShape(i);
-//        if (childShape->isCompound())
-//        {
-//            btCompoundShape* childCompound = static_cast<btCompoundShape*>(childShape);
-//            btTransform childPrincipalTransform = RigidBody_TransformCompoundRecursive(childCompound, masses[i]);
-//            compound->updateChildTransform(i, childPrincipalTransform * compound->getChildTransform(i)); // Transform the compound so that it is positioned at its centre of mass.
-//        }
-//    }
-//
-//    // Calculate the principal transform for the compound. This has its origin at the compound's
-//    // centre of mass and its axes aligned with those of the inertia tensor.
-//    btTransform principalTransform;
-//    btVector3 principalInertia;
-//    compound->calculatePrincipalAxisTransform(masses, principalTransform, principalInertia);
-//
-//    // Transform all the child shapes by the inverse of the compound's principal transform, so
-//    // as to restore their world positions.
-//    for (int i = 0; i < compound->getNumChildShapes(); ++i)
-//    {
-//        btCollisionShape* childShape = compound->getChildShape(i);
-//        compound->updateChildTransform(i, principalTransform.inverse() * compound->getChildTransform(i));
-//    }
-//
-//    return principalTransform;
-//}
 
 auto Merge_operation::describe() const -> std::string
 {
@@ -112,11 +71,14 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             continue;
         }
         mat4 transform;
-        auto node_physics = get_physics_node(mesh.get());
+        auto node_physics  = get_physics_node(mesh.get());
+        auto node_raytrace = get_raytrace    (mesh.get());
 
+        //rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
         Entry source_entry{
-            .mesh         = mesh,
-            .node_physics = node_physics
+            .mesh          = mesh,
+            .node_physics  = node_physics,
+            .node_raytrace = node_raytrace
         };
 
         if (first_mesh)
@@ -194,22 +156,25 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         m_combined.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
     }
 
-    const erhe::geometry::Geometry::Weld_settings weld_settings;
-    combined_geometry.weld(weld_settings);
-    combined_geometry.build_edges();
+    std::shared_ptr<erhe::geometry::Geometry> welded_geometry = std::make_shared<erhe::geometry::Geometry>(
+        erhe::geometry::operation::weld(combined_geometry)
+    );;
+
+    m_combined.node_raytrace = std::make_shared<Node_raytrace>(welded_geometry);
+    const auto* rt_primitive = m_combined.node_raytrace->raytrace_primitive();
 
     m_combined.primitives.push_back(
         erhe::primitive::Primitive{
             .material              = material,
             .gl_primitive_geometry = make_primitive(
-                combined_geometry,
+                *welded_geometry.get(),
                 parameters.build_info,
                 normal_style
             ),
-            .rt_primitive_geometry = {}, // TODO
-            .rt_vertex_buffer      = {}, // TODO
-            .rt_index_buffer       = {}, // TODO
-            .source_geometry       = std::make_shared<erhe::geometry::Geometry>(std::move(combined_geometry)),
+            .rt_primitive_geometry = rt_primitive->primitive_geometry,
+            .rt_vertex_buffer      = rt_primitive->vertex_buffer,
+            .rt_index_buffer       = rt_primitive->index_buffer,
+            .source_geometry       = welded_geometry,
             .normal_style          = normal_style
         }
     );
@@ -217,7 +182,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
 void Merge_operation::execute(const Operation_context&)
 {
-    log_operations->trace("Op Execute {}", describe());
+    log_operations->trace("begin Op Execute {}", describe());
 
     if (m_sources.empty())
     {
@@ -229,8 +194,9 @@ void Merge_operation::execute(const Operation_context&)
     {
         return;
     }
-    auto& scene         = scene_root->scene();
-    auto& physics_world = scene_root->physics_world();
+    auto& scene          = scene_root->scene();
+    auto& physics_world  = scene_root->physics_world();
+    auto& raytrace_scene = scene_root->raytrace_scene();
 
     scene.sanity_check();
 
@@ -242,6 +208,7 @@ void Merge_operation::execute(const Operation_context&)
         {
             // For first mesh: Replace mesh primitives
             mesh->mesh_data.primitives = m_combined.primitives;
+
             auto old_node_physics = get_physics_node(mesh.get());
             if (old_node_physics)
             {
@@ -254,6 +221,18 @@ void Merge_operation::execute(const Operation_context&)
                 add_to_physics_world(physics_world, m_combined.node_physics);
             }
 
+            auto old_node_raytrace = get_raytrace(mesh.get());
+            if (old_node_raytrace)
+            {
+                remove_from_raytrace_scene(raytrace_scene, old_node_raytrace);
+                mesh->detach(old_node_raytrace.get());
+            }
+            if (m_combined.node_raytrace)
+            {
+                mesh->attach(m_combined.node_raytrace);
+                add_to_raytrace_scene(raytrace_scene, m_combined.node_raytrace);
+            }
+
             first_entry = false;
         }
         else
@@ -263,12 +242,18 @@ void Merge_operation::execute(const Operation_context&)
                 remove_from_physics_world(physics_world, *entry.node_physics.get());
                 mesh->detach(entry.node_physics.get());
             }
+            if (entry.node_raytrace)
+            {
+                remove_from_raytrace_scene(raytrace_scene, entry.node_raytrace);
+                mesh->detach(entry.node_raytrace.get());
+            }
             scene.remove(mesh);
         }
     }
     m_parameters.selection_tool->set_selection(m_selection_after);
 
     scene.sanity_check();
+    log_operations->trace("end Op Execute {}", describe());
 }
 
 void Merge_operation::undo(const Operation_context&)
@@ -288,8 +273,9 @@ void Merge_operation::undo(const Operation_context&)
         return;
     }
 
-    auto& scene         = scene_root->scene();
-    auto& physics_world = scene_root->physics_world();
+    auto& scene          = scene_root->scene();
+    auto& physics_world  = scene_root->physics_world();
+    auto& raytrace_scene = scene_root->raytrace_scene();
 
     ERHE_VERIFY(scene_root->layers().content() != nullptr);
     auto& layer = *scene_root->layers().content();
@@ -306,6 +292,7 @@ void Merge_operation::undo(const Operation_context&)
         if (first_entry)
         {
             first_entry = false;
+
             auto old_node_physics = get_physics_node(mesh.get());
             if (old_node_physics)
             {
@@ -317,6 +304,18 @@ void Merge_operation::undo(const Operation_context&)
                 mesh->attach(entry.node_physics);
                 add_to_physics_world(physics_world, entry.node_physics);
             }
+
+            auto old_node_raytrace = get_raytrace(mesh.get());
+            if (old_node_raytrace)
+            {
+                remove_from_raytrace_scene(raytrace_scene, old_node_raytrace);
+                mesh->detach(old_node_physics.get());
+            }
+            if (entry.node_raytrace)
+            {
+                mesh->attach(entry.node_raytrace);
+                add_to_raytrace_scene(raytrace_scene, entry.node_raytrace);
+            }
         }
         else
         {
@@ -325,6 +324,11 @@ void Merge_operation::undo(const Operation_context&)
             {
                 add_to_physics_world(physics_world, entry.node_physics);
                 mesh->attach(entry.node_physics);
+            }
+            if (entry.node_raytrace)
+            {
+                add_to_raytrace_scene(raytrace_scene, entry.node_raytrace);
+                mesh->attach(entry.node_raytrace);
             }
             scene.add_to_mesh_layer(layer, mesh);
             if (m_parent != nullptr)

@@ -34,10 +34,13 @@ using glm::vec4;
 Reference_frame::Reference_frame() = default;
 
 Reference_frame::Reference_frame(
-    const erhe::geometry::Geometry& geometry,
-    erhe::geometry::Polygon_id      polygon_id
+    const erhe::geometry::Geometry&  geometry,
+    const erhe::geometry::Polygon_id polygon_id,
+    const uint32_t                   in_face_offset,
+    const uint32_t                   in_corner_offset
 )
     : polygon_id{polygon_id}
+    , face_offset{in_face_offset}
 {
     const auto* const polygon_centroids = geometry.polygon_attributes().find<vec3>(c_polygon_centroids);
     const auto* const polygon_normals   = geometry.polygon_attributes().find<vec3>(c_polygon_normals);
@@ -45,6 +48,13 @@ Reference_frame::Reference_frame(
     ERHE_VERIFY(point_locations != nullptr);
 
     const auto& polygon = geometry.polygons[polygon_id];
+    if (polygon.corner_count == 0)
+    {
+        log_brush->warn("Polygon with 0 corners");
+        return;
+    }
+
+    this->corner_offset = in_corner_offset % polygon.corner_count;
 
     centroid = (polygon_centroids != nullptr) && polygon_centroids->has(polygon_id)
         ? polygon_centroids->get(polygon_id)
@@ -54,12 +64,12 @@ Reference_frame::Reference_frame(
         ? polygon_normals->get(polygon_id)
         : polygon.compute_normal(geometry, *point_locations);
 
-    const Corner_id corner_id = geometry.polygon_corners[polygon.first_polygon_corner_id];
+    const Corner_id corner_id = geometry.polygon_corners[polygon.first_polygon_corner_id + corner_offset];
     const auto&     corner    = geometry.corners[corner_id];
     const Point_id  point     = corner.point_id;
     ERHE_VERIFY(point_locations->has(point));
     position = point_locations->get(point);
-    const vec3 midpoint = polygon.compute_edge_midpoint(geometry, *point_locations);
+    const vec3 midpoint = polygon.compute_edge_midpoint(geometry, *point_locations, corner_offset);
     T = normalize(midpoint - centroid);
     B = normalize(cross(N, T));
     N = normalize(cross(T, B));
@@ -67,7 +77,7 @@ Reference_frame::Reference_frame(
     corner_count = polygon.corner_count;
 }
 
-void Reference_frame::transform_by(const mat4 m)
+void Reference_frame::transform_by(const mat4& m)
 {
     centroid = m * vec4{centroid, 1.0f};
     position = m * vec4{position, 1.0f};
@@ -152,11 +162,19 @@ void Brush::late_initialize()
 
 Brush::Brush(Brush&& other) noexcept = default;
 
-auto Brush::get_reference_frame(const uint32_t corner_count) -> Reference_frame
+auto Brush::get_reference_frame(
+    const uint32_t corner_count,
+    const uint32_t in_face_offset,
+    const uint32_t corner_offset
+) -> Reference_frame
 {
     for (const auto& reference_frame : reference_frames)
     {
-        if (reference_frame.corner_count == corner_count)
+        if (
+            (reference_frame.corner_count  == corner_count  ) &&
+            (reference_frame.face_offset   == in_face_offset) &&
+            (reference_frame.corner_offset == corner_offset )
+        )
         {
             return reference_frame;
         }
@@ -164,6 +182,8 @@ auto Brush::get_reference_frame(const uint32_t corner_count) -> Reference_frame
 
     const auto geometry = get_geometry();
 
+    uint32_t face_offset = 0;
+    Polygon_id selected_polygon = 0;
     for (
         Polygon_id polygon_id = 0, end = geometry->get_polygon_count();
         polygon_id < end;
@@ -176,12 +196,15 @@ auto Brush::get_reference_frame(const uint32_t corner_count) -> Reference_frame
             (polygon_id + 1 == end)
         )
         {
-            return reference_frames.emplace_back(*geometry.get(), polygon_id);
+            selected_polygon = polygon_id;
+            if (face_offset == in_face_offset)
+            {
+                break;
+            }
+            ++face_offset;
         }
     }
-
-    log_brush->error("{} invalid code path", __func__);
-    return Reference_frame{};
+    return reference_frames.emplace_back(*geometry.get(), selected_polygon, in_face_offset, corner_offset);
 }
 
 auto Brush::get_scaled(const float scale) -> const Scaled&

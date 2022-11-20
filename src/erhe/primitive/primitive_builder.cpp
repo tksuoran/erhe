@@ -948,6 +948,7 @@ void Build_context::build_polygon_fill()
         root.build_info.format.features.normal_smooth;
 
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
+    root.primitive_geometry->corner_to_vertex_id.resize(root.geometry.get_corner_count());
     for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id)
     {
         const Polygon& polygon = root.geometry.polygons[polygon_id];
@@ -974,7 +975,8 @@ void Build_context::build_polygon_fill()
             corner_id            = root.geometry.polygon_corners[polygon_corner_id];
             const Corner& corner = root.geometry.corners[corner_id];
             point_id             = corner.point_id;
-            //const Point& point   = root.geometry.points[point_id];
+
+            root.primitive_geometry->corner_to_vertex_id[corner_id] = vertex_index;
 
             build_polygon_id      ();
             build_vertex_position ();

@@ -174,6 +174,8 @@ void New_game_window::place_cities()
         }
     }
 
+    ERHE_VERIFY(!city_tiles.empty());
+
     for (auto& city_location : m_cities)
     {
         int city_tile = rand() % city_tiles.size();

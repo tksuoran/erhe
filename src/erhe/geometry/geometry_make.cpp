@@ -282,10 +282,6 @@ void Geometry::sort_point_corners()
         log_geometry->error("Could not sort point corners");
         debug_trace();
     }
-
-    //// log_weld->trace("after sort point corners:");
-    //// debug_trace();
-    //// sanity_check();
 }
 
 // Allocates new edge polygon.

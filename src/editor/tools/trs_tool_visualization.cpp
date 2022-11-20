@@ -31,7 +31,8 @@ void Trs_tool::Visualization::update_scale(
     const glm::vec3 view_position_in_world
 )
 {
-    if (root == nullptr)
+    const auto root = m_root.lock();
+    if (!root)
     {
         return;
     }

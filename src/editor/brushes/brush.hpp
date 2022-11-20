@@ -47,21 +47,25 @@ public:
 
     Reference_frame(
         const erhe::geometry::Geometry& geometry,
-        erhe::geometry::Polygon_id      polygon_id
+        erhe::geometry::Polygon_id      polygon_id,
+        uint32_t                        face_offset,
+        uint32_t                        corner_offset
     );
 
-    void transform_by(const glm::mat4 m);
+    void transform_by(const glm::mat4& m);
 
     [[nodiscard]] auto transform() const -> glm::mat4;
     [[nodiscard]] auto scale    () const -> float;
 
-    uint32_t                   corner_count{0};
-    erhe::geometry::Polygon_id polygon_id  {0};
-    glm::vec3                  centroid    {0.0f, 0.0f, 0.0f}; // polygon centroid
-    glm::vec3                  position    {1.0f, 0.0f, 0.0f}; // one of polygon corner points
-    glm::vec3                  B           {0.0f, 0.0f, 1.0f};
-    glm::vec3                  T           {1.0f, 0.0f, 0.0f};
-    glm::vec3                  N           {0.0f, 1.0f, 0.0f};
+    uint32_t                   corner_count {0};
+    uint32_t                   face_offset  {0};
+    uint32_t                   corner_offset{0};
+    erhe::geometry::Polygon_id polygon_id   {0};
+    glm::vec3                  centroid     {0.0f, 0.0f, 0.0f}; // polygon centroid
+    glm::vec3                  position     {1.0f, 0.0f, 0.0f}; // one of polygon corner points
+    glm::vec3                  B            {0.0f, 0.0f, 1.0f};
+    glm::vec3                  T            {1.0f, 0.0f, 0.0f};
+    glm::vec3                  N            {0.0f, 1.0f, 0.0f};
 };
 
 using Geometry_generator = std::function<std::shared_ptr<erhe::geometry::Geometry>()>;
@@ -119,9 +123,13 @@ public:
     // Public API
     void late_initialize();
     [[nodiscard]] auto name               () const -> const std::string&;
-    [[nodiscard]] auto get_reference_frame(const uint32_t corner_count) -> Reference_frame;
-    [[nodiscard]] auto get_scaled         (const float scale) -> const Scaled&;
-    [[nodiscard]] auto create_scaled      (const int scale_key) -> Scaled;
+    [[nodiscard]] auto get_reference_frame(
+        uint32_t corner_count,
+        uint32_t face_offset,
+        uint32_t corner_offset
+    ) -> Reference_frame;
+    [[nodiscard]] auto get_scaled         (float scale) -> const Scaled&;
+    [[nodiscard]] auto create_scaled      (int scale_key) -> Scaled;
     [[nodiscard]] auto make_instance      (const Instance_create_info& instance_create_info) -> Instance;
     [[nodiscard]] auto get_bounding_box   () -> erhe::toolkit::Bounding_box;
     [[nodiscard]] auto get_geometry       () -> std::shared_ptr<erhe::geometry::Geometry>;

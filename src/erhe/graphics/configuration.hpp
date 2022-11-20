@@ -41,6 +41,11 @@ public:
     class Limits
     {
     public:
+        int max_samples                              {0};
+        int max_color_texture_samples                {0};
+        int max_depth_texture_samples                {0};
+        int max_framebuffer_samples                  {0};
+        int max_integer_samples                      {0};
         int max_vertex_attribs                       {0};
         int max_texture_size                        {64};
         int max_3d_texture_size                      {0};

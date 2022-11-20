@@ -246,6 +246,116 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
     }
 }
 
+[[nodiscard]] auto is_integer(const gl::Internal_format format) -> bool
+{
+    switch (format)
+    {
+        case gl::Internal_format::compressed_r11_eac                        : return false;
+        case gl::Internal_format::compressed_red                            : return false;
+        case gl::Internal_format::compressed_red_rgtc1                      : return false;
+        case gl::Internal_format::compressed_rg                             : return false;
+        case gl::Internal_format::compressed_rg11_eac                       : return false;
+        case gl::Internal_format::compressed_rg_rgtc2                       : return false;
+        case gl::Internal_format::compressed_rgb                            : return false;
+        case gl::Internal_format::compressed_rgb8_etc2                      : return false;
+        case gl::Internal_format::compressed_rgb8_punchthrough_alpha1_etc2  : return false;
+        case gl::Internal_format::compressed_rgb_bptc_signed_float          : return false;
+        case gl::Internal_format::compressed_rgb_bptc_unsigned_float        : return false;
+        case gl::Internal_format::compressed_rgba                           : return false;
+        case gl::Internal_format::compressed_rgba8_etc2_eac                 : return false;
+        case gl::Internal_format::compressed_rgba_bptc_unorm                : return false;
+        case gl::Internal_format::compressed_signed_r11_eac                 : return false;
+        case gl::Internal_format::compressed_signed_red_rgtc1               : return false;
+        case gl::Internal_format::compressed_signed_rg11_eac                : return false;
+        case gl::Internal_format::compressed_signed_rg_rgtc2                : return false;
+        case gl::Internal_format::compressed_srgb                           : return false;
+        case gl::Internal_format::compressed_srgb8_alpha8_etc2_eac          : return false;
+        case gl::Internal_format::compressed_srgb8_etc2                     : return false;
+        case gl::Internal_format::compressed_srgb8_punchthrough_alpha1_etc2 : return false;
+        case gl::Internal_format::compressed_srgb_alpha                     : return false;
+        case gl::Internal_format::compressed_srgb_alpha_bptc_unorm          : return false;
+        case gl::Internal_format::depth24_stencil8                          : return false;
+        case gl::Internal_format::depth32f_stencil8                         : return false;
+        case gl::Internal_format::depth_component                           : return false;
+        case gl::Internal_format::depth_component16                         : return false;
+        case gl::Internal_format::depth_component32f                        : return false;
+        case gl::Internal_format::depth_stencil                             : return false;
+        case gl::Internal_format::r11f_g11f_b10f                            : return false;
+        case gl::Internal_format::r16                                       : return false;
+        case gl::Internal_format::r16_snorm                                 : return false;
+        case gl::Internal_format::r16f                                      : return false;
+        case gl::Internal_format::r16i                                      : return true;
+        case gl::Internal_format::r16ui                                     : return true;
+        case gl::Internal_format::r32f                                      : return false;
+        case gl::Internal_format::r32i                                      : return true;
+        case gl::Internal_format::r32ui                                     : return true;
+        case gl::Internal_format::r3_g3_b2                                  : return false;
+        case gl::Internal_format::r8                                        : return false;
+        case gl::Internal_format::r8_snorm                                  : return false;
+        case gl::Internal_format::r8i                                       : return true;
+        case gl::Internal_format::r8ui                                      : return true;
+        case gl::Internal_format::red                                       : return false;
+        case gl::Internal_format::rg                                        : return false;
+        case gl::Internal_format::rg16                                      : return false;
+        case gl::Internal_format::rg16_snorm                                : return false;
+        case gl::Internal_format::rg16f                                     : return false;
+        case gl::Internal_format::rg16i                                     : return true;
+        case gl::Internal_format::rg16ui                                    : return true;
+        case gl::Internal_format::rg32f                                     : return false;
+        case gl::Internal_format::rg32i                                     : return true;
+        case gl::Internal_format::rg32ui                                    : return true;
+        case gl::Internal_format::rg8                                       : return false;
+        case gl::Internal_format::rg8_snorm                                 : return false;
+        case gl::Internal_format::rg8i                                      : return true;
+        case gl::Internal_format::rg8ui                                     : return true;
+        case gl::Internal_format::rgb                                       : return false;
+        case gl::Internal_format::rgb10                                     : return false;
+        case gl::Internal_format::rgb10_a2                                  : return false;
+        case gl::Internal_format::rgb10_a2ui                                : return true;
+        case gl::Internal_format::rgb12                                     : return false;
+        case gl::Internal_format::rgb16                                     : return false;
+        case gl::Internal_format::rgb16_snorm                               : return false;
+        case gl::Internal_format::rgb16f                                    : return false;
+        case gl::Internal_format::rgb16i                                    : return true;
+        case gl::Internal_format::rgb16ui                                   : return true;
+        case gl::Internal_format::rgb32f                                    : return false;
+        case gl::Internal_format::rgb32i                                    : return true;
+        case gl::Internal_format::rgb32ui                                   : return true;
+        case gl::Internal_format::rgb4                                      : return false;
+        case gl::Internal_format::rgb5                                      : return false;
+        case gl::Internal_format::rgb5_a1                                   : return false;
+        case gl::Internal_format::rgb8                                      : return false;
+        case gl::Internal_format::rgb8_snorm                                : return false;
+        case gl::Internal_format::rgb8i                                     : return true;
+        case gl::Internal_format::rgb8ui                                    : return true;
+        case gl::Internal_format::rgb9_e5                                   : return false;
+        case gl::Internal_format::rgba                                      : return false;
+        case gl::Internal_format::rgba12                                    : return false;
+        case gl::Internal_format::rgba16                                    : return false;
+        case gl::Internal_format::rgba16f                                   : return false;
+        case gl::Internal_format::rgba16i                                   : return true;
+        case gl::Internal_format::rgba16ui                                  : return true;
+        case gl::Internal_format::rgba32f                                   : return false;
+        case gl::Internal_format::rgba32i                                   : return true;
+        case gl::Internal_format::rgba32ui                                  : return true;
+        case gl::Internal_format::rgba4                                     : return false;
+        case gl::Internal_format::rgba8                                     : return false;
+        case gl::Internal_format::rgba8_snorm                               : return false;
+        case gl::Internal_format::rgba8i                                    : return true;
+        case gl::Internal_format::rgba8ui                                   : return true;
+        case gl::Internal_format::srgb                                      : return false;
+        case gl::Internal_format::srgb8                                     : return false;
+        case gl::Internal_format::srgb8_alpha8                              : return false;
+        case gl::Internal_format::srgb_alpha                                : return false;
+        case gl::Internal_format::stencil_index                             : return false;
+        case gl::Internal_format::stencil_index1                            : return false;
+        case gl::Internal_format::stencil_index16                           : return false;
+        case gl::Internal_format::stencil_index4                            : return false;
+        case gl::Internal_format::stencil_index8                            : return false;
+        default: return false;
+    }
+}
+
 [[nodiscard]] auto has_color(const gl::Internal_format format) -> bool
 {
     switch (format)

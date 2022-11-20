@@ -188,6 +188,8 @@ auto Buffer::allocate_bytes(
     const std::size_t alignment
 ) noexcept -> std::size_t
 {
+    ERHE_VERIFY(alignment > 0);
+
     const std::lock_guard<std::mutex> lock{m_allocate_mutex};
 
     while ((m_next_free_byte % alignment) != 0)

@@ -227,15 +227,31 @@ void Operations::imgui()
             )
         );
     }
-    if (make_button("Reverse", has_selection_mode, button_size))
+    if (make_button("Join", has_selection_mode, button_size))
     {
         m_operation_stack->push(
-            std::make_shared<Reverse_operation>(
+            std::make_shared<Join_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Subdivide", has_selection_mode, button_size))
+    if (make_button("Kis", has_selection_mode, button_size))
+    {
+        m_operation_stack->push(
+            std::make_shared<Kis_operation>(
+                mesh_context()
+            )
+        );
+    }
+    if (make_button("Meta", has_selection_mode, button_size))
+    {
+        m_operation_stack->push(
+            std::make_shared<Meta_operation>(
+                mesh_context()
+            )
+        );
+    }
+    if (make_button("Ortho", has_selection_mode, button_size))
     {
         m_operation_stack->push(
             std::make_shared<Subdivide_operation>(
@@ -283,16 +299,24 @@ void Operations::imgui()
             )
         );
     }
-    if (make_button("GUI Quad", erhe::application::Item_mode::normal, button_size))
+    if (make_button("Reverse", has_selection_mode, button_size))
     {
-        Scene_builder* scene_builder = get<Scene_builder>().get();
-
-        m_imgui_renderer->at_end_of_frame(
-            [scene_builder](){
-                scene_builder->add_rendertarget_viewports(2);
-            }
+        m_operation_stack->push(
+            std::make_shared<Reverse_operation>(
+                mesh_context()
+            )
         );
     }
+    //// if (make_button("GUI Quad", erhe::application::Item_mode::normal, button_size))
+    //// {
+    ////     Scene_builder* scene_builder = get<Scene_builder>().get();
+    ////
+    ////     m_imgui_renderer->at_end_of_frame(
+    ////         [scene_builder](){
+    ////             scene_builder->add_rendertarget_viewports(2);
+    ////         }
+    ////     );
+    //// }
 #endif
 }
 

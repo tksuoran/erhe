@@ -226,7 +226,8 @@ public:
 
     auto compute_edge_midpoint(
         const Geometry&                          geometry,
-        const Property_map<Point_id, glm::vec3>& point_locations
+        const Property_map<Point_id, glm::vec3>& point_locations,
+        uint32_t                                 corner_offset
     ) const -> glm::vec3;
 
     void compute_centroid(
@@ -262,6 +263,9 @@ public:
     ) const -> Corner_id;
 
     void reverse(Geometry& geometry);
+
+    [[nodiscard]] auto format_points(const Geometry& geometry) const -> std::string;
+    [[nodiscard]] auto format_corners(const Geometry& geometry) const -> std::string;
 
     class Polygon_corner_context
     {
@@ -696,31 +700,9 @@ public:
 
     void merge(Geometry& other, const glm::mat4 transform);
 
-    class Weld_settings
-    {
-    public:
-        float max_point_distance    {0.05f};
-        float min_normal_dot_product{0.95f};
-        float max_texcoord_distance {0.05f};
-        float max_color_distance    {0.05f};
-    };
-
-    void weld(const Weld_settings& weld_settings);
-
-    // used by weld
-    void reallocate_point_corners(Remapper<Point_id>& point_remapper);
-    void reallocate_point_corners();
-    void remap_corner_polygons   (Remapper<Polygon_id>& polygon_remapper);
-    void remap_corners           (Remapper<Corner_id>& corner_remapper);
-
-    // used by weld
     void rotate_polygons_to_least_point_first();
 
-    void connect(const Weld_settings& weld_settings);
-
     void sanity_check() const;
-
-    void trace_points(spdlog::logger& logger) const;
 
     void compute_bounding_box(glm::vec3& min_corner, glm::vec3& max_corner) const;
 

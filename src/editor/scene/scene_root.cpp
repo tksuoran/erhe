@@ -108,10 +108,11 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 }
 
 Scene_root::Scene_root(
-    const std::string_view name
+    erhe::scene::Message_bus* message_bus,
+    const std::string_view    name
 )
     : m_name  {name}
-    , m_scene {std::make_unique<Scene>(this)}
+    , m_scene {std::make_unique<Scene>(message_bus, this)}
     , m_layers(*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION

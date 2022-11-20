@@ -45,6 +45,7 @@ namespace erhe::scene
 {
     class Camera;
     class Mesh;
+    class Message;
     class Node;
     class Viewport;
 }
@@ -154,6 +155,7 @@ public:
     void end_drag     (erhe::application::Command_context& context);
 
 private:
+    void on_message(erhe::scene::Message& message);
     void touch     ();
     void begin_move();
     void end_move  ();
@@ -281,7 +283,7 @@ private:
         float     scale         {1.0f};
 
         std::shared_ptr<Material_library>          material_library;
-        erhe::scene::Node*                         root{nullptr};
+        std::weak_ptr<erhe::scene::Node>           m_root;
         Scene_root*                                tool_scene_root{nullptr};
         std::shared_ptr<erhe::scene::Node>         tool_node;
         bool                                       local{true};
@@ -314,7 +316,7 @@ private:
     };
 
     [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto root                    () -> erhe::scene::Node*;
+    [[nodiscard]] auto get_root                () -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto snap_translate          (const glm::dvec3 translation) const -> glm::dvec3;
     [[nodiscard]] auto snap_rotate             (const double angle_radians) const -> double;
     [[nodiscard]] auto is_x_translate_active   () const -> bool;
@@ -332,6 +334,7 @@ private:
     [[nodiscard]] auto get_plane_side          (const bool world) const -> glm::dvec3;
     [[nodiscard]] auto get_axis_color          (Handle handle) const -> glm::vec4;
     [[nodiscard]] auto get_target_node         () const -> std::shared_ptr<erhe::scene::Node>;
+    [[nodiscard]] auto get_target_node_physics () const -> std::shared_ptr<Node_physics>;
 
     void set_local                  (bool local);
     void set_node                   (const std::shared_ptr<erhe::scene::Node>& node);
@@ -369,8 +372,7 @@ private:
     Handle                                     m_active_handle  {Handle::e_handle_none};
     std::optional<Selection_tool::Subcription> m_selection_subscription;
     std::map<erhe::scene::Mesh*, Handle>       m_handles;
-    std::shared_ptr<erhe::scene::Node>         m_target_node;
-    std::shared_ptr<Node_physics>              m_node_physics;
+    std::weak_ptr<erhe::scene::Node>           m_target_node;
     std::shared_ptr<erhe::scene::Node>         m_tool_node;
     std::optional<erhe::physics::Motion_mode>  m_original_motion_mode;
     bool                                       m_translate_snap_enable{false};

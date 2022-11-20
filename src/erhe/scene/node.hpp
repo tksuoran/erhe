@@ -66,7 +66,8 @@ public:
     static constexpr uint64_t is_light                  = (1u << 4);
     static constexpr uint64_t is_mesh                   = (1u << 5);
     static constexpr uint64_t is_rendertarget           = (1u << 6);
-    static constexpr uint64_t show_debug_visualizations = (1u << 7);
+    static constexpr uint64_t no_message                = (1u << 7); // no message bus
+    static constexpr uint64_t show_debug_visualizations = (1u << 8);
 };
 
 class Node_transforms

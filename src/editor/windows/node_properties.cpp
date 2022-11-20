@@ -787,6 +787,7 @@ void Node_properties::imgui()
             {
                 if (ImGui::TreeNodeEx("Physics", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
                 {
+                    ImGui::Text("Rigid Body: %s", rigid_body->get_debug_label());
                     float           mass    = rigid_body->get_mass();
                     const glm::mat4 inertia = rigid_body->get_local_inertia();
                     if (ImGui::SliderFloat("Mass", &mass, 0.0f, 1000.0f)) {

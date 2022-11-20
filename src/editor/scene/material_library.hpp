@@ -44,9 +44,13 @@ public:
         return material;
     }
 
+    void set_visible(bool visible);
+    [[nodiscard]] auto is_visible() const -> bool;
+
 private:
     mutable std::mutex                                      m_mutex;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
+    bool                                                    m_visible{true};
 };
 
 } // namespace editor

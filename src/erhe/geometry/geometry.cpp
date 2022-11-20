@@ -901,6 +901,26 @@ void Geometry::sanity_check() const
     }
 }
 
+void Geometry::compute_bounding_box(vec3& min_corner, vec3& max_corner) const
+{
+    min_corner = vec3{std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max()};
+    max_corner = vec3{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
+    auto* point_locations = point_attributes().find<vec3>(c_point_locations);
+    if (point_locations == nullptr)
+    {
+        return;
+    }
+    for (Point_id point_id = 0; point_id < m_next_point_id; ++point_id)
+    {
+        vec3 position;
+        if (point_locations->maybe_get(point_id, position))
+        {
+            min_corner = glm::min(min_corner, position);
+            max_corner = glm::max(max_corner, position);
+        }
+    }
+}
+
 auto Geometry::get_mass_properties() -> Mass_properties
 {
     ERHE_PROFILE_FUNCTION

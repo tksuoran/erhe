@@ -45,9 +45,9 @@ void Physics_window::declare_required_components()
 {
     m_editor_scenes = require<Editor_scenes>();
 
-    require<Tools      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows>();
+    require<Tools>();
 }
 
 void Physics_window::initialize_component()

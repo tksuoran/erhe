@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/components/components.hpp"
+#include "erhe/scene/message_bus.hpp"
 
 #include <thread>
 
@@ -32,11 +33,13 @@ public:
 
     [[nodiscard]] auto get_scene_roots       () -> const std::vector<std::shared_ptr<Scene_root>>&;
     [[nodiscard]] auto get_current_scene_root() -> const std::shared_ptr<Scene_root>&;
+    [[nodiscard]] auto get_message_bus       () -> erhe::scene::Message_bus*;
 
 private:
     std::mutex                               m_mutex;
     std::vector<std::shared_ptr<Scene_root>> m_scene_roots;
     std::shared_ptr<Scene_root>              m_current_scene_root;
+    erhe::scene::Message_bus                 m_message_bus;
 };
 
 } // namespace editor

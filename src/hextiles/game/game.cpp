@@ -293,6 +293,8 @@ void Game::new_game(const Game_create_parameters& parameters)
 
 void Game::next_turn()
 {
+    ERHE_VERIFY(!m_players.empty());
+
     m_current_player = (m_current_player + 1) % m_players.size();
     update_current_player();
 }

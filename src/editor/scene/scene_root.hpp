@@ -51,6 +51,7 @@ namespace erhe::scene
     class Light_layer;
     class Mesh;
     class Mesh_layer;
+    class Message_bus;
     class Scene;
 }
 
@@ -109,7 +110,10 @@ private:
 class Scene_root
 {
 public:
-    explicit Scene_root(const std::string_view name);
+    Scene_root(
+        erhe::scene::Message_bus* message_bus,
+        const std::string_view    name
+    );
     ~Scene_root() noexcept;
 
     // Public API

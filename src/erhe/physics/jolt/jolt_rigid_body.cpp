@@ -15,6 +15,8 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/ConvexShape.h>
 
+#include <fmt/format.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
@@ -70,7 +72,6 @@ Jolt_rigid_body::Jolt_rigid_body(
     }
     , m_collision_shape{std::dynamic_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
     , m_motion_mode    {motion_state->get_motion_mode()}
-    , m_debug_label    {create_info.debug_label}
 {
     if (!m_collision_shape)
     {
@@ -149,6 +150,8 @@ Jolt_rigid_body::Jolt_rigid_body(
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
     creation_settings.mUserData = static_cast<JPH::uint64>(reinterpret_cast<uintptr_t>(this));
     m_body = m_body_interface.CreateBody(creation_settings);
+
+    m_debug_label = fmt::format("{} ({})", create_info.debug_label, m_body->GetID().GetIndex());
 }
 
 Jolt_rigid_body::~Jolt_rigid_body() noexcept = default;

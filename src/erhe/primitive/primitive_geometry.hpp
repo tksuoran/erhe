@@ -49,7 +49,9 @@ public:
     Buffer_range vertex_buffer_range     {};
     Buffer_range index_buffer_range      {};
 
+    // TODO These make Primitive_geometry expensive to copy
     std::vector<uint32_t> primitive_id_to_polygon_id;
+    std::vector<uint32_t> corner_to_vertex_id;
 };
 
 } // namespace erhe::primitive

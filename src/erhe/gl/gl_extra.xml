@@ -21,6 +21,7 @@
 
     <group name="GetPName">
       <enum name="GL_CLIP_ORIGIN"/>
+      <enum name="GL_MAX_SAMPLES"/>
     </group>
 
     <group name="GetMultisamplePNameNV">

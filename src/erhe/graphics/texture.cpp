@@ -3,6 +3,7 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/gl/gl_helpers.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/graphics_log.hpp"
@@ -384,6 +385,20 @@ Texture::Texture(const Create_info& create_info)
         m_height,
         gl::c_str(m_internal_format)
     );
+
+    m_sample_count = std::min(m_sample_count, Instance::limits.max_samples);
+    if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format))
+    {
+        m_sample_count = std::min(m_sample_count, Instance::limits.max_color_texture_samples);
+    }
+    if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format))
+    {
+        m_sample_count = std::min(m_sample_count, Instance::limits.max_depth_texture_samples);
+    }
+    if (gl_helpers::is_integer(m_internal_format))
+    {
+        m_sample_count = std::min(m_sample_count, Instance::limits.max_integer_samples);
+    }
 
     const auto dimensions = storage_dimensions(m_target);
 

@@ -9,6 +9,7 @@ namespace editor
 {
 
 Material_library::Material_library()
+    : m_visible{true}
 {
 }
 
@@ -132,5 +133,15 @@ auto Material_library::material_combo(
     return selection_changed;
 }
 #endif
+
+void Material_library::set_visible(const bool visible)
+{
+    m_visible = visible;
+}
+
+[[nodiscard]] auto Material_library::is_visible() const -> bool
+{
+    return m_visible;
+}
 
 } // namespace editor

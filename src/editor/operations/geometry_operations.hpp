@@ -32,11 +32,38 @@ public:
     [[nodiscard]] auto describe() const -> std::string override;
 };
 
+class Join_operation
+    : public Mesh_operation
+{
+public:
+    explicit Join_operation(Parameters&& context);
+
+    [[nodiscard]] auto describe() const -> std::string override;
+};
+
+class Kis_operation
+    : public Mesh_operation
+{
+public:
+    explicit Kis_operation(Parameters&& context);
+
+    [[nodiscard]] auto describe() const -> std::string override;
+};
+
 class Subdivide_operation
     : public Mesh_operation
 {
 public:
     explicit Subdivide_operation(Parameters&& context);
+
+    [[nodiscard]] auto describe() const -> std::string override;
+};
+
+class Meta_operation
+    : public Mesh_operation
+{
+public:
+    explicit Meta_operation(Parameters&& context);
 
     [[nodiscard]] auto describe() const -> std::string override;
 };

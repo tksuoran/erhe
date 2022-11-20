@@ -174,6 +174,35 @@ public:
         int                           step_count = 40
     );
 
+    void add_cone(
+        const erhe::scene::Transform& transform,
+        const glm::vec4&              major_color,
+        const glm::vec4&              minor_color,
+        float                         major_thickness,
+        float                         minor_thickness,
+        const glm::vec3&              center,
+        float                         height,
+        float                         bottom_radius,
+        float                         top_radius,
+        const glm::vec3&              camera_position_in_world,
+        int                           side_count
+    );
+
+    void add_torus(
+        const erhe::scene::Transform& world_from_node,
+        const glm::vec4&              major_color,
+        const glm::vec4&              minor_color,
+        float                         major_thickness,
+        float                         major_radius,
+        float                         minor_radius,
+        const glm::vec3&              camera_position_in_world,
+        int                           major_step_count,
+        int                           minor_step_count,
+        float                         epsilon,
+        int                           debug_major,
+        int                           debug_minor
+    );
+
 private:
     static constexpr std::size_t s_frame_resources_count = 4;
 

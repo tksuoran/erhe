@@ -23,6 +23,7 @@ void Editor_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene
 
 void Editor_scenes::update_once_per_frame(const erhe::components::Time_context&)
 {
+    m_message_bus.notify();
     for (const auto& scene_root : m_scene_roots)
     {
         scene_root->scene().update_node_transforms();
@@ -47,12 +48,19 @@ void Editor_scenes::update_once_per_frame(const erhe::components::Time_context&)
     return m_current_scene_root;
 }
 
+[[nodiscard]] auto Editor_scenes::get_message_bus() -> erhe::scene::Message_bus*
+{
+    return &m_message_bus;
+}
+
 void Editor_scenes::sanity_check()
 {
+#if !defined(NDEBUG)
     for (const auto& scene_root : m_scene_roots)
     {
         scene_root->sanity_check();
     }
+#endif
 }
 
 } // namespace hextiles

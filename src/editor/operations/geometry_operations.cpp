@@ -6,6 +6,9 @@
 #include "erhe/geometry/operation/catmull_clark_subdivision.hpp"
 #include "erhe/geometry/operation/dual.hpp"
 #include "erhe/geometry/operation/gyro.hpp"
+#include "erhe/geometry/operation/join.hpp"
+#include "erhe/geometry/operation/kis.hpp"
+#include "erhe/geometry/operation/meta.hpp"
 #include "erhe/geometry/operation/normalize.hpp"
 #include "erhe/geometry/operation/reverse.hpp"
 #include "erhe/geometry/operation/sqrt3_subdivision.hpp"
@@ -52,6 +55,28 @@ Triangulate_operation::Triangulate_operation(Parameters&& context)
     make_entries(erhe::geometry::operation::triangulate);
 }
 
+auto Join_operation::describe() const -> std::string
+{
+    return fmt::format("Join {}", Mesh_operation::describe());
+}
+
+Join_operation::Join_operation(Parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::join);
+}
+
+auto Kis_operation::describe() const -> std::string
+{
+    return fmt::format("Kis {}", Mesh_operation::describe());
+}
+
+Kis_operation::Kis_operation(Parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::kis);
+}
+
 auto Subdivide_operation::describe() const -> std::string
 {
     return fmt::format("Subdivide {}", Mesh_operation::describe());
@@ -61,6 +86,17 @@ Subdivide_operation::Subdivide_operation(Parameters&& context)
     : Mesh_operation{std::move(context)}
 {
     make_entries(erhe::geometry::operation::subdivide);
+}
+
+auto Meta_operation::describe() const -> std::string
+{
+    return fmt::format("Meta {}", Mesh_operation::describe());
+}
+
+Meta_operation::Meta_operation(Parameters&& context)
+    : Mesh_operation{std::move(context)}
+{
+    make_entries(erhe::geometry::operation::meta);
 }
 
 auto Gyro_operation::describe() const -> std::string

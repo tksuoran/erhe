@@ -10,6 +10,8 @@ erhe_target_sources_grouped(
     node.hpp
     mesh.cpp
     mesh.hpp
+    message_bus.cpp
+    message_bus.hpp
     light.cpp
     light.hpp
     projection.cpp

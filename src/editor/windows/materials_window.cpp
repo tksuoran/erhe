@@ -52,12 +52,19 @@ void Materials_window::post_initialize()
     for (const auto& scene_root : scene_roots)
     {
         const auto& material_library = scene_root->material_library();
-        const auto& materials        = material_library->materials();
+        if (!material_library->is_visible())
+        {
+            continue;
+        }
+
+        const auto& materials = material_library->materials();
 
         if (materials.empty())
         {
             continue;
         }
+
+        m_selected_material_library = material_library;
         m_selected_material = materials.front();
         break;
     }
@@ -68,22 +75,32 @@ void Materials_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    const ImGuiTreeNodeFlags parent_flags{
-        ImGuiTreeNodeFlags_DefaultOpen       |
-        ImGuiTreeNodeFlags_OpenOnArrow       |
-        ImGuiTreeNodeFlags_OpenOnDoubleClick |
-        ImGuiTreeNodeFlags_SpanFullWidth
-    };
+    //// const ImGuiTreeNodeFlags parent_flags{
+    ////     ImGuiTreeNodeFlags_DefaultOpen       |
+    ////     ImGuiTreeNodeFlags_OpenOnArrow       |
+    ////     ImGuiTreeNodeFlags_OpenOnDoubleClick |
+    ////     ImGuiTreeNodeFlags_SpanFullWidth
+    //// };
 
     const auto& scene_roots = m_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {
-        if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
+        const auto& material_library = scene_root->material_library();
+
+        if (!material_library->is_visible())
         {
-            const auto& material_library = scene_root->material_library();
-            const auto& materials        = material_library->materials();
+            continue;
+        }
+
+        //// if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
+        {
+            const auto& materials = material_library->materials();
 
             const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
+            if (ImGui::Button("Create"))
+            {
+                material_library->make_material("new material");
+            }
             for (const auto& material : materials)
             {
                 if (material->visible == false)
@@ -104,7 +121,7 @@ void Materials_window::imgui()
                     m_selected_material         = material;
                 }
             }
-            ImGui::TreePop();
+            //// ImGui::TreePop();
         }
     }
 #endif

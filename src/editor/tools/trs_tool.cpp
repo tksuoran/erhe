@@ -220,6 +220,40 @@ void Trs_tool::initialize_component()
     commands->register_command(&m_drag_command);
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
     commands->bind_command_to_controller_trigger(&m_drag_command, 0.50f, 0.45f, true);
+
+    m_editor_scenes->get_message_bus()->add_receiver(
+        [&](erhe::scene::Message& message)
+        {
+            on_message(message);
+        }
+    );
+}
+
+void Trs_tool::on_message(erhe::scene::Message& message)
+{
+    switch (message.event_type)
+    {
+        case erhe::scene::Node_event_type::node_added_to_scene:
+        {
+            log_trs_tool->trace("Node {} added to scene", message.lhs->name());
+            break;
+        }
+        case erhe::scene::Node_event_type::node_removed_from_scene:
+        {
+            log_trs_tool->trace("Node {} removed from scene", message.lhs->name());
+            break;
+        }
+        case erhe::scene::Node_event_type::node_replaced:
+        {
+            log_trs_tool->trace("Node {} replaced with {}", message.lhs->name(), message.rhs->name());
+            break;
+        }
+        case erhe::scene::Node_event_type::node_changed:
+        {
+            log_trs_tool->trace("Node {} changed", message.lhs->name());
+            break;
+        }
+    }
 }
 
 void Trs_tool::post_initialize()
@@ -250,14 +284,24 @@ void Trs_tool::set_rotate(const bool enabled)
 
 auto Trs_tool::get_target_node() const -> std::shared_ptr<erhe::scene::Node>
 {
-    return m_target_node;
+    return m_target_node.lock();
+}
+
+[[nodiscard]] auto Trs_tool::get_target_node_physics() const -> std::shared_ptr<Node_physics>
+{
+    const auto target_node = get_target_node();
+    if (!target_node)
+    {
+        return {};
+    }
+    return get_physics_node(target_node.get());
 }
 
 void Trs_tool::set_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
-    if (node == m_target_node)
+    if (node == m_target_node.lock())
     {
         return;
     }
@@ -266,19 +310,16 @@ void Trs_tool::set_node(
 
     // Attach new host to manipulator
     m_target_node = node;
-    m_node_physics = node
-        ? get_physics_node(node.get())
-        : std::shared_ptr<Node_physics>();
 
-    if (m_target_node)
+    if (node)
     {
         log_trs_tool->trace("TRS now has target node");
-        m_visualization.root = m_target_node.get();
+        m_visualization.m_root = node;
     }
     else
     {
         log_trs_tool->trace("TRS now does not have target");
-        m_visualization.root = nullptr;
+        m_visualization.m_root.reset();
     }
 
     update_visibility();
@@ -296,8 +337,9 @@ void Trs_tool::touch()
 void Trs_tool::begin_move()
 {
     m_touched = true;
-    auto* const rigid_body = m_node_physics
-        ? m_node_physics->rigid_body()
+    const auto node_physics = get_target_node_physics();
+    auto* const rigid_body = node_physics
+        ? node_physics->rigid_body()
         : nullptr;
 
     if (rigid_body == nullptr)
@@ -315,19 +357,20 @@ void Trs_tool::begin_move()
 
 void Trs_tool::end_move()
 {
+    const auto node_physics = get_target_node_physics();
     if (
-        m_node_physics &&
-        m_node_physics->rigid_body()
+        node_physics &&
+        node_physics->rigid_body()
     )
     {
         ERHE_VERIFY(m_original_motion_mode.has_value());
-        log_trs_tool->trace("TRS restoring old physics node");
-        auto* const rigid_body = m_node_physics->rigid_body();
+        log_trs_tool->trace("S restoring old physics node");
+        auto* const rigid_body = node_physics->rigid_body();
         rigid_body->set_motion_mode     (m_original_motion_mode.value());
         rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
         rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
         rigid_body->end_move            ();
-        m_node_physics->on_node_transform_changed();
+        node_physics->on_node_transform_changed();
         m_original_motion_mode.reset();
     }
 
@@ -649,10 +692,10 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         return false;
     }
 
+    const auto root = get_root();
     if (
         (m_active_handle == Handle::e_handle_none) ||
-        (root() == nullptr) ////||
-        ////!viewport_window->position_in_viewport().has_value()
+        (!root)
     )
     {
         //log_trs_tool->trace("drag not possible - no handle, or no root");
@@ -667,24 +710,25 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
     }
 
     m_drag.initial_position_in_world = tool.position.value();
-    m_drag.initial_world_from_local  = root()->world_from_node();
-    m_drag.initial_local_from_world  = root()->node_from_world();
+    m_drag.initial_world_from_local  = root->world_from_node();
+    m_drag.initial_local_from_world  = root->node_from_world();
     m_drag.initial_distance          = glm::distance(
         glm::dvec3{camera->position_in_world()},
         tool.position.value()
     );
-    if (m_target_node)
+    const auto& target_node = m_target_node.lock();
+    if (target_node)
     {
-        m_drag.initial_parent_from_node_transform = m_target_node->parent_from_node_transform();
+        m_drag.initial_parent_from_node_transform = target_node->parent_from_node_transform();
     }
 
     // For rotation
-    if (is_rotate_active())
+    if (is_rotate_active() && target_node)
     {
         const bool  world        = !m_local;
         const dvec3 n            = get_plane_normal(world);
         const dvec3 side         = get_plane_side  (world);
-        const dvec3 center       = root()->position_in_world();
+        const dvec3 center       = root->position_in_world();
         const auto  intersection = project_pointer_to_plane(scene_view, n, center);
         if (intersection.has_value())
         {
@@ -694,7 +738,7 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
                 .reference_direction  = direction,
                 .center_of_rotation   = center,
                 .start_rotation_angle = erhe::toolkit::angle_of_rotation<double>(direction, n, side),
-                .world_from_node      = m_target_node->world_from_node_transform()
+                .world_from_node      = target_node->world_from_node_transform()
             };
         }
         else
@@ -706,12 +750,12 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
     //Tool::set_ready();
     update_visibility();
 
-    if (m_node_physics)
+    const auto node_physics = get_target_node_physics();
+    if (node_physics)
     {
-        auto* const rigid_body = m_node_physics->rigid_body();
+        auto* const rigid_body = node_physics->rigid_body();
         if (rigid_body != nullptr)
         {
-            log_trs_tool->trace("m_node_physics and rigid_body != nullptr -> rigid_body->begin_move()");
             rigid_body->begin_move();
         }
     }
@@ -732,16 +776,17 @@ void Trs_tool::end_drag(erhe::application::Command_context& context)
     m_drag.initial_distance          = 0.0;
     update_visibility();
 
-    if (m_touched && m_target_node)
+    const auto target_node = m_target_node.lock();
+    if (m_touched && target_node)
     {
         log_trs_tool->trace("m_touched && m_target_node -> creating transform operation");
 
         m_operation_stack->push(
             std::make_shared<Node_transform_operation>(
                 Node_transform_operation::Parameters{
-                    .node                    = m_target_node,
+                    .node                    = target_node,
                     .parent_from_node_before = m_drag.initial_parent_from_node_transform,
-                    .parent_from_node_after  = m_target_node->parent_from_node_transform()
+                    .parent_from_node_after  = target_node->parent_from_node_transform()
                 }
             )
         );
@@ -1153,7 +1198,8 @@ void Trs_tool::update_rotate(Scene_view* scene_view)
 
     // log_trs_tool->trace("update_rotate()");
 
-    if (root() == nullptr)
+    const auto root = get_root();
+    if (!root)
     {
         return;
     }
@@ -1240,15 +1286,16 @@ void Trs_tool::update_rotate_final()
 
 void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
 {
-    if (root() == nullptr)
+    const auto root = get_root();
+    if (!root)
     {
         return;
     }
-    const auto& root_parent = root()->parent().lock();
+    const auto& root_parent = root->parent().lock();
     const dmat4 parent_from_world = root_parent
         ? dmat4{root_parent->node_from_world()} * world_from_node
         : world_from_node;
-    root()->set_parent_from_node(mat4{parent_from_world});
+    root->set_parent_from_node(mat4{parent_from_world});
  }
 
 void Trs_tool::update_for_view(Scene_view* scene_view)
@@ -1294,7 +1341,8 @@ void Trs_tool::tool_render(
 
     if (m_cast_rays)
     {
-    std::shared_ptr<erhe::scene::Mesh> mesh = as_mesh(m_target_node);
+    const auto target_node = m_target_node.lock();
+    std::shared_ptr<erhe::scene::Mesh> mesh = as_mesh(target_node);
     if (mesh)
     {
         auto* scene_root = reinterpret_cast<Scene_root*>(mesh->node_data.host);
@@ -1341,11 +1389,12 @@ void Trs_tool::tool_render(
         }
     }
 
+    const auto root = get_root();
     if (
         (m_line_renderer_set == nullptr) ||
         (get_handle_type(m_active_handle) != Handle_type::e_handle_type_rotate) ||
         (context.camera == nullptr) ||
-        (root() == nullptr)
+        (!root)
     )
     {
         return;
@@ -1355,7 +1404,7 @@ void Trs_tool::tool_render(
     const dvec3  n                 = m_rotation.normal;
     const dvec3  side1             = m_rotation.reference_direction;
     const dvec3  side2             = normalize(cross(n, side1));
-    const dvec3  position_in_world = root()->position_in_world();
+    const dvec3  position_in_world = root->position_in_world();
     const double distance          = length(position_in_world - dvec3{context.camera->position_in_world()});
     const double scale             = m_visualization.scale * distance / 100.0;
     const double r1                = scale * 6.0;
@@ -1510,7 +1559,8 @@ void Trs_tool::Visualization::update_transforms() //const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (root == nullptr)
+    const auto root = m_root.lock();
+    if (!root)
     {
         return;
     }
@@ -1527,11 +1577,17 @@ void Trs_tool::Visualization::update_transforms() //const uint64_t serial)
 
 void Trs_tool::update_transforms()
 {
-    if (root() == nullptr)
+    const auto root = get_root();
+    if (!root)
     {
         return;
     }
-    auto* scene_root = reinterpret_cast<Scene_root*>(m_target_node->node_data.host);
+    const auto target_node = m_target_node.lock();
+    if (!target_node)
+    {
+        return;
+    }
+    auto* scene_root = reinterpret_cast<Scene_root*>(target_node->node_data.host);
     if (scene_root == nullptr)
     {
         log_trs_tool->error("Node '{}' has no scene root");
@@ -1549,13 +1605,13 @@ void Trs_tool::on_enable_state_changed()
 
 void Trs_tool::update_visibility()
 {
-    m_visualization.update_visibility(m_target_node != nullptr);
+    m_visualization.update_visibility(!m_target_node.expired());
     update_transforms();
 }
 
-auto Trs_tool::root() -> erhe::scene::Node*
+auto Trs_tool::get_root() -> std::shared_ptr<erhe::scene::Node>
 {
-    return m_visualization.root;
+    return m_visualization.m_root.lock();
 }
 
 } // namespace editor

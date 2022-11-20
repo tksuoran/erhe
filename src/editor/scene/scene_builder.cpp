@@ -124,18 +124,20 @@ void Scene_builder::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    {
-        const erhe::application::Scoped_gl_context gl_context{
-            Component::get<erhe::application::Gl_context_provider>()
-        };
-
-        m_scene_root = std::make_shared<Scene_root>("Scene");
-        m_scene_root->material_library()->add_default_materials();
-
-        setup_scene();
-    }
+    const erhe::application::Scoped_gl_context gl_context{
+        Component::get<erhe::application::Gl_context_provider>()
+    };
 
     const auto& editor_scenes = get<Editor_scenes>();
+
+    m_scene_root = std::make_shared<Scene_root>(
+        editor_scenes->get_message_bus(),
+        "Scene"
+    );
+    m_scene_root->material_library()->add_default_materials();
+
+    setup_scene();
+
     editor_scenes->register_scene_root(m_scene_root);
 }
 
@@ -1085,6 +1087,8 @@ void Scene_builder::make_mesh_nodes()
         const auto& material_library = m_scene_root->material_library();
         const auto& materials        = material_library->materials();
         std::size_t material_index   = 0;
+
+        ERHE_VERIFY(!materials.empty());
 
         for (auto& entry : pack_entries)
         {

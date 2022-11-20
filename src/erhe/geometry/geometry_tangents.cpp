@@ -137,6 +137,7 @@ auto Geometry::compute_tangents(
             ERHE_VERIFY(iVert > 0); // This only works for triangulated polygons, N > 3
             const auto& triangle = get_triangle(iFace);
             const auto& polygon  = get_polygon(iFace);
+            ERHE_VERIFY(polygon.corner_count > 0);
             const uint32_t          corner_offset     = (iVert - 1 + triangle.triangle_index) % polygon.corner_count;
             const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + corner_offset;
             const Corner_id         corner_id         = geometry->polygon_corners[polygon_corner_id];

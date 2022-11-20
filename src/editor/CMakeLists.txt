@@ -121,6 +121,8 @@ erhe_target_sources_grouped(
     tools/hud.hpp
     tools/material_paint_tool.cpp
     tools/material_paint_tool.hpp
+    tools/paint_tool.cpp
+    tools/paint_tool.hpp
     tools/physics_tool.cpp
     tools/physics_tool.hpp
     tools/selection_tool.cpp

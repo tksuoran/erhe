@@ -24,6 +24,8 @@ Vertex_format::Vertex_format(std::initializer_list<Vertex_attribute> attributes)
 
 void Vertex_format::align_to(const std::size_t alignment)
 {
+    ERHE_VERIFY(alignment > 0);
+
     while ((m_stride % alignment) != 0)
     {
         ++m_stride;

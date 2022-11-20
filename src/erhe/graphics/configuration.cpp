@@ -160,6 +160,20 @@ void Instance::initialize()
 
     gl::command_info_init(info.glsl_version, extensions);
 
+    gl::get_integer_v(gl::Get_p_name::max_samples,                      &limits.max_samples);
+    gl::get_integer_v(gl::Get_p_name::max_color_texture_samples,        &limits.max_color_texture_samples);
+    gl::get_integer_v(gl::Get_p_name::max_depth_texture_samples,        &limits.max_depth_texture_samples);
+    gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples,          &limits.max_framebuffer_samples);
+    gl::get_integer_v(gl::Get_p_name::max_integer_samples,              &limits.max_integer_samples);
+
+    log_configuration->info("max samples: {} color {} depth {} framebuffer {} integer {}",
+        limits.max_samples,
+        limits.max_color_texture_samples,
+        limits.max_depth_texture_samples,
+        limits.max_framebuffer_samples,
+        limits.max_integer_samples
+    );
+
     gl::get_integer_v(gl::Get_p_name::max_3d_texture_size,              &limits.max_3d_texture_size);
     gl::get_integer_v(gl::Get_p_name::max_cube_map_texture_size,        &limits.max_cube_map_texture_size);
     gl::get_integer_v(gl::Get_p_name::max_texture_image_units,          &limits.max_texture_image_units);

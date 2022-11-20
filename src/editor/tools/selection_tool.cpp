@@ -601,6 +601,7 @@ void Selection_tool::update_selection_from_node(
 
 void Selection_tool::sanity_check()
 {
+#if !defined(NDEBUG)
     std::size_t error_count{0};
 
     const auto& scene_roots = m_editor_scenes->get_scene_roots();
@@ -632,6 +633,7 @@ void Selection_tool::sanity_check()
     {
         log_selection->error("Selection errors: {}", error_count);
     }
+#endif
 }
 
 void Selection_tool::call_selection_change_subscriptions() const

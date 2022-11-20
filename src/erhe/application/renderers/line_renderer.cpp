@@ -50,6 +50,7 @@ static constexpr gl::Map_buffer_access_mask access_mask{
 
 using erhe::graphics::Shader_stages;
 using glm::mat4;
+using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
@@ -411,9 +412,9 @@ void Line_renderer::end()
 }
 
 void Line_renderer::put(
-    const glm::vec3&        point,
+    const vec3&             point,
     const float             thickness,
-    const glm::vec4&        color,
+    const vec4&             color,
     const gsl::span<float>& gpu_float_data,
     std::size_t&            word_offset
 )
@@ -429,7 +430,7 @@ void Line_renderer::put(
 }
 
 void Line_renderer::add_lines(
-    const glm::mat4&                  transform,
+    const mat4&                       transform,
     const std::initializer_list<Line> lines
 )
 {
@@ -445,8 +446,8 @@ void Line_renderer::add_lines(
     std::size_t word_offset = 0;
     for (const Line& line : lines)
     {
-        const glm::vec4 p0{transform * glm::vec4{line.p0, 1.0f}};
-        const glm::vec4 p1{transform * glm::vec4{line.p1, 1.0f}};
+        const vec4 p0{transform * vec4{line.p0, 1.0f}};
+        const vec4 p1{transform * vec4{line.p1, 1.0f}};
         put(vec3{p0} / p0.w, m_line_thickness, m_line_color, gpu_float_data, word_offset);
         put(vec3{p1} / p1.w, m_line_thickness, m_line_color, gpu_float_data, word_offset);
     }
@@ -456,7 +457,7 @@ void Line_renderer::add_lines(
 }
 
 void Line_renderer::add_lines(
-    const glm::mat4&                   transform,
+    const mat4&                        transform,
     const std::initializer_list<Line4> lines
 )
 {
@@ -472,8 +473,8 @@ void Line_renderer::add_lines(
     std::size_t word_offset = 0;
     for (const Line4& line : lines)
     {
-        const glm::vec4 p0{transform * glm::vec4{glm::vec3{line.p0}, 1.0f}};
-        const glm::vec4 p1{transform * glm::vec4{glm::vec3{line.p1}, 1.0f}};
+        const vec4 p0{transform * vec4{vec3{line.p0}, 1.0f}};
+        const vec4 p1{transform * vec4{vec3{line.p1}, 1.0f}};
         put(vec3{p0} / p0.w, line.p0.w, m_line_color, gpu_float_data, word_offset);
         put(vec3{p1} / p1.w, line.p1.w, m_line_color, gpu_float_data, word_offset);
     }
@@ -486,17 +487,17 @@ void Line_renderer::set_line_color(const float r, const float g, const float b, 
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    m_line_color = glm::vec4{r, g, b, a};
+    m_line_color = vec4{r, g, b, a};
 }
 
-void Line_renderer::set_line_color(const glm::vec3& color)
+void Line_renderer::set_line_color(const vec3& color)
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    m_line_color = glm::vec4{color, 1.0f};
+    m_line_color = vec4{color, 1.0f};
 }
 
-void Line_renderer::set_line_color(const glm::vec4& color)
+void Line_renderer::set_line_color(const vec4& color)
 {
     m_line_color = color;
 }
@@ -506,7 +507,7 @@ void Line_renderer::set_line_color(const ImVec4 color)
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    m_line_color = glm::vec4{color.x, color.y, color.z, color.w};
+    m_line_color = vec4{color.x, color.y, color.z, color.w};
 }
 #endif
 
@@ -542,11 +543,11 @@ void Line_renderer::add_lines(
 }
 
 void Line_renderer::add_cube(
-    const glm::mat4& transform,
-    const glm::vec4& color,
-    const glm::vec3& min_corner,
-    const glm::vec3& max_corner,
-    const bool       z_cross
+    const mat4& transform,
+    const vec4& color,
+    const vec3& min_corner,
+    const vec3& max_corner,
+    const bool  z_cross
 )
 {
     const auto a = min_corner;
@@ -608,17 +609,17 @@ void Line_renderer::add_cube(
 
 namespace {
 
-auto safe_normalize_cross(const glm::vec3& lhs, const glm::vec3& rhs)
+auto safe_normalize_cross(const vec3& lhs, const vec3& rhs)
 {
-    const glm::vec3 lhs_normalized = glm::normalize(lhs);
-    const glm::vec3 rhs_normalized = glm::normalize(rhs);
+    const vec3 lhs_normalized = glm::normalize(lhs);
+    const vec3 rhs_normalized = glm::normalize(rhs);
     const float d = glm::dot(lhs_normalized, rhs_normalized);
     if (std::abs(d) > 0.999f)
     {
         return erhe::toolkit::min_axis(lhs);
     }
 
-    const glm::vec3 c0 = glm::cross(lhs, rhs);
+    const vec3 c0 = glm::cross(lhs, rhs);
     if (glm::length(c0) < glm::epsilon<float>())
     {
         return erhe::toolkit::min_axis(lhs);
@@ -639,22 +640,22 @@ void Line_renderer::imgui()
 
 void Line_renderer::add_sphere(
     const erhe::scene::Transform&       transform,
-    const glm::vec4&                    edge_color,
-    const glm::vec4&                    great_circle_color,
+    const vec4&                         edge_color,
+    const vec4&                         great_circle_color,
     const float                         edge_thickness,
     const float                         great_circle_thickness,
-    const glm::vec3&                    local_center,
+    const vec3&                         local_center,
     const float                         radius,
     const erhe::scene::Transform* const camera_world_from_node,
     const int                           step_count
 )
 {
-    const glm::mat4 m      = transform.matrix();
-    const glm::vec3 center = glm::vec3{m * glm::vec4{local_center, 1.0f}};
-    const glm::vec3 axis_x{radius, 0.0f, 0.0f};
-    const glm::vec3 axis_y{0.0f, radius, 0.0f};
-    const glm::vec3 axis_z{0.0f, 0.0f, radius};
-    const glm::mat4 I{1.0f};
+    const mat4 m      = transform.matrix();
+    const vec3 center = vec3{m * vec4{local_center, 1.0f}};
+    const vec3 axis_x{radius, 0.0f, 0.0f};
+    const vec3 axis_y{0.0f, radius, 0.0f};
+    const vec3 axis_z{0.0f, 0.0f, radius};
+    const mat4 I{1.0f};
     set_thickness(great_circle_thickness);
     for (int i = 0; i < step_count; ++i)
     {
@@ -722,11 +723,11 @@ void Line_renderer::add_sphere(
     //   C      P d             V  p*p + h*h = r*r          .
     //                             p = sqrt(r*r - h*h)      .
 
-    const glm::vec3 camera_position                 = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-    const glm::vec3 from_camera_to_sphere           = center - camera_position;
-    const glm::vec3 from_sphere_to_camera           = camera_position - center;
-    const glm::vec3 from_camera_to_sphere_direction = glm::normalize(from_camera_to_sphere);
-    const glm::vec3 from_sphere_to_camera_direction = glm::normalize(from_sphere_to_camera);
+    const vec3 camera_position                 = vec3{camera_world_from_node->matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    const vec3 from_camera_to_sphere           = center - camera_position;
+    const vec3 from_sphere_to_camera           = camera_position - center;
+    const vec3 from_camera_to_sphere_direction = glm::normalize(from_camera_to_sphere);
+    const vec3 from_sphere_to_camera_direction = glm::normalize(from_sphere_to_camera);
 
     const float r2 = radius * radius;
     const float d2 = glm::length2(from_camera_to_sphere);
@@ -737,27 +738,12 @@ void Line_renderer::add_sphere(
     const float h2 = h * h;
     const float p  = std::sqrt(r2 - h2);
 
-    const glm::vec3 P = center + p * from_sphere_to_camera_direction;
-
-    const glm::vec3 up0_direction  = glm::vec3{camera_world_from_node->matrix() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const glm::vec3 side_direction = safe_normalize_cross(from_camera_to_sphere_direction, up0_direction);
-    const glm::vec3 up_direction   = safe_normalize_cross(side_direction, from_camera_to_sphere_direction);
-    const glm::vec3 axis_a = h * side_direction;
-    const glm::vec3 axis_b = h * up_direction;
-
-    //// m_imgui.emplace_back(
-    ////     [=]
-    ////     ()
-    ////     {
-    ////         const float sin_alpha = radius / d;
-    ////         const float alpha     = std::asin(sin_alpha);
-    ////         ImGui::Text("d = %f", d);
-    ////         ImGui::Text("h = %f", h);
-    ////         ImGui::Text("p = %f", p);
-    ////         ImGui::Text("Cone = %f rad", 2.0f * alpha);
-    ////         ImGui::Text("Cone = %f deg", glm::degrees(2.0f * alpha));
-    ////     }
-    //// );
+    const vec3 P              = center + p * from_sphere_to_camera_direction;
+    const vec3 up0_direction  = vec3{camera_world_from_node->matrix() * vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const vec3 side_direction = safe_normalize_cross(from_camera_to_sphere_direction, up0_direction);
+    const vec3 up_direction   = safe_normalize_cross(side_direction, from_camera_to_sphere_direction);
+    const vec3 axis_a         = h * side_direction;
+    const vec3 axis_b         = h * up_direction;
 
     set_thickness(edge_thickness);
     for (int i = 0; i < step_count; ++i)
@@ -774,6 +760,626 @@ void Line_renderer::add_sphere(
                 }
             }
         );
+    }
+}
+
+auto sign(const float x) -> float
+{
+    return (x < 0.0f) ? -1.0f : (x == 0.0f) ? 0.0f : 1.0f;
+}
+
+auto sign(const double x) -> double
+{
+    return (x < 0.0) ? -1.0 : (x == 0.0) ? 0.0 : 1.0;
+}
+
+void Line_renderer::add_cone(
+    const erhe::scene::Transform& world_from_node,
+    const vec4&                   major_color,
+    const vec4&                   minor_color,
+    const float                   major_thickness,
+    const float                   minor_thickness,
+    const vec3&                   bottom_center,
+    const float                   height,
+    const float                   bottom_radius,
+    const float                   top_radius,
+    const vec3&                   camera_position_in_world,
+    const int                     side_count
+)
+{
+    constexpr vec3 axis_x       {1.0f, 0.0f, 0.0f};
+    constexpr vec3 axis_y       {0.0f, 1.0f, 0.0f};
+    constexpr vec3 axis_z       {0.0f, 0.0f, 1.0f};
+    constexpr vec3 bottom_normal{0.0f, -1.0f, 0.0f};
+    constexpr vec3 top_normal   {0.0f,  1.0f, 0.0f};
+
+    const mat4 m                       = world_from_node.matrix();
+    const mat4 node_from_world         = world_from_node.inverse_matrix();
+    const vec3 top_center              = bottom_center + vec3{0.0f, height, 0.0f};
+    const vec3 camera_position_in_node = vec4{node_from_world * vec4{camera_position_in_world, 1.0f}};
+
+    set_thickness(major_thickness);
+
+    class Cone_edge
+    {
+    public:
+        Cone_edge(
+            const vec3& p0,
+            const vec3& p1,
+            const vec3& n,
+            const vec3& t,
+            const vec3& b,
+            const float phi,
+            const float n_dot_v
+        )
+        : p0     {p0}
+        , p1     {p1}
+        , n      {n}
+        , t      {t}
+        , b      {b}
+        , phi    {phi}
+        , n_dot_v{n_dot_v}
+        {
+        }
+
+        vec3  p0;
+        vec3  p1;
+        vec3  n;
+        vec3  t;
+        vec3  b;
+        float phi;
+        float n_dot_v;
+    };
+
+    std::vector<Cone_edge> cone_edges;
+    for (int i = 0; i < side_count; ++i)
+    {
+        const float phi = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(side_count);
+        const vec3  sin_phi_z = std::cos(phi) * axis_x;
+        const vec3  cos_phi_x = std::sin(phi) * axis_z;
+
+        const vec3 p0       {bottom_center + bottom_radius * cos_phi_x + bottom_radius * sin_phi_z};
+        const vec3 p1       {top_center    + top_radius    * cos_phi_x + top_radius    * sin_phi_z};
+        const vec3 mid_point{0.5f * (p0 + p1)};
+
+        const vec3 B = normalize(p1 - p0); // generatrix
+        const vec3 T{
+            static_cast<float>(std::cos(phi + glm::half_pi<float>())),
+            0.0f,
+            static_cast<float>(std::sin(phi + glm::half_pi<float>()))
+        };
+        const vec3  N       = safe_normalize_cross(B, T);
+        const vec3  v       = glm::normalize(camera_position_in_node - mid_point);
+        const float n_dot_v = dot(N, v);
+
+        cone_edges.emplace_back(
+            p0,
+            p1,
+            N,
+            T,
+            B,
+            phi,
+            n_dot_v
+        );
+    }
+
+    std::vector<Cone_edge> sign_flip_edges;
+
+    const vec3  bottom_v        = glm::normalize(camera_position_in_node -bottom_center);
+    const float bottom_n_dot_v  = glm::dot(bottom_normal, bottom_v);
+    const bool  bottom_visible  = bottom_n_dot_v >= 0.0f;
+
+    const vec3  top_v        = glm::normalize(camera_position_in_node - top_center);
+    const float top_n_dot_v  = glm::dot(top_normal, top_v);
+    const bool  top_visible  = top_n_dot_v >= 0.0f;
+
+    set_thickness(minor_thickness);
+    add_lines(
+        m,
+        minor_color,
+        {
+            {
+                bottom_center - bottom_radius * axis_x,
+                bottom_center + bottom_radius * axis_x,
+            },
+            {
+                bottom_center - bottom_radius * axis_z,
+                bottom_center + bottom_radius * axis_z
+            },
+            {
+                top_center - top_radius * axis_x,
+                top_center + top_radius * axis_x,
+            },
+            {
+                top_center - top_radius * axis_z,
+                top_center + top_radius * axis_z
+            },
+            {
+                bottom_center,
+                top_center
+            },
+            {
+                bottom_center - bottom_radius * axis_x,
+                top_center    - top_radius    * axis_x
+            },
+            {
+                bottom_center + bottom_radius * axis_x,
+                top_center    + top_radius    * axis_x
+            },
+            {
+                bottom_center - bottom_radius * axis_z,
+                top_center    - top_radius    * axis_z
+            },
+            {
+                bottom_center + bottom_radius * axis_z,
+                top_center    + top_radius    * axis_z
+            }
+        }
+    );
+
+    for (size_t i = 0; i < cone_edges.size(); ++i)
+    {
+        const std::size_t next_i      = (i + 1) % cone_edges.size();
+        const auto&       edge        = cone_edges[i];
+        const auto&       next_edge   = cone_edges[next_i];
+        const float       avg_n_dot_v = 0.5f * edge.n_dot_v + 0.5f * next_edge.n_dot_v;
+        if (sign(edge.n_dot_v) != sign(next_edge.n_dot_v))
+        {
+            if (std::abs(edge.n_dot_v) < std::abs(next_edge.n_dot_v))
+            {
+                sign_flip_edges.push_back(edge);
+            }
+            else
+            {
+                sign_flip_edges.push_back(next_edge);
+            }
+        }
+        if (bottom_radius > 0.0f)
+        {
+            {
+                add_lines(
+                    m,
+                    bottom_visible || (avg_n_dot_v > 0.0)
+                        ? major_color
+                        : minor_color,
+                    {
+                        {
+                            edge.p0,
+                            next_edge.p0
+                        }
+                    }
+                );
+            }
+        }
+
+        if (top_radius > 0.0f)
+        {
+            {
+                add_lines(
+                    m,
+                    top_visible || (avg_n_dot_v > 0.0)
+                        ? major_color
+                        : minor_color,
+                    {
+                        {
+                            edge.p1,
+                            next_edge.p1
+                        }
+                    }
+                );
+            }
+        }
+    }
+
+    for (auto& edge : sign_flip_edges)
+    {
+        add_lines(m, major_color, { { edge.p0, edge.p1 } } );
+    }
+}
+
+namespace {
+
+struct Torus_point
+{
+    vec3 p;
+    vec3 n;
+};
+
+[[nodiscard]] auto torus_point(
+    const double R,
+    const double r,
+    const double rel_major,
+    const double rel_minor
+) -> Torus_point
+{
+    const double theta     = (glm::pi<double>() * 2.0 * rel_major);
+    const double phi       = (glm::pi<double>() * 2.0 * rel_minor);
+    const double sin_theta = std::sin(theta);
+    const double cos_theta = std::cos(theta);
+    const double sin_phi   = std::sin(phi);
+    const double cos_phi   = std::cos(phi);
+
+    const double vx = (R + r * cos_phi) * cos_theta;
+    const double vy = (R + r * cos_phi) * sin_theta;
+    const double vz =      r * sin_phi;
+
+    const double tx = -sin_theta;
+    const double ty =  cos_theta;
+    const double tz = 0.0f;
+    const vec3   T{tx, ty, tz};
+
+    const double bx = -sin_phi * cos_theta;
+    const double by = -sin_phi * sin_theta;
+    const double bz =  cos_phi;
+    const vec3   B{bx, by, bz};
+    const vec3   N = glm::normalize(glm::cross(T, B));
+
+    return Torus_point{
+        .p = vec3{vx, vy, vz},
+        .n = N
+    };
+}
+
+// Adapted from https://www.shadertoy.com/view/4sBGDy
+//
+// The MIT License
+// Copyright (C) 2014 Inigo Quilez
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// f(x) = (|x|^2 + R^2 - r^2)^2 - 4R^2|xy|^2 = 0
+auto ray_torus_intersection(
+    const vec3 ro,
+    const vec3 rd,
+    const vec2 tor
+) -> float
+{
+    float po = 1.0;
+
+    float Ra2 = tor.x * tor.x;
+    float ra2 = tor.y * tor.y;
+
+    float m = glm::dot(ro, ro);
+    float n = glm::dot(ro, rd);
+
+    // bounding sphere
+    {
+    	float h = n * n - m + (tor.x + tor.y) * (tor.x + tor.y);
+    	if (h < 0.0f)
+        {
+            return -1.0f;
+        }
+    	//float t = -n-sqrt(h); // could use this to compute intersections from ro+t*rd
+    }
+
+	// find quartic equation
+    float k  = (m - ra2 - Ra2) / 2.0f;
+    float k3 = n;
+    float k2 = n * n + Ra2 * rd.z * rd.z + k;
+    float k1 = k * n + Ra2 * ro.z * rd.z;
+    float k0 = k * k + Ra2 * ro.z * ro.z - Ra2 * ra2;
+
+    #if 1
+    // prevent |c1| from being too close to zero
+    if (std::abs(k3 * (k3 * k3 - k2) + k1) < 0.01)
+    {
+        po = -1.0f;
+        float tmp = k1; k1 = k3; k3 = tmp;
+        k0 = 1.0f / k0;
+        k1 = k1 * k0;
+        k2 = k2 * k0;
+        k3 = k3 * k0;
+    }
+	#endif
+
+    float c2 = 2.0f * k2 - 3.0f * k3 * k3;
+    float c1 = k3 * (k3 * k3 - k2) + k1;
+    float c0 = k3 * (k3 * (-3.0f * k3 * k3 + 4.0f * k2) - 8.0f * k1) + 4.0f * k0;
+
+    c2 /= 3.0f;
+    c1 *= 2.0f;
+    c0 /= 3.0f;
+
+    float Q = c2 * c2 + c0;
+    float R = 3.0f * c0 * c2 - c2 * c2 * c2 - c1 * c1;
+
+
+    float h = R * R - Q * Q * Q;
+    float z = 0.0f;
+    if (h < 0.0f)
+    {
+    	// 4 intersections
+        float sQ = std::sqrt(Q);
+        z = 2.0f * sQ * std::cos(
+            std::acos(R / (sQ * Q)) / 3.0f
+        );
+    }
+    else
+    {
+        // 2 intersections
+        float sQ = std::pow(
+            std::sqrt(h) + std::abs(R),
+            1.0f / 3.0f
+        );
+        z = sign(R) * std::abs(sQ + Q / sQ);
+    }
+    z = c2 - z;
+
+    float d1 = z     - 3.0f * c2;
+    float d2 = z * z - 3.0f * c0;
+    if (std::abs(d1) < 1.0e-4)
+    {
+        if (d2 < 0.0f)
+        {
+            return -1.0f;
+        }
+        d2 = std::sqrt(d2);
+    }
+    else
+    {
+        if (d1 < 0.0f)
+        {
+            return -1.0f;
+        }
+        d1 = std::sqrt(d1 / 2.0f);
+        d2 = c1 / d1;
+    }
+
+    //----------------------------------
+
+    float result = 1e20;
+
+    h = d1 * d1 - z + d2;
+    if (h > 0.0f)
+    {
+        h = std::sqrt(h);
+        float t1 = -d1 - h - k3; t1 = (po < 0.0f) ? 2.0f / t1 : t1;
+        float t2 = -d1 + h - k3; t2 = (po < 0.0f) ? 2.0f / t2 : t2;
+        if (t1 > 0.0f) result = t1;
+        if (t2 > 0.0f) result = std::min(result, t2);
+    }
+
+    h = d1 * d1 - z - d2;
+    if (h > 0.0f)
+    {
+        h = std::sqrt(h);
+        float t1 = d1 - h - k3; t1 = (po < 0.0f) ? 2.0f / t1 : t1;
+        float t2 = d1 + h - k3; t2 = (po < 0.0f) ? 2.0f / t2 : t2;
+        if (t1 > 0.0f) result = std::min(result, t1);
+        if (t2 > 0.0f) result = std::min(result, t2);
+    }
+
+    return result;
+}
+
+auto ray_torus_intersection(
+    const glm::dvec3 ro,
+    const glm::dvec3 rd,
+    const glm::dvec2 tor
+) -> double
+{
+    double po = 1.0;
+
+    double Ra2 = tor.x * tor.x;
+    double ra2 = tor.y * tor.y;
+
+    double m = glm::dot(ro, ro);
+    double n = glm::dot(ro, rd);
+
+    // bounding sphere
+    {
+    	double h = n * n - m + (tor.x + tor.y) * (tor.x + tor.y);
+    	if (h < 0.0)
+        {
+            return -1.0;
+        }
+    	//float t = -n-sqrt(h); // could use this to compute intersections from ro+t*rd
+    }
+
+	// find quartic equation
+    double k  = (m - ra2 - Ra2) / 2.0;
+    double k3 = n;
+    double k2 = n * n + Ra2 * rd.z * rd.z + k;
+    double k1 = k * n + Ra2 * ro.z * rd.z;
+    double k0 = k * k + Ra2 * ro.z * ro.z - Ra2 * ra2;
+
+    #if 1
+    // prevent |c1| from being too close to zero
+    if (std::abs(k3 * (k3 * k3 - k2) + k1) < 0.001)
+    {
+        po = -1.0;
+        double tmp = k1; k1 = k3; k3 = tmp;
+        k0 = 1.0 / k0;
+        k1 = k1 * k0;
+        k2 = k2 * k0;
+        k3 = k3 * k0;
+    }
+	#endif
+
+    double c2 = 2.0 * k2 - 3.0 * k3 * k3;
+    double c1 = k3 * (k3 * k3 - k2) + k1;
+    double c0 = k3 * (k3 * (-3.0 * k3 * k3 + 4.0 * k2) - 8.0 * k1) + 4.0 * k0;
+
+    c2 /= 3.0;
+    c1 *= 2.0;
+    c0 /= 3.0;
+
+    double Q = c2 * c2 + c0;
+    double R = 3.0 * c0 * c2 - c2 * c2 * c2 - c1 * c1;
+
+    double h = R * R - Q * Q * Q;
+    double z = 0.0;
+    if (h < 0.0)
+    {
+    	// 4 intersections
+        double sQ = std::sqrt(Q);
+        z = 2.0 * sQ * std::cos(
+            std::acos(R / (sQ * Q)) / 3.0
+        );
+    }
+    else
+    {
+        // 2 intersections
+        double sQ = std::pow(
+            std::sqrt(h) + std::abs(R),
+            1.0 / 3.0
+        );
+        z = sign(R) * std::abs(sQ + Q / sQ);
+    }
+    z = c2 - z;
+
+    double d1 = z     - 3.0 * c2;
+    double d2 = z * z - 3.0 * c0;
+    if (std::abs(d1) < 1.0e-6)
+    {
+        if (d2 < 0.0)
+        {
+            return -1.0;
+        }
+        d2 = std::sqrt(d2);
+    }
+    else
+    {
+        if (d1 < 0.0)
+        {
+            return -1.0;
+        }
+        d1 = std::sqrt(d1 / 2.0);
+        d2 = c1 / d1;
+    }
+
+    //----------------------------------
+
+    double result = 1e20;
+
+    h = d1 * d1 - z + d2;
+    if (h > 0.0)
+    {
+        h = std::sqrt(h);
+        double t1 = -d1 - h - k3; t1 = (po < 0.0) ? 2.0 / t1 : t1;
+        double t2 = -d1 + h - k3; t2 = (po < 0.0) ? 2.0 / t2 : t2;
+        if (t1 > 0.0) result = t1;
+        if (t2 > 0.0) result = std::min(result, t2);
+    }
+
+    h = d1 * d1 - z - d2;
+    if (h > 0.0)
+    {
+        h = std::sqrt(h);
+        double t1 = d1 - h - k3; t1 = (po < 0.0) ? 2.0 / t1 : t1;
+        double t2 = d1 + h - k3; t2 = (po < 0.0) ? 2.0 / t2 : t2;
+        if (t1 > 0.0) result = std::min(result, t1);
+        if (t2 > 0.0) result = std::min(result, t2);
+    }
+
+    return result;
+}
+
+} // anonymous namespace
+
+void Line_renderer::add_torus(
+    const erhe::scene::Transform& world_from_node,
+    const vec4&                   major_color,
+    const vec4&                   minor_color,
+    const float                   major_thickness,
+    const float                   major_radius,
+    const float                   minor_radius,
+    const glm::vec3&              camera_position_in_world,
+    const int                     major_step_count,
+    const int                     minor_step_count,
+    const float                   epsilon,
+    const int                     debug_major,
+    const int                     debug_minor
+)
+{
+    static_cast<void>(major_color);
+    static_cast<void>(minor_color);
+    static_cast<void>(debug_major);
+    static_cast<void>(debug_minor);
+    constexpr vec3 axis_x{1.0f, 0.0f, 0.0f};
+    constexpr vec3 axis_y{0.0f, 1.0f, 0.0f};
+    constexpr vec3 axis_z{0.0f, 0.0f, 1.0f};
+    const     mat4 m                       = world_from_node.matrix();
+    const     mat4 node_from_world         = world_from_node.inverse_matrix();
+    const     vec3 camera_position_in_node = vec4{node_from_world * vec4{camera_position_in_world, 1.0f}};
+    const     vec2 tor                     = vec2{major_radius, minor_radius};
+    constexpr int  k = 8;
+    set_thickness(major_thickness);
+    for (int i = 0; i < major_step_count; ++i)
+    {
+        const float rel_major = static_cast<float>(i    ) / static_cast<float>(major_step_count);
+        for (int j = 0; j < minor_step_count * k; ++j)
+        {
+            const float       rel_minor      = static_cast<float>(j    ) / static_cast<float>(minor_step_count * k);
+            const float       rel_minor_next = static_cast<float>(j + 1) / static_cast<float>(minor_step_count * k);
+            const Torus_point a       = torus_point(major_radius, minor_radius, rel_major, rel_minor);
+            const Torus_point b       = torus_point(major_radius, minor_radius, rel_major, rel_minor_next);
+            const Torus_point c       = torus_point(major_radius, minor_radius, rel_major, 0.5f * (rel_minor + rel_minor_next));
+            const glm::dvec3  ray_dir = glm::normalize(glm::dvec3{camera_position_in_node} - glm::dvec3{c.p});
+            const glm::dvec3  ray_org = glm::dvec3{c.p} + 1.5 * epsilon * ray_dir;
+            const double      t       = ray_torus_intersection(glm::dvec3{ray_org}, glm::dvec3{ray_dir}, glm::dvec2{tor});
+            const glm::dvec3  P0      = ray_org + t * ray_dir;
+            const float       d       = static_cast<float>(glm::distance(P0, glm::dvec3{c.p}));
+            const bool        visible = (t == -1.0f) || (t > 1e10) || (d < epsilon) || (d > glm::distance(c.p, camera_position_in_node));
+
+            add_lines(
+                m,
+                visible ? major_color : minor_color,
+                { { a.p, b.p } }
+            );
+#if 0
+            if ((i == debug_major) && (j == debug_minor))
+            {
+                add_lines( // blue: normal
+                    m,
+                    vec4{0.0f, 0.0f, 1.0f, 0.5f},
+                    { { c.p, c.p + 0.1f * c.n } }
+                );
+                add_lines( // cyan: point to camera
+                    m,
+                    vec4{0.0f, 1.0f, 1.0f, 0.5f},
+                    { { camera_position_in_node, c.p } }
+                );
+                add_lines( // green: center to point
+                    m,
+                    vec4{0.0f, 1.0f, 0.0f, 1.0f},
+                    { { vec3{0.0f, 0.0f, 0.0f}, c.p } }
+                );
+                if ((t > 0.0f) && (t < 1e10)) // && (d > epsilon))
+                {
+                    add_lines( // red: point to intersection
+                        m,
+                        vec4{1.0f, 0.0f, 0.0f, 1.0f},
+                        { { ray_org, P0 } }
+                    );
+                }
+            }
+#endif
+        }
+    }
+
+    for (int j = 0; j < minor_step_count; ++j)
+    {
+        const float rel_minor = static_cast<float>(j    ) / static_cast<float>(minor_step_count);
+        for (int i = 0; i < major_step_count * k; ++i)
+        {
+            const float       rel_major      = static_cast<float>(i    ) / static_cast<float>(major_step_count * k);
+            const float       rel_major_next = static_cast<float>(i + 1) / static_cast<float>(major_step_count * k);
+            const Torus_point a = torus_point(major_radius, minor_radius, rel_major,      rel_minor);
+            const Torus_point b = torus_point(major_radius, minor_radius, rel_major_next, rel_minor);
+            const Torus_point c = torus_point(major_radius, minor_radius, 0.5f * (rel_major + rel_major_next), rel_minor);
+            const glm::dvec3  ray_dir = glm::normalize(glm::dvec3{camera_position_in_node} - glm::dvec3{c.p});
+            const glm::dvec3  ray_org = glm::dvec3{c.p} + 1.5 * epsilon * ray_dir;
+            const double      t       = ray_torus_intersection(glm::dvec3{ray_org}, glm::dvec3{ray_dir}, glm::dvec2{tor});
+            const glm::dvec3  P0      = ray_org + t * ray_dir;
+            const float       d       = static_cast<float>(glm::distance(P0, glm::dvec3{c.p}));
+            const bool        visible = (t == -1.0f) || (t > 1e10) || (d < epsilon) || (d > glm::distance(c.p, camera_position_in_node));
+
+            add_lines(
+                m,
+                visible ? major_color : minor_color,
+                { { a.p, b.p } }
+            );
+        }
     }
 }
 

@@ -148,13 +148,14 @@ auto Brushes::make_brush(const Brush_data& create_info) -> std::shared_ptr<Brush
     }
 
     const auto brush = std::make_shared<Brush>(create_info);
-
-    {
-        const std::lock_guard<std::mutex> lock{m_brush_mutex};
-        m_brushes.push_back(brush);
-    }
-
+    register_brush(brush);
     return brush;
+}
+
+void Brushes::register_brush(const std::shared_ptr<Brush>& brush)
+{
+    const std::lock_guard<std::mutex> lock{m_brush_mutex};
+    m_brushes.push_back(brush);
 }
 
 void Brushes::remove_brush_mesh()
@@ -292,14 +293,20 @@ auto Brushes::get_brush_transform() -> mat4
     }
 
     const Polygon&  polygon    = m_hover_geometry->polygons[polygon_id];
-    Reference_frame hover_frame(*m_hover_geometry, polygon_id);
-    Reference_frame brush_frame = brush->get_reference_frame(polygon.corner_count);
+    Reference_frame hover_frame(*m_hover_geometry, polygon_id, 0, 0);
+    Reference_frame brush_frame = brush->get_reference_frame(
+        polygon.corner_count,
+        static_cast<uint32_t>(m_polygon_offset),
+        static_cast<uint32_t>(m_corner_offset)
+    );
     hover_frame.N *= -1.0f;
     hover_frame.B *= -1.0f;
 
     ERHE_VERIFY(brush_frame.scale() != 0.0f);
 
-    const float scale = hover_frame.scale() / brush_frame.scale();
+    const float hover_scale = hover_frame.scale();
+    const float brush_scale = brush_frame.scale();
+    const float scale       = hover_scale / brush_scale;
 
     m_transform_scale = scale;
     if (scale != 1.0f)
@@ -499,6 +506,7 @@ void Brushes::add_brush_mesh()
         Node_visibility::content |
         Node_visibility::brush
     );
+    m_brush_mesh->node_data.flag_bits = m_brush_mesh->node_data.flag_bits | erhe::scene::Node_flag_bit::no_message;
 
     scene_root->add(m_brush_mesh, scene_root->layers().brush());
 
@@ -541,6 +549,8 @@ void Brushes::tool_properties()
     ERHE_PROFILE_FUNCTION
 
     ImGui::Checkbox   ("Physics",         &m_with_physics);
+    ImGui::DragInt    ("Face Offset",     &m_polygon_offset, 1.0f, 0, 100);
+    ImGui::DragInt    ("Corner Offset",   &m_corner_offset,  1.0f, 0, 100);
     ImGui::InputFloat ("Hover scale",     &debug_info.hover_frame_scale);
     ImGui::InputFloat ("Brush scale",     &debug_info.brush_frame_scale);
     ImGui::InputFloat ("Transform scale", &debug_info.transform_scale);

@@ -129,9 +129,7 @@ public:
     auto try_insert      () -> bool;
     void on_motion       ();
 
-    [[nodiscard]] auto allocate_brush(
-        const erhe::primitive::Build_info& build_info
-    ) -> std::shared_ptr<Brush>;
+    void register_brush(const std::shared_ptr<Brush>& brush);
 
     [[nodiscard]] auto make_brush(const Brush_data& create_info) -> std::shared_ptr<Brush>;
 
@@ -176,6 +174,8 @@ private:
     bool                                m_with_physics{true};
     float                               m_scale            {1.0f};
     float                               m_transform_scale  {1.0f};
+    int                                 m_polygon_offset   {0};
+    int                                 m_corner_offset    {0};
 
     class Debug_info
     {
