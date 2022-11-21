@@ -131,12 +131,12 @@ struct L2Distance
     float diff2 = get<1>(p) - get<1>(q);
     float diff3 = get<2>(p) - get<2>(q);
 
-    return std::pow(diff1, 2) + std::pow(diff2, 2) + std::pow(diff3, 2);
+    return std::pow(diff1, 2.0f) + std::pow(diff2, 2.0f) + std::pow(diff3, 2.0f);
   }
 
   static inline float norm(float x, float y, float z)
   {
-    return std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2);
+    return std::pow(x, 2.0f) + std::pow(y, 2.0f) + std::pow(z, 2.0f);
   }
 
   static inline float sqr(float r)
@@ -390,7 +390,7 @@ void Octree<PointT, ContainerT>::initialize(const ContainerT& pts, const OctreeP
   else
     data_ = &pts;
 
-  const uint32_t N = pts.size();
+  const uint32_t N = static_cast<uint32_t>(pts.size());
   successors_ = std::vector<uint32_t>(N);
 
   // determine axis-aligned bounding box.
