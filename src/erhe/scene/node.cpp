@@ -1,5 +1,6 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/scene_host.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -24,10 +25,10 @@ auto Node_transforms::get_next_serial() -> uint64_t
 
 INode_attachment::~INode_attachment() noexcept
 {
-    auto* const host = get_node();
-    if (host != nullptr)
+    Node* const host_node = get_node();
+    if (host_node != nullptr)
     {
-        host->detach(this);
+        host_node->detach(this);
     }
 }
 
@@ -46,6 +47,21 @@ auto INode_attachment::flag_bits() -> uint64_t&
     return m_flag_bits;
 }
 
+void INode_attachment::set_node(Node* const node)
+{
+    Scene_host* const old_host = (m_node != nullptr) ? m_node->get_scene_host() : nullptr;
+    m_node = node;
+    Scene_host* const new_host = (m_node != nullptr) ? m_node->get_scene_host() : nullptr;
+    if (new_host != old_host)
+    {
+        handle_node_scene_host_update(old_host, new_host);
+        if (m_node != nullptr)
+        {
+            handle_node_transform_update();
+        }
+    }
+};
+
 Node::Node(std::string_view name)
     : m_id{}
 {
@@ -55,19 +71,19 @@ Node::Node(std::string_view name)
 
 Node::~Node() noexcept
 {
-    sanity_check(nullptr);
+    sanity_check();
 
+    std::shared_ptr<Node> parent = node_data.parent.lock();
+    set_parent({});
     for (auto& child : node_data.children)
     {
-        child->on_detached_from(*this);
+        child->set_parent(parent);
     }
     for (auto& attachment : node_data.attachments)
     {
-        attachment->on_detached_from(this);
         attachment->set_node(nullptr);
     }
-    remove_from_scene();
-    sanity_check(nullptr);
+    sanity_check();
 }
 
 auto Node::node_type() const -> const char*
@@ -120,11 +136,8 @@ void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
 
     node_data.attachments.push_back(attachment);
     attachment->set_node(this);
-    attachment->on_attached_to(this);
-    attachment->on_node_transform_changed();
-    sanity_check(node_data.host);
-    on_visibility_mask_changed();
-    sanity_check(node_data.host);
+    handle_visibility_mask_update();
+    sanity_check();
 }
 
 auto Node::detach(INode_attachment* attachment) -> bool
@@ -174,9 +187,8 @@ auto Node::detach(INode_attachment* attachment) -> bool
             name()
         );
         node_data.attachments.erase(i, node_data.attachments.end());
-        attachment->on_detached_from(this);
         attachment->set_node(nullptr);
-        sanity_check(node_data.host);
+        sanity_check();
         return true;
     }
 
@@ -240,117 +252,42 @@ auto Node::is_ancestor(const Node* ancestor_candidate) const -> bool
     return current_parent->is_ancestor(ancestor_candidate);
 }
 
-void Node::attach(
+auto Node::get_scene_host() const -> Scene_host*
+{
+    return node_data.host;
+}
+
+auto Node::get_scene() const -> Scene*
+{
+    return (node_data.host != nullptr)
+        ? node_data.host->get_scene()
+        : nullptr;
+}
+
+void Node::handle_add_child(
     const std::shared_ptr<Node>& child_node,
-    const std::size_t            position,
-    const bool                   call_on_attached
+    const std::size_t            position
 )
 {
-    if (child_node.get() == this)
-    {
-        log->error("Cannot attach node to itself");
-        return;
-    }
-    if (is_ancestor(child_node.get()))
-    {
-        log->error("Cannot attach ancestor to node");
-        return;
-    }
-
-    ERHE_PROFILE_FUNCTION
-
     ERHE_VERIFY(child_node);
-
-    log->trace(
-        "{} ({}).attach_at(child node = {} ({}), position = {})",
-        name(),
-        node_type(),
-        child_node->name(),
-        child_node->node_type(),
-        position
-    );
 
 #ifndef NDEBUG
     const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
     if (i != node_data.children.end())
     {
-        log->error("Node {} already attached to {}", child_node->name(), name());
+        log->error("Node {} already has child {}", name(), child_node->name());
         return;
     }
 #endif
 
-    const auto child_parent_from_node = node_from_world_transform() * child_node->world_from_node_transform();
-
-    const auto& current_parent = child_node->parent().lock();
-    if (current_parent)
-    {
-        current_parent->detach(child_node.get(), false);
-    }
-
     node_data.children.insert(node_data.children.begin() + position, child_node);
-    child_node->set_parent          (shared_from_this());
-    child_node->set_parent_from_node(child_parent_from_node);
-
-    // Attached child transform is as good as parent transform
-    child_node->node_data.transforms.update_serial = node_data.transforms.update_serial;
-
-    child_node->set_depth_recursive(depth() + 1);
-    if (call_on_attached)
-    {
-        child_node->on_attached();
-    }
-    sanity_check(node_data.host);
 }
 
-auto Node::detach(
-    Node*      child_node,
-    const bool call_on_detached,
-    const bool remove_from_scene
-) -> bool
+void Node::handle_remove_child(
+    Node* const child_node
+)
 {
-    ERHE_PROFILE_FUNCTION
-
-    if (!child_node)
-    {
-        log->warn("empty child_node, cannot detach");
-        return false;
-    }
-
-    const auto& root_node = root().lock();
-
-    // Detaching from the implicit root is nop.
-    // However as secondary (temporary) operation, it is allowed.
-    if (
-        !remove_from_scene &&
-        call_on_detached &&
-        (root_node.get() == this)
-    )
-    {
-        return true;
-    }
-
-    log->trace(
-        "{} ({}).detach({} ({}))",
-        name(),
-        node_type(),
-        child_node->name(),
-        child_node->node_type()
-    );
-
-    const auto& parent = child_node->parent().lock();
-
-    if (parent.get() != this)
-    {
-        log->warn(
-            "Child node {} parent {} != this {}",
-            child_node->name(),
-            parent
-                ? parent->name()
-                : "(none)",
-            name()
-        );
-        return false;
-    }
+    ERHE_VERIFY(child_node != nullptr);
 
     const auto i = std::remove_if(
         node_data.children.begin(),
@@ -362,60 +299,75 @@ auto Node::detach(
     );
     if (i != node_data.children.end())
     {
-        log->trace("Removing attachment {} from node", child_node->name());
-
-        const auto& world_from_node = child_node->world_from_node_transform();
-
         node_data.children.erase(i, node_data.children.end());
+    }
+    else
+    {
+        log->error(
+            "child node {} cannot be removed from parent node {}: child not found",
+            child_node->name(),
+            name()
+        );
+    }
+}
 
-        const auto& current_parent = child_node->parent().lock();
-        if (current_parent.get() != this)
-        {
-            log->error(
-                "Cannot detach node {} from {} - parent is different ({})",
-                child_node->name(),
-                name(),
-                current_parent
-                    ? current_parent->name()
-                    : "(nullptr)"
-            );
-            return false;
-        }
-        child_node->set_parent          ({}); // so that attach won't call detach
-        child_node->set_parent_from_node(world_from_node);
-        child_node->set_depth_recursive (0);
+//// void Node::set_parent(
+////     const std::weak_ptr<Node>& new_parent_node,
+////     const std::size_t          position
+//// )
+//// {
+////     set_parent(new_parent_node.lock(), position);
+//// }
 
-        // Attach to the implicit root node,
-        if (
-            !remove_from_scene &&
-            call_on_detached &&
-            (root_node.get() != this)
-        )
-        {
-            root_node->attach(child_node->shared_from_this(), false);
-        }
-        child_node->set_world_from_node(world_from_node);
+void Node::set_parent(
+    const std::shared_ptr<Node>& new_parent_node,
+    const std::size_t            position
+)
+{
+    const auto& world_from_node = world_from_node_transform();
 
-        if (call_on_detached)
-        {
-            child_node->on_detached_from(*this);
-        }
-        sanity_check(node_data.host);
-        return true;
+    Node* old_parent = node_data.parent.lock().get();
+    node_data.parent = new_parent_node;
+    Node* new_parent = node_data.parent.lock().get();
+
+    if (old_parent == new_parent)
+    {
+        return;
     }
 
-    log->warn("Detaching {} from node {} failed - was not attached", child_node->name(), name());
-    return false;
+    if (old_parent)
+    {
+        old_parent->handle_remove_child(this);
+    }
+
+    if (new_parent)
+    {
+        new_parent->handle_add_child(shared_from_this(), position);
+    }
+
+    set_world_from_node(world_from_node);
+    set_depth_recursive(
+        new_parent
+            ? new_parent->depth() + 1
+            : 0
+    );
+    handle_parent_update(old_parent, new_parent);
+    sanity_check();
 }
 
-void Node::set_parent(const std::weak_ptr<Node>& new_parent_node)
+void Node::set_parent(
+    Node* const       new_parent_node,
+    const std::size_t position
+)
 {
-    node_data.parent = new_parent_node;
-}
-
-void Node::on_attached()
-{
-    sanity_check(node_data.host);
+    if (new_parent_node != nullptr)
+    {
+        set_parent(new_parent_node->shared_from_this(), position);
+    }
+    else
+    {
+        set_parent(std::shared_ptr<Node>{}, position);
+    }
 }
 
 void Node::set_depth_recursive(const std::size_t depth)
@@ -433,13 +385,49 @@ void Node::set_depth_recursive(const std::size_t depth)
     }
 }
 
-void Node::on_detached_from(Node& node)
+void Node::handle_parent_update(Node* old_parent, Node* new_parent)
 {
-    static_cast<void>(node);
-    sanity_check(node_data.host);
+    ERHE_VERIFY(old_parent != new_parent);
+    Scene_host* old_scene_host = old_parent != nullptr ? old_parent->get_scene_host() : nullptr;
+    Scene_host* new_scene_host = new_parent != nullptr ? new_parent->get_scene_host() : nullptr;
+    if (old_scene_host != new_scene_host)
+    {
+        handle_scene_host_update(old_scene_host, new_scene_host);
+    }
+    sanity_check();
 }
 
-void Node::on_transform_changed(uint64_t serial) const
+void Node::handle_scene_host_update(
+    Scene_host* const old_scene_host,
+    Scene_host* const new_scene_host
+)
+{
+    ERHE_VERIFY(old_scene_host != new_scene_host);
+
+    if (old_scene_host != nullptr)
+    {
+        Scene* old_scene = old_scene_host->get_scene();
+        if (old_scene != nullptr)
+        {
+            old_scene->unregister_node(shared_from_this());
+        }
+    }
+    if (new_scene_host != nullptr)
+    {
+        Scene* new_scene = new_scene_host->get_scene();
+        if (new_scene != nullptr)
+        {
+            new_scene->register_node(shared_from_this());
+        }
+    }
+
+    for (const auto& attachment : node_data.attachments)
+    {
+        attachment->handle_node_scene_host_update(old_scene_host, new_scene_host);
+    }
+}
+
+void Node::handle_transform_update(uint64_t serial) const
 {
     ERHE_PROFILE_FUNCTION
 
@@ -450,41 +438,17 @@ void Node::on_transform_changed(uint64_t serial) const
     node_data.transforms.update_serial = effective_serial;
     for (const auto& attachment : node_data.attachments)
     {
-        attachment->on_node_transform_changed();
+        attachment->handle_node_transform_update();
     }
 }
 
-void Node::on_visibility_mask_changed()
+void Node::handle_visibility_mask_update()
 {
     ERHE_PROFILE_FUNCTION
 
     for (const auto& attachment : node_data.attachments)
     {
-        attachment->on_node_visibility_mask_changed(node_data.visibility_mask);
-    }
-}
-
-void Node::remove_from_scene()
-{
-    const auto& current_parent = parent().lock();
-    if (current_parent)
-    {
-        current_parent->detach(this, true, true);
-    }
-}
-
-void Node::unparent()
-{
-    const auto& current_parent = parent().lock();
-    const auto& root_node      = root().lock();
-    if (
-        (current_parent != root_node) &&
-        (root_node.get() != this)
-    )
-    {
-        current_parent->detach(this);
-        //root_node->attach(shared_from_this()); //// TODO Remove? already done by detach()
-        //current_parent->detach(this);
+        attachment->handle_node_visibility_mask_update(node_data.visibility_mask);
     }
 }
 
@@ -517,7 +481,7 @@ void Node::update_transform(uint64_t serial) const
         current_parent->world_from_node() * parent_from_node(),
         node_from_parent() * current_parent->node_from_world()
     );
-    on_transform_changed(serial);
+    handle_transform_update(serial);
 }
 
 void Node::update_world_from_node()
@@ -539,10 +503,9 @@ void Node::update_world_from_node()
     }
 }
 
-void Node::sanity_check(const void* host) const
+void Node::sanity_check() const
 {
 #if 1
-    ERHE_VERIFY((host == nullptr) || (node_data.host == host));
     sanity_check_root_path(this);
 
     const auto& current_parent = parent().lock();
@@ -590,7 +553,15 @@ void Node::sanity_check(const void* host) const
                 child->depth()
             );
         }
-        child->sanity_check(host);
+        if (child->get_scene_host() != get_scene_host())
+        {
+            log->error(
+                "Scene host mismatch: parent node = {}, child node = {}",
+                name(),
+                child->name()
+            );
+        }
+        child->sanity_check();
     }
 
     for (const auto& attachment : node_data.attachments)
@@ -664,7 +635,7 @@ void Node::set_visibility_mask(const uint64_t value)
         return;
     }
     node_data.visibility_mask = value;
-    on_visibility_mask_changed();
+    handle_visibility_mask_update();
 }
 
 auto Node::get_flag_bits() const -> uint64_t
@@ -764,7 +735,7 @@ void Node::set_parent_from_node(const glm::mat4 m)
 {
     node_data.transforms.parent_from_node.set(m);
     update_world_from_node();
-    on_transform_changed(Node_transforms::get_next_serial());
+    handle_transform_update(Node_transforms::get_next_serial());
 }
 
 void Node::set_parent_from_node(const Transform& transform)
@@ -773,21 +744,21 @@ void Node::set_parent_from_node(const Transform& transform)
 
     node_data.transforms.parent_from_node = transform;
     update_world_from_node();
-    on_transform_changed(Node_transforms::get_next_serial());
+    handle_transform_update(Node_transforms::get_next_serial());
 }
 
 void Node::set_node_from_parent(const glm::mat4 matrix)
 {
     node_data.transforms.parent_from_node.set(glm::inverse(matrix), matrix);
     update_world_from_node();
-    on_transform_changed(Node_transforms::get_next_serial());
+    handle_transform_update(Node_transforms::get_next_serial());
 }
 
 void Node::set_node_from_parent(const Transform& transform)
 {
     node_data.transforms.parent_from_node = Transform::inverse(transform);
     update_world_from_node();
-    on_transform_changed(Node_transforms::get_next_serial());
+    handle_transform_update(Node_transforms::get_next_serial());
 }
 
 void Node::set_world_from_node(const glm::mat4 matrix)

@@ -27,6 +27,7 @@ class Editor_scenes;
 class Materials_window;
 class Mesh_memory;
 class Operation_stack;
+class Scene_commands;
 class Selection_tool;
 
 class Brush_create
@@ -170,6 +171,7 @@ private:
     std::shared_ptr<Materials_window> m_materials_window;
     std::shared_ptr<Mesh_memory     > m_mesh_memory;
     std::shared_ptr<Operation_stack > m_operation_stack;
+    std::shared_ptr<Scene_commands  > m_scene_commands;
     std::shared_ptr<Selection_tool  > m_selection_tool;
 
     erhe::primitive::Normal_style m_normal_style{erhe::primitive::Normal_style::point_normals};

@@ -34,7 +34,7 @@ public:
 
     // Implements INode_attachment
     [[nodiscard]] auto node_attachment_type() const -> const char* override;
-    void on_node_transform_changed() override;
+    void handle_node_transform_update() override;
 
     // Public API
     void reset            ();

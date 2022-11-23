@@ -32,6 +32,65 @@ namespace erhe::scene
 
 namespace editor {
 
+class Icon_set;
+class Icon_rasterization;
+class Icons;
+
+class Icon_rasterization
+{
+public:
+    Icon_rasterization();
+    Icon_rasterization(Icon_set& icon_set, int size, int column_count, int row_count);
+
+    void post_initialize(Icon_set& icon_set);
+    void rasterize(
+        lunasvg::Document& document,
+        int                column,
+        int                row
+    );
+
+    void icon(
+        glm::vec2 uv0,
+        glm::vec4 tint_color = glm::vec4{1.0f}
+    ) const;
+
+    auto icon_button(
+        glm::vec2 uv0,
+        int       frame_padding,
+        glm::vec4 backround_color = glm::vec4{0.0f},
+        glm::vec4 tint_color = glm::vec4{1.0f},
+        bool      linear = false
+    ) const -> bool;
+
+private:
+    [[nodiscard]] auto uv1(const glm::vec2& uv0) const -> glm::vec2;
+
+    std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
+    std::shared_ptr<erhe::graphics::Texture>           m_texture;
+    uint64_t                                           m_texture_handle{0};
+    int                                                m_icon_width    {0};
+    int                                                m_icon_height   {0};
+    float                                              m_icon_uv_width {0.0f};
+    float                                              m_icon_uv_height{0.0f};
+};
+
+class Icons
+{
+public:
+    glm::vec2 camera           {};
+    glm::vec2 directional_light{};
+    glm::vec2 drag             {};
+    glm::vec2 point_light      {};
+    glm::vec2 pull             {};
+    glm::vec2 push             {};
+    glm::vec2 spot_light       {};
+    glm::vec2 mesh             {};
+    glm::vec2 move             {};
+    glm::vec2 node             {};
+    glm::vec2 rotate           {};
+    glm::vec2 three_dots       {};
+};
+
 class Icon_set
     : public erhe::components::Component
 {
@@ -50,76 +109,20 @@ public:
     [[nodiscard]] auto load    (const std::filesystem::path& path) -> glm::vec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;
 
-    class Rasterization
-    {
-    public:
-        Rasterization();
-        Rasterization(Icon_set& icon_set, int size, int column_count, int row_count);
-
-        void post_initialize(Icon_set& icon_set);
-        void rasterize(
-            lunasvg::Document& document,
-            int                column,
-            int                row
-        );
-
-        void icon(
-            glm::vec2 uv0,
-            glm::vec4 tint_color = glm::vec4{1.0f}
-        ) const;
-
-        auto icon_button(
-            glm::vec2 uv0,
-            int       frame_padding,
-            glm::vec4 backround_color = glm::vec4{0.0f},
-            glm::vec4 tint_color = glm::vec4{1.0f},
-            bool      linear = false
-        ) const -> bool;
-
-    private:
-        [[nodiscard]] auto uv1(const glm::vec2& uv0) const -> glm::vec2;
-
-        std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-        std::shared_ptr<erhe::graphics::Texture>           m_texture;
-        uint64_t                                           m_texture_handle{0};
-        int                                                m_icon_width    {0};
-        int                                                m_icon_height   {0};
-        float                                              m_icon_uv_width {0.0f};
-        float                                              m_icon_uv_height{0.0f};
-    };
-
-
-    class Icons
-    {
-    public:
-        glm::vec2 camera           {};
-        glm::vec2 directional_light{};
-        glm::vec2 drag             {};
-        glm::vec2 point_light      {};
-        glm::vec2 pull             {};
-        glm::vec2 push             {};
-        glm::vec2 spot_light       {};
-        glm::vec2 mesh             {};
-        glm::vec2 move             {};
-        glm::vec2 node             {};
-        glm::vec2 rotate           {};
-        glm::vec2 three_dots       {};
-    };
-
     Icons icons;
 
-    [[nodiscard]] auto get_small_rasterization () const -> const Rasterization&;
-    [[nodiscard]] auto get_large_rasterization () const -> const Rasterization&;
-    [[nodiscard]] auto get_hotbar_rasterization() const -> const Rasterization&;
+    [[nodiscard]] auto get_small_rasterization () const -> const Icon_rasterization&;
+    [[nodiscard]] auto get_large_rasterization () const -> const Icon_rasterization&;
+    [[nodiscard]] auto get_hotbar_rasterization() const -> const Icon_rasterization&;
 
 private:
-    Rasterization m_small;
-    Rasterization m_large;
-    Rasterization m_hotbar;
-    int           m_row_count   {0};
-    int           m_column_count{0};
-    int           m_row         {0};
-    int           m_column      {0};
+    Icon_rasterization m_small;
+    Icon_rasterization m_large;
+    Icon_rasterization m_hotbar;
+    int                m_row_count   {0};
+    int                m_column_count{0};
+    int                m_row         {0};
+    int                m_column      {0};
 };
 
 }

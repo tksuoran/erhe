@@ -1,10 +1,10 @@
 #include "windows/operations.hpp"
 #include "editor_log.hpp"
 
-#include "operations/attach_detach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
+#include "operations/node_operation.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -167,23 +167,27 @@ void Operations::imgui()
     if (erhe::application::make_button("Attach", multi_select_mode, button_size))
     {
         m_operation_stack->push(
-            std::make_shared<Attach_detach_operation>(
-                Attach_detach_operation::Parameters{
-                    .attach         = true,
-                    .selection_tool = m_selection_tool.get()
-                }
+            std::make_shared<Node_attach_operation>(
+                m_selection_tool->selection().at(1),
+                m_selection_tool->selection().at(0),
+                std::shared_ptr<erhe::scene::Node>{},
+                std::shared_ptr<erhe::scene::Node>{}
             )
         );
     }
 
-    if (make_button("Detach", multi_select_mode, button_size))
+    const auto has_selection_mode = (selected_mesh_count >= 1)
+        ? erhe::application::Item_mode::normal
+        : erhe::application::Item_mode::disabled;
+
+    if (make_button("Detach", has_selection_mode, button_size))
     {
         m_operation_stack->push(
-            std::make_shared<Attach_detach_operation>(
-                Attach_detach_operation::Parameters{
-                    .attach         = false,
-                    .selection_tool = m_selection_tool.get()
-                }
+            std::make_shared<Node_attach_operation>(
+                std::shared_ptr<erhe::scene::Node>{},
+                m_selection_tool->selection().at(0),
+                std::shared_ptr<erhe::scene::Node>{},
+                std::shared_ptr<erhe::scene::Node>{}
             )
         );
     }
@@ -200,9 +204,6 @@ void Operations::imgui()
         );
     }
 
-    const auto has_selection_mode = (selected_mesh_count >= 1)
-        ? erhe::application::Item_mode::normal
-        : erhe::application::Item_mode::disabled;
     if (make_button("Catmull-Clark", has_selection_mode, button_size))
     {
         m_operation_stack->push(

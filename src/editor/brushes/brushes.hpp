@@ -57,7 +57,6 @@ class Materials_window;
 class Mesh_memory;
 class Operation_stack;
 class Render_context;
-class Scene_root;
 class Selection_tool;
 class Viewport_windows;
 

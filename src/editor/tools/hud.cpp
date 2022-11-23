@@ -101,10 +101,7 @@ void Hud::initialize_component()
         hud.ppm
     );
 
-    scene_root->scene().add_to_mesh_layer(
-        *scene_root->layers().rendertarget(),
-        m_rendertarget_node
-    );
+    m_rendertarget_node->set_parent(scene_root->scene().root_node);
 
     m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
 

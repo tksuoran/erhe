@@ -6,10 +6,11 @@
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/format_info.hpp"
-#include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/scene/scene_host.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <map>
@@ -108,36 +109,25 @@ private:
 };
 
 class Scene_root
+    : public erhe::scene::Scene_host
 {
 public:
     Scene_root(
-        erhe::scene::Message_bus* message_bus,
-        const std::string_view    name
+        erhe::scene::Message_bus*                message_bus,
+        const std::shared_ptr<Material_library>& material_library,
+        const std::string_view                   name
     );
-    ~Scene_root() noexcept;
+    ~Scene_root() noexcept override;
 
-    // Public API
-    auto create_new_camera    () -> std::shared_ptr<erhe::scene::Camera>;
-    auto create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>;
-    auto create_new_light     () -> std::shared_ptr<erhe::scene::Light>;
-
-    //void attach_to_selection(const std::shared_ptr<erhe::scene::Node>& node);
-
-    void add(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh,
-        erhe::scene::Mesh_layer*                  layer = nullptr
-    );
-
-    [[nodiscard]] auto material_library() const -> const std::shared_ptr<Material_library>&;
-    [[nodiscard]] auto layers          () -> Scene_layers&;
-    [[nodiscard]] auto layers          () const -> const Scene_layers&;
-    [[nodiscard]] auto physics_world   () -> erhe::physics::IWorld&;
-    [[nodiscard]] auto raytrace_scene  () -> erhe::raytrace::IScene&;
-    [[nodiscard]] auto scene           () -> erhe::scene::Scene&;
-    [[nodiscard]] auto scene           () const -> const erhe::scene::Scene&;
-    [[nodiscard]] auto name            () const -> const std::string&;
-
-    void add_instance(const Instance& instance);
+    // Implements Scene_host
+    [[nodiscard]] auto get_scene     () -> erhe::scene::Scene* override;
+    [[nodiscard]] auto layers        () -> Scene_layers&;
+    [[nodiscard]] auto layers        () const -> const Scene_layers&;
+    [[nodiscard]] auto physics_world () -> erhe::physics::IWorld&;
+    [[nodiscard]] auto raytrace_scene() -> erhe::raytrace::IScene&;
+    [[nodiscard]] auto scene         () -> erhe::scene::Scene&;
+    [[nodiscard]] auto scene         () const -> const erhe::scene::Scene&;
+    [[nodiscard]] auto name          () const -> const std::string&;
 
     auto camera_combo(
         const char*           label,
@@ -158,6 +148,8 @@ public:
     ) const -> bool;
 
     void sort_lights();
+
+    [[nodiscard]] auto material_library() const -> std::shared_ptr<Material_library>;
 
     [[nodiscard]] auto create_rendertarget_node(
         const erhe::components::Components& components,

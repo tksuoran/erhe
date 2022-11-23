@@ -98,7 +98,7 @@ auto Frame_controller::node_attachment_type() const -> const char*
     return "Frame_controller";
 }
 
-void Frame_controller::on_node_transform_changed()
+void Frame_controller::handle_node_transform_update()
 {
     if (m_transform_update)
     {
@@ -106,6 +106,10 @@ void Frame_controller::on_node_transform_changed()
     }
 
     auto* node = get_node();
+    if (node == nullptr)
+    {
+        return;
+    }
     const vec4 position  = node->position_in_world();
     const vec4 direction = node->direction_in_world();
 

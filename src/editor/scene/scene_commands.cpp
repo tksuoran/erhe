@@ -1,9 +1,14 @@
 #include "scene/scene_commands.hpp"
-#include "scene/scene_root.hpp"
-
 #include "editor_scenes.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/insert_operation.hpp"
+#include "scene/scene_root.hpp"
+#include "scene/viewport_window.hpp"
+#include "scene/viewport_windows.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "erhe/application/commands/commands.hpp"
+#include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 namespace editor
@@ -69,40 +74,121 @@ void Scene_commands::initialize_component()
 
 void Scene_commands::post_initialize()
 {
-    m_editor_scenes = get<Editor_scenes>();
+    m_editor_scenes   = get<Editor_scenes >();
+    m_operation_stack = get<Operation_stack>();
 }
 
-auto Scene_commands::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
+auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_root*
 {
-    const auto& scene_root = m_editor_scenes->get_current_scene_root();
-    if (!scene_root)
+    if (parent != nullptr)
+    {
+        return reinterpret_cast<Scene_root*>(parent->get_scene_host());
+    }
+
+    const auto& selection_tool  = get<Selection_tool>();
+    const auto  selection_front = selection_tool->selection().empty()
+        ? std::shared_ptr<erhe::scene::Node>()
+        : selection_tool->selection().front();
+
+    const auto& viewport_window = get<Viewport_windows>()->last_window();
+
+    erhe::scene::Scene_host* scene_host = selection_front
+        ? reinterpret_cast<Scene_root*>(selection_front->node_data.host)
+        : viewport_window
+            ? viewport_window->get_scene_root().get()
+            : nullptr;
+    if (scene_host == nullptr)
+    {
+        return nullptr;
+    }
+
+    Scene_root* scene_root = reinterpret_cast<Scene_root*>(scene_host);
+    return scene_root;
+}
+
+auto Scene_commands::create_new_camera(
+    erhe::scene::Node* parent
+) -> std::shared_ptr<erhe::scene::Camera>
+{
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr)
     {
         return {};
     }
 
-    return scene_root->create_new_camera();
+    auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
+    new_camera->node_data.visibility_mask = erhe::scene::Node_visibility::content;
+    get<Operation_stack>()->push(
+        std::make_shared<Node_insert_remove_operation>(
+            Node_insert_remove_operation::Parameters{
+                .selection_tool = get<Selection_tool>().get(),
+                .node           = new_camera,
+                .parent         = (parent != nullptr)
+                    ? parent->shared_from_this()
+                    : scene_root->get_scene()->root_node,
+                .mode           = Scene_item_operation::Mode::insert
+            }
+        )
+    );
+
+    return new_camera;
 }
 
-auto Scene_commands::create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>
+auto Scene_commands::create_new_empty_node(
+    erhe::scene::Node* parent
+) -> std::shared_ptr<erhe::scene::Node>
 {
-    const auto& scene_root = m_editor_scenes->get_current_scene_root();
-    if (!scene_root)
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr)
     {
         return {};
     }
 
-    return scene_root->create_new_empty_node();
+    auto new_empty_node = std::make_shared<erhe::scene::Node>("new empty node");
+    new_empty_node->node_data.visibility_mask = erhe::scene::Node_visibility::content;
+    get<Operation_stack>()->push(
+        std::make_shared<Node_insert_remove_operation>(
+            Node_insert_remove_operation::Parameters{
+                .selection_tool = get<Selection_tool>().get(),
+                .node           = new_empty_node,
+                .parent         = (parent != nullptr)
+                    ? parent->shared_from_this()
+                    : scene_root->get_scene()->root_node,
+                .mode           = Scene_item_operation::Mode::insert
+            }
+        )
+    );
+
+    return new_empty_node;
 }
 
-auto Scene_commands::create_new_light() -> std::shared_ptr<erhe::scene::Light>
+auto Scene_commands::create_new_light(
+    erhe::scene::Node* parent
+) -> std::shared_ptr<erhe::scene::Light>
 {
-    const auto& scene_root = m_editor_scenes->get_current_scene_root();
-    if (!scene_root)
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr)
     {
         return {};
     }
 
-    return scene_root->create_new_light();
+    auto new_light = std::make_shared<erhe::scene::Light>("new light");
+    new_light->node_data.visibility_mask = erhe::scene::Node_visibility::content;
+    new_light->layer_id = scene_root->layers().light()->id.get_id();
+    get<Operation_stack>()->push(
+        std::make_shared<Node_insert_remove_operation>(
+            Node_insert_remove_operation::Parameters{
+                .selection_tool = get<Selection_tool>().get(),
+                .node           = new_light,
+                .parent         = (parent != nullptr)
+                    ? parent->shared_from_this()
+                    : scene_root->get_scene()->root_node,
+                .mode           = Scene_item_operation::Mode::insert
+            }
+        )
+    );
+
+    return new_light;
 }
 
 } // namespace editor

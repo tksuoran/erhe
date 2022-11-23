@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
@@ -19,9 +20,10 @@ namespace erhe::scene
 class Mesh_data
 {
 public:
-    std::vector<erhe::primitive::Primitive> primitives;
-    float                                   point_size{3.0f};
-    float                                   line_width{1.0f};
+    erhe::toolkit::Unique_id<Mesh_layer>::id_type layer_id;
+    std::vector<erhe::primitive::Primitive>       primitives;
+    float                                         point_size{3.0f};
+    float                                         line_width{1.0f};
 };
 
 class Mesh

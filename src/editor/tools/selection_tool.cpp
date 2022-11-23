@@ -200,52 +200,16 @@ auto Selection_tool::delete_selection() -> bool
     Compound_operation::Parameters compound_parameters;
     for (auto& node : m_selection)
     {
-        // TODO Handle all node types
-        auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
-        if (is_mesh(node))
-        {
-            const auto mesh = as_mesh(node);
-            compound_parameters.operations.push_back(
-                std::make_shared<Mesh_insert_remove_operation>(
-                    Mesh_insert_remove_operation::Parameters{
-                        .scene_root     = scene_root,
-                        .mesh           = mesh,
-                        .node_physics   = get_physics_node(mesh.get()),
-                        .node_raytrace  = get_raytrace(mesh.get()),
-                        .parent         = mesh->parent().lock(),
-                        .mode           = Scene_item_operation::Mode::remove,
-                    }
-                )
-            );
-        }
-        else if (is_light(node))
-        {
-            const auto light = as_light(node);
-            compound_parameters.operations.push_back(
-                std::make_shared<Light_insert_remove_operation>(
-                    Light_insert_remove_operation::Parameters{
-                        .scene_root = scene_root,
-                        .light      = light,
-                        .parent     = light->parent().lock(),
-                        .mode       = Scene_item_operation::Mode::remove,
-                    }
-                )
-            );
-        }
-        else if (is_camera(node))
-        {
-            const auto camera = as_camera(node);
-            compound_parameters.operations.push_back(
-                std::make_shared<Camera_insert_remove_operation>(
-                    Camera_insert_remove_operation::Parameters{
-                        .scene_root = scene_root,
-                        .camera     = camera,
-                        .parent     = camera->parent().lock(),
-                        .mode       = Scene_item_operation::Mode::remove,
-                    }
-                )
-            );
-        }
+        compound_parameters.operations.push_back(
+            std::make_shared<Node_insert_remove_operation>(
+                Node_insert_remove_operation::Parameters{
+                    .selection_tool = this,
+                    .node           = node,
+                    .parent         = node->parent().lock(),
+                    .mode           = Scene_item_operation::Mode::remove,
+                }
+            )
+        );
     }
     if (compound_parameters.operations.empty())
     {
@@ -279,12 +243,14 @@ void Selection_tool::declare_required_components()
 {
     require<erhe::application::Commands>();
     require<erhe::application::Imgui_windows>();
-    require<Tools>();
+    require<Editor_scenes>();
+    require<Tools        >();
 }
 
 void Selection_tool::initialize_component()
 {
     get<Tools>()->register_tool(this);
+    Message_bus_node::initialize(get<Editor_scenes>()->get_message_bus());
 
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     hide();
@@ -312,15 +278,6 @@ void Selection_tool::post_initialize()
 auto Selection_tool::description() -> const char*
 {
     return c_title.data();
-}
-
-auto Selection_tool::subscribe_selection_change_notification(
-    On_selection_changed callback
-) -> Selection_tool::Subcription
-{
-    const int handle = m_next_selection_change_subscription++;
-    m_selection_change_subscriptions.push_back({callback, handle});
-    return Subcription(this, handle);
 }
 
 auto Selection_tool::selection() const -> const Selection&
@@ -361,21 +318,6 @@ void Selection_tool::set_selection(const Selection& selection)
     }
     m_selection = selection;
     call_selection_change_subscriptions();
-}
-
-void Selection_tool::unsubscribe_selection_change_notification(int handle)
-{
-    m_selection_change_subscriptions.erase(
-        std::remove_if(
-            m_selection_change_subscriptions.begin(),
-            m_selection_change_subscriptions.end(),
-            [=](Subscription_entry& entry) -> bool
-            {
-                return entry.handle == handle;
-            }
-        ),
-        m_selection_change_subscriptions.end()
-    );
 }
 
 auto Selection_tool::on_select_try_ready() -> bool
@@ -638,10 +580,11 @@ void Selection_tool::sanity_check()
 
 void Selection_tool::call_selection_change_subscriptions() const
 {
-    for (const auto& entry : m_selection_change_subscriptions)
-    {
-        entry.callback(m_selection);
-    }
+    send(
+        erhe::scene::Message{
+            .event_type = erhe::scene::Event_type::selection_changed
+        }
+    );
 }
 
 void Selection_tool::imgui()

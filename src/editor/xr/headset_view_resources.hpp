@@ -31,10 +31,9 @@ class Headset_view_resources
 {
 public:
     Headset_view_resources(
-        erhe::xr::Render_view&             render_view,
-        Headset_view&                      headset_view,
-        const std::shared_ptr<Scene_root>& scene_root,
-        const std::size_t                  slot
+        erhe::xr::Render_view& render_view,
+        Headset_view&          headset_view,
+        const std::size_t      slot
     );
 
     void update(erhe::xr::Render_view& render_view);

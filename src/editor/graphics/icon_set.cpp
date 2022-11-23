@@ -16,11 +16,11 @@
 
 namespace editor {
 
-Icon_set::Rasterization::Rasterization()
+Icon_rasterization::Icon_rasterization()
 {
 }
 
-Icon_set::Rasterization::Rasterization(
+Icon_rasterization::Icon_rasterization(
     Icon_set& icon_set,
     const int size,
     const int column_count,
@@ -48,7 +48,7 @@ Icon_set::Rasterization::Rasterization(
     );
 }
 
-void Icon_set::Rasterization::post_initialize(Icon_set& icon_set)
+void Icon_rasterization::post_initialize(Icon_set& icon_set)
 {
     m_imgui_renderer = icon_set.get<erhe::application::Imgui_renderer>();
 }
@@ -79,9 +79,9 @@ void Icon_set::initialize_component()
         Component::get<erhe::application::Gl_context_provider>()
     };
 
-    m_small  = Rasterization(*this, config->imgui.small_icon_size, m_column_count, m_row_count);
-    m_large  = Rasterization(*this, config->imgui.large_icon_size, m_column_count, m_row_count);
-    m_hotbar = Rasterization(*this, config->hotbar.icon_size,      m_column_count, m_row_count);
+    m_small  = Icon_rasterization(*this, config->imgui.small_icon_size, m_column_count, m_row_count);
+    m_large  = Icon_rasterization(*this, config->imgui.large_icon_size, m_column_count, m_row_count);
+    m_hotbar = Icon_rasterization(*this, config->hotbar.icon_size,      m_column_count, m_row_count);
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
@@ -106,7 +106,7 @@ void Icon_set::post_initialize()
     m_hotbar.post_initialize(*this);
 }
 
-void Icon_set::Rasterization::rasterize(
+void Icon_rasterization::rasterize(
     lunasvg::Document& document,
     const int          column,
     const int          row
@@ -211,7 +211,7 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
 #endif
 }
 
-auto Icon_set::Rasterization::uv1(const glm::vec2& uv0) const -> glm::vec2
+auto Icon_rasterization::uv1(const glm::vec2& uv0) const -> glm::vec2
 {
     return glm::vec2{
         uv0.x + m_icon_uv_width,
@@ -230,7 +230,7 @@ auto imvec_from_glm(glm::vec4 v) -> ImVec4
 }
 #endif
 
-void Icon_set::Rasterization::icon(
+void Icon_rasterization::icon(
     const glm::vec2 uv0,
     const glm::vec4 tint_color
 ) const
@@ -254,7 +254,7 @@ void Icon_set::Rasterization::icon(
 #endif
 }
 
-auto Icon_set::Rasterization::icon_button(
+auto Icon_rasterization::icon_button(
     const glm::vec2 uv0,
     const int       frame_padding,
     const glm::vec4 background_color,
@@ -298,17 +298,17 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
     }
 }
 
-[[nodiscard]] auto Icon_set::get_small_rasterization() const -> const Rasterization&
+[[nodiscard]] auto Icon_set::get_small_rasterization() const -> const Icon_rasterization&
 {
     return m_small;
 }
 
-[[nodiscard]] auto Icon_set::get_large_rasterization() const -> const Rasterization&
+[[nodiscard]] auto Icon_set::get_large_rasterization() const -> const Icon_rasterization&
 {
     return m_large;
 }
 
-[[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Rasterization&
+[[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
 {
     return m_hotbar;
 }

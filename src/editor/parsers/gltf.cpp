@@ -1,7 +1,6 @@
 #include "parsers/gltf.hpp"
 #include "editor_log.hpp"
 
-#include "scene/helpers.hpp"
 #include "scene/material_library.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
@@ -361,8 +360,7 @@ private:
             safe_str(material->name)
         );
 
-        const auto& material_library = m_scene_root->material_library();
-        auto new_material = material_library->make_material(material->name);
+        auto new_material = m_scene_root->material_library()->make_material(material->name);
         m_materials.push_back(new_material);
         if (material->has_pbr_metallic_roughness)
         {
@@ -485,7 +483,7 @@ private:
             }
         }
 
-        m_scene_root->scene().add(new_camera);
+        new_camera->set_parent(m_scene_root->scene().root_node);
         m_nodes[node_index] = new_camera;
         parse_node_transform(node, new_camera);
     }
@@ -511,10 +509,8 @@ private:
         new_light->inner_spot_angle = light->spot_inner_cone_angle;
         new_light->outer_spot_angle = light->spot_outer_cone_angle;
 
-        m_scene_root->scene().add_to_light_layer(
-            *m_scene_root->layers().light(),
-            new_light
-        );
+        new_light->layer_id = m_scene_root->layers().light()->id.get_id();
+        new_light->set_parent(m_scene_root->scene().root_node);
         m_nodes[node_index] = new_light;
         parse_node_transform(node, new_light);
     }
@@ -1136,10 +1132,6 @@ private:
         );
 
         erhe_mesh->attach(node_raytrace);
-        add_to_raytrace_scene(
-            m_scene_root->raytrace_scene(),
-            node_raytrace
-        );
     }
     void parse_mesh(cgltf_node* node)
     {
@@ -1165,10 +1157,8 @@ private:
             erhe::scene::Node_visibility::id
         );
 
-        m_scene_root->scene().add_to_mesh_layer(
-            *m_scene_root->layers().content(),
-            erhe_mesh
-        );
+        erhe_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id.get_id();
+        erhe_mesh->set_parent(m_scene_root->scene().root_node);
         m_nodes[node_index] = erhe_mesh;
         parse_node_transform(node, erhe_mesh);
     }
@@ -1177,8 +1167,8 @@ private:
         const cgltf_size node_index = node - m_data->nodes;
         log_parsers->trace("Empty node: node_index = {}, name = {}", node_index, safe_str(node->name));
         auto empty_node = std::make_shared<erhe::scene::Node>(node->name);
+        empty_node->set_parent(m_scene_root->scene().root_node);
         m_nodes[node_index] = empty_node;
-        m_scene_root->scene().add_node(empty_node);
         parse_node_transform(node, empty_node);
     }
     void parse_node(cgltf_node* node)
@@ -1222,13 +1212,13 @@ private:
     void fix_node_hierarchy(cgltf_node* node)
     {
         const cgltf_size node_index = node - m_data->nodes;
-        auto& erhe_node = m_nodes.at(node_index);
+        auto& erhe_parent_node = m_nodes.at(node_index);
         for (cgltf_size i = 0; i < node->children_count; ++i)
         {
             cgltf_node* child_node       = node->children[i];
             cgltf_size  child_node_index = child_node - m_data->nodes;
             auto& erhe_child_node        = m_nodes.at(child_node_index);
-            erhe_node->attach(erhe_child_node);
+            erhe_child_node->set_parent(erhe_parent_node);
         }
 
         for (cgltf_size i = 0; i < node->children_count; ++i)
@@ -1263,9 +1253,10 @@ private:
         m_meshes .clear();
     }
 
-    std::shared_ptr<Materials>   m_materials_;
-    std::shared_ptr<Scene_root>  m_scene_root;
-    erhe::primitive::Build_info& m_build_info;
+    std::shared_ptr<Materials>        m_materials_;
+    std::shared_ptr<Scene_root>       m_scene_root;
+    std::shared_ptr<Material_library> m_material_library;
+    erhe::primitive::Build_info&      m_build_info;
 
     cgltf_data*                                             m_data{nullptr};
 

@@ -113,11 +113,11 @@ void Node_attach_operation::execute(const Operation_context& context)
                 ? m_place_after_node ->get_index_in_parent() + 1
                 : m_parent_after->child_count();
 
-        m_parent_after->attach(m_child_node, m_parent_after_index);
+        m_child_node->set_parent(m_parent_after, m_parent_after_index);
     }
     else
     {
-        m_child_node->unparent();
+        m_child_node->set_parent({});
     }
 
     if (context.components != nullptr)
@@ -138,11 +138,11 @@ void Node_attach_operation::undo(const Operation_context& context)
 
     if (m_parent_before)
     {
-        m_parent_before->attach(m_child_node, m_parent_before_index);
+        m_child_node->set_parent(m_parent_before, m_parent_before_index);
     }
     else if (m_parent_after)
     {
-        m_child_node->unparent();
+        m_child_node->set_parent({});
     }
 
     if (context.components != nullptr)

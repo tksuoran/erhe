@@ -7,7 +7,6 @@
 #include "editor_scenes.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
-#include "scene/helpers.hpp"
 #include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -33,6 +32,7 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/scene_host.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/gtx/transform.hpp>
@@ -162,19 +162,12 @@ void Brushes::remove_brush_mesh()
 {
     if (m_brush_mesh)
     {
-        auto* scene_root = reinterpret_cast<Scene_root*>(m_brush_mesh->node_data.host);
-        ERHE_VERIFY(scene_root != nullptr);
+        ERHE_VERIFY(m_brush_mesh->node_data.host != nullptr);
 
         log_brush->trace("removing brush mesh");
 
-        // Step 1
-        m_brush_mesh->remove_from_scene();
-
-        // Step 2
-        scene_root->scene().remove(
-            //*m_scene_root->brush_layer(),
-            m_brush_mesh
-        );
+        // TODO node destructor already does this, right?
+        m_brush_mesh->set_parent({});
 
         m_brush_mesh.reset();
     }
@@ -385,7 +378,7 @@ void Brushes::update_mesh_node_transform()
 
         if (m_hover_mesh)
         {
-            m_hover_mesh->attach(m_brush_mesh);
+            m_brush_mesh->set_parent(m_hover_mesh);
         }
     }
     m_brush_mesh->set_parent_from_node(transform);
@@ -422,13 +415,12 @@ void Brushes::do_insert_operation()
         erhe::scene::Node_visibility::shadow_cast |
         erhe::scene::Node_visibility::id;
 
-    auto* scene_root = reinterpret_cast<Scene_root*>(m_hover_mesh->node_data.host);
-    ERHE_VERIFY(scene_root != nullptr);
+    ERHE_VERIFY(m_hover_mesh->node_data.host != nullptr);
 
     const Instance_create_info brush_instance_create_info
     {
         .node_visibility_flags = visibility_flags,
-        .scene_root            = scene_root,
+        .scene_root            = reinterpret_cast<Scene_root*>(m_hover_mesh->get_scene_host()),
         .world_from_node       = m_hover_mesh->world_from_node() * hover_from_brush,
         .material              = m_materials_window->selected_material(),
         .scale                 = m_transform_scale,
@@ -443,12 +435,10 @@ void Brushes::do_insert_operation()
         parent = selection.front();
     }
 
-    auto op = std::make_shared<Mesh_insert_remove_operation>(
-        Mesh_insert_remove_operation::Parameters{
-            .scene_root     = scene_root,
-            .mesh           = instance.mesh,
-            .node_physics   = m_with_physics ? instance.node_physics : std::shared_ptr<Node_physics>{},
-            .node_raytrace  = instance.node_raytrace,
+    auto op = std::make_shared<Node_insert_remove_operation>(
+        Node_insert_remove_operation::Parameters{
+            .selection_tool = m_selection_tool.get(),
+            .node           = instance.mesh,
             .parent         = parent,
             .mode           = Scene_item_operation::Mode::insert
         }
@@ -469,23 +459,15 @@ void Brushes::add_brush_mesh()
         return;
     }
 
-    auto  material_library = m_materials_window->selected_material_library();
-    auto  material         = m_materials_window->selected_material();
-    auto* scene_root       = reinterpret_cast<Scene_root*>(m_hover_mesh->node_data.host);
-    ERHE_VERIFY(scene_root != nullptr);
-
-    if (material_library != scene_root->material_library())
-    {
-        log_brush->warn("Selected material library mismatch");
-        material_library = scene_root->material_library();
-        material = material_library->materials().front();
-    }
-
+    auto material = m_materials_window->selected_material();
     if (!material)
     {
         log_brush->warn("No material selected");
-        material = material_library->materials().front();
+        return;
     }
+
+    auto* scene_root = reinterpret_cast<Scene_root*>(m_hover_mesh->node_data.host);
+    ERHE_VERIFY(scene_root != nullptr);
 
     brush->late_initialize();
     const auto& brush_scaled = brush->get_scaled(m_transform_scale);
@@ -506,9 +488,13 @@ void Brushes::add_brush_mesh()
         Node_visibility::content |
         Node_visibility::brush
     );
-    m_brush_mesh->node_data.flag_bits = m_brush_mesh->node_data.flag_bits | erhe::scene::Node_flag_bit::no_message;
+    m_brush_mesh->node_data.flag_bits =
+        m_brush_mesh->node_data.flag_bits |
+        erhe::scene::Node_flag_bit::no_message;
 
-    scene_root->add(m_brush_mesh, scene_root->layers().brush());
+    m_brush_mesh->mesh_data.layer_id = scene_root->layers().brush()->id.get_id();
+
+    m_brush_mesh->set_parent(scene_root->scene().root_node);
 
     update_mesh_node_transform();
 }

@@ -4,8 +4,6 @@
 #include "rendertarget_node.hpp"
 
 #include "scene/debug_draw.hpp"
-#include "scene/helpers.hpp"
-#include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"
@@ -108,12 +106,14 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 }
 
 Scene_root::Scene_root(
-    erhe::scene::Message_bus* message_bus,
-    const std::string_view    name
+    erhe::scene::Message_bus*                message_bus,
+    const std::shared_ptr<Material_library>& material_library,
+    const std::string_view                   name
 )
-    : m_name  {name}
-    , m_scene {std::make_unique<Scene>(message_bus, this)}
-    , m_layers(*m_scene.get())
+    : m_name            {name}
+    , m_scene           {std::make_unique<Scene>(message_bus, this)}
+    , m_material_library{material_library}
+    , m_layers          (*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION
 
@@ -122,64 +122,17 @@ Scene_root::Scene_root(
     using std::make_unique;
     using erhe::scene::Node;
 
-    m_material_library = std::make_shared<Material_library>();
-    m_physics_world    = erhe::physics::IWorld::create_unique();
-    m_raytrace_scene   = erhe::raytrace::IScene::create_unique("root");
-
-    ///// TODO Do these where scene is created instead
-    /////
-    ///// const auto& debug_drawer  = components.get<Debug_draw>();
-    ///// const auto& configuration = components.get<erhe::application::Configuration>();
-    ///// m_physics_world->set_debug_drawer(debug_drawer.get());
-    ///// if (configuration->physics.enabled)
-    ///// {
-    /////     m_physics_world->enable_physics_updates();
-    ///// }
-    ///// else
-    ///// {
-    /////     m_physics_world->disable_physics_updates();
-    ///// }
+    m_physics_world  = erhe::physics::IWorld::create_unique();
+    m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 }
 
 Scene_root::~Scene_root() noexcept
 {
 }
 
-auto Scene_root::create_new_camera() -> std::shared_ptr<erhe::scene::Camera>
+[[nodiscard]] auto Scene_root::get_scene() -> Scene*
 {
-    auto camera = std::make_shared<erhe::scene::Camera>("Camera");
-    camera->projection()->fov_y           = glm::radians(35.0f);
-    camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
-    camera->projection()->z_near          = 0.03f;
-    camera->projection()->z_far           = 200.0f;
-    scene().add(camera);
-    return camera;
-}
-
-auto Scene_root::create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>
-{
-    auto node = std::make_shared<erhe::scene::Node>("Empty Node");
-    scene().add_node(node);
-    return node;
-}
-
-auto Scene_root::create_new_light() -> std::shared_ptr<erhe::scene::Light>
-{
-    auto light = std::make_shared<Light>("Light");
-    light->type      = Light::Type::directional;
-    light->color     = glm::vec3{1.0, 1.0f, 1.0};
-    light->intensity =  1.0f;
-    light->range     =  0.0f;
-    scene().add_to_light_layer(
-        *m_layers.light(),
-        light
-    );
-    return light;
-}
-
-auto Scene_root::material_library() const -> const std::shared_ptr<Material_library>&
-{
-    return m_material_library;
+    return m_scene.get();
 }
 
 [[nodiscard]] auto Scene_root::layers() -> Scene_layers&
@@ -219,46 +172,6 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
 [[nodiscard]] auto Scene_root::name() const -> const std::string&
 {
     return m_name;
-}
-
-void Scene_root::add_instance(const Instance& instance)
-{
-    ERHE_PROFILE_FUNCTION
-
-    scene().add_to_mesh_layer(
-        *m_layers.content(),
-        instance.mesh
-    );
-
-    if (instance.node_physics)
-    {
-        add_to_physics_world(
-            physics_world(),
-            instance.node_physics
-        );
-    }
-
-    if (instance.node_raytrace)
-    {
-        add_to_raytrace_scene(
-            raytrace_scene(),
-            instance.node_raytrace
-        );
-    }
-}
-
-void Scene_root::add(
-    const std::shared_ptr<erhe::scene::Mesh>& mesh,
-    Mesh_layer*                               layer
-)
-{
-    const std::lock_guard<std::mutex> lock{m_mutex};
-
-    if (layer == nullptr)
-    {
-        layer = m_layers.content();
-    }
-    scene().add_to_mesh_layer(*layer, mesh);
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -438,7 +351,12 @@ void Scene_root::update_pointer_for_rendertarget_nodes()
     }
 }
 
-[[nodiscard]] auto Scene_root::create_rendertarget_node(
+auto Scene_root::material_library() const -> std::shared_ptr<Material_library>
+{
+    return m_material_library;
+}
+
+auto Scene_root::create_rendertarget_node(
     const erhe::components::Components& components,
     Viewport_window&                    host_viewport_window,
     const int                           width,
@@ -456,6 +374,7 @@ void Scene_root::update_pointer_for_rendertarget_nodes()
         height,
         pixels_per_meter
     );
+    rendertarget_node->mesh_data.layer_id = layers().rendertarget()->id.get_id();
     m_rendertarget_nodes.push_back(rendertarget_node);
     return rendertarget_node;
 }

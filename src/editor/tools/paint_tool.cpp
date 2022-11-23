@@ -284,8 +284,8 @@ void Paint_tool::declare_required_components()
 {
     require<erhe::application::Commands     >();
     require<erhe::application::Imgui_windows>();
-    require<Tools>();
     require<Operations>();
+    require<Tools     >();
 }
 
 void Paint_tool::initialize_component()
@@ -297,17 +297,10 @@ void Paint_tool::initialize_component()
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_paint_vertex_command);
-    commands->bind_command_to_mouse_drag(&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
+    commands->bind_command_to_mouse_drag        (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
     commands->bind_command_to_controller_trigger(&m_paint_vertex_command, 0.5f, 0.45f, true);
     get<Operations>()->register_active_tool(this);
-
-    const auto& tools = get<Tools>();
-    const auto& tools_scene_root = tools->get_tool_scene_root().lock();
-    if (!tools_scene_root)
-    {
-        return;
-    }
-    tools->register_tool(this);
+    get<Tools     >()->register_tool(this);
 
 #if 0
     m_ngon_colors.emplace_back(240.0f / 255.0f, 163.0f / 255.0f, 255.0f / 255.0f, 1.0f);

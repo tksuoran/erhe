@@ -18,6 +18,8 @@ erhe_target_sources_grouped(
     projection.hpp
     scene.cpp
     scene.hpp
+    scene_host.cpp
+    scene_host.hpp
     scene_log.cpp
     scene_log.hpp
     transform.cpp

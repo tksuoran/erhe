@@ -21,7 +21,9 @@ namespace editor
 {
 
 class Editor_scenes;
+class Operation_stack;
 class Scene_commands;
+class Scene_root;
 
 class Create_new_camera_command
     : public erhe::application::Command
@@ -88,9 +90,10 @@ public:
     void post_initialize            () override;
 
     // Public API
-    auto create_new_camera    () -> std::shared_ptr<erhe::scene::Camera>;
-    auto create_new_empty_node() -> std::shared_ptr<erhe::scene::Node>;
-    auto create_new_light     () -> std::shared_ptr<erhe::scene::Light>;
+    auto create_new_camera    (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
+    auto create_new_empty_node(erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+    auto create_new_light     (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
+    auto get_scene_root       (erhe::scene::Node* parent) const -> Scene_root*;
 
 private:
     // Commands
@@ -99,7 +102,8 @@ private:
     Create_new_light_command      m_create_new_light_command;
 
     // Component dependencies
-    std::shared_ptr<Editor_scenes> m_editor_scenes;
+    std::shared_ptr<Editor_scenes>   m_editor_scenes;
+    std::shared_ptr<Operation_stack> m_operation_stack;
 };
 
 } // namespace editor

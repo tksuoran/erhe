@@ -1,4 +1,5 @@
 #include "scene/node_raytrace.hpp"
+#include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"
@@ -13,6 +14,7 @@
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
+#include "erhe/scene/scene_host.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -200,26 +202,43 @@ auto Node_raytrace::node_attachment_type() const -> const char*
     return "Node_raytrace";
 }
 
-void Node_raytrace::on_attached_to(erhe::scene::Node* node)
+void Node_raytrace::handle_node_scene_host_update(
+    erhe::scene::Scene_host* old_scene_host,
+    erhe::scene::Scene_host* new_scene_host
+)
 {
-    if (node == nullptr)
+    ERHE_VERIFY(old_scene_host != new_scene_host);
+
+    if (old_scene_host != nullptr)
     {
-        return;
+        log_raytrace->trace("detaching {} from raytrace world", m_instance->debug_label());
+        Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
+        ERHE_VERIFY(old_scene_root != nullptr);
+        auto& raytrace_scene = old_scene_root->raytrace_scene();
+        raytrace_scene.detach(raytrace_instance());
     }
-    const auto mask = raytrace_node_mask(*node);
-    m_instance->set_mask(mask);
+    if (new_scene_host != nullptr)
+    {
+        log_raytrace->trace("attaching {} to raytrace world", m_instance->debug_label());
+        ERHE_VERIFY(m_node);
+        Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
+        ERHE_VERIFY(new_scene_root != nullptr);
+        auto& raytrace_scene = new_scene_root->raytrace_scene();
+        raytrace_scene.attach(raytrace_instance());
+        const auto mask = raytrace_node_mask(*m_node);
+        m_instance->set_mask(mask);
+    }
 }
 
-void Node_raytrace::on_node_transform_changed()
+void Node_raytrace::handle_node_transform_update()
 {
     ERHE_PROFILE_FUNCTION
 
-    auto* node = get_node();
-    m_instance->set_transform(node->world_from_node());
+    m_instance->set_transform(m_node->world_from_node());
     m_instance->commit();
 }
 
-void Node_raytrace::on_node_visibility_mask_changed(const uint64_t mask)
+void Node_raytrace::handle_node_visibility_mask_update(const uint64_t mask)
 {
     const bool node_visible = (mask & erhe::scene::Node_visibility::visible) != 0;
     if (node_visible && !m_instance->is_enabled())

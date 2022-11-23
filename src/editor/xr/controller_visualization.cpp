@@ -22,7 +22,8 @@ Controller_visualization::Controller_visualization(
 {
     ERHE_PROFILE_FUNCTION
 
-    auto controller_material = scene_root.material_library()->make_material(
+    const auto& material_library = scene_root.material_library();
+    auto controller_material = material_library->make_material(
         "Controller",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
@@ -44,11 +45,8 @@ Controller_visualization::Controller_visualization(
     };
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller", primitive);
     m_controller_mesh->node_data.visibility_mask |= erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::controller;
-    view_root->attach(m_controller_mesh);
-    scene_root.add(
-        m_controller_mesh,
-        scene_root.layers().content() //// controller()
-    );
+    m_controller_mesh->mesh_data.layer_id = scene_root.layers().content()->id.get_id();
+    m_controller_mesh->set_parent(view_root);
 }
 
 void Controller_visualization::update(const erhe::xr::Pose& pose)

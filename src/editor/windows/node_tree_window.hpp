@@ -24,6 +24,7 @@ namespace editor
 class Editor_scenes;
 class IOperation;
 class Icon_set;
+class Scene_commands;
 class Selection_tool;
 
 enum class Placement : unsigned int
@@ -102,6 +103,7 @@ private:
     // Component dependencies
     std::shared_ptr<Editor_scenes>  m_editor_scenes;
     std::shared_ptr<Icon_set>       m_icon_set;
+    std::shared_ptr<Scene_commands> m_scene_commands;
     std::shared_ptr<Selection_tool> m_selection_tool;
 
     robin_hood::unordered_map<

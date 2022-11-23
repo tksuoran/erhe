@@ -7,6 +7,8 @@
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/scene_commands.hpp"
+#include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
@@ -367,6 +369,7 @@ void Create::post_initialize()
     m_materials_window  = get<Materials_window>();
     m_mesh_memory       = get<Mesh_memory     >();
     m_operation_stack   = get<Operation_stack >();
+    m_scene_commands    = get<Scene_commands  >();
     m_selection_tool    = get<Selection_tool  >();
 }
 
@@ -400,70 +403,40 @@ void Create::imgui()
         return;
     }
 
-    const auto parent = m_selection_tool->selection().empty()
+    const auto selection_front = m_selection_tool->selection().empty()
         ? std::shared_ptr<erhe::scene::Node>()
         : m_selection_tool->selection().front();
 
-    Scene_root* scene_root = parent
-        ? reinterpret_cast<Scene_root*>(parent->node_data.host)
+    erhe::scene::Scene_host* scene_host = selection_front
+        ? reinterpret_cast<Scene_root*>(selection_front->node_data.host)
         : viewport_window->get_scene_root().get();
-    if (scene_root == nullptr)
+    if (scene_host == nullptr)
     {
         return;
     }
+    Scene_root* scene_root = reinterpret_cast<Scene_root*>(scene_host);
+    ERHE_VERIFY(scene_root != nullptr);
 
-    const glm::mat4 world_from_node = parent
-        ? parent->world_from_node()
-        : glm::mat4{1.0f};
+    const auto parent = selection_front
+        ? selection_front
+        : scene_root->get_scene()->root_node;
+
+    ERHE_VERIFY(parent);
+
+    const glm::mat4 world_from_node = parent->world_from_node();
 
     ImGui::Text("Nodes");
     if (ImGui::Button("Empty Node", button_size))
     {
-        auto new_empty_node = scene_root->create_new_empty_node();
-        new_empty_node->set_name("new empty node");
-        new_empty_node->node_data.visibility_mask = erhe::scene::Node_visibility::content;
-        get<Operation_stack>()->push(
-            std::make_shared<Node_insert_remove_operation>(
-                Node_insert_remove_operation::Parameters{
-                    .scene_root = scene_root,
-                    .node       = new_empty_node,
-                    .parent     = parent,
-                    .mode       = Scene_item_operation::Mode::insert
-                }
-            )
-        );
+        m_scene_commands->create_new_empty_node();
     }
     if (ImGui::Button("Camera", button_size))
     {
-        auto new_camera = scene_root->create_new_camera();
-        new_camera->set_name("new camera");
-        new_camera->node_data.visibility_mask = erhe::scene::Node_visibility::content;
-        get<Operation_stack>()->push(
-            std::make_shared<Camera_insert_remove_operation>(
-                Camera_insert_remove_operation::Parameters{
-                    .scene_root = scene_root,
-                    .camera     = new_camera,
-                    .parent     = parent,
-                    .mode       = Scene_item_operation::Mode::insert
-                }
-            )
-        );
+        m_scene_commands->create_new_camera();
     }
     if (ImGui::Button("Light", button_size))
     {
-        auto new_light = scene_root->create_new_light();
-        new_light->set_name("new light");
-        new_light->node_data.visibility_mask = erhe::scene::Node_visibility::content;
-        get<Operation_stack>()->push(
-            std::make_shared<Light_insert_remove_operation>(
-                Light_insert_remove_operation::Parameters{
-                    .scene_root = scene_root,
-                    .light      = new_light,
-                    .parent     = parent,
-                    .mode       = Scene_item_operation::Mode::insert
-                }
-            )
-        );
+        m_scene_commands->create_new_light();
     }
 
     ImGui::Separator();
@@ -512,15 +485,13 @@ void Create::imgui()
                     .material              = m_materials_window->selected_material(),
                     .scale                 = 1.0
                 };
-
                 const auto instance = m_brush->make_instance(brush_instance_create_info);
+                instance.mesh->mesh_data.layer_id = scene_root->layers().content()->id.get_id();
 
-                auto op = std::make_shared<Mesh_insert_remove_operation>(
-                    Mesh_insert_remove_operation::Parameters{
-                        .scene_root     = scene_root,
-                        .mesh           = instance.mesh,
-                        .node_physics   = instance.node_physics,
-                        .node_raytrace  = instance.node_raytrace,
+                auto op = std::make_shared<Node_insert_remove_operation>(
+                    Node_insert_remove_operation::Parameters{
+                        .selection_tool = m_selection_tool.get(),
+                        .node           = instance.mesh,
                         .parent         = parent,
                         .mode           = Scene_item_operation::Mode::insert
                     }

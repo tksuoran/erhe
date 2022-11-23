@@ -641,7 +641,7 @@ void Editor_rendering::render_id(const Render_context& context)
     const auto position = position_opt.value();
 
     const auto& layers          = scene_root->layers();
-    const auto& tool_scene_root = m_tools->get_tool_scene_root().lock();
+    const auto& tool_scene_root = m_tools->get_tool_scene_root();
     if (!tool_scene_root)
     {
         return;
@@ -984,7 +984,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         trs_tool->update_for_view(context.scene_view);
     }
 
-    const auto& scene_root = m_tools->get_tool_scene_root().lock();
+    const auto& scene_root = m_tools->get_tool_scene_root();
     if (!scene_root)
     {
         return;

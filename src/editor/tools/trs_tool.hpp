@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tools/handle_visualizations.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
@@ -56,10 +57,12 @@ namespace erhe::application
     class Line_renderer_set;
     class Text_renderer;
 }
+
 namespace editor
 {
 
 class Editor_scenes;
+class Icon_rasterization;
 class Icon_set;
 class Material_library;
 class Materials;
@@ -93,9 +96,10 @@ private:
 };
 
 class Trs_tool
-    : public erhe::components::Component
+    : public erhe::application::Imgui_window
+    , public erhe::components::Component
+    , public erhe::scene::Message_bus_node
     , public Tool
-    , public erhe::application::Imgui_window
 {
 public:
     enum class Reference_mode : unsigned int
@@ -154,35 +158,22 @@ public:
     auto on_drag      (erhe::application::Command_context& context) -> bool;
     void end_drag     (erhe::application::Command_context& context);
 
+    // For Handle_visualizations
+    [[nodiscard]] auto is_x_translate_active() const -> bool;
+    [[nodiscard]] auto is_y_translate_active() const -> bool;
+    [[nodiscard]] auto is_z_translate_active() const -> bool;
+    [[nodiscard]] auto is_rotate_active     () const -> bool;
+    [[nodiscard]] auto get_active_handle    () const -> Handle;
+    [[nodiscard]] auto get_hover_handle     () const -> Handle;
+    [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
+    [[nodiscard]] auto get_handle_type      (const Handle handle) const -> Handle_type;
+    [[nodiscard]] auto get_tool_scene_root  () -> std::shared_ptr<Scene_root>;
+
 private:
     void on_message(erhe::scene::Message& message);
     void touch     ();
     void begin_move();
     void end_move  ();
-
-    enum class Handle : unsigned int
-    {
-        e_handle_none         = 0,
-        e_handle_translate_x  = 1,
-        e_handle_translate_y  = 2,
-        e_handle_translate_z  = 3,
-        e_handle_translate_xy = 4,
-        e_handle_translate_xz = 5,
-        e_handle_translate_yz = 6,
-        e_handle_rotate_x     = 7,
-        e_handle_rotate_y     = 8,
-        e_handle_rotate_z     = 9,
-    };
-
-    enum class Handle_type : unsigned int
-    {
-        e_handle_type_none            = 0,
-        e_handle_type_translate_axis  = 1,
-        e_handle_type_translate_plane = 2,
-        e_handle_type_rotate          = 3
-    };
-
-    [[nodiscard]] static auto c_str(const Handle handle) -> const char*;
 
     class Debug_rendering
     {
@@ -223,110 +214,9 @@ private:
         erhe::scene::Transform    world_from_node;
     };
 
-    class Visualization
-    {
-    public:
-        explicit Visualization(Trs_tool& trs_tool);
-
-        enum class Mode : unsigned int
-        {
-            Normal = 0,
-            Hover  = 1,
-            Active = 2
-        };
-        class Part
-        {
-        public:
-            std::shared_ptr<erhe::geometry::Geometry> geometry;
-            erhe::primitive::Primitive_geometry       primitive_geometry;
-            std::shared_ptr<Raytrace_primitive>       raytrace_primitive;
-        };
-
-        [[nodiscard]] auto make_arrow_cylinder  (Mesh_memory& mesh_memory) -> Part;
-        [[nodiscard]] auto make_arrow_cone      (Mesh_memory& mesh_memory) -> Part;
-        [[nodiscard]] auto make_box             (Mesh_memory& mesh_memory) -> Part;
-        [[nodiscard]] auto make_rotate_ring     (Mesh_memory& mesh_memory) -> Part;
-        [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
-        [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
-
-        [[nodiscard]] auto make_material(
-            const char*      name,
-            const glm::vec3& color,
-            Mode             mode = Mode::Normal
-        ) -> std::shared_ptr<erhe::primitive::Material>;
-
-        void initialize(
-            const erhe::application::Configuration& configuration,
-            Mesh_memory&                            mesh_memory,
-            Scene_root*                             tool_scene_root
-        );
-
-        void update_visibility(const bool show);
-        void update_scale     (const glm::vec3 view_position_in_world);
-        void update_transforms(); //const uint64_t serial);
-
-        auto make_mesh(
-            const std::string_view                            name,
-            const std::shared_ptr<erhe::primitive::Material>& material,
-            const Part&                                       part
-        ) -> std::shared_ptr<erhe::scene::Mesh>;
-
-        void update_mesh_visibility(
-            const std::shared_ptr<erhe::scene::Mesh>& mesh
-        );
-
-        Trs_tool& trs_tool;
-        bool      is_visible    {false};
-        bool      show_translate{true};
-        bool      show_rotate   {false};
-        bool      hide_inactive {true};
-        float     scale         {1.0f};
-
-        std::shared_ptr<Material_library>          material_library;
-        std::weak_ptr<erhe::scene::Node>           m_root;
-        Scene_root*                                tool_scene_root{nullptr};
-        std::shared_ptr<erhe::scene::Node>         tool_node;
-        bool                                       local{true};
-        float                                      view_distance{1.0f};
-        std::shared_ptr<erhe::primitive::Material> x_material;
-        std::shared_ptr<erhe::primitive::Material> y_material;
-        std::shared_ptr<erhe::primitive::Material> z_material;
-        std::shared_ptr<erhe::primitive::Material> x_hover_material;
-        std::shared_ptr<erhe::primitive::Material> y_hover_material;
-        std::shared_ptr<erhe::primitive::Material> z_hover_material;
-        std::shared_ptr<erhe::primitive::Material> x_active_material;
-        std::shared_ptr<erhe::primitive::Material> y_active_material;
-        std::shared_ptr<erhe::primitive::Material> z_active_material;
-        std::shared_ptr<erhe::scene::Mesh>         x_arrow_cylinder_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         x_arrow_neg_cone_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         x_arrow_pos_cone_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         y_arrow_cylinder_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         y_arrow_neg_cone_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         y_arrow_pos_cone_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         z_arrow_cylinder_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         z_arrow_neg_cone_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         z_arrow_pos_cone_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         xy_box_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         xz_box_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         yz_box_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         x_rotate_ring_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         y_rotate_ring_mesh;
-        std::shared_ptr<erhe::scene::Mesh>         z_rotate_ring_mesh;
-        std::vector<std::shared_ptr<Raytrace_primitive>> rt_primitives;
-    };
-
     [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto get_root                () -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto snap_translate          (const glm::dvec3 translation) const -> glm::dvec3;
     [[nodiscard]] auto snap_rotate             (const double angle_radians) const -> double;
-    [[nodiscard]] auto is_x_translate_active   () const -> bool;
-    [[nodiscard]] auto is_y_translate_active   () const -> bool;
-    [[nodiscard]] auto is_z_translate_active   () const -> bool;
-    [[nodiscard]] auto is_rotate_active        () const -> bool;
-    [[nodiscard]] auto get_active_handle       () const -> Handle;
-    [[nodiscard]] auto get_hover_handle        () const -> Handle;
-    [[nodiscard]] auto get_handle              (erhe::scene::Mesh* mesh) const -> Handle;
-    [[nodiscard]] auto get_handle_type         (const Handle handle) const -> Handle_type;
     [[nodiscard]] auto offset_plane_origo      (const Handle handle, const glm::dvec3 p) const -> glm::dvec3;
     [[nodiscard]] auto project_to_offset_plane (const Handle handle, const glm::dvec3 p, const glm::dvec3 q) const -> glm::dvec3;
     [[nodiscard]] auto get_axis_direction      () const -> glm::dvec3;
@@ -348,7 +238,6 @@ private:
     auto update_rotate_parallel     (Scene_view* scene_view) -> bool;
     void update_rotate_final        ();
     void set_node_world_transform   (const glm::dmat4 world_from_node);
-    void set_scene_changed          ();
     void update_transforms          ();
     void update_visibility          ();
 
@@ -370,8 +259,6 @@ private:
     bool                                       m_touched        {false};
     Handle                                     m_hover_handle   {Handle::e_handle_none};
     Handle                                     m_active_handle  {Handle::e_handle_none};
-    std::optional<Selection_tool::Subcription> m_selection_subscription;
-    std::map<erhe::scene::Mesh*, Handle>       m_handles;
     std::weak_ptr<erhe::scene::Node>           m_target_node;
     std::shared_ptr<erhe::scene::Node>         m_tool_node;
     std::optional<erhe::physics::Motion_mode>  m_original_motion_mode;
@@ -383,11 +270,11 @@ private:
     float                                      m_rotate_snap          {15.0f};
     erhe::scene::Transform                     m_parent_from_node_before;
 
-    bool             m_cast_rays{false};
-    Debug_rendering  m_debug_rendering;
-    Drag             m_drag;
-    Rotation_context m_rotation;
-    Visualization    m_visualization;
+    bool                  m_cast_rays{false};
+    Debug_rendering       m_debug_rendering;
+    Drag                  m_drag;
+    Rotation_context      m_rotation;
+    Handle_visualizations m_visualization;
 };
 
 } // namespace editor

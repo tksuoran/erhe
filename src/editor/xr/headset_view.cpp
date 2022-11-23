@@ -220,7 +220,6 @@ auto Headset_view::get_headset_view_resources(
         auto resource = std::make_shared<Headset_view_resources>(
             render_view,                               // erhe::xr::Render_view& render_view,
             *this,                                     // Headset_view&          headset_view,
-            m_scene_root,                              // Scene_root&            scene_root,
             static_cast<std::size_t>(render_view.slot) // const std::size_t      slot
         );
         const std::string label = fmt::format(
@@ -263,7 +262,7 @@ void Headset_view::update_pointer_context_from_controller()
     raytrace_update(
         ray_origin,
         ray_direction,
-        m_tools->get_tool_scene_root().lock().get()
+        m_tools->get_tool_scene_root().get()
     );
 }
 
@@ -426,7 +425,7 @@ void Headset_view::setup_root_camera()
     projection.z_near          = 0.03f;
     projection.z_far           = 200.0f;
 
-    m_scene_root->scene().add(m_root_camera);
+    m_root_camera->set_parent(m_scene_root->scene().root_node);
 }
 
 auto Headset_view::get_scene_root() const -> std::shared_ptr<Scene_root>

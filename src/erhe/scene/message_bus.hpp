@@ -13,18 +13,19 @@ class Message;
 class Message_bus;
 class Node;
 
-enum class Node_event_type : int
+enum class Event_type : int
 {
     node_added_to_scene,
     node_removed_from_scene,
     node_replaced,
-    node_changed
+    node_changed,
+    selection_changed
 };
 
 class Message
 {
 public:
-    Node_event_type       event_type;
+    Event_type            event_type;
     std::shared_ptr<Node> lhs;
     std::shared_ptr<Node> rhs;
 };
@@ -32,14 +33,16 @@ public:
 class Message_bus_node
 {
 public:
-    explicit Message_bus_node(Message_bus* message_bus);
+    Message_bus_node();
     virtual ~Message_bus_node();
 
+    void initialize(Message_bus* message_bus);
+
 protected:
-    Message_bus* m_message_bus;
+    Message_bus* m_message_bus{nullptr};
 
     std::function<void (Message&)> get_notify_func();
-    void                           send           (Message message);
+    void                           send           (Message message) const;
 
     virtual void on_notify(Message& message);
 };
@@ -52,7 +55,7 @@ public:
 
     void add_receiver(std::function<void(Message&)> message_receiver);
     void send_message(Message message);
-    void notify();
+    void notify      ();
 
 private:
     std::vector<std::function<void (Message&)>> m_receivers;

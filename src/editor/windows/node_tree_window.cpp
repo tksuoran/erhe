@@ -10,6 +10,7 @@
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -795,18 +796,7 @@ auto Node_tree_window::node_items(
                     [this, scene_root, parent_node]
                     ()
                     {
-                        auto new_empty_node = scene_root->create_new_empty_node();
-                        new_empty_node->set_name("new empty node");
-                        get<Operation_stack>()->push(
-                            std::make_shared<Node_insert_remove_operation>(
-                                Node_insert_remove_operation::Parameters{
-                                    .scene_root = scene_root,
-                                    .node       = new_empty_node,
-                                    .parent     = parent_node,
-                                    .mode       = Scene_item_operation::Mode::insert
-                                }
-                            )
-                        );
+                        m_scene_commands->create_new_empty_node(parent_node.get());
                     }
                 );
                 close = true;
@@ -817,18 +807,7 @@ auto Node_tree_window::node_items(
                     [this, scene_root, parent_node]
                     ()
                     {
-                        auto new_camera = scene_root->create_new_camera();
-                        new_camera->set_name("new camera");
-                        get<Operation_stack>()->push(
-                            std::make_shared<Camera_insert_remove_operation>(
-                                Camera_insert_remove_operation::Parameters{
-                                    .scene_root = scene_root,
-                                    .camera     = new_camera,
-                                    .parent     = parent_node,
-                                    .mode       = Scene_item_operation::Mode::insert
-                                }
-                            )
-                        );
+                        m_scene_commands->create_new_camera(parent_node.get());
                     }
                 );
                 close = true;
@@ -839,18 +818,7 @@ auto Node_tree_window::node_items(
                     [this, scene_root, parent_node]
                     ()
                     {
-                        auto new_light = scene_root->create_new_light();
-                        new_light->set_name("new light");
-                        get<Operation_stack>()->push(
-                            std::make_shared<Light_insert_remove_operation>(
-                                Light_insert_remove_operation::Parameters{
-                                    .scene_root = scene_root,
-                                    .light      = new_light,
-                                    .parent     = parent_node,
-                                    .mode       = Scene_item_operation::Mode::insert
-                                }
-                            )
-                        );
+                        m_scene_commands->create_new_light(parent_node.get());
                     }
                 );
                 close = true;

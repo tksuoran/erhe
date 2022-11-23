@@ -1,5 +1,5 @@
 #include "scene/node_physics.hpp"
-#include "scene/helpers.hpp"
+#include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
 #include "erhe/log/log_glm.hpp"
@@ -36,10 +36,7 @@ Node_physics::Node_physics(
 
 Node_physics::~Node_physics() noexcept
 {
-    if (m_physics_world != nullptr)
-    {
-        remove_from_physics_world(*m_physics_world, *this);
-    }
+    set_node(nullptr);
 }
 
 auto Node_physics::node_attachment_type() const -> const char*
@@ -47,21 +44,37 @@ auto Node_physics::node_attachment_type() const -> const char*
     return "Node_physics";
 }
 
-void Node_physics::on_attached_to(erhe::physics::IWorld* world)
+void Node_physics::handle_node_scene_host_update(
+    erhe::scene::Scene_host* old_scene_host,
+    erhe::scene::Scene_host* new_scene_host
+)
 {
-    log_physics->trace("attached {} to world", m_rigid_body->get_debug_label());
-    m_physics_world = world;
-}
+    ERHE_VERIFY(old_scene_host != new_scene_host);
 
-void Node_physics::on_detached_from(erhe::physics::IWorld* world)
-{
-    static_cast<void>(world);
-    m_physics_world = nullptr;
+    if (old_scene_host != nullptr)
+    {
+        Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
+        ERHE_VERIFY(old_scene_root != nullptr);
+        auto& physics_world = old_scene_root->physics_world();
+        physics_world.remove_rigid_body(rigid_body());
+        m_physics_world = nullptr;
+    }
+    if (new_scene_host != nullptr)
+    {
+        log_physics->trace("attaching {} to physics world", m_rigid_body->get_debug_label());
+        Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
+        ERHE_VERIFY(new_scene_root != nullptr);
+        auto& physics_world = new_scene_root->physics_world();
+        physics_world.add_rigid_body(rigid_body());
+        m_physics_world = &physics_world;
+    }
 }
 
 // This is called from scene graph (Node) when mode is moved
-void Node_physics::on_node_transform_changed()
+void Node_physics::handle_node_transform_update()
 {
+    ERHE_VERIFY(m_node);
+
     if (m_transform_change_from_physics)
     //if (m_motion_mode != Motion_mode::e_dynamic)
     {
@@ -168,7 +181,7 @@ void Node_physics::set_world_from_node(
 
     const glm::mat4& matrix{world_from_node};
     // TODO don't unparent, call set_world_from_node() instead?
-    get_node()->unparent();
+    get_node()->set_parent(get_node()->get_scene()->root_node);
     get_node()->set_parent_from_node(matrix);
 
     m_transform_change_from_physics = false;
@@ -202,7 +215,7 @@ void Node_physics::set_world_from_node(
         1.0f
     };
     // TODO don't unparent, call set_world_from_node() instead?
-    get_node()->unparent();
+    get_node()->set_parent(get_node()->get_scene()->root_node);
     get_node()->set_parent_from_node(matrix);
 
     m_transform_change_from_physics = false;

@@ -30,6 +30,7 @@
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/message_bus.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -39,24 +40,6 @@
 
 namespace editor
 {
-
-[[nodiscard]] auto Trs_tool::c_str(const Handle handle) -> const char*
-{
-    switch (handle)
-    {
-        case Handle::e_handle_none        : return "None";
-        case Handle::e_handle_translate_x : return "Translate X";
-        case Handle::e_handle_translate_y : return "Translate Y";
-        case Handle::e_handle_translate_z : return "Translate Z";
-        case Handle::e_handle_translate_xy: return "Translate XY";
-        case Handle::e_handle_translate_xz: return "Translate XZ";
-        case Handle::e_handle_translate_yz: return "Translate YZ";
-        case Handle::e_handle_rotate_x    : return "Rotate X";
-        case Handle::e_handle_rotate_y    : return "Rotate Y";
-        case Handle::e_handle_rotate_z    : return "Rotate Z";
-        default: return "?";
-    };
-}
 
 using glm::normalize;
 using glm::cross;
@@ -74,10 +57,8 @@ void Trs_tool_drag_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    //log_trs_tool->trace("try_ready");
     if (!m_trs_tool.is_enabled())
     {
-        //log_trs_tool->trace("trs not enabled");
         return;
     }
 
@@ -91,10 +72,8 @@ auto Trs_tool_drag_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    //log_trs_tool->trace("try_call");
     if (!m_trs_tool.is_enabled())
     {
-        //log_trs_tool->trace("trs not enabled");
         return false;
     }
 
@@ -108,8 +87,7 @@ auto Trs_tool_drag_command::try_call(
 
     if (get_command_state() != erhe::application::State::Active)
     {
-        // We might be ready, but not consuming event yet
-        return false;
+        return false; // We might be ready, but not consuming event yet
     }
 
     const bool still_active = m_trs_tool.on_drag(context);
@@ -134,8 +112,8 @@ void Trs_tool_drag_command::on_inactive(
 }
 
 Trs_tool::Trs_tool()
-    : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
+    : Imgui_window               {c_title}
+    , erhe::components::Component{c_type_name}
     , m_drag_command             {*this}
     , m_visualization            {*this}
 {
@@ -166,6 +144,8 @@ void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    Message_bus_node::initialize(get<Editor_scenes>()->get_message_bus());
+
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
     };
@@ -173,43 +153,15 @@ void Trs_tool::initialize_component()
     ERHE_VERIFY(m_mesh_memory);
     ERHE_VERIFY(m_tools);
 
-    const auto& tool_scene_root = m_tools->get_tool_scene_root().lock();
+    const auto& tool_scene_root = m_tools->get_tool_scene_root();
     if (!tool_scene_root)
     {
         return;
     }
-    m_visualization.initialize(*Component::get<erhe::application::Configuration>(), *m_mesh_memory, tool_scene_root.get());
-    m_handles[m_visualization.x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
-    m_handles[m_visualization.x_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_x;
-    m_handles[m_visualization.x_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_x;
-    m_handles[m_visualization.y_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_y;
-    m_handles[m_visualization.y_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_y;
-    m_handles[m_visualization.y_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_y;
-    m_handles[m_visualization.z_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_z;
-    m_handles[m_visualization.z_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_z;
-    m_handles[m_visualization.z_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_z;
-    m_handles[m_visualization.xy_box_mesh          .get()] = Handle::e_handle_translate_xy;
-    m_handles[m_visualization.xz_box_mesh          .get()] = Handle::e_handle_translate_xz;
-    m_handles[m_visualization.yz_box_mesh          .get()] = Handle::e_handle_translate_yz;
-    m_handles[m_visualization.x_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_x;
-    m_handles[m_visualization.y_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_y;
-    m_handles[m_visualization.z_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_z;
-
-    if (m_selection_tool)
-    {
-        auto lambda = [this](const Selection_tool::Selection& selection)
-        {
-            if (selection.empty())
-            {
-                set_node({});
-            }
-            else
-            {
-                set_node(selection.front());
-            }
-        };
-        m_selection_subscription = m_selection_tool->subscribe_selection_change_notification(lambda);
-    }
+    m_visualization.initialize(
+        *Component::get<erhe::application::Configuration>(),
+        *m_mesh_memory
+    );
 
     const auto& tools = get<Tools>();
     tools->register_tool(this);
@@ -233,24 +185,40 @@ void Trs_tool::on_message(erhe::scene::Message& message)
 {
     switch (message.event_type)
     {
-        case erhe::scene::Node_event_type::node_added_to_scene:
+        case erhe::scene::Event_type::node_added_to_scene:
         {
             log_trs_tool->trace("Node {} added to scene", message.lhs->name());
             break;
         }
-        case erhe::scene::Node_event_type::node_removed_from_scene:
+        case erhe::scene::Event_type::node_removed_from_scene:
         {
             log_trs_tool->trace("Node {} removed from scene", message.lhs->name());
             break;
         }
-        case erhe::scene::Node_event_type::node_replaced:
+        case erhe::scene::Event_type::node_replaced:
         {
             log_trs_tool->trace("Node {} replaced with {}", message.lhs->name(), message.rhs->name());
             break;
         }
-        case erhe::scene::Node_event_type::node_changed:
+        case erhe::scene::Event_type::node_changed:
         {
             log_trs_tool->trace("Node {} changed", message.lhs->name());
+            break;
+        }
+        case erhe::scene::Event_type::selection_changed:
+        {
+            log_trs_tool->trace("Selection changed {}");
+            const auto& selection = m_selection_tool->selection();
+            {
+                if (selection.empty())
+                {
+                    set_node({});
+                }
+                else
+                {
+                    set_node(selection.front());
+                }
+            };
             break;
         }
     }
@@ -272,13 +240,13 @@ void Trs_tool::post_initialize()
 
 void Trs_tool::set_translate(const bool enabled)
 {
-    m_visualization.show_translate = enabled;
+    m_visualization.set_translate(enabled);
     update_visibility();
 }
 
 void Trs_tool::set_rotate(const bool enabled)
 {
-    m_visualization.show_rotate = enabled;
+    m_visualization.set_rotate(enabled);
     update_visibility();
 }
 
@@ -306,22 +274,8 @@ void Trs_tool::set_node(
         return;
     }
 
-    log_trs_tool->trace("TRS set_node(node = {})", node ? node->name() : "");
-
-    // Attach new host to manipulator
     m_target_node = node;
-
-    if (node)
-    {
-        log_trs_tool->trace("TRS now has target node");
-        m_visualization.m_root = node;
-    }
-    else
-    {
-        log_trs_tool->trace("TRS now does not have target");
-        m_visualization.m_root.reset();
-    }
-
+    m_visualization.set_target(m_target_node.lock());
     update_visibility();
 }
 
@@ -370,7 +324,7 @@ void Trs_tool::end_move()
         rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
         rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
         rigid_body->end_move            ();
-        node_physics->on_node_transform_changed();
+        node_physics->handle_node_transform_update();
         m_original_motion_mode.reset();
     }
 
@@ -381,146 +335,28 @@ void Trs_tool::end_move()
 void Trs_tool::set_local(const bool local)
 {
     m_local = local;
-    m_visualization.local = local;
+    m_visualization.set_local(local);
 }
 
 void Trs_tool::viewport_toolbar()
 {
-    const auto& icon_rasterication = m_icon_set->get_small_rasterization();
-
-    ImGui::SameLine();
-    const auto local_pressed = erhe::application::make_button(
-        "L",
-        m_local
-            ? erhe::application::Item_mode::active
-            : erhe::application::Item_mode::normal
-    );
-    if (ImGui::IsItemHovered())
+    if (m_icon_set)
     {
-        ImGui::SetTooltip("Transform in Local space");
-    }
-    if (local_pressed)
-    {
-        set_local(true);
-    }
-
-    ImGui::SameLine();
-    const auto global_pressed = erhe::application::make_button(
-        "W",
-        (!m_local)
-            ? erhe::application::Item_mode::active
-            : erhe::application::Item_mode::normal
-    );
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Transform in World space");
-    }
-    if (global_pressed)
-    {
-        set_local(false);
-    }
-
-    ImGui::SameLine();
-    {
-        const auto mode = m_visualization.show_translate
-            ? erhe::application::Item_mode::active
-            : erhe::application::Item_mode::normal;
-
-        erhe::application::begin_button_style(mode);
-        const bool translate_pressed = icon_rasterication.icon_button(
-            m_icon_set->icons.move,
-            -1,
-            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-            false
-        );
-        erhe::application::end_button_style(mode);
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip(
-                m_visualization.show_translate
-                    ? "Hide Translate Tool"
-                    : "Show Translate Tool"
-            );
-        }
-        if (translate_pressed)
-        {
-            m_visualization.show_translate = !m_visualization.show_translate;
-            update_visibility();
-        }
-    }
-
-    ImGui::SameLine();
-    {
-        const auto mode = m_visualization.show_rotate
-            ? erhe::application::Item_mode::active
-            : erhe::application::Item_mode::normal;
-        erhe::application::begin_button_style(mode);
-        const bool rotate_pressed = icon_rasterication.icon_button(
-            m_icon_set->icons.rotate,
-            -1,
-            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-            false
-        );
-        erhe::application::end_button_style(mode);
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip(
-                m_visualization.show_rotate
-                    ? "Hide Rotate Tool"
-                    : "Show Rotate Tool"
-            );
-        }
-        if (rotate_pressed)
-        {
-            m_visualization.show_rotate = !m_visualization.show_rotate;
-            update_visibility();
-        }
+        m_visualization.viewport_toolbar(*m_icon_set.get());
     }
 }
 
 void Trs_tool::imgui()
 {
+    m_visualization.imgui();
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const bool   show_translate = m_visualization.show_translate;
-    const bool   show_rotate    = m_visualization.show_rotate;
-    const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
 
     ImGui::Checkbox("Cast Rays", &m_cast_rays);
 
     ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
     ImGui::Text("Active handle: %s", c_str(m_active_handle));
 
-    if (
-        erhe::application::make_button(
-            "Local",
-            (m_local)
-                ? erhe::application::Item_mode::active
-                : erhe::application::Item_mode::normal,
-            button_size
-        )
-    )
     {
-        set_local(true);
-    }
-    if (
-        erhe::application::make_button(
-            "Global",
-            (!m_local)
-                ? erhe::application::Item_mode::active
-                : erhe::application::Item_mode::normal,
-            button_size
-        )
-    )
-    {
-        set_local(false);
-    }
-
-    ImGui::SliderFloat("Scale", &m_visualization.scale, 1.0f, 10.0f);
-
-    {
-        ImGui::Checkbox("Translate Tool",        &m_visualization.show_translate);
         ImGui::Checkbox("Translate Snap Enable", &m_translate_snap_enable);
         const float translate_snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
         const char* translate_snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
@@ -542,7 +378,6 @@ void Trs_tool::imgui()
     ImGui::Separator();
 
     {
-        ImGui::Checkbox("Rotate Tool",        &m_visualization.show_rotate);
         ImGui::Checkbox("Rotate Snap Enable", &m_rotate_snap_enable);
         const float rotate_snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
         const char* rotate_snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
@@ -559,17 +394,6 @@ void Trs_tool::imgui()
         {
             m_rotate_snap = rotate_snap_values[m_rotate_snap_index];
         }
-    }
-
-    ImGui::Separator();
-    ImGui::Checkbox ("Hide Inactive", &m_visualization.hide_inactive);
-
-    if (
-        (show_translate != m_visualization.show_translate) ||
-        (show_rotate    != m_visualization.show_rotate   )
-    )
-    {
-        update_visibility();
     }
 #endif
 }
@@ -692,10 +516,10 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         return false;
     }
 
-    const auto root = get_root();
+    const auto target_node = m_target_node.lock();
     if (
         (m_active_handle == Handle::e_handle_none) ||
-        (!root)
+        (!target_node)
     )
     {
         //log_trs_tool->trace("drag not possible - no handle, or no root");
@@ -710,13 +534,12 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
     }
 
     m_drag.initial_position_in_world = tool.position.value();
-    m_drag.initial_world_from_local  = root->world_from_node();
-    m_drag.initial_local_from_world  = root->node_from_world();
+    m_drag.initial_world_from_local  = target_node->world_from_node();
+    m_drag.initial_local_from_world  = target_node->node_from_world();
     m_drag.initial_distance          = glm::distance(
         glm::dvec3{camera->position_in_world()},
         tool.position.value()
     );
-    const auto& target_node = m_target_node.lock();
     if (target_node)
     {
         m_drag.initial_parent_from_node_transform = target_node->parent_from_node_transform();
@@ -728,7 +551,7 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         const bool  world        = !m_local;
         const dvec3 n            = get_plane_normal(world);
         const dvec3 side         = get_plane_side  (world);
-        const dvec3 center       = root->position_in_world();
+        const dvec3 center       = target_node->position_in_world();
         const auto  intersection = project_pointer_to_plane(scene_view, n, center);
         if (intersection.has_value())
         {
@@ -1198,8 +1021,8 @@ void Trs_tool::update_rotate(Scene_view* scene_view)
 
     // log_trs_tool->trace("update_rotate()");
 
-    const auto root = get_root();
-    if (!root)
+    const auto target_node = m_target_node.lock();
+    if (!target_node)
     {
         return;
     }
@@ -1286,16 +1109,16 @@ void Trs_tool::update_rotate_final()
 
 void Trs_tool::set_node_world_transform(const dmat4 world_from_node)
 {
-    const auto root = get_root();
-    if (!root)
+    const auto target_node = m_target_node.lock();
+    if (!target_node)
     {
         return;
     }
-    const auto& root_parent = root->parent().lock();
-    const dmat4 parent_from_world = root_parent
-        ? dmat4{root_parent->node_from_world()} * world_from_node
+    const auto& target_parent = target_node->parent().lock();
+    const dmat4 parent_from_world = target_parent
+        ? dmat4{target_parent->node_from_world()} * world_from_node
         : world_from_node;
-    root->set_parent_from_node(mat4{parent_from_world});
+    target_node->set_parent_from_node(mat4{parent_from_world});
  }
 
 void Trs_tool::update_for_view(Scene_view* scene_view)
@@ -1389,12 +1212,12 @@ void Trs_tool::tool_render(
         }
     }
 
-    const auto root = get_root();
+    const auto target_node = m_target_node.lock();
     if (
         (m_line_renderer_set == nullptr) ||
         (get_handle_type(m_active_handle) != Handle_type::e_handle_type_rotate) ||
         (context.camera == nullptr) ||
-        (!root)
+        (!target_node)
     )
     {
         return;
@@ -1404,9 +1227,9 @@ void Trs_tool::tool_render(
     const dvec3  n                 = m_rotation.normal;
     const dvec3  side1             = m_rotation.reference_direction;
     const dvec3  side2             = normalize(cross(n, side1));
-    const dvec3  position_in_world = root->position_in_world();
+    const dvec3  position_in_world = target_node->position_in_world();
     const double distance          = length(position_in_world - dvec3{context.camera->position_in_world()});
-    const double scale             = m_visualization.scale * distance / 100.0;
+    const double scale             = m_visualization.get_scale() * distance / 100.0;
     const double r1                = scale * 6.0;
 
     constexpr glm::vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
@@ -1504,14 +1327,9 @@ auto Trs_tool::get_hover_handle() const -> Handle
     return m_hover_handle;
 }
 
-auto Trs_tool::get_handle(erhe::scene::Mesh* mesh) const -> Trs_tool::Handle
+auto Trs_tool::get_handle(erhe::scene::Mesh* mesh) const -> Handle
 {
-    const auto i = m_handles.find(mesh);
-    if (i == m_handles.end())
-    {
-        return Handle::e_handle_none;
-    }
-    return i->second;
+    return m_visualization.get_handle(mesh);
 }
 
 auto Trs_tool::get_handle_type(const Handle handle) const -> Handle_type
@@ -1555,33 +1373,8 @@ auto Trs_tool::get_axis_color(const Handle handle) const -> glm::vec4
     }
 }
 
-void Trs_tool::Visualization::update_transforms() //const uint64_t serial)
-{
-    ERHE_PROFILE_FUNCTION
-
-    const auto root = m_root.lock();
-    if (!root)
-    {
-        return;
-    }
-
-    auto world_from_root_transform = local
-        ? root->world_from_node_transform()
-        : erhe::scene::Transform::create_translation(root->position_in_world());
-
-    const mat4 scaling = erhe::toolkit::create_scale<float>(scale * view_distance / 100.0f);
-    world_from_root_transform.catenate(scaling);
-
-    tool_node->set_parent_from_node(world_from_root_transform);
-}
-
 void Trs_tool::update_transforms()
 {
-    const auto root = get_root();
-    if (!root)
-    {
-        return;
-    }
     const auto target_node = m_target_node.lock();
     if (!target_node)
     {
@@ -1590,7 +1383,7 @@ void Trs_tool::update_transforms()
     auto* scene_root = reinterpret_cast<Scene_root*>(target_node->node_data.host);
     if (scene_root == nullptr)
     {
-        log_trs_tool->error("Node '{}' has no scene root");
+        log_trs_tool->error("Node '{}' has no scene root", target_node->name());
         return;
     }
     m_visualization.update_transforms();
@@ -1609,9 +1402,9 @@ void Trs_tool::update_visibility()
     update_transforms();
 }
 
-auto Trs_tool::get_root() -> std::shared_ptr<erhe::scene::Node>
+auto Trs_tool::get_tool_scene_root() -> std::shared_ptr<Scene_root>
 {
-    return m_visualization.m_root.lock();
+    return m_tools->get_tool_scene_root();
 }
 
 } // namespace editor

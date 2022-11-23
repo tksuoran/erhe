@@ -11,6 +11,11 @@ namespace erhe::physics
     class IWorld;
 }
 
+namespace erhe::scene
+{
+    class Scene_host;
+}
+
 namespace editor
 {
 
@@ -27,7 +32,11 @@ public:
 
     // Implements INode_attachment
     [[nodiscard]] auto node_attachment_type() const -> const char* override;
-    void on_node_transform_changed() override;
+    void handle_node_scene_host_update(
+        erhe::scene::Scene_host* old_scene_host,
+        erhe::scene::Scene_host* new_scene_host
+    ) override;
+    void handle_node_transform_update() override;
 
     // Implements IMotion_state
     [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform   override;
@@ -40,12 +49,6 @@ public:
     [[nodiscard]] auto rigid_body         ()       ->       erhe::physics::IRigid_body*;
     [[nodiscard]] auto rigid_body         () const -> const erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_world_from_node() const -> erhe::physics::Transform;
-
-    using erhe::scene::INode_attachment::on_attached_to;
-    void on_attached_to          (erhe::physics::IWorld* world);
-
-    using erhe::scene::INode_attachment::on_detached_from;
-    void on_detached_from        (erhe::physics::IWorld* world);
 
     void set_world_from_node     (const glm::mat4& world_from_node);
     void set_world_from_node     (const erhe::physics::Transform world_from_node);

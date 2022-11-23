@@ -401,6 +401,10 @@ auto Brush::make_instance(
             .normal_style          = data.normal_style
         }
     );
+
+    ERHE_VERIFY(instance_create_info.scene_root != nullptr);
+
+    mesh->mesh_data.layer_id = instance_create_info.scene_root->layers().content()->id.get_id();
     mesh->set_visibility_mask(instance_create_info.node_visibility_flags);
     mesh->set_world_from_node(instance_create_info.world_from_node);
 

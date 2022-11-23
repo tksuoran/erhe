@@ -23,8 +23,6 @@ erhe_target_sources_grouped(
     graphics/textures.cpp
     graphics/textures.hpp
 
-    operations/attach_detach_operation.cpp
-    operations/attach_detach_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -117,6 +115,8 @@ erhe_target_sources_grouped(
     tools/hotbar.hpp
     tools/hover_tool.cpp
     tools/hover_tool.hpp
+    tools/handle_visualizations.cpp
+    tools/handle_visualizations.hpp
     tools/hud.cpp
     tools/hud.hpp
     tools/material_paint_tool.cpp
@@ -132,7 +132,6 @@ erhe_target_sources_grouped(
     tools/tools.cpp
     tools/tools.hpp
     tools/trs_tool.cpp
-    tools/trs_tool_visualization.cpp
     tools/trs_tool.hpp
 
     windows/debug_view_window.cpp

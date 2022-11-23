@@ -16,6 +16,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Material_library;
 class Mesh_memory;
 class Scene_root;
 

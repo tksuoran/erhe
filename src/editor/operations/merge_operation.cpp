@@ -3,7 +3,6 @@
 #include "editor_log.hpp"
 #include "operations/merge_operation.hpp"
 #include "tools/selection_tool.hpp"
-#include "scene/helpers.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
@@ -61,6 +60,8 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     mat4        reference_node_from_world = mat4{1};
     auto        normal_style              = Normal_style::none;
 
+    ERHE_VERIFY(parameters.selection_tool);
+
     m_selection_before = parameters.selection_tool->selection();
 
     for (const auto& item : parameters.selection_tool->selection())
@@ -70,6 +71,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         {
             continue;
         }
+
         mat4 transform;
         auto node_physics  = get_physics_node(mesh.get());
         auto node_raytrace = get_raytrace    (mesh.get());
@@ -77,9 +79,12 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         //rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
         Entry source_entry{
             .mesh          = mesh,
+            .before_parent = mesh->parent().lock(),
             .node_physics  = node_physics,
             .node_raytrace = node_raytrace
         };
+
+        ERHE_VERIFY(source_entry.before_parent);
 
         if (first_mesh)
         {
@@ -87,7 +92,6 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             reference_node_from_world = mesh->node_from_world();
             transform                 = mat4{1};
             first_mesh                = false;
-            m_parent = mesh->parent().lock();
             m_selection_after.push_back(mesh);
             m_combined.mesh = mesh;
         }
@@ -192,9 +196,7 @@ void Merge_operation::execute(const Operation_context&)
     {
         return;
     }
-    auto& scene          = scene_root->scene();
-    auto& physics_world  = scene_root->physics_world();
-    auto& raytrace_scene = scene_root->raytrace_scene();
+    auto& scene = scene_root->scene();
 
     scene.sanity_check();
 
@@ -210,25 +212,21 @@ void Merge_operation::execute(const Operation_context&)
             auto old_node_physics = get_physics_node(mesh.get());
             if (old_node_physics)
             {
-                remove_from_physics_world(physics_world, *old_node_physics.get());
                 mesh->detach(old_node_physics.get());
             }
             if (m_combined.node_physics)
             {
                 mesh->attach(m_combined.node_physics);
-                add_to_physics_world(physics_world, m_combined.node_physics);
             }
 
             auto old_node_raytrace = get_raytrace(mesh.get());
             if (old_node_raytrace)
             {
-                remove_from_raytrace_scene(raytrace_scene, old_node_raytrace);
                 mesh->detach(old_node_raytrace.get());
             }
             if (m_combined.node_raytrace)
             {
                 mesh->attach(m_combined.node_raytrace);
-                add_to_raytrace_scene(raytrace_scene, m_combined.node_raytrace);
             }
 
             first_entry = false;
@@ -237,15 +235,13 @@ void Merge_operation::execute(const Operation_context&)
         {
             if (entry.node_physics)
             {
-                remove_from_physics_world(physics_world, *entry.node_physics.get());
                 mesh->detach(entry.node_physics.get());
             }
             if (entry.node_raytrace)
             {
-                remove_from_raytrace_scene(raytrace_scene, entry.node_raytrace);
                 mesh->detach(entry.node_raytrace.get());
             }
-            scene.remove(mesh);
+            mesh->set_parent({});
         }
     }
     m_parameters.selection_tool->set_selection(m_selection_after);
@@ -271,13 +267,7 @@ void Merge_operation::undo(const Operation_context&)
         return;
     }
 
-    auto& scene          = scene_root->scene();
-    auto& physics_world  = scene_root->physics_world();
-    auto& raytrace_scene = scene_root->raytrace_scene();
-
-    ERHE_VERIFY(scene_root->layers().content() != nullptr);
-    auto& layer = *scene_root->layers().content();
-
+    auto& scene = scene_root->scene();
     scene.sanity_check();
 
     bool first_entry = true;
@@ -294,25 +284,21 @@ void Merge_operation::undo(const Operation_context&)
             auto old_node_physics = get_physics_node(mesh.get());
             if (old_node_physics)
             {
-                remove_from_physics_world(physics_world, *old_node_physics.get());
                 mesh->detach(old_node_physics.get());
             }
             if (entry.node_physics)
             {
                 mesh->attach(entry.node_physics);
-                add_to_physics_world(physics_world, entry.node_physics);
             }
 
             auto old_node_raytrace = get_raytrace(mesh.get());
             if (old_node_raytrace)
             {
-                remove_from_raytrace_scene(raytrace_scene, old_node_raytrace);
                 mesh->detach(old_node_physics.get());
             }
             if (entry.node_raytrace)
             {
                 mesh->attach(entry.node_raytrace);
-                add_to_raytrace_scene(raytrace_scene, entry.node_raytrace);
             }
         }
         else
@@ -320,19 +306,13 @@ void Merge_operation::undo(const Operation_context&)
             // For non-first meshes:
             if (entry.node_physics)
             {
-                add_to_physics_world(physics_world, entry.node_physics);
                 mesh->attach(entry.node_physics);
             }
             if (entry.node_raytrace)
             {
-                add_to_raytrace_scene(raytrace_scene, entry.node_raytrace);
                 mesh->attach(entry.node_raytrace);
             }
-            scene.add_to_mesh_layer(layer, mesh);
-            if (m_parent != nullptr)
-            {
-                m_parent->attach(mesh);
-            }
+            mesh->set_parent(entry.before_parent);
         }
     }
     scene.nodes_sorted = false;

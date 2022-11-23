@@ -9,7 +9,6 @@
 #include "scene/material_library.hpp"
 //#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/helpers.hpp"
 #include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
 
@@ -109,7 +108,7 @@ void Rendertarget_node::add_primitive(
     const erhe::components::Components& components
 )
 {
-    auto& material_library = m_host_scene_root.material_library();
+    const auto& material_library = m_host_scene_root.material_library();
     auto& mesh_memory      = *components.get<Mesh_memory>().get();
 
     m_material = material_library->make_material(

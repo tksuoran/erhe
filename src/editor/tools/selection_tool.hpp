@@ -6,6 +6,7 @@
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/scene/message_bus.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <functional>
@@ -88,56 +89,12 @@ private:
 class Selection_tool
     : public erhe::application::Imgui_window
     , public erhe::components::Component
+    , public erhe::scene::Message_bus_node
     , public Tool
 {
 public:
     using Selection            = std::vector<std::shared_ptr<erhe::scene::Node>>;
     using On_selection_changed = std::function<void(const Selection&)>;
-
-    class Subcription final
-    {
-    public:
-        Subcription(Selection_tool* tool, const int handle)
-            : m_tool  {tool}
-            , m_handle{handle}
-        {
-        }
-
-        ~Subcription() noexcept
-        {
-            if (
-                (m_tool != nullptr) &&
-                (m_handle != 0)
-            )
-            {
-                m_tool->unsubscribe_selection_change_notification(m_handle);
-            }
-        }
-
-        Subcription   (const Subcription&) = delete;
-        void operator=(const Subcription&) = delete;
-
-        Subcription(Subcription&& other) noexcept
-        {
-            m_tool         = other.m_tool;
-            m_handle       = other.m_handle;
-            other.m_tool   = nullptr;
-            other.m_handle = 0;
-        }
-
-        auto operator=(Subcription&& other) noexcept -> Subcription&
-        {
-            m_tool         = other.m_tool;
-            m_handle       = other.m_handle;
-            other.m_tool   = nullptr;
-            other.m_handle = 0;
-            return *this;
-        }
-
-    private:
-        Selection_tool* m_tool  {nullptr};
-        int             m_handle{0};
-    };
 
     static constexpr int              c_priority {3};
     static constexpr std::string_view c_type_name{"Selection_tool"};
@@ -161,11 +118,9 @@ public:
     void imgui() override;
 
     // Public API
-    [[nodiscard]] auto subscribe_selection_change_notification(On_selection_changed callback) -> Subcription;
-    [[nodiscard]] auto selection                              () const -> const Selection&;
-    [[nodiscard]] auto is_in_selection                        (const std::shared_ptr<erhe::scene::Node>& item) const -> bool;
-    [[nodiscard]] auto range_selection                        () -> Range_selection&;
-    void unsubscribe_selection_change_notification(int handle);
+    [[nodiscard]] auto selection      () const -> const Selection&;
+    [[nodiscard]] auto is_in_selection(const std::shared_ptr<erhe::scene::Node>& item) const -> bool;
+    [[nodiscard]] auto range_selection() -> Range_selection&;
     void set_selection             (const Selection& selection);
     auto add_to_selection          (const std::shared_ptr<erhe::scene::Node>& item) -> bool;
     auto clear_selection           () -> bool;

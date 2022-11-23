@@ -1,15 +1,22 @@
 #include "erhe/scene/message_bus.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::scene
 {
 
-Message_bus_node::Message_bus_node(Message_bus* message_bus)
-    : m_message_bus{message_bus}
+Message_bus_node::Message_bus_node()
 {
-    m_message_bus->add_receiver(get_notify_func());
 }
 
 Message_bus_node::~Message_bus_node() = default;
+
+void Message_bus_node::initialize(Message_bus* message_bus)
+{
+    ERHE_VERIFY(message_bus != nullptr);
+
+    m_message_bus = message_bus;
+    m_message_bus->add_receiver(get_notify_func());
+}
 
 std::function<void (Message&)> Message_bus_node::get_notify_func()
 {
@@ -20,8 +27,10 @@ std::function<void (Message&)> Message_bus_node::get_notify_func()
     return message_listener;
 }
 
-void Message_bus_node::send(Message message)
+void Message_bus_node::send(Message message) const
 {
+    ERHE_VERIFY(m_message_bus != nullptr);
+
     m_message_bus->send_message(message);
 }
 

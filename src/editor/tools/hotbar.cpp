@@ -93,10 +93,7 @@ void Hotbar::initialize_component()
         4000.0
     );
 
-    scene_root->scene().add_to_mesh_layer(
-        *scene_root->layers().rendertarget(),
-        m_rendertarget_node
-    );
+    m_rendertarget_node->set_parent(scene_root->scene().root_node);
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         m_rendertarget_node.get(),

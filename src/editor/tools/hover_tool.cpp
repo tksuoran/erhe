@@ -63,14 +63,6 @@ void Hover_tool::initialize_component()
     imgui_windows->register_imgui_window(this);
 
     const auto& tools = get<Tools>();
-    const auto& tools_scene_root = tools->get_tool_scene_root().lock();
-    if (!tools_scene_root)
-    {
-        return;
-    }
-    //// const auto& material_library = tools_scene_root->material_library();
-    //// m_hover_material = material_library->make_material("hover");
-    //// m_hover_material->visible = false;
     tools->register_background_tool(this);
     tools->register_hover_tool(this);
 }
@@ -81,39 +73,6 @@ void Hover_tool::post_initialize()
     m_text_renderer     = get<erhe::application::Text_renderer    >();
     m_viewport_windows  = get<Viewport_windows                    >();
 }
-
-//// void Hover_tool::on_inactive()
-//// {
-////     m_hover_content = false;
-////     m_hover_tool    = false;
-////     m_hover_position_world.reset();
-////     m_hover_normal.reset();
-////     deselect();
-//// }
-
-//// void Hover_tool::on_scene_view(Scene_view* scene_view)
-//// {
-////     if (scene_view == nullptr)
-////     {
-////         on_inactive();
-////         return;
-////     }
-////
-////     const auto& content = scene_view->get_hover(Hover_entry::content_slot);
-////     const auto& tool    = scene_view->get_hover(Hover_entry::tool_slot);
-////     m_hover_content        = content.valid && content.mesh;
-////     m_hover_tool           = tool   .valid && tool   .mesh;
-////     m_hover_position_world = content.valid ? content.position : std::optional<vec3>{};
-////     m_hover_normal         = content.valid ? content.normal   : std::optional<vec3>{};
-////     if (
-////         (content.mesh      != m_hover_mesh           ) ||
-////         (content.primitive != m_hover_primitive_index)
-////     )
-////     {
-////         deselect();
-////         select();
-////     }
-//// }
 
 void Hover_tool::tool_hover(Scene_view* scene_view)
 {

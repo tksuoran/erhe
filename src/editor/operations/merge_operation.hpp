@@ -61,13 +61,13 @@ private:
     {
     public:
         std::shared_ptr<erhe::scene::Mesh>      mesh;
+        std::shared_ptr<erhe::scene::Node>      before_parent;
         std::shared_ptr<Node_physics>           node_physics;
         std::shared_ptr<Node_raytrace>          node_raytrace;
         std::vector<erhe::primitive::Primitive> primitives;
     };
 
     Parameters                                                  m_parameters;
-    std::shared_ptr<erhe::scene::Node>                          m_parent;
     std::vector<Entry>                                          m_sources;
     Entry                                                       m_combined;
     std::vector<std::shared_ptr<erhe::scene::Node>>             m_selection_before;

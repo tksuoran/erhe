@@ -32,6 +32,7 @@ namespace erhe::raytrace
 namespace editor
 {
 
+class Node_attach_operation;
 class Node_physics;
 class Node_raytrace;
 class Scene_root;
@@ -94,10 +95,15 @@ public:
     class Parameters
     {
     public:
-        Scene_root*                        scene_root;
+        Selection_tool*                    selection_tool{nullptr};
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Node> parent;
         Mode                               mode;
+    };
+
+    class Entry
+    {
+    public:
     };
 
     explicit Node_insert_remove_operation(const Parameters& parameters);
@@ -109,108 +115,15 @@ public:
     void undo   (const Operation_context& context) override;
 
 private:
-    void execute(
-        const Operation_context& context,
-        const Mode               mode
-    ) const;
+    Mode                                                m_mode;
+    std::shared_ptr<erhe::scene::Node>                  m_node;
+    std::shared_ptr<erhe::scene::Node>                  m_before_parent;
+    std::shared_ptr<erhe::scene::Node>                  m_after_parent;
+    std::vector<std::shared_ptr<Node_attach_operation>> m_parent_changes;
 
-    Parameters m_parameters;
-};
-
-class Mesh_insert_remove_operation
-    : public Scene_item_operation
-{
-public:
-    class Parameters
-    {
-    public:
-        Scene_root*                        scene_root;
-        std::shared_ptr<erhe::scene::Mesh> mesh;
-        std::shared_ptr<Node_physics>      node_physics;
-        std::shared_ptr<Node_raytrace>     node_raytrace;
-        std::shared_ptr<erhe::scene::Node> parent;
-        Mode                               mode;
-    };
-
-    explicit Mesh_insert_remove_operation(const Parameters& parameters);
-    ~Mesh_insert_remove_operation() noexcept override;
-
-    // Implements IOperation
-    [[nodiscard]] auto describe() const -> std::string override;
-    void execute(const Operation_context& context) override;
-    void undo   (const Operation_context& context) override;
-
-private:
-    void execute(
-        const Operation_context& context,
-        const Mode               mode
-    ) const;
-
-    Parameters m_parameters;
-};
-
-class Light_insert_remove_operation
-    : public Scene_item_operation
-{
-public:
-    class Parameters
-    {
-    public:
-        Scene_root*                         scene_root;
-        std::shared_ptr<erhe::scene::Light> light;
-        std::shared_ptr<erhe::scene::Node>  parent;
-        Mode                                mode;
-    };
-
-    explicit Light_insert_remove_operation(const Parameters& parameters);
-    ~Light_insert_remove_operation() noexcept override;
-
-    // Public API
-    [[nodiscard]] auto describe() const -> std::string override;
-    void execute(const Operation_context& context) override;
-    void undo   (const Operation_context& context) override;
-
-private:
-    void execute(
-        const Operation_context& context,
-        const Mode               mode
-    );
-
-    Parameters                                      m_parameters;
-    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
-    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
-};
-
-class Camera_insert_remove_operation
-    : public Scene_item_operation
-{
-public:
-    class Parameters
-    {
-    public:
-        Scene_root*                          scene_root;
-        std::shared_ptr<erhe::scene::Camera> camera;
-        std::shared_ptr<erhe::scene::Node>   parent;
-        Mode                                 mode;
-    };
-
-    explicit Camera_insert_remove_operation(const Parameters& parameters);
-    ~Camera_insert_remove_operation() noexcept override;
-
-    // Public API
-    [[nodiscard]] auto describe() const -> std::string override;
-    void execute(const Operation_context& context) override;
-    void undo   (const Operation_context& context) override;
-
-private:
-    void execute(
-        const Operation_context& context,
-        const Mode               mode
-    ) const;
-
-    Parameters                                      m_parameters;
-    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_before;
-    std::vector<std::shared_ptr<erhe::scene::Node>> m_selection_after;
+    erhe::scene::Scene_host*                            m_scene_host;
+    std::vector<std::shared_ptr<erhe::scene::Node>>     m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Node>>     m_selection_after;
 };
 
 }

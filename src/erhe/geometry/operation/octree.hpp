@@ -763,7 +763,7 @@ int32_t Octree<PointT, ContainerT>::findNeighbor(const PointT& query, float minD
   float maxDistance = std::numeric_limits<float>::infinity();
   int32_t resultIndex = -1;
   if(root_ == 0) return resultIndex;
-  
+
   findNeighbor<Distance>(root_, query, minDistance, maxDistance, resultIndex);
 
   return resultIndex;

@@ -2,6 +2,7 @@
 
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene.hpp" // for Light_layer..
 #include "erhe/scene/transform.hpp"
 
 #include <gsl/gsl>
@@ -68,6 +69,7 @@ public:
     float     outer_spot_angle {glm::pi<float>() * 0.5f};
     bool      cast_shadow      {true};
     bool      tight_frustum_fit{false};
+    erhe::toolkit::Unique_id<Light_layer>::id_type layer_id;
 
 private:
     [[nodiscard]] auto stable_directional_light_projection(const Light_projection_parameters& parameters) const -> Projection;

@@ -9,8 +9,8 @@ namespace editor
 {
 
 class Scene_root;
-class Editor_scenes
 
+class Editor_scenes
     : public erhe::components::Component
     , public erhe::components::IUpdate_once_per_frame
 {

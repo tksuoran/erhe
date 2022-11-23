@@ -13,26 +13,31 @@
 namespace erhe::scene
 {
 
-class Node;
-class Mesh;
 class Camera;
 class Light;
+class Mesh;
+class Node;
+class Scene;
 
 class Mesh_layer
 {
 public:
     Mesh_layer(
         const std::string_view name,
-        const uint64_t         flags
+        uint64_t               flags
     );
 
     [[nodiscard]] auto get_mesh_by_id(
         const erhe::toolkit::Unique_id<Node>::id_type id
     ) const -> std::shared_ptr<Mesh>;
 
-    std::vector<std::shared_ptr<Mesh>> meshes;
-    std::string                        name;
-    uint64_t                           flags{0};
+    void add   (const std::shared_ptr<Mesh>& mesh);
+    void remove(const std::shared_ptr<Mesh>& mesh);
+
+    std::vector<std::shared_ptr<Mesh>>   meshes;
+    std::string                          name;
+    uint64_t                             flags{0};
+    erhe::toolkit::Unique_id<Mesh_layer> id;
 };
 
 class Light_layer
@@ -44,16 +49,22 @@ public:
         const erhe::toolkit::Unique_id<Node>::id_type id
     ) const -> std::shared_ptr<Light>;
 
-    std::vector<std::shared_ptr<Light>> lights;
-    glm::vec4                           ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
-    std::string                         name;
+    void add   (const std::shared_ptr<Light>& light);
+    void remove(const std::shared_ptr<Light>& light);
+
+    std::vector<std::shared_ptr<Light>>   lights;
+    glm::vec4                             ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
+    std::string                           name;
+    erhe::toolkit::Unique_id<Light_layer> id;
 };
+
+class Scene_host;
 
 class Scene
     : public Message_bus_node
 {
 public:
-    explicit Scene(Message_bus* message_bus, void* host = nullptr);
+    explicit Scene(Message_bus* message_bus, Scene_host* host = nullptr);
     ~Scene() override;
 
     void sanity_check          () const;
@@ -61,55 +72,16 @@ public:
     void update_node_transforms();
 
     //[[nodiscard]] auto get_node_by_id         (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Node>;
-    [[nodiscard]] auto get_mesh_by_id  (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
-    [[nodiscard]] auto get_light_by_id (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
-    [[nodiscard]] auto get_camera_by_id(const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>;
+    [[nodiscard]] auto get_mesh_by_id       (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
+    [[nodiscard]] auto get_light_by_id      (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
+    [[nodiscard]] auto get_camera_by_id     (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>;
+    [[nodiscard]] auto get_mesh_layer_by_id (erhe::toolkit::Unique_id<Mesh_layer>::id_type id) const -> std::shared_ptr<Mesh_layer>;
+    [[nodiscard]] auto get_light_layer_by_id(erhe::toolkit::Unique_id<Light_layer>::id_type id) const -> std::shared_ptr<Light_layer>;
 
-    void add_node(
-        const std::shared_ptr<erhe::scene::Node>& node
-    );
+    void register_node  (const std::shared_ptr<Node>& node);
+    void unregister_node(const std::shared_ptr<Node>& node);
 
-    void add_to_mesh_layer(
-        erhe::scene::Mesh_layer&                  layer,
-        const std::shared_ptr<erhe::scene::Mesh>& mesh_node
-    );
-
-    void add_to_light_layer(
-        erhe::scene::Light_layer&                  layer,
-        const std::shared_ptr<erhe::scene::Light>& light_node
-    );
-
-    void add(
-        const std::shared_ptr<erhe::scene::Camera>& camera
-    );
-
-    void remove_from_mesh_layer(
-        erhe::scene::Mesh_layer&                  layer,
-        const std::shared_ptr<erhe::scene::Mesh>& mesh
-    );
-
-    void remove_node(
-        const std::shared_ptr<erhe::scene::Node>& node
-    );
-
-    void remove(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh
-    );
-
-    void remove_from_light_layer(
-        erhe::scene::Light_layer&                  layer,
-        const std::shared_ptr<erhe::scene::Light>& light
-    );
-
-    void remove(
-        const std::shared_ptr<erhe::scene::Light>& light
-    );
-
-    void remove(
-        const std::shared_ptr<erhe::scene::Camera>& camera
-    );
-
-    void*                                     host{nullptr};
+    Scene_host*                               host{nullptr};
     std::shared_ptr<erhe::scene::Node>        root_node;
     std::vector<std::shared_ptr<Node>>        flat_node_vector;
     std::vector<std::shared_ptr<Mesh_layer>>  mesh_layers;

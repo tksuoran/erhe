@@ -28,6 +28,7 @@ void Tools::initialize_component()
     const auto editor_scenes = get<Editor_scenes>();
     m_scene_root = std::make_shared<Scene_root>(
         editor_scenes->get_message_bus(),
+        std::make_shared<Material_library>(),
         "Tool scene"
     );
     m_scene_root->material_library()->set_visible(false);
@@ -38,6 +39,11 @@ void Tools::initialize_component()
 void Tools::post_initialize()
 {
     m_imgui_windows = get<erhe::application::Imgui_windows>();
+}
+
+[[nodiscard]] auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
+{
+    return m_scene_root;
 }
 
 void Tools::register_tool(Tool* tool)
@@ -79,11 +85,6 @@ void Tools::render_tools(const Render_context& context)
     {
         tool->tool_render(context);
     }
-}
-
-[[nodiscard]] auto Tools::get_tool_scene_root() -> std::weak_ptr<Scene_root>
-{
-    return m_scene_root;
 }
 
 }  // namespace erhe::application

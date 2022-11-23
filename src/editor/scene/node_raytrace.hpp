@@ -64,9 +64,12 @@ public:
 
     // Implements INode_attachment
     [[nodiscard]] auto node_attachment_type() const -> const char* override;
-    void on_attached_to                 (erhe::scene::Node* node) override;
-    void on_node_transform_changed      () override;
-    void on_node_visibility_mask_changed(const uint64_t mask) override;
+    void handle_node_scene_host_update(
+        erhe::scene::Scene_host* old_scene_host,
+        erhe::scene::Scene_host* new_scene_host
+    ) override;
+    void handle_node_transform_update      () override;
+    void handle_node_visibility_mask_update(const uint64_t mask) override;
 
     // Public API
     [[nodiscard]] auto source_geometry   () -> std::shared_ptr<erhe::geometry::Geometry>;
