@@ -39,9 +39,6 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(
     ${_target}
-    PUBLIC
-        ghc_filesystem
-        optional_lite
     PRIVATE
         erhe::gl
         erhe::log

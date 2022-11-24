@@ -39,9 +39,10 @@ namespace erhe::scene
 namespace editor
 {
 
-class Scene_view;
+class Editor_message;
 class Mesh_memory;
 class Scene_root;
+class Scene_view;
 class Shadow_render_node;
 class Shadow_renderer;
 class Viewport_window;
@@ -95,6 +96,9 @@ public:
     void next_frame();
 
 private:
+    void on_message                      (Editor_message& message);
+    void handle_graphics_settings_changed();
+
     // Component dependencies
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;

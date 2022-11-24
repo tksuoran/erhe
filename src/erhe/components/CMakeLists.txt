@@ -19,7 +19,6 @@ target_link_libraries(${_target}
         erhe::concurrency
         erhe::log
         #mango
-        optional_lite
         Microsoft.GSL::GSL
 )
 

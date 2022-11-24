@@ -10,7 +10,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -181,7 +181,7 @@ auto Programs::make_prototype(
     create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
 
     const auto& config = Component::get<erhe::application::Configuration>();
-    if (config->shadow_renderer.enabled)
+    // TODO if (config->shadow_renderer.enabled)
     {
         create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
     }

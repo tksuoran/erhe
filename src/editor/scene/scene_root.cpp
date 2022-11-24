@@ -106,9 +106,9 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 }
 
 Scene_root::Scene_root(
-    erhe::scene::Message_bus*                message_bus,
-    const std::shared_ptr<Material_library>& material_library,
-    const std::string_view                   name
+    erhe::message_bus::Message_bus<erhe::scene::Scene_message>* message_bus,
+    const std::shared_ptr<Material_library>&                    material_library,
+    const std::string_view                                      name
 )
     : m_name            {name}
     , m_scene           {std::make_unique<Scene>(message_bus, this)}

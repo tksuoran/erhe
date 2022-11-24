@@ -254,7 +254,10 @@ void Scene::update_node_transforms()
     }
 }
 
-Scene::Scene(Message_bus* message_bus, Scene_host* host)
+Scene::Scene(
+    erhe::message_bus::Message_bus<Scene_message>* const message_bus,
+    Scene_host* const                                    host
+)
     : host     {host}
     , root_node{std::make_shared<erhe::scene::Node>("root")}
 {
@@ -328,9 +331,9 @@ void Scene::register_node(
     if ((node->node_data.flag_bits & Node_flag_bit::no_message) == 0)
     {
         send(
-            Message{
-                .event_type = Event_type::node_added_to_scene,
-                .lhs = node
+            Scene_message{
+                .event_type = Scene_event_type::node_added_to_scene,
+                .lhs        = node
             }
         );
     }
@@ -389,9 +392,9 @@ void Scene::unregister_node(
     if ((node->node_data.flag_bits & Node_flag_bit::no_message) == 0)
     {
         send(
-            Message{
-                .event_type = Event_type::node_removed_from_scene,
-                .lhs = node
+            Scene_message{
+                .event_type = Scene_event_type::node_removed_from_scene,
+                .lhs        = node
             }
         );
     }

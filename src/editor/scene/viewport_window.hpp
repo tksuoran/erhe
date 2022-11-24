@@ -100,6 +100,7 @@ public:
     [[nodiscard]] auto get_type() const -> int override;
 
     // Public API
+    void reconfigure        (int sample_count);
     void connect            (Viewport_windows* viewport_windows);
     void set_window_viewport(int x, int y, int width, int height);
     void set_is_hovered     (bool is_hovered);

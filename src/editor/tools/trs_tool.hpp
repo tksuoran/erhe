@@ -1,5 +1,6 @@
 #pragma once
 
+#include "editor_message.hpp"
 #include "tools/handle_visualizations.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
@@ -7,6 +8,7 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/physics/imotion_state.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/node.hpp"
@@ -98,7 +100,7 @@ private:
 class Trs_tool
     : public erhe::application::Imgui_window
     , public erhe::components::Component
-    , public erhe::scene::Message_bus_node
+    , public erhe::message_bus::Message_bus_node<Editor_message>
     , public Tool
 {
 public:
@@ -170,7 +172,7 @@ public:
     [[nodiscard]] auto get_tool_scene_root  () -> std::shared_ptr<Scene_root>;
 
 private:
-    void on_message(erhe::scene::Message& message);
+    void on_message(Editor_message& message);
     void touch     ();
     void begin_move();
     void end_move  ();

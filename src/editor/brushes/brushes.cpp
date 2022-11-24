@@ -48,9 +48,6 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
-using erhe::geometry::Polygon_id;
-using erhe::scene::Node;
-using erhe::scene::Node_visibility;
 
 auto Brush_tool_preview_command::try_call(
     erhe::application::Command_context& context
@@ -107,8 +104,9 @@ void Brushes::declare_required_components()
 {
     require<erhe::application::Commands>();
     m_configuration = require<erhe::application::Configuration>();
-    require<Operations                 >();
-    require<Tools                      >();
+    require<Editor_scenes>();
+    require<Operations   >();
+    require<Tools        >();
 }
 
 void Brushes::initialize_component()
@@ -124,6 +122,13 @@ void Brushes::initialize_component()
     commands->bind_command_to_mouse_click(&m_insert_command, erhe::toolkit::Mouse_button_right);
 
     get<Operations>()->register_active_tool(this);
+
+    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+        [&](Editor_message& message)
+        {
+            on_message(message);
+        }
+    );
 }
 
 void Brushes::post_initialize()
@@ -134,6 +139,31 @@ void Brushes::post_initialize()
     m_operation_stack   = get<Operation_stack >();
     m_selection_tool    = get<Selection_tool  >();
     m_viewport_windows  = get<Viewport_windows>();
+}
+
+void Brushes::on_message(Editor_message& message)
+{
+    switch (message.event_type)
+    {
+        case Editor_event_type::selection_changed:
+        {
+            break;
+        }
+
+        case Editor_event_type::viewport_changed:
+        {
+            if (!message.new_viewport_window)
+            {
+                remove_brush_mesh();
+            }
+            break;
+        }
+
+        default:
+        {
+            break;
+        }
+    }
 }
 
 auto Brushes::make_brush(const Brush_data& create_info) -> std::shared_ptr<Brush>
@@ -279,7 +309,7 @@ auto Brushes::get_brush_transform() -> mat4
         return mat4{1};
     }
 
-    const Polygon_id polygon_id = static_cast<Polygon_id>(m_hover_local_index);
+    const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(m_hover_local_index);
     if (m_hover_local_index >= m_hover_geometry->get_polygon_count())
     {
         return mat4{1};
@@ -484,9 +514,9 @@ void Brushes::add_brush_mesh()
         }
     );
     m_brush_mesh->set_visibility_mask(
-        Node_visibility::visible |
-        Node_visibility::content |
-        Node_visibility::brush
+        erhe::scene::Node_visibility::visible |
+        erhe::scene::Node_visibility::content |
+        erhe::scene::Node_visibility::brush
     );
     m_brush_mesh->node_data.flag_bits =
         m_brush_mesh->node_data.flag_bits |

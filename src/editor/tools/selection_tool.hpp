@@ -1,12 +1,13 @@
 #pragma once
 
+#include "editor_message.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
-#include "erhe/scene/message_bus.hpp"
+#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <functional>
@@ -89,12 +90,11 @@ private:
 class Selection_tool
     : public erhe::application::Imgui_window
     , public erhe::components::Component
-    , public erhe::scene::Message_bus_node
+    , public erhe::message_bus::Message_bus_node<Editor_message>
     , public Tool
 {
 public:
-    using Selection            = std::vector<std::shared_ptr<erhe::scene::Node>>;
-    using On_selection_changed = std::function<void(const Selection&)>;
+    using Selection = std::vector<std::shared_ptr<erhe::scene::Node>>;
 
     static constexpr int              c_priority {3};
     static constexpr std::string_view c_type_name{"Selection_tool"};
@@ -141,13 +141,6 @@ private:
         const bool clear_others
     );
 
-    class Subscription_entry
-    {
-    public:
-        On_selection_changed callback;
-        int                  handle;
-    };
-
     Selection_tool_select_command m_select_command;
     Selection_tool_delete_command m_delete_command;
 
@@ -162,7 +155,6 @@ private:
 
     int                                m_next_selection_change_subscription{1};
     Selection                          m_selection;
-    std::vector<Subscription_entry>    m_selection_change_subscriptions;
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
     bool                               m_hover_content{false};

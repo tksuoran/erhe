@@ -32,12 +32,6 @@ class Time;
 class View;
 class Window;
 
-class Hover_item
-{
-public:
-    virtual void on_hover() = 0;
-};
-
 class Commands
     : public erhe::components::Component
 {
@@ -163,9 +157,6 @@ private:
     std::vector<std::unique_ptr<Mouse_wheel_binding>> m_mouse_wheel_bindings;
     std::vector<Controller_trigger_binding>           m_controller_trigger_bindings;
     std::vector<Update_binding>                       m_update_bindings;
-
-    std::mutex m_hover_mutex;
-    std::vector<std::weak_ptr<Hover_item>> m_hover_items;
 };
 
 } // namespace erhe::application

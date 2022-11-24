@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/scene/viewport.hpp"
 
 #include <glm/glm.hpp>

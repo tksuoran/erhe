@@ -499,7 +499,6 @@ void Editor_rendering::begin_frame()
 
     erhe::application::Window_imgui_viewport* imgui_viewport = m_imgui_windows->get_window_viewport().get();
 
-    m_viewport_windows->reset_hover();
     m_viewport_windows->update_hover(imgui_viewport);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

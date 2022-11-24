@@ -29,7 +29,6 @@ target_link_libraries(${_target}
         erhe::log
         fmt::fmt
         Microsoft.GSL::GSL
-        optional_lite
         openxr_loader
 )
 

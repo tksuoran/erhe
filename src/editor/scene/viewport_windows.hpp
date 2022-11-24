@@ -1,11 +1,13 @@
 #pragma once
 
+#include "editor_message.hpp"
 #include "windows/viewport_config.hpp"
 
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/view.hpp"
@@ -34,6 +36,7 @@ namespace editor
 {
 
 class Basic_viewport_window;
+class Editor_message;
 class Editor_rendering;
 class Id_renderer;
 class Imgui_viewport_window;
@@ -69,6 +72,7 @@ private:
 /// (mouse cursor).
 class Viewport_windows
     : public erhe::components::Component
+    , public erhe::message_bus::Message_bus_node<Editor_message>
 {
 public:
     static constexpr std::string_view c_type_name{"Viewport_windows"};
@@ -159,9 +163,12 @@ public:
     [[nodiscard]] auto mouse_y              () const -> double;
 
 private:
+    void on_message                      (Editor_message& message);
+    void handle_graphics_settings_changed();
+
     void update_hover_from_imgui_viewport_windows(erhe::application::Imgui_viewport* imgui_viewport);
     void update_hover_from_basic_viewport_windows();
-    void layout_basic_viewport_windows();
+    void layout_basic_viewport_windows           ();
 
     // Component dependencies
     std::shared_ptr<erhe::application::Configuration>     m_configuration;

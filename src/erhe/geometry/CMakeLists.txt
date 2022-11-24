@@ -83,7 +83,6 @@ target_link_libraries(${_target}
     PRIVATE
         erhe::log
         erhe::toolkit
-        optional_lite
         Microsoft.GSL::GSL
         mikktspace
 )

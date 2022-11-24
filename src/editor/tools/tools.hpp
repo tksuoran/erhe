@@ -44,7 +44,6 @@ public:
     void register_tool           (Tool* tool);
     void register_background_tool(Tool* tool);
     void register_hover_tool     (Tool* tool);
-    void on_hover                (Scene_view* scene_view);
 
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;
 

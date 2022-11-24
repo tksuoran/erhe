@@ -1,9 +1,11 @@
 #include "rendergraph/shadow_render_node.hpp"
+#include "editor_log.hpp"
 
 #include "renderers/shadow_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
@@ -37,44 +39,45 @@ Shadow_render_node::Shadow_render_node(
         erhe::application::Rendergraph_node_key::shadow_maps
     );
 
+    reconfigure(resolution, light_count, reverse_depth);
+}
+
+void Shadow_render_node::reconfigure(
+    const int  resolution,
+    const int  light_count,
+    const bool reverse_depth
+)
+{
+    log_render->info("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
     {
         ERHE_PROFILE_SCOPE("allocating shadow map array texture");
 
-        m_texture = std::make_shared<Texture>(
-            Texture::Create_info
-            {
-                .target          = gl::Texture_target::texture_2d_array,
-                .internal_format = gl::Internal_format::depth_component32f,
-                //.sparse          = erhe::graphics::Instance::info.use_sparse_texture,
-                .width           = resolution,
-                .height          = resolution,
-                .depth           = light_count
-            }
-        );
+        m_texture.reset();
 
-#if 0
-        if (erhe::graphics::Instance::info.use_sparse_texture)
+        if (light_count > 0)
         {
-            // commit the whole texture for now
-            gl::texture_page_commitment_ext(
-                m_texture->gl_name(),
-                0,                  // level
-                0,                  // x offset
-                0,                  // y offset,
-                0,                  // z offset
-                m_texture->width(),
-                m_texture->height(),
-                m_texture->depth(),
-                GL_TRUE
+            m_texture = std::make_shared<Texture>(
+                Texture::Create_info
+                {
+                    .target          = gl::Texture_target::texture_2d_array,
+                    .internal_format = gl::Internal_format::depth_component32f,
+                    //.sparse          = erhe::graphics::Instance::info.use_sparse_texture,
+                    .width           = resolution,
+                    .height          = resolution,
+                    .depth           = light_count
+                }
             );
-        }
-#endif
 
-        m_texture->set_debug_label("Shadowmaps");
-        //float depth_clear_value = erhe::graphics::Instance::depth_clear_value;
-        //gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
+            m_texture->set_debug_label("Shadowmaps");
+        }
+        if (resolution == 1)
+        {
+            float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
+            gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
+        }
     }
 
+    m_framebuffers.clear();
     for (int i = 0; i < light_count; ++i)
     {
         ERHE_PROFILE_SCOPE("framebuffer creation");
@@ -89,9 +92,9 @@ Shadow_render_node::Shadow_render_node(
     m_viewport = {
         .x             = 0,
         .y             = 0,
-        .width         = m_texture->width(),
-        .height        = m_texture->height(),
-        .reverse_depth = reverse_depth  //// m_configuration->graphics.reverse_depth
+        .width         = resolution,
+        .height        = resolution,
+        .reverse_depth = reverse_depth
     };
 }
 
@@ -107,6 +110,11 @@ void Shadow_render_node::execute_rendergraph_node()
 
     const auto& layers = scene_root->layers();
     if (layers.content()->meshes.empty())
+    {
+        return;
+    }
+
+    if (!m_texture)
     {
         return;
     }
@@ -178,3 +186,23 @@ auto Shadow_render_node::get_viewport() const -> erhe::scene::Viewport
 }
 
 } // namespace editor
+
+
+
+#if 0
+        if (erhe::graphics::Instance::info.use_sparse_texture)
+        {
+            // commit the whole texture for now
+            gl::texture_page_commitment_ext(
+                m_texture->gl_name(),
+                0,                  // level
+                0,                  // x offset
+                0,                  // y offset,
+                0,                  // z offset
+                m_texture->width(),
+                m_texture->height(),
+                m_texture->depth(),
+                GL_TRUE
+            );
+        }
+#endif

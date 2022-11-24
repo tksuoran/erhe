@@ -18,7 +18,6 @@ if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     add_subdirectory(imgui)
 endif ()
 
-add_subdirectory(ghc_filesystem)
 add_subdirectory(mikktspace)
 
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
@@ -27,7 +26,6 @@ endif ()
 
 add_subdirectory(mINI)
 add_subdirectory(rapidjson)
-add_subdirectory(optional_lite)
 add_subdirectory(RectangleBinPack)
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")

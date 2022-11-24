@@ -30,12 +30,14 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     // TODO color format, depth and stencil format
-    explicit Multisample_resolve_node(
+    Multisample_resolve_node(
         const std::string_view name,
         int                    sample_count,
         const std::string_view label,
         int                    key
     );
+
+    void reconfigure(int sample_count);
 
     // Implements Rendergraph_node
     [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }

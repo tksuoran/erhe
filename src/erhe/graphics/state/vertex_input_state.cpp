@@ -1,14 +1,14 @@
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 
-#include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/graphics_log.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_attribute_mapping.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>

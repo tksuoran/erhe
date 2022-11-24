@@ -1,5 +1,5 @@
 #include "erhe/scene/transform.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 namespace erhe::scene

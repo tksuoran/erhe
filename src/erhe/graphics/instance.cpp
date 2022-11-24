@@ -1,4 +1,4 @@
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"

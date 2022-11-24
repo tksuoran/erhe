@@ -1,7 +1,7 @@
 #include "erhe/ui/font.hpp"
 #include "erhe/ui/glyph.hpp"
 #include "erhe/ui/ui_log.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <fmt/printf.h>

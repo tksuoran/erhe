@@ -94,6 +94,7 @@ private:
 };
 
 class Brush_data;
+class Editor_message;
 
 class Brushes
     : public erhe::components::Component
@@ -133,6 +134,7 @@ public:
     [[nodiscard]] auto make_brush(const Brush_data& create_info) -> std::shared_ptr<Brush>;
 
 private:
+    void on_message                (Editor_message& editor_message);
     void update_mesh               ();
 
     [[nodiscard]]

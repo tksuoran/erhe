@@ -8,8 +8,8 @@ erhe_target_sources_grouped(
     buffer.hpp
     buffer_transfer_queue.cpp
     buffer_transfer_queue.hpp
-    configuration.cpp
-    configuration.hpp
+    instance.cpp
+    instance.hpp
     debug.cpp
     debug.hpp
     fragment_output.cpp
@@ -91,10 +91,8 @@ target_link_libraries(${_target}
         erhe::components
         erhe::gl
         fmt::fmt
-        ghc_filesystem
         glm::glm
         #### glslang
-        optional_lite
         Microsoft.GSL::GSL
     PRIVATE
         erhe::log

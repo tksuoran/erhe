@@ -7,10 +7,12 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/format_info.hpp"
 #include "erhe/scene/scene_host.hpp"
+#include "erhe/scene/scene_message.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <map>
@@ -113,9 +115,9 @@ class Scene_root
 {
 public:
     Scene_root(
-        erhe::scene::Message_bus*                message_bus,
-        const std::shared_ptr<Material_library>& material_library,
-        const std::string_view                   name
+        erhe::message_bus::Message_bus<erhe::scene::Scene_message>* message_bus,
+        const std::shared_ptr<Material_library>&                    material_library,
+        const std::string_view                                      name
     );
     ~Scene_root() noexcept override;
 

@@ -1,30 +1,11 @@
-set(_target "erhe_scene")
+set(_target "erhe_message_bus")
 add_library(${_target})
-add_library(erhe::scene ALIAS ${_target})
+add_library(erhe::message_bus ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    camera.cpp
-    camera.hpp
-    node.cpp
-    node.hpp
-    mesh.cpp
-    mesh.hpp
-    light.cpp
-    light.hpp
-    projection.cpp
-    projection.hpp
-    scene.cpp
-    scene.hpp
-    scene_host.cpp
-    scene_host.hpp
-    scene_log.cpp
-    scene_log.hpp
-    scene_message.hpp
-    transform.cpp
-    transform.hpp
-    viewport.cpp
-    viewport.hpp
+    message_bus.cpp
+    message_bus.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
@@ -32,13 +13,10 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(
     ${_target}
     PRIVATE
-        erhe::gl
         erhe::log
-        erhe::message_bus
         fmt::fmt
         Microsoft.GSL::GSL
     PUBLIC
-        erhe::primitive
         glm::glm
 )
 

@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "renderers/shadow_renderer.hpp"
+#include "editor_scenes.hpp"
 
 #include "editor_log.hpp"
 
@@ -18,10 +19,10 @@
 #include "erhe/gl/draw_indirect.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/gpu_timer.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/shader_resource.hpp"
@@ -66,8 +67,9 @@ Shadow_renderer::~Shadow_renderer() noexcept
 void Shadow_renderer::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
+    require<Editor_scenes    >();
     require<Program_interface>();
-    require<Programs>();
+    require<Programs         >();
     m_configuration = require<erhe::application::Configuration>();
     m_render_graph  = require<erhe::application::Rendergraph>();
     m_mesh_memory   = require<Mesh_memory>();
@@ -128,11 +130,26 @@ void Shadow_renderer::initialize_component()
     };
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Shadow_renderer");
+
+    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+        [&](Editor_message& message)
+        {
+            on_message(message);
+        }
+    );
 }
 
 void Shadow_renderer::post_initialize()
 {
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+}
+
+void Shadow_renderer::on_message(Editor_message& message)
+{
+    if (message.event_type == Editor_event_type::graphics_settings_changed)
+    {
+        handle_graphics_settings_changed();
+    }
 }
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
@@ -142,8 +159,8 @@ auto Shadow_renderer::create_node_for_viewport(
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& config        = m_configuration->shadow_renderer;
-    const int   resolution    = config.enabled ? config.shadow_map_resolution : 1;
-    const int   light_count   = config.shadow_map_max_light_count;
+    const int   resolution    = config.enabled ? config.shadow_map_resolution      : 1;
+    const int   light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
     const bool  reverse_depth = m_configuration->graphics.reverse_depth;
 
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
@@ -156,6 +173,19 @@ auto Shadow_renderer::create_node_for_viewport(
     m_render_graph->register_node(shadow_render_node);
     m_nodes.push_back(shadow_render_node);
     return shadow_render_node;
+}
+
+void Shadow_renderer::handle_graphics_settings_changed()
+{
+    const auto& config        = m_configuration->shadow_renderer;
+    const int   resolution    = config.enabled ? config.shadow_map_resolution      : 1;
+    const int   light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
+    const bool  reverse_depth = m_configuration->graphics.reverse_depth;
+
+    for (const auto& node : m_nodes)
+    {
+        node->reconfigure(resolution, light_count, reverse_depth);
+    }
 }
 
 auto Shadow_renderer::get_node_for_view(
@@ -285,6 +315,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 continue;
             }
             const std::size_t light_index = light_projection_transform->index;
+            if (light_index >= parameters.framebuffers.size())
+            {
+                continue;
+            }
             m_light_buffers->update_control(light_index);
             m_light_buffers->bind_control_buffer();
 

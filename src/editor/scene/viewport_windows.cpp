@@ -4,6 +4,7 @@
 
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -86,13 +87,22 @@ void Viewport_windows::declare_required_components()
     m_window          = require<erhe::application::Window       >();
     m_post_processing = require<Post_processing>();
     m_shadow_renderer = require<Shadow_renderer >();
+    require<Editor_scenes>();
 }
 
 void Viewport_windows::initialize_component()
 {
+    Message_bus_node::initialize(get<Editor_scenes>()->get_editor_message_bus());
     const auto commands = get<erhe::application::Commands>();
     commands->register_command   (&m_open_new_viewport_window_command);
     commands->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+
+    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+        [&](Editor_message& message)
+        {
+            on_message(message);
+        }
+    );
 }
 
 void Viewport_windows::post_initialize()
@@ -102,6 +112,24 @@ void Viewport_windows::post_initialize()
     m_id_renderer            = get<Id_renderer     >();
     m_viewport_config        = get<Viewport_config >();
     m_tools                  = get<Tools           >();
+}
+
+void Viewport_windows::on_message(Editor_message& message)
+{
+    if (message.event_type == Editor_event_type::graphics_settings_changed)
+    {
+        handle_graphics_settings_changed();
+    }
+}
+
+void Viewport_windows::handle_graphics_settings_changed()
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+
+    for (const auto& viewport_window : m_viewport_windows)
+    {
+        viewport_window->reconfigure(m_configuration->graphics.msaa_sample_count);
+    }
 }
 
 void Viewport_windows::erase(Viewport_window* viewport_window)
@@ -114,7 +142,6 @@ void Viewport_windows::erase(Viewport_window* viewport_window)
             return entry.get() == viewport_window;
         }
     );
-    //// const auto count = std::distance(i, m_viewport_windows.end());
     m_viewport_windows.erase(i, m_viewport_windows.end());
 }
 
@@ -128,12 +155,7 @@ void Viewport_windows::erase(Basic_viewport_window* basic_viewport_window)
             return entry.get() == basic_viewport_window;
         }
     );
-    //// const auto count = std::distance(i, m_basic_viewport_windows.end());
     m_basic_viewport_windows.erase(i, m_basic_viewport_windows.end());
-    //// if (count == 0)
-    //// {
-    ////     log_windows->warn("nothing deleted");
-    //// }
 }
 
 auto Viewport_windows::create_viewport_window(
@@ -353,14 +375,14 @@ auto Viewport_windows::open_new_viewport_window(
 //    }
 //}
 
-void Viewport_windows::reset_hover()
-{
-    m_hover_stack.clear();
-}
-
 void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_viewport)
 {
     ERHE_PROFILE_FUNCTION
+
+    std::shared_ptr<Viewport_window> old_window = m_hover_stack.empty()
+        ? std::shared_ptr<Viewport_window>{}
+        : m_hover_stack.back().lock();
+    m_hover_stack.clear();
 
     if (imgui_viewport != nullptr)
     {
@@ -370,6 +392,21 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
     {
         layout_basic_viewport_windows();
         update_hover_from_basic_viewport_windows();
+    }
+
+    std::shared_ptr<Viewport_window> new_window = m_hover_stack.empty()
+        ? std::shared_ptr<Viewport_window>{}
+        : m_hover_stack.back().lock();
+
+    if (old_window != new_window)
+    {
+        send(
+            Editor_message{
+                .event_type          = Editor_event_type::viewport_changed,
+                .old_viewport_window = old_window,
+                .new_viewport_window = new_window
+            }
+        );
     }
 }
 
@@ -418,15 +455,12 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
         {
             viewport_window->reset_control_ray();
         }
-
-        // TODO same on both hover and non-hover?
-        // TODO Only call when transitioning from hover to non-hover
-        m_tools->on_hover(viewport_window.get());
     }
 }
 
 void Viewport_windows::update_hover_from_basic_viewport_windows()
 {
+    m_hover_stack.clear();
     for (const auto& basic_viewport_window : m_basic_viewport_windows)
     {
         const auto viewport_window = basic_viewport_window->get_viewport_window();
@@ -472,10 +506,6 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
         {
             viewport_window->reset_control_ray();
         }
-
-        // TODO same on both hover and non-hover?
-        // TODO Only call when transitioning from hover to non-hover
-        m_tools->on_hover(viewport_window.get());
     }
 }
 

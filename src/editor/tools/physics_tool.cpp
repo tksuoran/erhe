@@ -205,6 +205,12 @@ void Physics_tool::initialize_component()
     );
     world->add_rigid_body(m_constraint_world_point_rigid_body.get());
 
+    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+        [&](Editor_message& message)
+        {
+            on_message(message);
+        }
+    );
 }
 
 void Physics_tool::post_initialize()
@@ -217,6 +223,31 @@ void Physics_tool::post_initialize()
 auto Physics_tool::description() -> const char*
 {
     return c_title.data();
+}
+
+void Physics_tool::on_message(Editor_message& message)
+{
+    switch (message.event_type)
+    {
+        case Editor_event_type::selection_changed:
+        {
+            break;
+        }
+
+        case Editor_event_type::viewport_changed:
+        {
+            if (!message.new_viewport_window)
+            {
+                release_target();
+            }
+            break;
+        }
+
+        default:
+        {
+            break;
+        }
+    }
 }
 
 [[nodiscard]] auto Physics_tool::get_mode() const -> Physics_tool_mode

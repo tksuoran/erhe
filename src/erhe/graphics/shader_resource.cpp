@@ -1,5 +1,5 @@
 #include "erhe/graphics/shader_resource.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <algorithm>

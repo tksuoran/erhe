@@ -3,8 +3,8 @@
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/graphics_log.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>

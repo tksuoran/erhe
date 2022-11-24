@@ -1,6 +1,7 @@
 .idea
 .vs
 .vscode/compile_commands.json
+src/editor/user.ini
 build
 cmake-build-debug
 vscode-cmake-build

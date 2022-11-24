@@ -1,7 +1,7 @@
 #include "erhe/primitive/property_maps.hpp"
 #include "erhe/primitive/primitive_log.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>

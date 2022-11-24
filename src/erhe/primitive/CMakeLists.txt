@@ -44,7 +44,6 @@ target_link_libraries(${_target}
         erhe::geometry
         erhe::gl
         erhe::raytrace
-        optional_lite
 )
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")

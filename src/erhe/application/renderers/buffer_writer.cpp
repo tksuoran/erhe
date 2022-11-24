@@ -1,5 +1,5 @@
 #include "erhe/application//renderers/buffer_writer.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 
 namespace erhe::application
 {

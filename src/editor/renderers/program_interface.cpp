@@ -3,7 +3,7 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/window.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"

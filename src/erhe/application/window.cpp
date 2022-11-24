@@ -5,7 +5,7 @@
 
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"

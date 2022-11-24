@@ -512,7 +512,6 @@ void Headset_view::begin_frame()
             m_hud->update_node_transform(world_from_view);
         }
     }
-    m_tools->on_hover(this);
 }
 
 void Headset_view::connect(const std::shared_ptr<Shadow_render_node>& shadow_render_node)

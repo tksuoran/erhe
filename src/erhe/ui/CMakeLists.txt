@@ -25,7 +25,6 @@ target_link_libraries(
         erhe::graphics
         erhe::primitive
         fmt::fmt
-        ghc_filesystem
         glm::glm
         glfw
     PRIVATE

@@ -105,7 +105,6 @@ target_link_libraries(
         erhe::primitive
         fmt::fmt
         glm::glm
-        optional_lite
     PRIVATE
         Microsoft.GSL::GSL
 )

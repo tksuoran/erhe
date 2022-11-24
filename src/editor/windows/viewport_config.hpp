@@ -4,7 +4,7 @@
 
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 
 #include <glm/glm.hpp>
 

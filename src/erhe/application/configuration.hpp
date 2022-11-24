@@ -9,6 +9,18 @@
 
 namespace erhe::application {
 
+auto str     (bool value      ) -> const char*;
+auto split   (const std::string& s, char delimeter) -> std::vector<std::string>;
+auto trim    (const std::string& str, const std::string& whitespace = " \t") -> std::string;
+
+auto to_lower(std::string data) -> std::string;
+void ini_get (const mINI::INIMap<std::string>& ini, std::string key, int& destination);
+void ini_get (const mINI::INIMap<std::string>& ini, std::string key, float& destination);
+void ini_get (const mINI::INIMap<std::string>& ini, std::string key, glm::vec4& destination);
+void ini_get (const mINI::INIMap<std::string>& ini, std::string key, std::string& destination);
+void ini_get (const mINI::INIMap<std::string>& ini, std::string key, bool& destination);
+
+
 class Configuration
     : public erhe::components::Component
 {
@@ -69,13 +81,13 @@ public:
     class Graphics
     {
     public:
-        bool low_hdr          {false};
-        bool reverse_depth    {true};
-        bool simpler_shaders  {true};
-        bool post_processing  {true};
+        bool low_hdr          {false}; // TODO remove
+        bool reverse_depth    {true};  // TODO move to editor
+        bool simpler_shaders  {true};  // TODO move to editor
+        bool post_processing  {true};  // TODO move to editor
         bool use_time_query   {true};
-        bool force_no_bindless{false};
-        int  msaa_sample_count{4};
+        bool force_no_bindless{false}; // TODO move to erhe::graphics
+        int  msaa_sample_count{4};     // TODO move to editor
     };
     Graphics graphics;
 

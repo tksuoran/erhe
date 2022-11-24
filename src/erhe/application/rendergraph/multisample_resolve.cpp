@@ -36,6 +36,19 @@ Multisample_resolve_node::Multisample_resolve_node(
     register_output(Resource_routing::Resource_provided_by_consumer, label, key);
 }
 
+void Multisample_resolve_node::reconfigure(const int sample_count)
+{
+    if (m_sample_count == sample_count)
+    {
+        return;
+    }
+
+    m_sample_count = sample_count;
+    m_color_texture.reset();
+    m_depth_stencil_renderbuffer.reset();
+    m_framebuffer.reset();
+}
+
 [[nodiscard]] auto Multisample_resolve_node::get_consumer_input_texture(
     const Resource_routing resource_routing,
     const int              key,

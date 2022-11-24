@@ -27,7 +27,7 @@ void Tools::initialize_component()
 {
     const auto editor_scenes = get<Editor_scenes>();
     m_scene_root = std::make_shared<Scene_root>(
-        editor_scenes->get_message_bus(),
+        editor_scenes->get_scene_message_bus(),
         std::make_shared<Material_library>(),
         "Tool scene"
     );
@@ -64,15 +64,6 @@ void Tools::register_hover_tool(Tool* tool)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_hover_tools.emplace_back(tool);
-}
-
-void Tools::on_hover(Scene_view* scene_view)
-{
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    for (const auto& tool : m_hover_tools)
-    {
-        tool->tool_hover(scene_view);
-    }
 }
 
 void Tools::render_tools(const Render_context& context)

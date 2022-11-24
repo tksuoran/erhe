@@ -103,8 +103,6 @@ target_link_libraries(
     erhe::toolkit
     erhe::ui
     imgui
-    ghc_filesystem
-    optional_lite
     nlohmann_json::nlohmann_json
 )
 

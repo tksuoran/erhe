@@ -1,6 +1,7 @@
 #pragma once
 
-#include "erhe/scene/message_bus.hpp"
+#include "erhe/message_bus/message_bus.hpp"
+#include "erhe/scene/scene_message.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <glm/glm.hpp>
@@ -61,10 +62,14 @@ public:
 class Scene_host;
 
 class Scene
-    : public Message_bus_node
+    : public erhe::message_bus::Message_bus_node<Scene_message>
 {
 public:
-    explicit Scene(Message_bus* message_bus, Scene_host* host = nullptr);
+    explicit Scene(
+        erhe::message_bus::Message_bus<Scene_message>* message_bus,
+        Scene_host*                                    host = nullptr
+    );
+
     ~Scene() override;
 
     void sanity_check          () const;

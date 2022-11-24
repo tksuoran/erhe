@@ -48,6 +48,7 @@
 #include "windows/post_processing_window.hpp"
 #include "windows/physics_window.hpp"
 #include "windows/rendergraph_window.hpp"
+#include "windows/settings.hpp"
 #include "windows/tool_properties_window.hpp"
 #include "windows/viewport_config.hpp"
 
@@ -208,6 +209,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Scene_builder         >());
         m_components.add(make_shared<editor::Scene_commands        >());
         m_components.add(make_shared<editor::Selection_tool        >());
+        m_components.add(make_shared<editor::Settings_window       >());
         m_components.add(make_shared<editor::Shadow_renderer       >());
         m_components.add(make_shared<editor::Tools                 >());
         m_components.add(make_shared<editor::Tool_properties_window>());

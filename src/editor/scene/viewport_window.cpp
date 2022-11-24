@@ -26,6 +26,7 @@
 #include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
+#include "erhe/application/rendergraph/multisample_resolve.hpp"
 #include "erhe/application/view.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
@@ -175,6 +176,15 @@ void Viewport_window::execute_rendergraph_node()
     }
 
     m_editor_rendering->render_viewport_main(context, m_is_hovered);
+}
+
+void Viewport_window::reconfigure(const int sample_count)
+{
+    const auto resolve_node = m_multisample_resolve_node.lock();
+    if (resolve_node)
+    {
+        resolve_node->reconfigure(sample_count);
+    }
 }
 
 void Viewport_window::connect(Viewport_windows* viewport_windows)

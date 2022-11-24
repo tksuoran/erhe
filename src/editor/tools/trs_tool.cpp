@@ -30,7 +30,7 @@
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/scene/message_bus.hpp"
+#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -144,7 +144,7 @@ void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    Message_bus_node::initialize(get<Editor_scenes>()->get_message_bus());
+    Message_bus_node::initialize(get<Editor_scenes>()->get_editor_message_bus());
 
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
@@ -173,39 +173,39 @@ void Trs_tool::initialize_component()
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
     commands->bind_command_to_controller_trigger(&m_drag_command, 0.50f, 0.45f, true);
 
-    m_editor_scenes->get_message_bus()->add_receiver(
-        [&](erhe::scene::Message& message)
+    m_editor_scenes->get_editor_message_bus()->add_receiver(
+        [&](Editor_message& message)
         {
             on_message(message);
         }
     );
 }
 
-void Trs_tool::on_message(erhe::scene::Message& message)
+void Trs_tool::on_message(Editor_message& message)
 {
     switch (message.event_type)
     {
-        case erhe::scene::Event_type::node_added_to_scene:
-        {
-            log_trs_tool->trace("Node {} added to scene", message.lhs->name());
-            break;
-        }
-        case erhe::scene::Event_type::node_removed_from_scene:
-        {
-            log_trs_tool->trace("Node {} removed from scene", message.lhs->name());
-            break;
-        }
-        case erhe::scene::Event_type::node_replaced:
-        {
-            log_trs_tool->trace("Node {} replaced with {}", message.lhs->name(), message.rhs->name());
-            break;
-        }
-        case erhe::scene::Event_type::node_changed:
-        {
-            log_trs_tool->trace("Node {} changed", message.lhs->name());
-            break;
-        }
-        case erhe::scene::Event_type::selection_changed:
+        //case erhe::scene::Event_type::node_added_to_scene:
+        //{
+        //    log_trs_tool->trace("Node {} added to scene", message.lhs->name());
+        //    break;
+        //}
+        //case erhe::scene::Event_type::node_removed_from_scene:
+        //{
+        //    log_trs_tool->trace("Node {} removed from scene", message.lhs->name());
+        //    break;
+        //}
+        //case erhe::scene::Event_type::node_replaced:
+        //{
+        //    log_trs_tool->trace("Node {} replaced with {}", message.lhs->name(), message.rhs->name());
+        //    break;
+        //}
+        //case erhe::scene::Event_type::node_changed:
+        //{
+        //    log_trs_tool->trace("Node {} changed", message.lhs->name());
+        //    break;
+        //}
+        case Editor_event_type::selection_changed:
         {
             log_trs_tool->trace("Selection changed {}");
             const auto& selection = m_selection_tool->selection();

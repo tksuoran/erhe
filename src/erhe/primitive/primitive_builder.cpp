@@ -11,7 +11,7 @@
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/gl_helpers.hpp"
 #include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"

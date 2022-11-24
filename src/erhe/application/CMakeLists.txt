@@ -129,8 +129,6 @@ target_link_libraries(${_target}
         erhe::toolkit
         erhe::ui
         mINI
-        ghc_filesystem
-        optional_lite
         Microsoft.GSL::GSL
 )
 

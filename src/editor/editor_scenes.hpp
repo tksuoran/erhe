@@ -1,7 +1,9 @@
 #pragma once
 
+#include "editor_message.hpp"
 #include "erhe/components/components.hpp"
-#include "erhe/scene/message_bus.hpp"
+#include "erhe/message_bus/message_bus.hpp"
+#include "erhe/scene/scene_message.hpp"
 
 #include <thread>
 
@@ -33,13 +35,15 @@ public:
 
     [[nodiscard]] auto get_scene_roots       () -> const std::vector<std::shared_ptr<Scene_root>>&;
     [[nodiscard]] auto get_current_scene_root() -> const std::shared_ptr<Scene_root>&;
-    [[nodiscard]] auto get_message_bus       () -> erhe::scene::Message_bus*;
+    [[nodiscard]] auto get_editor_message_bus() -> erhe::message_bus::Message_bus<Editor_message>*;
+    [[nodiscard]] auto get_scene_message_bus () -> erhe::message_bus::Message_bus<erhe::scene::Scene_message>*;
 
 private:
-    std::mutex                               m_mutex;
-    std::vector<std::shared_ptr<Scene_root>> m_scene_roots;
-    std::shared_ptr<Scene_root>              m_current_scene_root;
-    erhe::scene::Message_bus                 m_message_bus;
+    std::mutex                                                 m_mutex;
+    std::vector<std::shared_ptr<Scene_root>>                   m_scene_roots;
+    std::shared_ptr<Scene_root>                                m_current_scene_root;
+    erhe::message_bus::Message_bus<Editor_message>             m_editor_message_bus; // TODO relocate?
+    erhe::message_bus::Message_bus<erhe::scene::Scene_message> m_scene_message_bus; // TODO relocate?
 };
 
 } // namespace editor

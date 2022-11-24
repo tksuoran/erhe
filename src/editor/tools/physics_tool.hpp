@@ -40,6 +40,7 @@ namespace erhe::application
 namespace editor
 {
 
+class Editor_message;
 class Editor_scenes;
 class Fly_camera_tool;
 class Node_physics;
@@ -118,6 +119,8 @@ public:
     auto on_drag      (Scene_view* scene_view) -> bool;
 
 private:
+    void on_message(Editor_message& message);
+
     void move_drag_point_instant  (glm::vec3 position);
     void move_drag_point_kinematic(glm::vec3 position);
 

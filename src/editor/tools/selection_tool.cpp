@@ -250,7 +250,7 @@ void Selection_tool::declare_required_components()
 void Selection_tool::initialize_component()
 {
     get<Tools>()->register_tool(this);
-    Message_bus_node::initialize(get<Editor_scenes>()->get_message_bus());
+    Message_bus_node::initialize(get<Editor_scenes>()->get_editor_message_bus());
 
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     hide();
@@ -581,8 +581,8 @@ void Selection_tool::sanity_check()
 void Selection_tool::call_selection_change_subscriptions() const
 {
     send(
-        erhe::scene::Message{
-            .event_type = erhe::scene::Event_type::selection_changed
+        Editor_message{
+            .event_type = Editor_event_type::selection_changed
         }
     );
 }

@@ -156,6 +156,8 @@ erhe_target_sources_grouped(
     windows/physics_window.hpp
     windows/rendergraph_window.cpp
     windows/rendergraph_window.hpp
+    windows/settings.cpp
+    windows/settings.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
     windows/viewport_config.cpp
@@ -163,6 +165,7 @@ erhe_target_sources_grouped(
 
     editor_log.cpp
     editor_log.hpp
+    editor_message.hpp
     editor_on_load.cpp
     editor_rendering.cpp
     editor_rendering.hpp
@@ -266,8 +269,7 @@ target_link_libraries(
     erhe::scene
     erhe::toolkit
     erhe::ui
-    ghc_filesystem
-    optional_lite
+    mINI
     RectangleBinPack
     rapidjson
 )

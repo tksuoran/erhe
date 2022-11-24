@@ -130,7 +130,7 @@ void Scene_builder::initialize_component()
     const auto& editor_scenes = get<Editor_scenes>();
 
     m_scene_root = std::make_shared<Scene_root>(
-        editor_scenes->get_message_bus(),
+        editor_scenes->get_scene_message_bus(),
         std::make_shared<Material_library>(),
         "Scene"
     );
@@ -325,7 +325,9 @@ void Scene_builder::setup_cameras()
 
     if (configuration->window.show)
     {
-        const auto shadow_render_node = shadow_renderer->create_node_for_viewport(m_primary_viewport_window);
+        const auto shadow_render_node = shadow_renderer->create_node_for_viewport(
+            m_primary_viewport_window
+        );
         render_graph->register_node(shadow_render_node);
         render_graph->connect(
             erhe::application::Rendergraph_node_key::shadow_maps,

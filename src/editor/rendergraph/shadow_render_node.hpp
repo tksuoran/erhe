@@ -31,9 +31,9 @@ public:
     Shadow_render_node(
         Shadow_renderer&                   shadow_renderer,
         const std::shared_ptr<Scene_view>& scene_view,
-        int                                 resolution,
-        int                                 light_count,
-        bool                                reverse_depth
+        int                                resolution,
+        int                                light_count,
+        bool                               reverse_depth
     );
 
     // Implements Rendergraph_node
@@ -57,6 +57,12 @@ public:
     [[nodiscard]] auto inputs_allowed() const -> bool override;
 
     // Public API
+    void reconfigure(
+        int  resolution,
+        int  light_count,
+        bool reverse_depth
+    );
+
     [[nodiscard]] auto get_scene_view       () const -> std::shared_ptr<Scene_view>;
     [[nodiscard]] auto get_light_projections() -> Light_projections&;
     [[nodiscard]] auto get_texture          () const -> std::shared_ptr<erhe::graphics::Texture>;

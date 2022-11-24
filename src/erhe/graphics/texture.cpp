@@ -2,11 +2,11 @@
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/gl/gl_helpers.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/configuration.hpp"
 #include "erhe/graphics/graphics_log.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/verify.hpp"
 
