@@ -313,10 +313,6 @@ auto Brushes::get_hover_mesh_transform() -> mat4
         brush_frame.transform_by(scale_transform);
     }
 
-    debug_info.hover_frame_scale = hover_frame.scale();
-    debug_info.brush_frame_scale = brush_frame.scale();
-    debug_info.transform_scale   = scale;
-
     if (
         !m_snap_to_hover_polygon &&
         m_hover.position.has_value()
@@ -576,9 +572,6 @@ void Brushes::tool_properties()
 
     ImGui::NewLine    ();
     ImGui::Checkbox   ("Debug visualization", &m_debug_visualization);
-    ImGui::Text       ("Hover scale: %f",     &debug_info.hover_frame_scale);
-    ImGui::Text       ("Brush scale: %f",     &debug_info.brush_frame_scale);
-    ImGui::Text       ("Transform scale: %f", &debug_info.transform_scale);
 #endif
 }
 

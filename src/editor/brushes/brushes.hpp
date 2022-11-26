@@ -177,15 +177,6 @@ private:
     int                                 m_polygon_offset   {0};
     int                                 m_corner_offset    {0};
     Scene_view*                         m_scene_view       {nullptr};
-
-    class Debug_info
-    {
-    public:
-        float hover_frame_scale{0.0f};
-        float brush_frame_scale{0.0f};
-        float transform_scale{0.0f};
-    };
-    Debug_info debug_info;
 };
 
 } // namespace editor

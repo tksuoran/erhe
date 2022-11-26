@@ -220,8 +220,11 @@ auto get_plane_transform(Grid_plane_type plane_type) -> glm::dmat4
                 0.0, 0.0, 0.0, 1.0
             };
         }
+        default:
+        {
+            return glm::dmat4{1.0};
+        }
     }
-    return glm::dmat4{1.0};
 }
 
 void Grid_tool::imgui()
