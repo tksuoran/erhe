@@ -91,7 +91,6 @@ public:
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
-    void tool_hover (Scene_view* scene_view) override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -118,8 +117,6 @@ private:
     std::shared_ptr<Mesh_memory     > m_mesh_memory;
 
     Paint_vertex_command m_paint_vertex_command;
-
-    std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
 
     Paint_mode m_paint_mode{Paint_mode::Point};
     glm::vec4  m_color     {1.0f, 1.0f, 1.0f, 1.0f};

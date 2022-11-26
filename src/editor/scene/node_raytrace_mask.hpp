@@ -15,6 +15,7 @@ public:
     static constexpr uint32_t brush        = (1u << 3);
     static constexpr uint32_t rendertarget = (1u << 4);
     static constexpr uint32_t controller   = (1u << 5);
+    static constexpr uint32_t grid         = (1u << 6);
 };
 
 } // namespace editor

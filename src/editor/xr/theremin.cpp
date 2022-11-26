@@ -195,8 +195,6 @@ void Theremin::initialize_component()
     ////     ma_device_start(&m_audio_device);
     //// }
 
-    // TODO update_grid_color();
-
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::index,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::middle, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
@@ -278,21 +276,6 @@ void Theremin::generate(
     }
 }
 
-void Theremin::update_grid_color() const
-{
-    const auto& grid = get<Grid_tool>();
-    if (m_snap_to_note)
-    {
-        grid->set_major_color(glm::vec4{0.265f, 0.265f, 0.95f, 1.0f});
-        grid->set_minor_color(glm::vec4{0.035f, 0.035f, 0.35f, 1.0f});
-    }
-    else
-    {
-        grid->set_major_color(glm::vec4{0.15f, 0.15f, 0.45f, 1.0f});
-        grid->set_minor_color(glm::vec4{0.07f, 0.07f, 0.25f, 1.0f});
-    }
-}
-
 void Theremin::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
@@ -369,7 +352,6 @@ void Theremin::tool_render(const Render_context& context)
                     m_right_click = true;
 
                     m_snap_to_note = !m_snap_to_note;
-                    update_grid_color();
                 }
             }
         }

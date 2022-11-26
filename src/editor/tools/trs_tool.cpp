@@ -31,6 +31,7 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/message_bus/message_bus.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -183,44 +184,26 @@ void Trs_tool::initialize_component()
 
 void Trs_tool::on_message(Editor_message& message)
 {
-    switch (message.event_type)
+    using namespace erhe::toolkit;
+    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_selection))
     {
-        //case erhe::scene::Event_type::node_added_to_scene:
-        //{
-        //    log_trs_tool->trace("Node {} added to scene", message.lhs->name());
-        //    break;
-        //}
-        //case erhe::scene::Event_type::node_removed_from_scene:
-        //{
-        //    log_trs_tool->trace("Node {} removed from scene", message.lhs->name());
-        //    break;
-        //}
-        //case erhe::scene::Event_type::node_replaced:
-        //{
-        //    log_trs_tool->trace("Node {} replaced with {}", message.lhs->name(), message.rhs->name());
-        //    break;
-        //}
-        //case erhe::scene::Event_type::node_changed:
-        //{
-        //    log_trs_tool->trace("Node {} changed", message.lhs->name());
-        //    break;
-        //}
-        case Editor_event_type::selection_changed:
+        log_trs_tool->trace("Selection changed {}");
+        const auto& selection = m_selection_tool->selection();
         {
-            log_trs_tool->trace("Selection changed {}");
-            const auto& selection = m_selection_tool->selection();
+            if (selection.empty())
             {
-                if (selection.empty())
-                {
-                    set_node({});
-                }
-                else
-                {
-                    set_node(selection.front());
-                }
-            };
-            break;
-        }
+                set_node({});
+            }
+            else
+            {
+                set_node(selection.front());
+            }
+        };
+    }
+    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_hover))
+    {
+        log_trs_tool->trace("Hover changed {}");
+        tool_hover(message.scene_view);
     }
 }
 

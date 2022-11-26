@@ -2,6 +2,7 @@
 
 #include "scene/collision_generator.hpp"
 #include "tools/tool.hpp"
+#include "scene/scene_view.hpp"
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
@@ -29,6 +30,7 @@ namespace erhe::application
 {
     class Configuration;
     class Line_renderer_set;
+    class Text_renderer;
 }
 
 namespace erhe::primitive
@@ -52,6 +54,7 @@ class Brush;
 class Brushes;
 class Editor;
 class Editor_scenes;
+class Grid;
 class Grid_tool;
 class Materials_window;
 class Mesh_memory;
@@ -118,6 +121,7 @@ public:
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override { return c_title.data(); }
+    void tool_render            (const Render_context& context) override;
     void tool_properties        () override;
     void on_enable_state_changed() override;
 
@@ -136,26 +140,27 @@ public:
 private:
     void on_message                (Editor_message& editor_message);
     void update_mesh               ();
-
-    [[nodiscard]]
-    auto get_brush_transform       () -> glm::mat4; // Places brush in parent (hover) mesh
-
     void do_insert_operation       ();
     void add_brush_mesh            ();
     void remove_brush_mesh         ();
     void update_mesh_node_transform();
 
+    [[nodiscard]] auto get_hover_mesh_transform() -> glm::mat4; // Places brush in parent (hover) mesh
+    [[nodiscard]] auto get_hover_grid_transform() -> glm::mat4;
+
     Brush_tool_preview_command m_preview_command;
     Brush_tool_insert_command  m_insert_command;
 
     // Component dependencies
-    std::shared_ptr<erhe::application::Configuration> m_configuration;
-    std::shared_ptr<Editor_scenes   > m_editor_scenes;
-    std::shared_ptr<Grid_tool       > m_grid_tool;
-    std::shared_ptr<Materials_window> m_materials_window;
-    std::shared_ptr<Operation_stack > m_operation_stack;
-    std::shared_ptr<Selection_tool  > m_selection_tool;
-    std::shared_ptr<Viewport_windows> m_viewport_windows;
+    std::shared_ptr<erhe::application::Configuration>     m_configuration;
+    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
+    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
+    std::shared_ptr<Editor_scenes   >   m_editor_scenes;
+    std::shared_ptr<Grid_tool       >   m_grid_tool;
+    std::shared_ptr<Materials_window>   m_materials_window;
+    std::shared_ptr<Operation_stack >   m_operation_stack;
+    std::shared_ptr<Selection_tool  >   m_selection_tool;
+    std::shared_ptr<Viewport_windows>   m_viewport_windows;
 
     std::mutex                          m_brush_mutex;
     std::vector<std::shared_ptr<Brush>> m_brushes;
@@ -163,20 +168,15 @@ private:
     std::weak_ptr<Brush>                m_brush                {};
     bool                                m_snap_to_hover_polygon{true};
     bool                                m_snap_to_grid         {true};
-    bool                                m_hover_content        {false};
-    bool                                m_hover_tool           {false};
-    std::optional<glm::vec3>            m_hover_position;
-    std::optional<glm::vec3>            m_hover_normal;
-    std::shared_ptr<erhe::scene::Mesh>  m_hover_mesh;
-    erhe::geometry::Geometry*           m_hover_geometry   {nullptr};
-    std::size_t                         m_hover_primitive  {0};
-    std::size_t                         m_hover_local_index{0};
+    bool                                m_debug_visualization  {false};
+    Hover_entry                         m_hover;
     std::shared_ptr<erhe::scene::Mesh>  m_brush_mesh;
-    bool                                m_with_physics{true};
+    bool                                m_with_physics     {true};
     float                               m_scale            {1.0f};
     float                               m_transform_scale  {1.0f};
     int                                 m_polygon_offset   {0};
     int                                 m_corner_offset    {0};
+    Scene_view*                         m_scene_view       {nullptr};
 
     class Debug_info
     {

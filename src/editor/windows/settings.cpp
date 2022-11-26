@@ -146,7 +146,7 @@ void Settings_window::use_settings(const Settings& settings)
 
     send(
         Editor_message{
-            .event_type = Editor_event_type::graphics_settings_changed
+            .changed = Changed_flag_bit::c_flag_bit_graphics_settings
         }
     );
 }
@@ -240,7 +240,7 @@ void Settings_window::imgui()
     {
         Settings& settings = m_settings.at(m_settings_index);
 
-        ImGui::InputText("Preset Name", &settings.name, ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputText("Preset Name", &settings.name);
 
         ImGui::Separator();
 

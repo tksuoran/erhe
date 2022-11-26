@@ -96,7 +96,6 @@ public:
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int     override { return c_priority; }
     [[nodiscard]] auto description  () -> const char*   override;
-    void tool_hover     (Scene_view* scene_view) override;
     void tool_render    (const Render_context& context) override;
     void tool_properties() override;
 
@@ -120,6 +119,7 @@ public:
 
 private:
     void on_message(Editor_message& message);
+    void tool_hover(Scene_view* scene_view);
 
     void move_drag_point_instant  (glm::vec3 position);
     void move_drag_point_kinematic(glm::vec3 position);

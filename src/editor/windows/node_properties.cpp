@@ -297,8 +297,8 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
     if (
         ImGui::TreeNodeEx(
             "Mesh",
-            ImGuiTreeNodeFlags_Framed |
-            ImGuiTreeNodeFlags_DefaultOpen
+            ImGuiTreeNodeFlags_Framed // |
+            //ImGuiTreeNodeFlags_DefaultOpen
         )
     )
     {
@@ -785,7 +785,7 @@ void Node_properties::imgui()
             erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
             if (rigid_body != nullptr)
             {
-                if (ImGui::TreeNodeEx("Physics", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
+                if (ImGui::TreeNodeEx("Physics", /*ImGuiTreeNodeFlags_DefaultOpen | */  ImGuiTreeNodeFlags_Framed))
                 {
                     ImGui::Text("Rigid Body: %s", rigid_body->get_debug_label());
                     float           mass    = rigid_body->get_mass();

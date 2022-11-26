@@ -34,6 +34,7 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -146,7 +147,8 @@ void Shadow_renderer::post_initialize()
 
 void Shadow_renderer::on_message(Editor_message& message)
 {
-    if (message.event_type == Editor_event_type::graphics_settings_changed)
+    using namespace erhe::toolkit;
+    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_graphics_settings))
     {
         handle_graphics_settings_changed();
     }
@@ -293,13 +295,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             erhe::primitive::Primitive_mode::polygon_fill,
             shadow_filter
         );
-        if (draw_indirect_buffer_range.draw_indirect_count == 0)
+        if (draw_indirect_buffer_range.draw_indirect_count > 0)
         {
-            continue;
+            m_primitive_buffers->bind();
+            m_draw_indirect_buffers->bind();
         }
-
-        m_primitive_buffers->bind();
-        m_draw_indirect_buffers->bind();
 
         for (const auto& light : lights)
         {
@@ -319,8 +319,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             {
                 continue;
             }
-            m_light_buffers->update_control(light_index);
-            m_light_buffers->bind_control_buffer();
 
             //Frustum_tiler frustum_tiler{*m_texture.get()};
             //frustum_tiler.update(
@@ -346,6 +344,14 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
                 gl::clear_buffer_fv(gl::Buffer::depth, 0, m_configuration->depth_clear_value_pointer());
             }
+
+            if (draw_indirect_buffer_range.draw_indirect_count == 0)
+            {
+                continue;
+            }
+
+            m_light_buffers->update_control(light_index);
+            m_light_buffers->bind_control_buffer();
 
             {
                 static constexpr std::string_view c_id_mdi{"mdi"};

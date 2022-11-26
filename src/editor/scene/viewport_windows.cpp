@@ -39,6 +39,7 @@
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -116,7 +117,8 @@ void Viewport_windows::post_initialize()
 
 void Viewport_windows::on_message(Editor_message& message)
 {
-    if (message.event_type == Editor_event_type::graphics_settings_changed)
+    using namespace erhe::toolkit;
+    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_graphics_settings))
     {
         handle_graphics_settings_changed();
     }
@@ -324,7 +326,7 @@ auto Viewport_windows::open_new_viewport_window(
 {
     if (scene_root)
     {
-        std::string name = fmt::format("Viewport for {}", scene_root->name());
+        const std::string name = fmt::format("Viewport for {}", scene_root->name());
 
         auto selection_tool = try_get<Selection_tool>();
         if (selection_tool)
@@ -402,9 +404,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
     {
         send(
             Editor_message{
-                .event_type          = Editor_event_type::viewport_changed,
-                .old_viewport_window = old_window,
-                .new_viewport_window = new_window
+                .changed = Changed_flag_bit::c_flag_bit_viewport
             }
         );
     }

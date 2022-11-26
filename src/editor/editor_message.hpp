@@ -5,21 +5,22 @@
 namespace editor
 {
 
-class Viewport_window;
-
-enum class Editor_event_type : int
+class Changed_flag_bit
 {
-    selection_changed,
-    viewport_changed,
-    graphics_settings_changed
+public:
+    static constexpr uint64_t c_flag_bit_selection         = (1u << 0);
+    static constexpr uint64_t c_flag_bit_viewport          = (1u << 1);
+    static constexpr uint64_t c_flag_bit_hover             = (1u << 2);
+    static constexpr uint64_t c_flag_bit_graphics_settings = (1u << 3);
 };
+
+class Scene_view;
 
 class Editor_message
 {
 public:
-    Editor_event_type                event_type;
-    std::shared_ptr<Viewport_window> old_viewport_window;
-    std::shared_ptr<Viewport_window> new_viewport_window;
+    uint64_t    changed{0};
+    Scene_view* scene_view{nullptr};
 };
 
 }

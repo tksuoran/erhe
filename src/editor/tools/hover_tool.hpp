@@ -30,7 +30,7 @@ namespace erhe::application
 namespace editor
 {
 
-class Editor_scenes;
+class Editor_message;
 class Hover_tool;
 class Scene_view;
 class Viewport_window;
@@ -63,47 +63,22 @@ public:
 
     // Implements Tool
     [[nodiscard]] auto description() -> const char* override;
-    void tool_hover (Scene_view* scene_view) override;
     void tool_render(const Render_context& context) override;
 
     // Implements Imgui_window
     void imgui() override;
 
-    // Public API
-    //[[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
-
-    // Command
-    //void on_inactive  ();
-    //void on_scene_view(Scene_view* scene_view);
-
 private:
-    //void deselect();
-    //void select  ();
+    void on_message(Editor_message& message);
+    void tool_hover(Scene_view* scene_view);
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
-    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
-    std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
-    std::optional<glm::dvec3> m_origin;
-    std::optional<glm::dvec3> m_direction;
-
-    //std::shared_ptr<erhe::scene::Mesh> m_hover_mesh           {nullptr};
-    //std::size_t                        m_hover_primitive_index{0};
-    //std::optional<glm::vec3>           m_hover_position_world;
-    //std::optional<glm::vec3>           m_hover_normal;
-    //bool                               m_hover_content        {false};
-    //bool                               m_hover_tool           {false};
-
-    //glm::vec4                                  m_hover_primitive_emissive{0.00f, 0.00f, 0.00f, 0.0f};
-    //glm::vec4                                  m_hover_emissive          {0.05f, 0.05f, 0.10f, 0.0f};
-    //std::shared_ptr<erhe::primitive::Material> m_original_primitive_material;
-    //std::shared_ptr<erhe::primitive::Material> m_hover_material;
-    //std::size_t                                m_hover_material_index{0};
-
-    //bool m_enable_color_highlight{false};
+    Scene_view* m_scene_view                {nullptr};
+    bool        m_show_snapped_grid_position{false};
 };
 
 } // namespace editor

@@ -162,7 +162,6 @@ public:
         float spot_light_height          {10.0f};
         int   spot_light_count           {3};
         float floor_size                 {40.0f};
-        int   floor_div                  {4};
         int   instance_count             {1};
         float instance_gap               {0.4f};
         float object_scale               {1.0f};
@@ -210,11 +209,13 @@ public:
         Window_entry node_tree           {false};
         Window_entry operation_stack     {false};
         Window_entry operations          {false};
+        Window_entry paint_tool          {false};
         Window_entry performance         {false};
         Window_entry pipelines           {false};
         Window_entry physics             {false};
         Window_entry post_processing     {false};
         Window_entry render_graph        {false};
+        Window_entry settings            {false};
         Window_entry tool_properties     {false};
         Window_entry trs                 {false};
         Window_entry viewport            {true};

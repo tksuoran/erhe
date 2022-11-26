@@ -122,17 +122,24 @@ public:
 
     // Public API
     void late_initialize();
-    [[nodiscard]] auto name               () const -> const std::string&;
+
     [[nodiscard]] auto get_reference_frame(
         uint32_t corner_count,
         uint32_t face_offset,
         uint32_t corner_offset
     ) -> Reference_frame;
-    [[nodiscard]] auto get_scaled         (float scale) -> const Scaled&;
-    [[nodiscard]] auto create_scaled      (int scale_key) -> Scaled;
-    [[nodiscard]] auto make_instance      (const Instance_create_info& instance_create_info) -> Instance;
-    [[nodiscard]] auto get_bounding_box   () -> erhe::toolkit::Bounding_box;
-    [[nodiscard]] auto get_geometry       () -> std::shared_ptr<erhe::geometry::Geometry>;
+
+    [[nodiscard]] auto get_reference_frame(
+        uint32_t face_offset,
+        uint32_t corner_offset
+    ) -> Reference_frame;
+
+    [[nodiscard]] auto name            () const -> const std::string&;
+    [[nodiscard]] auto get_scaled      (float scale) -> const Scaled&;
+    [[nodiscard]] auto create_scaled   (int scale_key) -> Scaled;
+    [[nodiscard]] auto make_instance   (const Instance_create_info& instance_create_info) -> Instance;
+    [[nodiscard]] auto get_bounding_box() -> erhe::toolkit::Bounding_box;
+    [[nodiscard]] auto get_geometry    () -> std::shared_ptr<erhe::geometry::Geometry>;
 
     Brush_data                                           data;
     std::unique_ptr<erhe::primitive::Primitive_geometry> gl_primitive_geometry;

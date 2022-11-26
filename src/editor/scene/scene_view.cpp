@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/grid_tool.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "erhe/geometry/geometry.hpp"
@@ -18,9 +19,76 @@
 namespace editor
 {
 
+static const std::string empty_string{};
+
+[[nodiscard]] auto Hover_entry::get_name() const -> const std::string&
+{
+    if (mesh)
+    {
+        return mesh->name();
+    }
+    if (grid)
+    {
+        return grid->name;
+    }
+    return empty_string;
+}
+
 [[nodiscard]] auto Scene_view::get_type() const -> int
 {
     return Input_context_type_scene_view;
+}
+
+void Scene_view::set_hover(
+    const std::size_t  slot,
+    const Hover_entry& entry
+)
+{
+    const bool mesh_changed = m_hover_entries[slot].mesh != entry.mesh;
+    const bool grid_changed = m_hover_entries[slot].grid != entry.grid;
+    m_hover_entries[slot]      = entry;
+    m_hover_entries[slot].slot = slot;
+
+    update_nearest_slot();
+
+    if (mesh_changed || grid_changed)
+    {
+        send(
+            Editor_message{
+                .changed    = Changed_flag_bit::c_flag_bit_hover,
+                .scene_view = this
+            }
+        );
+    }
+}
+
+void Scene_view::update_nearest_slot()
+{
+    // Update nearest slot
+    if (!m_control_ray_origin_in_world.has_value())
+    {
+        m_nearest_slot = 0;
+        return;
+    }
+
+    double nearest_distance = std::numeric_limits<double>::max();
+    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
+    {
+        const Hover_entry& entry = m_hover_entries[slot];
+        if (!entry.valid || !entry.position.has_value())
+        {
+            continue;
+        }
+        const double distance = glm::distance(
+            m_control_ray_origin_in_world.value(),
+            entry.position.value()
+        );
+        if (distance < nearest_distance)
+        {
+            nearest_distance = distance;
+            m_nearest_slot = slot;
+        }
+    }
 }
 
 auto Scene_view::get_light_projections() const -> Light_projections*
@@ -88,15 +156,14 @@ auto Scene_view::get_nearest_hover() const -> const Hover_entry&
 
 void Scene_view::reset_control_ray()
 {
-    std::fill(
-        m_hover_entries.begin(),
-        m_hover_entries.end(),
-        Hover_entry{}
-    );
+    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
+    {
+        set_hover(slot, Hover_entry{});
+    }
 
-    m_control_ray_origin_in_world.reset();
+    m_control_ray_origin_in_world   .reset();
     m_control_ray_direction_in_world.reset();
-    m_position_in_viewport  .reset();
+    m_position_in_viewport          .reset();
 }
 
 void Scene_view::raytrace_update(
@@ -120,28 +187,28 @@ void Scene_view::raytrace_update(
         scene.commit();
     }
 
-    m_nearest_slot = 0;
     {
         ERHE_PROFILE_SCOPE("raytrace inner");
 
-        float nearest_t_far = 9999.0f;
-
-        for (size_t i = 0; i < Hover_entry::slot_count; ++i)
+        for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
         {
-            const uint32_t i_mask = Hover_entry::slot_masks[i];
-            auto& entry = m_hover_entries[i];
+            const uint32_t slot_mask = Hover_entry::slot_masks[slot];
+            Hover_entry entry {
+                .slot = slot,
+                .mask = slot_mask
+            };
             erhe::raytrace::Ray ray{
                 .origin    = ray_origin,
                 .t_near    = 0.0f,
                 .direction = ray_direction,
                 .time      = 0.0f,
                 .t_far     = 9999.0f,
-                .mask      = i_mask,
+                .mask      = slot_mask,
                 .id        = 0,
                 .flags     = 0
             };
             erhe::raytrace::Hit hit;
-            if (i == Hover_entry::tool_slot)
+            if (slot == Hover_entry::tool_slot)
             {
                 if (tool_scene_root)
                 {
@@ -152,14 +219,12 @@ void Scene_view::raytrace_update(
             {
                 scene.intersect(ray, hit);
             }
-            entry.valid = hit.instance != nullptr;
-            entry.mask  = i_mask;
+            entry.valid = (hit.instance != nullptr);
             if (entry.valid)
             {
                 void* user_data     = hit.instance->get_user_data();
                 entry.raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
                 entry.position      = ray.origin + ray.t_far * ray.direction;
-                entry.geometry      = nullptr;
                 entry.local_index   = std::numeric_limits<std::size_t>::max();
 
                 SPDLOG_LOGGER_TRACE(
@@ -198,11 +263,10 @@ void Scene_view::raytrace_update(
                     {
                         entry.mesh = as_mesh(node->shared_from_this());
                         auto* primitive = entry.raytrace_node->raytrace_primitive();
-                        entry.primitive = 0; // TODO
                         if (primitive != nullptr)
                         {
-                            entry.geometry = entry.raytrace_node->source_geometry().get();
-                            if (entry.geometry != nullptr)
+                            entry.geometry = entry.raytrace_node->source_geometry();
+                            if (entry.geometry)
                             {
                                 SPDLOG_LOGGER_TRACE(
                                     log_controller_ray,
@@ -228,7 +292,9 @@ void Scene_view::raytrace_update(
                                     if (polygon_id < entry.geometry->get_polygon_count())
                                     {
                                         SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
-                                        auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+                                        auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(
+                                            erhe::geometry::c_polygon_normals
+                                        );
                                         if (
                                             (polygon_normals != nullptr) &&
                                             polygon_normals->has(polygon_id)
@@ -245,37 +311,18 @@ void Scene_view::raytrace_update(
                         }
                     }
                 }
-
-                if (ray.t_far < nearest_t_far)
-                {
-                    m_nearest_slot = i;
-                    nearest_t_far = ray.t_far;
-                }
             }
             else
             {
-                entry.raytrace_node = nullptr;
-                entry.mesh.reset();
-                entry.geometry      = nullptr;
-                entry.position.reset();
-                entry.normal.reset();
-                entry.primitive     = std::numeric_limits<std::size_t>::max();
-                entry.local_index   = std::numeric_limits<std::size_t>::max();
-
                 SPDLOG_LOGGER_TRACE(
                     log_controller_ray,
                     "{}: no hit",
                     Hover_entry::slot_names[i]
                 );
             }
+            set_hover(slot, entry);
         }
     }
-
-    SPDLOG_LOGGER_TRACE(
-        log_controller_ray,
-        "Nearest slot: {}",
-        Hover_entry::slot_names[m_nearest_slot]
-    );
 }
 
 } // namespace editor

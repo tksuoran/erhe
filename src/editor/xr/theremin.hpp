@@ -83,7 +83,6 @@ public:
     void set_antenna_distance(const float distance);
 
 private:
-    void update_grid_color() const;
     auto normalized_finger_distance() const -> float;
 
     // Component dependencies

@@ -35,16 +35,16 @@ Reference_frame::Reference_frame() = default;
 
 Reference_frame::Reference_frame(
     const erhe::geometry::Geometry&  geometry,
-    const erhe::geometry::Polygon_id polygon_id,
-    const uint32_t                   in_face_offset,
+    const erhe::geometry::Polygon_id in_polygon_id,
+    const uint32_t                   face_offset,
     const uint32_t                   in_corner_offset
 )
-    : face_offset{in_face_offset}
-    , polygon_id {polygon_id}
+    : face_offset{face_offset}
+    , polygon_id {std::min(in_polygon_id, geometry.get_polygon_count() - 1)}
 {
     const auto* const polygon_centroids = geometry.polygon_attributes().find<vec3>(c_polygon_centroids);
     const auto* const polygon_normals   = geometry.polygon_attributes().find<vec3>(c_polygon_normals);
-    const auto* const point_locations   = geometry.point_attributes().find<vec3>(c_point_locations);
+    const auto* const point_locations   = geometry.point_attributes  ().find<vec3>(c_point_locations);
     ERHE_VERIFY(point_locations != nullptr);
 
     const auto& polygon = geometry.polygons[polygon_id];
@@ -97,9 +97,9 @@ auto Reference_frame::scale() const -> float
 auto Reference_frame::transform() const -> mat4
 {
     return mat4{
-        vec4{B, 0.0f},
-        vec4{T, 0.0f},
-        vec4{N, 0.0f},
+        vec4{-T, 0.0f},
+        vec4{-N, 0.0f},
+        vec4{-B, 0.0f},
         vec4{centroid, 1.0f}
     };
 }
@@ -192,6 +192,7 @@ auto Brush::get_reference_frame(
     {
         const auto& polygon = geometry->polygons[polygon_id];
         if (
+            (corner_count == 0) ||
             (polygon.corner_count == corner_count) ||
             (polygon_id + 1 == end)
         )
@@ -205,6 +206,39 @@ auto Brush::get_reference_frame(
         }
     }
     return reference_frames.emplace_back(*geometry.get(), selected_polygon, in_face_offset, corner_offset);
+}
+
+auto Brush::get_reference_frame(
+    const uint32_t face_offset,
+    const uint32_t corner_offset
+) -> Reference_frame
+{
+    //for (const auto& reference_frame : reference_frames)
+    //{
+    //    if (
+    //        (reference_frame.corner_count  == 0            ) &&
+    //        (reference_frame.face_offset   == face_offset  ) &&
+    //        (reference_frame.corner_offset == corner_offset)
+    //    )
+    //    {
+    //        return reference_frame;
+    //    }
+    //}
+
+    const auto geometry = get_geometry();
+
+    //return reference_frames.emplace_back(
+    //    *geometry.get(),
+    //    face_offset,
+    //    face_offset,
+    //    corner_offset
+    //);
+    return Reference_frame{
+        *geometry.get(),
+        face_offset,
+        face_offset,
+        corner_offset
+    };
 }
 
 auto Brush::get_scaled(const float scale) -> const Scaled&

@@ -275,9 +275,11 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree           );
     init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack     );
     init_window(m_components.get<editor::Operations            >(), config.operations          );
+    init_window(m_components.get<editor::Paint_tool            >(), config.paint_tool          );
     init_window(m_components.get<editor::Physics_window        >(), config.physics             );
     init_window(m_components.get<editor::Post_processing_window>(), config.post_processing     );
     init_window(m_components.get<editor::Rendergraph_window    >(), config.render_graph        );
+    init_window(m_components.get<editor::Settings_window       >(), config.settings            );
     init_window(m_components.get<editor::Trs_tool              >(), config.trs                 );
     init_window(m_components.get<editor::Tool_properties_window>(), config.tool_properties     );
     init_window(m_components.get<editor::Viewport_config       >(), config.viewport_config     );

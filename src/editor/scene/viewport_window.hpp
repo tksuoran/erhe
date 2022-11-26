@@ -114,8 +114,9 @@ public:
     [[nodiscard]] auto projection_viewport() const -> const erhe::scene::Viewport&;
 
     // Pointer context API
-    void raytrace(uint32_t mask);
-    void raytrace();
+    void raytrace         (uint32_t mask);
+    void raytrace         ();
+    void update_grid_hover();
 
     // call with const glm::vec2 position_in_window = m_window.to_scene_content(position);
     void update_pointer_context(
@@ -160,17 +161,15 @@ private:
     std::weak_ptr<Post_processing_node>                        m_post_processing_node;
     std::weak_ptr<Rendergraph_node>                            m_final_output;
 
-    std::string                 m_name;
-
+    std::string                        m_name;
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<Scene_root>          m_tool_scene_root;
-    std::weak_ptr<erhe::scene::Camera> m_camera{};
-
-    Viewport_windows*           m_viewport_windows      {nullptr};
-    erhe::scene::Viewport       m_window_viewport       {0, 0, 0, 0, true};
-    erhe::scene::Viewport       m_projection_viewport   {0, 0, 0, 0, true};
-    Shader_stages_variant       m_shader_stages_variant {Shader_stages_variant::standard};
-    bool                        m_is_hovered            {false};
+    std::weak_ptr<erhe::scene::Camera> m_camera                {};
+    Viewport_windows*                  m_viewport_windows      {nullptr};
+    erhe::scene::Viewport              m_window_viewport       {0, 0, 0, 0, true};
+    erhe::scene::Viewport              m_projection_viewport   {0, 0, 0, 0, true};
+    Shader_stages_variant              m_shader_stages_variant {Shader_stages_variant::standard};
+    bool                               m_is_hovered            {false};
 };
 
 } // namespace editor

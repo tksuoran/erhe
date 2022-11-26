@@ -261,12 +261,17 @@ void Node_raytrace::handle_node_visibility_mask_update(const uint64_t mask)
     );
 }
 
-auto Node_raytrace::source_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
+auto Node_raytrace::source_geometry() const -> std::shared_ptr<erhe::geometry::Geometry>
 {
     return m_source_geometry;
 }
 
 auto Node_raytrace::raytrace_primitive() -> Raytrace_primitive*
+{
+    return m_primitive.get();
+}
+
+auto Node_raytrace::raytrace_primitive() const -> const Raytrace_primitive*
 {
     return m_primitive.get();
 }

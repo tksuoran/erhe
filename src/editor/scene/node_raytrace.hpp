@@ -72,8 +72,9 @@ public:
     void handle_node_visibility_mask_update(const uint64_t mask) override;
 
     // Public API
-    [[nodiscard]] auto source_geometry   () -> std::shared_ptr<erhe::geometry::Geometry>;
-    [[nodiscard]] auto raytrace_primitive() -> Raytrace_primitive*;
+    [[nodiscard]] auto source_geometry   () const -> std::shared_ptr<erhe::geometry::Geometry>;
+    [[nodiscard]] auto raytrace_primitive()       -> Raytrace_primitive*;
+    [[nodiscard]] auto raytrace_primitive() const -> const Raytrace_primitive*;
     [[nodiscard]] auto raytrace_geometry ()       ->       erhe::raytrace::IGeometry*;
     [[nodiscard]] auto raytrace_geometry () const -> const erhe::raytrace::IGeometry*;
     [[nodiscard]] auto raytrace_instance ()       ->       erhe::raytrace::IInstance*;

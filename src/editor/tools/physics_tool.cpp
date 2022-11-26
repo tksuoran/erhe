@@ -27,6 +27,7 @@
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -227,26 +228,10 @@ auto Physics_tool::description() -> const char*
 
 void Physics_tool::on_message(Editor_message& message)
 {
-    switch (message.event_type)
+    using namespace erhe::toolkit;
+    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_viewport))
     {
-        case Editor_event_type::selection_changed:
-        {
-            break;
-        }
-
-        case Editor_event_type::viewport_changed:
-        {
-            if (!message.new_viewport_window)
-            {
-                release_target();
-            }
-            break;
-        }
-
-        default:
-        {
-            break;
-        }
+        release_target();
     }
 }
 

@@ -466,10 +466,7 @@ void Scene_builder::make_brushes()
                 ERHE_PROFILE_SCOPE("Floor brush");
 
                 auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
-                    make_box(
-                        vec3{config.floor_size, 1.0f, config.floor_size},
-                        ivec3{config.floor_div, 1, config.floor_div}
-                    )
+                    make_box(config.floor_size, 1.0f, config.floor_size)
                 );
                 floor_geometry->name = "floor";
                 floor_geometry->build_edges();

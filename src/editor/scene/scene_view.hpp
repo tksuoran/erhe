@@ -1,5 +1,6 @@
 #pragma once
 
+#include "editor_message.hpp"
 #include "windows/viewport_config.hpp"
 #include "renderers/programs.hpp"
 #include "scene/node_raytrace_mask.hpp"
@@ -9,6 +10,7 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
+#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/viewport.hpp"
 
@@ -46,6 +48,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Grid;
 class Light_projections;
 class Node_raytrace;
 class Render_context;
@@ -59,33 +62,38 @@ public:
     static constexpr std::size_t tool_slot         = 1;
     static constexpr std::size_t brush_slot        = 2;
     static constexpr std::size_t rendertarget_slot = 3;
-    static constexpr std::size_t slot_count        = 4;
+    static constexpr std::size_t grid_slot         = 4;
+    static constexpr std::size_t slot_count        = 5;
 
     static constexpr std::array<uint32_t, slot_count> slot_masks = {
         Raytrace_node_mask::content,
         Raytrace_node_mask::tool,
         Raytrace_node_mask::brush,
-        Raytrace_node_mask::rendertarget
+        Raytrace_node_mask::rendertarget,
+        Raytrace_node_mask::grid
     };
 
     static constexpr std::array<const char*, slot_count> slot_names = {
         "content",
         "tool",
         "brush",
-        "rendertarget"
+        "rendertarget",
+        "grid"
     };
 
-    void reset();
+    [[nodiscard]] auto get_name() const -> const std::string&;
 
-    uint32_t                           mask         {0};
-    bool                               valid        {false};
-    Node_raytrace*                     raytrace_node{nullptr};
-    std::shared_ptr<erhe::scene::Mesh> mesh         {};
-    erhe::geometry::Geometry*          geometry     {nullptr};
-    std::optional<glm::dvec3>          position     {};
-    std::optional<glm::dvec3>          normal       {};
-    std::size_t                        primitive    {std::numeric_limits<std::size_t>::max()};
-    std::size_t                        local_index  {std::numeric_limits<std::size_t>::max()};
+    std::size_t                               slot         {slot_count};
+    uint32_t                                  mask         {0};
+    bool                                      valid        {false};
+    const Node_raytrace*                      raytrace_node{nullptr};
+    std::shared_ptr<erhe::scene::Mesh>        mesh         {};
+    const Grid*                               grid         {nullptr};
+    std::shared_ptr<erhe::geometry::Geometry> geometry     {};
+    std::optional<glm::dvec3>                 position     {};
+    std::optional<glm::dvec3>                 normal       {};
+    std::size_t                               primitive    {std::numeric_limits<std::size_t>::max()};
+    std::size_t                               local_index  {std::numeric_limits<std::size_t>::max()};
 };
 
 constexpr int Input_context_type_scene_view      = 0;
@@ -94,6 +102,7 @@ constexpr int Input_context_type_headset_view    = 2;
 
 class Scene_view
     : public erhe::application::Input_context
+    , public erhe::message_bus::Message_bus_node<Editor_message>
 {
 public:
     // Implements erhe::application::Input_context
@@ -121,11 +130,16 @@ public:
     [[nodiscard]] auto get_shadow_texture                       () const -> erhe::graphics::Texture*;
 
 protected:
-    std::optional<glm::dvec2>                        m_position_in_viewport;
-    std::optional<glm::dvec3>                        m_control_ray_origin_in_world;
-    std::optional<glm::dvec3>                        m_control_ray_direction_in_world;
+    void set_hover          (std::size_t slot, const Hover_entry& entry);
+    void update_nearest_slot();
+
+    std::optional<glm::dvec2> m_position_in_viewport;
+    std::optional<glm::dvec3> m_control_ray_origin_in_world;
+    std::optional<glm::dvec3> m_control_ray_direction_in_world;
+    std::size_t               m_nearest_slot{0};
+
+private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
-    std::size_t                                      m_nearest_slot{0};
 };
 
 } // namespace editor

@@ -361,30 +361,11 @@ void Paint_tool::post_initialize()
     m_mesh_memory      = get<Mesh_memory     >();
 }
 
-void Paint_tool::tool_hover(Scene_view* scene_view)
-{
-    if (scene_view == nullptr)
-    {
-        for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
-        {
-            m_hover_entries[slot] = Hover_entry{};
-        }
-        return;
-    }
-
-    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
-    {
-        m_hover_entries[slot] = scene_view->get_hover(slot);
-    }
-}
-
 void Paint_tool::imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
-    const auto hover = m_hover_entries[Hover_entry::content_slot];
     ImGui::ColorEdit4("Color", &m_color.x, ImGuiColorEditFlags_Float);
-
 
     ImGui::SetNextItemWidth(200);
     erhe::application::make_combo(
@@ -393,8 +374,6 @@ void Paint_tool::imgui()
         c_paint_mode_strings,
         IM_ARRAYSIZE(c_paint_mode_strings)
     );
-
-    ImGui::Text("Content: %s", (hover.valid && hover.mesh) ? hover.mesh->name().c_str() : "");
 
     if (m_point_id.has_value())
     {

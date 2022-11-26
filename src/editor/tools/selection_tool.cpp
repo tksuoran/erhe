@@ -582,7 +582,7 @@ void Selection_tool::call_selection_change_subscriptions() const
 {
     send(
         Editor_message{
-            .event_type = Editor_event_type::selection_changed
+            .changed = Changed_flag_bit::c_flag_bit_selection
         }
     );
 }

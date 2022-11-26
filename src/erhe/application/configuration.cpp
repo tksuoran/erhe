@@ -279,11 +279,13 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "node_tree",            windows.node_tree           );
         get_window(ini, "operation_stack",      windows.operation_stack     );
         get_window(ini, "operations",           windows.operations          );
+        get_window(ini, "paint_tool",           windows.paint_tool          );
         get_window(ini, "performance",          windows.performance         );
         get_window(ini, "pipelines",            windows.pipelines           );
         get_window(ini, "physics",              windows.physics             );
         get_window(ini, "post_processing",      windows.post_processing     );
         get_window(ini, "render_graph",         windows.render_graph        );
+        get_window(ini, "settings",             windows.settings            );
         get_window(ini, "tool_properties",      windows.tool_properties     );
         get_window(ini, "trs",                  windows.trs                 );
         get_window(ini, "viewport",             windows.viewport            );
@@ -300,7 +302,6 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "spot_light_radius",           scene.spot_light_radius);
             ini_get(section, "spot_light_height",           scene.spot_light_height);
             ini_get(section, "spot_light_count",            scene.spot_light_count);
-            ini_get(section, "floor_div",                   scene.floor_div);
             ini_get(section, "floor_size",                  scene.floor_size);
             ini_get(section, "instance_count",              scene.instance_count);
             ini_get(section, "instance_gap",                scene.instance_gap);

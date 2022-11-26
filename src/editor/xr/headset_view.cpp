@@ -141,6 +141,10 @@ void Headset_view::post_initialize()
     m_hand_tracker     = get<Hand_tracker    >();
     m_hud              = get<Hud             >();
     m_tools            = get<Tools           >();
+
+    erhe::message_bus::Message_bus_node<Editor_message>::initialize(
+        get<Editor_scenes>()->get_editor_message_bus()
+    );
 }
 
 auto Headset_view::description() -> const char*

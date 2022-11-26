@@ -3,6 +3,7 @@
 #include "scene/viewport_window.hpp"
 
 #include "editor_log.hpp"
+#include "editor_scenes.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/id_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -75,19 +76,19 @@ Viewport_window::Viewport_window(
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
     : erhe::application::Rendergraph_node{name}
-    , m_configuration         {components.get<erhe::application::Configuration    >()}
-    , m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
-    , m_editor_rendering      {components.get<Editor_rendering>()}
-    , m_grid_tool             {components.get<Grid_tool       >()}
-    , m_physics_window        {components.get<Physics_window  >()}
-    , m_post_processing       {components.get<Post_processing >()}
-    , m_programs              {components.get<Programs        >()}
-    , m_trs_tool              {components.get<Trs_tool        >()}
-    , m_viewport_config       {components.get<Viewport_config >()}
-    , m_name                  {name}
-    , m_scene_root            {scene_root}
-    , m_tool_scene_root       {components.get<Tools>()->get_tool_scene_root()}
-    , m_camera                {camera}
+    , m_configuration                    {components.get<erhe::application::Configuration    >()}
+    , m_pipeline_state_tracker           {components.get<erhe::graphics::OpenGL_state_tracker>()}
+    , m_editor_rendering                 {components.get<Editor_rendering>()}
+    , m_grid_tool                        {components.get<Grid_tool       >()}
+    , m_physics_window                   {components.get<Physics_window  >()}
+    , m_post_processing                  {components.get<Post_processing >()}
+    , m_programs                         {components.get<Programs        >()}
+    , m_trs_tool                         {components.get<Trs_tool        >()}
+    , m_viewport_config                  {components.get<Viewport_config >()}
+    , m_name                             {name}
+    , m_scene_root                       {scene_root}
+    , m_tool_scene_root                  {components.get<Tools>()->get_tool_scene_root()}
+    , m_camera                           {camera}
 {
     register_input(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -98,6 +99,10 @@ Viewport_window::Viewport_window(
         erhe::application::Resource_routing::Resource_provided_by_consumer,
         "viewport",
         erhe::application::Rendergraph_node_key::viewport
+    );
+
+    erhe::message_bus::Message_bus_node<Editor_message>::initialize(
+        components.get<Editor_scenes>()->get_editor_message_bus()
     );
 }
 
@@ -325,6 +330,33 @@ void Viewport_window::raytrace()
     raytrace_update(ray_origin, ray_direction);
 }
 
+void Viewport_window::update_grid_hover()
+{
+    const auto pointer_near = position_in_world_viewport_depth(1.0);
+    const auto pointer_far  = position_in_world_viewport_depth(0.0);
+
+    if (!pointer_near.has_value() || !pointer_far.has_value())
+    {
+        return;
+    }
+
+    const glm::dvec3 ray_origin   {pointer_near.value()};
+    const glm::dvec3 ray_direction{glm::normalize(pointer_far.value() - pointer_near.value())};
+
+    const Grid_hover_position hover_position = m_grid_tool->update_hover(ray_origin, ray_direction);
+    Hover_entry entry;
+    entry.valid = (hover_position.grid != nullptr);
+    if (entry.valid)
+    {
+        entry.position = hover_position.position;
+        entry.normal   = glm::vec3{
+            hover_position.grid->world_from_grid * glm::dvec4{0.0, 1.0, 0.0, 0.0}
+        };
+        entry.grid     = hover_position.grid;
+    }
+
+    set_hover(Hover_entry::grid_slot, entry);
+}
 
 void Viewport_window::update_pointer_context(
     Id_renderer&    id_renderer,
@@ -368,26 +400,27 @@ void Viewport_window::update_pointer_context(
             static_cast<int>(position_in_viewport.x),
             static_cast<int>(position_in_viewport.y)
         );
-
-        Hover_entry entry;
-        entry.position = position_in_world_viewport_depth(id_query.depth);
-        entry.valid    = id_query.valid;
-
-        SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
         if (!id_query.valid)
         {
             SPDLOG_LOGGER_TRACE(log_controller_ray, "pointer context hover not valid");
             return;
         }
 
-        entry.mesh        = id_query.mesh;
-        entry.primitive   = id_query.mesh_primitive_index;
-        entry.local_index = id_query.local_index;
+        Hover_entry entry
+        {
+            .valid       = id_query.valid,
+            .mesh        = id_query.mesh,
+            .position    = position_in_world_viewport_depth(id_query.depth),
+            .primitive   = id_query.mesh_primitive_index,
+            .local_index = id_query.local_index
+        };
+
+        SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
+
         if (entry.mesh)
         {
             const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
-            entry.geometry = primitive.source_geometry.get();
-            entry.normal   = {};
+            entry.geometry = primitive.source_geometry;
             if (entry.geometry != nullptr)
             {
                 const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(entry.local_index);
@@ -428,10 +461,10 @@ void Viewport_window::update_pointer_context(
             hover_brush        ? "brush "        : "",
             hover_rendertarget ? "rendertarget " : ""
         );
-        m_hover_entries[Hover_entry::content_slot     ] = hover_content      ? entry : Hover_entry{};
-        m_hover_entries[Hover_entry::tool_slot        ] = hover_tool         ? entry : Hover_entry{};
-        m_hover_entries[Hover_entry::brush_slot       ] = hover_brush        ? entry : Hover_entry{};
-        m_hover_entries[Hover_entry::rendertarget_slot] = hover_rendertarget ? entry : Hover_entry{};
+        set_hover(Hover_entry::content_slot     , hover_content      ? entry : Hover_entry{});
+        set_hover(Hover_entry::tool_slot        , hover_tool         ? entry : Hover_entry{});
+        set_hover(Hover_entry::brush_slot       , hover_brush        ? entry : Hover_entry{});
+        set_hover(Hover_entry::rendertarget_slot, hover_rendertarget ? entry : Hover_entry{});
 
         const auto scene_root = m_scene_root.lock();
         if (scene_root)
@@ -443,6 +476,8 @@ void Viewport_window::update_pointer_context(
     {
         raytrace();
     }
+
+    update_grid_hover();
 }
 
 auto Viewport_window::position_in_world_viewport_depth(
