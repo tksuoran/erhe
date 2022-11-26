@@ -337,6 +337,10 @@ auto Grid_tool::update_hover(
 
     for (auto& grid : m_grids)
     {
+        if (!grid.enable)
+        {
+            continue;
+        }
         const glm::dvec3 ray_origin_in_grid    = glm::dvec3{grid.grid_from_world * glm::dvec4{ray_origin_in_world, 1.0}};
         const glm::dvec3 ray_direction_in_grid = glm::dvec3{grid.grid_from_world * glm::dvec4{ray_direction_in_world, 0.0}};
         const auto intersection = erhe::toolkit::intersect_plane<double>(
@@ -350,17 +354,24 @@ auto Grid_tool::update_hover(
             continue;
         }
         const glm::dvec3 position_in_grid  = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
+
+        if (
+            (position_in_grid.x < -static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count)) ||
+            (position_in_grid.x >  static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count)) ||
+            (position_in_grid.z < -static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count)) ||
+            (position_in_grid.z >  static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count))
+        )
+        {
+            continue;
+        }
+
         const glm::dvec3 position_in_world = glm::dvec3{grid.world_from_grid * glm::dvec4{position_in_grid, 1.0}};
         const double     distance          = glm::distance(ray_origin_in_world, position_in_world);
         if (distance < min_distance)
         {
-            min_distance = distance;
-            //const glm::dvec3 snapped_position_in_grid  = grid.snap_grid_position(position_in_grid);
-            //const glm::dvec3 snapped_position_in_world = glm::dvec3{grid.world_from_grid * glm::dvec4{snapped_position_in_grid, 1.0}};
-            //result.valid              = true;
-            result.position           = position_in_world;
-            //result.position_with_snap = snapped_position_in_world;
-            result.grid               = &grid;
+            min_distance    = distance;
+            result.position = position_in_world;
+            result.grid     = &grid;
         }
     }
     return result;
@@ -368,11 +379,12 @@ auto Grid_tool::update_hover(
 
 auto Grid::snap_world_position(const glm::dvec3& position_in_world) const -> glm::dvec3
 {
+    const double snap_size = static_cast<double>(cell_size) / static_cast<double>(cell_div);
     const glm::dvec3 position_in_grid = glm::dvec3{grid_from_world * glm::dvec4{position_in_world, 1.0}};
     const glm::dvec3 snapped_position_in_grid{
-        std::floor((position_in_grid.x + cell_size * 0.5) / cell_size) * cell_size,
-        std::floor((position_in_grid.y + cell_size * 0.5) / cell_size) * cell_size,
-        std::floor((position_in_grid.z + cell_size * 0.5) / cell_size) * cell_size
+        std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
     };
 
     return glm::dvec3{
@@ -382,10 +394,11 @@ auto Grid::snap_world_position(const glm::dvec3& position_in_world) const -> glm
 
 auto Grid::snap_grid_position(const glm::dvec3& position_in_grid) const -> glm::dvec3
 {
+    const double snap_size = static_cast<double>(cell_size) / static_cast<double>(cell_div);
     const glm::dvec3 snapped_position_in_grid{
-        std::floor((position_in_grid.x + cell_size * 0.5) / cell_size) * cell_size,
-        std::floor((position_in_grid.y + cell_size * 0.5) / cell_size) * cell_size,
-        std::floor((position_in_grid.z + cell_size * 0.5) / cell_size) * cell_size
+        std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
     };
 
     return glm::dvec3{

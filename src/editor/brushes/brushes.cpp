@@ -340,8 +340,8 @@ auto Brushes::get_hover_grid_transform() -> mat4
     }
 
     m_transform_scale = m_scale;
-    const auto            brush       = m_brush.lock();
-    const Reference_frame brush_frame = brush->get_reference_frame(
+    const auto      brush       = m_brush.lock();
+    Reference_frame brush_frame = brush->get_reference_frame(
         static_cast<uint32_t>(m_polygon_offset),
         static_cast<uint32_t>(m_corner_offset)
     );
@@ -350,7 +350,9 @@ auto Brushes::get_hover_grid_transform() -> mat4
         ? m_hover.grid->snap_world_position(m_hover.position.value())
         : m_hover.position.value();
 
-    // TODO scale
+    const mat4 scale_transform = erhe::toolkit::create_scale(m_scale);
+    brush_frame.transform_by(scale_transform);
+
     const glm::dvec3 offset_in_grid  = glm::dvec3{m_hover.grid->grid_from_world * glm::dvec4{position, 1.0}};
     const double     radians         = glm::radians(m_hover.grid->rotation);
     const glm::dmat4 orientation     = get_plane_transform(m_hover.grid->plane_type);
@@ -563,9 +565,9 @@ void Brushes::tool_properties()
     ImGui::Checkbox   ("Snap to Polygon", &m_snap_to_hover_polygon);
     ImGui::EndDisabled();
     ImGui::Checkbox   ("Snap To Grid",    &m_snap_to_grid);
-    ImGui::BeginDisabled(true); // TODO Wip
-    ImGui::SliderFloat("Scale",           &m_scale, 0.0f, 2.0f);
-    ImGui::EndDisabled();
+    //ImGui::BeginDisabled(true); // TODO Wip
+    ImGui::SliderFloat("Scale",           &m_scale, 0.0001f, 32.0f, "%.3f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
+    //ImGui::EndDisabled();
     ImGui::Checkbox   ("Physics",         &m_with_physics);
     ImGui::DragInt    ("Face Offset",     &m_polygon_offset, 0.1f, 0, INT_MAX);
     ImGui::DragInt    ("Corner Offset",   &m_corner_offset,  0.1f, 0, INT_MAX);
