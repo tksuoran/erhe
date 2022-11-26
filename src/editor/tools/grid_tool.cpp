@@ -202,7 +202,7 @@ auto get_plane_transform(Grid_plane_type plane_type) -> glm::dmat4
         {
             return glm::dmat4{
                 1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0,-1.0, 0.0,
                 0.0, 1.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 1.0
             };
@@ -288,7 +288,7 @@ void Grid_tool::imgui()
             ImGuiDataType_Double,
             &grid.rotation,
             1,
-            0.01f,
+            0.05f,
             &min_rotation,
             &max_rotation
         );
@@ -297,13 +297,11 @@ void Grid_tool::imgui()
         {
             const double radians = glm::radians(grid.rotation);
             const glm::dmat4 orientation  = get_plane_transform(grid.plane_type);
-            const glm::dvec3 plane_normal = glm::dvec3{orientation * glm::dvec4{0.0, 1.0, 0.0, 0.0}};
+            const glm::dvec3 plane_normal = glm::dvec3{0.0, 1.0, 0.0};
             const glm::dmat4 offset       = erhe::toolkit::create_translation<double>(grid.center);
             const glm::dmat4 rotation     = erhe::toolkit::create_rotation<double>( radians, plane_normal);
-            //const glm::dmat4 inverse_rotation = erhe::toolkit::create_rotation<double>(-radians, plane_normal);
-            //const glm::dmat4 inverse_offset   = erhe::toolkit::create_translation<double>(-grid.center);
-            grid.world_from_grid = rotation * offset * orientation;
-            grid.grid_from_world = glm::inverse(grid.world_from_grid); // orientation * inverse_offset * inverse_rotation;
+            grid.world_from_grid = orientation * rotation * offset;
+            grid.grid_from_world = glm::inverse(grid.world_from_grid); // orientation * inverse_rotation * inverse_offset;
         }
     }
 

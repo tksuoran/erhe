@@ -188,13 +188,9 @@ void Brushes::remove_brush_mesh()
 {
     if (m_brush_mesh)
     {
-        ERHE_VERIFY(m_brush_mesh->node_data.host != nullptr);
-
-        log_brush->trace("removing brush mesh");
-
-        // TODO node destructor already does this, right?
+        // Do not remove this. It is not possible to rely on reset calling destructor,
+        // because parent will have shared_ptr to the child.
         m_brush_mesh->set_parent({});
-
         m_brush_mesh.reset();
     }
 }
@@ -292,6 +288,7 @@ auto Brushes::get_hover_mesh_transform() -> mat4
     const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(m_hover.local_index);
     const Polygon&  polygon    = m_hover.geometry->polygons[polygon_id];
     Reference_frame hover_frame(*m_hover.geometry, polygon_id, 0, 0);
+
     Reference_frame brush_frame = brush->get_reference_frame(
         polygon.corner_count,
         static_cast<uint32_t>(m_polygon_offset),
@@ -306,10 +303,10 @@ auto Brushes::get_hover_mesh_transform() -> mat4
     const float brush_scale = brush_frame.scale();
     const float scale       = hover_scale / brush_scale;
 
-    m_transform_scale = scale;
-    if (scale != 1.0f)
+    m_transform_scale = m_scale * scale;
+    if (m_transform_scale != 1.0f)
     {
-        const mat4 scale_transform = erhe::toolkit::create_scale(scale);
+        const mat4 scale_transform = erhe::toolkit::create_scale(m_transform_scale);
         brush_frame.transform_by(scale_transform);
     }
 
@@ -319,10 +316,6 @@ auto Brushes::get_hover_mesh_transform() -> mat4
     )
     {
         hover_frame.centroid = m_hover.position.value();
-        //// if (m_snap_to_grid)
-        //// {
-        ////     hover_frame.centroid = m_grid_tool->snap(hover_frame.centroid);
-        //// }
     }
 
     const mat4 hover_transform = hover_frame.transform();
@@ -356,10 +349,10 @@ auto Brushes::get_hover_grid_transform() -> mat4
     const glm::dvec3 offset_in_grid  = glm::dvec3{m_hover.grid->grid_from_world * glm::dvec4{position, 1.0}};
     const double     radians         = glm::radians(m_hover.grid->rotation);
     const glm::dmat4 orientation     = get_plane_transform(m_hover.grid->plane_type);
-    const glm::dvec3 plane_normal    = glm::dvec3{orientation * glm::dvec4{0.0, 1.0, 0.0, 0.0}};
+    const glm::dvec3 plane_normal    = glm::dvec3{0.0, 1.0, 0.0};
     const glm::dmat4 offset          = erhe::toolkit::create_translation<double>(m_hover.grid->center + offset_in_grid);
     const glm::dmat4 rotation        = erhe::toolkit::create_rotation<double>(radians, plane_normal);
-    const glm::dmat4 world_from_grid = rotation * offset * orientation;
+    const glm::dmat4 world_from_grid = orientation * rotation * offset;
 
     const mat4 brush_transform = brush_frame.transform();
     const mat4 inverse_brush   = inverse(brush_transform);
@@ -442,9 +435,7 @@ void Brushes::do_insert_operation()
         .scene_root            = scene_root.get(),
         .world_from_node       = m_hover.mesh
             ? m_hover.mesh->world_from_node() * hover_from_brush
-            : glm::mat4{
-                glm::mat3{m_hover.grid->world_from_grid}
-              } * hover_from_brush,
+            : hover_from_brush,
         .material              = m_materials_window->selected_material(),
         .scale                 = m_transform_scale,
         .physics_enabled       = m_configuration->physics.static_enable
@@ -561,13 +552,9 @@ void Brushes::tool_properties()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    ImGui::BeginDisabled(true); // TODO Wip
     ImGui::Checkbox   ("Snap to Polygon", &m_snap_to_hover_polygon);
-    ImGui::EndDisabled();
     ImGui::Checkbox   ("Snap To Grid",    &m_snap_to_grid);
-    //ImGui::BeginDisabled(true); // TODO Wip
     ImGui::SliderFloat("Scale",           &m_scale, 0.0001f, 32.0f, "%.3f", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_Logarithmic);
-    //ImGui::EndDisabled();
     ImGui::Checkbox   ("Physics",         &m_with_physics);
     ImGui::DragInt    ("Face Offset",     &m_polygon_offset, 0.1f, 0, INT_MAX);
     ImGui::DragInt    ("Corner Offset",   &m_corner_offset,  0.1f, 0, INT_MAX);

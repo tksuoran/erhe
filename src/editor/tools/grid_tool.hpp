@@ -15,6 +15,7 @@ namespace erhe::application
 namespace editor
 {
 
+// TODO Negative half planes
 enum class Grid_plane_type : unsigned int
 {
     XZ = 0,
@@ -25,9 +26,9 @@ enum class Grid_plane_type : unsigned int
 
 static constexpr const char* grid_plane_type_strings[] =
 {
-    "XZ",
-    "XY",
-    "YZ",
+    "XZ-Plane Y+",
+    "XY-Plane Z+",
+    "YZ-Plane X+",
     "Custom"
 };
 
@@ -49,12 +50,12 @@ public:
     bool            see_hidden_major{false};
     bool            see_hidden_minor{false};
     float           cell_size       {1.0f};
-    int             cell_div        {10};
-    int             cell_count      {20};
+    int             cell_div        {2};
+    int             cell_count      {1};
     float           major_width     {4.0f};
     float           minor_width     {2.0f};
-    glm::vec4       major_color     {0.716f, 0.950f, 0.265f, 0.729f};
-    glm::vec4       minor_color     {0.374f, 0.557f, 0.149f, 0.737f};
+    glm::vec4       major_color     {0.0f, 0.0f, 0.0f, 0.729f};
+    glm::vec4       minor_color     {0.0f, 0.0f, 0.0f, 0.737f};
 };
 
 class Grid_hover_position
