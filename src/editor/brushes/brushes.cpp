@@ -338,25 +338,19 @@ auto Brushes::get_hover_grid_transform() -> mat4
         static_cast<uint32_t>(m_polygon_offset),
         static_cast<uint32_t>(m_corner_offset)
     );
-
-    const glm::dvec3 position = m_snap_to_grid
-        ? m_hover.grid->snap_world_position(m_hover.position.value())
-        : m_hover.position.value();
-
     const mat4 scale_transform = erhe::toolkit::create_scale(m_scale);
     brush_frame.transform_by(scale_transform);
-
-    const glm::dvec3 offset_in_grid  = glm::dvec3{m_hover.grid->grid_from_world * glm::dvec4{position, 1.0}};
-    const double     radians         = glm::radians(m_hover.grid->rotation);
-    const glm::dmat4 orientation     = get_plane_transform(m_hover.grid->plane_type);
-    const glm::dvec3 plane_normal    = glm::dvec3{0.0, 1.0, 0.0};
-    const glm::dmat4 offset          = erhe::toolkit::create_translation<double>(m_hover.grid->center + offset_in_grid);
-    const glm::dmat4 rotation        = erhe::toolkit::create_rotation<double>(radians, plane_normal);
-    const glm::dmat4 world_from_grid = orientation * rotation * offset;
-
     const mat4 brush_transform = brush_frame.transform();
     const mat4 inverse_brush   = inverse(brush_transform);
-    const mat4 align           = mat4{world_from_grid} * inverse_brush;
+
+    const glm::dvec3 position_in_grid0 = m_hover.grid->grid_from_world() * glm::dvec4{m_hover.position.value(), 1.0};
+    const glm::dvec3 position_in_grid  = m_snap_to_grid
+        ? m_hover.grid->snap_grid_position(position_in_grid0)
+        : position_in_grid0;
+    const glm::dmat4 offset            = erhe::toolkit::create_translation<double>(position_in_grid);
+    const glm::dmat4 world_from_grid   = m_hover.grid->world_from_grid() * offset;
+
+    const mat4 align = mat4{world_from_grid} * inverse_brush;
     return align;
 }
 

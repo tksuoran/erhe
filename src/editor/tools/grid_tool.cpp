@@ -1,7 +1,8 @@
 #include "tools/grid_tool.hpp"
-#include "tools/tools.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
+#include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -16,10 +17,269 @@
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
+#include <fmt/format.h>
+
 namespace editor
 {
 
 using glm::vec3;
+
+[[nodiscard]] auto Grid::node_attachment_type() const -> const char*
+{
+    return "Grid";
+}
+
+auto Grid::get_name() const -> const std::string&
+{
+    return m_name;
+}
+
+auto Grid::snap_world_position(const glm::dvec3& position_in_world) const -> glm::dvec3
+{
+    const double snap_size = static_cast<double>(m_cell_size) / static_cast<double>(m_cell_div);
+    const glm::dvec3 position_in_grid = glm::dvec3{grid_from_world() * glm::dvec4{position_in_world, 1.0}};
+    const glm::dvec3 snapped_position_in_grid{
+        std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
+    };
+
+    return glm::dvec3{
+        world_from_grid() * glm::dvec4{snapped_position_in_grid, 1.0}
+    };
+}
+
+auto Grid::snap_grid_position(const glm::dvec3& position_in_grid) const -> glm::dvec3
+{
+    const double snap_size = static_cast<double>(m_cell_size) / static_cast<double>(m_cell_div);
+    const glm::dvec3 snapped_position_in_grid{
+        std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
+        std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
+    };
+
+    return snapped_position_in_grid;
+}
+
+auto Grid::world_from_grid() const -> glm::dmat4
+{
+    if (m_plane_type == Grid_plane_type::Node)
+    {
+        erhe::scene::Node* node = get_node();
+        if (node != nullptr)
+        {
+            return glm::dmat4{node->world_from_node()};
+        }
+    }
+    return m_world_from_grid;
+}
+
+auto Grid::grid_from_world() const -> glm::dmat4
+{
+    if (m_plane_type == Grid_plane_type::Node)
+    {
+        erhe::scene::Node* node = get_node();
+        if (node != nullptr)
+        {
+            return glm::dmat4{node->node_from_world()};
+        }
+    }
+    return m_grid_from_world;
+}
+
+void Grid::render(
+    const std::shared_ptr<erhe::application::Line_renderer_set>& line_renderer_set,
+    const Render_context&                                        context
+)
+{
+    if (!m_enable)
+    {
+        return;
+    }
+
+    const glm::vec3 camera_position = context.camera->position_in_world();
+    const glm::mat4 m = world_from_grid();
+
+    const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
+    const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
+    int cell;
+    auto& major_renderer = m_see_hidden_major
+        ? *line_renderer_set->visible.at(1).get()
+        : *line_renderer_set->hidden .at(1).get();
+    auto& minor_renderer = m_see_hidden_minor
+        ? *line_renderer_set->visible.at(0).get()
+        : *line_renderer_set->hidden .at(0).get();
+    major_renderer.set_thickness(m_major_width);
+    minor_renderer.set_thickness(m_minor_width);
+    major_renderer.set_line_color(m_major_color);
+    minor_renderer.set_line_color(m_minor_color);
+
+    for (cell = -m_cell_count; cell < m_cell_count; ++cell)
+    {
+        float xz = static_cast<float>(cell) * m_cell_size;
+
+        major_renderer.add_lines(
+            m,
+            {
+                {
+                    vec3{     xz, 0.0f,  -extent},
+                    vec3{     xz, 0.0f,   extent}
+                },
+                {
+                    vec3{-extent, 0.0f,      xz},
+                    vec3{ extent, 0.0f,      xz}
+                }
+            }
+        );
+        for (int i = 0; i < (m_cell_div - 1); ++i)
+        {
+            xz += minor_step;
+            minor_renderer.add_lines(
+                m,
+                {
+                    {
+                        vec3{     xz, 0.0f, -extent},
+                        vec3{     xz, 0.0f,  extent}
+                    },
+                    {
+                        vec3{-extent, 0.0f,      xz},
+                        vec3{ extent, 0.0f,      xz}
+                    }
+                }
+            );
+        }
+    }
+    float xz = static_cast<float>(cell) * m_cell_size;
+    major_renderer.add_lines(
+        m,
+        {
+            {
+                vec3{     xz, 0.0f, -extent},
+                vec3{     xz, 0.0f,  extent}
+            },
+            {
+                vec3{-extent, 0.0f,      xz},
+                vec3{ extent, 0.0f,      xz}
+            }
+        }
+    );
+}
+
+void Grid::imgui(
+    const std::shared_ptr<Selection_tool>& selection_tool
+)
+{
+    ImGui::InputText  ("Name",             &m_name);
+    ImGui::Separator();
+    ImGui::Checkbox   ("Enable",           &m_enable);
+    ImGui::Checkbox   ("See Major Hidden", &m_see_hidden_major);
+    ImGui::Checkbox   ("See Minor Hidden", &m_see_hidden_minor);
+    ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.0f, 10.0f);
+    ImGui::SliderInt  ("Cell Div",         &m_cell_div,        0,    10);
+    ImGui::SliderInt  ("Cell Count",       &m_cell_count,      1,    100);
+    ImGui::SliderFloat("Major Width",      &m_major_width,  -100.0f, 100.0f);
+    ImGui::SliderFloat("Minor Width",      &m_minor_width,  -100.0f, 100.0f);
+    ImGui::ColorEdit4 ("Major Color",      &m_major_color.x, ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit4 ("Minor Color",      &m_minor_color.x, ImGuiColorEditFlags_Float);
+
+    erhe::application::make_combo(
+        "Plane",
+        m_plane_type,
+        grid_plane_type_strings,
+        IM_ARRAYSIZE(grid_plane_type_strings)
+    );
+    if (m_plane_type != Grid_plane_type::Node)
+    {
+        ImGui::DragScalarN(
+            "Offset",
+            ImGuiDataType_Double,
+            &m_center.x,
+            3,
+            0.01f
+        );
+        const double min_rotation = -180.0;
+        const double max_rotation =  180.0;
+        ImGui::DragScalarN(
+            "Rotation",
+            ImGuiDataType_Double,
+            &m_rotation,
+            1,
+            0.05f,
+            &min_rotation,
+            &max_rotation
+        );
+
+        const double radians = glm::radians(m_rotation);
+        const glm::dmat4 orientation  = get_plane_transform(m_plane_type);
+        const glm::dvec3 plane_normal = glm::dvec3{0.0, 1.0, 0.0};
+        const glm::dmat4 offset       = erhe::toolkit::create_translation<double>(m_center);
+        const glm::dmat4 rotation     = erhe::toolkit::create_rotation<double>( radians, plane_normal);
+        m_world_from_grid = orientation * rotation * offset;
+        m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
+    }
+    else
+    {
+        {
+            erhe::scene::Node* host_node = get_node();
+            if (host_node != nullptr)
+            {
+                const std::string label        = fmt::format("Node: {}", host_node->name());
+                const std::string detach_label = fmt::format("Detach from {}", host_node->name());
+                ImGui::TextUnformatted(label.c_str());
+                if (ImGui::Button(detach_label.c_str()))
+                {
+                    host_node->detach(this);
+                }
+            }
+        }
+        const auto& selection = selection_tool->selection();
+        if (!selection.empty())
+        {
+            const auto& host_node = selection.front();
+            const std::string label = fmt::format("Attach to {}", host_node->name());
+            if (ImGui::Button(label.c_str()))
+            {
+                host_node->attach(shared_from_this());
+            }
+        }
+    }
+}
+
+auto Grid::intersect_ray(
+    const glm::dvec3& ray_origin_in_world,
+    const glm::dvec3& ray_direction_in_world
+) -> std::optional<glm::dvec3>
+{
+    if (!m_enable)
+    {
+        return {};
+    }
+    const glm::dvec3 ray_origin_in_grid    = glm::dvec3{grid_from_world() * glm::dvec4{ray_origin_in_world, 1.0}};
+    const glm::dvec3 ray_direction_in_grid = glm::dvec3{grid_from_world() * glm::dvec4{ray_direction_in_world, 0.0}};
+    const auto intersection = erhe::toolkit::intersect_plane<double>(
+        glm::dvec3{0.0, 1.0, 0.0},
+        glm::dvec3{0.0, 0.0, 0.0},
+        ray_origin_in_grid,
+        ray_direction_in_grid
+    );
+    if (!intersection.has_value())
+    {
+        return {};
+    }
+    const glm::dvec3 position_in_grid = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
+
+    if (
+        (position_in_grid.x < -static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count)) ||
+        (position_in_grid.x >  static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count)) ||
+        (position_in_grid.z < -static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count)) ||
+        (position_in_grid.z >  static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count))
+    )
+    {
+        return {};
+    }
+
+    return glm::dvec3{world_from_grid() * glm::dvec4{position_in_grid, 1.0}};
+}
 
 Grid_tool::Grid_tool()
     : erhe::application::Imgui_window{c_title}
@@ -43,27 +303,29 @@ void Grid_tool::initialize_component()
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     get<Tools                           >()->register_background_tool(this);
 
-    const auto& config = get<erhe::application::Configuration>()->grid;
+    //const auto& config = get<erhe::application::Configuration>()->grid;
 
-    m_grids.push_back(
-        Grid
-        {
-            .name        = "Default Grid",
-            .enable      = config.enabled,
-            .cell_size   = config.cell_size,
-            .cell_div    = config.cell_div,
-            .cell_count  = config.cell_count,
-            .major_width = config.major_width,
-            .minor_width = config.minor_width,
-            .major_color = config.major_color,
-            .minor_color = config.minor_color
-        }
-    );
+    std::shared_ptr<Grid> grid = std::make_shared<Grid>();
+
+    // TODO Move config to editor
+    //
+    // grid->name        = "Default Grid";
+    // grid->enable      = config.enabled;
+    // grid->cell_size   = config.cell_size;
+    // grid->cell_div    = config.cell_div;
+    // grid->cell_count  = config.cell_count;
+    // grid->major_width = config.major_width;
+    // grid->minor_width = config.minor_width;
+    // grid->major_color = config.major_color;
+    // grid->minor_color = config.minor_color;
+
+    m_grids.push_back(grid);
 }
 
 void Grid_tool::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    m_selection_tool    = get<Selection_tool>();
 }
 
 auto Grid_tool::description() -> const char*
@@ -94,77 +356,7 @@ void Grid_tool::tool_render(
 
     for (const auto& grid : m_grids)
     {
-        if (!grid.enable)
-        {
-            continue;
-        }
-
-        const glm::vec3 camera_position = context.camera->position_in_world();
-        const glm::mat4 m = grid.world_from_grid;
-
-        const float extent     = static_cast<float>(grid.cell_count) * grid.cell_size;
-        const float minor_step = grid.cell_size / static_cast<float>(grid.cell_div);
-        int cell;
-        auto& major_renderer = grid.see_hidden_major
-            ? *m_line_renderer_set->visible.at(1).get()
-            : *m_line_renderer_set->hidden .at(1).get();
-        auto& minor_renderer = grid.see_hidden_minor
-            ? *m_line_renderer_set->visible.at(0).get()
-            : *m_line_renderer_set->hidden .at(0).get();
-        major_renderer.set_thickness(grid.major_width);
-        minor_renderer.set_thickness(grid.minor_width);
-        major_renderer.set_line_color(grid.major_color);
-        minor_renderer.set_line_color(grid.minor_color);
-
-        for (cell = -grid.cell_count; cell < grid.cell_count; ++cell)
-        {
-            float xz = static_cast<float>(cell) * grid.cell_size;
-
-            major_renderer.add_lines(
-                m,
-                {
-                    {
-                        vec3{     xz, 0.0f,  -extent},
-                        vec3{     xz, 0.0f,   extent}
-                    },
-                    {
-                        vec3{-extent, 0.0f,      xz},
-                        vec3{ extent, 0.0f,      xz}
-                    }
-                }
-            );
-            for (int i = 0; i < (grid.cell_div - 1); ++i)
-            {
-                xz += minor_step;
-                minor_renderer.add_lines(
-                    m,
-                    {
-                        {
-                            vec3{     xz, 0.0f, -extent},
-                            vec3{     xz, 0.0f,  extent}
-                        },
-                        {
-                            vec3{-extent, 0.0f,      xz},
-                            vec3{ extent, 0.0f,      xz}
-                        }
-                    }
-                );
-            }
-        }
-        float xz = static_cast<float>(cell) * grid.cell_size;
-        major_renderer.add_lines(
-            m,
-            {
-                {
-                    vec3{     xz, 0.0f, -extent},
-                    vec3{     xz, 0.0f,  extent}
-                },
-                {
-                    vec3{-extent, 0.0f,      xz},
-                    vec3{ extent, 0.0f,      xz}
-                }
-            }
-        );
+        grid->render(m_line_renderer_set, context);
     }
 }
 
@@ -183,8 +375,8 @@ void Grid_tool::viewport_toolbar()
     {
         ImGui::SetTooltip(
             m_enable
-                ? "Toggle grid on -> off"
-                : "Toggle grid off -> on"
+                ? "Toggle all grids on -> off"
+                : "Toggle all grids off -> on"
         );
     };
 
@@ -239,7 +431,7 @@ void Grid_tool::imgui()
     std::vector<const char*> grid_names;
     for (auto& grid : m_grids)
     {
-        grid_names.push_back(grid.name.c_str());
+        grid_names.push_back(grid->get_name().c_str());
     }
     ImGui::SetNextItemWidth(300);
     ImGui::Combo(
@@ -253,56 +445,7 @@ void Grid_tool::imgui()
     if (!m_grids.empty())
     {
         m_grid_index = std::min(m_grid_index, static_cast<int>(grid_names.size() - 1));
-
-        auto& grid = m_grids.at(m_grid_index);
-        ImGui::InputText  ("Name",             &grid.name);
-        ImGui::Separator();
-        ImGui::Checkbox   ("Enable",           &grid.enable);
-        ImGui::Checkbox   ("See Major Hidden", &grid.see_hidden_major);
-        ImGui::Checkbox   ("See Minor Hidden", &grid.see_hidden_minor);
-        ImGui::SliderFloat("Cell Size",        &grid.cell_size,       0.0f, 10.0f);
-        ImGui::SliderInt  ("Cell Div",         &grid.cell_div,        0,    10);
-        ImGui::SliderInt  ("Cell Count",       &grid.cell_count,      1,    100);
-        ImGui::SliderFloat("Major Width",      &grid.major_width,  -100.0f, 100.0f);
-        ImGui::SliderFloat("Minor Width",      &grid.minor_width,  -100.0f, 100.0f);
-        ImGui::ColorEdit4 ("Major Color",      &grid.major_color.x, ImGuiColorEditFlags_Float);
-        ImGui::ColorEdit4 ("Minor Color",      &grid.minor_color.x, ImGuiColorEditFlags_Float);
-
-        erhe::application::make_combo(
-            "Plane",
-            grid.plane_type,
-            grid_plane_type_strings,
-            IM_ARRAYSIZE(grid_plane_type_strings)
-        );
-        ImGui::DragScalarN(
-            "Offset",
-            ImGuiDataType_Double,
-            &grid.center.x,
-            3,
-            0.01f
-        );
-        const double min_rotation = -180.0;
-        const double max_rotation =  180.0;
-        ImGui::DragScalarN(
-            "Rotation",
-            ImGuiDataType_Double,
-            &grid.rotation,
-            1,
-            0.05f,
-            &min_rotation,
-            &max_rotation
-        );
-
-        if (grid.plane_type != Grid_plane_type::Custom)
-        {
-            const double radians = glm::radians(grid.rotation);
-            const glm::dmat4 orientation  = get_plane_transform(grid.plane_type);
-            const glm::dvec3 plane_normal = glm::dvec3{0.0, 1.0, 0.0};
-            const glm::dmat4 offset       = erhe::toolkit::create_translation<double>(grid.center);
-            const glm::dmat4 rotation     = erhe::toolkit::create_rotation<double>( radians, plane_normal);
-            grid.world_from_grid = orientation * rotation * offset;
-            grid.grid_from_world = glm::inverse(grid.world_from_grid); // orientation * inverse_rotation * inverse_offset;
-        }
+        m_grids[m_grid_index]->imgui(m_selection_tool);
     }
 
     ImGui::NewLine();
@@ -311,7 +454,9 @@ void Grid_tool::imgui()
     const bool add_pressed = ImGui::Button("Add Grid", button_size);
     if (add_pressed)
     {
-        m_grids.push_back(Grid{.name = "new grid"});
+        std::shared_ptr<Grid> new_grid = std::make_shared<Grid>();
+        //new_grid->name = "new grid"; TODO
+        m_grids.push_back(new_grid);
     }
 
     ImGui::SameLine();
@@ -335,73 +480,21 @@ auto Grid_tool::update_hover(
 
     for (auto& grid : m_grids)
     {
-        if (!grid.enable)
+        const auto position_in_world_opt = grid->intersect_ray(ray_origin_in_world, ray_direction_in_world);
+        if (!position_in_world_opt.has_value())
         {
             continue;
         }
-        const glm::dvec3 ray_origin_in_grid    = glm::dvec3{grid.grid_from_world * glm::dvec4{ray_origin_in_world, 1.0}};
-        const glm::dvec3 ray_direction_in_grid = glm::dvec3{grid.grid_from_world * glm::dvec4{ray_direction_in_world, 0.0}};
-        const auto intersection = erhe::toolkit::intersect_plane<double>(
-            glm::dvec3{0.0, 1.0, 0.0},
-            glm::dvec3{0.0, 0.0, 0.0},
-            ray_origin_in_grid,
-            ray_direction_in_grid
-        );
-        if (!intersection.has_value())
-        {
-            continue;
-        }
-        const glm::dvec3 position_in_grid  = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
-
-        if (
-            (position_in_grid.x < -static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count)) ||
-            (position_in_grid.x >  static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count)) ||
-            (position_in_grid.z < -static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count)) ||
-            (position_in_grid.z >  static_cast<double>(grid.cell_size) * static_cast<double>(grid.cell_count))
-        )
-        {
-            continue;
-        }
-
-        const glm::dvec3 position_in_world = glm::dvec3{grid.world_from_grid * glm::dvec4{position_in_grid, 1.0}};
+        const glm::dvec3 position_in_world = position_in_world_opt.value();
         const double     distance          = glm::distance(ray_origin_in_world, position_in_world);
         if (distance < min_distance)
         {
             min_distance    = distance;
             result.position = position_in_world;
-            result.grid     = &grid;
+            result.grid     = grid.get();
         }
     }
     return result;
-}
-
-auto Grid::snap_world_position(const glm::dvec3& position_in_world) const -> glm::dvec3
-{
-    const double snap_size = static_cast<double>(cell_size) / static_cast<double>(cell_div);
-    const glm::dvec3 position_in_grid = glm::dvec3{grid_from_world * glm::dvec4{position_in_world, 1.0}};
-    const glm::dvec3 snapped_position_in_grid{
-        std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
-        std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
-        std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
-    };
-
-    return glm::dvec3{
-        world_from_grid * glm::dvec4{snapped_position_in_grid, 1.0}
-    };
-}
-
-auto Grid::snap_grid_position(const glm::dvec3& position_in_grid) const -> glm::dvec3
-{
-    const double snap_size = static_cast<double>(cell_size) / static_cast<double>(cell_div);
-    const glm::dvec3 snapped_position_in_grid{
-        std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
-        std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
-        std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
-    };
-
-    return glm::dvec3{
-        world_from_grid * glm::dvec4{snapped_position_in_grid, 1.0}
-    };
 }
 
 } // namespace editor

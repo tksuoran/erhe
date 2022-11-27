@@ -350,7 +350,7 @@ void Viewport_window::update_grid_hover()
     {
         entry.position = hover_position.position;
         entry.normal   = glm::vec3{
-            hover_position.grid->world_from_grid * glm::dvec4{0.0, 1.0, 0.0, 0.0}
+            hover_position.grid->world_from_grid() * glm::dvec4{0.0, 1.0, 0.0, 0.0}
         };
         entry.grid     = hover_position.grid;
     }

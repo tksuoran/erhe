@@ -263,10 +263,10 @@ void Hover_tool::tool_render(
     }
     else if (entry.grid)
     {
-        const glm::vec3 local_position = glm::vec3{entry.grid->grid_from_world * glm::dvec4{entry.position.value(), 1.0}};
+        const glm::vec3 local_position = glm::vec3{entry.grid->grid_from_world() * glm::dvec4{entry.position.value(), 1.0}};
         const std::string text_line_3 = fmt::format(
             "Position in {}: {}",
-            entry.grid->name,
+            entry.grid->get_name(),
             local_position
         );
         m_text_renderer->print(

@@ -24,6 +24,7 @@ public:
     static constexpr uint64_t c_flag_bit_is_physics          = (1u << 0);
     static constexpr uint64_t c_flag_bit_is_raytrace         = (1u << 1);
     static constexpr uint64_t c_flag_bit_is_frame_controller = (1u << 2);
+    static constexpr uint64_t c_flag_bit_is_grid             = (1u << 3);
 
     void set_node(Node* node);
 

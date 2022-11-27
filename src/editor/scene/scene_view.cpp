@@ -29,7 +29,7 @@ static const std::string empty_string{};
     }
     if (grid)
     {
-        return grid->name;
+        return grid->get_name();
     }
     return empty_string;
 }
