@@ -73,18 +73,18 @@ class Range_selection
 public:
     explicit Range_selection(Selection_tool& selection_tool);
 
-    void set_terminator(const std::shared_ptr<erhe::scene::Node>& node);
-    void entry         (const std::shared_ptr<erhe::scene::Node>& node);
+    void set_terminator(const std::shared_ptr<erhe::scene::Scene_item>& item);
+    void entry         (const std::shared_ptr<erhe::scene::Scene_item>& item);
     void begin         ();
     void end           ();
     void reset         ();
 
 private:
-    Selection_tool&                                 m_selection_tool;
-    std::shared_ptr<erhe::scene::Node>              m_primary_terminator;
-    std::shared_ptr<erhe::scene::Node>              m_secondary_terminator;
-    bool                                            m_edited{false};
-    std::vector<std::shared_ptr<erhe::scene::Node>> m_entries;
+    Selection_tool&                                       m_selection_tool;
+    std::shared_ptr<erhe::scene::Scene_item>              m_primary_terminator;
+    std::shared_ptr<erhe::scene::Scene_item>              m_secondary_terminator;
+    bool                                                  m_edited{false};
+    std::vector<std::shared_ptr<erhe::scene::Scene_item>> m_entries;
 };
 
 class Selection_tool
@@ -94,8 +94,6 @@ class Selection_tool
     , public Tool
 {
 public:
-    using Selection = std::vector<std::shared_ptr<erhe::scene::Node>>;
-
     static constexpr int              c_priority {3};
     static constexpr std::string_view c_type_name{"Selection_tool"};
     static constexpr std::string_view c_title    {"Selection tool"};
@@ -118,15 +116,16 @@ public:
     void imgui() override;
 
     // Public API
-    [[nodiscard]] auto selection      () const -> const Selection&;
-    [[nodiscard]] auto is_in_selection(const std::shared_ptr<erhe::scene::Node>& item) const -> bool;
-    [[nodiscard]] auto range_selection() -> Range_selection&;
-    void set_selection             (const Selection& selection);
-    auto add_to_selection          (const std::shared_ptr<erhe::scene::Node>& item) -> bool;
-    auto clear_selection           () -> bool;
-    auto remove_from_selection     (const std::shared_ptr<erhe::scene::Node>& item) -> bool;
-    void update_selection_from_node(const std::shared_ptr<erhe::scene::Node>& node, const bool added);
-    void sanity_check              ();
+    [[nodiscard]] auto selection              () const -> const std::vector<std::shared_ptr<erhe::scene::Scene_item>>&;
+    [[nodiscard]] auto is_in_selection        (const std::shared_ptr<erhe::scene::Scene_item>& item) const -> bool;
+    [[nodiscard]] auto range_selection        () -> Range_selection&;
+    [[nodiscard]] auto get_first_selected_node() -> std::shared_ptr<erhe::scene::Node>;
+    void set_selection                   (const std::vector<std::shared_ptr<erhe::scene::Scene_item>>& selection);
+    auto add_to_selection                (const std::shared_ptr<erhe::scene::Scene_item>& item) -> bool;
+    auto clear_selection                 () -> bool;
+    auto remove_from_selection           (const std::shared_ptr<erhe::scene::Scene_item>& item) -> bool;
+    void update_selection_from_scene_item(const std::shared_ptr<erhe::scene::Scene_item>& item, const bool added);
+    void sanity_check                    ();
 
     // Commands
     auto on_select_try_ready() -> bool;
@@ -137,14 +136,12 @@ public:
 private:
     void call_selection_change_subscriptions() const;
     void toggle_selection(
-        const std::shared_ptr<erhe::scene::Node>& item,
-        const bool clear_others
+        const std::shared_ptr<erhe::scene::Scene_item>& item,
+        bool                                            clear_others
     );
 
     Selection_tool_select_command m_select_command;
     Selection_tool_delete_command m_delete_command;
-
-    Range_selection m_range_selection;
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
@@ -153,8 +150,8 @@ private:
     std::shared_ptr<Viewport_windows>  m_viewport_windows;
     std::shared_ptr<Viewport_config>   m_viewport_config;
 
-    int                                m_next_selection_change_subscription{1};
-    Selection                          m_selection;
+    std::vector<std::shared_ptr<erhe::scene::Scene_item>> m_selection;
+    Range_selection                                       m_range_selection;
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
     bool                               m_hover_content{false};

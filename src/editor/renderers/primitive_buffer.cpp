@@ -58,7 +58,7 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Primitive_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    const erhe::scene::Visibility_filter&                      visibility_filter,
+    const erhe::scene::Scene_item_filter&                      filter,
     bool                                                       use_id_ranges
 ) -> erhe::application::Buffer_range
 {
@@ -86,14 +86,20 @@ auto Primitive_buffer::update(
         }
 
         ERHE_VERIFY(mesh);
-        if (!visibility_filter(mesh->get_visibility_mask()))
+        if (!filter(mesh->get_flag_bits()))
         {
             continue;
         }
 
-        const auto& node_data = mesh->node_data;
+        const auto* node = mesh->get_node();
+        if (node == nullptr)
+        {
+            continue;
+        }
+
+        //const auto& node_data = node->node_data;
         const auto& mesh_data = mesh->mesh_data;
-        const glm::mat4 world_from_node = mesh->world_from_node();
+        const glm::mat4 world_from_node = node->world_from_node();
 
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives)
@@ -116,6 +122,7 @@ auto Primitive_buffer::update(
                 m_id_offset += add;
             }
 
+            const glm::vec4 wireframe_color = mesh->get_wireframe_color();
             const glm::vec3 id_offset_vec3  = erhe::toolkit::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4  = glm::vec4{id_offset_vec3, 0.0f};
             const uint32_t  material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
@@ -124,8 +131,8 @@ auto Primitive_buffer::update(
 
             using erhe::graphics::as_span;
             const auto color_span =
-                (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4           ) :
-                (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(node_data.wireframe_color) :
+                (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4         ) :
+                (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color        ) :
                                                                                           as_span(settings.constant_color);
             const auto size_span =
                 (settings.size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh_data.point_size   ) :

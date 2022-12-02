@@ -1,13 +1,12 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 #include "editor_log.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/material_library.hpp"
-//#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
@@ -30,9 +29,10 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/math_util.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "erhe/xr/headset.hpp"
@@ -43,7 +43,7 @@
 namespace editor
 {
 
-Rendertarget_node::Rendertarget_node(
+Rendertarget_mesh::Rendertarget_mesh(
     Scene_root&                         host_scene_root,
     Viewport_window&                    host_viewport_window,
     const erhe::components::Components& components,
@@ -58,13 +58,18 @@ Rendertarget_node::Rendertarget_node(
     , m_viewport_config     {components.get<Viewport_config>()}
     , m_pixels_per_meter    {pixels_per_meter}
 {
-    node_data.flag_bits |= (erhe::scene::Node_flag_bit::is_rendertarget);
+    enable_flag_bits(erhe::scene::Scene_item_flags::rendertarget);
 
     init_rendertarget(width, height);
     add_primitive(components);
 }
 
-void Rendertarget_node::init_rendertarget(
+auto Rendertarget_mesh::type_name() const -> const char*
+{
+    return "Rendertarget_mesh";
+}
+
+void Rendertarget_mesh::init_rendertarget(
     const int width,
     const int height
 )
@@ -104,7 +109,7 @@ void Rendertarget_node::init_rendertarget(
     m_framebuffer->set_debug_label("Rendertarget Node");
 }
 
-void Rendertarget_node::add_primitive(
+void Rendertarget_mesh::add_primitive(
     const erhe::components::Components& components
 )
 {
@@ -146,10 +151,10 @@ void Rendertarget_node::add_primitive(
 
     mesh_memory.gl_buffer_transfer_queue->flush();
 
-    this->set_visibility_mask(
-        erhe::scene::Node_visibility::visible |
-        erhe::scene::Node_visibility::id      |
-        erhe::scene::Node_visibility::rendertarget
+    enable_flag_bits(
+        erhe::scene::Scene_item_flags::visible |
+        erhe::scene::Scene_item_flags::id      |
+        erhe::scene::Scene_item_flags::rendertarget
     );
 
     //// m_node_raytrace = std::make_shared<Node_raytrace>(shared_geometry);
@@ -158,18 +163,18 @@ void Rendertarget_node::add_primitive(
     //// this->attach(m_node_raytrace);
 }
 
-auto Rendertarget_node::texture() const -> std::shared_ptr<erhe::graphics::Texture>
+auto Rendertarget_mesh::texture() const -> std::shared_ptr<erhe::graphics::Texture>
 {
     return m_texture;
 }
 
-auto Rendertarget_node::framebuffer() const -> std::shared_ptr<erhe::graphics::Framebuffer>
+auto Rendertarget_mesh::framebuffer() const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     return m_framebuffer;
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-void Rendertarget_node::update_headset(Headset_view& headset_view)
+void Rendertarget_mesh::update_headset(Headset_view& headset_view)
 {
     const auto* headset = headset_view.get_headset();
     if (headset != nullptr)
@@ -226,11 +231,17 @@ void Rendertarget_node::update_headset(Headset_view& headset_view)
         m_finger_trigger = distance < 0.014f;
     }
 
+    auto const* node = get_node();
+    if (node == nullptr)
+    {
+        return;
+    }
+
     const auto pointer      = index_opt.value();
     const auto direction    = glm::vec3{pointer.orientation * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
     const auto intersection = erhe::toolkit::intersect_plane<float>(
-        glm::vec3{this->direction_in_world()},
-        glm::vec3{this->position_in_world()},
+        glm::vec3{node->direction_in_world()},
+        glm::vec3{node->position_in_world()},
         pointer.position,
         direction
     );
@@ -252,7 +263,7 @@ void Rendertarget_node::update_headset(Headset_view& headset_view)
 }
 #endif
 
-auto Rendertarget_node::update_pointer() -> bool
+auto Rendertarget_mesh::update_pointer() -> bool
 {
     m_pointer.reset();
 
@@ -270,10 +281,17 @@ auto Rendertarget_node::update_pointer() -> bool
     {
         return false;
     }
+
+    auto const* node = get_node();
+    if (node == nullptr)
+    {
+        return false;
+    }
+
     const glm::vec3 origin_position_in_world = opt_origin_in_world.value();
     const glm::vec3 direction_in_world       = opt_direction_in_world.value();
-    const glm::vec3 origin_in_mesh           = this->transform_point_from_world_to_local(origin_position_in_world);
-    const glm::vec3 direction_in_mesh        = this->transform_direction_from_world_to_local(direction_in_world      );
+    const glm::vec3 origin_in_mesh           = node->transform_point_from_world_to_local(origin_position_in_world);
+    const glm::vec3 direction_in_mesh        = node->transform_direction_from_world_to_local(direction_in_world      );
 
     const glm::vec3 origo      { 0.0f, 0.0f, 0.0f};
     const glm::vec3 unit_axis_z{ 0.0f, 0.0f, 1.0f};
@@ -325,11 +343,17 @@ auto Rendertarget_node::update_pointer() -> bool
     }
 }
 
-[[nodiscard]] auto Rendertarget_node::world_to_window(
+[[nodiscard]] auto Rendertarget_mesh::world_to_window(
     glm::vec3 position_in_world
 ) const -> std::optional<glm::vec2>
 {
-    const glm::vec3 position_in_mesh = this->transform_point_from_world_to_local(position_in_world);
+    auto const* node = get_node();
+    if (node == nullptr)
+    {
+        return {};
+    }
+
+    const glm::vec3 position_in_mesh = node->transform_point_from_world_to_local(position_in_world);
     const glm::vec2 a{
         position_in_mesh.x / m_local_width,
         position_in_mesh.y / m_local_height
@@ -353,13 +377,13 @@ auto Rendertarget_node::update_pointer() -> bool
     };
 }
 
-void Rendertarget_node::bind()
+void Rendertarget_mesh::bind()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
     gl::viewport        (0, 0, m_texture->width(), m_texture->height());
 }
 
-void Rendertarget_node::clear(glm::vec4 clear_color)
+void Rendertarget_mesh::clear(glm::vec4 clear_color)
 {
     //m_pipeline_state_tracker->shader_stages.reset();
     //m_pipeline_state_tracker->color_blend.execute(
@@ -373,96 +397,114 @@ void Rendertarget_node::clear(glm::vec4 clear_color)
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 }
 
-void Rendertarget_node::render_done()
+void Rendertarget_mesh::render_done()
 {
     gl::generate_texture_mipmap(m_texture->gl_name());
 
-    if (m_viewport_config->rendertarget_node_lod_bias != m_sampler->lod_bias)
+    if (m_viewport_config->rendertarget_mesh_lod_bias != m_sampler->lod_bias)
     {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
             gl::Texture_min_filter::linear_mipmap_linear,
             gl::Texture_mag_filter::nearest,
-            m_viewport_config->rendertarget_node_lod_bias
+            m_viewport_config->rendertarget_mesh_lod_bias
         );
         m_material->sampler = m_sampler;
     }
 }
 
-[[nodiscard]] auto Rendertarget_node::get_pointer() const -> std::optional<glm::vec2>
+[[nodiscard]] auto Rendertarget_mesh::get_pointer() const -> std::optional<glm::vec2>
 {
     return m_pointer;
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-[[nodiscard]] auto Rendertarget_node::get_pointer_finger() const -> std::optional<Finger_point>
+[[nodiscard]] auto Rendertarget_mesh::get_pointer_finger() const -> std::optional<Finger_point>
 {
     return m_pointer_finger;
 }
 
-[[nodiscard]] auto Rendertarget_node::get_finger_trigger() const -> bool
+[[nodiscard]] auto Rendertarget_mesh::get_finger_trigger() const -> bool
 {
     return m_finger_trigger;
 }
 
-[[nodiscard]] auto Rendertarget_node::get_controller_pose() const -> const erhe::xr::Pose&
+[[nodiscard]] auto Rendertarget_mesh::get_controller_pose() const -> const erhe::xr::Pose&
 {
     return m_controller_pose;
 }
 
-[[nodiscard]] auto Rendertarget_node::get_controller_trigger() const -> float
+[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger() const -> float
 {
     return m_controller_trigger_value;
 }
 #endif
 
-[[nodiscard]] auto Rendertarget_node::width() const -> float
+[[nodiscard]] auto Rendertarget_mesh::width() const -> float
 {
     return static_cast<float>(m_texture->width());
 }
 
-[[nodiscard]] auto Rendertarget_node::height() const -> float
+[[nodiscard]] auto Rendertarget_mesh::height() const -> float
 {
     return static_cast<float>(m_texture->height());
 }
 
-auto is_rendertarget(const erhe::scene::Node* const node) -> bool
+auto is_rendertarget(const erhe::scene::Scene_item* const scene_item) -> bool
 {
-    if (node == nullptr)
+    if (scene_item == nullptr)
     {
         return false;
     }
-    return (node->get_flag_bits() & erhe::scene::Node_flag_bit::is_rendertarget) == erhe::scene::Node_flag_bit::is_rendertarget;
+    using namespace erhe::toolkit;
+    return test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Scene_item_flags::rendertarget);
 }
 
-auto is_rendertarget(const std::shared_ptr<erhe::scene::Node>& node) -> bool
+auto is_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool
 {
-    return is_rendertarget(node.get());
+    return is_rendertarget(scene_item.get());
 }
 
-auto as_rendertarget(erhe::scene::Node* const node) -> Rendertarget_node*
+auto as_rendertarget(erhe::scene::Scene_item* const scene_item) -> Rendertarget_mesh*
 {
-    if (node == nullptr)
+    if (scene_item == nullptr)
     {
         return nullptr;
     }
-    if ((node->get_flag_bits() & erhe::scene::Node_flag_bit::is_rendertarget) == 0)
+    using namespace erhe::toolkit;
+    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Scene_item_flags::rendertarget))
     {
         return nullptr;
     }
-    return reinterpret_cast<Rendertarget_node*>(node);
+    return reinterpret_cast<Rendertarget_mesh*>(scene_item);
 }
 
-auto as_rendertarget(const std::shared_ptr<erhe::scene::Node>& node) -> std::shared_ptr<Rendertarget_node>
+auto as_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>
 {
-    if (!node)
+    if (!scene_item)
     {
         return {};
     }
-    if ((node->get_flag_bits() & erhe::scene::Node_flag_bit::is_rendertarget) == 0)
+    using namespace erhe::toolkit;
+    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Scene_item_flags::rendertarget))
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Rendertarget_node>(node);
+    return std::dynamic_pointer_cast<Rendertarget_mesh>(scene_item);
+}
+
+auto get_rendertarget(
+    const erhe::scene::Node* const node
+) -> std::shared_ptr<Rendertarget_mesh>
+{
+    for (const auto& attachment : node->attachments())
+    {
+        auto rendertarget = as_rendertarget(attachment);
+        if (rendertarget)
+        {
+            return rendertarget;
+        }
+    }
+    return {};
 }
 
 }  // namespace editor

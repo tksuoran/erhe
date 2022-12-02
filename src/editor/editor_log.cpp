@@ -48,7 +48,7 @@ void initialize_logging()
     log_id_render                  = erhe::log::make_logger("editor::id_render"                 , spdlog::level::info);
     log_materials                  = erhe::log::make_logger("editor::materials"                 , spdlog::level::info);
     log_node_properties            = erhe::log::make_logger("editor::node_properties"           , spdlog::level::info);
-    log_operations                 = erhe::log::make_logger("editor::operations"                , spdlog::level::trace);
+    log_operations                 = erhe::log::make_logger("editor::operations"                , spdlog::level::info);
     log_parsers                    = erhe::log::make_logger("editor::parsers"                   , spdlog::level::info);
     log_physics                    = erhe::log::make_logger("editor::physics"                   , spdlog::level::info);
     log_pointer                    = erhe::log::make_logger("editor::pointer"                   , spdlog::level::info);

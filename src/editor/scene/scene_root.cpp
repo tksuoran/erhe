@@ -1,7 +1,7 @@
 #include "scene/scene_root.hpp"
 
 #include "editor_log.hpp"
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 
 #include "scene/debug_draw.hpp"
 #include "scene/node_physics.hpp"
@@ -38,35 +38,35 @@ using erhe::scene::Light;
 using erhe::scene::Light_layer;
 using erhe::scene::Mesh;
 using erhe::scene::Mesh_layer;
-using erhe::scene::Node_visibility;
+////using erhe::scene::Node_visibility;
 using erhe::scene::Scene;
 using erhe::primitive::Material;
 
-Instance::Instance(
-    const std::shared_ptr<erhe::scene::Mesh>& mesh,
-    const std::shared_ptr<Node_physics>&      node_physics,
-    const std::shared_ptr<Node_raytrace>&     node_raytrace
-)
-    : mesh         {mesh}
-    , node_physics {node_physics}
-    , node_raytrace{node_raytrace}
-{
-}
-
-Instance::~Instance() noexcept
-{
-}
+//Instance::Instance(
+//    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+//    const std::shared_ptr<Node_physics>&      node_physics,
+//    const std::shared_ptr<Node_raytrace>&     node_raytrace
+//)
+//    : mesh         {mesh}
+//    , node_physics {node_physics}
+//    , node_raytrace{node_raytrace}
+//{
+//}
+//
+//Instance::~Instance() noexcept
+//{
+//}
 
 Scene_layers::Scene_layers(erhe::scene::Scene& scene)
 {
     using std::make_shared;
 
-    m_content      = make_shared<Mesh_layer>("content",      Node_visibility::content);
-    m_controller   = make_shared<Mesh_layer>("controller",   Node_visibility::controller);
-    m_tool         = make_shared<Mesh_layer>("tool",         Node_visibility::tool);
-    m_rendertarget = make_shared<Mesh_layer>("rendertarget", Node_visibility::rendertarget);
-    m_brush        = make_shared<Mesh_layer>("brush",        Node_visibility::brush);
-    m_light        = make_shared<Light_layer>("lights");
+    m_content      = std::make_shared<Mesh_layer>("content",      erhe::scene::Scene_item_flags::content);
+    m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::scene::Scene_item_flags::controller);
+    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::scene::Scene_item_flags::tool);
+    m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::scene::Scene_item_flags::rendertarget);
+    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::scene::Scene_item_flags::brush);
+    m_light        = std::make_shared<Light_layer>("lights");
 
     scene.mesh_layers .push_back(m_content);
     scene.mesh_layers .push_back(m_controller);
@@ -341,13 +341,13 @@ void Scene_root::sort_lights()
     );
 }
 
-void Scene_root::update_pointer_for_rendertarget_nodes()
+void Scene_root::update_pointer_for_rendertarget_meshes()
 {
-    std::lock_guard<std::mutex> lock(m_rendertarget_nodes_mutex);
+    std::lock_guard<std::mutex> lock(m_rendertarget_meshes_mutex);
 
-    for (const auto& rendertarget_node : m_rendertarget_nodes)
+    for (const auto& rendertarget_mesh : m_rendertarget_meshes)
     {
-        rendertarget_node->update_pointer();
+        rendertarget_mesh->update_pointer();
     }
 }
 
@@ -356,17 +356,17 @@ auto Scene_root::material_library() const -> std::shared_ptr<Material_library>
     return m_material_library;
 }
 
-auto Scene_root::create_rendertarget_node(
+auto Scene_root::create_rendertarget_mesh(
     const erhe::components::Components& components,
     Viewport_window&                    host_viewport_window,
     const int                           width,
     const int                           height,
     const double                        pixels_per_meter
-) -> std::shared_ptr<Rendertarget_node>
+) -> std::shared_ptr<Rendertarget_mesh>
 {
-    std::lock_guard<std::mutex> lock(m_rendertarget_nodes_mutex);
+    std::lock_guard<std::mutex> lock(m_rendertarget_meshes_mutex);
 
-    auto rendertarget_node = std::make_shared<Rendertarget_node>(
+    auto rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
         *this,
         host_viewport_window,
         components,
@@ -374,9 +374,9 @@ auto Scene_root::create_rendertarget_node(
         height,
         pixels_per_meter
     );
-    rendertarget_node->mesh_data.layer_id = layers().rendertarget()->id.get_id();
-    m_rendertarget_nodes.push_back(rendertarget_node);
-    return rendertarget_node;
+    rendertarget_mesh->mesh_data.layer_id = layers().rendertarget()->id.get_id();
+    m_rendertarget_meshes.push_back(rendertarget_mesh);
+    return rendertarget_mesh;
 }
 
 void Scene_root::sanity_check()

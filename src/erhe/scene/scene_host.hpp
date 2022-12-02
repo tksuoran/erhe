@@ -5,8 +5,6 @@
 namespace erhe::scene
 {
 
-class Node;
-class INode_attachment;
 class Scene;
 
 class Scene_host

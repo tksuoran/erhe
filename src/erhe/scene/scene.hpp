@@ -83,8 +83,14 @@ public:
     [[nodiscard]] auto get_mesh_layer_by_id (erhe::toolkit::Unique_id<Mesh_layer>::id_type id) const -> std::shared_ptr<Mesh_layer>;
     [[nodiscard]] auto get_light_layer_by_id(erhe::toolkit::Unique_id<Light_layer>::id_type id) const -> std::shared_ptr<Light_layer>;
 
-    void register_node  (const std::shared_ptr<Node>& node);
-    void unregister_node(const std::shared_ptr<Node>& node);
+    void register_node    (const std::shared_ptr<Node>& node);
+    void unregister_node  (const std::shared_ptr<Node>& node);
+    void register_camera  (const std::shared_ptr<Camera>& camera);
+    void unregister_camera(const std::shared_ptr<Camera>& camera);
+    void register_mesh    (const std::shared_ptr<Mesh>& mesh);
+    void unregister_mesh  (const std::shared_ptr<Mesh>& mesh);
+    void register_light   (const std::shared_ptr<Light>& light);
+    void unregister_light (const std::shared_ptr<Light>& light);
 
     Scene_host*                               host{nullptr};
     std::shared_ptr<erhe::scene::Node>        root_node;

@@ -70,24 +70,9 @@ class Material_library;
 class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
-class Rendertarget_node;
+class Rendertarget_mesh;
 class Scene_root;
 class Viewport_window;
-
-class Instance
-{
-public:
-    Instance(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh,
-        const std::shared_ptr<Node_physics>&      node_physics,
-        const std::shared_ptr<Node_raytrace>&     node_raytrace
-    );
-    ~Instance() noexcept;
-
-    std::shared_ptr<erhe::scene::Mesh> mesh;
-    std::shared_ptr<Node_physics>      node_physics;
-    std::shared_ptr<Node_raytrace>     node_raytrace;
-};
 
 class Scene_layers
 {
@@ -153,15 +138,15 @@ public:
 
     [[nodiscard]] auto material_library() const -> std::shared_ptr<Material_library>;
 
-    [[nodiscard]] auto create_rendertarget_node(
+    [[nodiscard]] auto create_rendertarget_mesh(
         const erhe::components::Components& components,
         Viewport_window&                    host_viewport_window,
         const int                           width,
         const int                           height,
         const double                        pixels_per_meter
-    ) -> std::shared_ptr<Rendertarget_node>;
+    ) -> std::shared_ptr<Rendertarget_mesh>;
 
-    void update_pointer_for_rendertarget_nodes();
+    void update_pointer_for_rendertarget_meshes();
 
     void sanity_check();
 
@@ -174,8 +159,8 @@ private:
     std::shared_ptr<erhe::scene::Camera>            m_camera;
     std::shared_ptr<Frame_controller>               m_camera_controls;
     std::shared_ptr<Material_library>               m_material_library;
-    std::mutex                                      m_rendertarget_nodes_mutex;
-    std::vector<std::shared_ptr<Rendertarget_node>> m_rendertarget_nodes;
+    std::mutex                                      m_rendertarget_meshes_mutex;
+    std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
     Scene_layers                                    m_layers;
 };
 

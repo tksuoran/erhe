@@ -440,6 +440,7 @@ private:
             node_index, camera_index, safe_str(camera->name)
         );
 
+        auto erhe_node = m_nodes.at(node_index);
         auto new_camera = std::make_shared<erhe::scene::Camera>(camera->name);
         auto* projection = new_camera->projection();
         switch (camera->type)
@@ -483,9 +484,8 @@ private:
             }
         }
 
-        new_camera->set_parent(m_scene_root->scene().root_node);
-        m_nodes[node_index] = new_camera;
-        parse_node_transform(node, new_camera);
+        erhe_node->attach(new_camera);
+        m_cameras[camera_index] = new_camera;
     }
     void parse_light(cgltf_node* node)
     {
@@ -497,6 +497,7 @@ private:
             node_index, light_index, safe_str(light->name)
         );
 
+        auto erhe_node = m_nodes.at(node_index);
         auto new_light = std::make_shared<erhe::scene::Light>(light->name);
         new_light->color = glm::vec3{
             light->color[0],
@@ -510,9 +511,10 @@ private:
         new_light->outer_spot_angle = light->spot_outer_cone_angle;
 
         new_light->layer_id = m_scene_root->layers().light()->id.get_id();
-        new_light->set_parent(m_scene_root->scene().root_node);
-        m_nodes[node_index] = new_light;
-        parse_node_transform(node, new_light);
+
+        erhe_node->attach(new_light);
+        m_lights[light_index] = new_light;
+        //parse_node_transform(node, new_light);
     }
 
     static const std::size_t max_vertex_valency = 10;
@@ -1131,7 +1133,7 @@ private:
             }
         );
 
-        erhe_mesh->attach(node_raytrace);
+        erhe_mesh->get_node()->attach(node_raytrace);
     }
     void parse_mesh(cgltf_node* node)
     {
@@ -1143,6 +1145,7 @@ private:
             node_index, mesh_index, safe_str(mesh->name)
         );
 
+        auto erhe_node = m_nodes.at(node_index);
         auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh->name);
 
         for (cgltf_size i = 0; i < mesh->primitives_count; ++i)
@@ -1150,63 +1153,47 @@ private:
             parse_primitive(erhe_mesh, mesh, &mesh->primitives[i]);
         }
 
-        erhe_mesh->set_visibility_mask(
-            erhe::scene::Node_visibility::visible     |
-            erhe::scene::Node_visibility::content     |
-            erhe::scene::Node_visibility::shadow_cast |
-            erhe::scene::Node_visibility::id
+        erhe_mesh->enable_flag_bits(
+            erhe::scene::Scene_item_flags::visible     |
+            erhe::scene::Scene_item_flags::content     |
+            erhe::scene::Scene_item_flags::shadow_cast |
+            erhe::scene::Scene_item_flags::id
         );
 
         erhe_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id.get_id();
-        erhe_mesh->set_parent(m_scene_root->scene().root_node);
-        m_nodes[node_index] = erhe_mesh;
-        parse_node_transform(node, erhe_mesh);
+        erhe_node->attach(erhe_mesh);
+        m_meshes[mesh_index] = erhe_mesh;
     }
-    void parse_empty_node(cgltf_node* node)
+    void parse_node(
+        cgltf_node*                        node,
+        std::shared_ptr<erhe::scene::Node> erhe_parent
+    )
     {
         const cgltf_size node_index = node - m_data->nodes;
-        log_parsers->trace("Empty node: node_index = {}, name = {}", node_index, safe_str(node->name));
-        auto empty_node = std::make_shared<erhe::scene::Node>(node->name);
-        empty_node->set_parent(m_scene_root->scene().root_node);
-        m_nodes[node_index] = empty_node;
-        parse_node_transform(node, empty_node);
-    }
-    void parse_node(cgltf_node* node)
-    {
-        const cgltf_size node_index = node - m_data->nodes;
-
         log_parsers->trace("Node: node index = {}, name = {}", node_index, safe_str(node->name));
+        auto erhe_node = std::make_shared<erhe::scene::Node>(node->name);
+        erhe_node->set_parent(erhe_parent);
+        m_nodes[node_index] = erhe_node;
+        parse_node_transform(node, erhe_node);
 
-        std::size_t node_count = 0;
         if (node->camera != nullptr)
         {
-            assert(node_count == 0); // TODO
-            ++node_count;
             parse_camera(node);
         }
 
         if (node->light != nullptr)
         {
-            assert(node_count == 0); // TODO
-            ++node_count;
             parse_light(node);
         }
 
         if (node->mesh != nullptr)
         {
-            assert(node_count == 0); // TODO
-            ++node_count;
             parse_mesh(node);
-        }
-
-        if (node_count == 0)
-        {
-            parse_empty_node(node);
         }
 
         for (cgltf_size i = 0; i < node->children_count; ++i)
         {
-            parse_node(node->children[i]);
+            parse_node(node->children[i], erhe_node);
         }
     }
     void fix_node_hierarchy(cgltf_node* node)
@@ -1239,7 +1226,10 @@ private:
         );
         for (cgltf_size i = 0; i < scene->nodes_count; ++i)
         {
-            parse_node(scene->nodes[i]);
+            parse_node(
+                scene->nodes[i],
+                m_scene_root->scene().root_node
+            );
         }
 
         // Setup node hierarchy

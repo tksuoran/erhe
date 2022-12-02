@@ -32,7 +32,7 @@ Draw_indirect_buffer::Draw_indirect_buffer(std::size_t max_draw_count)
 auto Draw_indirect_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     erhe::primitive::Primitive_mode                            primitive_mode,
-    const erhe::scene::Visibility_filter&                      visibility_filter
+    const erhe::scene::Scene_item_filter&                      filter
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION
@@ -60,7 +60,7 @@ auto Draw_indirect_buffer::update(
             break;
         }
 
-        if (!visibility_filter(mesh->get_visibility_mask()))
+        if (!filter(mesh->get_flag_bits()))
         {
             continue;
         }

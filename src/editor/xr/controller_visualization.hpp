@@ -34,6 +34,7 @@ public:
     void update(const erhe::xr::Pose& pose);
 
 private:
+    std::shared_ptr<erhe::scene::Node> m_controller_node;
     std::shared_ptr<erhe::scene::Mesh> m_controller_mesh;
 };
 

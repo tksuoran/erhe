@@ -168,7 +168,7 @@ void Viewport_config::imgui()
         erhe::application::make_combo("Camera", debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
         ImGui::TreePop();
     }
-    ImGui::SliderFloat("LoD Bias", &rendertarget_node_lod_bias, -8.0f, 8.0f);
+    ImGui::SliderFloat("LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
 
     const auto& hotbar = get<Hotbar>();
     if (hotbar)

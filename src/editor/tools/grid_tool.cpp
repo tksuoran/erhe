@@ -24,7 +24,12 @@ namespace editor
 
 using glm::vec3;
 
-[[nodiscard]] auto Grid::node_attachment_type() const -> const char*
+Grid::Grid()
+{
+    enable_flag_bits(erhe::scene::Scene_item_flags::grid);
+}
+
+[[nodiscard]] auto Grid::type_name() const -> const char*
 {
     return "Grid";
 }
@@ -65,7 +70,7 @@ auto Grid::world_from_grid() const -> glm::dmat4
 {
     if (m_plane_type == Grid_plane_type::Node)
     {
-        erhe::scene::Node* node = get_node();
+        const erhe::scene::Node* node = get_node();
         if (node != nullptr)
         {
             return glm::dmat4{node->world_from_node()};
@@ -78,7 +83,7 @@ auto Grid::grid_from_world() const -> glm::dmat4
 {
     if (m_plane_type == Grid_plane_type::Node)
     {
-        erhe::scene::Node* node = get_node();
+        const erhe::scene::Node* node = get_node();
         if (node != nullptr)
         {
             return glm::dmat4{node->node_from_world()};
@@ -97,7 +102,9 @@ void Grid::render(
         return;
     }
 
-    const glm::vec3 camera_position = context.camera->position_in_world();
+    const erhe::scene::Node* camera_node = context.camera->get_node();
+    ERHE_VERIFY(camera_node != nullptr);
+    const glm::vec3 camera_position = camera_node->position_in_world();
     const glm::mat4 m = world_from_grid();
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;
@@ -232,14 +239,15 @@ void Grid::imgui(
                 }
             }
         }
-        const auto& selection = selection_tool->selection();
-        if (!selection.empty())
+        const auto& host_node = selection_tool->get_first_selected_node();
+        if (host_node)
         {
-            const auto& host_node = selection.front();
             const std::string label = fmt::format("Attach to {}", host_node->name());
             if (ImGui::Button(label.c_str()))
             {
-                host_node->attach(shared_from_this());
+                host_node->attach(
+                    std::static_pointer_cast<Grid>(shared_from_this())
+                );
             }
         }
     }

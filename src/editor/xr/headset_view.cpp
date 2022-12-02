@@ -121,7 +121,7 @@ void Headset_view::initialize_component()
         m_controller_visualization = std::make_unique<Controller_visualization>(
             *mesh_memory,
             *m_scene_root,
-            m_root_camera.get()
+            m_root_node.get()
         );
     }
 
@@ -397,10 +397,10 @@ void Headset_view::execute_rendergraph_node()
                     m_line_renderer_set->render(viewport, *render_context.camera);
                     m_line_renderer_set->end();
                 }
-                m_editor_rendering->render_content           (render_context, false);
-                m_editor_rendering->render_selection         (render_context, false);
-                m_editor_rendering->render_tool_meshes       (render_context);
-                m_editor_rendering->render_rendertarget_nodes(render_context);
+                m_editor_rendering->render_content            (render_context, false);
+                m_editor_rendering->render_selection          (render_context, false);
+                m_editor_rendering->render_tool_meshes        (render_context);
+                m_editor_rendering->render_rendertarget_meshes(render_context);
             }
 
             return true;
@@ -417,24 +417,36 @@ void Headset_view::setup_root_camera()
     m_root_camera = std::make_shared<erhe::scene::Camera>(
         "Headset Root Camera"
     );
-    const glm::mat4 m = erhe::toolkit::create_look_at(
-        glm::vec3{0.0f, 0.0f,  0.0f}, // eye
-        glm::vec3{0.0f, 0.0f,  0.0f}, // look at
-        glm::vec3{0.0f, 1.0f,  0.0f}  // up
-    );
-    m_root_camera->set_parent_from_node(m);
+
     auto& projection = *m_root_camera->projection();
     projection.fov_y           = glm::radians(35.0f);
     projection.projection_type = erhe::scene::Projection::Type::perspective_vertical;
     projection.z_near          = 0.03f;
     projection.z_far           = 200.0f;
 
-    m_root_camera->set_parent(m_scene_root->scene().root_node);
+    const glm::mat4 m = erhe::toolkit::create_look_at(
+        glm::vec3{0.0f, 0.0f,  0.0f}, // eye
+        glm::vec3{0.0f, 0.0f,  0.0f}, // look at
+        glm::vec3{0.0f, 1.0f,  0.0f}  // up
+    );
+
+    m_root_node = std::make_shared<erhe::scene::Node>(
+        "Headset Root Camera Node"
+    );
+
+    m_root_node->set_parent_from_node(m);
+    m_root_node->attach(m_root_camera);
+    m_root_node->set_parent(m_scene_root->scene().root_node);
 }
 
 auto Headset_view::get_scene_root() const -> std::shared_ptr<Scene_root>
 {
     return m_scene_root;
+}
+
+auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
+{
+    return m_root_node;
 }
 
 auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>

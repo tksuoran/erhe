@@ -15,6 +15,7 @@ namespace erhe::application
 namespace erhe::scene
 {
     class Camera;
+    class Node;
 }
 
 namespace editor
@@ -24,7 +25,7 @@ class Icon_set;
 class Operations;
 class Physics_tool;
 class Rendertarget_imgui_viewport;
-class Rendertarget_node;
+class Rendertarget_mesh;
 class Selection_tool;
 class Trs_tool;
 class Viewport_windows;
@@ -87,8 +88,8 @@ private:
     std::shared_ptr<Trs_tool>                          m_trs_tool;
     std::shared_ptr<Viewport_windows>                  m_viewport_windows;
 
-
-    std::shared_ptr<Rendertarget_node>           m_rendertarget_node;
+    std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
+    std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
     bool  m_show{true};
     float m_x{ 0.0f};

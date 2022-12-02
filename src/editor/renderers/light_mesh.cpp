@@ -138,11 +138,17 @@ auto Light_mesh::point_in_light(
         return true;
     }
 
+    const auto* node = light.get_node();
+    if (node == nullptr)
+    {
+        return false;
+    }
+
     const float spot_angle         = light.outer_spot_angle * 0.5f;
     const float outer_angle        = spot_angle / std::cos(glm::pi<float>() / static_cast<float>(m_light_cone_sides));
     const float spot_cutoff        = std::cos(outer_angle);
     const float range              = light.range;
-    const mat4  light_from_world   = light.node_from_world();
+    const mat4  light_from_world   = node->node_from_world();
     const vec3  view_in_light_     = vec3{light_from_world * vec4{point, 1.0f}};
     const float distance           = -view_in_light_.z;
     const vec3  view_in_light      = glm::normalize(view_in_light_);

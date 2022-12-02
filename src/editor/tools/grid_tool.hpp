@@ -38,12 +38,13 @@ static constexpr const char* grid_plane_type_strings[] =
 auto get_plane_transform(Grid_plane_type plane_type) -> glm::dmat4;
 
 class Grid
-    : public erhe::scene::INode_attachment
-    , public std::enable_shared_from_this<Grid>
+    : public erhe::scene::Node_attachment
 {
 public:
-    // Implements INode_attachment
-    [[nodiscard]] auto node_attachment_type() const -> const char* override;
+    Grid();
+
+    // Implements Node_attachment
+    [[nodiscard]] auto type_name() const -> const char* override;
 
     // Public API
     [[nodiscard]] auto get_name           () const -> const std::string&;

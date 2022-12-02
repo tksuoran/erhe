@@ -78,12 +78,17 @@ Headset_view_resources::Headset_view_resources(
     gl::named_framebuffer_draw_buffers(framebuffer->gl_name(), 1, &draw_buffers[0]);
     gl::named_framebuffer_read_buffer (framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
+
     camera = std::make_shared<erhe::scene::Camera>(
         fmt::format("Headset Camera slot {}", slot)
     );
 
-    // view camera is used as root for all cameras
-    camera->set_parent(headset_view.get_camera());
+    node = std::make_shared<erhe::scene::Node>(
+        fmt::format("Headset Camera node slot {}", slot)
+    );
+
+    node->attach(camera);
+    node->set_parent(headset_view.get_root_node());
 
     is_valid = true;
 }
@@ -106,7 +111,7 @@ void Headset_view_resources::update(erhe::xr::Render_view& render_view)
     const glm::mat4 orientation = glm::mat4_cast(render_view.view_pose.orientation);
     const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, render_view.view_pose.position);
     const glm::mat4 m           = translation * orientation;
-    camera->set_parent_from_node(m);
+    node->set_parent_from_node(m);
 }
 
 } // namespace editor

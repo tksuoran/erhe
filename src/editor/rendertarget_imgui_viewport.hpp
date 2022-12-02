@@ -25,7 +25,7 @@ namespace editor
 class Hand_tracker;
 class Headset_view;
 #endif
-class Rendertarget_node;
+class Rendertarget_mesh;
 class Viewport_window;
 
 class Rendertarget_imgui_viewport
@@ -33,14 +33,14 @@ class Rendertarget_imgui_viewport
 {
 public:
     Rendertarget_imgui_viewport(
-        Rendertarget_node*                  rendertarget_node,
+        Rendertarget_mesh*                  rendertarget_mesh,
         const std::string_view              name,
         const erhe::components::Components& components,
         bool                                imgui_ini = true
     );
     virtual ~Rendertarget_imgui_viewport() noexcept;
 
-    [[nodiscard]] auto rendertarget_node() -> Rendertarget_node*;
+    [[nodiscard]] auto rendertarget_mesh() -> Rendertarget_mesh*;
     void set_clear_color(const glm::vec4& value);
 
     // Implements Imgui_viewport
@@ -76,7 +76,7 @@ public:
     ) const -> erhe::scene::Viewport override;
 
 private:
-    Rendertarget_node*                                 m_rendertarget_node;
+    Rendertarget_mesh*                                 m_rendertarget_mesh{nullptr};
     std::shared_ptr<erhe::application::Configuration>  m_configuration;
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
     std::shared_ptr<erhe::application::Imgui_windows>  m_imgui_windows;

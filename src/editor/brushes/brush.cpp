@@ -402,7 +402,7 @@ auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
 
 auto Brush::make_instance(
     const Instance_create_info& instance_create_info
-) -> Instance
+) -> std::shared_ptr<erhe::scene::Node>
 {
     ERHE_PROFILE_FUNCTION
 
@@ -423,7 +423,8 @@ auto Brush::make_instance(
         instance_create_info.material->name
     );
 
-    auto mesh = std::make_shared<erhe::scene::Mesh>(name);
+    auto node = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+    auto mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{} mesh", name));
     mesh->mesh_data.primitives.push_back(
         erhe::primitive::Primitive{
             .material              = instance_create_info.material,
@@ -439,11 +440,11 @@ auto Brush::make_instance(
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
 
     mesh->mesh_data.layer_id = instance_create_info.scene_root->layers().content()->id.get_id();
-    mesh->set_visibility_mask(instance_create_info.node_visibility_flags);
-    mesh->set_world_from_node(instance_create_info.world_from_node);
+    mesh->enable_flag_bits(instance_create_info.mesh_flags);
+    node->set_world_from_node(instance_create_info.world_from_node);
+    node->attach             (mesh);
+    node->enable_flag_bits   (instance_create_info.mesh_flags);
 
-    std::shared_ptr<Node_physics>  node_physics;
-    std::shared_ptr<Node_raytrace> node_raytrace;
     if (data.collision_shape || data.collision_shape_generator)
     {
         ERHE_PROFILE_SCOPE("make brush node physics");
@@ -455,24 +456,20 @@ auto Brush::make_instance(
             .inertia_override = scaled.local_inertia,
             .debug_label      = name.c_str()
         };
-        node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
-        mesh->attach(node_physics);
+        auto node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+        node->attach(node_physics);
     }
 
     if (scaled.rt_primitive)
     {
-        node_raytrace = std::make_shared<Node_raytrace>(
+        auto node_raytrace = std::make_shared<Node_raytrace>(
             scaled.geometry,
             scaled.rt_primitive
         );
-        mesh->attach(node_raytrace);
+        node->attach(node_raytrace);
     }
 
-    return Instance{
-        mesh,
-        node_physics,
-        node_raytrace
-    };
+    return node;
 }
 
 [[nodiscard]] auto Brush::get_bounding_box() -> erhe::toolkit::Bounding_box

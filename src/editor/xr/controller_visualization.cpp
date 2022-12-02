@@ -43,10 +43,16 @@ Controller_visualization::Controller_visualization(
         .material              = controller_material,
         .gl_primitive_geometry = controller_pg
     };
+
+    m_controller_node = std::make_shared<erhe::scene::Node>("Controller node");
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller", primitive);
-    m_controller_mesh->node_data.visibility_mask |= erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::controller;
+    m_controller_mesh->enable_flag_bits(
+        erhe::scene::Scene_item_flags::visible |
+        erhe::scene::Scene_item_flags::controller
+    );
     m_controller_mesh->mesh_data.layer_id = scene_root.layers().content()->id.get_id();
-    m_controller_mesh->set_parent(view_root);
+    m_controller_node->attach(m_controller_mesh);
+    m_controller_node->set_parent(view_root);
 }
 
 void Controller_visualization::update(const erhe::xr::Pose& pose)
@@ -54,12 +60,12 @@ void Controller_visualization::update(const erhe::xr::Pose& pose)
     const glm::mat4 orientation = glm::mat4_cast(pose.orientation);
     const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, pose.position);
     const glm::mat4 m           = translation * orientation;
-    m_controller_mesh->set_parent_from_node(m);
+    m_controller_node->set_parent_from_node(m);
 }
 
 auto Controller_visualization::get_node() const -> erhe::scene::Node*
 {
-    return m_controller_mesh.get();
+    return m_controller_node.get();
 }
 
 }

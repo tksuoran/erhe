@@ -84,9 +84,9 @@ private:
         const erhe::scene::Light*            light
     );
 
-    void directional_light_visualization(Light_visualization_context& context);
-    void point_light_visualization      (Light_visualization_context& context);
-    void spot_light_visualization       (Light_visualization_context& context);
+    void directional_light_visualization(const Light_visualization_context& context);
+    void point_light_visualization      (const Light_visualization_context& context);
+    void spot_light_visualization       (const Light_visualization_context& context);
     void camera_visualization(
         const Render_context&      render_context,
         const erhe::scene::Camera* camera

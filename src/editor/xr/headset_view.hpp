@@ -102,6 +102,8 @@ public:
     [[nodiscard]] auto get_hand_tracker      () const -> Hand_tracker*;
     [[nodiscard]] auto get_headset           () const -> erhe::xr::Headset*;
 
+    [[nodiscard]] auto get_root_node() const -> std::shared_ptr<erhe::scene::Node>;
+
     // Implements Scene_view
     [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
     [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
@@ -130,6 +132,7 @@ private:
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
     std::shared_ptr<Scene_root>                          m_scene_root;
     std::unique_ptr<erhe::xr::Headset>                   m_headset;
+    std::shared_ptr<erhe::scene::Node>                   m_root_node;
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;

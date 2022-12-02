@@ -6,7 +6,7 @@
 namespace erhe::scene
 {
     class Mesh;
-    class Visibility_filter;
+    class Scene_item_filter;
 }
 
 namespace editor
@@ -29,7 +29,7 @@ public:
     auto update(
         const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         erhe::primitive::Primitive_mode                            primitive_mode,
-        const erhe::scene::Visibility_filter&                      visibility_filter
+        const erhe::scene::Scene_item_filter&                      filter
     ) -> Draw_indirect_buffer_range;
 
     void debug_properties_window();

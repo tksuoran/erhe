@@ -14,12 +14,14 @@ namespace erhe::scene
     class Light;
     class Mesh;
     class Node;
+    class Node_attachment;
 }
 
 namespace editor
 {
 
 class Editor_scenes;
+class Node_physics;
 class Operation_stack;
 class Selection_tool;
 
@@ -51,6 +53,10 @@ private:
     void light_properties    (erhe::scene::Light& light) const;
     void mesh_properties     (erhe::scene::Mesh& mesh) const;
     void transform_properties(erhe::scene::Node& node);
+
+    void node_physics_properties(Node_physics& node_physics);
+    void attachment_properties  (erhe::scene::Node_attachment& attachment);
+
 
     class Value_edit_state
     {

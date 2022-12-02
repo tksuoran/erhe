@@ -3,6 +3,7 @@
 
 #include "erhe/application/controller.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -17,8 +18,9 @@ using glm::vec3;
 using glm::vec4;
 
 Frame_controller::Frame_controller()
+    : Node_attachment{"frame controller"}
 {
-    m_flag_bits |= INode_attachment::c_flag_bit_is_frame_controller;
+    m_flag_bits |= erhe::scene::Scene_item_flags::frame_controller;
 
     reset();
     rotate_x      .set_damp     (0.700f);
@@ -93,7 +95,7 @@ auto Frame_controller::heading() const -> float
     return m_heading;
 }
 
-auto Frame_controller::node_attachment_type() const -> const char*
+auto Frame_controller::type_name() const -> const char*
 {
     return "Frame_controller";
 }
@@ -268,37 +270,41 @@ void Frame_controller::update_fixed_step()
 }
 
 auto is_frame_controller(
-    const erhe::scene::INode_attachment* const attachment
+    const erhe::scene::Node_attachment* const attachment
 ) -> bool
 {
     if (attachment == nullptr)
     {
         return false;
     }
-    return
-        (attachment->flag_bits()
-            & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller)
-        ==
-            erhe::scene::INode_attachment::c_flag_bit_is_frame_controller;
+    using namespace erhe::toolkit;
+    return test_all_rhs_bits_set(
+        attachment->get_flag_bits(),
+        erhe::scene::Scene_item_flags::frame_controller
+    );
 }
 
 auto is_frame_controller(
-    const std::shared_ptr<erhe::scene::INode_attachment>& attachment
+    const std::shared_ptr<erhe::scene::Node_attachment>& attachment
 ) -> bool
 {
     return is_frame_controller(attachment.get());
 }
 
 auto as_frame_controller(
-    erhe::scene::INode_attachment* attachment
+    erhe::scene::Node_attachment* attachment
 ) -> Frame_controller*
 {
     if (attachment == nullptr)
     {
         return nullptr;
     }
+    using namespace erhe::toolkit;
     if (
-        (attachment->flag_bits() & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller) == 0
+        !test_all_rhs_bits_set(
+            attachment->get_flag_bits(),
+            erhe::scene::Scene_item_flags::frame_controller
+        )
     )
     {
         return nullptr;
@@ -307,15 +313,19 @@ auto as_frame_controller(
 }
 
 auto as_frame_controller(
-    const std::shared_ptr<erhe::scene::INode_attachment>& attachment
+    const std::shared_ptr<erhe::scene::Node_attachment>& attachment
 ) -> std::shared_ptr<Frame_controller>
 {
     if (!attachment)
     {
         return {};
     }
+    using namespace erhe::toolkit;
     if (
-        (attachment->flag_bits() & erhe::scene::INode_attachment::c_flag_bit_is_frame_controller) == 0
+        !test_all_rhs_bits_set(
+            attachment->get_flag_bits(),
+            erhe::scene::Scene_item_flags::frame_controller
+        )
     )
     {
         return {};

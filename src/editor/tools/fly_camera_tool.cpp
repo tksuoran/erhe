@@ -261,7 +261,13 @@ void Fly_camera_tool::update_camera()
     const auto camera = (viewport_window)
         ? viewport_window->get_camera()
         : std::shared_ptr<erhe::scene::Camera>{};
-    if (m_camera_controller->get_node() != camera.get())
+    const auto* camera_node = camera
+        ? camera->get_node()
+        : nullptr;
+
+    // TODO This is messy
+
+    if (m_camera_controller->get_node() != camera_node)
     {
         set_camera(camera.get());
     }
@@ -274,7 +280,7 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera)
 
     if (camera != nullptr)
     {
-        auto* scene_root = reinterpret_cast<Scene_root*>(camera->node_data.host);
+        auto* scene_root = reinterpret_cast<Scene_root*>(camera->get_node()->node_data.host);
         if (scene_root != nullptr)
         {
             scene_root->scene().update_node_transforms();
@@ -293,13 +299,15 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera)
     }
     if (camera != nullptr)
     {
-        camera->attach(m_camera_controller);
+        camera->get_node()->attach(m_camera_controller);
     }
 }
 
 auto Fly_camera_tool::get_camera() const -> erhe::scene::Camera*
 {
-    return as_camera(m_camera_controller->get_node());
+    return erhe::scene::get_camera(
+        m_camera_controller->get_node()
+    ).get();
 }
 
 auto Fly_camera_tool::description() -> const char*

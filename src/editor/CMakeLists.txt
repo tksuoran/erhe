@@ -70,6 +70,8 @@ erhe_target_sources_grouped(
     renderers/program_interface.hpp
     renderers/programs.cpp
     renderers/programs.hpp
+    renderers/render_context.cpp
+    renderers/render_context.hpp
     renderers/shadow_renderer.cpp
     renderers/shadow_renderer.hpp
 
@@ -174,8 +176,8 @@ erhe_target_sources_grouped(
     editor_view_client.cpp
     editor_view_client.hpp
     main.cpp
-    rendertarget_node.cpp
-    rendertarget_node.hpp
+    rendertarget_mesh.cpp
+    rendertarget_mesh.hpp
     rendertarget_imgui_viewport.cpp
     rendertarget_imgui_viewport.hpp
     task_queue.cpp

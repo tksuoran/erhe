@@ -1,7 +1,9 @@
 #include "scene/scene_commands.hpp"
 #include "editor_scenes.hpp"
-#include "operations/operation_stack.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
+#include "operations/node_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
@@ -13,6 +15,8 @@
 
 namespace editor
 {
+
+using erhe::scene::Scene_item_flags;
 
 auto Create_new_camera_command::try_call(
     erhe::application::Command_context& context
@@ -86,14 +90,12 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
     }
 
     const auto& selection_tool  = get<Selection_tool>();
-    const auto  selection_front = selection_tool->selection().empty()
-        ? std::shared_ptr<erhe::scene::Node>()
-        : selection_tool->selection().front();
+    const auto first_selected_node = selection_tool->get_first_selected_node();
 
     const auto& viewport_window = get<Viewport_windows>()->last_window();
 
-    erhe::scene::Scene_host* scene_host = selection_front
-        ? reinterpret_cast<Scene_root*>(selection_front->node_data.host)
+    erhe::scene::Scene_host* scene_host = first_selected_node
+        ? reinterpret_cast<Scene_root*>(first_selected_node->node_data.host)
         : viewport_window
             ? viewport_window->get_scene_root().get()
             : nullptr;
@@ -116,17 +118,26 @@ auto Scene_commands::create_new_camera(
         return {};
     }
 
+    auto new_node = std::make_shared<erhe::scene::Node>("new camera node");
     auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
-    new_camera->node_data.visibility_mask = erhe::scene::Node_visibility::content;
+    new_node->enable_flag_bits(Scene_item_flags::content);
+    new_camera->enable_flag_bits(erhe::scene::Scene_item_flags::content);
     get<Operation_stack>()->push(
-        std::make_shared<Node_insert_remove_operation>(
-            Node_insert_remove_operation::Parameters{
-                .selection_tool = get<Selection_tool>().get(),
-                .node           = new_camera,
-                .parent         = (parent != nullptr)
-                    ? parent->shared_from_this()
-                    : scene_root->get_scene()->root_node,
-                .mode           = Scene_item_operation::Mode::insert
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{
+                .operations = {
+                    std::make_shared<Node_insert_remove_operation>(
+                        Node_insert_remove_operation::Parameters{
+                            .selection_tool = get<Selection_tool>().get(),
+                            .node           = new_node,
+                            .parent         = (parent != nullptr)
+                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
+                                : scene_root->get_scene()->root_node,
+                            .mode           = Scene_item_operation::Mode::insert
+                        }
+                    ),
+                    std::make_shared<Attach_operation>(new_camera, new_node)
+                }
             }
         )
     );
@@ -145,14 +156,14 @@ auto Scene_commands::create_new_empty_node(
     }
 
     auto new_empty_node = std::make_shared<erhe::scene::Node>("new empty node");
-    new_empty_node->node_data.visibility_mask = erhe::scene::Node_visibility::content;
+    new_empty_node->enable_flag_bits(Scene_item_flags::content);
     get<Operation_stack>()->push(
         std::make_shared<Node_insert_remove_operation>(
             Node_insert_remove_operation::Parameters{
                 .selection_tool = get<Selection_tool>().get(),
                 .node           = new_empty_node,
                 .parent         = (parent != nullptr)
-                    ? parent->shared_from_this()
+                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                     : scene_root->get_scene()->root_node,
                 .mode           = Scene_item_operation::Mode::insert
             }
@@ -172,21 +183,31 @@ auto Scene_commands::create_new_light(
         return {};
     }
 
+    auto new_node = std::make_shared<erhe::scene::Node>("new light node");
     auto new_light = std::make_shared<erhe::scene::Light>("new light");
-    new_light->node_data.visibility_mask = erhe::scene::Node_visibility::content;
+    new_node->enable_flag_bits(erhe::scene::Scene_item_flags::content);
+    new_light->enable_flag_bits(erhe::scene::Scene_item_flags::content);
     new_light->layer_id = scene_root->layers().light()->id.get_id();
     get<Operation_stack>()->push(
-        std::make_shared<Node_insert_remove_operation>(
-            Node_insert_remove_operation::Parameters{
-                .selection_tool = get<Selection_tool>().get(),
-                .node           = new_light,
-                .parent         = (parent != nullptr)
-                    ? parent->shared_from_this()
-                    : scene_root->get_scene()->root_node,
-                .mode           = Scene_item_operation::Mode::insert
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{
+                .operations = {
+                    std::make_shared<Node_insert_remove_operation>(
+                        Node_insert_remove_operation::Parameters{
+                            .selection_tool = get<Selection_tool>().get(),
+                            .node           = new_node,
+                            .parent         = (parent != nullptr)
+                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
+                                : scene_root->get_scene()->root_node,
+                            .mode           = Scene_item_operation::Mode::insert
+                        }
+                    ),
+                    std::make_shared<Attach_operation>(new_light, new_node)
+                }
             }
         )
     );
+
 
     return new_light;
 }

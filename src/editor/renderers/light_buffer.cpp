@@ -185,6 +185,8 @@ auto Light_buffer::update(
         //}
 
         ERHE_VERIFY(light);
+        erhe::scene::Node* node = light->get_node();
+        ERHE_VERIFY(node != nullptr);
 
         switch (light->type)
         {
@@ -209,7 +211,7 @@ auto Light_buffer::update(
         }
 
         const mat4  texture_from_world   = light_projection_transforms->texture_from_world.matrix();
-        const vec3  direction            = vec3{light->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+        const vec3  direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
         const vec3  position             = vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         const vec4  radiance             = vec4{light->intensity * light->color, light->range};
         const auto  inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);

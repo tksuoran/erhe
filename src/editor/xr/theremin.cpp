@@ -286,14 +286,18 @@ void Theremin::tool_render(const Render_context& context)
     }
 
     auto&      line_renderer = *m_line_renderer_set->hidden.at(2).get();
-    const auto camera        = m_headset_view->get_camera();
-
-    if (!camera)
+    //const auto camera        = m_headset_view->get_camera();
+    //if (!camera)
+    //{
+    //    return;
+    //}
+    const auto& root_node = m_headset_view->get_root_node();
+    if (!root_node)
     {
         return;
     }
 
-    const auto  transform  = camera->world_from_node();
+    const auto  transform  = root_node->world_from_node();
     const auto& left_hand  = m_hand_tracker->get_hand(Hand_name::Left);
     const auto& right_hand = m_hand_tracker->get_hand(Hand_name::Right);
 

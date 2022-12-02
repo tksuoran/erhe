@@ -46,7 +46,6 @@ class Id_renderer;
 class Mesh_memory;
 class Post_processing;
 class Render_context;
-class Rendertarget_node;
 class Scene_root;
 class Shadow_renderer;
 class Tools;
@@ -98,16 +97,16 @@ public:
     void update_once_per_frame(const erhe::components::Time_context&) override;
 
     // Public API
-    void trigger_capture          ();
-    void render                   ();
-    void render_viewport_main     (const Render_context& context, bool has_pointer);
-    void render_viewport_overlay  (const Render_context& context, bool has_pointer);
-    void render_content           (const Render_context& context, bool polygon_fill);
-    void render_selection         (const Render_context& context, bool polygon_fill);
-    void render_tool_meshes       (const Render_context& context);
-    void render_rendertarget_nodes(const Render_context& context);
-    void render_brush             (const Render_context& context);
-    void render_id                (const Render_context& context);
+    void trigger_capture           ();
+    void render                    ();
+    void render_viewport_main      (const Render_context& context, bool has_pointer);
+    void render_viewport_overlay   (const Render_context& context, bool has_pointer);
+    void render_content            (const Render_context& context, bool polygon_fill);
+    void render_selection          (const Render_context& context, bool polygon_fill);
+    void render_tool_meshes        (const Render_context& context);
+    void render_rendertarget_meshes(const Render_context& context);
+    void render_brush              (const Render_context& context);
+    void render_id                 (const Render_context& context);
 
     void begin_frame();
     void end_frame  ();
@@ -157,7 +156,7 @@ private:
     Renderpass m_rp_edge_lines;
     Renderpass m_rp_corner_points;
     Renderpass m_rp_polygon_centroids;
-    Renderpass m_rp_rendertarget_nodes;
+    Renderpass m_rp_rendertarget_meshes;
 
     std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_selection_timer;

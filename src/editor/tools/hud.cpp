@@ -5,7 +5,7 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 
 #include "erhe/application/commands/command_context.hpp"
@@ -34,7 +34,11 @@ auto Toggle_hud_visibility_command::try_call(
         const auto& camera     = scene_view->get_camera();
         if (camera)
         {
-            m_hud.update_node_transform(camera->world_from_node());
+            const auto* node = camera->get_node();
+            if (node)
+            {
+                m_hud.update_node_transform(node->world_from_node());
+            }
         }
     }
     return true;
@@ -93,7 +97,7 @@ void Hud::initialize_component()
     const auto& primary_viewport_window = scene_builder->get_primary_viewport_window();
     const auto& scene_root              = scene_builder->get_scene_root();
 
-    m_rendertarget_node = scene_root->create_rendertarget_node(
+    m_rendertarget_mesh = scene_root->create_rendertarget_mesh(
         *m_components,
         *primary_viewport_window.get(),
         hud.width,
@@ -101,12 +105,13 @@ void Hud::initialize_component()
         hud.ppm
     );
 
+    m_rendertarget_mesh->disable_flag_bits(erhe::scene::Scene_item_flags::visible);
+    m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
     m_rendertarget_node->set_parent(scene_root->scene().root_node);
-
-    m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
+    m_rendertarget_node->attach(m_rendertarget_mesh);
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
-        m_rendertarget_node.get(),
+        m_rendertarget_mesh.get(),
         "Hud Viewport",
         *m_components
     );
@@ -167,21 +172,13 @@ void Hud::set_visibility(const bool value)
 {
     m_is_visible = value;
 
-    if (!m_rendertarget_node)
+    if (!m_rendertarget_mesh)
     {
         return;
     }
 
-    if (m_is_visible)
-    {
-        m_rendertarget_imgui_viewport->set_enabled(true);
-        m_rendertarget_node->node_data.visibility_mask |= erhe::scene::Node_visibility::visible;
-    }
-    else
-    {
-        m_rendertarget_imgui_viewport->set_enabled(false);
-        m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
-    }
+    m_rendertarget_imgui_viewport->set_enabled(m_is_visible);
+    m_rendertarget_mesh->set_visible(m_is_visible);
 }
 
 } // namespace editor

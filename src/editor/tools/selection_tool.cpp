@@ -29,6 +29,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 namespace editor
@@ -44,44 +45,48 @@ Range_selection::Range_selection(Selection_tool& selection_tool)
 }
 
 void Range_selection::set_terminator(
-    const std::shared_ptr<erhe::scene::Node>& node
+    const std::shared_ptr<erhe::scene::Scene_item>& item
 )
 {
     if (!m_primary_terminator)
     {
-        log_selection->trace("setting primary terminator to {} {}", node->node_type(), node->name());
-        m_primary_terminator = node;
+        log_selection->trace(
+            "setting primary terminator to {} {}",
+            item->type_name(),
+            item->name()
+        );
+        m_primary_terminator = item;
         m_edited = true;
         return;
     }
-    if (node == m_primary_terminator)
+    if (item == m_primary_terminator)
     {
         log_selection->trace(
             "ignoring setting terminator to {} - {} because it is already the primary terminator",
-            node->node_type(),
-            node->name()
+            item->type_name(),
+            item->name()
         );
         return;
     }
-    if (node == m_secondary_terminator)
+    if (item == m_secondary_terminator)
     {
         log_selection->trace(
             "ignoring setting terminator to {} - {} because it is already the secondary terminator",
-            node->node_type(),
-            node->name()
+            item->type_name(),
+            item->name()
         );
         return;
     }
-    log_selection->trace("setting secondary terminator to {} {}", node->node_type(), node->name());
-    m_secondary_terminator = node;
+    log_selection->trace("setting secondary terminator to {} {}", item->type_name(), item->name());
+    m_secondary_terminator = item;
     m_edited = true;
 }
 
 void Range_selection::entry(
-    const std::shared_ptr<erhe::scene::Node>& node
+    const std::shared_ptr<erhe::scene::Scene_item>& item
 )
 {
-    m_entries.push_back(node);
+    m_entries.push_back(item);
 }
 
 void Range_selection::begin()
@@ -99,28 +104,28 @@ void Range_selection::end()
     }
     log_selection->trace("setting selection since range was modified");
 
-    std::vector<std::shared_ptr<erhe::scene::Node>> selection;
-    bool                                            between_terminators{false};
-    for (const auto& node : m_entries)
+    std::vector<std::shared_ptr<erhe::scene::Scene_item>> selection;
+    bool between_terminators{false};
+    for (const auto& item : m_entries)
     {
         if (
-            (node == m_primary_terminator) ||
-            (node == m_secondary_terminator)
+            (item == m_primary_terminator) ||
+            (item == m_secondary_terminator)
         )
         {
-            log_selection->trace("   T. {} {} {}", node->node_type(), node->name(), node->get_id());
-            selection.push_back(node);
+            log_selection->trace("   T. {} {} {}", item->type_name(), item->name(), item->get_id());
+            selection.push_back(item);
             between_terminators = !between_terminators;
             continue;
         }
         if (between_terminators)
         {
-            log_selection->trace("    + {} {} {}", node->node_type(), node->name(), node->get_id());
-            selection.push_back(node);
+            log_selection->trace("    + {} {} {}", item->type_name(), item->name(), item->get_id());
+            selection.push_back(item);
         }
         else
         {
-            log_selection->trace("    - {} {} {}", node->node_type(), node->name(), node->get_id());
+            log_selection->trace("    - {} {} {}", item->type_name(), item->name(), item->get_id());
         }
     }
     if (selection.empty())
@@ -198,8 +203,14 @@ auto Selection_tool::delete_selection() -> bool
 
     //const auto& scene_root = m_editor_scenes->get_scene_root();
     Compound_operation::Parameters compound_parameters;
-    for (auto& node : m_selection)
+    for (auto& item : m_selection)
     {
+        auto node = as_node(item);
+        if (!node)
+        {
+            // TODO
+            continue;
+        }
         compound_parameters.operations.push_back(
             std::make_shared<Node_insert_remove_operation>(
                 Node_insert_remove_operation::Parameters{
@@ -224,6 +235,18 @@ auto Selection_tool::delete_selection() -> bool
 auto Selection_tool::range_selection() -> Range_selection&
 {
     return m_range_selection;
+}
+
+auto Selection_tool::get_first_selected_node() -> std::shared_ptr<erhe::scene::Node>
+{
+    for (const auto& i : m_selection)
+    {
+        if (is_node(i))
+        {
+            return as_node(i);
+        }
+    }
+    return {};
 }
 
 Selection_tool::Selection_tool()
@@ -280,7 +303,7 @@ auto Selection_tool::description() -> const char*
     return c_title.data();
 }
 
-auto Selection_tool::selection() const -> const Selection&
+auto Selection_tool::selection() const -> const std::vector<std::shared_ptr<erhe::scene::Scene_item>>&
 {
     return m_selection;
 }
@@ -298,23 +321,21 @@ template <typename T>
     ) != items.end();
 }
 
-void Selection_tool::set_selection(const Selection& selection)
+void Selection_tool::set_selection(const std::vector<std::shared_ptr<erhe::scene::Scene_item>>& selection)
 {
-    for (auto& node : m_selection)
+    for (auto& item : m_selection)
     {
         if (
-            node->is_selected() &&
-            !is_in(node, selection)
+            item->is_selected() &&
+            !is_in(item, selection)
         )
         {
-            const auto mask = node->get_visibility_mask();
-            node->set_visibility_mask(mask & ~erhe::scene::Node_visibility::selected);
+            item->set_selected(false);
         }
     }
-    for (auto& node : selection)
+    for (auto& item : selection)
     {
-        const auto mask = node->get_visibility_mask();
-        node->set_visibility_mask(mask | erhe::scene::Node_visibility::selected);
+        item->set_selected(true);
     }
     m_selection = selection;
     call_selection_change_subscriptions();
@@ -394,8 +415,7 @@ auto Selection_tool::clear_selection() -> bool
         {
             continue;
         }
-        const auto mask = item->get_visibility_mask();
-        item->set_visibility_mask(mask & ~erhe::scene::Node_visibility::selected);
+        item->set_selected(false);
     }
 
     log_selection->trace("Clearing selection ({} items were selected)", m_selection.size());
@@ -407,8 +427,8 @@ auto Selection_tool::clear_selection() -> bool
 }
 
 void Selection_tool::toggle_selection(
-    const std::shared_ptr<erhe::scene::Node>& item,
-    const bool                                clear_others
+    const std::shared_ptr<erhe::scene::Scene_item>& item,
+    const bool                                      clear_others
 )
 {
     if (clear_others)
@@ -438,7 +458,7 @@ void Selection_tool::toggle_selection(
 }
 
 auto Selection_tool::is_in_selection(
-    const std::shared_ptr<erhe::scene::Node>& item
+    const std::shared_ptr<erhe::scene::Scene_item>& item
 ) const -> bool
 {
     if (!item)
@@ -454,7 +474,7 @@ auto Selection_tool::is_in_selection(
 }
 
 auto Selection_tool::add_to_selection(
-    const std::shared_ptr<erhe::scene::Node>& item
+    const std::shared_ptr<erhe::scene::Scene_item>& item
 ) -> bool
 {
     if (!item)
@@ -463,10 +483,7 @@ auto Selection_tool::add_to_selection(
         return false;
     }
 
-    const auto mask = item->get_visibility_mask();
-    item->set_visibility_mask(
-        mask | erhe::scene::Node_visibility::selected
-    );
+    item->set_selected(true);
 
     if (!is_in_selection(item))
     {
@@ -481,7 +498,7 @@ auto Selection_tool::add_to_selection(
 }
 
 auto Selection_tool::remove_from_selection(
-    const std::shared_ptr<erhe::scene::Node>& item
+    const std::shared_ptr<erhe::scene::Scene_item>& item
 ) -> bool
 {
     if (!item)
@@ -490,8 +507,7 @@ auto Selection_tool::remove_from_selection(
         return false;
     }
 
-    const auto mask = item->get_visibility_mask();
-    item->set_visibility_mask(mask & ~erhe::scene::Node_visibility::selected);
+    item->set_selected(false);
 
     const auto i = std::remove(
         m_selection.begin(),
@@ -510,27 +526,27 @@ auto Selection_tool::remove_from_selection(
     return false;
 }
 
-void Selection_tool::update_selection_from_node(
-    const std::shared_ptr<erhe::scene::Node>& node,
-    const bool                                added
+void Selection_tool::update_selection_from_scene_item(
+    const std::shared_ptr<erhe::scene::Scene_item>& item,
+    const bool                                      added
 )
 {
-    if (node->is_selected() && added)
+    if (item->is_selected() && added)
     {
-        if (!is_in(node, m_selection))
+        if (!is_in(item, m_selection))
         {
-            m_selection.push_back(node);
+            m_selection.push_back(item);
             call_selection_change_subscriptions();
         }
     }
     else
     {
-        if (is_in(node, m_selection))
+        if (is_in(item, m_selection))
         {
             const auto i = std::remove(
                 m_selection.begin(),
                 m_selection.end(),
-                node
+                item
             );
             if (i != m_selection.end())
             {
@@ -552,9 +568,10 @@ void Selection_tool::sanity_check()
         const auto& scene = scene_root->scene();
         for (const auto& node : scene.flat_node_vector)
         {
+            const auto item = std::static_pointer_cast<erhe::scene::Scene_item>(node);
             if (
                 node->is_selected() &&
-                !is_in(node, m_selection)
+                !is_in(item, m_selection)
             )
             {
                 log_selection->error("Node has selection flag set without being in selection");
@@ -562,7 +579,7 @@ void Selection_tool::sanity_check()
             }
             else if (
                 !node->is_selected() &&
-                is_in(node, m_selection)
+                is_in(item, m_selection)
             )
             {
                 log_selection->error("Node does not have selection flag set while being in selection");
@@ -590,9 +607,9 @@ void Selection_tool::call_selection_change_subscriptions() const
 void Selection_tool::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    for (const auto& node : m_selection)
+    for (const auto& item : m_selection)
     {
-        if (!node)
+        if (!item)
         {
             ImGui::BulletText("(empty)");
         }
@@ -600,9 +617,9 @@ void Selection_tool::imgui()
         {
             ImGui::BulletText(
                 "%s %s %s",
-                node->node_type(),
-                node->name().c_str(),
-                node->is_selected() ? "Ok" : "?!"
+                item->type_name(),
+                item->name().c_str(),
+                item->is_selected() ? "Ok" : "?!"
             );
         }
     }

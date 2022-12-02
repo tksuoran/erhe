@@ -2,8 +2,10 @@
 
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/scene_host.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -16,19 +18,45 @@ namespace erhe::scene
 {
 
 Light::Light(const std::string_view name)
-    : Node{name}
+    : Node_attachment{name}
 {
-    node_data.flag_bits |= (Node_flag_bit::is_light | Node_flag_bit::is_transform);
-    node_data.visibility_mask = Node_visibility::content;
+    enable_flag_bits(Scene_item_flags::light);
 }
 
 Light::~Light() noexcept
 {
 }
 
-auto Light::node_type() const -> const char*
+auto Light::type_name() const -> const char*
 {
     return "Light";
+}
+
+void Light::handle_node_scene_host_update(
+    Scene_host* old_scene_host,
+    Scene_host* new_scene_host
+)
+{
+    if (old_scene_host)
+    {
+        Scene* scene = old_scene_host->get_scene();
+        if (scene != nullptr)
+        {
+            scene->unregister_light(
+                std::static_pointer_cast<Light>(shared_from_this())
+            );
+        }
+    }
+    if (new_scene_host)
+    {
+        Scene* scene = new_scene_host->get_scene();
+        if (scene != nullptr)
+        {
+            scene->register_light(
+                std::static_pointer_cast<Light>(shared_from_this())
+            );
+        }
+    }
 }
 
 auto Light::projection(const Light_projection_parameters& parameters) const -> Projection
@@ -130,7 +158,11 @@ auto Light::stable_directional_light_projection_transforms(
     using mat3 = glm::mat3;
     using mat4 = glm::mat4;
 
-    const Light* light = this;
+    const Node* const light_node = get_node();
+    ERHE_VERIFY(light_node != nullptr);
+
+    const Node* const view_camera_node = parameters.view_camera->get_node();
+    ERHE_VERIFY(view_camera_node != nullptr);
 
     //// // View distance is used as radius of the view camera bounding volume
     //// const float r = parameters.view_camera->projection()->z_far;
@@ -140,13 +172,13 @@ auto Light::stable_directional_light_projection_transforms(
     const Projection light_projection = projection(parameters);
 
     // Place light projection camera on the view camera bounding volume using light direction
-    const vec3 light_direction       = vec3{light->direction_in_world()};
-    const vec3 light_up_vector       = vec3{light->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const vec3 view_camera_position  = vec3{parameters.view_camera->position_in_world()};
+    const vec3 light_direction       = vec3{light_node->direction_in_world()};
+    const vec3 light_up_vector       = vec3{light_node->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const vec3 view_camera_position  = vec3{view_camera_node->position_in_world()};
 
     // Rotation only transform
-    const mat3 world_from_light{light->world_from_node()};
-    const mat3 light_from_world{light->node_from_world()};
+    const mat3 world_from_light{light_node->world_from_node()};
+    const mat3 light_from_world{light_node->node_from_world()};
 
     // Snap camera position to shadow map texture texels
     const vec3 view_camera_position_in_light = light_from_world * view_camera_position;
@@ -372,10 +404,12 @@ auto Light::stable_directional_light_projection_transforms(
 {
     const Projection light_projection = projection(parameters);
     const auto clip_from_light_camera = light_projection.clip_from_node_transform(parameters.shadow_map_viewport);
+    const Node* const node = get_node();
+    ERHE_VERIFY(node != nullptr);
 
     const Transform clip_from_world{
-        clip_from_light_camera.matrix() * node_from_world(),
-        world_from_node() * clip_from_light_camera.inverse_matrix()
+        clip_from_light_camera.matrix() * node->node_from_world(),
+        node->world_from_node() * clip_from_light_camera.inverse_matrix()
     };
     const Transform texture_from_world{
         texture_from_clip * clip_from_world.matrix(),
@@ -384,51 +418,69 @@ auto Light::stable_directional_light_projection_transforms(
 
     return Light_projection_transforms{
         .light                   = this,
-        .world_from_light_camera = world_from_node_transform(),
+        .world_from_light_camera = node->world_from_node_transform(),
         .clip_from_light_camera  = clip_from_light_camera,
         .clip_from_world         = clip_from_world,
         .texture_from_world      = texture_from_world
     };
 }
 
-auto is_light(const Node* const node) -> bool
+auto is_light(const Scene_item* const scene_item) -> bool
 {
-    if (node == nullptr)
+    if (scene_item == nullptr)
     {
         return false;
     }
-    return (node->get_flag_bits() & Node_flag_bit::is_light) == Node_flag_bit::is_light;
+    using namespace erhe::toolkit;
+    return test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::light);
 }
 
-auto is_light(const std::shared_ptr<Node>& node) -> bool
+auto is_light(const std::shared_ptr<Scene_item>& scene_item) -> bool
 {
-    return is_light(node.get());
+    return is_light(scene_item.get());
 }
 
-auto as_light(Node* const node) -> Light*
+auto as_light(Scene_item* const scene_item) -> Light*
 {
-    if (node == nullptr)
+    if (scene_item == nullptr)
     {
         return nullptr;
     }
-    if ((node->get_flag_bits() & Node_flag_bit::is_light) == 0)
+    using namespace erhe::toolkit;
+    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::light))
     {
         return nullptr;
     }
-    return reinterpret_cast<Light*>(node);
+    return reinterpret_cast<Light*>(scene_item);
 }
 
-auto as_light(const std::shared_ptr<Node>& node) -> std::shared_ptr<Light>
+auto as_light(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<Light>
 {
-    if (!node)
+    if (!scene_item)
     {
         return {};
     }
-    if ((node->get_flag_bits() & Node_flag_bit::is_light) == 0)
+    using namespace erhe::toolkit;
+    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::light))
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Light>(node);
+    return std::dynamic_pointer_cast<Light>(scene_item);
+}
+
+auto get_light(
+    const erhe::scene::Node* const node
+) -> std::shared_ptr<Light>
+{
+    for (const auto& attachment : node->attachments())
+    {
+        auto light = as_light(attachment);
+        if (light)
+        {
+            return light;
+        }
+    }
+    return {};
 }
 
 } // namespace erhe::scene

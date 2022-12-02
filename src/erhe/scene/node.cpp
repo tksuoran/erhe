@@ -2,6 +2,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/scene_host.hpp"
 #include "erhe/scene/scene_log.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -10,6 +11,35 @@
 
 namespace erhe::scene
 {
+
+[[nodiscard]] auto Scene_item_flags::to_string(uint64_t mask) -> std::string
+{
+    if (mask == none) return std::string{"no flags "};
+    std::stringstream ss;
+    if (mask & no_message               ) ss << "no_message ";
+    if (mask & show_debug_visualizations) ss << "show_debug_visualizations ";
+    if (mask & shadow_cast              ) ss << "shadow_cast ";
+    if (mask & selected                 ) ss << "selected ";
+    if (mask & visible                  ) ss << "visible ";
+    if (mask & render_wireframe         ) ss << "render_wireframe ";
+    if (mask & render_bounding_box      ) ss << "render_bounding_box ";
+    if (mask & node                     ) ss << "node ";
+    if (mask & attachment               ) ss << "attachment ";
+    if (mask & physics                  ) ss << "physics ";
+    if (mask & raytrace                 ) ss << "raytrace ";
+    if (mask & frame_controller         ) ss << "frame_controller ";
+    if (mask & grid                     ) ss << "grid ";
+    if (mask & light                    ) ss << "light ";
+    if (mask & camera                   ) ss << "camera ";
+    if (mask & mesh                     ) ss << "mesh ";
+    if (mask & rendertarget             ) ss << "rendertarget ";
+    if (mask & controller               ) ss << "controller ";
+    if (mask & content                  ) ss << "content ";
+    if (mask & id                       ) ss << "id ";
+    if (mask & tool                     ) ss << "tool ";
+    if (mask & brush                    ) ss << "brush ";
+    return ss.str();
+}
 
 uint64_t Node_transforms::s_global_update_serial = 0;
 
@@ -23,7 +53,181 @@ auto Node_transforms::get_next_serial() -> uint64_t
     return ++s_global_update_serial;
 }
 
-INode_attachment::~INode_attachment() noexcept
+auto Scene_item_filter::operator()(const uint64_t visibility_mask) const -> bool
+{
+    if ((visibility_mask & require_all_bits_set) != require_all_bits_set)
+    {
+        return false;
+    }
+    if (require_at_least_one_bit_set != 0u)
+    {
+        if ((visibility_mask & require_at_least_one_bit_set) == 0u)
+        {
+            return false;
+        }
+    }
+    if ((visibility_mask & require_all_bits_clear) != 0u)
+    {
+        return false;
+    }
+    if (require_at_least_one_bit_clear != 0u)
+    {
+        if ((visibility_mask & require_at_least_one_bit_clear) == require_at_least_one_bit_clear)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// -----------------------------------------------------------------------------
+
+Scene_item::Scene_item()
+{
+    m_label = fmt::format("##Node{}", m_id.get_id());
+}
+
+Scene_item::Scene_item(const std::string_view name)
+    : m_name{name}
+{
+    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
+}
+
+Scene_item::~Scene_item() noexcept = default;
+
+auto Scene_item::name() const -> const std::string&
+{
+    return m_name;
+}
+
+void Scene_item::set_name(const std::string_view name)
+{
+    m_name = name;
+    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
+}
+
+auto Scene_item::label() const -> const std::string&
+{
+    return m_label;
+}
+
+auto Scene_item::get_scene_host() const -> Scene_host*
+{
+    return nullptr;
+}
+
+auto Scene_item::type_name() const -> const char*
+{
+    return "Scene_item";
+}
+
+auto Scene_item::get_flag_bits() const -> uint64_t
+{
+    return m_flag_bits;
+}
+
+void Scene_item::set_flag_bits(const uint64_t mask, const bool value)
+{
+    if (value)
+    {
+        m_flag_bits = m_flag_bits | mask;
+    }
+    else
+    {
+        m_flag_bits = m_flag_bits & ~mask;
+    }
+}
+
+void Scene_item::enable_flag_bits(const uint64_t mask)
+{
+    set_flag_bits(mask, true);
+}
+
+void Scene_item::disable_flag_bits(const uint64_t mask)
+{
+    set_flag_bits(mask, false);
+}
+
+auto Scene_item::flag_bits() -> uint64_t&
+{
+    return m_flag_bits;
+}
+
+auto Scene_item::get_id() const -> erhe::toolkit::Unique_id<Scene_item>::id_type
+{
+    return m_id.get_id();
+}
+
+auto Scene_item::is_selected() const -> bool
+{
+    return (m_flag_bits & Scene_item_flags::selected) == Scene_item_flags::selected;
+}
+
+void Scene_item::set_selected(const bool selected)
+{
+    set_flag_bits(Scene_item_flags::selected, selected);
+}
+
+void Scene_item::set_visible(const bool value)
+{
+    set_flag_bits(Scene_item_flags::visible, value);
+}
+
+void Scene_item::show()
+{
+    set_flag_bits(Scene_item_flags::visible, true);
+}
+
+void Scene_item::hide()
+{
+    set_flag_bits(Scene_item_flags::visible, false);
+}
+
+auto Scene_item::is_visible() const -> bool
+{
+    return (m_flag_bits & Scene_item_flags::visible) == Scene_item_flags::visible;
+}
+
+auto Scene_item::is_hidden() const -> bool
+{
+    return !is_visible();
+}
+
+auto Scene_item::describe() -> std::string
+{
+    return fmt::format(
+        "type = {}, name = {}, id = {}, flags = {}",
+        type_name(),
+        name(),
+        get_id(),
+        Scene_item_flags::to_string(get_flag_bits())
+    );
+}
+
+void Scene_item::set_wireframe_color(const glm::vec4& color)
+{
+    m_wireframe_color = color;
+}
+
+ auto Scene_item::get_wireframe_color() const -> glm::vec4
+{
+    return m_wireframe_color;
+}
+
+// -----------------------------------------------------------------------------
+
+Node_attachment::Node_attachment()
+{
+    enable_flag_bits(Scene_item_flags::attachment);
+}
+
+Node_attachment::Node_attachment(const std::string_view name)
+    : Scene_item{name}
+{
+    enable_flag_bits(Scene_item_flags::attachment);
+}
+
+Node_attachment::~Node_attachment() noexcept
 {
     Node* const host_node = get_node();
     if (host_node != nullptr)
@@ -32,22 +236,26 @@ INode_attachment::~INode_attachment() noexcept
     }
 }
 
-auto INode_attachment::get_node() const -> Node*
+auto Node_attachment::get_node() -> Node*
 {
     return m_node;
 }
 
-auto INode_attachment::flag_bits() const -> uint64_t
+auto Node_attachment::get_node() const -> const Node*
 {
-    return m_flag_bits;
+    return m_node;
 }
 
-auto INode_attachment::flag_bits() -> uint64_t&
+auto Node_attachment::get_scene_host() const -> Scene_host*
 {
-    return m_flag_bits;
+    if (m_node == nullptr)
+    {
+        return nullptr;
+    }
+    return m_node->get_scene_host();
 }
 
-void INode_attachment::set_node(Node* const node)
+void Node_attachment::set_node(Node* const node)
 {
     Scene_host* const old_host = (m_node != nullptr) ? m_node->get_scene_host() : nullptr;
     m_node = node;
@@ -62,11 +270,17 @@ void INode_attachment::set_node(Node* const node)
     }
 };
 
-Node::Node(std::string_view name)
-    : m_id{}
+// -----------------------------------------------------------------------------
+
+Node::Node()
 {
-    node_data.name  = name;
-    node_data.label = fmt::format("{}##Node{}", name, m_id.get_id());
+    enable_flag_bits(Scene_item_flags::node);
+}
+
+Node::Node(const std::string_view name)
+    : Scene_item{name}
+{
+    enable_flag_bits(Scene_item_flags::node);
 }
 
 Node::~Node() noexcept
@@ -86,61 +300,40 @@ Node::~Node() noexcept
     sanity_check();
 }
 
-auto Node::node_type() const -> const char*
+auto Node::type_name() const -> const char*
 {
     return "Node";
 }
 
-auto Node::is_selected() const -> bool
-{
-    return (node_data.visibility_mask & Node_visibility::selected) == Node_visibility::selected;
-}
-
-auto Node::name() const -> const std::string&
-{
-    return node_data.name;
-}
-
-auto Node::label() const -> const std::string&
-{
-    return node_data.label;
-}
-
-void Node::set_name(const std::string_view name)
-{
-    node_data.name = name;
-    node_data.label = fmt::format("{}##Node{}", name, m_id.get_id());
-}
-
-void Node::attach(const std::shared_ptr<INode_attachment>& attachment)
+void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
 {
     ERHE_PROFILE_FUNCTION
 
     ERHE_VERIFY(attachment);
 
     log->trace(
-        "{} ({}).attach({})",
+        "{} (attach({} {})",
         name(),
-        node_type(),
-        attachment->node_attachment_type()
+        attachment->type_name(),
+        attachment->name()
     );
 
 #ifndef NDEBUG
     const auto i = std::find(node_data.attachments.begin(), node_data.attachments.end(), attachment);
     if (i != node_data.attachments.end())
     {
-        log->error("Attachment {} already attached to {}", attachment->node_attachment_type(), name());
+        log->error("Attachment {} already attached to {}", attachment->type_name(), name());
         return;
     }
 #endif
 
     node_data.attachments.push_back(attachment);
     attachment->set_node(this);
-    handle_visibility_mask_update();
+    //// handle_visibility_mask_update();
     sanity_check();
 }
 
-auto Node::detach(INode_attachment* attachment) -> bool
+auto Node::detach(Node_attachment* attachment) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
@@ -151,18 +344,19 @@ auto Node::detach(INode_attachment* attachment) -> bool
     }
 
     log->trace(
-        "{} ({}).detach({})",
+        "{} (detach({} {})",
         name(),
-        node_type(),
-        attachment->node_attachment_type()
+        attachment->type_name(),
+        attachment->name()
     );
 
     auto* node = attachment->get_node();
     if (node != this)
     {
         log->warn(
-            "Attachment {} node {} != this {}",
-            attachment->node_attachment_type(),
+            "Attachment {} {} node {} != this {}",
+            attachment->type_name(),
+            attachment->name(),
             node
                 ? node->name()
                 : "(none)",
@@ -174,7 +368,7 @@ auto Node::detach(INode_attachment* attachment) -> bool
     const auto i = std::remove_if(
         node_data.attachments.begin(),
         node_data.attachments.end(),
-        [attachment](const std::shared_ptr<INode_attachment>& node_attachment)
+        [attachment](const std::shared_ptr<Node_attachment>& node_attachment)
         {
             return node_attachment.get() == attachment;
         }
@@ -182,8 +376,8 @@ auto Node::detach(INode_attachment* attachment) -> bool
     if (i != node_data.attachments.end())
     {
         log->trace(
-            "Removing {} attachment from node",
-            attachment->node_attachment_type(),
+            "Removing {} {} attachment from node",
+            attachment->type_name(),
             name()
         );
         node_data.attachments.erase(i, node_data.attachments.end());
@@ -193,8 +387,9 @@ auto Node::detach(INode_attachment* attachment) -> bool
     }
 
     log->warn(
-        "Detaching {} from node {} failed - was not attached",
-        attachment->node_attachment_type(),
+        "Detaching {} {} from node {} failed - was not attached",
+        attachment->type_name(),
+        attachment->name(),
         name()
     );
 
@@ -206,9 +401,30 @@ auto Node::child_count() const -> std::size_t
     return node_data.children.size();
 }
 
-auto Node::get_id() const -> erhe::toolkit::Unique_id<Node>::id_type
+auto Node::child_count(const Scene_item_filter& filter) const -> std::size_t
 {
-    return m_id.get_id();
+    std::size_t result{};
+    for (const auto& child : node_data.children)
+    {
+        if (filter(child->get_flag_bits()))
+        {
+            ++result;
+        }
+    }
+    return result;
+}
+
+auto Node::attachment_count(const Scene_item_filter& filter) const -> std::size_t
+{
+    std::size_t result{};
+    for (const auto& attachment : node_data.attachments)
+    {
+        if (filter(attachment->get_flag_bits()))
+        {
+            ++result;
+        }
+    }
+    return result;
 }
 
 auto Node::get_index_in_parent() const -> std::size_t
@@ -311,14 +527,6 @@ void Node::handle_remove_child(
     }
 }
 
-//// void Node::set_parent(
-////     const std::weak_ptr<Node>& new_parent_node,
-////     const std::size_t          position
-//// )
-//// {
-////     set_parent(new_parent_node.lock(), position);
-//// }
-
 void Node::set_parent(
     const std::shared_ptr<Node>& new_parent_node,
     const std::size_t            position
@@ -342,7 +550,10 @@ void Node::set_parent(
 
     if (new_parent)
     {
-        new_parent->handle_add_child(shared_from_this(), position);
+        new_parent->handle_add_child(
+            std::static_pointer_cast<Node>(shared_from_this()),
+            position
+        );
     }
 
     set_world_from_node(world_from_node);
@@ -362,7 +573,12 @@ void Node::set_parent(
 {
     if (new_parent_node != nullptr)
     {
-        set_parent(new_parent_node->shared_from_this(), position);
+        set_parent(
+            std::static_pointer_cast<Node>(
+                new_parent_node->shared_from_this()
+            ),
+            position
+        );
     }
     else
     {
@@ -385,7 +601,9 @@ void Node::set_depth_recursive(const std::size_t depth)
     }
 }
 
-void Node::handle_parent_update(Node* old_parent, Node* new_parent)
+void Node::handle_parent_update(
+    Node* const old_parent,
+    Node* const new_parent)
 {
     ERHE_VERIFY(old_parent != new_parent);
     Scene_host* old_scene_host = old_parent != nullptr ? old_parent->get_scene_host() : nullptr;
@@ -409,7 +627,11 @@ void Node::handle_scene_host_update(
         Scene* old_scene = old_scene_host->get_scene();
         if (old_scene != nullptr)
         {
-            old_scene->unregister_node(shared_from_this());
+            old_scene->unregister_node(
+                std::static_pointer_cast<Node>(
+                    shared_from_this()
+                )
+            );
         }
     }
     if (new_scene_host != nullptr)
@@ -417,7 +639,11 @@ void Node::handle_scene_host_update(
         Scene* new_scene = new_scene_host->get_scene();
         if (new_scene != nullptr)
         {
-            new_scene->register_node(shared_from_this());
+            new_scene->register_node(
+                std::static_pointer_cast<Node>(
+                    shared_from_this()
+                )
+            );
         }
     }
 
@@ -427,7 +653,7 @@ void Node::handle_scene_host_update(
     }
 }
 
-void Node::handle_transform_update(uint64_t serial) const
+void Node::handle_transform_update(const uint64_t serial) const
 {
     ERHE_PROFILE_FUNCTION
 
@@ -442,22 +668,14 @@ void Node::handle_transform_update(uint64_t serial) const
     }
 }
 
-void Node::handle_visibility_mask_update()
-{
-    ERHE_PROFILE_FUNCTION
-
-    for (const auto& attachment : node_data.attachments)
-    {
-        attachment->handle_node_visibility_mask_update(node_data.visibility_mask);
-    }
-}
-
 auto Node::root() -> std::weak_ptr<Node>
 {
     const auto& current_parent = parent().lock();
     if (!current_parent)
     {
-        return shared_from_this();
+        return std::static_pointer_cast<Node>(
+            shared_from_this()
+        );
     }
     return current_parent->root();
 }
@@ -570,9 +788,10 @@ void Node::sanity_check() const
         if (node != this)
         {
             log->error(
-                "Node {} attachment {} node == {}",
+                "Node {} attachment {} {} node == {}",
                 name(),
-                attachment->node_attachment_type(),
+                attachment->type_name(),
+                attachment->name(),
                 (node != nullptr)
                     ? node->name()
                     : "(none)"
@@ -618,38 +837,9 @@ auto Node::mutable_children() -> std::vector<std::shared_ptr<Node>>&
     return node_data.children;
 }
 
-auto Node::attachments() const -> const std::vector<std::shared_ptr<INode_attachment>>&
+auto Node::attachments() const -> const std::vector<std::shared_ptr<Node_attachment>>&
 {
     return node_data.attachments;
-}
-
-auto Node::get_visibility_mask() const -> uint64_t
-{
-    return node_data.visibility_mask;
-}
-
-void Node::set_visibility_mask(const uint64_t value)
-{
-    if (node_data.visibility_mask == value)
-    {
-        return;
-    }
-    node_data.visibility_mask = value;
-    handle_visibility_mask_update();
-}
-
-auto Node::get_flag_bits() const -> uint64_t
-{
-    return node_data.flag_bits;
-}
-
-void Node::set_flag_bits(const uint64_t value)
-{
-    if (node_data.flag_bits == value)
-    {
-        return;
-    }
-    node_data.flag_bits = value;
 }
 
 auto Node::parent_from_node_transform() const -> const Transform&
@@ -787,43 +977,100 @@ void Node::set_world_from_node(const Transform& transform)
     }
 }
 
-auto is_empty(const Node* const node) -> bool
-{
-    return (node->get_flag_bits() & Node_flag_bit::is_empty) == Node_flag_bit::is_empty;
-}
-
-auto is_empty(const std::shared_ptr<Node>& node) -> bool
-{
-    return is_empty(node.get());
-}
-
-auto is_transform(Node* const node) -> bool
-{
-    return (node->get_flag_bits() & Node_flag_bit::is_transform) == Node_flag_bit::is_transform;
-}
-
-auto is_transform(const std::shared_ptr<Node>& node) -> bool
-{
-    return is_transform(node.get());
-}
-
-auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs) -> unsigned int
+auto Node_data::diff_mask(
+    const Node_data& lhs,
+    const Node_data& rhs
+) -> unsigned int
 {
     unsigned int mask{0};
 
     if (lhs.transforms.parent_from_node != rhs.transforms.parent_from_node) mask |= Node_data::bit_transform;
     if (lhs.transforms.world_from_node  != rhs.transforms.world_from_node ) mask |= Node_data::bit_transform;
     if (lhs.host                        != rhs.host                       ) mask |= Node_data::bit_host;
-    // if (lhs.parent                      != rhs.parent                     ) mask |= Node_data::bit_parent;
-    // children
-    // attachments
-    if (lhs.visibility_mask             != rhs.visibility_mask            ) mask |= Node_data::bit_visibility_mask;
-    if (lhs.flag_bits                   != rhs.flag_bits                  ) mask |= Node_data::bit_flag_bits;
     if (lhs.depth                       != rhs.depth                      ) mask |= Node_data::bit_depth;
-    if (lhs.wireframe_color             != rhs.wireframe_color            ) mask |= Node_data::bit_wireframe_color;
-    if (lhs.name                        != rhs.name                       ) mask |= Node_data::bit_name;
-    if (lhs.label                       != rhs.label                      ) mask |= Node_data::bit_label;
     return mask;
 }
+
+auto is_node(const Scene_item* const scene_item) -> bool
+{
+    if (scene_item == nullptr)
+    {
+        return false;
+    }
+    using namespace erhe::toolkit;
+    return test_all_rhs_bits_set(
+        scene_item->get_flag_bits(),
+        Scene_item_flags::node
+    );
+}
+
+auto is_node(
+    const std::shared_ptr<Scene_item>& scene_item
+) -> bool
+{
+    return is_node(scene_item.get());
+}
+
+auto as_node(Scene_item* const scene_item) -> Node*
+{
+    if (scene_item == nullptr)
+    {
+        return nullptr;
+    }
+    using namespace erhe::toolkit;
+    if (
+        !test_all_rhs_bits_set(
+            scene_item->get_flag_bits(),
+            Scene_item_flags::mesh
+        )
+    )
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<Node*>(scene_item);
+}
+
+auto as_node(
+    const std::shared_ptr<Scene_item>& scene_item
+) -> std::shared_ptr<Node>
+{
+    if (!scene_item)
+    {
+        return {};
+    }
+    using namespace erhe::toolkit;
+    if (
+        !test_all_rhs_bits_set(
+            scene_item->get_flag_bits(),
+            Scene_item_flags::node
+        )
+    )
+    {
+        return {};
+    }
+    return std::dynamic_pointer_cast<Node>(scene_item);
+}
+
+auto as_node_attachment(
+    const std::shared_ptr<Scene_item>& scene_item
+) -> std::shared_ptr<Node_attachment>
+{
+    if (!scene_item)
+    {
+        return {};
+    }
+    using namespace erhe::toolkit;
+    if (
+        !test_all_rhs_bits_set(
+            scene_item->get_flag_bits(),
+            Scene_item_flags::attachment
+        )
+    )
+    {
+        return {};
+    }
+    return std::dynamic_pointer_cast<Node_attachment>(scene_item);
+}
+
 
 } // namespace erhe::scene

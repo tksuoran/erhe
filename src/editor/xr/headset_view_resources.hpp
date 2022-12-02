@@ -17,6 +17,7 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
+    class Node;
 }
 
 namespace editor
@@ -44,6 +45,7 @@ public:
     std::shared_ptr<erhe::graphics::Texture>     color_texture;
     std::shared_ptr<erhe::graphics::Texture>     depth_texture;
     std::shared_ptr<erhe::graphics::Framebuffer> framebuffer;
+    std::shared_ptr<erhe::scene::Node>           node;
     std::shared_ptr<erhe::scene::Camera>         camera;
     bool                                         is_valid{false};
 };

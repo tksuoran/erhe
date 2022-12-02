@@ -89,12 +89,12 @@ public:
 class Instance_create_info final
 {
 public:
-    uint64_t                                   node_visibility_flags{0};
-    Scene_root*                                scene_root           {nullptr};
-    glm::mat4                                  world_from_node      {1.0f};
+    uint64_t                                   mesh_flags     {0};
+    Scene_root*                                scene_root     {nullptr};
+    glm::mat4                                  world_from_node{1.0f};
     std::shared_ptr<erhe::primitive::Material> material;
-    float                                      scale                {1.0f};
-    bool                                       physics_enabled      {true};
+    float                                      scale          {1.0f};
+    bool                                       physics_enabled{true};
 };
 
 class Brush final
@@ -137,7 +137,7 @@ public:
     [[nodiscard]] auto name            () const -> const std::string&;
     [[nodiscard]] auto get_scaled      (float scale) -> const Scaled&;
     [[nodiscard]] auto create_scaled   (int scale_key) -> Scaled;
-    [[nodiscard]] auto make_instance   (const Instance_create_info& instance_create_info) -> Instance;
+    [[nodiscard]] auto make_instance   (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_bounding_box() -> erhe::toolkit::Bounding_box;
     [[nodiscard]] auto get_geometry    () -> std::shared_ptr<erhe::geometry::Geometry>;
 

@@ -19,7 +19,6 @@ namespace erhe::components
 namespace erhe::graphics
 {
     class Framebuffer;
-    //class OpenGL_state_tracker;
     class Sampler;
     class Texture;
 }
@@ -38,22 +37,17 @@ namespace editor
 {
 
 class Forward_renderer;
-//// class Node_raytrace;
 class Hand_tracker;
 class Render_context;
 class Scene_root;
 class Viewport_config;
 class Viewport_window;
 
-/// <summary>
-/// A textured quad mesh and framebuffer for rendering into
-/// </summary>
-/// TODO Should this be a Rendergraph_node?
-class Rendertarget_node
+class Rendertarget_mesh
     : public erhe::scene::Mesh
 {
 public:
-    Rendertarget_node(
+    Rendertarget_mesh(
         Scene_root&                         host_scene_root,
         Viewport_window&                    host_viewport_window,
         const erhe::components::Components& components,
@@ -61,6 +55,9 @@ public:
         const int                           height,
         const double                        pixels_per_meter
     );
+
+    // Implements Scene_item
+    [[nodiscard]] auto type_name() const -> const char* override;
 
     // Public API
     [[nodiscard]] auto texture        () const -> std::shared_ptr<erhe::graphics::Texture>;
@@ -94,7 +91,7 @@ private:
     double                                       m_pixels_per_meter{0.0};
     double                                       m_local_width     {0.0};
     double                                       m_local_height    {0.0};
-    //// std::shared_ptr<Node_raytrace>                      m_node_raytrace;
+
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;
     std::shared_ptr<erhe::primitive::Material>   m_material;
@@ -109,9 +106,11 @@ private:
 #endif
 };
 
-[[nodiscard]] auto is_rendertarget(const erhe::scene::Node* const node) -> bool;
-[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::scene::Node>& node) -> bool;
-[[nodiscard]] auto as_rendertarget(erhe::scene::Node* const node) -> Rendertarget_node*;
-[[nodiscard]] auto as_rendertarget(const std::shared_ptr<erhe::scene::Node>& node) -> std::shared_ptr<Rendertarget_node>;
+[[nodiscard]] auto is_rendertarget(const erhe::scene::Scene_item* const scene_item) -> bool;
+[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool;
+[[nodiscard]] auto as_rendertarget(erhe::scene::Scene_item* const scene_item) -> Rendertarget_mesh*;
+[[nodiscard]] auto as_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>;
+
+[[nodiscard]] auto get_rendertarget(const erhe::scene::Node* const node) -> std::shared_ptr<Rendertarget_mesh>;
 
 } // namespace erhe::application

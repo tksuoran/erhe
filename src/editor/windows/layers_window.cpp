@@ -75,6 +75,7 @@ void Layers_window::imgui()
         ? m_icon_set->get_small_rasterization()
         : m_icon_set->get_large_rasterization();
 
+    std::shared_ptr<erhe::scene::Scene_item> item_clicked;
     for (const auto& scene_root : scene_roots)
     {
         if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
@@ -99,7 +100,7 @@ void Layers_window::imgui()
                         );
                         if (ImGui::IsItemClicked())
                         {
-                            m_node_clicked = mesh->shared_from_this();
+                            item_clicked = mesh->shared_from_this();
                         }
                     }
                     ImGui::TreePop();
@@ -109,31 +110,29 @@ void Layers_window::imgui()
         }
     }
 
-    //const ImGuiIO& io = ImGui::GetIO();
-    if (m_node_clicked && m_selection_tool)
+    if (item_clicked && m_selection_tool)
     {
         if (false) // TODO shift or maybe ctrl?
         {
-            if (m_node_clicked->is_selected())
+            if (item_clicked->is_selected())
             {
-                m_selection_tool->remove_from_selection(m_node_clicked);
+                m_selection_tool->remove_from_selection(m_item_clicked);
             }
             else
             {
-                m_selection_tool->add_to_selection(m_node_clicked);
+                m_selection_tool->add_to_selection(m_item_clicked);
             }
         }
         else
         {
-            bool was_selected = m_node_clicked->is_selected();
+            bool was_selected = item_clicked->is_selected();
             m_selection_tool->clear_selection();
             if (!was_selected)
             {
-                m_selection_tool->add_to_selection(m_node_clicked);
+                m_selection_tool->add_to_selection(m_item_clicked);
             }
         }
     }
-    m_node_clicked.reset();
 #endif
 }
 

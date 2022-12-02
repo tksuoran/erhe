@@ -505,13 +505,13 @@ void Hand_tracker::tool_render(const Render_context& context)
         return;
     }
 
-    const auto camera = m_headset_view->get_camera();
-    if (!camera)
+    const auto root_node = m_headset_view->get_root_node();
+    if (!root_node)
     {
         return;
     }
 
-    const auto transform     = camera->world_from_node();
+    const auto transform     = root_node->world_from_node();
     auto&      line_renderer = *m_line_renderer_set->hidden.at(3).get();
 
     m_left_hand .draw(line_renderer, transform);

@@ -187,22 +187,11 @@ void Trs_tool::on_message(Editor_message& message)
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_selection))
     {
-        log_trs_tool->trace("Selection changed {}");
-        const auto& selection = m_selection_tool->selection();
-        {
-            if (selection.empty())
-            {
-                set_node({});
-            }
-            else
-            {
-                set_node(selection.front());
-            }
-        };
+        set_node(m_selection_tool->get_first_selected_node());
     }
     if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_hover))
     {
-        log_trs_tool->trace("Hover changed {}");
+        log_trs_tool->trace("Hover changed");
         tool_hover(message.scene_view);
     }
 }
@@ -245,7 +234,7 @@ auto Trs_tool::get_target_node() const -> std::shared_ptr<erhe::scene::Node>
     {
         return {};
     }
-    return get_physics_node(target_node.get());
+    return get_node_physics(target_node.get());
 }
 
 void Trs_tool::set_node(
@@ -515,12 +504,17 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         //log_trs_tool->trace("drag not possible - no camera");
         return false;
     }
+    const auto* camera_node = camera->get_node();
+    if (camera_node == nullptr)
+    {
+        return false;
+    }
 
     m_drag.initial_position_in_world = tool.position.value();
     m_drag.initial_world_from_local  = target_node->world_from_node();
     m_drag.initial_local_from_world  = target_node->node_from_world();
     m_drag.initial_distance          = glm::distance(
-        glm::dvec3{camera->position_in_world()},
+        glm::dvec3{camera_node->position_in_world()},
         tool.position.value()
     );
     if (target_node)
@@ -1116,8 +1110,13 @@ void Trs_tool::update_for_view(Scene_view* scene_view)
     {
         return;
     }
+    const auto* camera_node = camera->get_node();
+    if (camera_node == nullptr)
+    {
+        return;
+    }
 
-    const vec3 view_position_in_world = vec3{camera->position_in_world()};
+    const vec3 view_position_in_world = vec3{camera_node->position_in_world()};
 
     m_visualization.update_scale(view_position_in_world);
     update_transforms();
@@ -1151,44 +1150,48 @@ void Trs_tool::tool_render(
     std::shared_ptr<erhe::scene::Mesh> mesh = as_mesh(target_node);
     if (mesh)
     {
-        auto* scene_root = reinterpret_cast<Scene_root*>(mesh->node_data.host);
-        if (scene_root != nullptr)
-            {
-                glm::vec3 directions[] = {
-                    { 0.0f, -1.0f,  0.0f},
-                    { 1.0f,  0.0f,  0.0f},
-                    {-1.0f,  0.0f,  0.0f},
-                    { 0.0f,  0.0f,  1.0f},
-                    { 0.0f,  0.0f, -1.0f}
-                };
-                for (auto& d : directions)
+        const auto* node = mesh->get_node();
+        if (node != nullptr)
+        {
+            auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
+            if (scene_root != nullptr)
                 {
-                    auto& raytrace_scene = scene_root->raytrace_scene();
-                    erhe::raytrace::Ray ray{
-                        .origin    = mesh->position_in_world(),
-                        .t_near    = 0.0f,
-                        .direction = d,
-                        .time      = 0.0f,
-                        .t_far     = 9999.0f,
-                        .mask      = Raytrace_node_mask::content,
-                        .id        = 0,
-                        .flags     = 0
+                    glm::vec3 directions[] = {
+                        { 0.0f, -1.0f,  0.0f},
+                        { 1.0f,  0.0f,  0.0f},
+                        {-1.0f,  0.0f,  0.0f},
+                        { 0.0f,  0.0f,  1.0f},
+                        { 0.0f,  0.0f, -1.0f}
                     };
-
-                    erhe::raytrace::Hit hit;
-                    if (project_ray(&raytrace_scene, mesh.get(), ray, hit))
+                    for (auto& d : directions)
                     {
-                        Ray_hit_style ray_hit_style
-                        {
-                            .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
-                            .ray_thickness = 8.0f,
-                            .ray_length    = 0.5f,
-                            .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
-                            .hit_thickness = 8.0f,
-                            .hit_size      = 0.10f
+                        auto& raytrace_scene = scene_root->raytrace_scene();
+                        erhe::raytrace::Ray ray{
+                            .origin    = node->position_in_world(),
+                            .t_near    = 0.0f,
+                            .direction = d,
+                            .time      = 0.0f,
+                            .t_far     = 9999.0f,
+                            .mask      = Raytrace_node_mask::content,
+                            .id        = 0,
+                            .flags     = 0
                         };
 
-                        draw_ray_hit(line_renderer, ray, hit, ray_hit_style);
+                        erhe::raytrace::Hit hit;
+                        if (project_ray(&raytrace_scene, mesh.get(), ray, hit))
+                        {
+                            Ray_hit_style ray_hit_style
+                            {
+                                .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
+                                .ray_thickness = 8.0f,
+                                .ray_length    = 0.5f,
+                                .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
+                                .hit_thickness = 8.0f,
+                                .hit_size      = 0.10f
+                            };
+
+                            draw_ray_hit(line_renderer, ray, hit, ray_hit_style);
+                        }
                     }
                 }
             }
@@ -1206,12 +1209,18 @@ void Trs_tool::tool_render(
         return;
     }
 
+    const auto* camera_node = context.get_camera_node();
+    if (camera_node == nullptr)
+    {
+        return;
+    }
+
     const dvec3  p                 = m_rotation.center_of_rotation;
     const dvec3  n                 = m_rotation.normal;
     const dvec3  side1             = m_rotation.reference_direction;
     const dvec3  side2             = normalize(cross(n, side1));
     const dvec3  position_in_world = target_node->position_in_world();
-    const double distance          = length(position_in_world - dvec3{context.camera->position_in_world()});
+    const double distance          = length(position_in_world - dvec3{camera_node->position_in_world()});
     const double scale             = m_visualization.get_scale() * distance / 100.0;
     const double r1                = scale * 6.0;
 

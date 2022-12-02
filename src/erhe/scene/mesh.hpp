@@ -27,7 +27,7 @@ public:
 };
 
 class Mesh
-    : public Node
+    : public Node_attachment
 {
 public:
     Mesh         ();
@@ -35,7 +35,9 @@ public:
     Mesh         (const std::string_view name, const erhe::primitive::Primitive primitive);
     ~Mesh        () noexcept override;
 
-    [[nodiscard]] auto node_type() const -> const char* override;
+    // Implements Node_attachment
+    [[nodiscard]] auto type_name() const -> const char* override;
+    void handle_node_scene_host_update(Scene_host* old_scene_host, Scene_host* new_scene_host) override;
 
     Mesh_data mesh_data;
 
@@ -44,9 +46,11 @@ public:
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
 
-[[nodiscard]] auto is_mesh(const Node* const node) -> bool;
-[[nodiscard]] auto is_mesh(const std::shared_ptr<Node>& node) -> bool;
-[[nodiscard]] auto as_mesh(Node* const node) -> Mesh*;
-[[nodiscard]] auto as_mesh(const std::shared_ptr<Node>& node) -> std::shared_ptr<Mesh>;
+[[nodiscard]] auto is_mesh(const Scene_item* const scene_item) -> bool;
+[[nodiscard]] auto is_mesh(const std::shared_ptr<Scene_item>& scene_item) -> bool;
+[[nodiscard]] auto as_mesh(Scene_item* const scene_item) -> Mesh*;
+[[nodiscard]] auto as_mesh(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<Mesh>;
+
+[[nodiscard]] auto get_mesh(const erhe::scene::Node* node) -> std::shared_ptr<Mesh>;
 
 } // namespace erhe::scene

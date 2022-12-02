@@ -186,11 +186,15 @@ void Brushes::register_brush(const std::shared_ptr<Brush>& brush)
 
 void Brushes::remove_brush_mesh()
 {
-    if (m_brush_mesh)
+    if (m_brush_node)
     {
         // Do not remove this. It is not possible to rely on reset calling destructor,
         // because parent will have shared_ptr to the child.
-        m_brush_mesh->set_parent({});
+        m_brush_node->set_parent({});
+        m_brush_node.reset();
+    }
+    if (m_brush_mesh)
+    {
         m_brush_mesh.reset();
     }
 }
@@ -203,6 +207,7 @@ auto Brushes::try_insert_ready() -> bool
 auto Brushes::try_insert() -> bool
 {
     if (
+        !m_brush_node ||
         !m_brush_mesh ||
         !m_hover.position.has_value() ||
         (m_brush.expired())
@@ -263,9 +268,13 @@ void Brushes::on_motion()
         m_hover.geometry    = nullptr;
     }
 
-    if (m_hover.mesh && m_hover.position.has_value())
+    if (
+        m_hover.mesh &&
+        (m_hover.mesh->get_node() != nullptr) &&
+        m_hover.position.has_value()
+    )
     {
-        m_hover.position = m_hover.mesh->transform_direction_from_world_to_local(m_hover.position.value());
+        m_hover.position = m_hover.mesh->get_node()->transform_direction_from_world_to_local(m_hover.position.value());
     }
 
     update_mesh();
@@ -277,7 +286,7 @@ auto Brushes::get_hover_mesh_transform() -> mat4
     const auto brush = m_brush.lock();
 
     if (
-        (m_hover.mesh     == nullptr) ||
+        (m_hover.mesh == nullptr) ||
         (m_hover.geometry == nullptr) ||
         (m_hover.local_index >= m_hover.geometry->get_polygon_count())
     )
@@ -361,6 +370,7 @@ void Brushes::update_mesh_node_transform()
         !brush ||
         !m_hover.position.has_value() ||
         !m_brush_mesh ||
+        !m_brush_node ||
         (!m_hover.mesh && (m_hover.grid == nullptr))
     )
     {
@@ -373,16 +383,16 @@ void Brushes::update_mesh_node_transform()
     const auto& brush_scaled = brush->get_scaled(m_transform_scale);
     if (m_hover.mesh)
     {
-        m_brush_mesh->set_parent(m_hover.mesh);
-        m_brush_mesh->set_parent_from_node(transform);
+        m_brush_node->set_parent(m_hover.mesh->get_node());
+        m_brush_node->set_parent_from_node(transform);
     }
     else if (m_hover.grid)
     {
         ERHE_VERIFY(m_scene_view != nullptr);
         const auto& scene_root = m_scene_view->get_scene_root();
         ERHE_VERIFY(scene_root);
-        m_brush_mesh->set_parent(scene_root->get_scene()->root_node);
-        m_brush_mesh->set_parent_from_node(transform);
+        m_brush_node->set_parent(scene_root->get_scene()->root_node);
+        m_brush_node->set_parent_from_node(transform);
     }
 
     auto& primitive = m_brush_mesh->mesh_data.primitives.front();
@@ -413,42 +423,43 @@ void Brushes::do_insert_operation()
     const auto hover_from_brush = m_hover.mesh
         ? get_hover_mesh_transform()
         : get_hover_grid_transform();
-    const uint64_t visibility_flags =
-        erhe::scene::Node_visibility::visible     |
-        erhe::scene::Node_visibility::content     |
-        erhe::scene::Node_visibility::shadow_cast |
-        erhe::scene::Node_visibility::id;
+    const uint64_t mesh_flags =
+        erhe::scene::Scene_item_flags::visible     |
+        erhe::scene::Scene_item_flags::content     |
+        erhe::scene::Scene_item_flags::shadow_cast |
+        erhe::scene::Scene_item_flags::id;
 
     ERHE_VERIFY(m_scene_view != nullptr);
     const auto& scene_root = m_scene_view->get_scene_root();
     ERHE_VERIFY(scene_root);
 
+    auto* const hover_node = m_hover.mesh ? m_hover.mesh->get_node() : nullptr;
     const Instance_create_info brush_instance_create_info
     {
-        .node_visibility_flags = visibility_flags,
-        .scene_root            = scene_root.get(),
-        .world_from_node       = m_hover.mesh
-            ? m_hover.mesh->world_from_node() * hover_from_brush
+        .mesh_flags       = mesh_flags,
+        .scene_root       = scene_root.get(),
+        .world_from_node  = (hover_node != nullptr)
+            ? hover_node->world_from_node() * hover_from_brush
             : hover_from_brush,
-        .material              = m_materials_window->selected_material(),
-        .scale                 = m_transform_scale,
-        .physics_enabled       = m_configuration->physics.static_enable
+        .material         = m_materials_window->selected_material(),
+        .scale            = m_transform_scale,
+        .physics_enabled  = m_configuration->physics.static_enable
     };
-    const auto instance = brush->make_instance(brush_instance_create_info);
+    const auto instance_node = brush->make_instance(brush_instance_create_info);
 
-    std::shared_ptr<erhe::scene::Node> parent = m_hover.mesh
-        ? m_hover.mesh
+    std::shared_ptr<erhe::scene::Node> parent = (hover_node != nullptr)
+        ? std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this())
         : scene_root->get_scene()->root_node;
-    const auto& selection = m_selection_tool->selection();
-    if (!selection.empty())
+    const auto& first_selected_node = m_selection_tool->get_first_selected_node();
+    if (first_selected_node)
     {
-        parent = selection.front();
+        parent = first_selected_node;
     }
 
     auto op = std::make_shared<Node_insert_remove_operation>(
         Node_insert_remove_operation::Parameters{
             .selection_tool = m_selection_tool.get(),
-            .node           = instance.mesh,
+            .node           = instance_node,
             .parent         = parent,
             .mode           = Scene_item_operation::Mode::insert
         }
@@ -470,7 +481,7 @@ void Brushes::add_brush_mesh()
         return;
     }
 
-    auto material = m_materials_window->selected_material();
+    const auto& material = m_materials_window->selected_material();
     if (!material)
     {
         log_brush->warn("No material selected");
@@ -482,8 +493,10 @@ void Brushes::add_brush_mesh()
 
     brush->late_initialize();
     const auto& brush_scaled = brush->get_scaled(m_transform_scale);
+    const std::string name = fmt::format("brush-{}", brush->name());
+    m_brush_node = std::make_shared<erhe::scene::Node>(name);
     m_brush_mesh = std::make_shared<erhe::scene::Mesh>(
-        fmt::format("brush-{}", brush->name()),
+        name,
         erhe::primitive::Primitive{
             .material              = material,
             .gl_primitive_geometry = brush_scaled.gl_primitive_geometry,
@@ -494,18 +507,16 @@ void Brushes::add_brush_mesh()
             .normal_style          = brush->data.normal_style
         }
     );
-    m_brush_mesh->set_visibility_mask(
-        erhe::scene::Node_visibility::visible |
-        erhe::scene::Node_visibility::content |
-        erhe::scene::Node_visibility::brush
+    m_brush_mesh->enable_flag_bits(
+        erhe::scene::Scene_item_flags::visible |
+        erhe::scene::Scene_item_flags::brush   |
+        erhe::scene::Scene_item_flags::no_message
     );
-    m_brush_mesh->node_data.flag_bits =
-        m_brush_mesh->node_data.flag_bits |
-        erhe::scene::Node_flag_bit::no_message;
 
     m_brush_mesh->mesh_data.layer_id = scene_root->layers().brush()->id.get_id();
 
-    m_brush_mesh->set_parent(scene_root->scene().root_node);
+    m_brush_node->attach(m_brush_mesh);
+    m_brush_node->set_parent(scene_root->scene().root_node);
 
     update_mesh_node_transform();
 }
@@ -592,7 +603,8 @@ void Brushes::tool_render(
     if (
         !m_debug_visualization ||
         (context.scene_view == nullptr) ||
-        !m_brush_mesh
+        !m_brush_mesh ||
+        !m_brush_node
     )
     {
         return;
@@ -600,7 +612,7 @@ void Brushes::tool_render(
 
     auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
-    const auto& transform = m_brush_mesh->parent_from_node_transform();
+    const auto& transform = m_brush_node->parent_from_node_transform();
     glm::mat4 m = transform.matrix();
 
     constexpr vec3 O     { 0.0f };

@@ -47,7 +47,9 @@ void Mesh_operation::execute(const Operation_context&)
 
     for (const auto& entry : m_entries)
     {
-        auto* scene_root = reinterpret_cast<Scene_root*>(entry.mesh->node_data.host);
+        const auto* node = entry.mesh->get_node();
+        ERHE_VERIFY(node != nullptr);
+        auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
         ERHE_VERIFY(scene_root);
         const auto& scene = scene_root->scene();
         scene.sanity_check();
@@ -62,7 +64,9 @@ void Mesh_operation::undo(const Operation_context&)
 
     for (const auto& entry : m_entries)
     {
-        auto* scene_root = reinterpret_cast<Scene_root*>(entry.mesh->node_data.host);
+        const auto* mesh_node = entry.mesh->get_node();
+        ERHE_VERIFY(mesh_node != nullptr);
+        auto* scene_root = reinterpret_cast<Scene_root*>(mesh_node->node_data.host);
         ERHE_VERIFY(scene_root);
         const auto& scene = scene_root->scene();
         scene.sanity_check();
@@ -82,7 +86,12 @@ void Mesh_operation::make_entries(
     {
         return;
     }
-    auto* scene_root = reinterpret_cast<Scene_root*>(selection.front()->node_data.host);
+    const auto first_node = m_parameters.selection_tool->get_first_selected_node();
+    if (!first_node)
+    {
+        return;
+    }
+    auto* scene_root = reinterpret_cast<Scene_root*>(first_node->node_data.host);
     ERHE_VERIFY(scene_root);
     const auto& scene = scene_root->scene();
     scene.sanity_check();

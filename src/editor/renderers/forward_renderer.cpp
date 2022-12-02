@@ -112,14 +112,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& viewport          = parameters.viewport;
-    const auto* camera            = parameters.camera;
-    const auto& mesh_spans        = parameters.mesh_spans;
-    const auto& lights            = parameters.lights;
-    const auto& materials         = parameters.materials;
-    const auto& passes            = parameters.passes;
-    const auto& visibility_filter = parameters.visibility_filter;
-    const bool  enable_shadows    =
+    const auto& viewport       = parameters.viewport;
+    const auto* camera         = parameters.camera;
+    const auto& mesh_spans     = parameters.mesh_spans;
+    const auto& lights         = parameters.lights;
+    const auto& materials      = parameters.materials;
+    const auto& passes         = parameters.passes;
+    const auto& filter         = parameters.filter;
+    const bool  enable_shadows =
         m_shadow_renderer &&
         (!lights.empty()) &&
         (parameters.shadow_texture != nullptr);
@@ -139,7 +139,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr)
     {
-        m_camera_buffers->update(*camera->projection(), *camera, viewport, camera->get_exposure());
+        m_camera_buffers->update(
+            *camera->projection(),
+            *camera->get_node(),
+            viewport,
+            camera->get_exposure()
+        );
         m_camera_buffers->bind();
     }
 
@@ -212,8 +217,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
             ERHE_PROFILE_SCOPE("mesh span");
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
 
-            m_primitive_buffers->update(meshes, visibility_filter);
-            const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(meshes, primitive_mode, visibility_filter);
+            m_primitive_buffers->update(meshes, filter);
+            const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(meshes, primitive_mode, filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0)
             {
                 continue;
@@ -285,7 +290,12 @@ void Forward_renderer::render_fullscreen(
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr)
     {
-        m_camera_buffers->update(*camera->projection(), *camera, viewport, camera->get_exposure());
+        m_camera_buffers->update(
+            *camera->projection(),
+            *camera->get_node(),
+            viewport,
+            camera->get_exposure()
+        );
         m_camera_buffers->bind();
     }
 

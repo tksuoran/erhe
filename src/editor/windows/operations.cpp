@@ -166,30 +166,39 @@ void Operations::imgui()
         : erhe::application::Item_mode::disabled;
     if (erhe::application::make_button("Attach", multi_select_mode, button_size))
     {
-        m_operation_stack->push(
-            std::make_shared<Node_attach_operation>(
-                m_selection_tool->selection().at(1),
-                m_selection_tool->selection().at(0),
-                std::shared_ptr<erhe::scene::Node>{},
-                std::shared_ptr<erhe::scene::Node>{}
-            )
-        );
+        const auto& node0 = as_node(m_selection_tool->selection().at(0));
+        const auto& node1 = as_node(m_selection_tool->selection().at(1));
+        if (node1 && node1)
+        {
+            m_operation_stack->push(
+                std::make_shared<Node_attach_operation>(
+                    node1,
+                    node0,
+                    std::shared_ptr<erhe::scene::Node>{},
+                    std::shared_ptr<erhe::scene::Node>{}
+                )
+            );
+        }
     }
 
     const auto has_selection_mode = (selected_mesh_count >= 1)
         ? erhe::application::Item_mode::normal
         : erhe::application::Item_mode::disabled;
 
-    if (make_button("Detach", has_selection_mode, button_size))
+    if (make_button("Unparent", has_selection_mode, button_size))
     {
-        m_operation_stack->push(
-            std::make_shared<Node_attach_operation>(
-                std::shared_ptr<erhe::scene::Node>{},
-                m_selection_tool->selection().at(0),
-                std::shared_ptr<erhe::scene::Node>{},
-                std::shared_ptr<erhe::scene::Node>{}
-            )
-        );
+        const auto& node0 = as_node(m_selection_tool->selection().at(0));
+        if (node0)
+        {
+            m_operation_stack->push(
+                std::make_shared<Node_attach_operation>(
+                    std::shared_ptr<erhe::scene::Node>{},
+                    node0,
+                    std::shared_ptr<erhe::scene::Node>{},
+                    std::shared_ptr<erhe::scene::Node>{}
+                )
+            );
+        }
     }
 
     if (make_button("Merge", multi_select_mode, button_size))

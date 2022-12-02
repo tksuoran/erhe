@@ -130,7 +130,7 @@ Physics_tool::~Physics_tool() noexcept
         return nullptr;
     }
 
-    return reinterpret_cast<Scene_root*>(m_target_mesh->node_data.host);
+    return reinterpret_cast<Scene_root*>(m_target_mesh->get_node()->node_data.host);
 }
 
 [[nodiscard]] auto Physics_tool::get_raytrace_scene() const -> erhe::raytrace::IScene*
@@ -313,16 +313,16 @@ auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
     const glm::vec3 view_position   = p0_opt.value();
     const glm::vec3 target_position = glm::mix(
         glm::vec3{content.position.value()},
-        glm::vec3{content.mesh->position_in_world()},
+        glm::vec3{content.mesh->get_node()->position_in_world()},
         m_depth
     );
 
     m_target_mesh     = content.mesh;
     m_target_distance = glm::distance(view_position, target_position);
-    m_target_position_in_mesh = m_target_mesh->transform_point_from_world_to_local(
+    m_target_position_in_mesh = m_target_mesh->get_node()->transform_point_from_world_to_local(
         target_position
     );
-    m_target_node_physics = get_physics_node(m_target_mesh.get());
+    m_target_node_physics = get_node_physics(m_target_mesh->get_node());
     if (!m_target_node_physics)
     {
         log_physics->warn("Cant target: No physics mesh");
@@ -360,7 +360,7 @@ auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
     rigid_body->set_linear_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
 
     m_target_position_end = glm::dvec3{
-        m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}
+        m_target_mesh->get_node()->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}
     };
 
     log_physics->trace("PT pos in mesh {}", m_target_position_in_mesh);
@@ -527,12 +527,12 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
 
     if (m_mode == Physics_tool_mode::Drag)
     {
-        m_target_position_start = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
+        m_target_position_start = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
         m_target_position_end   = end.value();
     }
     else
     {
-        m_target_position_start = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
+        m_target_position_start = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
 
         float max_radius = 0.0f;
         for (const auto& primitive : m_target_mesh->mesh_data.primitives)
@@ -585,7 +585,7 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
         if (raytrace_scene != nullptr)
         {
             erhe::raytrace::Ray ray{
-                .origin    = m_target_mesh->position_in_world(),
+                .origin    = m_target_mesh->get_node()->position_in_world(),
                 .t_near    = 0.0f,
                 .direction = glm::vec3{0.0f, -1.0f, 0.0f},
                 .time      = 0.0f,
@@ -704,7 +704,7 @@ void Physics_tool::tool_properties()
     ImGui::Text("Mesh: %s", m_last_target_mesh->name().c_str());
 
     //float speed = 0.0f;
-    //std::shared_ptr<Node_physics> node_physics = get_physics_node(m_last_target_mesh.get());
+    //std::shared_ptr<Node_physics> node_physics = get_node_physics(m_last_target_mesh.get());
     //if (node_physics)
     //{
     //    erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();

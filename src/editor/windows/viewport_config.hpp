@@ -93,7 +93,7 @@ public:
     Debug_visualizations debug_visualizations;
     bool                 selection_bounding_box;
     bool                 selection_bounding_sphere;
-    float                rendertarget_node_lod_bias{-0.666f};
+    float                rendertarget_mesh_lod_bias{-0.666f};
 };
 
 } // namespace editor

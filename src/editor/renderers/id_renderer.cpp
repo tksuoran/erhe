@@ -296,8 +296,8 @@ void Id_renderer::render(
 {
     ERHE_PROFILE_FUNCTION
 
-    const erhe::scene::Visibility_filter id_filter{
-        .require_all_bits_set           = erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::id,
+    const erhe::scene::Scene_item_filter id_filter{
+        .require_all_bits_set           = erhe::scene::Scene_item_flags::visible | erhe::scene::Scene_item_flags::id,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
@@ -385,7 +385,12 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     m_primitive_buffers->settings.color_source = Primitive_color_source::id_offset;
 
-    m_camera_buffers->update(*camera->projection(), *camera, viewport, 1.0f);
+    m_camera_buffers->update(
+        *camera->projection(),
+        *camera->get_node(),
+        viewport,
+        1.0f
+    );
     m_camera_buffers->bind();
 
     {

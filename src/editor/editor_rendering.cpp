@@ -9,7 +9,7 @@
 #include "renderers/shadow_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_viewport.hpp"
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -404,8 +404,8 @@ void Editor_rendering::setup_renderpasses()
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
-    m_rp_rendertarget_nodes.pipeline.data = {
-        .name           = "Rendertarget Nodes",
+    m_rp_rendertarget_meshes.pipeline.data = {
+        .name           = "Rendertarget Meshes",
         .shader_stages  = programs.textured.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
@@ -586,10 +586,10 @@ void Editor_rendering::render_viewport_main(
 
     if (m_forward_renderer)
     {
-        render_content    (context, false);
-        render_selection  (context, false);
-        render_tool_meshes(context);
-        render_rendertarget_nodes(context);
+        render_content            (context, false);
+        render_selection          (context, false);
+        render_tool_meshes        (context);
+        render_rendertarget_meshes(context);
     }
 
     if (m_text_renderer)
@@ -691,10 +691,12 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
     const auto& material_library = scene_root->material_library();
     const auto& materials        = material_library->materials();
 
-    constexpr erhe::scene::Visibility_filter content_not_selected_filter{
-        .require_all_bits_set         = erhe::scene::Node_visibility::visible,
-        .require_at_least_one_bit_set = erhe::scene::Node_visibility::content | erhe::scene::Node_visibility::controller,
-        .require_all_bits_clear       = erhe::scene::Node_visibility::selected
+    using Scene_item_filter = erhe::scene::Scene_item_filter;
+    using Scene_item_flags  = erhe::scene::Scene_item_flags;
+    constexpr Scene_item_filter content_not_selected_filter{
+        .require_all_bits_set         = Scene_item_flags::visible,
+        .require_at_least_one_bit_set = Scene_item_flags::content | Scene_item_flags::controller,
+        .require_all_bits_clear       = Scene_item_flags::selected
     };
 
     if (polygon_fill && render_style.polygon_fill)
@@ -722,7 +724,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
                 .passes            = { &renderpass },
                 .shadow_texture    = context.scene_view->get_shadow_texture(),
                 .viewport          = context.viewport,
-                .visibility_filter = content_not_selected_filter,
+                .filter            = content_not_selected_filter,
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -740,12 +742,12 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         primitive_settings.constant_size  = render_style.line_width;
         m_forward_renderer->render(
             {
-                .camera            = context.camera,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes },
-                .passes            = { &m_rp_edge_lines },
-                .viewport          = context.viewport,
-                .visibility_filter = content_not_selected_filter
+                .camera     = context.camera,
+                .materials  = materials,
+                .mesh_spans = { layers.content()->meshes },
+                .passes     = { &m_rp_edge_lines },
+                .viewport   = context.viewport,
+                .filter     = content_not_selected_filter
             }
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -759,12 +761,12 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .camera            = context.camera,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes },
-                .passes            = { &m_rp_polygon_centroids },
-                .viewport          = context.viewport,
-                .visibility_filter = content_not_selected_filter
+                .camera     = context.camera,
+                .materials  = materials,
+                .mesh_spans = { layers.content()->meshes },
+                .passes     = { &m_rp_polygon_centroids },
+                .viewport   = context.viewport,
+                .filter     = content_not_selected_filter
             }
         );
     }
@@ -777,18 +779,18 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .camera            = context.camera,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes },
-                .passes            = { &m_rp_corner_points },
-                .viewport          = context.viewport,
-                .visibility_filter = content_not_selected_filter
+                .camera     = context.camera,
+                .materials  = materials,
+                .mesh_spans = { layers.content()->meshes },
+                .passes     = { &m_rp_corner_points },
+                .viewport   = context.viewport,
+                .filter     = content_not_selected_filter
             }
         );
     }
 }
 
-void Editor_rendering::render_rendertarget_nodes(
+void Editor_rendering::render_rendertarget_meshes(
     const Render_context& context
 )
 {
@@ -810,7 +812,7 @@ void Editor_rendering::render_rendertarget_nodes(
         return;
     }
 
-    erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport rendertarget nodes"};
+    erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport rendertarget meshes"};
 
     const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->material_library();
@@ -818,16 +820,16 @@ void Editor_rendering::render_rendertarget_nodes(
 
     m_forward_renderer->render(
         Forward_renderer::Render_parameters{
-            .camera            = context.camera,
-            .materials         = { materials },
-            .mesh_spans        = { layers.rendertarget()->meshes },
-            .passes            = { &m_rp_rendertarget_nodes },
-            .viewport          = context.viewport,
-            .visibility_filter =
+            .camera     = context.camera,
+            .materials  = { materials },
+            .mesh_spans = { layers.rendertarget()->meshes },
+            .passes     = { &m_rp_rendertarget_meshes },
+            .viewport   = context.viewport,
+            .filter =
             {
                 .require_all_bits_set = (
-                    erhe::scene::Node_visibility::visible |
-                    erhe::scene::Node_visibility::rendertarget
+                    erhe::scene::Scene_item_flags::visible |
+                    erhe::scene::Scene_item_flags::rendertarget
                 )
             }
         }
@@ -856,11 +858,11 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
     const auto& material_library = scene_root->material_library();
     const auto& materials        = material_library->materials();
 
-    constexpr erhe::scene::Visibility_filter content_selected_filter{
+    constexpr erhe::scene::Scene_item_filter content_selected_filter{
         .require_all_bits_set =
-            erhe::scene::Node_visibility::visible |
-            erhe::scene::Node_visibility::content |
-            erhe::scene::Node_visibility::selected
+            erhe::scene::Scene_item_flags::visible |
+            erhe::scene::Scene_item_flags::content |
+            erhe::scene::Scene_item_flags::selected
     };
 
     if (polygon_fill && render_style.polygon_fill)
@@ -892,7 +894,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
                 .passes            = { &renderpass },
                 .shadow_texture    = context.scene_view->get_shadow_texture(),
                 .viewport          = context.viewport,
-                .visibility_filter = content_selected_filter
+                .filter            = content_selected_filter
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -912,12 +914,12 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         primitive_settings.constant_size  = render_style.line_width;
         m_forward_renderer->render(
             {
-                .camera            = context.camera,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes },
-                .passes            = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
-                .viewport          = context.viewport,
-                .visibility_filter = content_selected_filter
+                .camera     = context.camera,
+                .materials  = materials,
+                .mesh_spans = { layers.content()->meshes },
+                .passes     = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
+                .viewport   = context.viewport,
+                .filter     = content_selected_filter
             }
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -934,12 +936,12 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .camera            = context.camera,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes },
-                .passes            = { &m_rp_polygon_centroids },
-                .viewport          = context.viewport,
-                .visibility_filter = content_selected_filter
+                .camera     = context.camera,
+                .materials  = materials,
+                .mesh_spans = { layers.content()->meshes },
+                .passes     = { &m_rp_polygon_centroids },
+                .viewport   = context.viewport,
+                .filter     = content_selected_filter
             }
         );
     }
@@ -953,12 +955,12 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         primitive_settings.constant_size  = render_style.point_size;
         m_forward_renderer->render(
             {
-                .camera            = context.camera,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes },
-                .passes            = { &m_rp_corner_points },
-                .viewport          = context.viewport,
-                .visibility_filter = content_selected_filter
+                .camera     = context.camera,
+                .materials  = materials,
+                .mesh_spans = { layers.content()->meshes },
+                .passes     = { &m_rp_corner_points },
+                .viewport   = context.viewport,
+                .filter     = content_selected_filter
             }
         );
     }
@@ -1004,11 +1006,11 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
 
     m_forward_renderer->render(
         {
-            .camera            = context.camera,
-            .lights            = {},
-            .materials         = materials,
-            .mesh_spans        = { layers.tool()->meshes },
-            .passes            =
+            .camera     = context.camera,
+            .lights     = {},
+            .materials  = materials,
+            .mesh_spans = { layers.tool()->meshes },
+            .passes     =
             {
                 &m_rp_tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
                 &m_rp_tool2_visible_stencil,  // tag_depth_visible_with_stencil
@@ -1017,12 +1019,12 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
                 &m_rp_tool5_visible_color,    // require_stencil_tag_depth_visible
                 &m_rp_tool6_hidden_color      // require_stencil_tag_depth_hidden_and_blend,
             },
-            .viewport          = context.viewport,
-            .visibility_filter =
+            .viewport   = context.viewport,
+            .filter     =
             {
                 .require_all_bits_set =
-                    erhe::scene::Node_visibility::visible |
-                    erhe::scene::Node_visibility::tool
+                    erhe::scene::Scene_item_flags::visible |
+                    erhe::scene::Scene_item_flags::tool
             }
         }
     );
@@ -1062,18 +1064,18 @@ void Editor_rendering::render_brush(const Render_context& context)
 
     m_forward_renderer->render(
         {
-            .ambient_light     = layers.light()->ambient_light,
-            .camera            = context.camera,
-            .lights            = layers.light()->lights,
-            .materials         = materials,
-            .mesh_spans        = { layers.brush()->meshes },
-            .passes            = { &m_rp_brush_back, &m_rp_brush_front },
-            .viewport          = context.viewport,
-            .visibility_filter =
+            .ambient_light = layers.light()->ambient_light,
+            .camera        = context.camera,
+            .lights        = layers.light()->lights,
+            .materials     = materials,
+            .mesh_spans    = { layers.brush()->meshes },
+            .passes        = { &m_rp_brush_back, &m_rp_brush_front },
+            .viewport      = context.viewport,
+            .filter        =
             {
                 .require_all_bits_set =
-                    erhe::scene::Node_visibility::visible |
-                    erhe::scene::Node_visibility::brush
+                    erhe::scene::Scene_item_flags::visible |
+                    erhe::scene::Scene_item_flags::brush
             }
         }
     );

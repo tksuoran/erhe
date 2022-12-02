@@ -41,33 +41,28 @@ void Create_uv_sphere::render_preview(
     const erhe::scene::Transform&         transform
 )
 {
-    if (render_context.scene_view == nullptr)
+    const auto* camera_node = render_context.get_camera_node();
+    if (camera_node == nullptr)
     {
         return;
     }
 
-    const auto& view_camera = render_context.scene_view->get_camera();
-    if (view_camera)
-    {
-        //const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
-
-        auto& line_renderer = *line_renderer_set.hidden.at(2).get();
-        const glm::vec4 edge_color            {1.0f, 1.0f, 1.0f, 1.0f};
-        const glm::vec4 great_circle_color    {0.5f, 0.5f, 0.5f, 0.5f};
-        const float     edge_thickness        {6.0f};
-        const float     great_circle_thickness{4.0f};
-        line_renderer.add_sphere(
-            transform,
-            edge_color,
-            great_circle_color,
-            edge_thickness,
-            great_circle_thickness,
-            glm::vec3{0.0f, 0.0f,0.0f},
-            m_radius,
-            &view_camera->world_from_node_transform(),
-            80
-        );
-    }
+    auto& line_renderer = *line_renderer_set.hidden.at(2).get();
+    const glm::vec4 edge_color            {1.0f, 1.0f, 1.0f, 1.0f};
+    const glm::vec4 great_circle_color    {0.5f, 0.5f, 0.5f, 0.5f};
+    const float     edge_thickness        {6.0f};
+    const float     great_circle_thickness{4.0f};
+    line_renderer.add_sphere(
+        transform,
+        edge_color,
+        great_circle_color,
+        edge_thickness,
+        great_circle_thickness,
+        glm::vec3{0.0f, 0.0f,0.0f},
+        m_radius,
+        &camera_node->world_from_node_transform(),
+        80
+    );
 }
 
 void Create_uv_sphere::imgui()
@@ -111,35 +106,30 @@ void Create_cone::render_preview(
     const erhe::scene::Transform&         transform
 )
 {
-    if (render_context.scene_view == nullptr)
+    const auto* camera_node = render_context.get_camera_node();
+    if (camera_node == nullptr)
     {
         return;
     }
 
-    const auto& view_camera = render_context.scene_view->get_camera();
-    if (view_camera)
-    {
-        //const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
-
-        auto& line_renderer = *line_renderer_set.hidden.at(2).get();
-        const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
-        const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
-        const float     major_thickness{6.0f};
-        const float     minor_thickness{3.0f};
-        line_renderer.add_cone(
-            transform,
-            major_color,
-            minor_color,
-            major_thickness,
-            minor_thickness,
-            glm::vec3{0.0f, 0.0f,0.0f},
-            m_height,
-            m_bottom_radius,
-            m_top_radius,
-            view_camera->position_in_world(),
-            80
-        );
-    }
+    auto& line_renderer = *line_renderer_set.hidden.at(2).get();
+    const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
+    const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
+    const float     major_thickness{6.0f};
+    const float     minor_thickness{3.0f};
+    line_renderer.add_cone(
+        transform,
+        major_color,
+        minor_color,
+        major_thickness,
+        minor_thickness,
+        glm::vec3{0.0f, 0.0f,0.0f},
+        m_height,
+        m_bottom_radius,
+        m_top_radius,
+        camera_node->position_in_world(),
+        80
+    );
 }
 
 void Create_cone::imgui()
@@ -190,40 +180,32 @@ void Create_torus::render_preview(
     const erhe::scene::Transform&         transform
 )
 {
-    if (render_context.scene_view == nullptr)
+    const auto* camera_node = render_context.get_camera_node();
+    if (camera_node == nullptr)
     {
         return;
     }
 
-    const auto& view_camera = render_context.scene_view->get_camera();
-    if (view_camera)
-    {
-        //const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
-
-        auto& line_renderer = *line_renderer_set.hidden.at(2).get();
-        const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
-        const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
-        const float     major_thickness{6.0f};
-        //const float     minor_thickness{3.0f};
-        line_renderer.add_torus(
-            transform,
-            major_color,
-            minor_color,
-            major_thickness,
-            //minor_thickness,
-            //glm::vec3{0.0f, 0.0f, 0.0f},
-            m_major_radius,
-            m_minor_radius,
-            m_use_debug_camera
-                ? m_debug_camera
-                : view_camera->position_in_world(),
-            20,
-            10,
-            m_epsilon,
-            m_debug_major,
-            m_debug_minor
-        );
-    }
+    auto& line_renderer = *line_renderer_set.hidden.at(2).get();
+    const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
+    const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
+    const float     major_thickness{6.0f};
+    line_renderer.add_torus(
+        transform,
+        major_color,
+        minor_color,
+        major_thickness,
+        m_major_radius,
+        m_minor_radius,
+        m_use_debug_camera
+            ? m_debug_camera
+            : camera_node->position_in_world(),
+        20,
+        10,
+        m_epsilon,
+        m_debug_major,
+        m_debug_minor
+    );
 }
 
 void Create_torus::imgui()
@@ -285,13 +267,8 @@ void Create_box::render_preview(
     const auto& view_camera = render_context.scene_view->get_camera();
     if (view_camera)
     {
-        //const erhe::scene::Transform& camera_world_from_node_transform = view_camera->world_from_node_transform();
-
         auto& line_renderer = *line_renderer_set.hidden.at(2).get();
         const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
-        //const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
-        //const float     major_thickness{6.0f};
-        //const float     minor_thickness{3.0f};
         line_renderer.add_cube(
             transform.matrix(),
             major_color,
@@ -403,12 +380,10 @@ void Create::imgui()
         return;
     }
 
-    const auto selection_front = m_selection_tool->selection().empty()
-        ? std::shared_ptr<erhe::scene::Node>()
-        : m_selection_tool->selection().front();
+    const auto selected_node = m_selection_tool->get_first_selected_node();
 
-    erhe::scene::Scene_host* scene_host = selection_front
-        ? reinterpret_cast<Scene_root*>(selection_front->node_data.host)
+    erhe::scene::Scene_host* scene_host = selected_node
+        ? reinterpret_cast<Scene_root*>(selected_node->node_data.host)
         : viewport_window->get_scene_root().get();
     if (scene_host == nullptr)
     {
@@ -417,8 +392,8 @@ void Create::imgui()
     Scene_root* scene_root = reinterpret_cast<Scene_root*>(scene_host);
     ERHE_VERIFY(scene_root != nullptr);
 
-    const auto parent = selection_front
-        ? selection_front
+    const auto parent = selected_node
+        ? selected_node
         : scene_root->get_scene()->root_node;
 
     ERHE_VERIFY(parent);
@@ -471,27 +446,26 @@ void Create::imgui()
             m_brush = m_brush_create->create(brush_create_info);
             if (m_brush && create_instance)
             {
-                const uint64_t visibility_flags =
-                    erhe::scene::Node_visibility::visible     |
-                    erhe::scene::Node_visibility::content     |
-                    erhe::scene::Node_visibility::shadow_cast |
-                    erhe::scene::Node_visibility::id;
+                const uint64_t mesh_flags =
+                    erhe::scene::Scene_item_flags::visible     |
+                    erhe::scene::Scene_item_flags::content     |
+                    erhe::scene::Scene_item_flags::shadow_cast |
+                    erhe::scene::Scene_item_flags::id;
 
                 const Instance_create_info brush_instance_create_info
                 {
-                    .node_visibility_flags = visibility_flags,
-                    .scene_root            = scene_root,
-                    .world_from_node       = world_from_node,
-                    .material              = m_materials_window->selected_material(),
-                    .scale                 = 1.0
+                    .mesh_flags       = mesh_flags,
+                    .scene_root       = scene_root,
+                    .world_from_node  = world_from_node,
+                    .material         = m_materials_window->selected_material(),
+                    .scale            = 1.0
                 };
-                const auto instance = m_brush->make_instance(brush_instance_create_info);
-                instance.mesh->mesh_data.layer_id = scene_root->layers().content()->id.get_id();
+                const auto instance_node = m_brush->make_instance(brush_instance_create_info);
 
                 auto op = std::make_shared<Node_insert_remove_operation>(
                     Node_insert_remove_operation::Parameters{
                         .selection_tool = m_selection_tool.get(),
-                        .node           = instance.mesh,
+                        .node           = instance_node,
                         .parent         = parent,
                         .mode           = Scene_item_operation::Mode::insert
                     }
@@ -565,9 +539,10 @@ void Create::imgui()
 
 void Create::tool_render(const Render_context& context)
 {
-    const auto parent = m_selection_tool->selection().empty()
-        ? std::shared_ptr<erhe::scene::Node>()
-        : m_selection_tool->selection().front();
+    const auto node = m_selection_tool->get_first_selected_node();
+    const auto parent = node
+        ? node
+        : std::shared_ptr<erhe::scene::Node>{};
     const erhe::scene::Transform transform = parent
         ? parent->world_from_node_transform()
         : erhe::scene::Transform{};

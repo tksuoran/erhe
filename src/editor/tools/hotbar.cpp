@@ -9,7 +9,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/trs_tool.hpp"
 #include "tools/tools.hpp"
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -85,7 +85,7 @@ void Hotbar::initialize_component()
     const auto& primary_viewport_window = scene_builder->get_primary_viewport_window();
     const auto& scene_root              = scene_builder->get_scene_root();
 
-    m_rendertarget_node = scene_root->create_rendertarget_node(
+    m_rendertarget_mesh = scene_root->create_rendertarget_mesh(
         *m_components,
         *primary_viewport_window.get(),
         128 * 3,
@@ -93,14 +93,17 @@ void Hotbar::initialize_component()
         4000.0
     );
 
-    m_rendertarget_node->set_parent(scene_root->scene().root_node);
-
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
-        m_rendertarget_node.get(),
+        m_rendertarget_mesh.get(),
         "Hotbar Viewport",
         *m_components,
         false
     );
+
+    m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
+    m_rendertarget_node->set_parent(scene_root->scene().root_node);
+    m_rendertarget_node->attach(m_rendertarget_mesh);
+
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
     // Also registers rendertarget node
@@ -108,16 +111,14 @@ void Hotbar::initialize_component()
 
     this->set_viewport(m_rendertarget_imgui_viewport.get());
 
+    m_rendertarget_imgui_viewport->set_enabled(m_show);
+    m_rendertarget_mesh->set_visible(m_show);
     if (m_show)
     {
-        m_rendertarget_imgui_viewport->set_enabled(true);
-        m_rendertarget_node->node_data.visibility_mask |= erhe::scene::Node_visibility::visible;
         show();
     }
     else
     {
-        m_rendertarget_imgui_viewport->set_enabled(false);
-        m_rendertarget_node->node_data.visibility_mask &= ~erhe::scene::Node_visibility::visible;
         hide();
     }
 }
@@ -210,8 +211,8 @@ auto Hotbar::flags() -> ImGuiWindowFlags
 
 void Hotbar::on_begin()
 {
-    m_min_size[0] = static_cast<float>(m_rendertarget_node->width());
-    m_min_size[1] = static_cast<float>(m_rendertarget_node->height());
+    m_min_size[0] = static_cast<float>(m_rendertarget_mesh->width());
+    m_min_size[1] = static_cast<float>(m_rendertarget_mesh->height());
     m_max_size[0] = m_min_size[0];
     m_max_size[1] = m_min_size[1];
     ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
@@ -343,7 +344,15 @@ void Hotbar::imgui()
     const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window)
     {
-        update_node_transform(viewport_window->get_camera()->world_from_node());
+        const auto& camera = viewport_window->get_camera();
+        if (camera)
+        {
+            const auto* node = camera->get_node();
+            if (node != nullptr)
+            {
+                update_node_transform(node->world_from_node());
+            }
+        }
     }
 #endif
 }

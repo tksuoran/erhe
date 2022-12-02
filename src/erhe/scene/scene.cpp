@@ -275,60 +275,24 @@ void Scene::register_node(
 {
     ERHE_PROFILE_FUNCTION
 
-    {
 #ifndef NDEBUG
-        const auto i = std::find(flat_node_vector.begin(), flat_node_vector.end(), node);
-        if (i != flat_node_vector.end())
-        {
-            log->error("{} {} already in scene nodes", node->node_type(), node->name());
-        }
-        else
+    const auto i = std::find(flat_node_vector.begin(), flat_node_vector.end(), node);
+    if (i != flat_node_vector.end())
+    {
+        log->error("{} {} already in scene nodes", node->type_name(), node->name());
+    }
+    else
 #endif
-        {
-            ERHE_VERIFY(node->node_data.host == nullptr);
-            node->node_data.host = this->host;
-            flat_node_vector.push_back(node);
-            nodes_sorted = false;
-        }
-    }
-
-    auto mesh = as_mesh(node);
-    if (mesh)
     {
-        auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
-        if (mesh_layer)
-        {
-            mesh_layer->add(mesh);
-        }
-    }
-    auto light = as_light(node);
-    if (light)
-    {
-        auto light_layer = get_light_layer_by_id(light->layer_id);
-        if (light_layer)
-        {
-            light_layer->add(light);
-        }
-    }
-    auto camera = as_camera(node);
-    if (camera)
-    {
-#ifndef NDEBUG
-        const auto i = std::find(cameras.begin(), cameras.end(), camera);
-        if (i != cameras.end())
-        {
-            log->error("camera {} already in scene cameras", camera->name());
-        }
-        else
-#endif
-        {
-            cameras.push_back(camera);
-        }
+        ERHE_VERIFY(node->node_data.host == nullptr);
+        node->node_data.host = this->host;
+        flat_node_vector.push_back(node);
+        nodes_sorted = false;
     }
 
     ERHE_VERIFY(!node->parent().expired());
 
-    if ((node->node_data.flag_bits & Node_flag_bit::no_message) == 0)
+    if ((node->get_flag_bits() & Scene_item_flags::no_message) == 0)
     {
         send(
             Scene_message{
@@ -343,53 +307,20 @@ void Scene::unregister_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
+    const auto i = std::remove(flat_node_vector.begin(), flat_node_vector.end(), node);
+    if (i == flat_node_vector.end())
     {
-        const auto i = std::remove(flat_node_vector.begin(), flat_node_vector.end(), node);
-        if (i == flat_node_vector.end())
-        {
-            log->error("{} {} not in scene nodes", node->node_type(), node->name());
-        }
-        else
-        {
-            node->node_data.host = nullptr;
-            flat_node_vector.erase(i, flat_node_vector.end());
-        }
+        log->error("Node {} not in scene nodes", node->name());
     }
+    else
+    {
+        node->node_data.host = nullptr;
+        flat_node_vector.erase(i, flat_node_vector.end());
+    }
+
     sanity_check();
 
-    auto mesh = as_mesh(node);
-    if (mesh)
-    {
-        auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
-        if (mesh_layer)
-        {
-            mesh_layer->remove(mesh);
-        }
-    }
-    auto light = as_light(node);
-    if (light)
-    {
-        auto light_layer = get_light_layer_by_id(light->layer_id);
-        if (light_layer)
-        {
-            light_layer->remove(light);
-        }
-    }
-    auto camera = as_camera(node);
-    if (camera)
-    {
-        const auto i = std::remove(cameras.begin(), cameras.end(), camera);
-        if (i == cameras.end())
-        {
-            log->error("camera {} not in scene cameras", camera->name());
-        }
-        else
-        {
-            cameras.erase(i, cameras.end());
-        }
-    }
-
-    if ((node->node_data.flag_bits & Node_flag_bit::no_message) == 0)
+    if ((node->get_flag_bits() & Scene_item_flags::no_message) == 0)
     {
         send(
             Scene_message{
@@ -397,6 +328,83 @@ void Scene::unregister_node(
                 .lhs        = node
             }
         );
+    }
+}
+
+void Scene::register_camera(const std::shared_ptr<Camera>& camera)
+{
+#ifndef NDEBUG
+    const auto i = std::find(cameras.begin(), cameras.end(), camera);
+    if (i != cameras.end())
+    {
+        log->error("camera {} already in scene cameras", camera->name());
+    }
+    else
+#endif
+    {
+        cameras.push_back(camera);
+    }
+}
+
+void Scene::unregister_camera(const std::shared_ptr<Camera>& camera)
+{
+    ERHE_VERIFY(camera);
+    const auto i = std::remove(cameras.begin(), cameras.end(), camera);
+    if (i == cameras.end())
+    {
+        log->error("camera {} not in scene cameras", camera->name());
+    }
+    else
+    {
+        cameras.erase(i, cameras.end());
+    }
+}
+
+void Scene::register_mesh(const std::shared_ptr<Mesh>& mesh)
+{
+    ERHE_VERIFY(mesh);
+    auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
+    if (mesh_layer)
+    {
+        mesh_layer->add(mesh);
+    }
+}
+
+void Scene::unregister_mesh(const std::shared_ptr<Mesh>& mesh)
+{
+    ERHE_VERIFY(mesh);
+    auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
+    if (mesh_layer)
+    {
+        mesh_layer->remove(mesh);
+    }
+}
+
+void Scene::register_light(const std::shared_ptr<Light>& light)
+{
+    ERHE_VERIFY(light);
+    auto light_layer = get_light_layer_by_id(light->layer_id);
+    if (light_layer)
+    {
+        light_layer->add(light);
+    }
+    else
+    {
+        log->error("light {} layer not found", light->name());
+    }
+}
+
+void Scene::unregister_light(const std::shared_ptr<Light>& light)
+{
+    ERHE_VERIFY(light);
+    auto light_layer = get_light_layer_by_id(light->layer_id);
+    if (light_layer)
+    {
+        light_layer->remove(light);
+    }
+    else
+    {
+        log->error("light {} layer not found", light->name());
     }
 }
 

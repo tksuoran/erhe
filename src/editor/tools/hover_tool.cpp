@@ -241,13 +241,14 @@ void Hover_tool::tool_render(
     };
     if (entry.mesh)
     {
-        auto node_physics = get_physics_node(entry.mesh.get());
+        const auto* node = entry.mesh->get_node();
+        auto node_physics = get_node_physics(node);
         if (node_physics)
         {
             erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
             if (rigid_body)
             {
-                const glm::vec3 local_position = entry.mesh->transform_point_from_world_to_local(entry.position.value());
+                const glm::vec3 local_position = node->transform_point_from_world_to_local(entry.position.value());
                 const std::string text_line_3 = fmt::format(
                     "Position in {}: {}",
                     entry.mesh->name(),

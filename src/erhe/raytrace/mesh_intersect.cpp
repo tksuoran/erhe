@@ -84,7 +84,9 @@ auto intersect(
     float&                      out_v
 ) -> bool
 {
-    const auto mesh_from_world   = mesh.node_from_world();
+    const erhe::scene::Node* node = mesh.get_node();
+    ERHE_VERIFY(node != nullptr);
+    const auto mesh_from_world   = node->node_from_world();
     const vec3 origin_in_mesh    = vec3{mesh_from_world * vec4{origin_in_world, 1.0f}};
     const vec3 direction_in_mesh = vec3{mesh_from_world * vec4{direction_in_world, 0.0f}};
 

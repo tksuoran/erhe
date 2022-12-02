@@ -2,7 +2,7 @@
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 #include "task_queue.hpp"
 
@@ -81,10 +81,10 @@ using erhe::geometry::shapes::make_sphere;
 using erhe::geometry::shapes::make_torus;
 using erhe::geometry::shapes::torus_volume;
 using erhe::geometry::shapes::make_cylinder;
-using erhe::scene::Projection;
 using erhe::scene::Light;
 using erhe::scene::Node;
-using erhe::scene::Node_visibility;
+using erhe::scene::Projection;
+using erhe::scene::Scene_item_flags;
 using erhe::geometry::shapes::make_box;
 using erhe::primitive::Normal_style;
 using glm::mat3;
@@ -151,14 +151,15 @@ void Scene_builder::add_rendertarget_viewports(int count)
 
     if (count >= 1)
     {
-        auto rendertarget_node_1 = test_scene_root->create_rendertarget_node(
+        auto rendertarget_node_1 = std::make_shared<erhe::scene::Node>("RT Node 1");
+        auto rendertarget_mesh_1 = test_scene_root->create_rendertarget_mesh(
             *m_components,
             *primary_viewport_window.get(),
             1920,
             1080,
             2000.0
         );
-
+        rendertarget_node_1->attach(rendertarget_mesh_1);
         rendertarget_node_1->set_parent(test_scene_root->scene().root_node);
 
         rendertarget_node_1->set_world_from_node(
@@ -170,7 +171,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
         );
 
         auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_viewport>(
-            rendertarget_node_1.get(),
+            rendertarget_mesh_1.get(),
             "Rendertarget ImGui Viewport 1",
             *m_components
         );
@@ -197,7 +198,8 @@ void Scene_builder::add_rendertarget_viewports(int count)
             glm::vec3{-7.0f, 1.0f, 0.0f},
             glm::vec3{ 0.0f, 0.5f, 0.0f}
         );
-        camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
+        //auto* camera_node_b = camera_b->get_node();
+        camera_b->set_wireframe_color(glm::vec4{ 0.3f, 0.6f, 1.00f, 1.0f });
 
         const auto& viewport_windows = get<editor::Viewport_windows>();
         auto secondary_viewport_window = viewport_windows->create_viewport_window(
@@ -211,14 +213,15 @@ void Scene_builder::add_rendertarget_viewports(int count)
         );
         //secondary_viewport_window->set_post_processing_enable(false); // TODO Post processing currently only handles one viewport
 
-        auto rendertarget_node_2 = test_scene_root->create_rendertarget_node(
+        auto rendertarget_node_2 = std::make_shared<erhe::scene::Node>("RT Node 2");
+        auto rendertarget_mesh_2 = test_scene_root->create_rendertarget_mesh(
             *m_components,
             *primary_viewport_window.get(),
             1920,
             1080,
             2000.0
         );
-
+        rendertarget_node_2->attach(rendertarget_mesh_2);
         rendertarget_node_2->set_parent(test_scene_root->scene().root_node);
 
         rendertarget_node_2->set_world_from_node(
@@ -230,7 +233,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
         );
 
         auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_viewport>(
-            rendertarget_node_2.get(),
+            rendertarget_mesh_2.get(),
             "Rendertarget ImGui Viewport 2",
             *m_components
         );
@@ -258,20 +261,23 @@ auto Scene_builder::make_camera(
     vec3             look_at
 ) -> std::shared_ptr<erhe::scene::Camera>
 {
+    auto node = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
     auto camera = std::make_shared<erhe::scene::Camera>(name);
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 80.0f;
-
-    camera->set_parent(m_scene_root->scene().root_node);
+    camera->enable_flag_bits(Scene_item_flags::content);
+    node->attach(camera);
+    node->set_parent(m_scene_root->scene().root_node);
 
     const mat4 m = erhe::toolkit::create_look_at(
         position, // eye
         look_at,  // center
         vec3{0.0f, 1.0f,  0.0f}  // up
     );
-    camera->set_parent_from_node(m);
+    node->set_parent_from_node(m);
+    node->enable_flag_bits(Scene_item_flags::content);
 
     return camera;
 }
@@ -284,7 +290,7 @@ void Scene_builder::setup_cameras()
         vec3{0.0f, 0.5f, 0.0f}
     );
     camera_a->projection()->z_far = 64.0f;
-    camera_a->node_data.wireframe_color = glm::vec4{1.0f, 0.6f, 0.3f, 1.0f};
+    camera_a->set_wireframe_color(glm::vec4{1.0f, 0.6f, 0.3f, 1.0f});
 
     //const auto& camera_b = make_camera(
     //    "Camera B",
@@ -840,10 +846,16 @@ void Scene_builder::make_brushes()
                     .normal_style          = erhe::primitive::Normal_style::point_normals
                 }
             );
-            mesh->set_visibility_mask (Node_visibility::visible | Node_visibility::content);
-            mesh->set_parent_from_node(transform);
+            mesh->enable_flag_bits(
+                Scene_item_flags::visible |
+                Scene_item_flags::content
+            );
             mesh->mesh_data.layer_id = m_scene_root->layers().content()->id.get_id();
-            mesh->set_parent(m_scene_root->scene().root_node);
+
+            auto node = std::make_shared<erhe::scene::Node>(name);
+            node->attach              (mesh);
+            node->set_parent_from_node(transform);
+            node->set_parent          (m_scene_root->scene().root_node);
         };
 
         make_mesh_node("X ring", Transform{} );
@@ -885,7 +897,7 @@ void Scene_builder::make_brushes()
                                     .normal_style       = Normal_style::polygon_normals,
                                     .geometry_generator = [shared_geometry](){ return shared_geometry; },
                                     .density            = config.mass_scale,
-                                    .physics_enabled = configuration->physics.static_enable
+                                    .physics_enabled    = configuration->physics.static_enable
                                 },
                                 false
                             );
@@ -929,18 +941,18 @@ void Scene_builder::add_room()
     // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info
     {
-        .node_visibility_flags = Node_visibility::visible | Node_visibility::content | Node_visibility::id,
-        .scene_root            = m_scene_root.get(),
-        .world_from_node       = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
-        .material              = floor_material,
-        .scale                 = 1.0f
+        .mesh_flags      = Scene_item_flags::visible | Scene_item_flags::content | Scene_item_flags::id,
+        .scene_root      = m_scene_root.get(),
+        .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
+        .material        = floor_material,
+        .scale           = 1.0f
     };
 
-    auto floor_instance = m_floor_brush->make_instance(
+    auto floor_instance_node = m_floor_brush->make_instance(
         floor_brush_instance_create_info
     );
 
-    floor_instance.mesh->set_parent(m_scene_root->scene().root_node);
+    floor_instance_node->set_parent(m_scene_root->scene().root_node);
 }
 
 void Scene_builder::make_mesh_nodes()
@@ -1085,19 +1097,19 @@ void Scene_builder::make_mesh_nodes()
             //const auto& material = m_scene_root->materials().at(material_index);
             const Instance_create_info brush_instance_create_info
             {
-                .node_visibility_flags = (
-                    erhe::scene::Node_visibility::visible |
-                    erhe::scene::Node_visibility::content |
-                    erhe::scene::Node_visibility::id      |
-                    erhe::scene::Node_visibility::shadow_cast
+                .mesh_flags = (
+                    Scene_item_flags::visible |
+                    Scene_item_flags::content |
+                    Scene_item_flags::id      |
+                    Scene_item_flags::shadow_cast
                 ),
                 .scene_root      = m_scene_root.get(),
                 .world_from_node = erhe::toolkit::create_translation(x, y, z),
                 .material        = materials.at(material_index),
                 .scale           = 1.0f
             };
-            auto instance = brush->make_instance(brush_instance_create_info);
-            instance.mesh->set_parent(m_scene_root->scene().root_node);
+            auto instance_node = brush->make_instance(brush_instance_create_info);
+            instance_node->set_parent(m_scene_root->scene().root_node);
 
             m_scene_root->scene().sanity_check();
         }
@@ -1134,14 +1146,16 @@ void Scene_builder::make_cube_benchmark()
             {
                 const float z_rel = static_cast<float>(k) - static_cast<float>(z_count) * 0.5f;
                 const vec3 pos{scale * x_rel, 1.0f + scale * y_rel, scale * z_rel};
+                auto node = std::make_shared<erhe::scene::Node>();
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
-                mesh->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
                 mesh->mesh_data.layer_id = m_scene_root->layers().content()->id.get_id();
-                mesh->set_visibility_mask(
-                    Node_visibility::content |
-                    Node_visibility::shadow_cast
+                mesh->enable_flag_bits(
+                    Scene_item_flags::content |
+                    Scene_item_flags::shadow_cast
                 );
-                mesh->set_parent(m_scene_root->scene().root_node);
+                node->attach(mesh);
+                node->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
+                node->set_parent(m_scene_root->scene().root_node);
             }
         }
     }
@@ -1156,20 +1170,24 @@ auto Scene_builder::make_directional_light(
     const float            intensity
 ) -> std::shared_ptr<Light>
 {
+    auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
     auto light = std::make_shared<Light>(name);
     light->type      = Light::Type::directional;
     light->color     = color;
     light->intensity = intensity;
     light->range     = 0.0f;
     light->layer_id  = m_scene_root->layers().light()->id.get_id();
-    light->set_parent(m_scene_root->scene().root_node);
+    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
+    node->attach          (light);
+    node->set_parent      (m_scene_root->scene().root_node);
+    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
 
     const mat4 m = erhe::toolkit::create_look_at(
         position,                // eye
         vec3{0.0f, 0.0f, 0.0f},  // center
         vec3{0.0f, 1.0f, 0.0f}   // up
     );
-    light->set_parent_from_node(m);
+    node->set_parent_from_node(m);
 
     return light;
 }
@@ -1183,6 +1201,7 @@ auto Scene_builder::make_spot_light(
     const vec2             spot_cone_angle
 ) -> std::shared_ptr<Light>
 {
+    auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
     auto light = std::make_shared<Light>(name);
     light->type             = Light::Type::spot;
     light->color            = color;
@@ -1191,10 +1210,13 @@ auto Scene_builder::make_spot_light(
     light->inner_spot_angle = spot_cone_angle[0];
     light->outer_spot_angle = spot_cone_angle[1];
     light->layer_id         = m_scene_root->layers().light()->id.get_id();
-    light->set_parent(m_scene_root->scene().root_node);
+    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
+    node->attach          (light);
+    node->set_parent      (m_scene_root->scene().root_node);
+    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
 
     const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
-    light->set_parent_from_node(m);
+    node->set_parent_from_node(m);
 
     return light;
 }
@@ -1321,7 +1343,7 @@ void Scene_builder::animate_lights(const double time_d)
             vec3{0.0f, 1.0f, 0.0f} // up
         );
 
-        l->set_parent_from_node(m);
+        l->get_node()->set_parent_from_node(m);
 
         light_index++;
     }

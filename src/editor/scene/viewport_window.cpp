@@ -419,24 +419,30 @@ void Viewport_window::update_pointer_context(
 
         if (entry.mesh)
         {
-            const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
-            entry.geometry = primitive.source_geometry;
-            if (entry.geometry != nullptr)
+            const erhe::scene::Node* node = entry.mesh->get_node();
+            if (node != nullptr)
             {
-                const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(entry.local_index);
-                if (polygon_id < entry.geometry->get_polygon_count())
+                const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
+                entry.geometry = primitive.source_geometry;
+                if (entry.geometry != nullptr)
                 {
-                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
-                    auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
-                    if (
-                        (polygon_normals != nullptr) &&
-                        polygon_normals->has(polygon_id)
-                    )
+                    const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(entry.local_index);
+                    if (polygon_id < entry.geometry->get_polygon_count())
                     {
-                        const auto local_normal    = polygon_normals->get(polygon_id);
-                        const auto world_from_node = entry.mesh->world_from_node();
-                        entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                        SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
+                        SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
+                        auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(
+                            erhe::geometry::c_polygon_normals
+                        );
+                        if (
+                            (polygon_normals != nullptr) &&
+                            polygon_normals->has(polygon_id)
+                        )
+                        {
+                            const auto local_normal    = polygon_normals->get(polygon_id);
+                            const auto world_from_node = node->world_from_node();
+                            entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
+                            SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
+                        }
                     }
                 }
             }
@@ -444,12 +450,12 @@ void Viewport_window::update_pointer_context(
 
         using erhe::toolkit::test_all_rhs_bits_set;
 
-        const uint64_t visibility_mask = id_query.mesh ? entry.mesh->get_visibility_mask() : 0;
+        const uint64_t flags = id_query.mesh ? entry.mesh->get_flag_bits() : 0;
 
-        const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(visibility_mask, erhe::scene::Node_visibility::content     );
-        const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(visibility_mask, erhe::scene::Node_visibility::tool        );
-        const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(visibility_mask, erhe::scene::Node_visibility::brush       );
-        const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(visibility_mask, erhe::scene::Node_visibility::rendertarget);
+        const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::content     );
+        const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::tool        );
+        const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::brush       );
+        const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::rendertarget);
         SPDLOG_LOGGER_TRACE(
             log_controller_ray,
             "hover mesh = {} primitive = {} local index {} {}{}{}{}",
@@ -469,7 +475,7 @@ void Viewport_window::update_pointer_context(
         const auto scene_root = m_scene_root.lock();
         if (scene_root)
         {
-            scene_root->update_pointer_for_rendertarget_nodes();
+            scene_root->update_pointer_for_rendertarget_meshes();
         }
     }
     else

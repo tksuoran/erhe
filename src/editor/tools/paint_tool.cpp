@@ -209,7 +209,14 @@ void Paint_tool::paint(Scene_view* scene_view)
     }
 
     const glm::vec3 hover_position_in_world = content.position.value();
-    const glm::vec3 hover_position_in_mesh  = content.mesh->transform_point_from_world_to_local(hover_position_in_world);
+
+    const auto* node = content.mesh->get_node();
+    if (node == nullptr)
+    {
+        return;
+    }
+
+    const glm::vec3 hover_position_in_mesh = node->transform_point_from_world_to_local(hover_position_in_world);
 
     float                     max_distance_squared = std::numeric_limits<float>::max();
     erhe::geometry::Point_id  nearest_point_id     = 0;

@@ -27,13 +27,13 @@ enum class Control : unsigned int
 };
 
 class Frame_controller
-    : public erhe::scene::INode_attachment
+    : public erhe::scene::Node_attachment
 {
 public:
     Frame_controller();
 
-    // Implements INode_attachment
-    [[nodiscard]] auto node_attachment_type() const -> const char* override;
+    // Implements Node_attachment
+    [[nodiscard]] auto type_name() const -> const char* override;
     void handle_node_transform_update() override;
 
     // Public API
@@ -69,10 +69,10 @@ private:
     bool      m_transform_update{false};
 };
 
-auto is_frame_controller(const erhe::scene::INode_attachment* const attachment) -> bool;
-auto is_frame_controller(const std::shared_ptr<erhe::scene::INode_attachment>& attachment) -> bool;
-auto as_frame_controller(erhe::scene::INode_attachment* attachment) -> Frame_controller*;
-auto as_frame_controller(const std::shared_ptr<erhe::scene::INode_attachment>& attachment) -> std::shared_ptr<Frame_controller>;
+auto is_frame_controller(const erhe::scene::Node_attachment* const attachment) -> bool;
+auto is_frame_controller(const std::shared_ptr<erhe::scene::Node_attachment>& attachment) -> bool;
+auto as_frame_controller(erhe::scene::Node_attachment* attachment) -> Frame_controller*;
+auto as_frame_controller(const std::shared_ptr<erhe::scene::Node_attachment>& attachment) -> std::shared_ptr<Frame_controller>;
 
 auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 

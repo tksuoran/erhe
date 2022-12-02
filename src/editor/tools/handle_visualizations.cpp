@@ -86,7 +86,8 @@ void Handle_visualizations::update_mesh_visibility(
     const bool translate_x   = m_trs_tool.is_x_translate_active() && (handle == Handle::e_handle_translate_x);
     const bool translate_y   = m_trs_tool.is_y_translate_active() && (handle == Handle::e_handle_translate_y);
     const bool translate_z   = m_trs_tool.is_z_translate_active() && (handle == Handle::e_handle_translate_z);
-    mesh->set_visibility_mask(
+
+    mesh->set_visible(
         show &&
         (
             !m_hide_inactive ||
@@ -94,8 +95,6 @@ void Handle_visualizations::update_mesh_visibility(
             (translate_x || translate_y || translate_z) ||
             show_all
         )
-            ? (erhe::scene::Node_visibility::visible | erhe::scene::Node_visibility::tool | erhe::scene::Node_visibility::id)
-            : erhe::scene::Node_visibility::tool
     );
 
     const Mode mode = (active_handle == handle) || (translate_x || translate_y || translate_z)
@@ -135,7 +134,7 @@ auto Handle_visualizations::make_mesh(
 ) -> std::shared_ptr<erhe::scene::Mesh>
 {
     ERHE_PROFILE_FUNCTION
-
+    auto node = std::make_shared<erhe::scene::Node>(name);
     auto mesh = std::make_shared<erhe::scene::Mesh>(
         name,
         erhe::primitive::Primitive{
@@ -146,21 +145,27 @@ auto Handle_visualizations::make_mesh(
                 : erhe::primitive::Primitive_geometry{}
         }
     );
-    mesh->set_visibility_mask(erhe::scene::Node_visibility::tool);
 
+    mesh->enable_flag_bits(
+        //erhe::scene::Scene_item_flags::visible |
+        erhe::scene::Scene_item_flags::tool |
+        erhe::scene::Scene_item_flags::id
+    );
+
+    node->attach(mesh);
     if (part.raytrace_primitive)
     {
         auto node_raytrace = std::make_shared<Node_raytrace>(
             part.geometry,
             part.raytrace_primitive
         );
-        mesh->attach(node_raytrace);
+        node->attach(node_raytrace);
     }
 
     const auto scene_root    = m_trs_tool.get_tool_scene_root();
     const auto tool_layer_id = scene_root->layers().tool()->id.get_id();
     mesh->mesh_data.layer_id = tool_layer_id;
-    mesh->set_parent(m_tool_node);
+    node->set_parent(m_tool_node);
     return mesh;
 }
 
@@ -400,24 +405,24 @@ void Handle_visualizations::initialize(
     const auto rotate_y_neg_90  = Transform::create_rotation(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f});
     const auto rotate_y_pos_180 = Transform::create_rotation(-glm::pi<float>()       , glm::vec3{0.0f, 1.0f, 0.0f});
 
-    m_x_arrow_cylinder_mesh->set_parent_from_node(glm::mat4{1.0f});
-    m_x_arrow_neg_cone_mesh->set_parent_from_node(rotate_y_pos_180);
-    m_x_arrow_pos_cone_mesh->set_parent_from_node(glm::mat4{1.0f});
+    m_x_arrow_cylinder_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
+    m_x_arrow_neg_cone_mesh->get_node()->set_parent_from_node(rotate_y_pos_180);
+    m_x_arrow_pos_cone_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
 
-    m_y_arrow_cylinder_mesh->set_parent_from_node(rotate_z_pos_90);
-    m_y_arrow_neg_cone_mesh->set_parent_from_node(rotate_z_neg_90);
-    m_y_arrow_pos_cone_mesh->set_parent_from_node(rotate_z_pos_90);
-    m_z_arrow_cylinder_mesh->set_parent_from_node(rotate_y_neg_90);
-    m_z_arrow_neg_cone_mesh->set_parent_from_node(rotate_y_pos_90);
-    m_z_arrow_pos_cone_mesh->set_parent_from_node(rotate_y_neg_90);
+    m_y_arrow_cylinder_mesh->get_node()->set_parent_from_node(rotate_z_pos_90);
+    m_y_arrow_neg_cone_mesh->get_node()->set_parent_from_node(rotate_z_neg_90);
+    m_y_arrow_pos_cone_mesh->get_node()->set_parent_from_node(rotate_z_pos_90);
+    m_z_arrow_cylinder_mesh->get_node()->set_parent_from_node(rotate_y_neg_90);
+    m_z_arrow_neg_cone_mesh->get_node()->set_parent_from_node(rotate_y_pos_90);
+    m_z_arrow_pos_cone_mesh->get_node()->set_parent_from_node(rotate_y_neg_90);
 
-    m_xy_box_mesh          ->set_parent_from_node(glm::mat4{1.0f});
-    m_xz_box_mesh          ->set_parent_from_node(rotate_x_pos_90);
-    m_yz_box_mesh          ->set_parent_from_node(rotate_y_neg_90);
+    m_xy_box_mesh          ->get_node()->set_parent_from_node(glm::mat4{1.0f});
+    m_xz_box_mesh          ->get_node()->set_parent_from_node(rotate_x_pos_90);
+    m_yz_box_mesh          ->get_node()->set_parent_from_node(rotate_y_neg_90);
 
-    m_y_rotate_ring_mesh->set_parent_from_node(glm::mat4{1.0f});
-    m_x_rotate_ring_mesh->set_parent_from_node(rotate_z_pos_90);
-    m_z_rotate_ring_mesh->set_parent_from_node(rotate_x_pos_90);
+    m_y_rotate_ring_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
+    m_x_rotate_ring_mesh->get_node()->set_parent_from_node(rotate_z_pos_90);
+    m_z_rotate_ring_mesh->get_node()->set_parent_from_node(rotate_x_pos_90);
 
     update_visibility(false);
 }

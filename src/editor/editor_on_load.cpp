@@ -6,7 +6,7 @@
 #include "graphics/icon_set.hpp"
 #include "graphics/image_transfer.hpp"
 #include "operations/operation_stack.hpp"
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 
 #include "rendergraph/shadow_render_node.hpp"

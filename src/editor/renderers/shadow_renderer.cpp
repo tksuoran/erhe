@@ -271,10 +271,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.light_camera_viewport.height
     );
 
-    erhe::scene::Visibility_filter shadow_filter{
+    erhe::scene::Scene_item_filter shadow_filter{
         .require_all_bits_set           =
-            erhe::scene::Node_visibility::visible |
-            erhe::scene::Node_visibility::shadow_cast,
+            erhe::scene::Scene_item_flags::visible |
+            erhe::scene::Scene_item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u

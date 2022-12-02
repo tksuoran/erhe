@@ -23,6 +23,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
@@ -263,15 +264,19 @@ void Node_properties::light_properties(erhe::scene::Light& light) const
         ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 20000.0f, "%.3f", logarithmic);
         ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
 
-        auto* scene_root = reinterpret_cast<Scene_root*>(light.node_data.host);
-        if (scene_root != nullptr)
+        const auto* node = light.get_node();
+        if (node != nullptr)
         {
-            const auto& layers = scene_root->layers();
-            ImGui::ColorEdit3(
-                "Ambient",
-                &layers.light()->ambient_light.x,
-                ImGuiColorEditFlags_Float
-            );
+            auto* scene_root = reinterpret_cast<Scene_root*>(node->get_scene_host());
+            if (scene_root != nullptr)
+            {
+                const auto& layers = scene_root->layers();
+                ImGui::ColorEdit3(
+                    "Ambient",
+                    &layers.light()->ambient_light.x,
+                    ImGuiColorEditFlags_Float
+                );
+            }
         }
         ImGui::TreePop();
     }
@@ -285,7 +290,8 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
     //ERHE_VERIFY(mesh.node_data.host != nullptr);
 
     auto& mesh_data  = mesh.mesh_data;
-    auto* scene_root = reinterpret_cast<Scene_root*>(mesh.node_data.host);
+    const auto* node = mesh.get_node();
+    auto* scene_root = reinterpret_cast<Scene_root*>(node->get_scene_host());
     if (scene_root == nullptr)
     {
         ImGui::Text("Mesh host not set");
@@ -368,20 +374,20 @@ public:
 
 // Fork of DragScalar() so we can differentiate between drag and text edit
 auto custom_drag_scalar(
-    const char*      label,
-    void*            p_data,
-    float            v_speed = 1.0f,
-    float            min     = 0.0f,
-    float            max     = 0.0f,
-    const char*      format  = "%.3f"
+    const char* const label,
+    void* const       p_data,
+    const float       v_speed = 1.0f,
+    const float       min     = 0.0f,
+    const float       max     = 0.0f,
+    const char*       format  = "%.3f"
 ) -> Custom_drag_result
 {
     ERHE_PROFILE_FUNCTION
 
-    ImGuiDataType    data_type = ImGuiDataType_Float;
-    ImGuiSliderFlags flags = 0;
-    float*           p_min = &min;
-    float*           p_max = &max;
+    ImGuiDataType      data_type = ImGuiDataType_Float;
+    ImGuiSliderFlags   flags = 0;
+    const float* const p_min = &min;
+    const float* const p_max = &max;
 
     Custom_drag_result result;
 
@@ -391,10 +397,10 @@ auto custom_drag_scalar(
         return result;
     }
 
-    ImGuiContext& g = *GImGui;
+    ImGuiContext&     g     = *GImGui;
     const ImGuiStyle& style = g.Style;
-    const ImGuiID id = window->GetID(label);
-    const float w = ImGui::CalcItemWidth();
+    const ImGuiID     id    = window->GetID(label);
+    const float       w     = ImGui::CalcItemWidth();
 
     const ImVec2 label_size = ImGui::CalcTextSize(label, NULL, true);
     const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(w, label_size.y + style.FramePadding.y * 2.0f));
@@ -640,18 +646,6 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
         glm::vec3 euler_angles;
         glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
 
-        //if (ImGui::TreeNodeEx("Matrix", ImGuiTreeNodeFlags_SpanFullWidth))
-        //{
-        //    for (int row = 0; row < 4; row++)
-        //    {
-        //        const std::string label     = fmt::format("M{}", row);
-        //        glm::vec4         rowVector = glm::vec4{transform[0][row], transform[1][row], transform[2][row], transform[3][row]};
-        //        ImGui::InputFloat4(label.c_str(), &rowVector.x, "%.3f");
-        //        // TODO rowVector back to matrix?
-        //    }
-        //    ImGui::TreePop();
-        //}
-
         Value_edit_state edit_state;
         if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen))
         {
@@ -681,7 +675,6 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
         if (
             edit_state.value_changed ||
             edit_state.edit_ended
-            //(edit_state.edit_ended && node_state.touched)
         )
         {
             node_state.touched = true;
@@ -709,9 +702,9 @@ void Node_properties::transform_properties(erhe::scene::Node& node)
             m_operation_stack->push(
                 std::make_shared<Node_transform_operation>(
                     Node_transform_operation::Parameters{
-                        .node                    = node.shared_from_this(),
+                        .node                    = std::static_pointer_cast<erhe::scene::Node>(node.shared_from_this()),
                         .parent_from_node_before = node_state.initial_parent_from_node_transform,
-                        .parent_from_node_after  = new_parent_from_node//m_target_node->parent_from_node_transform()
+                        .parent_from_node_after  = new_parent_from_node
                     }
                 )
             );
@@ -752,6 +745,121 @@ namespace {
 
 }
 
+void Node_properties::node_physics_properties(Node_physics& node_physics)
+{
+    erhe::physics::IRigid_body* rigid_body = node_physics.rigid_body();
+    if (rigid_body == nullptr)
+    {
+        return;
+    }
+    if (!ImGui::TreeNodeEx("Physics", /*ImGuiTreeNodeFlags_DefaultOpen | */  ImGuiTreeNodeFlags_Framed))
+    {
+        return;
+    }
+
+    ImGui::Text("Rigid Body: %s", rigid_body->get_debug_label());
+    float           mass    = rigid_body->get_mass();
+    const glm::mat4 inertia = rigid_body->get_local_inertia();
+    if (ImGui::SliderFloat("Mass", &mass, 0.0f, 1000.0f)) {
+        rigid_body->set_mass_properties(mass, inertia);
+    }
+    float friction = rigid_body->get_friction();
+    if (ImGui::SliderFloat("Friction", &friction, 0.0f, 1.0f)) {
+        rigid_body->set_friction(friction);
+    }
+    float restitution = rigid_body->get_restitution();
+    if (ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f)) {
+        rigid_body->set_restitution(restitution);
+    }
+
+    // Static bodies don't have access to these properties, at least in Jolt
+    if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_static)
+    {
+        float angular_damping = rigid_body->get_angular_damping();
+        float linear_damping = rigid_body->get_linear_damping();
+        if (
+            ImGui::SliderFloat("Angular Dampening", &angular_damping, 0.0f, 1.0f) ||
+            ImGui::SliderFloat("Linear Dampening", &linear_damping, 0.0f, 1.0f)
+        )
+        {
+            rigid_body->set_damping(linear_damping, angular_damping);
+        }
+
+        {
+            const glm::mat4 local_inertia = rigid_body->get_local_inertia();
+            float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
+            ImGui::InputFloat3("Local Inertia", floats);
+            // TODO floats back to rigid body?
+        }
+    }
+
+    int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
+    if (
+        ImGui::Combo(
+            "Motion Mode",
+            &motion_mode,
+            erhe::physics::c_motion_mode_strings,
+            IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
+        )
+    )
+    {
+        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
+    }
+
+    ImGui::TreePop();
+}
+
+void Node_properties::attachment_properties(erhe::scene::Node_attachment& attachment)
+{
+    if (!ImGui::TreeNodeEx(attachment.type_name()))
+    {
+        return;
+    }
+
+    auto* const node_physics = as_physics(&attachment);
+    if (node_physics)
+    {
+        node_physics_properties(*node_physics);
+    }
+
+    const auto flag_bits = attachment.get_flag_bits();
+    bool show_debug_visualization = erhe::toolkit::test_all_rhs_bits_set(
+        flag_bits,
+        erhe::scene::Scene_item_flags::show_debug_visualizations
+    );
+    if (ImGui::Checkbox("Show Debug", &show_debug_visualization))
+    {
+        if (show_debug_visualization)
+        {
+            attachment.enable_flag_bits(erhe::scene::Scene_item_flags::show_debug_visualizations);
+        }
+        else
+        {
+            attachment.disable_flag_bits(erhe::scene::Scene_item_flags::show_debug_visualizations);
+        }
+    }
+
+    auto* const camera = as_camera(&attachment);
+    if (camera)
+    {
+        icamera_properties(*camera);
+    }
+
+    auto* const light = as_light(&attachment);
+    if (light)
+    {
+        light_properties(*light);
+    }
+
+    auto* const mesh = as_mesh(&attachment);
+    if (mesh)
+    {
+        mesh_properties(*mesh);
+    }
+
+    ImGui::TreePop();
+}
+
 void Node_properties::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -763,177 +871,91 @@ void Node_properties::imgui()
     }
 
     const auto& selection = m_selection_tool->selection();
-    for (const auto& node : selection)
+    for (const auto& item : selection)
     {
-        if (!node)
-        {
-            continue;
-        }
+        ERHE_VERIFY(item);
 
-        std::string name = node->name();
+        std::string name = item->name();
         if (ImGui::InputText("Name", &name, ImGuiInputTextFlags_EnterReturnsTrue))
         {
-            if (name != node->name())
+            if (name != item->name())
             {
-                node->set_name(name);
+                item->set_name(name);
             }
         }
 
-        std::shared_ptr<Node_physics> node_physics = get_physics_node(node.get());
-        if (node_physics)
+        if (ImGui::TreeNodeEx("Flags", /*ImGuiTreeNodeFlags_DefaultOpen |*/ ImGuiTreeNodeFlags_Framed))
         {
-            erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
-            if (rigid_body != nullptr)
-            {
-                if (ImGui::TreeNodeEx("Physics", /*ImGuiTreeNodeFlags_DefaultOpen | */  ImGuiTreeNodeFlags_Framed))
-                {
-                    ImGui::Text("Rigid Body: %s", rigid_body->get_debug_label());
-                    float           mass    = rigid_body->get_mass();
-                    const glm::mat4 inertia = rigid_body->get_local_inertia();
-                    if (ImGui::SliderFloat("Mass", &mass, 0.0f, 1000.0f)) {
-                        rigid_body->set_mass_properties(mass, inertia);
-                    }
-                    float friction = rigid_body->get_friction();
-                    if (ImGui::SliderFloat("Friction", &friction, 0.0f, 1.0f)) {
-                        rigid_body->set_friction(friction);
-                    }
-                    float restitution = rigid_body->get_restitution();
-                    if (ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f)) {
-                        rigid_body->set_restitution(restitution);
-                    }
-
-                    // Static bodies don't have access to these properties, at least in Jolt
-                    if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_static)
-                    {
-                        float angular_damping = rigid_body->get_angular_damping();
-                        float linear_damping = rigid_body->get_linear_damping();
-                        if (
-                            ImGui::SliderFloat("Angular Dampening", &angular_damping, 0.0f, 1.0f) ||
-                            ImGui::SliderFloat("Linear Dampening", &linear_damping, 0.0f, 1.0f)
-                        )
-                        {
-                            rigid_body->set_damping(linear_damping, angular_damping);
-                        }
-
-                        {
-                            const glm::mat4 local_inertia = rigid_body->get_local_inertia();
-                            float floats[4] = { local_inertia[0][0], local_inertia[1][1], local_inertia[2][2] };
-                            ImGui::InputFloat3("Local Inertia", floats);
-                            // TODO floats back to rigid body?
-                        }
-                    }
-
-                    int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
-                    if (
-                        ImGui::Combo(
-                            "Motion Mode",
-                            &motion_mode,
-                            erhe::physics::c_motion_mode_strings,
-                            IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
-                        )
-                    )
-                    {
-                        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
-                    }
-
-                    ImGui::TreePop();
-                }
-            }
-        }
-
-        if (ImGui::TreeNodeEx("Visibility", /*ImGuiTreeNodeFlags_DefaultOpen |*/ ImGuiTreeNodeFlags_Framed))
-        {
-            const uint64_t initial_visibility = node->get_visibility_mask();
-            uint64_t visibility = initial_visibility;
-            bool visible      = test_bits(visibility, erhe::scene::Node_visibility::visible     );
-            bool content      = test_bits(visibility, erhe::scene::Node_visibility::content     );
-            //bool shadow_cast  = test_bits(visibility, erhe::scene::Node_visibility::shadow_cast );
-            //bool id           = test_bits(visibility, erhe::scene::Node_visibility::id          );
-            bool tool         = test_bits(visibility, erhe::scene::Node_visibility::tool        );
-            //bool brush        = test_bits(visibility, erhe::scene::Node_visibility::brush       );
-            //bool selected     = test_bits(visibility, erhe::scene::Node_visibility::selected    );
-            //bool rendertarget = test_bits(visibility, erhe::scene::Node_visibility::rendertarget);
-            //bool controller   = test_bits(visibility, erhe::scene::Node_visibility::controller  );
+            const uint64_t flags = item->get_flag_bits();
+            bool visible     = test_bits(flags, erhe::scene::Scene_item_flags::visible     );
+            bool content     = test_bits(flags, erhe::scene::Scene_item_flags::content     );
+            bool shadow_cast = test_bits(flags, erhe::scene::Scene_item_flags::shadow_cast );
+            bool id          = test_bits(flags, erhe::scene::Scene_item_flags::id          );
+            bool tool        = test_bits(flags, erhe::scene::Scene_item_flags::tool        );
+            bool selected    = test_bits(flags, erhe::scene::Scene_item_flags::selected    );
             if (ImGui::Checkbox("Visible", &visible))
             {
-                if (visible)
-                {
-                    visibility |= erhe::scene::Node_visibility::visible;
-                }
-                else
-                {
-                    visibility &= ~erhe::scene::Node_visibility::visible;
-                }
+                item->set_visible(visible);
             }
             if (ImGui::Checkbox("Content", &content))
             {
-                if (content)
+                item->set_flag_bits(erhe::scene::Scene_item_flags::content, content);
+            }
+            if (ImGui::Checkbox("ID Render", &id))
+            {
+                item->set_flag_bits(erhe::scene::Scene_item_flags::id, id);
+            }
+            if (ImGui::Checkbox("Shadow Cast", &shadow_cast))
+            {
+                item->set_flag_bits(erhe::scene::Scene_item_flags::shadow_cast, shadow_cast);
+            }
+            if (ImGui::Checkbox("Selected", &selected))
+            {
+                if (selected)
                 {
-                    visibility |= erhe::scene::Node_visibility::content;
+                    m_selection_tool->add_to_selection(item);
                 }
                 else
                 {
-                    visibility &= ~erhe::scene::Node_visibility::content;
+                    m_selection_tool->remove_from_selection(item);
                 }
             }
             if (ImGui::Checkbox("Tool", &tool))
             {
-                if (tool)
-                {
-                    visibility |= erhe::scene::Node_visibility::tool;
-                }
-                else
-                {
-                    visibility &= ~erhe::scene::Node_visibility::tool;
-                }
-            }
-            if (visibility != initial_visibility)
-            {
-                node->set_visibility_mask(visibility);
+                item->set_flag_bits(erhe::scene::Scene_item_flags::tool, tool);
             }
             ImGui::TreePop();
         }
 
-        ImGui::ColorEdit4(
-            "Wireframe Color",
-            &node->node_data.wireframe_color.x,
-            ImGuiColorEditFlags_Float |
-            ImGuiColorEditFlags_NoInputs
-        );
-
-        const auto flag_bits = node->get_flag_bits();
-        bool show_debug_visualization = (flag_bits & erhe::scene::Node_flag_bit::show_debug_visualizations) == erhe::scene::Node_flag_bit::show_debug_visualizations;
-        if (ImGui::Checkbox("Show Debug", &show_debug_visualization))
+        glm::vec4 color = item->get_wireframe_color();
+        if (
+            ImGui::ColorEdit4(
+                "Item Color",
+                &color.x,
+                ImGuiColorEditFlags_Float |
+                ImGuiColorEditFlags_NoInputs
+            )
+        )
         {
-            if (show_debug_visualization)
-            {
-                node->set_flag_bits(flag_bits | erhe::scene::Node_flag_bit::show_debug_visualizations);
-            }
-            else
-            {
-                node->set_flag_bits(flag_bits & ~erhe::scene::Node_flag_bit::show_debug_visualizations);
-            }
+            item->set_wireframe_color(color);
         }
 
-        const auto& camera = as_camera(node);
-        if (camera)
+        const auto attachment = as_node_attachment(item);
+        if (attachment)
         {
-            icamera_properties(*camera.get());
+            attachment_properties(*attachment);
         }
 
-        const auto& light = as_light(node);
-        if (light)
+        const auto node = as_node(item);
+        if (node)
         {
-            light_properties(*light.get());
-        }
+            //for (auto& attachment : node->attachments())
+            //{
+            //    attachment_properties(*attachment);
+            //}
 
-        const auto& mesh = as_mesh(node);
-        if (mesh)
-        {
-            mesh_properties(*mesh.get());
+            transform_properties(*node.get());
         }
-
-        transform_properties(*node.get());
     }
 #endif
 }

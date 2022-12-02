@@ -2,7 +2,7 @@
 
 #include "rendertarget_imgui_viewport.hpp"
 #include "editor_log.hpp"
-#include "rendertarget_node.hpp"
+#include "rendertarget_mesh.hpp"
 #include "scene/viewport_window.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -28,7 +28,7 @@ namespace editor
 {
 
 Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
-    Rendertarget_node*                  rendertarget_node,
+    Rendertarget_mesh*                  rendertarget_mesh,
     const std::string_view              name,
     const erhe::components::Components& components,
     const bool                          imgui_ini
@@ -37,7 +37,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
         name,
         components.get<erhe::application::Imgui_renderer>()->get_font_atlas()
     }
-    , m_rendertarget_node{rendertarget_node}
+    , m_rendertarget_mesh{rendertarget_mesh}
     , m_configuration    {components.get<erhe::application::Configuration >()}
     , m_imgui_renderer   {components.get<erhe::application::Imgui_renderer>()}
     , m_imgui_windows    {components.get<erhe::application::Imgui_windows >()}
@@ -63,7 +63,10 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
 
     io.BackendPlatformUserData = this;
     io.BackendPlatformName     = "erhe rendertarget";
-    io.DisplaySize             = ImVec2{static_cast<float>(m_rendertarget_node->width()), static_cast<float>(m_rendertarget_node->height())};
+    io.DisplaySize             = ImVec2{
+        static_cast<float>(m_rendertarget_mesh->width()),
+        static_cast<float>(m_rendertarget_mesh->height())
+    };
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
     io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
 
@@ -87,9 +90,9 @@ template <typename T>
     return gsl::span<const T>(&value, 1);
 }
 
-[[nodiscard]] auto Rendertarget_imgui_viewport::rendertarget_node() -> Rendertarget_node*
+[[nodiscard]] auto Rendertarget_imgui_viewport::rendertarget_mesh() -> Rendertarget_mesh*
 {
-    return m_rendertarget_node;
+    return m_rendertarget_mesh;
 }
 
 [[nodiscard]] auto Rendertarget_imgui_viewport::get_scale_value() const -> float
@@ -104,16 +107,16 @@ template <typename T>
         "Rendertarget_imgui_viewport::begin_imgui_frame()"
     );
 
-    if (m_rendertarget_node == nullptr)
+    if (m_rendertarget_mesh == nullptr)
     {
         return false;
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_rendertarget_node->update_headset(*m_headset_view.get());
+    m_rendertarget_mesh->update_headset(*m_headset_view.get());
 #endif
 
-    const auto pointer = m_rendertarget_node->get_pointer();
+    const auto pointer = m_rendertarget_mesh->get_pointer();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (!m_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
@@ -224,15 +227,17 @@ template <typename T>
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
     {
-        const auto& pose                   = m_rendertarget_node->get_controller_pose();
-        const float trigger_value          = m_rendertarget_node->get_controller_trigger();
+        const auto* node                   = m_rendertarget_mesh->get_node();
+        ERHE_VERIFY(node != nullptr);
+        const auto& pose                   = m_rendertarget_mesh->get_controller_pose();
+        const float trigger_value          = m_rendertarget_mesh->get_controller_trigger();
         const auto  controller_orientation = glm::mat4_cast(pose.orientation);
         const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
         const bool  trigger                = trigger_value > 0.5f;
 
         const auto intersection = erhe::toolkit::intersect_plane<float>(
-            glm::vec3{m_rendertarget_node->direction_in_world()},
-            glm::vec3{m_rendertarget_node->position_in_world()},
+            glm::vec3{node->direction_in_world()},
+            glm::vec3{node->position_in_world()},
             pose.position,
             controller_direction
         );
@@ -240,7 +245,7 @@ template <typename T>
         if (intersection.has_value())
         {
             const auto world_position      = pose.position + intersection.value() * controller_direction;
-            const auto window_position_opt = m_rendertarget_node->world_to_window(world_position);
+            const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
             if (window_position_opt.has_value())
             {
                 if (!has_cursor())
@@ -336,10 +341,10 @@ void Rendertarget_imgui_viewport::execute_rendergraph_node()
 
     erhe::application::Scoped_imgui_context imgui_context(imgui_windows, imgui_viewport);
 
-    m_rendertarget_node->bind();
-    m_rendertarget_node->clear(m_clear_color);
+    m_rendertarget_mesh->bind();
+    m_rendertarget_mesh->clear(m_clear_color);
     m_imgui_renderer->render_draw_data();
-    m_rendertarget_node->render_done();
+    m_rendertarget_mesh->render_done();
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_texture(
@@ -351,7 +356,7 @@ auto Rendertarget_imgui_viewport::get_consumer_input_texture(
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return m_rendertarget_node->texture();
+    return m_rendertarget_mesh->texture();
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
@@ -363,7 +368,7 @@ auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return m_rendertarget_node->framebuffer();
+    return m_rendertarget_mesh->framebuffer();
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
@@ -378,8 +383,8 @@ auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
     return erhe::scene::Viewport{
         .x      = 0,
         .y      = 0,
-        .width  = static_cast<int>(m_rendertarget_node->width()),
-        .height = static_cast<int>(m_rendertarget_node->height())
+        .width  = static_cast<int>(m_rendertarget_mesh->width()),
+        .height = static_cast<int>(m_rendertarget_mesh->height())
         // .reverse_depth = false // unused
     };
 }
@@ -396,8 +401,8 @@ auto Rendertarget_imgui_viewport::get_producer_output_viewport(
     return erhe::scene::Viewport{
         .x      = 0,
         .y      = 0,
-        .width  = static_cast<int>(m_rendertarget_node->width()),
-        .height = static_cast<int>(m_rendertarget_node->height())
+        .width  = static_cast<int>(m_rendertarget_mesh->width()),
+        .height = static_cast<int>(m_rendertarget_mesh->height())
         // .reverse_depth = false // unused
     };
 }

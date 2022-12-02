@@ -6,6 +6,7 @@
 #include "erhe/physics/iworld.hpp"
 #include "erhe/physics/physics_log.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -15,7 +16,7 @@ namespace editor
 using erhe::physics::IRigid_body_create_info;
 using erhe::physics::IRigid_body;
 using erhe::physics::Motion_mode;
-using erhe::scene::INode_attachment;
+using erhe::scene::Node_attachment;
 
 Node_physics::Node_physics(
     const IRigid_body_create_info& create_info
@@ -30,8 +31,8 @@ Node_physics::Node_physics(
     , m_rigid_body     {IRigid_body::create_rigid_body_shared(create_info, this)}
     , m_collision_shape{create_info.collision_shape}
 {
+    enable_flag_bits(erhe::scene::Scene_item_flags::physics);
     log_physics->trace("Created Node_physics {}", create_info.debug_label);
-    m_flag_bits |= INode_attachment::c_flag_bit_is_physics;
 }
 
 Node_physics::~Node_physics() noexcept
@@ -39,7 +40,7 @@ Node_physics::~Node_physics() noexcept
     set_node(nullptr);
 }
 
-auto Node_physics::node_attachment_type() const -> const char*
+auto Node_physics::type_name() const -> const char*
 {
     return "Node_physics";
 }
@@ -231,50 +232,66 @@ auto Node_physics::rigid_body() const -> const IRigid_body*
     return m_rigid_body.get();
 }
 
-auto is_physics(const INode_attachment* const attachment) -> bool
+auto is_physics(const erhe::scene::Scene_item* const scene_item) -> bool
 {
-    if (attachment == nullptr)
+    if (scene_item == nullptr)
     {
         return false;
     }
-    return (attachment->flag_bits() & INode_attachment::c_flag_bit_is_physics) == INode_attachment::c_flag_bit_is_physics;
+    using namespace erhe::toolkit;
+    return test_all_rhs_bits_set(
+        scene_item->get_flag_bits(),
+        erhe::scene::Scene_item_flags::physics
+    );
 }
 
-auto is_physics(const std::shared_ptr<INode_attachment>& attachment) -> bool
+auto is_physics(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool
 {
-    return is_physics(attachment.get());
+    return is_physics(scene_item.get());
 }
 
-auto as_physics(INode_attachment* attachment) -> Node_physics*
+auto as_physics(erhe::scene::Scene_item* scene_item) -> Node_physics*
 {
-    if (attachment == nullptr)
+    if (scene_item == nullptr)
     {
         return nullptr;
     }
-    if ((attachment->flag_bits() & INode_attachment::c_flag_bit_is_physics) == 0)
+    using namespace erhe::toolkit;
+    if (
+        !test_all_rhs_bits_set(
+            scene_item->get_flag_bits(),
+            erhe::scene::Scene_item_flags::physics
+        )
+    )
     {
         return nullptr;
     }
-    return reinterpret_cast<Node_physics*>(attachment);
+    return reinterpret_cast<Node_physics*>(scene_item);
 }
 
 auto as_physics(
-    const std::shared_ptr<INode_attachment>& attachment
+    const std::shared_ptr<erhe::scene::Scene_item>& scene_item
 ) -> std::shared_ptr<Node_physics>
 {
-    if (!attachment)
+    if (!scene_item)
     {
         return {};
     }
-    if ((attachment->flag_bits() & INode_attachment::c_flag_bit_is_physics) == 0)
+    using namespace erhe::toolkit;
+    if (
+        !test_all_rhs_bits_set(
+            scene_item->get_flag_bits(),
+            erhe::scene::Scene_item_flags::physics
+        )
+    )
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Node_physics>(attachment);
+    return std::dynamic_pointer_cast<Node_physics>(scene_item);
 }
 
-auto get_physics_node(
-    erhe::scene::Node* node
+auto get_node_physics(
+    const erhe::scene::Node* node
 ) -> std::shared_ptr<Node_physics>
 {
     for (const auto& attachment : node->attachments())

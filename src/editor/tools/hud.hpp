@@ -7,11 +7,16 @@
 
 #include <glm/glm.hpp>
 
+namespace erhe::scene
+{
+    class Node;
+};
+
 namespace editor
 {
 
 class Rendertarget_imgui_viewport;
-class Rendertarget_node;
+class Rendertarget_mesh;
 class Viewport_windows;
 
 class Hud;
@@ -65,7 +70,8 @@ private:
 
     std::shared_ptr<Viewport_windows> m_viewport_windows;
 
-    std::shared_ptr<Rendertarget_node>           m_rendertarget_node;
+    std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
+    std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
     float m_x           {-0.09f};
     float m_y           { 0.0f};

@@ -30,17 +30,10 @@ auto Node_operation::describe() const -> std::string
         ss << entry.node->name();
         using erhe::scene::Node_data;
         const auto changed = Node_data::diff_mask(entry.before, entry.after);
-        if (changed & Node_data::bit_transform      ) ss << " transform";
-        if (changed & Node_data::bit_host           ) ss << " host";
-        if (changed & Node_data::bit_parent         ) ss << " parent";
-        if (changed & Node_data::bit_children       ) ss << " children";
-        if (changed & Node_data::bit_attachments    ) ss << " attachments";
-        if (changed & Node_data::bit_visibility_mask) ss << " visibility";
-        if (changed & Node_data::bit_flag_bits      ) ss << " flag-bits";
-        if (changed & Node_data::bit_depth          ) ss << " depth";
-        if (changed & Node_data::bit_wireframe_color) ss << " wireframe-color";
-        if (changed & Node_data::bit_name           ) ss << " name";
-        if (changed & Node_data::bit_label          ) ss << " label";
+        if (changed & Node_data::bit_transform) ss << " transform";
+        if (changed & Node_data::bit_host     ) ss << " host";
+        if (changed & Node_data::bit_parent   ) ss << " parent";
+        if (changed & Node_data::bit_depth    ) ss << " depth";
     }
     return ss.str();
 }
@@ -69,6 +62,80 @@ void Node_operation::add_entry(Entry&& entry)
 {
     m_entries.emplace_back(entry);
 }
+
+// ----------------------------------------------------------------------------
+
+auto Attach_operation::describe() const -> std::string
+{
+    return fmt::format(
+        "Attach_operation(attachment = {} {}, host node before = {}, host node after = {})",
+        m_attachment->type_name(),
+        m_attachment->name(),
+        m_host_node_before->name(),
+        m_host_node_after->name()
+    );
+}
+
+Attach_operation::Attach_operation() = default;
+
+Attach_operation::Attach_operation(
+    const std::shared_ptr<erhe::scene::Node_attachment>& attachment,
+    const std::shared_ptr<erhe::scene::Node>&            host_node
+)
+    : m_attachment     {attachment}
+    , m_host_node_after{host_node}
+{
+}
+
+void Attach_operation::execute(const Operation_context& context)
+{
+    log_operations->trace("Op Execute {}", describe());
+
+    m_host_node_before = std::static_pointer_cast<erhe::scene::Node>(
+        m_attachment->get_node()->shared_from_this()
+    );
+    m_host_node_before->detach(m_attachment.get());
+
+    if (m_host_node_after)
+    {
+        m_host_node_after->attach(m_attachment);
+    }
+
+    if (context.components != nullptr)
+    {
+        const auto& selection_tool = context.components->get<Selection_tool>();
+        if (selection_tool)
+        {
+            selection_tool->sanity_check();
+        }
+    }
+}
+
+void Attach_operation::undo(const Operation_context& context)
+{
+    log_operations->trace("Op Undo {}", describe());
+
+    m_host_node_after = std::static_pointer_cast<erhe::scene::Node>(
+        m_attachment->get_node()->shared_from_this()
+    );
+    m_host_node_after->detach(m_attachment.get());
+
+    if (m_host_node_before)
+    {
+        m_host_node_before->attach(m_attachment);
+    }
+
+    if (context.components != nullptr)
+    {
+        const auto& selection_tool = context.components->get<Selection_tool>();
+        if (selection_tool)
+        {
+            selection_tool->sanity_check();
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
 
 auto Node_attach_operation::describe() const -> std::string
 {
@@ -110,7 +177,7 @@ void Node_attach_operation::execute(const Operation_context& context)
         m_parent_after_index = m_place_before_node
             ? m_place_before_node->get_index_in_parent()
             : m_place_after_node
-                ? m_place_after_node ->get_index_in_parent() + 1
+                ? m_place_after_node->get_index_in_parent() + 1
                 : m_parent_after->child_count();
 
         m_child_node->set_parent(m_parent_after, m_parent_after_index);
@@ -155,7 +222,7 @@ void Node_attach_operation::undo(const Operation_context& context)
     }
 }
 
-//////
+// ----------------------------------------------------------------------------
 
 Node_reposition_in_parent_operation::Node_reposition_in_parent_operation() = default;
 

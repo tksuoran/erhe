@@ -20,9 +20,8 @@ namespace editor
 {
 
 class Node_physics
-    : public erhe::scene::INode_attachment
+    : public erhe::scene::Node_attachment
     , public erhe::physics::IMotion_state
-    , public std::enable_shared_from_this<Node_physics>
 {
 public:
     explicit Node_physics(
@@ -30,8 +29,10 @@ public:
     );
     ~Node_physics() noexcept override;
 
-    // Implements INode_attachment
-    [[nodiscard]] auto node_attachment_type() const -> const char* override;
+    // Implements Scene_item
+    [[nodiscard]] auto type_name() const -> const char* override;
+
+    // Implements Node_attachment
     void handle_node_scene_host_update(
         erhe::scene::Scene_host* old_scene_host,
         erhe::scene::Scene_host* new_scene_host
@@ -50,9 +51,9 @@ public:
     [[nodiscard]] auto rigid_body         () const -> const erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_world_from_node() const -> erhe::physics::Transform;
 
-    void set_world_from_node     (const glm::mat4& world_from_node);
-    void set_world_from_node     (const erhe::physics::Transform world_from_node);
-    void set_rigidbody_from_node (const erhe::physics::Transform rigidbody_from_node);
+    void set_world_from_node    (const glm::mat4& world_from_node);
+    void set_world_from_node    (const erhe::physics::Transform world_from_node);
+    void set_rigidbody_from_node(const erhe::physics::Transform rigidbody_from_node);
 
 private:
     erhe::physics::IWorld*                           m_physics_world      {nullptr};
@@ -64,11 +65,11 @@ private:
     bool                                             m_transform_change_from_physics{false};
 };
 
-auto is_physics(const erhe::scene::INode_attachment* const attachment) -> bool;
-auto is_physics(const std::shared_ptr<erhe::scene::INode_attachment>& attachment) -> bool;
-auto as_physics(erhe::scene::INode_attachment* attachment) -> Node_physics*;
-auto as_physics(const std::shared_ptr<erhe::scene::INode_attachment>& attachment) -> std::shared_ptr<Node_physics>;
+auto is_physics(const erhe::scene::Scene_item* const scene_item) -> bool;
+auto is_physics(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool;
+auto as_physics(erhe::scene::Scene_item* scene_item) -> Node_physics*;
+auto as_physics(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> std::shared_ptr<Node_physics>;
 
-auto get_physics_node(erhe::scene::Node* node) -> std::shared_ptr<Node_physics>;
+auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>;
 
 } // namespace editor

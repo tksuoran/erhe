@@ -1398,6 +1398,13 @@ void Line_renderer::render(
         return;
     }
 
+    const auto* camera_node = camera.get_node();
+    if (camera_node == nullptr)
+    {
+        return;
+    }
+
+
     ERHE_PROFILE_FUNCTION
     ERHE_PROFILE_GPU_SCOPE(c_line_renderer_render)
 
@@ -1407,7 +1414,7 @@ void Line_renderer::render(
 
     const auto  projection_transforms  = camera.projection_transforms(viewport);
     const mat4  clip_from_world        = projection_transforms.clip_from_world.matrix();
-    const vec4  view_position_in_world = camera.position_in_world();
+    const vec4  view_position_in_world = camera_node->position_in_world();
     const auto  fov_sides              = camera.projection()->get_fov_sides(viewport);
     auto* const view_buffer            = &current_frame_resources().view_buffer;
     const auto  view_gpu_data          = view_buffer->map();

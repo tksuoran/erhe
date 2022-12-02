@@ -40,6 +40,27 @@ private:
     std::vector<Entry> m_entries;
 };
 
+class Attach_operation
+    : public IOperation
+{
+public:
+    Attach_operation();
+    Attach_operation(
+        const std::shared_ptr<erhe::scene::Node_attachment>& attachment,
+        const std::shared_ptr<erhe::scene::Node>&            host_node
+    );
+
+    // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
+    void execute(const Operation_context& context) override;
+    void undo   (const Operation_context& context) override;
+
+private:
+    std::shared_ptr<erhe::scene::Node_attachment> m_attachment;
+    std::shared_ptr<erhe::scene::Node>            m_host_node_before;
+    std::shared_ptr<erhe::scene::Node>            m_host_node_after;
+};
+
 class Node_attach_operation
     : public IOperation
 {

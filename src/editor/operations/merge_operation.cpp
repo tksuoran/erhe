@@ -72,14 +72,21 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             continue;
         }
 
+        auto* node = mesh->get_node();
+        if (node == nullptr)
+        {
+            continue;
+        }
+
         mat4 transform;
-        auto node_physics  = get_physics_node(mesh.get());
-        auto node_raytrace = get_raytrace    (mesh.get());
+        const auto node_physics  = get_node_physics(node);
+        const auto node_raytrace = get_raytrace    (node);
 
         //rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
         Entry source_entry{
             .mesh          = mesh,
-            .before_parent = mesh->parent().lock(),
+            .node          = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this()),
+            .before_parent = node->parent().lock(),
             .node_physics  = node_physics,
             .node_raytrace = node_raytrace
         };
@@ -88,8 +95,8 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
         if (first_mesh)
         {
-            scene_root                = reinterpret_cast<Scene_root*>(mesh->node_data.host);
-            reference_node_from_world = mesh->node_from_world();
+            scene_root                = reinterpret_cast<Scene_root*>(node->node_data.host);
+            reference_node_from_world = node->node_from_world();
             transform                 = mat4{1};
             first_mesh                = false;
             m_selection_after.push_back(mesh);
@@ -97,7 +104,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
         else
         {
-            transform = reference_node_from_world * mesh->world_from_node();
+            transform = reference_node_from_world * node->world_from_node();
         }
 
         if (node_physics)
@@ -146,7 +153,9 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     if (!compound_shape_create_info.children.empty())
     {
         ERHE_VERIFY(scene_root != nullptr);
-        const auto& combined_collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(compound_shape_create_info);
+        const auto& combined_collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(
+            compound_shape_create_info
+        );
         auto& physics_world = scene_root->physics_world();
 
         const erhe::physics::IRigid_body_create_info rigid_body_create_info{
@@ -191,7 +200,7 @@ void Merge_operation::execute(const Operation_context&)
         return;
     }
 
-    auto* const scene_root = reinterpret_cast<Scene_root*>(m_sources.front().mesh->node_data.host);
+    auto* const scene_root = reinterpret_cast<Scene_root*>(m_sources.front().node->node_data.host);
     if (scene_root == nullptr)
     {
         return;
@@ -204,44 +213,63 @@ void Merge_operation::execute(const Operation_context&)
     for (const auto& entry : m_sources)
     {
         const auto& mesh = entry.mesh;
+
+        if (entry.node == nullptr)
+        {
+            continue;
+        }
+
+        erhe::scene::Node* node = entry.node.get();
+
         if (first_entry)
         {
             // For first mesh: Replace mesh primitives
             mesh->mesh_data.primitives = m_combined.primitives;
 
-            auto old_node_physics = get_physics_node(mesh.get());
+            auto old_mesh = erhe::scene::get_mesh(node);
+            if (old_mesh)
+            {
+                node->detach(old_mesh.get());
+            }
+            if (entry.mesh)
+            {
+                node->attach(m_combined.mesh);
+            }
+
+            auto old_node_physics = get_node_physics(node);
             if (old_node_physics)
             {
-                mesh->detach(old_node_physics.get());
+                node->detach(old_node_physics.get());
             }
             if (m_combined.node_physics)
             {
-                mesh->attach(m_combined.node_physics);
+                node->attach(m_combined.node_physics);
             }
 
-            auto old_node_raytrace = get_raytrace(mesh.get());
+            auto old_node_raytrace = get_raytrace(node);
             if (old_node_raytrace)
             {
-                mesh->detach(old_node_raytrace.get());
+                node->detach(old_node_raytrace.get());
             }
             if (m_combined.node_raytrace)
             {
-                mesh->attach(m_combined.node_raytrace);
+                node->attach(m_combined.node_raytrace);
             }
 
             first_entry = false;
         }
         else
         {
-            if (entry.node_physics)
-            {
-                mesh->detach(entry.node_physics.get());
-            }
-            if (entry.node_raytrace)
-            {
-                mesh->detach(entry.node_raytrace.get());
-            }
-            mesh->set_parent({});
+            //// entry.node->detach(entry.mesh.get());
+            //// if (entry.node_physics)
+            //// {
+            ////     entry.node->detach(entry.node_physics.get());
+            //// }
+            //// if (entry.node_raytrace)
+            //// {
+            ////     entry.node->detach(entry.node_raytrace.get());
+            //// }
+            entry.node->set_parent({});
         }
     }
     m_parameters.selection_tool->set_selection(m_selection_after);
@@ -259,9 +287,7 @@ void Merge_operation::undo(const Operation_context&)
         return;
     }
 
-    auto* const scene_root = reinterpret_cast<Scene_root*>(
-        m_sources.front().mesh->node_data.host
-    );
+    auto* const scene_root = reinterpret_cast<Scene_root*>(m_sources.front().node->node_data.host);
     if (scene_root == nullptr)
     {
         return;
@@ -277,42 +303,54 @@ void Merge_operation::undo(const Operation_context&)
         auto& mesh = entry.mesh;
         mesh->mesh_data.primitives = entry.primitives;
 
+        erhe::scene::Node* node = entry.node.get();
+
         if (first_entry)
         {
             first_entry = false;
 
-            auto old_node_physics = get_physics_node(mesh.get());
+            auto old_mesh = erhe::scene::get_mesh(node);
+            if (old_mesh)
+            {
+                node->detach(old_mesh.get());
+            }
+            if (entry.mesh)
+            {
+                node->attach(entry.mesh);
+            }
+
+            auto old_node_physics = get_node_physics(node);
             if (old_node_physics)
             {
-                mesh->detach(old_node_physics.get());
+                node->detach(old_node_physics.get());
             }
             if (entry.node_physics)
             {
-                mesh->attach(entry.node_physics);
+                node->attach(entry.node_physics);
             }
 
-            auto old_node_raytrace = get_raytrace(mesh.get());
+            auto old_node_raytrace = get_raytrace(node);
             if (old_node_raytrace)
             {
-                mesh->detach(old_node_physics.get());
+                node->detach(old_node_physics.get());
             }
             if (entry.node_raytrace)
             {
-                mesh->attach(entry.node_raytrace);
+                node->attach(entry.node_raytrace);
             }
         }
         else
         {
             // For non-first meshes:
-            if (entry.node_physics)
-            {
-                mesh->attach(entry.node_physics);
-            }
-            if (entry.node_raytrace)
-            {
-                mesh->attach(entry.node_raytrace);
-            }
-            mesh->set_parent(entry.before_parent);
+            //if (entry.node_physics)
+            //{
+            //    mesh->attach(entry.node_physics);
+            //}
+            //if (entry.node_raytrace)
+            //{
+            //    mesh->attach(entry.node_raytrace);
+            //}
+            node->set_parent(entry.before_parent);
         }
     }
     scene.nodes_sorted = false;
