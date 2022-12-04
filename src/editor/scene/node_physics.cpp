@@ -40,6 +40,11 @@ Node_physics::~Node_physics() noexcept
     set_node(nullptr);
 }
 
+auto Node_physics::static_type_name() -> const char*
+{
+    return "Node_physics";
+}
+
 auto Node_physics::type_name() const -> const char*
 {
     return "Node_physics";
@@ -287,7 +292,7 @@ auto as_physics(
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Node_physics>(scene_item);
+    return std::static_pointer_cast<Node_physics>(scene_item);
 }
 
 auto get_node_physics(

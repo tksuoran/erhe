@@ -25,7 +25,7 @@ static const std::string empty_string{};
 {
     if (mesh)
     {
-        return mesh->name();
+        return mesh->get_name();
     }
     if (grid)
     {

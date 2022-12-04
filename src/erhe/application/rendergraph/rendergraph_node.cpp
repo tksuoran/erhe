@@ -31,7 +31,7 @@ Rendergraph_node::~Rendergraph_node()
     SPDLOG_LOGGER_TRACE(
         log_rendergraph,
         "{} Rendergraph_node::get_input(resource_routing = {}, key = {}, depth = {})",
-        name(),
+        get_name(),
         c_str(resource_routing),
         key,
         depth
@@ -55,7 +55,7 @@ Rendergraph_node::~Rendergraph_node()
         return &*i;
     }
 
-    log_rendergraph->error("Node '{}' input for key '{}' is not registered", name(), key);
+    log_rendergraph->error("Node '{}' input for key '{}' is not registered", get_name(), key);
     return nullptr;
 }
 
@@ -67,20 +67,20 @@ Rendergraph_node::~Rendergraph_node()
 {
     if (!inputs_allowed())
     {
-        log_rendergraph->error("Node '{}' inputs are not allowed ('{}')", name(), key);
+        log_rendergraph->error("Node '{}' inputs are not allowed ('{}')", get_name(), key);
         return std::weak_ptr<Rendergraph_node>{};
     }
 
     const auto* input = get_input(resource_routing, key, depth + 1);
     if (input == nullptr)
     {
-        log_rendergraph->error("Node '{}' input for key '{}' is not registered", name(), key);
+        log_rendergraph->error("Node '{}' input for key '{}' is not registered", get_name(), key);
         return std::weak_ptr<Rendergraph_node>{};
     }
 
     if (input->producer_nodes.empty())
     {
-        //log_rendergraph->warning("Node '{}' input for key '{}' is not connected", name(), key);
+        //log_rendergraph->warning("Node '{}' input for key '{}' is not connected", get_name(), key);
         return std::weak_ptr<Rendergraph_node>{};
     }
 
@@ -134,7 +134,7 @@ auto Rendergraph_node::get_consumer_input_viewport(
     SPDLOG_LOGGER_TRACE(
         log_rendergraph,
         "{} Rendergraph_node::get_output(resource_routing = {}, key = {}, depth = {})",
-        name(),
+        get_name(),
         c_str(resource_routing),
         key,
         depth
@@ -158,7 +158,7 @@ auto Rendergraph_node::get_consumer_input_viewport(
         return &*i;
     };
 
-    log_rendergraph->error("Node '{}' output for key '{}' is not registered", name(), key);
+    log_rendergraph->error("Node '{}' output for key '{}' is not registered", get_name(), key);
     return nullptr;
 }
 
@@ -170,20 +170,20 @@ auto Rendergraph_node::get_consumer_input_viewport(
 {
     if (!outputs_allowed())
     {
-        log_rendergraph->error("Node '{}' outputs are not allowed ('{}')", name(), key);
+        log_rendergraph->error("Node '{}' outputs are not allowed ('{}')", get_name(), key);
         return std::weak_ptr<Rendergraph_node>{};
     }
 
     const auto* output = get_output(resource_routing, key, depth + 1);
     if (output == nullptr)
     {
-        log_rendergraph->error("Node '{}' output for key '{}' is not registered", name(), key);
+        log_rendergraph->error("Node '{}' output for key '{}' is not registered", get_name(), key);
         return std::weak_ptr<Rendergraph_node>{};
     }
 
     if (output->consumer_nodes.empty())
     {
-        log_rendergraph->error("Node '{}' output for key '{}' is not connected", name(), key);
+        log_rendergraph->error("Node '{}' output for key '{}' is not connected", get_name(), key);
         return std::weak_ptr<Rendergraph_node>{};
     }
 
@@ -250,7 +250,7 @@ auto Rendergraph_node::get_producer_output_viewport(
     return m_outputs;
 }
 
-[[nodiscard]] auto Rendergraph_node::name() const -> const std::string&
+[[nodiscard]] auto Rendergraph_node::get_name() const -> const std::string&
 {
     return m_name;
 }
@@ -273,7 +273,7 @@ auto Rendergraph_node::register_input(
 {
     if (!inputs_allowed())
     {
-        log_rendergraph->error("Node '{}' inputs are not allowed (label = {}, key = {})", name(), label, key);
+        log_rendergraph->error("Node '{}' inputs are not allowed (label = {}, key = {})", get_name(), label, key);
         return false;
     }
 
@@ -289,7 +289,7 @@ auto Rendergraph_node::register_input(
     );
     if (i != m_inputs.end())
     {
-        log_rendergraph->error("Node '{}' input key '{}' is already registered", name(), key);
+        log_rendergraph->error("Node '{}' input key '{}' is already registered", get_name(), key);
         return false;
     }
     m_inputs.push_back(
@@ -310,7 +310,7 @@ auto Rendergraph_node::register_output(
 {
     if (!outputs_allowed())
     {
-        log_rendergraph->error("Node '{}' outputs are not allowed (label = {}, key = {})", name(), label, key);
+        log_rendergraph->error("Node '{}' outputs are not allowed (label = {}, key = {})", get_name(), label, key);
         return false;
     }
 
@@ -326,7 +326,7 @@ auto Rendergraph_node::register_output(
     );
     if (i != m_outputs.end())
     {
-        log_rendergraph->error("Node '{}' output key '{}' is already registered", name(), key);
+        log_rendergraph->error("Node '{}' output key '{}' is already registered", get_name(), key);
         return false;
     }
     m_outputs.push_back(
@@ -349,14 +349,14 @@ auto Rendergraph_node::connect_input(
 {
     if (!inputs_allowed())
     {
-        log_rendergraph->error("Node '{}' inputs are not allowed (key = {})", name(), key);
+        log_rendergraph->error("Node '{}' inputs are not allowed (key = {})", get_name(), key);
         return false;
     }
 
     const auto& producer = producer_node.lock();
     if (!producer)
     {
-        log_rendergraph->error("Node '{}' input key '{}' producer node is expired or not not set, can not connect", name(), key);
+        log_rendergraph->error("Node '{}' input key '{}' producer node is expired or not not set, can not connect", get_name(), key);
         return false;
     }
 
@@ -370,7 +370,7 @@ auto Rendergraph_node::connect_input(
     );
     if (i == m_inputs.end())
     {
-        log_rendergraph->error("Node '{}' does not have input '{}' registered", name(), key);
+        log_rendergraph->error("Node '{}' does not have input '{}' registered", get_name(), key);
         return false;
     }
 
@@ -384,7 +384,7 @@ auto Rendergraph_node::connect_input(
     {
         log_rendergraph->warn(
             "Node '{}' input key {} already has {} producer{} registered",
-            name(),
+            get_name(),
             key,
             producer_nodes.size(),
             producer_nodes.size() > 1 ? "s" : ""
@@ -404,9 +404,9 @@ auto Rendergraph_node::connect_input(
     {
         log_rendergraph->error(
             "Node '{}' input key '{}' already has producer '{}' connected",
-            name(),
+            get_name(),
             key,
-            producer->name()
+            producer->get_name()
         );
         return false;
     }
@@ -424,14 +424,14 @@ auto Rendergraph_node::connect_output(
 {
     if (!outputs_allowed())
     {
-        log_rendergraph->error("Node '{}' outputs are not allowed (key = {})", name(), key);
+        log_rendergraph->error("Node '{}' outputs are not allowed (key = {})", get_name(), key);
         return false;
     }
 
     const auto& consumer = consumer_node.lock();
     if (!consumer)
     {
-        log_rendergraph->error("Node '{}' output key '{}' consumer node is expired or not not set, can not connect", name(), key);
+        log_rendergraph->error("Node '{}' output key '{}' consumer node is expired or not not set, can not connect", get_name(), key);
         return false;
     }
 
@@ -445,7 +445,7 @@ auto Rendergraph_node::connect_output(
     );
     if (i == m_outputs.end())
     {
-        log_rendergraph->error("Node '{}' does not have output '{}' registered", name(), key);
+        log_rendergraph->error("Node '{}' does not have output '{}' registered", get_name(), key);
         return false;
     }
 
@@ -459,7 +459,7 @@ auto Rendergraph_node::connect_output(
     {
         log_rendergraph->warn(
             "Node '{}' output key {} already has {} consumer{} registered",
-            name(),
+            get_name(),
             key,
             consumer_nodes.size(),
             consumer_nodes.size() > 1 ? "s" : ""
@@ -479,9 +479,9 @@ auto Rendergraph_node::connect_output(
     {
         log_rendergraph->error(
             "Node '{}' output key '{}' already has consumer '{}' connected",
-            name(),
+            get_name(),
             key,
-            consumer->name()
+            consumer->get_name()
         );
         return false;
     }
@@ -506,7 +506,7 @@ auto Rendergraph_node::disconnect_input(
     );
     if (i == m_inputs.end())
     {
-        log_rendergraph->error("Node '{}' does not have input '{}' registered", name(), key);
+        log_rendergraph->error("Node '{}' does not have input '{}' registered", get_name(), key);
         return false;
     }
 
@@ -524,9 +524,9 @@ auto Rendergraph_node::disconnect_input(
     {
         log_rendergraph->error(
             "Node '{}' input key '{}' producer '{}' not found",
-            name(),
+            get_name(),
             key,
-            producer->name()
+            producer->get_name()
         );
         return false;
     }
@@ -543,7 +543,7 @@ auto Rendergraph_node::disconnect_output(
     const auto& consumer = consumer_node.lock();
     if (!consumer)
     {
-        log_rendergraph->error("Node '{}' output key '{}' consumer node is expired or not not set, can not disconnect", name(), key);
+        log_rendergraph->error("Node '{}' output key '{}' consumer node is expired or not not set, can not disconnect", get_name(), key);
         return false;
     }
 
@@ -557,7 +557,7 @@ auto Rendergraph_node::disconnect_output(
     );
     if (i == m_outputs.end())
     {
-        log_rendergraph->error("Node '{}' does not have output '{}' registered", name(), key);
+        log_rendergraph->error("Node '{}' does not have output '{}' registered", get_name(), key);
         return false;
     }
 
@@ -574,9 +574,9 @@ auto Rendergraph_node::disconnect_output(
     {
         log_rendergraph->error(
             "Node '{}' output key '{}' consumer '{}' not found",
-            name(),
+            get_name(),
             key,
-            consumer->name()
+            consumer->get_name()
         );
         return false;
     }

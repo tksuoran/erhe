@@ -261,9 +261,9 @@ Configuration::Configuration(int argc, char** argv)
             ini_get(section, "dynamic_enable", physics.dynamic_enable);
         }
 
-        get_window(ini, "brush_palette",        windows.brush_palette       );
         get_window(ini, "commands",             windows.commands            );
         get_window(ini, "create",               windows.create              );
+        get_window(ini, "content_library",      windows.content_library     );
         get_window(ini, "debug_view",           windows.debug_view          );
         get_window(ini, "debug_visualizations", windows.debug_visualizations);
         get_window(ini, "fly_camera",           windows.fly_camera          );
@@ -273,9 +273,6 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "layers",               windows.layers              );
         get_window(ini, "line_renderer",        windows.line_renderer       );
         get_window(ini, "log",                  windows.log                 );
-        get_window(ini, "materials",            windows.materials           );
-        get_window(ini, "material_properties",  windows.material_properties );
-        get_window(ini, "node_properties",      windows.node_properties     );
         get_window(ini, "node_tree",            windows.node_tree           );
         get_window(ini, "operation_stack",      windows.operation_stack     );
         get_window(ini, "operations",           windows.operations          );
@@ -284,6 +281,7 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "pipelines",            windows.pipelines           );
         get_window(ini, "physics",              windows.physics             );
         get_window(ini, "post_processing",      windows.post_processing     );
+        get_window(ini, "properties",           windows.properties          );
         get_window(ini, "render_graph",         windows.render_graph        );
         get_window(ini, "settings",             windows.settings            );
         get_window(ini, "tool_properties",      windows.tool_properties     );

@@ -8,29 +8,24 @@
 namespace editor
 {
 
-Material_library::Material_library()
-    : m_visible{true}
-{
-}
-
-void Material_library::add_default_materials()
+void add_default_materials(Library<erhe::primitive::Material>& library)
 {
     const glm::vec2 roughness{0.68f, 0.34f};
 
-    make_material("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
-    make_material("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
-    make_material("Chromium",  glm::vec3{0.549f, 0.556f, 0.554f}, roughness, 1.0f);
-    make_material("Iron",      glm::vec3{0.562f, 0.565f, 0.578f}, roughness, 1.0f);
-    make_material("Nickel",    glm::vec3{0.660f, 0.609f, 0.526f}, roughness, 1.0f);
-    make_material("Platinum",  glm::vec3{0.673f, 0.637f, 0.585f}, roughness, 1.0f);
-    make_material("Copper",    glm::vec3{0.955f, 0.638f, 0.538f}, roughness, 1.0f);
-    make_material("Palladium", glm::vec3{0.733f, 0.697f, 0.652f}, roughness, 1.0f);
-    make_material("Zinc",      glm::vec3{0.664f, 0.824f, 0.850f}, roughness, 1.0f);
-    make_material("Gold",      glm::vec3{1.022f, 0.782f, 0.344f}, roughness, 1.0f);
-    make_material("Aluminum",  glm::vec3{0.913f, 0.922f, 0.924f}, roughness, 1.0f);
-    make_material("Silver",    glm::vec3{0.972f, 0.960f, 0.915f}, roughness, 1.0f);
+    library.make("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
+    library.make("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
+    library.make("Chromium",  glm::vec3{0.549f, 0.556f, 0.554f}, roughness, 1.0f);
+    library.make("Iron",      glm::vec3{0.562f, 0.565f, 0.578f}, roughness, 1.0f);
+    library.make("Nickel",    glm::vec3{0.660f, 0.609f, 0.526f}, roughness, 1.0f);
+    library.make("Platinum",  glm::vec3{0.673f, 0.637f, 0.585f}, roughness, 1.0f);
+    library.make("Copper",    glm::vec3{0.955f, 0.638f, 0.538f}, roughness, 1.0f);
+    library.make("Palladium", glm::vec3{0.733f, 0.697f, 0.652f}, roughness, 1.0f);
+    library.make("Zinc",      glm::vec3{0.664f, 0.824f, 0.850f}, roughness, 1.0f);
+    library.make("Gold",      glm::vec3{1.022f, 0.782f, 0.344f}, roughness, 1.0f);
+    library.make("Aluminum",  glm::vec3{0.913f, 0.922f, 0.924f}, roughness, 1.0f);
+    library.make("Silver",    glm::vec3{0.972f, 0.960f, 0.915f}, roughness, 1.0f);
 
-    make_material("Cobalt",    glm::vec3{0.662f, 0.655f, 0.634f}, roughness, 1.0f);
+    library.make("Cobalt",    glm::vec3{0.662f, 0.655f, 0.634f}, roughness, 1.0f);
 
     // water          0.020
     // plastic, glass 0.040 .. 0.045
@@ -63,85 +58,13 @@ void Material_library::add_default_materials()
         float R, G, B;
         erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
         //const std::string label = fmt::format("Hue {}", static_cast<int>(hue));
-        make_material(
+        library.make(
             fmt::format("Hue {}", static_cast<int>(hue)),
             glm::vec3{R, G, B},
             glm::vec2{0.02f, 0.02f},
             0.00f
         );
     }
-}
-
-[[nodiscard]] auto Material_library::materials() -> std::vector<std::shared_ptr<erhe::primitive::Material>>&
-{
-    return m_materials;
-}
-
-[[nodiscard]] auto Material_library::materials() const -> const std::vector<std::shared_ptr<erhe::primitive::Material>>&
-{
-    return m_materials;
-}
-
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-auto Material_library::material_combo(
-    const char*                                 label,
-    std::shared_ptr<erhe::primitive::Material>& selected_material,
-    const bool                                  empty_option
-) const -> bool
-{
-    const std::lock_guard<std::mutex> lock{m_mutex};
-
-    int selection_index = 0;
-    int index = 0;
-    std::vector<const char*> names;
-    std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
-    const bool empty_entry = empty_option || (selected_material == nullptr);
-    if (empty_entry)
-    {
-        names.push_back("(none)");
-        materials.push_back({});
-        ++index;
-    }
-    for (const auto& material : m_materials)
-    {
-        if (!material->visible)
-        {
-            continue;
-        }
-        names.push_back(material->name.c_str());
-        materials.push_back(material);
-        if (selected_material == material)
-        {
-            selection_index = index;
-        }
-        ++index;
-    }
-
-    // TODO Move to begin / end combo
-    const bool selection_changed =
-        ImGui::Combo(
-            label,
-            &selection_index,
-            names.data(),
-            static_cast<int>(names.size())
-        ) &&
-        (selected_material != materials.at(selection_index));
-    if (selection_changed)
-    {
-        selected_material = materials.at(selection_index);
-    }
-    return selection_changed;
-}
-#endif
-
-void Material_library::set_visible(const bool visible)
-{
-    m_visible = visible;
-}
-
-[[nodiscard]] auto Material_library::is_visible() const -> bool
-{
-    return m_visible;
 }
 
 } // namespace editor

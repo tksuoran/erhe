@@ -428,7 +428,6 @@ void Imgui_renderer::create_font_texture()
     // Build texture atlas
     Texture::Create_info create_info{};
     unsigned char* pixels = nullptr;
-    m_font_atlas.GetTexDataAsAlpha8(&pixels, &create_info.width, &create_info.height);
     create_info.internal_format = gl::Internal_format::rgba8;
     m_font_atlas.GetTexDataAsRGBA32(&pixels, &create_info.width, &create_info.height);
 

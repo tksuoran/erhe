@@ -200,6 +200,11 @@ Node_raytrace::~Node_raytrace() noexcept
     // TODO
 }
 
+auto Node_raytrace::static_type_name() -> const char*
+{
+    return "Node_raytrace";
+}
+
 auto Node_raytrace::type_name() const -> const char*
 {
     return "Node_raytrace";
@@ -382,14 +387,14 @@ auto as_raytrace(
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            scene_item->flag_bits(),
+            scene_item->get_flag_bits(),
             erhe::scene::Scene_item_flags::raytrace
         )
     )
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Node_raytrace>(scene_item);
+    return std::static_pointer_cast<Node_raytrace>(scene_item);
 }
 
 auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>

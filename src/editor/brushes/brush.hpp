@@ -121,6 +121,11 @@ public:
     void operator=(Brush&&)      = delete;
 
     // Public API
+    [[nodiscard]] static auto static_type_name() -> const char*;
+    [[nodiscard]] auto is_shown_in_ui() const -> bool;
+    [[nodiscard]] auto get_name      () const -> const std::string&;
+    [[nodiscard]] auto get_label     () const -> const std::string&;
+
     void late_initialize();
 
     [[nodiscard]] auto get_reference_frame(
@@ -134,7 +139,6 @@ public:
         uint32_t corner_offset
     ) -> Reference_frame;
 
-    [[nodiscard]] auto name            () const -> const std::string&;
     [[nodiscard]] auto get_scaled      (float scale) -> const Scaled&;
     [[nodiscard]] auto create_scaled   (int scale_key) -> Scaled;
     [[nodiscard]] auto make_instance   (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
@@ -142,6 +146,8 @@ public:
     [[nodiscard]] auto get_geometry    () -> std::shared_ptr<erhe::geometry::Geometry>;
 
     Brush_data                                           data;
+    std::string                                          label;
+    erhe::toolkit::Unique_id<Brush>                      id;
     std::unique_ptr<erhe::primitive::Primitive_geometry> gl_primitive_geometry;
     std::shared_ptr<Raytrace_primitive>                  rt_primitive;
     std::vector<Reference_frame>                         reference_frames;

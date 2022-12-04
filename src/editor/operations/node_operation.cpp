@@ -27,7 +27,7 @@ auto Node_operation::describe() const -> std::string
         {
             ss << ", ";
         }
-        ss << entry.node->name();
+        ss << entry.node->get_name();
         using erhe::scene::Node_data;
         const auto changed = Node_data::diff_mask(entry.before, entry.after);
         if (changed & Node_data::bit_transform) ss << " transform";
@@ -70,9 +70,9 @@ auto Attach_operation::describe() const -> std::string
     return fmt::format(
         "Attach_operation(attachment = {} {}, host node before = {}, host node after = {})",
         m_attachment->type_name(),
-        m_attachment->name(),
-        m_host_node_before->name(),
-        m_host_node_after->name()
+        m_attachment->get_name(),
+        m_host_node_before ? m_host_node_before->get_name() : "(empty)",
+        m_host_node_after ? m_host_node_after->get_name() : "(empty)"
     );
 }
 
@@ -91,10 +91,15 @@ void Attach_operation::execute(const Operation_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
 
-    m_host_node_before = std::static_pointer_cast<erhe::scene::Node>(
-        m_attachment->get_node()->shared_from_this()
-    );
-    m_host_node_before->detach(m_attachment.get());
+    auto* node = m_attachment->get_node();
+    m_host_node_before =
+        (node != nullptr)
+        ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
+        : std::shared_ptr<erhe::scene::Node>{};
+    if (m_host_node_before)
+    {
+        m_host_node_before->detach(m_attachment.get());
+    }
 
     if (m_host_node_after)
     {
@@ -115,10 +120,15 @@ void Attach_operation::undo(const Operation_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
 
-    m_host_node_after = std::static_pointer_cast<erhe::scene::Node>(
-        m_attachment->get_node()->shared_from_this()
-    );
-    m_host_node_after->detach(m_attachment.get());
+    auto* node = m_attachment->get_node();
+    m_host_node_after =
+        (node != nullptr)
+        ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
+        : std::shared_ptr<erhe::scene::Node>{};
+    if (m_host_node_after)
+    {
+        m_host_node_after->detach(m_attachment.get());
+    }
 
     if (m_host_node_before)
     {
@@ -141,9 +151,9 @@ auto Node_attach_operation::describe() const -> std::string
 {
     return fmt::format(
         "Node_attach_operation(child_node = {}, parent before = {}, parent after = {})",
-        m_child_node->name(),
-        m_parent_before->name(),
-        m_parent_after->name()
+        m_child_node->get_name(),
+        m_parent_before ? m_parent_before->get_name() : "(empty)",
+        m_parent_after  ? m_parent_after ->get_name() : "(empty)"
     );
 }
 
@@ -243,9 +253,9 @@ auto Node_reposition_in_parent_operation::describe() const -> std::string
 {
     return fmt::format(
         "Node_reposition_in_parent_operation(child_node = {}, place_before_node = {}, place_after_node = {})",
-        m_child_node->name(),
-        m_place_before_node ? m_place_before_node->name() : "()",
-        m_place_after_node  ? m_place_after_node ->name() : "()"
+        m_child_node->get_name(),
+        m_place_before_node ? m_place_before_node->get_name() : "()",
+        m_place_after_node  ? m_place_after_node ->get_name() : "()"
     );
 }
 

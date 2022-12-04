@@ -218,7 +218,7 @@ template<typename T>
             {
                 if (component->get_type_hash() == T::c_type_hash)
                 {
-                    return std::dynamic_pointer_cast<T>(component);
+                    return std::static_pointer_cast<T>(component);
                 }
             }
             return {};
@@ -266,7 +266,7 @@ template<typename T>
     {
         if (component->get_type_hash() == T::c_type_hash)
         {
-            return std::dynamic_pointer_cast<T>(component);
+            return std::static_pointer_cast<T>(component);
         }
     }
     return {};

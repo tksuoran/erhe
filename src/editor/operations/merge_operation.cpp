@@ -35,7 +35,7 @@ auto Merge_operation::describe() const -> std::string
         {
             ss << ", ";
         }
-        ss << entry.mesh->name();
+        ss << entry.mesh->get_name();
     }
     return ss.str();
 }
@@ -260,15 +260,6 @@ void Merge_operation::execute(const Operation_context&)
         }
         else
         {
-            //// entry.node->detach(entry.mesh.get());
-            //// if (entry.node_physics)
-            //// {
-            ////     entry.node->detach(entry.node_physics.get());
-            //// }
-            //// if (entry.node_raytrace)
-            //// {
-            ////     entry.node->detach(entry.node_raytrace.get());
-            //// }
             entry.node->set_parent({});
         }
     }
@@ -341,15 +332,6 @@ void Merge_operation::undo(const Operation_context&)
         }
         else
         {
-            // For non-first meshes:
-            //if (entry.node_physics)
-            //{
-            //    mesh->attach(entry.node_physics);
-            //}
-            //if (entry.node_raytrace)
-            //{
-            //    mesh->attach(entry.node_raytrace);
-            //}
             node->set_parent(entry.before_parent);
         }
     }

@@ -230,8 +230,8 @@ void Grid::imgui(
             erhe::scene::Node* host_node = get_node();
             if (host_node != nullptr)
             {
-                const std::string label        = fmt::format("Node: {}", host_node->name());
-                const std::string detach_label = fmt::format("Detach from {}", host_node->name());
+                const std::string label        = fmt::format("Node: {}", host_node->get_name());
+                const std::string detach_label = fmt::format("Detach from {}", host_node->get_name());
                 ImGui::TextUnformatted(label.c_str());
                 if (ImGui::Button(detach_label.c_str()))
                 {
@@ -242,7 +242,7 @@ void Grid::imgui(
         const auto& host_node = selection_tool->get_first_selected_node();
         if (host_node)
         {
-            const std::string label = fmt::format("Attach to {}", host_node->name());
+            const std::string label = fmt::format("Attach to {}", host_node->get_name());
             if (ImGui::Button(label.c_str()))
             {
                 host_node->attach(

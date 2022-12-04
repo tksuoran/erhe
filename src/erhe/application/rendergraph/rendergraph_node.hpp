@@ -64,7 +64,7 @@ public:
 
     [[nodiscard]] virtual auto type_name() const -> std::string_view { return c_type_name; }
     [[nodiscard]] virtual auto type_hash() const -> uint32_t         { return c_type_hash; }
-    [[nodiscard]] auto name       () const -> const std::string&;
+    [[nodiscard]] auto get_name   () const -> const std::string&;
     [[nodiscard]] auto get_inputs () const -> const std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_inputs ()       ->       std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_outputs() const -> const std::vector<Rendergraph_producer_connector>&;

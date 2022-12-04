@@ -14,28 +14,30 @@ namespace erhe::scene
     class Light;
     class Mesh;
     class Node;
-    class Node_attachment;
+    class Scene_item;
 }
 
 namespace editor
 {
 
+class Content_library_window;
 class Editor_scenes;
 class Node_physics;
 class Operation_stack;
+class Rendertarget_mesh;
 class Selection_tool;
 
-class Node_properties
+class Properties
     : public erhe::components::Component
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Node_properties"};
-    static constexpr std::string_view c_title{"Node Properties"};
+    static constexpr std::string_view c_type_name{"Properties"};
+    static constexpr std::string_view c_title{"Properties"};
     static constexpr uint32_t         c_type_hash{compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {})};
 
-    Node_properties ();
-    ~Node_properties() noexcept override;
+    Properties ();
+    ~Properties() noexcept override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
@@ -49,14 +51,14 @@ public:
     void on_end  () override;
 
 private:
-    void icamera_properties  (erhe::scene::Camera& camera) const;
-    void light_properties    (erhe::scene::Light& light) const;
-    void mesh_properties     (erhe::scene::Mesh& mesh) const;
-    void transform_properties(erhe::scene::Node& node);
-
-    void node_physics_properties(Node_physics& node_physics);
-    void attachment_properties  (erhe::scene::Node_attachment& attachment);
-
+    void camera_properties      (erhe::scene::Camera& camera) const;
+    void light_properties       (erhe::scene::Light& light) const;
+    void mesh_properties        (erhe::scene::Mesh& mesh) const;
+    void transform_properties   (erhe::scene::Node& node);
+    void rendertarget_properties(Rendertarget_mesh& rendertarget) const;
+    void node_physics_properties(Node_physics& node_physics) const;
+    void item_flags             (const std::shared_ptr<erhe::scene::Scene_item>& item);
+    void item_properties        (const std::shared_ptr<erhe::scene::Scene_item>& item);
 
     class Value_edit_state
     {
@@ -96,9 +98,10 @@ private:
     auto drop_node_state(erhe::scene::Node& node);
 
     // Component dependencies
-    std::shared_ptr<Editor_scenes  > m_editor_scenes;
-    std::shared_ptr<Operation_stack> m_operation_stack;
-    std::shared_ptr<Selection_tool > m_selection_tool;
+    std::shared_ptr<Content_library_window> m_content_library_window;
+    std::shared_ptr<Editor_scenes         > m_editor_scenes;
+    std::shared_ptr<Operation_stack       > m_operation_stack;
+    std::shared_ptr<Selection_tool        > m_selection_tool;
 
     std::vector<Node_state> m_node_states;
 };

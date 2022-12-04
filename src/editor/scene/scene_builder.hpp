@@ -1,6 +1,6 @@
 #pragma once
 
-#include "brushes/brushes.hpp"
+#include "brushes/brush_tool.hpp"
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 
@@ -45,7 +45,6 @@ namespace editor
 {
 
 class Brush;
-class Brushes;
 class Debug_draw;
 class Materials;
 class Mesh_memory;
@@ -128,7 +127,6 @@ private:
     void setup_lights       ();
 
     // Component dependencies
-    std::shared_ptr<Brushes>     m_brushes;
     std::shared_ptr<Mesh_memory> m_mesh_memory;
 
     // Self owned parts

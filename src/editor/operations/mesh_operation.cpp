@@ -32,7 +32,7 @@ auto Mesh_operation::describe() const -> std::string
         {
             ss << ", ";
         }
-        ss << entry.mesh->name();
+        ss << entry.mesh->get_name();
     }
     return ss.str();
 }

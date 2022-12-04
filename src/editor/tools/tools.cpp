@@ -1,7 +1,7 @@
 ﻿#include "tools/tools.hpp"
 #include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
-#include "scene/material_library.hpp"
+#include "scene/content_library.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -26,13 +26,13 @@ void Tools::declare_required_components()
 void Tools::initialize_component()
 {
     const auto editor_scenes = get<Editor_scenes>();
+    const auto tools_content_library = std::make_shared<Content_library>();
+    tools_content_library->is_shown_in_ui = false;
     m_scene_root = std::make_shared<Scene_root>(
         editor_scenes->get_scene_message_bus(),
-        std::make_shared<Material_library>(),
+        tools_content_library,
         "Tool scene"
     );
-    m_scene_root->material_library()->set_visible(false);
-
     editor_scenes->register_scene_root(m_scene_root);
 }
 

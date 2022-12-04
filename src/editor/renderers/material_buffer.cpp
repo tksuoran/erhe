@@ -66,6 +66,7 @@ auto Material_buffer::update(
     const auto  gpu_data       = buffer.map();
     m_writer.begin(buffer.target());
     m_used_handles.clear();
+    uint32_t material_index = 0;
     for (const auto& material : materials)
     {
         if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
@@ -93,6 +94,8 @@ auto Material_buffer::update(
             m_used_handles.insert(handle);
         }
 
+        material->material_buffer_index = material_index;
+
         write(gpu_data, m_writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
         write(gpu_data, m_writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
         write(gpu_data, m_writer.write_offset + offsets.transparency, as_span(material->transparency));
@@ -112,9 +115,9 @@ auto Material_buffer::update(
             write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(value));
         }
 
-
         m_writer.write_offset += entry_size;
         ERHE_VERIFY(m_writer.write_offset <= buffer.capacity_byte_count());
+        ++material_index;
     }
     m_writer.end();
 

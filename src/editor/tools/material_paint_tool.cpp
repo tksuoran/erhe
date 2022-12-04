@@ -270,12 +270,7 @@ void Material_paint_tool::tool_properties()
         return;
     }
 
-    const auto& material_library = scene_root->material_library();
-    if (!material_library)
-    {
-        return;
-    }
-
+    const auto& material_library = scene_root->content_library()->materials;
     int command = m_active_command;
     ImGui::RadioButton("Paint", &command, c_command_paint); ImGui::SameLine();
     ImGui::RadioButton("Pick",  &command, c_command_pick);
@@ -284,7 +279,7 @@ void Material_paint_tool::tool_properties()
         set_active_command(command);
     }
 
-    material_library->material_combo("Material", m_material);
+    material_library.combo("Material", m_material, false);
 #endif
 }
 

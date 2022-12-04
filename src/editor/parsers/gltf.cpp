@@ -1,6 +1,7 @@
 #include "parsers/gltf.hpp"
 #include "editor_log.hpp"
 
+#include "scene/content_library.hpp"
 #include "scene/material_library.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
@@ -360,7 +361,7 @@ private:
             safe_str(material->name)
         );
 
-        auto new_material = m_scene_root->material_library()->make_material(material->name);
+        auto new_material = m_scene_root->content_library()->materials.make(material->name);
         m_materials.push_back(new_material);
         if (material->has_pbr_metallic_roughness)
         {
@@ -371,11 +372,11 @@ private:
                 pbr_metallic_roughness.base_color_factor[2],
                 pbr_metallic_roughness.base_color_factor[3]
             };
-            new_material->metallic    = pbr_metallic_roughness.metallic_factor;
-            new_material->roughness.x = pbr_metallic_roughness.roughness_factor;
-            new_material->roughness.y = pbr_metallic_roughness.roughness_factor;
-            new_material->emissive    = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
-            new_material->visible     = true;
+            new_material->metallic      = pbr_metallic_roughness.metallic_factor;
+            new_material->roughness.x   = pbr_metallic_roughness.roughness_factor;
+            new_material->roughness.y   = pbr_metallic_roughness.roughness_factor;
+            new_material->emissive      = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
+            new_material->m_shown_in_ui = true;
             log_parsers->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_metallic_roughness.base_color_factor[0],
@@ -440,8 +441,8 @@ private:
             node_index, camera_index, safe_str(camera->name)
         );
 
-        auto erhe_node = m_nodes.at(node_index);
-        auto new_camera = std::make_shared<erhe::scene::Camera>(camera->name);
+        auto  erhe_node  = m_nodes.at(node_index);
+        auto  new_camera = m_scene_root->content_library()->cameras.make(camera->name);
         auto* projection = new_camera->projection();
         switch (camera->type)
         {
@@ -498,7 +499,7 @@ private:
         );
 
         auto erhe_node = m_nodes.at(node_index);
-        auto new_light = std::make_shared<erhe::scene::Light>(light->name);
+        auto new_light = m_scene_root->content_library()->lights.make(light->name);
         new_light->color = glm::vec3{
             light->color[0],
             light->color[1],
@@ -1146,8 +1147,7 @@ private:
         );
 
         auto erhe_node = m_nodes.at(node_index);
-        auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh->name);
-
+        auto erhe_mesh = m_scene_root->content_library()->meshes.make(mesh->name);
         for (cgltf_size i = 0; i < mesh->primitives_count; ++i)
         {
             parse_primitive(erhe_mesh, mesh, &mesh->primitives[i]);
@@ -1243,10 +1243,10 @@ private:
         m_meshes .clear();
     }
 
-    std::shared_ptr<Materials>        m_materials_;
-    std::shared_ptr<Scene_root>       m_scene_root;
-    std::shared_ptr<Material_library> m_material_library;
-    erhe::primitive::Build_info&      m_build_info;
+    std::shared_ptr<Materials>       m_materials_;
+    std::shared_ptr<Scene_root>      m_scene_root;
+    std::shared_ptr<Content_library> m_content_library;
+    erhe::primitive::Build_info&     m_build_info;
 
     cgltf_data*                                             m_data{nullptr};
 

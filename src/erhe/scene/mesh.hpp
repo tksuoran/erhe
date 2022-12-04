@@ -36,6 +36,7 @@ public:
     ~Mesh        () noexcept override;
 
     // Implements Node_attachment
+    [[nodiscard]] static auto static_type_name() -> const char*;
     [[nodiscard]] auto type_name() const -> const char* override;
     void handle_node_scene_host_update(Scene_host* old_scene_host, Scene_host* new_scene_host) override;
 

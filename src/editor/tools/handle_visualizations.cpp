@@ -319,12 +319,12 @@ auto Handle_visualizations::get_handle_material(
     const Mode       mode
 ) -> std::shared_ptr<erhe::primitive::Material>
 {
-    const auto material_library = m_trs_tool.get_tool_scene_root()->material_library();
+    auto& material_library = m_trs_tool.get_tool_scene_root()->content_library()->materials;
     switch (mode)
     {
-        case Mode::Normal: return material_library->make_material(name, color);
-        case Mode::Active: return material_library->make_material(name, glm::vec3(1.0f, 0.7f, 0.1f));
-        case Mode::Hover:  return material_library->make_material(name, 2.0f * color);
+        case Mode::Normal: return material_library.make(name, color);
+        case Mode::Active: return material_library.make(name, glm::vec3(1.0f, 0.7f, 0.1f));
+        case Mode::Hover:  return material_library.make(name, 2.0f * color);
         default:           return {};
     }
 }
@@ -354,9 +354,9 @@ void Handle_visualizations::initialize(
     m_y_active_material = make_material("y active", glm::vec3{0.23f, 1.00f, 0.0f}, Mode::Active);
     m_z_active_material = make_material("z active", glm::vec3{0.00f, 0.23f, 1.0f}, Mode::Active);
 
-    m_x_material->visible = false;
-    m_y_material->visible = false;
-    m_z_material->visible = false;
+    m_x_material->m_shown_in_ui = false;
+    m_y_material->m_shown_in_ui = false;
+    m_z_material->m_shown_in_ui = false;
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 

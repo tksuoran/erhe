@@ -125,7 +125,7 @@ auto Primitive_buffer::update(
             const glm::vec4 wireframe_color = mesh->get_wireframe_color();
             const glm::vec3 id_offset_vec3  = erhe::toolkit::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4  = glm::vec4{id_offset_vec3, 0.0f};
-            const uint32_t  material_index  = (primitive.material != nullptr) ? static_cast<uint32_t>(primitive.material->index) : 0u;
+            const uint32_t  material_index  = (primitive.material != nullptr) ? primitive.material->material_buffer_index : 0u;
             const uint32_t  extra2          = 0;
             const uint32_t  extra3          = 0;
 

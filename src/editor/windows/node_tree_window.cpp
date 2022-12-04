@@ -136,7 +136,7 @@ void Node_tree_window::move_selection(
 {
     log_node_properties->trace(
         "move_selection(anchor = {}, {})",
-        target_node ? target_node->name() : "(empty)",
+        target_node ? target_node->get_name() : "(empty)",
         (placement == Placement::Before_anchor)
             ? "Before_anchor"
             : "After_anchor"
@@ -229,8 +229,8 @@ void Node_tree_window::reposition(
     SPDLOG_LOGGER_TRACE(
         log_node_properties,
         "reposition(anchor_node = {}, node = {}, placement = {})",
-        anchor_node ? anchor_node->name() : "(empty)",
-        node ? node->name() : "(empty)",
+        anchor_node ? anchor_node->get_name() : "(empty)",
+        node ? node->get_name() : "(empty)",
         (placement == Placement::Before_anchor)
             ? "Before_anchor"
             : "After_anchor"
@@ -272,8 +272,8 @@ void Node_tree_window::reposition(
             SPDLOG_LOGGER_TRACE(
                 log_node_properties,
                 "Ignoring node {} because ancestor {} is in selection",
-                node->name(),
-                ancestor_in_selection->name()
+                node->get_name(),
+                ancestor_in_selection->get_name()
             );
             return;
         }
@@ -311,8 +311,8 @@ void Node_tree_window::try_add_to_attach(
     SPDLOG_LOGGER_TRACE(
         log_node_properties,
         "try_add_to_attach(target_node = {}, node = {})",
-        target_node ? target_node->name() : "(empty)",
-        node        ? node->name() : "(empty)"
+        target_node ? target_node->get_name() : "(empty)",
+        node        ? node->get_name()        : "(empty)"
     );
 
     if (!node)
@@ -352,8 +352,8 @@ void Node_tree_window::try_add_to_attach(
             SPDLOG_LOGGER_TRACE(
                 log_node_properties,
                 "Ignoring node {} because ancestor {} is in selection",
-                node->name(),
-                ancestor_in_selection->name()
+                node->get_name(),
+                ancestor_in_selection->get_name()
             );
             return;
         }
@@ -381,7 +381,7 @@ void Node_tree_window::attach_selection_to(
 
     //// log_tools->trace(
     ////     "attach_selection_to(target_node = {}, payload_id = {})",
-    ////     target_node->name(),
+    ////     target_node->get_name(),
     ////     payload_id
     //// );
     Compound_operation::Parameters compound_parameters;
@@ -425,7 +425,7 @@ void Node_tree_window::drag_and_drop_source(
     m_tree_items.emplace(id, item);
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
     {
-        ImGui::SetDragDropPayload("Scene_item", &id, sizeof(id));
+        ImGui::SetDragDropPayload(item->type_name(), &id, sizeof(id));
 
         const auto& selection = m_selection_tool->selection();
         if (is_in(item, selection))
@@ -524,9 +524,9 @@ auto Node_tree_window::drag_and_drop_target(
     const float x1       = rect_max.x;
 
     const auto        id                = item->get_id();
-    const std::string label_move_before = fmt::format("node dnd move before {}: {} {}", id, item->type_name(), item->name());
-    const std::string label_attach_to   = fmt::format("node dnd attach to {}: {} {}",   id, item->type_name(), item->name());
-    const std::string label_move_after  = fmt::format("node dnd move after {}: {} {}",  id, item->type_name(), item->name());
+    const std::string label_move_before = fmt::format("node dnd move before {}: {} {}", id, item->type_name(), item->get_name());
+    const std::string label_attach_to   = fmt::format("node dnd attach to {}: {} {}",   id, item->type_name(), item->get_name());
+    const std::string label_move_after  = fmt::format("node dnd move after {}: {} {}",  id, item->type_name(), item->get_name());
     const ImGuiID     imgui_id_before   = ImGui::GetID(label_move_before.c_str());
     const ImGuiID     imgui_id_attach   = ImGui::GetID(label_attach_to.c_str());
     const ImGuiID     imgui_id_after    = ImGui::GetID(label_move_after.c_str());
@@ -585,7 +585,49 @@ auto Node_tree_window::drag_and_drop_target(
     return false;
 }
 
-void Node_tree_window::imgui_item_update(
+void Node_tree_window::set_item_selection_terminator(const std::shared_ptr<erhe::scene::Scene_item>& item)
+{
+    auto& range_selection = m_selection_tool->range_selection();
+    const auto& node = as_node(item);
+    if (node && !m_expand_attachments && !node->attachments().empty())
+    {
+        range_selection.set_terminator(node->attachments().back());
+    }
+    else
+    {
+        range_selection.set_terminator(item);
+    }
+}
+
+void Node_tree_window::set_item_selection(const std::shared_ptr<erhe::scene::Scene_item>& item, bool selected)
+{
+    const auto& node = as_node(item);
+
+    if (selected)
+    {
+        m_selection_tool->add_to_selection(item);
+        if (node && !m_expand_attachments)
+        {
+            for (const auto& node_attachment : node->attachments())
+            {
+                m_selection_tool->add_to_selection(node_attachment);
+            }
+        }
+    }
+    else
+    {
+        m_selection_tool->remove_from_selection(item);
+        if (node && !m_expand_attachments)
+        {
+            for (const auto& node_attachment : node->attachments())
+            {
+                m_selection_tool->remove_from_selection(node_attachment);
+            }
+        }
+    }
+}
+
+void Node_tree_window::item_update_selection(
     const std::shared_ptr<erhe::scene::Scene_item>& item
 )
 {
@@ -617,24 +659,12 @@ void Node_tree_window::imgui_item_update(
             range_selection.reset();
             if (item->is_selected())
             {
-                SPDLOG_LOGGER_TRACE(
-                    log_node_properties,
-                    "click with ctrl down on selected {} {} - deselecting",
-                    item->type_name(),
-                    item->name()
-                );
-                m_selection_tool->remove_from_selection(item);
+                set_item_selection(item, false);
             }
             else
             {
-                SPDLOG_LOGGER_TRACE(
-                    log_node_properties,
-                    "click with ctrl down on {} {} - selecting",
-                    item->type_name(),
-                    item->name()
-                );
-                m_selection_tool->add_to_selection(item);
-                range_selection.set_terminator(item);
+                set_item_selection(item, true);
+                set_item_selection_terminator(item);
             }
         }
         else if (shift_down)
@@ -643,9 +673,9 @@ void Node_tree_window::imgui_item_update(
                 log_node_properties,
                 "click with shift down on {} {} - range select",
                 item->type_name(),
-                item->name()
+                item->get_name()
             );
-            range_selection.set_terminator(item);
+            set_item_selection_terminator(item);
         }
         else
         {
@@ -656,13 +686,13 @@ void Node_tree_window::imgui_item_update(
                 log_node_properties,
                 "mouse button release without modifier keys on {} {} - {} selecting it",
                 item->type_name(),
-                item->name(),
+                item->get_name(),
                 was_selected ? "de" : ""
             );
             if (!was_selected)
             {
-                m_selection_tool->add_to_selection(item);
-                range_selection.set_terminator(item);
+                set_item_selection(item, true);
+                set_item_selection_terminator(item);
             }
         }
     }
@@ -677,16 +707,16 @@ void Node_tree_window::imgui_item_update(
                     log_node_properties,
                     "key with shift down on {} {} - range select",
                     item->type_name(),
-                    item->name()
+                    item->get_name()
                 );
-                range_selection.set_terminator(item);
+                set_item_selection_terminator(item);
             }
             // else
             // {
             //     SPDLOG_LOGGER_TRACE(
             //         log_node_properties,
             //         "key without modifier key on node {} - clearing range select and select",
-            //         node->name()
+            //         node->get_name()
             //     );
             //     range_selection.reset();
             //     range_selection.set_terminator(node);
@@ -721,7 +751,7 @@ void Node_tree_window::item_popup_menu(
     )
     {
         m_popup_item = item;
-        m_popup_id_string = fmt::format("{}##Node{}-popup-menu", item->name(), item->get_id());
+        m_popup_id_string = fmt::format("{}##Node{}-popup-menu", item->get_name(), item->get_id());
         m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
         ImGui::OpenPopupEx(
             m_popup_id,
@@ -794,13 +824,8 @@ void Node_tree_window::item_popup_menu(
     }
 }
 
-auto Node_tree_window::item_icon_and_text(
-    const std::shared_ptr<erhe::scene::Scene_item>& item,
-    const bool                                      update
-) -> Node_state
+void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Scene_item>& item)
 {
-    ERHE_PROFILE_FUNCTION
-
     std::optional<glm::vec2> icon;
 
     glm::vec4 color = item->get_wireframe_color();
@@ -827,7 +852,7 @@ auto Node_tree_window::item_icon_and_text(
             default: break;
         }
     }
-    const auto& camera = as_camera(node);
+    const auto& camera = as_camera(item);
     if (camera)
     {
         icon = m_icon_set->icons.camera;
@@ -840,37 +865,35 @@ auto Node_tree_window::item_icon_and_text(
             : m_icon_set->get_large_rasterization();
         icon_rasterization.icon(icon.value(), color);
     }
+}
 
-    const bool is_leaf          = !node || (node->child_count(m_filter) == 0);
-    const bool only_attachments = node && (node->child_count(m_filter) == 0) && (node->attachment_count(m_filter) > 0);
+auto Node_tree_window::item_icon_and_text(
+    const std::shared_ptr<erhe::scene::Scene_item>& item,
+    const bool                                      update
+) -> Node_state
+{
+    ERHE_PROFILE_FUNCTION
 
-    const ImGuiTreeNodeFlags parent_flags{ImGuiTreeNodeFlags_OpenOnArrow      | ImGuiTreeNodeFlags_OpenOnDoubleClick};
-    const ImGuiTreeNodeFlags leaf_flags  {ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf             };
+    item_icon(item);
 
-    const ImGuiTreeNodeFlags item_flags{0
-        | ImGuiTreeNodeFlags_SpanAvailWidth
-        | (is_leaf ? leaf_flags : parent_flags)
-        | (only_attachments ? ImGuiTreeNodeFlags_DefaultOpen : 0)
-        | (update && item->is_selected()
-            ? ImGuiTreeNodeFlags_Selected
-            : ImGuiTreeNodeFlags_None)};
-
-    bool item_node_open;
+    const auto& node = as_node(item);
+    if (!m_expand_attachments && node)
     {
-        ERHE_PROFILE_SCOPE("TreeNodeEx");
-        item_node_open = ImGui::TreeNodeEx(
-            item->label().c_str(),
-            item_flags
-        );
-        // const std::string label = fmt::format(
-        //     "{}{}",
-        //     node->is_selected() ? "S." : "",
-        //     node->label().c_str()
-        // );
-        //node_open = ImGui::TreeNodeEx(label.c_str(), node_flags);
+        for (const auto& node_attachment : node->attachments())
+        {
+            item_icon(node_attachment);
+        }
     }
 
-    //int mouse_button = (popup_flags & ImGuiPopupFlags_MouseButtonMask_);
+    const bool is_leaf = !node || (node->child_count(m_filter) == 0);
+
+    const bool item_node_open = ImGui::TreeNodeEx(
+        item->get_label().c_str(),
+        ImGuiTreeNodeFlags_SpanAvailWidth |
+        (is_leaf ? ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf : 0) |
+        (update && item->is_selected() ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None)
+    );
+
     item_popup_menu(item);
 
     if (update)
@@ -879,14 +902,14 @@ auto Node_tree_window::item_icon_and_text(
         const bool consumed_by_drag_and_drop = drag_and_drop_target(item);
         if (!consumed_by_drag_and_drop)
         {
-            imgui_item_update(item);
+            item_update_selection(item);
         }
     }
 
     return Node_state
     {
-        .is_open   = item_node_open,
-        .is_parent = !is_leaf
+        .is_open       = item_node_open,
+        .need_tree_pop = !is_leaf
     };
 }
 
@@ -898,7 +921,7 @@ void Node_tree_window::imgui_item_node(
 
     if (!m_filter(item->get_flag_bits()))
     {
-        log_node_properties->info("filtered {}", item->describe());
+        //// log_node_properties->info("filtered {}", item->describe());
         return;
     }
 
@@ -913,21 +936,30 @@ void Node_tree_window::imgui_item_node(
         const auto& node = as_node(item);
         if (node)
         {
-            //for (const auto& child_node : node->children())
-            //{
-            //    imgui_item_node(child_node);
-            //}
-            ImGui::Indent(20.0f); // TODO
-            for (const auto& node_attachment : node->attachments())
+            if (m_expand_attachments)
             {
-                imgui_item_node(node_attachment);
+                const float attachment_indent = 15.0f; // TODO
+                ImGui::Indent(attachment_indent);
+                for (const auto& node_attachment : node->attachments())
+                {
+                    imgui_item_node(node_attachment);
+                }
+                ImGui::Unindent(attachment_indent);
             }
-            ImGui::Unindent(20.0f);
+            for (const auto& child_node : node->children())
+            {
+                imgui_item_node(child_node);
+            }
         }
-    }
-    if (node_state.is_parent)
-    {
-        ImGui::TreePop();
+        if (node_state.need_tree_pop)
+        {
+            log_tree->trace(
+                "{} {} TreePop",
+                item->type_name(),
+                item->get_label()
+            );
+            ImGui::TreePop();
+        }
     }
 }
 #endif
@@ -947,10 +979,17 @@ void Node_tree_window::on_end()
 #endif
 }
 
+auto Node_tree_window::expand_attachments() const -> bool
+{
+    return m_expand_attachments;
+}
+
 void Node_tree_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
+
+    ImGui::Checkbox("Expand Attachments", &m_expand_attachments);
 
     m_tree_items_last_frame = m_tree_items;
     m_tree_items.clear();

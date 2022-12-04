@@ -27,7 +27,7 @@ Node_transform_operation::~Node_transform_operation() noexcept
 auto Node_transform_operation::describe() const -> std::string
 {
     std::stringstream ss;
-    ss << "Node_transform " << m_parameters.node->name();
+    ss << "Node_transform " << m_parameters.node->get_name();
     return ss.str();
 }
 
@@ -58,7 +58,7 @@ auto Node_insert_remove_operation::describe() const -> std::string
         case Mode::remove: ss << "Node_remove "; break;
         default: break;
     }
-    ss << m_node->name() << " ";
+    ss << m_node->get_name() << " ";
     return ss.str();
 }
 
@@ -124,7 +124,7 @@ void Node_insert_remove_operation::execute(const Operation_context& context)
         m_parent_changes.clear();
         for (const auto& child : children)
         {
-            log_tools->info("  child -> parent {}", child->name(), m_before_parent->name());
+            log_tools->info("  child -> parent {}", child->get_name(), m_before_parent->get_name());
             m_parent_changes.push_back(
                 std::make_shared<Node_attach_operation>(
                     m_before_parent,

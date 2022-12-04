@@ -99,7 +99,7 @@ void Rendergraph_window::imgui()
         const auto& render_graph_nodes = m_render_graph->get_nodes();
         for (const auto& node : render_graph_nodes)
         {
-            if (ImGui::TreeNodeEx(node->name().c_str(), parent_flags | ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::TreeNodeEx(node->get_name().c_str(), parent_flags | ImGuiTreeNodeFlags_DefaultOpen))
             {
                 const auto& inputs = node->get_inputs();
                 for (const auto& input : inputs)
@@ -110,7 +110,7 @@ void Rendergraph_window::imgui()
                         ImGui::Text(
                             "Input '%s' Producer %s (%s)",
                             input.key.c_str(),
-                            producer_node->name().c_str(),
+                            producer_node->get_name().c_str(),
                             c_str(input.resource_routing)
                         );
                     }
@@ -125,7 +125,7 @@ void Rendergraph_window::imgui()
                         ImGui::Text(
                             "Output '%s' Consumer %s (%s)",
                             output.key.c_str(),
-                            consumer_node->name().c_str(),
+                            consumer_node->get_name().c_str(),
                             c_str(output.resource_routing)
                         );
                     }
@@ -142,7 +142,7 @@ void Rendergraph_window::imgui()
     {
         for (const auto& scene_root : scene_roots)
         {
-            ImGui::Text("%s", scene_root->name().c_str());
+            ImGui::Text("%s", scene_root->get_name().c_str());
             //if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
             //{
             //    ImGui::TreePop();
@@ -179,7 +179,7 @@ void Rendergraph_window::imgui()
         const bool   start_selected = node->get_selected();
         ImVec2       position = start_position;
         bool         selected = start_selected;
-        if (ImNodes::Ez::BeginNode(node.get(), node->name().c_str(), &position, &selected))
+        if (ImNodes::Ez::BeginNode(node.get(), node->get_name().c_str(), &position, &selected))
         {
             const auto& inputs  = node->get_inputs();
             const auto& outputs = node->get_outputs();

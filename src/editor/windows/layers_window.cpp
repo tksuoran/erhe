@@ -78,19 +78,19 @@ void Layers_window::imgui()
     std::shared_ptr<erhe::scene::Scene_item> item_clicked;
     for (const auto& scene_root : scene_roots)
     {
-        if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
+        if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags))
         {
             const auto& scene = scene_root->scene();
             for (const auto& layer : scene.mesh_layers)
             {
-                if (ImGui::TreeNodeEx(layer->name.c_str(), parent_flags))
+                if (ImGui::TreeNodeEx(layer->get_name().c_str(), parent_flags))
                 {
                     const auto& meshes = layer->meshes;
                     for (const auto& mesh : meshes)
                     {
                         icon_rasterization.icon(mesh_icon);
                         ImGui::TreeNodeEx(
-                            mesh->name().c_str(),
+                            mesh->get_name().c_str(),
                             leaf_flags |
                             (
                                 mesh->is_selected()

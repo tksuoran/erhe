@@ -30,6 +30,7 @@ public:
     ~Node_physics() noexcept override;
 
     // Implements Scene_item
+    [[nodiscard]] static auto static_type_name() -> const char*;
     [[nodiscard]] auto type_name() const -> const char* override;
 
     // Implements Node_attachment

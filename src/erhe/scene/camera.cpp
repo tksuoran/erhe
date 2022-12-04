@@ -21,6 +21,11 @@ Camera::~Camera() noexcept
 {
 }
 
+auto Camera::static_type_name() -> const char*
+{
+    return "Camera";
+}
+
 auto Camera::type_name() const -> const char*
 {
     return "Camera";
@@ -137,7 +142,7 @@ auto as_camera(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Camera>(scene_item);
+    return std::static_pointer_cast<Camera>(scene_item);
 }
 
 auto get_camera(

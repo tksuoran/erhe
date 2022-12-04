@@ -21,10 +21,9 @@ namespace editor
 {
 
 class Brush;
-class Brushes;
 class Brush_data;
 class Editor_scenes;
-class Materials_window;
+class Content_library_window;
 class Mesh_memory;
 class Operation_stack;
 class Scene_commands;
@@ -166,13 +165,12 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Brushes         > m_brushes;
-    std::shared_ptr<Editor_scenes   > m_editor_scenes;
-    std::shared_ptr<Materials_window> m_materials_window;
-    std::shared_ptr<Mesh_memory     > m_mesh_memory;
-    std::shared_ptr<Operation_stack > m_operation_stack;
-    std::shared_ptr<Scene_commands  > m_scene_commands;
-    std::shared_ptr<Selection_tool  > m_selection_tool;
+    std::shared_ptr<Editor_scenes         > m_editor_scenes;
+    std::shared_ptr<Content_library_window> m_content_library_window;
+    std::shared_ptr<Mesh_memory           > m_mesh_memory;
+    std::shared_ptr<Operation_stack       > m_operation_stack;
+    std::shared_ptr<Scene_commands        > m_scene_commands;
+    std::shared_ptr<Selection_tool        > m_selection_tool;
 
     erhe::primitive::Normal_style m_normal_style{erhe::primitive::Normal_style::point_normals};
     float                         m_density     {1.0f};

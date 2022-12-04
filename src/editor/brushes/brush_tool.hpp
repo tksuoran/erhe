@@ -51,12 +51,12 @@ namespace editor
 {
 
 class Brush;
-class Brushes;
+class Brush_tool;
+class Content_library_window;
 class Editor;
 class Editor_scenes;
 class Grid;
 class Grid_tool;
-class Materials_window;
 class Mesh_memory;
 class Operation_stack;
 class Render_context;
@@ -67,25 +67,25 @@ class Brush_tool_preview_command
     : public erhe::application::Command
 {
 public:
-    explicit Brush_tool_preview_command(Brushes& brushes)
-        : Command  {"Brush_tool.motion_preview"}
-        , m_brushes{brushes}
+    explicit Brush_tool_preview_command(Brush_tool& Brush_tool)
+        : Command     {"Brush_tool.motion_preview"}
+        , m_Brush_tool{Brush_tool}
     {
     }
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
-    Brushes& m_brushes;
+    Brush_tool& m_Brush_tool;
 };
 
 class Brush_tool_insert_command
     : public erhe::application::Command
 {
 public:
-    explicit Brush_tool_insert_command(Brushes& brushes)
+    explicit Brush_tool_insert_command(Brush_tool& Brush_tool)
         : Command  {"Brush_tool.insert"}
-        , m_brushes{brushes}
+        , m_Brush_tool{Brush_tool}
     {
     }
 
@@ -93,24 +93,24 @@ public:
     auto try_call (erhe::application::Command_context& context) -> bool override;
 
 private:
-    Brushes& m_brushes;
+    Brush_tool& m_Brush_tool;
 };
 
 class Brush_data;
 class Editor_message;
 
-class Brushes
+class Brush_tool
     : public erhe::components::Component
     , public Tool
 {
 public:
     static constexpr int              c_priority {4};
-    static constexpr std::string_view c_type_name{"Brushes"};
-    static constexpr std::string_view c_title    {"Brushes"};
+    static constexpr std::string_view c_type_name{"Brush_tool"};
+    static constexpr std::string_view c_title    {"Brush Tool"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
-    Brushes ();
-    ~Brushes() noexcept override;
+    Brush_tool ();
+    ~Brush_tool() noexcept override;
 
     // Implements erhe::components::Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
@@ -125,17 +125,10 @@ public:
     void tool_properties        () override;
     void on_enable_state_changed() override;
 
-    // Public API
-    void brush_palette(int& selected_brush_index);
-
     // Commands
     auto try_insert_ready() -> bool;
     auto try_insert      () -> bool;
     void on_motion       ();
-
-    void register_brush(const std::shared_ptr<Brush>& brush);
-
-    [[nodiscard]] auto make_brush(const Brush_data& create_info) -> std::shared_ptr<Brush>;
 
 private:
     void on_message                (Editor_message& editor_message);
@@ -155,17 +148,14 @@ private:
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
-    std::shared_ptr<Editor_scenes   >   m_editor_scenes;
-    std::shared_ptr<Grid_tool       >   m_grid_tool;
-    std::shared_ptr<Materials_window>   m_materials_window;
-    std::shared_ptr<Operation_stack >   m_operation_stack;
-    std::shared_ptr<Selection_tool  >   m_selection_tool;
-    std::shared_ptr<Viewport_windows>   m_viewport_windows;
+    std::shared_ptr<Content_library_window> m_content_library_window;
+    std::shared_ptr<Editor_scenes   >       m_editor_scenes;
+    std::shared_ptr<Grid_tool       >       m_grid_tool;
+    std::shared_ptr<Operation_stack >       m_operation_stack;
+    std::shared_ptr<Selection_tool  >       m_selection_tool;
+    std::shared_ptr<Viewport_windows>       m_viewport_windows;
 
     std::mutex                          m_brush_mutex;
-    std::vector<std::shared_ptr<Brush>> m_brushes;
-
-    std::weak_ptr<Brush>                m_brush                {};
     bool                                m_snap_to_hover_polygon{true};
     bool                                m_snap_to_grid         {true};
     bool                                m_debug_visualization  {false};

@@ -70,7 +70,7 @@ Jolt_rigid_body::Jolt_rigid_body(
             .get_physics_system()
             .GetBodyInterface()
     }
-    , m_collision_shape{std::dynamic_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
+    , m_collision_shape{std::static_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
     , m_motion_mode    {motion_state->get_motion_mode()}
 {
     if (!m_collision_shape)

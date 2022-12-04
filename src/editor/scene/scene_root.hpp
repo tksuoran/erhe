@@ -66,7 +66,7 @@ namespace erhe::physics
 namespace editor
 {
 
-class Material_library;
+class Content_library;
 class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
@@ -101,7 +101,7 @@ class Scene_root
 public:
     Scene_root(
         erhe::message_bus::Message_bus<erhe::scene::Scene_message>* message_bus,
-        const std::shared_ptr<Material_library>&                    material_library,
+        const std::shared_ptr<Content_library>&                     content_library,
         const std::string_view                                      name
     );
     ~Scene_root() noexcept override;
@@ -114,7 +114,7 @@ public:
     [[nodiscard]] auto raytrace_scene() -> erhe::raytrace::IScene&;
     [[nodiscard]] auto scene         () -> erhe::scene::Scene&;
     [[nodiscard]] auto scene         () const -> const erhe::scene::Scene&;
-    [[nodiscard]] auto name          () const -> const std::string&;
+    [[nodiscard]] auto get_name      () const -> const std::string&;
 
     auto camera_combo(
         const char*           label,
@@ -136,7 +136,7 @@ public:
 
     void sort_lights();
 
-    [[nodiscard]] auto material_library() const -> std::shared_ptr<Material_library>;
+    [[nodiscard]] auto content_library() const -> std::shared_ptr<Content_library>;
 
     [[nodiscard]] auto create_rendertarget_mesh(
         const erhe::components::Components& components,
@@ -158,7 +158,7 @@ private:
     std::unique_ptr<erhe::scene::Scene>             m_scene;
     std::shared_ptr<erhe::scene::Camera>            m_camera;
     std::shared_ptr<Frame_controller>               m_camera_controls;
-    std::shared_ptr<Material_library>               m_material_library;
+    std::shared_ptr<Content_library>                m_content_library;
     std::mutex                                      m_rendertarget_meshes_mutex;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
     Scene_layers                                    m_layers;

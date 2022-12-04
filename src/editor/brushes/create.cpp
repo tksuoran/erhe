@@ -2,7 +2,7 @@
 
 #include "editor_scenes.hpp"
 #include "brushes/brush.hpp"
-#include "brushes/brushes.hpp"
+#include "brushes/brush_tool.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -14,7 +14,7 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 #include "tools/selection_tool.hpp"
-#include "windows/materials_window.hpp"
+#include "windows/content_library_window.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
@@ -340,14 +340,13 @@ void Create::initialize_component()
 
 void Create::post_initialize()
 {
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_brushes           = get<Brushes         >();
-    m_editor_scenes     = get<Editor_scenes   >();
-    m_materials_window  = get<Materials_window>();
-    m_mesh_memory       = get<Mesh_memory     >();
-    m_operation_stack   = get<Operation_stack >();
-    m_scene_commands    = get<Scene_commands  >();
-    m_selection_tool    = get<Selection_tool  >();
+    m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
+    m_editor_scenes          = get<Editor_scenes         >();
+    m_content_library_window = get<Content_library_window>();
+    m_mesh_memory            = get<Mesh_memory           >();
+    m_operation_stack        = get<Operation_stack       >();
+    m_scene_commands         = get<Scene_commands        >();
+    m_selection_tool         = get<Selection_tool        >();
 }
 
 namespace
@@ -391,6 +390,8 @@ void Create::imgui()
     }
     Scene_root* scene_root = reinterpret_cast<Scene_root*>(scene_host);
     ERHE_VERIFY(scene_root != nullptr);
+
+    auto content_library = scene_root->content_library();
 
     const auto parent = selected_node
         ? selected_node
@@ -450,14 +451,15 @@ void Create::imgui()
                     erhe::scene::Scene_item_flags::visible     |
                     erhe::scene::Scene_item_flags::content     |
                     erhe::scene::Scene_item_flags::shadow_cast |
-                    erhe::scene::Scene_item_flags::id;
+                    erhe::scene::Scene_item_flags::id          |
+                    erhe::scene::Scene_item_flags::show_in_ui;
 
                 const Instance_create_info brush_instance_create_info
                 {
                     .mesh_flags       = mesh_flags,
                     .scene_root       = scene_root,
                     .world_from_node  = world_from_node,
-                    .material         = m_materials_window->selected_material(),
+                    .material         = m_content_library_window->selected_material(),
                     .scale            = 1.0
                 };
                 const auto instance_node = m_brush->make_instance(brush_instance_create_info);
@@ -475,7 +477,7 @@ void Create::imgui()
         }
         if (m_brush && create_brush)
         {
-            m_brushes->register_brush(m_brush);
+            content_library->brushes.add(m_brush);
             m_brush.reset();
         }
     }
@@ -528,7 +530,12 @@ void Create::imgui()
                         .density         = m_density,
                         .physics_enabled = get<erhe::application::Configuration>()->physics.static_enable
                     };
-                    static_cast<void>(m_brushes->make_brush(brush_create_info));
+                    //// source_geometry->build_edges();
+                    //// source_geometry->compute_polygon_normals();
+                    //// source_geometry->compute_tangents();
+                    //// source_geometry->compute_polygon_centroids();
+                    //// source_geometry->compute_point_normals(erhe::geometry::c_point_normals_smooth);
+                    content_library->brushes.make(brush_create_info);
                 }
             }
         }

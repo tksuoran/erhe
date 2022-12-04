@@ -7,7 +7,7 @@
 #include "task_queue.hpp"
 
 #include "brushes/brush.hpp"
-#include "brushes/brushes.hpp"
+#include "brushes/brush_tool.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
@@ -115,7 +115,6 @@ void Scene_builder::declare_required_components()
     require<Fly_camera_tool  >();
     require<Shadow_renderer  >();
     require<Viewport_windows >();
-    m_brushes     = require<Brushes    >();
     m_mesh_memory = require<Mesh_memory>();
 }
 
@@ -131,10 +130,11 @@ void Scene_builder::initialize_component()
 
     m_scene_root = std::make_shared<Scene_root>(
         editor_scenes->get_scene_message_bus(),
-        std::make_shared<Material_library>(),
+        std::make_shared<Content_library>(),
         "Scene"
     );
-    m_scene_root->material_library()->add_default_materials();
+
+    add_default_materials(m_scene_root->content_library()->materials);
 
     setup_scene();
 
@@ -261,13 +261,13 @@ auto Scene_builder::make_camera(
     vec3             look_at
 ) -> std::shared_ptr<erhe::scene::Camera>
 {
-    auto node = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto camera = std::make_shared<erhe::scene::Camera>(name);
+    auto node   = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
+    auto camera = m_scene_root->content_library()->cameras.make(name);
     camera->projection()->fov_y           = glm::radians(35.0f);
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 80.0f;
-    camera->enable_flag_bits(Scene_item_flags::content);
+    camera->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::show_in_ui);
     node->attach(camera);
     node->set_parent(m_scene_root->scene().root_node);
 
@@ -277,7 +277,7 @@ auto Scene_builder::make_camera(
         vec3{0.0f, 1.0f,  0.0f}  // up
     );
     node->set_parent_from_node(m);
-    node->enable_flag_bits(Scene_item_flags::content);
+    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::show_in_ui);
 
     return camera;
 }
@@ -386,7 +386,8 @@ auto Scene_builder::make_brush(
     const bool   instantiate_to_scene
 ) -> std::shared_ptr<Brush>
 {
-    const auto brush = m_brushes->make_brush(brush_create_info);
+    auto content_library = m_scene_root->content_library();
+    const auto brush = content_library->brushes.make(brush_create_info);
     if (instantiate_to_scene)
     {
         const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
@@ -805,8 +806,8 @@ void Scene_builder::make_brushes()
     {
         ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
 
-        const auto& material_library  = m_scene_root->material_library();
-        auto        aniso_material    = material_library->make_material("aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f);
+        auto&       material_library  = m_scene_root->content_library()->materials;
+        auto        aniso_material    = material_library.make("aniso", vec3{1.0f, 1.0f, 1.0f}, glm::vec2{0.8f, 0.2f}, 0.0f);
         const float ring_major_radius = 4.0f;
         const float ring_minor_radius = 0.55f; // 0.15f;
         auto        ring_geometry     = make_torus(
@@ -867,44 +868,38 @@ void Scene_builder::make_brushes()
     if (config.johnson_solids)
     {
         // TODO When tasks can have dependencies we could queue this as well
+        ERHE_PROFILE_SCOPE("Johnson solids");
+
         library = Json_library("res/polyhedra/johnson.json");
+        for (const auto& key_name : library.names)
         {
-            ERHE_PROFILE_SCOPE("Johnson solids");
-
-            {
-                ERHE_PROFILE_SCOPE("make brushes");
-
-                for (const auto& key_name : library.names)
+            execution_queue->enqueue(
+                [this, &library, &key_name, &config, &configuration]()
                 {
-                    execution_queue->enqueue(
-                        [this, &library, &key_name, &config, &configuration]()
-                        {
-                            auto geometry = library.make_geometry(key_name);
-                            if (geometry.get_polygon_count() == 0)
-                            {
-                                return;
-                            }
-                            geometry.compute_polygon_normals();
+                    auto geometry = library.make_geometry(key_name);
+                    if (geometry.get_polygon_count() == 0)
+                    {
+                        return;
+                    }
+                    geometry.compute_polygon_normals();
 
-                            const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
-                                std::move(geometry)
-                            );
+                    const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
+                        std::move(geometry)
+                    );
 
-                            make_brush(
-                                Brush_data{
-                                    .name               = shared_geometry->name,
-                                    .build_info         = build_info(),
-                                    .normal_style       = Normal_style::polygon_normals,
-                                    .geometry_generator = [shared_geometry](){ return shared_geometry; },
-                                    .density            = config.mass_scale,
-                                    .physics_enabled    = configuration->physics.static_enable
-                                },
-                                false
-                            );
-                        }
+                    make_brush(
+                        Brush_data{
+                            .name               = shared_geometry->name,
+                            .build_info         = build_info(),
+                            .normal_style       = Normal_style::polygon_normals,
+                            .geometry_generator = [shared_geometry](){ return shared_geometry; },
+                            .density            = config.mass_scale,
+                            .physics_enabled    = configuration->physics.static_enable
+                        },
+                        false
                     );
                 }
-            }
+            );
         }
     }
 
@@ -929,8 +924,8 @@ void Scene_builder::add_room()
         return;
     }
 
-    const auto& material_library = m_scene_root->material_library();
-    auto floor_material = material_library->make_material(
+    auto& material_library = m_scene_root->content_library()->materials;
+    auto floor_material = material_library.make(
         "Floor",
         //vec4{0.02f, 0.02f, 0.02f, 1.0f},
         vec4{0.01f, 0.01f, 0.01f, 1.0f},
@@ -941,7 +936,7 @@ void Scene_builder::add_room()
     // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info
     {
-        .mesh_flags      = Scene_item_flags::visible | Scene_item_flags::content | Scene_item_flags::id,
+        .mesh_flags      = Scene_item_flags::visible | Scene_item_flags::content | Scene_item_flags::id | Scene_item_flags::show_in_ui,
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
         .material        = floor_material,
@@ -990,7 +985,7 @@ void Scene_builder::make_mesh_nodes()
                 const std::shared_ptr<Brush>& rhs
             )
             {
-                return lhs->name() < rhs->name();
+                return lhs->get_name() < rhs->get_name();
             }
         );
     }
@@ -1069,8 +1064,8 @@ void Scene_builder::make_mesh_nodes()
     {
         ERHE_PROFILE_SCOPE("make instances");
 
-        const auto& material_library = m_scene_root->material_library();
-        const auto& materials        = material_library->materials();
+        auto&       material_library = m_scene_root->content_library()->materials;
+        const auto& materials        = material_library.entries();
         std::size_t material_index   = 0;
 
         ERHE_VERIFY(!materials.empty());
@@ -1082,7 +1077,7 @@ void Scene_builder::make_mesh_nodes()
             {
                 material_index = (material_index + 1) % materials.size();
             }
-            while (!materials.at(material_index)->visible);
+            while (!materials.at(material_index)->is_shown_in_ui());
 
             auto* brush = entry.brush;
             float x     = static_cast<float>(entry.rectangle.x) / 256.0f;
@@ -1122,10 +1117,10 @@ void Scene_builder::make_cube_benchmark()
 
     m_scene_root->scene().sanity_check();
 
-    const auto& material_library = m_scene_root->material_library();
-    auto material = material_library->make_material("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
-    auto cube     = make_cube(0.1f);
-    auto cube_pg  = make_primitive(cube, build_info(), Normal_style::polygon_normals);
+    auto& material_library = m_scene_root->content_library()->materials;
+    auto  material         = material_library.make("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
+    auto  cube             = make_cube(0.1f);
+    auto  cube_pg          = make_primitive(cube, build_info(), Normal_style::polygon_normals);
 
     constexpr float scale   = 0.5f;
     constexpr int   x_count = 20;
@@ -1171,16 +1166,16 @@ auto Scene_builder::make_directional_light(
 ) -> std::shared_ptr<Light>
 {
     auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto light = std::make_shared<Light>(name);
+    auto light = m_scene_root->content_library()->lights.make(name);
     light->type      = Light::Type::directional;
     light->color     = color;
     light->intensity = intensity;
     light->range     = 0.0f;
     light->layer_id  = m_scene_root->layers().light()->id.get_id();
-    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
+    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
     node->attach          (light);
     node->set_parent      (m_scene_root->scene().root_node);
-    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
+    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
 
     const mat4 m = erhe::toolkit::create_look_at(
         position,                // eye
@@ -1202,7 +1197,7 @@ auto Scene_builder::make_spot_light(
 ) -> std::shared_ptr<Light>
 {
     auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto light = std::make_shared<Light>(name);
+    auto light = m_scene_root->content_library()->lights.make(name);
     light->type             = Light::Type::spot;
     light->color            = color;
     light->intensity        = intensity;
@@ -1210,10 +1205,10 @@ auto Scene_builder::make_spot_light(
     light->inner_spot_angle = spot_cone_angle[0];
     light->outer_spot_angle = spot_cone_angle[1];
     light->layer_id         = m_scene_root->layers().light()->id.get_id();
-    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
+    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
     node->attach          (light);
     node->set_parent      (m_scene_root->scene().root_node);
-    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible);
+    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
 
     const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
     node->set_parent_from_node(m);
@@ -1224,7 +1219,6 @@ auto Scene_builder::make_spot_light(
 void Scene_builder::setup_lights()
 {
     const auto& config = get<erhe::application::Configuration>()->scene;
-
     const auto& layers = m_scene_root->layers();
     layers.light()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
 

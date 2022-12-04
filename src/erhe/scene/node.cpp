@@ -95,7 +95,7 @@ Scene_item::Scene_item(const std::string_view name)
 
 Scene_item::~Scene_item() noexcept = default;
 
-auto Scene_item::name() const -> const std::string&
+auto Scene_item::get_name() const -> const std::string&
 {
     return m_name;
 }
@@ -106,7 +106,7 @@ void Scene_item::set_name(const std::string_view name)
     m_label = fmt::format("{}##Node{}", name, m_id.get_id());
 }
 
-auto Scene_item::label() const -> const std::string&
+auto Scene_item::get_label() const -> const std::string&
 {
     return m_label;
 }
@@ -148,11 +148,6 @@ void Scene_item::disable_flag_bits(const uint64_t mask)
     set_flag_bits(mask, false);
 }
 
-auto Scene_item::flag_bits() -> uint64_t&
-{
-    return m_flag_bits;
-}
-
 auto Scene_item::get_id() const -> erhe::toolkit::Unique_id<Scene_item>::id_type
 {
     return m_id.get_id();
@@ -188,6 +183,11 @@ auto Scene_item::is_visible() const -> bool
     return (m_flag_bits & Scene_item_flags::visible) == Scene_item_flags::visible;
 }
 
+auto Scene_item::is_shown_in_ui() const -> bool
+{
+    return (m_flag_bits & Scene_item_flags::show_in_ui) == Scene_item_flags::show_in_ui;
+}
+
 auto Scene_item::is_hidden() const -> bool
 {
     return !is_visible();
@@ -198,7 +198,7 @@ auto Scene_item::describe() -> std::string
     return fmt::format(
         "type = {}, name = {}, id = {}, flags = {}",
         type_name(),
-        name(),
+        get_name(),
         get_id(),
         Scene_item_flags::to_string(get_flag_bits())
     );
@@ -313,16 +313,16 @@ void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
 
     log->trace(
         "{} (attach({} {})",
-        name(),
+        get_name(),
         attachment->type_name(),
-        attachment->name()
+        attachment->get_name()
     );
 
 #ifndef NDEBUG
     const auto i = std::find(node_data.attachments.begin(), node_data.attachments.end(), attachment);
     if (i != node_data.attachments.end())
     {
-        log->error("Attachment {} already attached to {}", attachment->type_name(), name());
+        log->error("Attachment {} already attached to {}", attachment->type_name(), get_name());
         return;
     }
 #endif
@@ -345,9 +345,9 @@ auto Node::detach(Node_attachment* attachment) -> bool
 
     log->trace(
         "{} (detach({} {})",
-        name(),
+        get_name(),
         attachment->type_name(),
-        attachment->name()
+        attachment->get_name()
     );
 
     auto* node = attachment->get_node();
@@ -356,11 +356,11 @@ auto Node::detach(Node_attachment* attachment) -> bool
         log->warn(
             "Attachment {} {} node {} != this {}",
             attachment->type_name(),
-            attachment->name(),
+            attachment->get_name(),
             node
-                ? node->name()
+                ? node->get_name()
                 : "(none)",
-            name()
+            get_name()
         );
         return false;
     }
@@ -378,7 +378,7 @@ auto Node::detach(Node_attachment* attachment) -> bool
         log->trace(
             "Removing {} {} attachment from node",
             attachment->type_name(),
-            name()
+            get_name()
         );
         node_data.attachments.erase(i, node_data.attachments.end());
         attachment->set_node(nullptr);
@@ -389,8 +389,8 @@ auto Node::detach(Node_attachment* attachment) -> bool
     log->warn(
         "Detaching {} {} from node {} failed - was not attached",
         attachment->type_name(),
-        attachment->name(),
-        name()
+        attachment->get_name(),
+        get_name()
     );
 
     return false;
@@ -491,7 +491,7 @@ void Node::handle_add_child(
     const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
     if (i != node_data.children.end())
     {
-        log->error("Node {} already has child {}", name(), child_node->name());
+        log->error("Node {} already has child {}", get_name(), child_node->get_name());
         return;
     }
 #endif
@@ -521,8 +521,8 @@ void Node::handle_remove_child(
     {
         log->error(
             "child node {} cannot be removed from parent node {}: child not found",
-            child_node->name(),
-            name()
+            child_node->get_name(),
+            get_name()
         );
     }
 }
@@ -559,7 +559,7 @@ void Node::set_parent(
     set_world_from_node(world_from_node);
     set_depth_recursive(
         new_parent
-            ? new_parent->depth() + 1
+            ? new_parent->get_depth() + 1
             : 0
     );
     handle_parent_update(old_parent, new_parent);
@@ -742,8 +742,8 @@ void Node::sanity_check() const
         {
             log->error(
                 "Node {} parent {} does not have node as child",
-                name(),
-                current_parent->name()
+                get_name(),
+                current_parent->get_name()
             );
         }
     }
@@ -754,29 +754,29 @@ void Node::sanity_check() const
         {
             log->error(
                 "Node {} child {} parent == {}",
-                name(),
-                child->name(),
+                get_name(),
+                child->get_name(),
                 (child->parent().lock())
-                    ? child->parent().lock()->name()
+                    ? child->parent().lock()->get_name()
                     : "(none)"
             );
         }
-        if (child->depth() != depth() + 1)
+        if (child->get_depth() != get_depth() + 1)
         {
             log->error(
                 "Node {} depth = {}, child {} depth = {}",
-                name(),
-                depth(),
-                child->name(),
-                child->depth()
+                get_name(),
+                get_depth(),
+                child->get_name(),
+                child->get_depth()
             );
         }
         if (child->get_scene_host() != get_scene_host())
         {
             log->error(
                 "Scene host mismatch: parent node = {}, child node = {}",
-                name(),
-                child->name()
+                get_name(),
+                child->get_name()
             );
         }
         child->sanity_check();
@@ -789,11 +789,11 @@ void Node::sanity_check() const
         {
             log->error(
                 "Node {} attachment {} {} node == {}",
-                name(),
+                get_name(),
                 attachment->type_name(),
-                attachment->name(),
+                attachment->get_name(),
                 (node != nullptr)
-                    ? node->name()
+                    ? node->get_name()
                     : "(none)"
             );
         }
@@ -810,7 +810,7 @@ void Node::sanity_check_root_path(const Node* node) const
         {
             log->error(
                 "Node {} has itself as an ancestor",
-                node->name()
+                node->get_name()
             );
         }
         current_parent->sanity_check_root_path(node);
@@ -822,7 +822,7 @@ auto Node::parent() const -> std::weak_ptr<Node>
     return node_data.parent;
 }
 
-auto Node::depth() const -> std::size_t
+auto Node::get_depth() const -> std::size_t
 {
     return node_data.depth;
 }
@@ -916,9 +916,9 @@ auto Node::transform_point_from_world_to_local(const glm::vec3 p) const -> glm::
     return glm::vec3{node_from_world() * glm::vec4{p, 1.0f}};
 }
 
-auto Node::transform_direction_from_world_to_local(const glm::vec3 d) const -> glm::vec3
+auto Node::transform_direction_from_world_to_local(const glm::vec3 direction) const -> glm::vec3
 {
-    return glm::vec3{node_from_world() * glm::vec4{d, 0.0f}};
+    return glm::vec3{node_from_world() * glm::vec4{direction, 0.0f}};
 }
 
 void Node::set_parent_from_node(const glm::mat4 m)
@@ -1048,7 +1048,7 @@ auto as_node(
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Node>(scene_item);
+    return std::static_pointer_cast<Node>(scene_item);
 }
 
 auto as_node_attachment(
@@ -1069,7 +1069,7 @@ auto as_node_attachment(
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Node_attachment>(scene_item);
+    return std::static_pointer_cast<Node_attachment>(scene_item);
 }
 
 

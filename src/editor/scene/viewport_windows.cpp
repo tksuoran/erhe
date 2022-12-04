@@ -246,7 +246,7 @@ auto Viewport_windows::create_basic_viewport_window(
 ) -> std::shared_ptr<Basic_viewport_window>
 {
     auto new_basic_viewport_window = std::make_shared<Basic_viewport_window>(
-        fmt::format("Basic_viewport_window for '{}'", viewport_window->name()),
+        fmt::format("Basic_viewport_window for '{}'", viewport_window->get_name()),
         viewport_window
     );
     m_basic_viewport_windows.push_back(new_basic_viewport_window);
@@ -301,7 +301,7 @@ auto Viewport_windows::create_imgui_viewport_window(
     const auto& window_imgui_viewport = m_imgui_windows->get_window_viewport();
 
     auto imgui_viewport_window = std::make_shared<Imgui_viewport_window>(
-        fmt::format("Imgui_viewport_window for '{}'", viewport_window->name()),
+        fmt::format("Imgui_viewport_window for '{}'", viewport_window->get_name()),
         viewport_window
     );
     m_imgui_viewport_windows.push_back(imgui_viewport_window);
@@ -326,7 +326,7 @@ auto Viewport_windows::open_new_viewport_window(
 {
     if (scene_root)
     {
-        const std::string name = fmt::format("Viewport for {}", scene_root->name());
+        const std::string name = fmt::format("Viewport for {}", scene_root->get_name());
 
         auto selection_tool = try_get<Selection_tool>();
         if (selection_tool)
@@ -440,7 +440,7 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
                 "mouse {}, {} hovers viewport {} @ {}",
                 m_mouse_x,
                 m_mouse_y,
-                viewport_window->name(),
+                viewport_window->get_name(),
                 viewport_position
             );
             viewport_window->update_pointer_context(
@@ -490,7 +490,7 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
                 "mouse {}, {} hovers viewport {} @ {}",
                 m_mouse_x,
                 m_mouse_y,
-                viewport_window->name(),
+                viewport_window->get_name(),
                 viewport_position
             );
 

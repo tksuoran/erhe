@@ -1,4 +1,5 @@
 #include "brushes/brush.hpp"
+#include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "editor_log.hpp"
@@ -111,6 +112,17 @@ Brush::Brush(const Brush_data& create_info)
     {
         data.name = data.geometry->name;
     }
+    label = fmt::format("{}##Node{}", data.name, id.get_id());
+}
+
+auto Brush::static_type_name() -> const char*
+{
+    return "Brush";
+}
+
+auto Brush::is_shown_in_ui() const -> bool
+{
+    return true;
 }
 
 void Brush::late_initialize()
@@ -385,9 +397,14 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
 const std::string empty_string = {};
 
-auto Brush::name() const -> const std::string&
+auto Brush::get_name() const -> const std::string&
 {
     return data.name;
+}
+
+auto Brush::get_label() const -> const std::string&
+{
+    return label;
 }
 
 auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
@@ -417,14 +434,16 @@ auto Brush::make_instance(
     ERHE_VERIFY(scaled.rt_primitive);
 
     log_scene->trace(
-        "creating {} with material index {} : {}",
+        "creating {} with material {} (material buffer index {})",
         name,
-        instance_create_info.material->index,
-        instance_create_info.material->name
+        instance_create_info.material->get_name(),
+        instance_create_info.material->material_buffer_index
     );
 
     auto node = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
-    auto mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{} mesh", name));
+    auto mesh = instance_create_info.scene_root->content_library()->meshes.make(
+        fmt::format("{} mesh", name)
+    );
     mesh->mesh_data.primitives.push_back(
         erhe::primitive::Primitive{
             .material              = instance_create_info.material,
@@ -456,13 +475,13 @@ auto Brush::make_instance(
             .inertia_override = scaled.local_inertia,
             .debug_label      = name.c_str()
         };
-        auto node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+        auto node_physics = std::make_shared<Node_physics>(rigid_body_create_info); // TODO use content library?
         node->attach(node_physics);
     }
 
     if (scaled.rt_primitive)
     {
-        auto node_raytrace = std::make_shared<Node_raytrace>(
+        auto node_raytrace = std::make_shared<Node_raytrace>( // TODO use content library?
             scaled.geometry,
             scaled.rt_primitive
         );

@@ -89,18 +89,24 @@ public:
         return {};
     }
 
-    void GetSubmergedVolume(
+	void GetSubmergedVolume(
         JPH::Mat44Arg     inCenterOfMassTransform,
         JPH::Vec3Arg      inScale,
         const JPH::Plane& inSurface,
         float&            outTotalVolume,
         float&            outSubmergedVolume,
         JPH::Vec3&        outCenterOfBuoyancy
+#ifdef JPH_DEBUG_RENDERER // Not using JPH_IF_DEBUG_RENDERER for Doxygen
+		, JPH::RVec3Arg   inBaseOffset
+#endif
     ) const override
     {
         static_cast<void>(inCenterOfMassTransform);
         static_cast<void>(inScale);
         static_cast<void>(inSurface);
+#ifdef JPH_DEBUG_RENDERER // Not using JPH_IF_DEBUG_RENDERER for Doxygen
+		static_cast<void>(inBaseOffset);
+#endif
         outTotalVolume = 0.0f;
         outSubmergedVolume = 0.0f;
         outCenterOfBuoyancy = JPH::Vec3{0.0f, 0.0f, 0.0f};

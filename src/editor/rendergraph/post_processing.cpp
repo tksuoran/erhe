@@ -160,7 +160,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     {
         log_post_processing->trace(
             "Resizing Post_processing_node '{}' to 0 x 0",
-            name()
+            get_name()
         );
         if (
             (m_width  != 0) ||
@@ -182,7 +182,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
 
     log_post_processing->trace(
         "Resizing Post_processing_node '{}' to {} x {}",
-        name(),
+        get_name(),
         m_width,
         m_height
     );

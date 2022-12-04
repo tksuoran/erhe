@@ -1,8 +1,8 @@
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "editor_view_client.hpp"
+#include "brushes/brush_tool.hpp"
 #include "brushes/create.hpp"
-#include "brushes/brush_palette.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/image_transfer.hpp"
 #include "operations/operation_stack.hpp"
@@ -40,13 +40,12 @@
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #include "windows/layers_window.hpp"
-#include "windows/material_properties.hpp"
-#include "windows/materials_window.hpp"
-#include "windows/node_properties.hpp"
+#include "windows/content_library_window.hpp"
 #include "windows/node_tree_window.hpp"
 #include "windows/operations.hpp"
 #include "windows/post_processing_window.hpp"
 #include "windows/physics_window.hpp"
+#include "windows/properties.hpp"
 #include "windows/rendergraph_window.hpp"
 #include "windows/settings.hpp"
 #include "windows/tool_properties_window.hpp"
@@ -174,9 +173,9 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Program_interface     >());
         m_components.add(make_shared<editor::Programs              >());
         m_components.add(make_shared<editor::Image_transfer        >());
-        m_components.add(make_shared<editor::Brushes               >());
-        m_components.add(make_shared<editor::Brush_palette         >());
+        m_components.add(make_shared<editor::Brush_tool            >());
         m_components.add(make_shared<editor::Create                >());
+        m_components.add(make_shared<editor::Content_library_window>());
         m_components.add(make_shared<editor::Debug_draw            >());
         m_components.add(make_shared<editor::Debug_view_window     >());
         m_components.add(make_shared<editor::Debug_visualizations  >());
@@ -192,10 +191,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Id_renderer           >());
         m_components.add(make_shared<editor::Layers_window         >());
         m_components.add(make_shared<editor::Material_paint_tool   >());
-        m_components.add(make_shared<editor::Material_properties   >());
-        m_components.add(make_shared<editor::Materials_window      >());
         m_components.add(make_shared<editor::Mesh_memory           >());
-        m_components.add(make_shared<editor::Node_properties       >());
+        m_components.add(make_shared<editor::Properties            >());
         m_components.add(make_shared<editor::Node_tree_window      >());
         m_components.add(make_shared<editor::Operation_stack       >());
         m_components.add(make_shared<editor::Operations            >());
@@ -258,8 +255,8 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<erhe::application::Performance_window>(), config.performance  );
     init_window(m_components.get<erhe::application::Pipelines         >(), config.pipelines    );
 
-    init_window(m_components.get<editor::Brush_palette         >(), config.brush_palette       );
     init_window(m_components.get<editor::Create                >(), config.create              );
+    init_window(m_components.get<editor::Content_library_window>(), config.content_library     );
     init_window(m_components.get<editor::Debug_view_window     >(), config.debug_view          );
     init_window(m_components.get<editor::Debug_visualizations  >(), config.debug_visualizations);
     init_window(m_components.get<editor::Fly_camera_tool       >(), config.fly_camera          );
@@ -269,15 +266,13 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 #endif
     init_window(m_components.get<editor::Hover_tool            >(), config.hover_tool          );
     init_window(m_components.get<editor::Layers_window         >(), config.layers              );
-    init_window(m_components.get<editor::Material_properties   >(), config.material_properties );
-    init_window(m_components.get<editor::Materials_window      >(), config.materials           );
-    init_window(m_components.get<editor::Node_properties       >(), config.node_properties     );
     init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree           );
     init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack     );
     init_window(m_components.get<editor::Operations            >(), config.operations          );
     init_window(m_components.get<editor::Paint_tool            >(), config.paint_tool          );
     init_window(m_components.get<editor::Physics_window        >(), config.physics             );
     init_window(m_components.get<editor::Post_processing_window>(), config.post_processing     );
+    init_window(m_components.get<editor::Properties            >(), config.properties          );
     init_window(m_components.get<editor::Rendergraph_window    >(), config.render_graph        );
     init_window(m_components.get<editor::Settings_window       >(), config.settings            );
     init_window(m_components.get<editor::Trs_tool              >(), config.trs                 );

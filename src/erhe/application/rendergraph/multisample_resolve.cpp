@@ -125,7 +125,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
     {
         log_rendergraph->info(
             "Resizing Multisample_resolve_node '{}' to {} x {}",
-            name(),
+            get_name(),
             output_viewport.width,
             output_viewport.height
         );
@@ -143,7 +143,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
             }
         );
         m_color_texture->set_debug_label(
-            fmt::format("{} Multisample_resolve_node color texture", name())
+            fmt::format("{} Multisample_resolve_node color texture", get_name())
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
         gl::clear_tex_image(
@@ -162,7 +162,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
         );
 
         m_depth_stencil_renderbuffer->set_debug_label(
-            fmt::format("'{}' Multisample_resolve_node depth-stencil renderbuffer", name())
+            fmt::format("'{}' Multisample_resolve_node depth-stencil renderbuffer", get_name())
         );
 
         {
@@ -172,7 +172,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
             create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_renderbuffer.get());
             m_framebuffer = std::make_unique<Framebuffer>(create_info);
             m_framebuffer->set_debug_label(
-                fmt::format("{} Multisample_resolve_node framebuffer", name())
+                fmt::format("{} Multisample_resolve_node framebuffer", get_name())
             );
 
             gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
@@ -181,7 +181,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
 
             if (!m_framebuffer->check_status())
             {
-                log_rendergraph->error("'{} Multisample_resolve_node framebuffer not complete", name());
+                log_rendergraph->error("'{} Multisample_resolve_node framebuffer not complete", get_name());
                 m_framebuffer.reset();
                 return;
             }
@@ -203,7 +203,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
         create_info.attach(gl::Framebuffer_attachment::depth_attachment,   m_depth_stencil_renderbuffer.get());
         create_info.attach(gl::Framebuffer_attachment::stencil_attachment, m_depth_stencil_renderbuffer.get());
         m_framebuffer = std::make_shared<Framebuffer>(create_info);
-        m_framebuffer->set_debug_label(name());
+        m_framebuffer->set_debug_label(get_name());
 
         gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
         gl::named_framebuffer_draw_buffers(m_framebuffer->gl_name(), 1, &draw_buffers[0]);
@@ -211,7 +211,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
 
         if (!m_framebuffer->check_status())
         {
-            log_rendergraph->error("{} Multisample_resolve_node framebuffer not complete", name());
+            log_rendergraph->error("{} Multisample_resolve_node framebuffer not complete", get_name());
             m_framebuffer.reset();
             return;
         }
@@ -239,7 +239,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
             {
                 log_rendergraph->error(
                     "{} Multisample_resolve_node BlitFramebuffer read framebuffer status = {}",
-                    name(),
+                    get_name(),
                     gl::c_str(status)
                 );
             }
@@ -259,7 +259,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
             {
                 log_rendergraph->error(
                     "{} Multisample_resolve_node BlitFramebuffer draw framebuffer status = {}",
-                    name(),
+                    get_name(),
                     gl::c_str(status)
                 );
             }

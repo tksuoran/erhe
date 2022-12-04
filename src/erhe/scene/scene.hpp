@@ -32,6 +32,8 @@ public:
         const erhe::toolkit::Unique_id<Node>::id_type id
     ) const -> std::shared_ptr<Mesh>;
 
+    [[nodiscard]] auto get_name() const -> const std::string&;
+
     void add   (const std::shared_ptr<Mesh>& mesh);
     void remove(const std::shared_ptr<Mesh>& mesh);
 
@@ -49,6 +51,8 @@ public:
     [[nodiscard]] auto get_light_by_id(
         const erhe::toolkit::Unique_id<Node>::id_type id
     ) const -> std::shared_ptr<Light>;
+
+    [[nodiscard]] auto get_name() const -> const std::string&;
 
     void add   (const std::shared_ptr<Light>& light);
     void remove(const std::shared_ptr<Light>& light);

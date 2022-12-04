@@ -107,13 +107,13 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 
 Scene_root::Scene_root(
     erhe::message_bus::Message_bus<erhe::scene::Scene_message>* message_bus,
-    const std::shared_ptr<Material_library>&                    material_library,
+    const std::shared_ptr<Content_library>&                     content_library,
     const std::string_view                                      name
 )
-    : m_name            {name}
-    , m_scene           {std::make_unique<Scene>(message_bus, this)}
-    , m_material_library{material_library}
-    , m_layers          (*m_scene.get())
+    : m_name           {name}
+    , m_scene          {std::make_unique<Scene>(message_bus, this)}
+    , m_content_library{content_library}
+    , m_layers         (*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION
 
@@ -169,7 +169,7 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
     return *m_scene.get();
 }
 
-[[nodiscard]] auto Scene_root::name() const -> const std::string&
+[[nodiscard]] auto Scene_root::get_name() const -> const std::string&
 {
     return m_name;
 }
@@ -192,7 +192,7 @@ auto Scene_root::camera_combo(
     }
     for (const auto& camera : scene().cameras)
     {
-        names.push_back(camera->name().c_str());
+        names.push_back(camera->get_name().c_str());
         cameras.push_back(camera.get());
         if (selected_camera == camera.get())
         {
@@ -234,7 +234,7 @@ auto Scene_root::camera_combo(
     }
     for (const auto& camera : scene().cameras)
     {
-        names.push_back(camera->name().c_str());
+        names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
         if (selected_camera == camera)
         {
@@ -276,7 +276,7 @@ auto Scene_root::camera_combo(
     }
     for (const auto& camera : scene().cameras)
     {
-        names.push_back(camera->name().c_str());
+        names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
         if (selected_camera.lock() == camera)
         {
@@ -351,9 +351,9 @@ void Scene_root::update_pointer_for_rendertarget_meshes()
     }
 }
 
-auto Scene_root::material_library() const -> std::shared_ptr<Material_library>
+auto Scene_root::content_library() const -> std::shared_ptr<Content_library>
 {
-    return m_material_library;
+    return m_content_library;
 }
 
 auto Scene_root::create_rendertarget_mesh(

@@ -27,6 +27,11 @@ Light::~Light() noexcept
 {
 }
 
+auto Light::static_type_name() -> const char*
+{
+    return "Light";
+}
+
 auto Light::type_name() const -> const char*
 {
     return "Light";
@@ -465,7 +470,7 @@ auto as_light(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Light>(scene_item);
+    return std::static_pointer_cast<Light>(scene_item);
 }
 
 auto get_light(

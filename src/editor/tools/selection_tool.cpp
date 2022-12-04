@@ -14,6 +14,7 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
+#include "windows/node_tree_window.hpp"
 #include "windows/viewport_config.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -53,7 +54,7 @@ void Range_selection::set_terminator(
         log_selection->trace(
             "setting primary terminator to {} {}",
             item->type_name(),
-            item->name()
+            item->get_name()
         );
         m_primary_terminator = item;
         m_edited = true;
@@ -64,7 +65,7 @@ void Range_selection::set_terminator(
         log_selection->trace(
             "ignoring setting terminator to {} - {} because it is already the primary terminator",
             item->type_name(),
-            item->name()
+            item->get_name()
         );
         return;
     }
@@ -73,11 +74,11 @@ void Range_selection::set_terminator(
         log_selection->trace(
             "ignoring setting terminator to {} - {} because it is already the secondary terminator",
             item->type_name(),
-            item->name()
+            item->get_name()
         );
         return;
     }
-    log_selection->trace("setting secondary terminator to {} {}", item->type_name(), item->name());
+    log_selection->trace("setting secondary terminator to {} {}", item->type_name(), item->get_name());
     m_secondary_terminator = item;
     m_edited = true;
 }
@@ -113,19 +114,19 @@ void Range_selection::end()
             (item == m_secondary_terminator)
         )
         {
-            log_selection->trace("   T. {} {} {}", item->type_name(), item->name(), item->get_id());
+            log_selection->trace("   T. {} {} {}", item->type_name(), item->get_name(), item->get_id());
             selection.push_back(item);
             between_terminators = !between_terminators;
             continue;
         }
         if (between_terminators)
         {
-            log_selection->trace("    + {} {} {}", item->type_name(), item->name(), item->get_id());
+            log_selection->trace("    + {} {} {}", item->type_name(), item->get_name(), item->get_id());
             selection.push_back(item);
         }
         else
         {
-            log_selection->trace("    - {} {} {}", item->type_name(), item->name(), item->get_id());
+            log_selection->trace("    - {} {} {}", item->type_name(), item->get_name(), item->get_id());
         }
     }
     if (selection.empty())
@@ -294,6 +295,7 @@ void Selection_tool::post_initialize()
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_headset_view      = get<Headset_view    >();
 #endif
+    m_node_tree_window  = get<Node_tree_window>();
     m_viewport_config   = get<Viewport_config >();
     m_viewport_windows  = get<Viewport_windows>();
 }
@@ -379,11 +381,12 @@ auto Selection_tool::on_select() -> bool
 {
     log_selection->trace("on select");
 
+    const bool was_selected = is_in_selection(m_hover_mesh);
     if (m_viewport_windows->control_key_down())
     {
         if (m_hover_content)
         {
-            toggle_selection(m_hover_mesh, false);
+            toggle_mesh_selection(m_hover_mesh, was_selected, false);
             return true;
         }
         return false;
@@ -396,7 +399,7 @@ auto Selection_tool::on_select() -> bool
     else
     {
         m_range_selection.reset();
-        toggle_selection(m_hover_mesh, true);
+        toggle_mesh_selection(m_hover_mesh, was_selected, true);
     }
     return true;
 }
@@ -426,31 +429,72 @@ auto Selection_tool::clear_selection() -> bool
     return true;
 }
 
-void Selection_tool::toggle_selection(
-    const std::shared_ptr<erhe::scene::Scene_item>& item,
-    const bool                                      clear_others
+void Selection_tool::toggle_mesh_selection(
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    const bool                                was_selected,
+    const bool                                clear_others
 )
 {
+    bool add{false};
+    bool remove{false};
     if (clear_others)
     {
-        const bool was_selected = is_in_selection(item);
-
         clear_selection();
-        if (!was_selected && item)
+        if (!was_selected && mesh)
         {
-            add_to_selection(item);
-            m_range_selection.set_terminator(item);
+            add = true;
         }
     }
-    else if (item)
+    else if (mesh)
     {
-        if (is_in_selection(item))
+        if (was_selected)
         {
-            remove_from_selection(item);
+            remove = true;
         }
         else
         {
-            add_to_selection(item);
+            add = true;
+        }
+    }
+
+    ERHE_VERIFY(!add || !remove);
+
+    if (add)
+    {
+        if (m_node_tree_window->expand_attachments())
+        {
+            add_to_selection(mesh);
+            m_range_selection.set_terminator(mesh);
+        }
+        else
+        {
+            erhe::scene::Node* const node = mesh->get_node();
+            const auto node_item = node->shared_from_this();
+            add_to_selection(node_item);
+            m_range_selection.set_terminator(node_item);
+            for (auto& attachment : node->attachments())
+            {
+                add_to_selection(attachment);
+                m_range_selection.set_terminator(attachment);
+            }
+        }
+    }
+    else if (remove)
+    {
+        if (m_node_tree_window->expand_attachments())
+        {
+            remove_from_selection(mesh);
+        }
+        else
+        {
+            erhe::scene::Node* const node = mesh->get_node();
+            const auto node_item = node->shared_from_this();
+            remove_from_selection(node_item);
+            m_range_selection.set_terminator(node_item);
+            for (auto& attachment : node->attachments())
+            {
+                remove_from_selection(attachment);
+            }
         }
     }
 
@@ -473,7 +517,7 @@ auto Selection_tool::is_in_selection(
     ) != m_selection.end();
 }
 
-auto Selection_tool::add_to_selection(
+    auto Selection_tool::add_to_selection(
     const std::shared_ptr<erhe::scene::Scene_item>& item
 ) -> bool
 {
@@ -487,13 +531,13 @@ auto Selection_tool::add_to_selection(
 
     if (!is_in_selection(item))
     {
-        log_selection->trace("Adding {} to selection", item->name());
+        log_selection->trace("Adding {} to selection", item->get_name());
         m_selection.push_back(item);
         call_selection_change_subscriptions();
         return true;
     }
 
-    log_selection->warn("Adding {} to selection failed - was already in selection", item->name());
+    log_selection->warn("Adding {} to selection failed - was already in selection", item->get_name());
     return false;
 }
 
@@ -516,13 +560,13 @@ auto Selection_tool::remove_from_selection(
     );
     if (i != m_selection.end())
     {
-        log_selection->trace("Removing item {} from selection", item->name());
+        log_selection->trace("Removing item {} from selection", item->get_name());
         m_selection.erase(i, m_selection.end());
         call_selection_change_subscriptions();
         return true;
     }
 
-    log_selection->info("Removing item {} from selection failed - was not in selection", item->name());
+    log_selection->info("Removing item {} from selection failed - was not in selection", item->get_name());
     return false;
 }
 
@@ -618,7 +662,7 @@ void Selection_tool::imgui()
             ImGui::BulletText(
                 "%s %s %s",
                 item->type_name(),
-                item->name().c_str(),
+                item->get_name().c_str(),
                 item->is_selected() ? "Ok" : "?!"
             );
         }

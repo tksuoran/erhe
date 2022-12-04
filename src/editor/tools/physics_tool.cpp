@@ -364,7 +364,7 @@ auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
     };
 
     log_physics->trace("PT pos in mesh {}", m_target_position_in_mesh);
-    log_physics->trace("PT drag {} ready @ {}", m_target_mesh->name(), m_target_position_end);
+    log_physics->trace("PT drag {} ready @ {}", m_target_mesh->get_name(), m_target_position_end);
 
     move_drag_point_instant(m_target_position_end);
 
@@ -456,7 +456,7 @@ auto Physics_tool::on_drag_ready(Scene_view* scene_view) -> bool
         return false;
     }
 
-    log_physics->trace("PT drag {} ready", m_target_mesh->name());
+    log_physics->trace("PT drag {} ready", m_target_mesh->get_name());
     return true;
 }
 
@@ -473,7 +473,7 @@ auto Physics_tool::on_force_ready() -> bool
         return false;
     }
 
-    log_physics->trace("Physics tool force {} ready", m_target_mesh->name());
+    log_physics->trace("Physics tool force {} ready", m_target_mesh->get_name());
     return true;
 }
 #endif
@@ -688,7 +688,7 @@ void Physics_tool::tool_properties()
     //ImGui::Text("State: %s",     erhe::application::c_state_str[static_cast<int>(m_drag_command.get_command_state())]);
     //if (m_hover_mesh)
     //{
-    //    ImGui::Text("Hover mesh: %s", m_hover_mesh->name().c_str());
+    //    ImGui::Text("Hover mesh: %s", m_hover_mesh->get_name().c_str());
     //}
     if (m_target_mesh)
     {
@@ -701,7 +701,7 @@ void Physics_tool::tool_properties()
     }
 
     ImGui::Checkbox("Show Drag Body", &m_show_drag_body);
-    ImGui::Text("Mesh: %s", m_last_target_mesh->name().c_str());
+    ImGui::Text("Mesh: %s", m_last_target_mesh->get_name().c_str());
 
     //float speed = 0.0f;
     //std::shared_ptr<Node_physics> node_physics = get_node_physics(m_last_target_mesh.get());

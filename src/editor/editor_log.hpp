@@ -35,6 +35,7 @@ extern std::shared_ptr<spdlog::logger> log_xr;
 extern std::shared_ptr<spdlog::logger> log_hud;
 extern std::shared_ptr<spdlog::logger> log_controller_ray;
 extern std::shared_ptr<spdlog::logger> log_frame;
+extern std::shared_ptr<spdlog::logger> log_tree;
 
 void initialize_logging();
 

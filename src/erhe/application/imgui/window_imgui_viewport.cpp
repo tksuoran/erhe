@@ -181,15 +181,8 @@ void Window_imgui_viewport::execute_rendergraph_node()
     const auto& context_window = m_window->get_context_window();
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     gl::viewport        (0, 0, context_window->get_width(), context_window->get_height());
-
-    //// TODO Is this still necessary?
-    ////
-    //// Pipeline state required for NVIDIA driver not to complain about texture
-    //// unit state when doing the clear.
-    //m_pipeline_state_tracker->shader_stages.reset();
-    //m_pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
-    gl::clear_color  (0.0f, 0.0f, 0.0f, 0.0f);
-    gl::clear        (gl::Clear_buffer_mask::color_buffer_bit);
+    gl::clear_color     (0.0f, 0.0f, 0.0f, 0.0f);
+    gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
     m_imgui_renderer->render_draw_data();
 }
 

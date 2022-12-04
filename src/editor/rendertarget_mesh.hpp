@@ -57,15 +57,17 @@ public:
     );
 
     // Implements Scene_item
+    [[nodiscard]] static auto static_type_name() -> const char*;
     [[nodiscard]] auto type_name() const -> const char* override;
 
     // Public API
-    [[nodiscard]] auto texture        () const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] auto framebuffer    () const -> std::shared_ptr<erhe::graphics::Framebuffer>;
-    [[nodiscard]] auto width          () const -> float;
-    [[nodiscard]] auto height         () const -> float;
-    [[nodiscard]] auto get_pointer    () const -> std::optional<glm::vec2>;
-    [[nodiscard]] auto world_to_window(glm::vec3 world_position) const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
+    [[nodiscard]] auto framebuffer     () const -> std::shared_ptr<erhe::graphics::Framebuffer>;
+    [[nodiscard]] auto width           () const -> float;
+    [[nodiscard]] auto height          () const -> float;
+    [[nodiscard]] auto pixels_per_meter() const -> double;
+    [[nodiscard]] auto get_pointer     () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto world_to_window (glm::vec3 world_position) const -> std::optional<glm::vec2>;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void update_headset(Headset_view& headset_view);

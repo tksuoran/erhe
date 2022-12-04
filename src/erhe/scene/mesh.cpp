@@ -35,6 +35,11 @@ Mesh::~Mesh() noexcept
 {
 }
 
+auto Mesh::static_type_name() -> const char*
+{
+    return "Mesh";
+}
+
 auto Mesh::type_name() const -> const char*
 {
     return "Mesh";
@@ -112,7 +117,7 @@ auto as_mesh(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<M
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Mesh>(scene_item);
+    return std::static_pointer_cast<Mesh>(scene_item);
 }
 
 auto get_mesh(

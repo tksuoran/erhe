@@ -112,9 +112,9 @@ void Hover_tool::imgui()
     const auto& nearest      = m_scene_view->get_nearest_hover();
     ImGui::Checkbox("Show Snapped Grid Position", &m_show_snapped_grid_position);
     ImGui::Text("Nearest: %s",      nearest.valid ? nearest.get_name().c_str() : "");
-    ImGui::Text("Content: %s",      (hover       .valid && hover       .mesh) ? hover       .mesh->name().c_str() : "");
-    ImGui::Text("Tool: %s",         (tool        .valid && tool        .mesh) ? tool        .mesh->name().c_str() : "");
-    ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget.mesh) ? rendertarget.mesh->name().c_str() : "");
+    ImGui::Text("Content: %s",      (hover       .valid && hover       .mesh) ? hover       .mesh->get_name().c_str() : "");
+    ImGui::Text("Tool: %s",         (tool        .valid && tool        .mesh) ? tool        .mesh->get_name().c_str() : "");
+    ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget.mesh) ? rendertarget.mesh->get_name().c_str() : "");
     if (grid.valid && grid.position.has_value())
     {
         const std::string text = fmt::format("Grid: {}", grid.position.value());
@@ -251,7 +251,7 @@ void Hover_tool::tool_render(
                 const glm::vec3 local_position = node->transform_point_from_world_to_local(entry.position.value());
                 const std::string text_line_3 = fmt::format(
                     "Position in {}: {}",
-                    entry.mesh->name(),
+                    entry.mesh->get_name(),
                     local_position
                 );
                 m_text_renderer->print(

@@ -359,7 +359,7 @@ void Debug_view_window::imgui()
         }
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip("%s", light_projection_transform.light->name().c_str());
+            ImGui::SetTooltip("%s", light_projection_transform.light->get_name().c_str());
         }
     }
 

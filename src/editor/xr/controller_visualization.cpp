@@ -1,5 +1,5 @@
 #include "xr/controller_visualization.hpp"
-#include "scene/material_library.hpp"
+#include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "renderers/mesh_memory.hpp"
 
@@ -22,8 +22,8 @@ Controller_visualization::Controller_visualization(
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& material_library = scene_root.material_library();
-    auto controller_material = material_library->make_material(
+    auto& material_library = scene_root.content_library()->materials;
+    auto controller_material = material_library.make(
         "Controller",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );

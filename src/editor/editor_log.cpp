@@ -32,6 +32,7 @@ std::shared_ptr<spdlog::logger> log_textures;
 std::shared_ptr<spdlog::logger> log_tools;
 std::shared_ptr<spdlog::logger> log_trs_tool;
 std::shared_ptr<spdlog::logger> log_xr;
+std::shared_ptr<spdlog::logger> log_tree;
 
 void initialize_logging()
 {
@@ -64,6 +65,7 @@ void initialize_logging()
     log_tools                      = erhe::log::make_logger("editor::tools"                     , spdlog::level::info);
     log_trs_tool                   = erhe::log::make_logger("editor::trs_tool"                  , spdlog::level::info);
     log_xr                         = erhe::log::make_logger("editor::xr"                        , spdlog::level::info);
+    log_tree                       = erhe::log::make_logger("editor::tree"                      , spdlog::level::trace);
 }
 
 }

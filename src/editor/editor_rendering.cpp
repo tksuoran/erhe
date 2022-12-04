@@ -688,8 +688,8 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
     auto& render_style = context.viewport_config->render_style_not_selected;
 
     const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->material_library();
-    const auto& materials        = material_library->materials();
+    const auto& material_library = scene_root->content_library()->materials;
+    const auto& materials        = material_library.entries();
 
     using Scene_item_filter = erhe::scene::Scene_item_filter;
     using Scene_item_flags  = erhe::scene::Scene_item_flags;
@@ -815,8 +815,8 @@ void Editor_rendering::render_rendertarget_meshes(
     erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport rendertarget meshes"};
 
     const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->material_library();
-    const auto& materials        = material_library->materials();
+    const auto& material_library = scene_root->content_library()->materials;
+    const auto& materials        = material_library.entries();
 
     m_forward_renderer->render(
         Forward_renderer::Render_parameters{
@@ -855,8 +855,8 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
 
     const auto& render_style     = context.viewport_config->render_style_selected;
     const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->material_library();
-    const auto& materials        = material_library->materials();
+    const auto& material_library = scene_root->content_library()->materials;
+    const auto& materials        = material_library.entries();
 
     constexpr erhe::scene::Scene_item_filter content_selected_filter{
         .require_all_bits_set =
@@ -992,12 +992,8 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
     }
 
     const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->material_library();
-    if (!material_library)
-    {
-        return;
-    }
-    const auto& materials = material_library->materials();
+    const auto& material_library = scene_root->content_library()->materials;
+    const auto& materials        = material_library.entries();
 
     if (layers.tool()->meshes.empty())
     {
@@ -1049,13 +1045,8 @@ void Editor_rendering::render_brush(const Render_context& context)
     }
 
     const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->material_library();
-    if (!material_library)
-    {
-        return;
-    }
-
-    const auto& materials = material_library->materials();
+    const auto& material_library = scene_root->content_library()->materials;
+    const auto& materials        = material_library.entries();
 
     if (layers.brush()->meshes.empty())
     {

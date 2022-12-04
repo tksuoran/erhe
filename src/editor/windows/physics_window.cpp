@@ -157,7 +157,7 @@ void Physics_window::imgui()
     auto&      physics_world           = scene_root->physics_world();
     const bool physics_enabled         = physics_world.is_physics_updates_enabled();
     bool       updated_physics_enabled = physics_enabled;
-    ImGui::Text("Scene: %s", scene_root->name().c_str());
+    ImGui::Text("Scene: %s", scene_root->get_name().c_str());
     ImGui::Checkbox("Physics enabled", &updated_physics_enabled);
     if (updated_physics_enabled != physics_enabled)
     {

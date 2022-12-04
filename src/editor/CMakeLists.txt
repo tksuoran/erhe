@@ -7,10 +7,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     brushes/brush.cpp
     brushes/brush.hpp
-    brushes/brushes.cpp
-    brushes/brushes.hpp
-    brushes/brush_palette.cpp
-    brushes/brush_palette.hpp
+    brushes/brush_tool.cpp
+    brushes/brush_tool.hpp
     brushes/create.cpp
     brushes/create.hpp
 
@@ -82,6 +80,8 @@ erhe_target_sources_grouped(
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
 
+    scene/content_library.cpp
+    scene/content_library.hpp
     scene/debug_draw.cpp
     scene/debug_draw.hpp
     scene/frame_controller.cpp
@@ -136,18 +136,14 @@ erhe_target_sources_grouped(
     tools/trs_tool.cpp
     tools/trs_tool.hpp
 
+    windows/content_library_window.cpp
+    windows/content_library_window.hpp
     windows/debug_view_window.cpp
     windows/debug_view_window.hpp
     windows/imgui_viewport_window.cpp
     windows/imgui_viewport_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
-    windows/materials_window.cpp
-    windows/materials_window.hpp
-    windows/material_properties.cpp
-    windows/material_properties.hpp
-    windows/node_properties.cpp
-    windows/node_properties.hpp
     windows/node_tree_window.cpp
     windows/node_tree_window.hpp
     windows/operations.cpp
@@ -156,6 +152,8 @@ erhe_target_sources_grouped(
     windows/post_processing_window.hpp
     windows/physics_window.cpp
     windows/physics_window.hpp
+    windows/properties.cpp
+    windows/properties.hpp
     windows/rendergraph_window.cpp
     windows/rendergraph_window.hpp
     windows/settings.cpp

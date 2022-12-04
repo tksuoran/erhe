@@ -95,6 +95,11 @@ auto Frame_controller::heading() const -> float
     return m_heading;
 }
 
+auto Frame_controller::static_type_name() -> const char*
+{
+    return "Frame_controller";
+}
+
 auto Frame_controller::type_name() const -> const char*
 {
     return "Frame_controller";
@@ -270,67 +275,67 @@ void Frame_controller::update_fixed_step()
 }
 
 auto is_frame_controller(
-    const erhe::scene::Node_attachment* const attachment
+    const erhe::scene::Scene_item* const item
 ) -> bool
 {
-    if (attachment == nullptr)
+    if (item == nullptr)
     {
         return false;
     }
     using namespace erhe::toolkit;
     return test_all_rhs_bits_set(
-        attachment->get_flag_bits(),
+        item->get_flag_bits(),
         erhe::scene::Scene_item_flags::frame_controller
     );
 }
 
 auto is_frame_controller(
-    const std::shared_ptr<erhe::scene::Node_attachment>& attachment
+    const std::shared_ptr<erhe::scene::Scene_item>& item
 ) -> bool
 {
-    return is_frame_controller(attachment.get());
+    return is_frame_controller(item.get());
 }
 
 auto as_frame_controller(
-    erhe::scene::Node_attachment* attachment
+    erhe::scene::Scene_item* item
 ) -> Frame_controller*
 {
-    if (attachment == nullptr)
+    if (item == nullptr)
     {
         return nullptr;
     }
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            attachment->get_flag_bits(),
+            item->get_flag_bits(),
             erhe::scene::Scene_item_flags::frame_controller
         )
     )
     {
         return nullptr;
     }
-    return reinterpret_cast<Frame_controller*>(attachment);
+    return reinterpret_cast<Frame_controller*>(item);
 }
 
 auto as_frame_controller(
-    const std::shared_ptr<erhe::scene::Node_attachment>& attachment
+    const std::shared_ptr<erhe::scene::Scene_item>& item
 ) -> std::shared_ptr<Frame_controller>
 {
-    if (!attachment)
+    if (!item)
     {
         return {};
     }
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            attachment->get_flag_bits(),
+            item->get_flag_bits(),
             erhe::scene::Scene_item_flags::frame_controller
         )
     )
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Frame_controller>(attachment);
+    return std::static_pointer_cast<Frame_controller>(item);
 }
 
 auto get_frame_controller(

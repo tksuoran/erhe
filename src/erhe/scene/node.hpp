@@ -44,6 +44,7 @@ public:
     static constexpr uint64_t id                        = (1u << 20);
     static constexpr uint64_t tool                      = (1u << 21);
     static constexpr uint64_t brush                     = (1u << 22);
+    static constexpr uint64_t show_in_ui                = (1u << 23);
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
 };
@@ -67,28 +68,29 @@ public:
     explicit Scene_item(const std::string_view name);
     virtual ~Scene_item() noexcept;
 
-    [[nodiscard]] auto name                   () const -> const std::string&;
-                  void set_name               (const std::string_view name);
-    [[nodiscard]] auto label                  () const -> const std::string&;
-    [[nodiscard]] auto get_flag_bits          () const -> uint64_t;
-    [[nodiscard]] auto flag_bits              () -> uint64_t&;
-                  void set_flag_bits          (const uint64_t mask, bool value);
-                  void enable_flag_bits       (const uint64_t mask);
-                  void disable_flag_bits      (const uint64_t mask);
-    [[nodiscard]] auto get_id                 () const -> erhe::toolkit::Unique_id<Scene_item>::id_type;
-    [[nodiscard]] auto is_selected            () const -> bool;
-                  void set_selected           (bool value);
-                  void set_visible            (bool value);
-                  void show                   ();
-                  void hide                   ();
-    [[nodiscard]] auto is_visible             () const -> bool;
-    [[nodiscard]] auto is_hidden              () const -> bool;
-    [[nodiscard]] auto describe               () -> std::string;
     [[nodiscard]] virtual auto get_scene_host() const -> Scene_host*;
     [[nodiscard]] virtual auto type_name     () const -> const char*;
 
-                  void set_wireframe_color(const glm::vec4& color);
+    [[nodiscard]] auto get_name           () const -> const std::string&;
+    [[nodiscard]] auto get_label          () const -> const std::string&;
+    [[nodiscard]] auto get_flag_bits      () const -> uint64_t;
+    [[nodiscard]] auto get_id             () const -> erhe::toolkit::Unique_id<Scene_item>::id_type;
+    [[nodiscard]] auto is_selected        () const -> bool;
+    [[nodiscard]] auto is_visible         () const -> bool;
+    [[nodiscard]] auto is_shown_in_ui     () const -> bool;
+    [[nodiscard]] auto is_hidden          () const -> bool;
+    [[nodiscard]] auto describe           () -> std::string;
     [[nodiscard]] auto get_wireframe_color() const -> glm::vec4;
+
+    void set_name           (const std::string_view name);
+    void set_flag_bits      (uint64_t mask, bool value);
+    void enable_flag_bits   (uint64_t mask);
+    void disable_flag_bits  (uint64_t mask);
+    void set_selected       (bool value);
+    void set_visible        (bool value);
+    void show               ();
+    void hide               ();
+    void set_wireframe_color(const glm::vec4& color);
 
 protected:
     uint64_t                             m_flag_bits      {Scene_item_flags::none};
@@ -119,12 +121,12 @@ public:
         static_cast<void>(new_scene_host);
     }
 
-    [[nodiscard]] auto get_node           () -> Node*;
-    [[nodiscard]] auto get_node           () const -> const Node*;
-    [[nodiscard]] auto get_scene_host     () const -> Scene_host* override;
+    [[nodiscard]] auto get_node      () -> Node*;
+    [[nodiscard]] auto get_node      () const -> const Node*;
+    [[nodiscard]] auto get_scene_host() const -> Scene_host* override;
 
 protected:
-    Node*     m_node           {nullptr};
+    Node* m_node{nullptr};
 };
 
 class Node_transforms
@@ -188,34 +190,34 @@ public:
     void handle_add_child        (const std::shared_ptr<Node>& child_node, std::size_t position = 0);
     void handle_remove_child     (Node* child_node);
 
-    [[nodiscard]] auto parent                    () const -> std::weak_ptr<Node>;
-    [[nodiscard]] auto depth                     () const -> size_t;
-    [[nodiscard]] auto children                  () const -> const std::vector<std::shared_ptr<Node>>&;
-    [[nodiscard]] auto mutable_children          () -> std::vector<std::shared_ptr<Node>>&;
-    [[nodiscard]] auto attachments               () const -> const std::vector<std::shared_ptr<Node_attachment>>&;
-    [[nodiscard]] auto parent_from_node_transform() const -> const Transform&;
-    [[nodiscard]] auto node_from_parent_transform() const -> const Transform;
-    [[nodiscard]] auto parent_from_node          () const -> glm::mat4;
-    [[nodiscard]] auto world_from_node_transform () const -> const Transform&;
-    [[nodiscard]] auto node_from_world_transform () const -> const Transform;
-    [[nodiscard]] auto world_from_node           () const -> glm::mat4;
-    [[nodiscard]] auto node_from_parent          () const -> glm::mat4;
-    [[nodiscard]] auto node_from_world           () const -> glm::mat4;
-    [[nodiscard]] auto world_from_parent         () const -> glm::mat4;
-    [[nodiscard]] auto position_in_world         () const -> glm::vec4;
-    [[nodiscard]] auto direction_in_world        () const -> glm::vec4;
-    [[nodiscard]] auto look_at                   (const Node& target) const -> glm::mat4;
+    [[nodiscard]] auto parent                                 () const -> std::weak_ptr<Node>;
+    [[nodiscard]] auto get_depth                              () const -> size_t;
+    [[nodiscard]] auto children                               () const -> const std::vector<std::shared_ptr<Node>>&;
+    [[nodiscard]] auto mutable_children                       () -> std::vector<std::shared_ptr<Node>>&;
+    [[nodiscard]] auto attachments                            () const -> const std::vector<std::shared_ptr<Node_attachment>>&;
+    [[nodiscard]] auto parent_from_node_transform             () const -> const Transform&;
+    [[nodiscard]] auto node_from_parent_transform             () const -> const Transform;
+    [[nodiscard]] auto parent_from_node                       () const -> glm::mat4;
+    [[nodiscard]] auto world_from_node_transform              () const -> const Transform&;
+    [[nodiscard]] auto node_from_world_transform              () const -> const Transform;
+    [[nodiscard]] auto world_from_node                        () const -> glm::mat4;
+    [[nodiscard]] auto node_from_parent                       () const -> glm::mat4;
+    [[nodiscard]] auto node_from_world                        () const -> glm::mat4;
+    [[nodiscard]] auto world_from_parent                      () const -> glm::mat4;
+    [[nodiscard]] auto position_in_world                      () const -> glm::vec4;
+    [[nodiscard]] auto direction_in_world                     () const -> glm::vec4;
+    [[nodiscard]] auto look_at                                (const Node& target) const -> glm::mat4;
     [[nodiscard]] auto transform_point_from_world_to_local    (const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto transform_direction_from_world_to_local(const glm::vec3 p) const -> glm::vec3;
-    [[nodiscard]] auto root               () -> std::weak_ptr<Node>;
-    [[nodiscard]] auto child_count        () const -> std::size_t;
-    [[nodiscard]] auto child_count        (const Scene_item_filter& filter) const -> std::size_t;
-    [[nodiscard]] auto attachment_count   (const Scene_item_filter& filter) const -> std::size_t;
-    [[nodiscard]] auto get_index_in_parent() const -> std::size_t;
-    [[nodiscard]] auto get_index_of_child (const Node* child) const -> std::optional<std::size_t>;
-    [[nodiscard]] auto is_ancestor        (const Node* ancestor_candidate) const -> bool;
-    [[nodiscard]] auto get_scene_host     () const -> Scene_host* override;
-    [[nodiscard]] auto get_scene          () const -> Scene*;
+    [[nodiscard]] auto root                                   () -> std::weak_ptr<Node>;
+    [[nodiscard]] auto child_count                            () const -> std::size_t;
+    [[nodiscard]] auto child_count                            (const Scene_item_filter& filter) const -> std::size_t;
+    [[nodiscard]] auto attachment_count                       (const Scene_item_filter& filter) const -> std::size_t;
+    [[nodiscard]] auto get_index_in_parent                    () const -> std::size_t;
+    [[nodiscard]] auto get_index_of_child                     (const Node* child) const -> std::optional<std::size_t>;
+    [[nodiscard]] auto is_ancestor                            (const Node* ancestor_candidate) const -> bool;
+    [[nodiscard]] auto get_scene_host                         () const -> Scene_host* override;
+    [[nodiscard]] auto get_scene                              () const -> Scene*;
 
     void set_parent            (Node* parent, std::size_t position = 0);
     void set_parent            (const std::shared_ptr<Node>& parent, std::size_t position = 0);

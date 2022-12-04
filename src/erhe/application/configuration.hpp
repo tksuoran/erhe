@@ -191,9 +191,9 @@ public:
     class Windows
     {
     public:
-        Window_entry brush_palette       {false};
         Window_entry commands            {false};
         Window_entry create              {false};
+        Window_entry content_library     {false};
         Window_entry debug_view          {false};
         Window_entry debug_visualizations{false};
         Window_entry fly_camera          {false};
@@ -203,12 +203,10 @@ public:
         Window_entry layers              {false};
         Window_entry line_renderer       {false};
         Window_entry log                 {false};
-        Window_entry materials           {false};
-        Window_entry material_properties {false};
-        Window_entry node_properties     {false};
         Window_entry node_tree           {false};
         Window_entry operation_stack     {false};
         Window_entry operations          {false};
+        Window_entry properties          {false};
         Window_entry paint_tool          {false};
         Window_entry performance         {false};
         Window_entry pipelines           {false};

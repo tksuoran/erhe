@@ -36,7 +36,7 @@ void Rendergraph::sort()
         {
             //// SPDLOG_LOGGER_TRACE(
             ////     log_rendergraph,
-            ////     "Sort: Considering node '{}'", node->name()
+            ////     "Sort: Considering node '{}'", node->get_name()
             //// );
             {
                 bool any_missing_dependency{false};
@@ -59,9 +59,9 @@ void Rendergraph::sort()
                             //// SPDLOG_LOGGER_TRACE(
                             ////     log_rendergraph,
                             ////     "Sort: Considering node '{}' failed - has unmet dependency key '{}' node '{}'",
-                            ////     node->name(),
+                            ////     node->get_name(),
                             ////     input.key,
-                            ////     producer ? producer->name() : std::string{"(empty)"}
+                            ////     producer ? producer->get_name() : std::string{"(empty)"}
                             //// );
                             any_missing_dependency = true;
                             break;
@@ -77,7 +77,7 @@ void Rendergraph::sort()
             //// SPDLOG_LOGGER_TRACE(
             ////     log_rendergraph,
             ////     "Sort: Selected node '{}' - all dependencies are met",
-            ////     node->name()
+            ////     node->get_name()
             //// );
             found_node = true;
 
@@ -88,7 +88,7 @@ void Rendergraph::sort()
             const auto i = std::remove(unsorted_nodes.begin(), unsorted_nodes.end(), node);
             if (i == unsorted_nodes.end())
             {
-                log_rendergraph->error("Sort: Node '{}' is not in graph nodes", node->name());
+                log_rendergraph->error("Sort: Node '{}' is not in graph nodes", node->get_name());
             }
             else
             {
@@ -106,7 +106,7 @@ void Rendergraph::sort()
             );
             for (const auto& node : m_nodes)
             {
-                log_rendergraph->info("    Node: {}", node->name());
+                log_rendergraph->info("    Node: {}", node->get_name());
                 for (const Rendergraph_consumer_connector& input : node->get_inputs())
                 {
                     log_rendergraph->info("        Input key: {}", input.key);
@@ -117,7 +117,7 @@ void Rendergraph::sort()
                         {
                             continue;
                         }
-                        log_rendergraph->info("          producer: {}", producer->name());
+                        log_rendergraph->info("          producer: {}", producer->get_name());
                     }
                 }
             }
@@ -125,13 +125,13 @@ void Rendergraph::sort()
             log_rendergraph->info("sorted nodes:");
             for (const auto& node : sorted_nodes)
             {
-                log_rendergraph->info("    Node: {}", node->name());
+                log_rendergraph->info("    Node: {}", node->get_name());
             }
 
             log_rendergraph->info("unsorted nodes:");
             for (const auto& node : unsorted_nodes)
             {
-                log_rendergraph->info("    Node: {}", node->name());
+                log_rendergraph->info("    Node: {}", node->get_name());
                 for (const auto& input : node->get_inputs())
                 {
                     log_rendergraph->info("        Input key: {}", input.key);
@@ -142,7 +142,7 @@ void Rendergraph::sort()
                         {
                             continue;
                         }
-                        log_rendergraph->info("          producer: {}", producer->name());
+                        log_rendergraph->info("          producer: {}", producer->get_name());
                     }
                 }
             }
@@ -166,8 +166,8 @@ void Rendergraph::execute()
 
     for (const auto& node : m_nodes)
     {
-        SPDLOG_LOGGER_TRACE(log_rendergraph, "Execute render graph node '{}'", node->name());
-        erhe::graphics::Scoped_debug_group render_graph_node_scope{node->name()};
+        SPDLOG_LOGGER_TRACE(log_rendergraph, "Execute render graph node '{}'", node->get_name());
+        erhe::graphics::Scoped_debug_group render_graph_node_scope{node->get_name()};
         node->execute_rendergraph_node();
     }
 }
@@ -190,7 +190,7 @@ void Rendergraph::register_node(const std::shared_ptr<Rendergraph_node>& node)
     );
     if (i != m_nodes.end())
     {
-        log_rendergraph->warn("Rendergraph_node '{}' is already registered to Rendergraph", node->name());
+        log_rendergraph->warn("Rendergraph_node '{}' is already registered to Rendergraph", node->get_name());
         return;
     }
 #endif
@@ -200,7 +200,7 @@ void Rendergraph::register_node(const std::shared_ptr<Rendergraph_node>& node)
     float y = 0.0f;
     node->set_position(glm::vec2{x, y});
 
-    log_rendergraph->info("Registered Rendergraph_node {}", node->name());
+    log_rendergraph->info("Registered Rendergraph_node {}", node->get_name());
 }
 
 void Rendergraph::unregister_node(Rendergraph_node* node)
@@ -224,7 +224,7 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
     );
     if (i == m_nodes.end())
     {
-        log_rendergraph->error("Rendergraph::unregister_node(): node '{}' is not registered", node->name());
+        log_rendergraph->error("Rendergraph::unregister_node(): node '{}' is not registered", node->get_name());
     }
 
     std::shared_ptr<Rendergraph_node> node_shared = *i;
@@ -257,7 +257,7 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
 
     m_nodes.erase(i);
 
-    log_rendergraph->info("Unregistered Rendergraph_node {}", node->name());
+    log_rendergraph->info("Unregistered Rendergraph_node {}", node->get_name());
 }
 
 void Rendergraph::automatic_layout()
@@ -320,7 +320,7 @@ auto Rendergraph::connect(
         return false;
     }
 
-    log_rendergraph->info("Rendergraph: Connected key: {} from: {} to: {}", key, source->name(), sink->name());
+    log_rendergraph->info("Rendergraph: Connected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
     automatic_layout();
     return true;
 }
@@ -348,7 +348,7 @@ auto Rendergraph::disconnect(
     /*const bool sink_disconnected   =*/ sink  ->disconnect_input(key, source_node);
     /*const bool source_disconnected =*/ source->disconnect_output(key, sink_node);
 
-    log_rendergraph->info("Rendergraph: disconnected key: {} from: {} to: {}", key, source->name(), sink->name());
+    log_rendergraph->info("Rendergraph: disconnected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
 
     return true;
 }

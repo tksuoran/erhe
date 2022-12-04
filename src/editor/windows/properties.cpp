@@ -1,13 +1,17 @@
-#include "windows/node_properties.hpp"
+#include "windows/properties.hpp"
 
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
+#include "rendertarget_mesh.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
+#include "scene/frame_controller.hpp"
 #include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "windows/content_library_window.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -40,7 +44,9 @@
 namespace editor
 {
 
-void Node_properties::Value_edit_state::combine(
+const float indent = 15.0f;
+
+void Properties::Value_edit_state::combine(
     const Value_edit_state& other
 )
 {
@@ -48,55 +54,51 @@ void Node_properties::Value_edit_state::combine(
     edit_ended    = edit_ended    || other.edit_ended;
 }
 
-Node_properties::Node_properties()
+Properties::Properties()
     : erhe::components::Component{c_type_name}
     , Imgui_window               {c_title}
 {
 }
 
-Node_properties::~Node_properties() noexcept
+Properties::~Properties() noexcept
 {
 }
 
-void Node_properties::declare_required_components()
+void Properties::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
 }
 
-void Node_properties::initialize_component()
+void Properties::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 }
 
-void Node_properties::post_initialize()
+void Properties::post_initialize()
 {
-    m_editor_scenes   = get<Editor_scenes  >();
-    m_operation_stack = get<Operation_stack>();
-    m_selection_tool  = get<Selection_tool >();
+    m_content_library_window = get<Content_library_window>();
+    m_editor_scenes          = get<Editor_scenes         >();
+    m_operation_stack        = get<Operation_stack       >();
+    m_selection_tool         = get<Selection_tool        >();
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Node_properties::icamera_properties(erhe::scene::Camera& camera) const
+void Properties::camera_properties(erhe::scene::Camera& camera) const
 {
     ERHE_PROFILE_FUNCTION
 
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
     auto* const projection = camera.projection();
-    if (projection == nullptr)
-    {
-        return;
-    }
-
-    ImGui::PushID("##icamera_properties");
     if (
+        (projection != nullptr) &&
         ImGui::TreeNodeEx(
             "Projection",
-            ImGuiTreeNodeFlags_Framed |
             ImGuiTreeNodeFlags_DefaultOpen
         )
     )
     {
+        ImGui::Indent(indent);
         ImGui::SetNextItemWidth(200);
         erhe::application::make_combo(
             "Type",
@@ -196,94 +198,72 @@ void Node_properties::icamera_properties(erhe::scene::Camera& camera) const
                 break;
             }
         }
+        ImGui::Unindent(indent);
         ImGui::TreePop();
     }
 
-    if (
-        ImGui::TreeNodeEx(
-            "Camera",
-            ImGuiTreeNodeFlags_Framed |
-            ImGuiTreeNodeFlags_DefaultOpen
-        )
-    )
+    float exposure = camera.get_exposure();
+    const auto avail = ImGui::GetContentRegionAvail().x;
+    const auto label_size = std::max(
+        ImGui::CalcTextSize("Exposure").x,
+        ImGui::CalcTextSize("Shadow Range").x
+    );
+    const auto width = avail - label_size;
     {
-        float exposure = camera.get_exposure();
-        const auto avail = ImGui::GetContentRegionAvail().x;
-        const auto label_size = std::max(
-            ImGui::CalcTextSize("Exposure").x,
-            ImGui::CalcTextSize("Shadow Range").x
-        );
-        const auto width = avail - label_size;
+        ImGui::SetNextItemWidth(width);
+        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
         {
-            ImGui::SetNextItemWidth(width);
-            if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
-            {
-                camera.set_exposure(exposure);
-            }
+            camera.set_exposure(exposure);
         }
-        float shadow_range = camera.get_shadow_range();
-        {
-            ImGui::SetNextItemWidth(width);
-            if (ImGui::SliderFloat("Shadow Range", &shadow_range, 1.00f, 1000.0f, "%.3f", logarithmic))
-            {
-                camera.set_shadow_range(shadow_range);
-            }
-        }
-        ImGui::TreePop();
     }
-    ImGui::PopID();
+    float shadow_range = camera.get_shadow_range();
+    {
+        ImGui::SetNextItemWidth(width);
+        if (ImGui::SliderFloat("Shadow Range", &shadow_range, 1.00f, 1000.0f, "%.3f", logarithmic))
+        {
+            camera.set_shadow_range(shadow_range);
+        }
+    }
 }
 
-void Node_properties::light_properties(erhe::scene::Light& light) const
+void Properties::light_properties(erhe::scene::Light& light) const
 {
     ERHE_PROFILE_FUNCTION
 
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
-    ImGui::PushID("##light_properties");
-    if (
-        ImGui::TreeNodeEx(
-            "Light",
-            ImGuiTreeNodeFlags_Framed |
-            ImGuiTreeNodeFlags_DefaultOpen
-        )
-    )
+    erhe::application::make_combo(
+        "Type",
+        light.type,
+        erhe::scene::Light::c_type_strings,
+        IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
+    );
+    if (light.type == erhe::scene::Light::Type::spot)
     {
-        erhe::application::make_combo(
-            "Type",
-            light.type,
-            erhe::scene::Light::c_type_strings,
-            IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
-        );
-        if (light.type == erhe::scene::Light::Type::spot)
-        {
-            ImGui::SliderFloat("Inner Spot", &light.inner_spot_angle, 0.0f, glm::pi<float>());
-            ImGui::SliderFloat("Outer Spot", &light.outer_spot_angle, 0.0f, glm::pi<float>());
-        }
-        ImGui::SliderFloat("Range",     &light.range,     1.00f, 20000.0f, "%.3f", logarithmic);
-        ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 20000.0f, "%.3f", logarithmic);
-        ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
-
-        const auto* node = light.get_node();
-        if (node != nullptr)
-        {
-            auto* scene_root = reinterpret_cast<Scene_root*>(node->get_scene_host());
-            if (scene_root != nullptr)
-            {
-                const auto& layers = scene_root->layers();
-                ImGui::ColorEdit3(
-                    "Ambient",
-                    &layers.light()->ambient_light.x,
-                    ImGuiColorEditFlags_Float
-                );
-            }
-        }
-        ImGui::TreePop();
+        ImGui::SliderFloat("Inner Spot", &light.inner_spot_angle, 0.0f, glm::pi<float>());
+        ImGui::SliderFloat("Outer Spot", &light.outer_spot_angle, 0.0f, glm::pi<float>());
     }
-    ImGui::PopID();
+    ImGui::SliderFloat("Range",     &light.range,     1.00f, 20000.0f, "%.3f", logarithmic);
+    ImGui::SliderFloat("Intensity", &light.intensity, 0.01f, 20000.0f, "%.3f", logarithmic);
+    ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
+
+    const auto* node = light.get_node();
+    if (node != nullptr)
+    {
+        auto* scene_root = reinterpret_cast<Scene_root*>(node->get_scene_host());
+        if (scene_root != nullptr)
+        {
+            const auto& layers = scene_root->layers();
+            ImGui::ColorEdit3(
+                "Ambient",
+                &layers.light()->ambient_light.x,
+                ImGuiColorEditFlags_Float
+            );
+        }
+    }
 }
 
-void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
+void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
     ERHE_PROFILE_FUNCTION
 
@@ -297,39 +277,33 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
         ImGui::Text("Mesh host not set");
         return;
     }
-    const auto& material_library = scene_root->material_library();
+    auto& material_library = scene_root->content_library()->materials;
 
-    ImGui::PushID("##mesh_properties");
-    if (
-        ImGui::TreeNodeEx(
-            "Mesh",
-            ImGuiTreeNodeFlags_Framed // |
-            //ImGuiTreeNodeFlags_DefaultOpen
-        )
-    )
+    for (auto& primitive : mesh_data.primitives)
     {
-        for (auto& primitive : mesh_data.primitives)
+        const auto& geometry = primitive.source_geometry;
+        if (geometry)
         {
-            const auto& geometry = primitive.source_geometry;
-            if (geometry)
+            const std::string label = fmt::format("Primitive: {}", geometry->name);
+            if (
+                ImGui::TreeNodeEx(label.c_str())
+            )
             {
+                ImGui::Indent(indent);
+                material_library.combo("Material", primitive.material, false);
+                if (primitive.material)
+                {
+                    ImGui::Text("Material Buffer Index: %zu", primitive.material->material_buffer_index);
+                }
+                else
+                {
+                    ImGui::Text("Null material");
+                }
                 if (
-                    ImGui::TreeNodeEx(
-                        geometry->name.c_str(),
-                        ImGuiTreeNodeFlags_Framed |
-                        ImGuiTreeNodeFlags_DefaultOpen
-                    )
+                    ImGui::TreeNodeEx("Statistics")
                 )
                 {
-                    material_library->material_combo("Material", primitive.material);
-                    if (primitive.material)
-                    {
-                        ImGui::Text("Material Index: %zu", primitive.material->index);
-                    }
-                    else
-                    {
-                        ImGui::Text("Null material");
-                    }
+                    ImGui::Indent(indent);
                     int point_count   = geometry->get_point_count();
                     int polygon_count = geometry->get_polygon_count();
                     int edge_count    = geometry->get_edge_count();
@@ -342,13 +316,21 @@ void Node_properties::mesh_properties(erhe::scene::Mesh& mesh) const
                     float bsphere_volume = primitive.gl_primitive_geometry.bounding_sphere.volume();
                     ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
                     ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
+                    ImGui::Unindent(indent);
                     ImGui::TreePop();
                 }
+                ImGui::Unindent(indent);
+                ImGui::TreePop();
             }
         }
-        ImGui::TreePop();
     }
-    ImGui::PopID();
+}
+
+void Properties::rendertarget_properties(Rendertarget_mesh& rendertarget) const
+{
+    ImGui::Text("Width: %f", rendertarget.width());
+    ImGui::Text("Height: %f", rendertarget.height());
+    ImGui::Text("Pixels per Meter: %f", static_cast<float>(rendertarget.pixels_per_meter()));
 }
 
 namespace {
@@ -495,7 +477,7 @@ auto custom_drag_scalar(
 
 }
 
-auto Node_properties::make_scalar_button(
+auto Properties::make_scalar_button(
     float* const      value,
     const uint32_t    text_color,
     const uint32_t    background_color,
@@ -542,7 +524,7 @@ auto Node_properties::make_scalar_button(
     };
 };
 
-auto Node_properties::make_angle_button(
+auto Properties::make_angle_button(
     float&            radians_value,
     const uint32_t    text_color,
     const uint32_t    background_color,
@@ -588,7 +570,7 @@ auto Node_properties::make_angle_button(
 };
 #endif
 
-Node_properties::Node_state::Node_state(erhe::scene::Node& node)
+Properties::Node_state::Node_state(erhe::scene::Node& node)
     : node                              {&node}
     , touched                           {false}
     , initial_parent_from_node_transform{node.parent_from_node_transform()}
@@ -596,7 +578,7 @@ Node_properties::Node_state::Node_state(erhe::scene::Node& node)
 {
 }
 
-auto Node_properties::get_node_state(erhe::scene::Node& node) -> Node_state&
+auto Properties::get_node_state(erhe::scene::Node& node) -> Node_state&
 {
     for (auto& entry : m_node_states)
     {
@@ -608,7 +590,7 @@ auto Node_properties::get_node_state(erhe::scene::Node& node) -> Node_state&
     return m_node_states.emplace_back(node);
 }
 
-auto Node_properties::drop_node_state(erhe::scene::Node& node)
+auto Properties::drop_node_state(erhe::scene::Node& node)
 {
     m_node_states.erase(
         std::remove_if(
@@ -624,112 +606,117 @@ auto Node_properties::drop_node_state(erhe::scene::Node& node)
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Node_properties::transform_properties(erhe::scene::Node& node)
+void Properties::transform_properties(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION
 
-    ImGui::PushID("##transform_properties");
-
-    if (ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed))
+    if (
+        !ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)
+    )
     {
-        auto& node_state = get_node_state(node);
+        return;
+    }
 
-        const glm::mat4 transform = node.world_from_node();
-        glm::vec3 scale;
-        glm::quat orientation;
-        glm::vec3 translation;
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(transform, scale, orientation, translation, skew, perspective);
+    ImGui::Indent(indent);
 
-        const glm::mat4 orientation_matrix{orientation};
-        glm::vec3 euler_angles;
-        glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
+    auto& node_state = get_node_state(node);
 
-        Value_edit_state edit_state;
-        if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            edit_state.combine(make_scalar_button(&translation.x, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
-            edit_state.combine(make_scalar_button(&translation.y, 0xff88ff88u, 0xff226622u, "Y", "##T.Y"));
-            edit_state.combine(make_scalar_button(&translation.z, 0xffff8888u, 0xff662222u, "Z", "##T.Z"));
-            ImGui::TreePop();
-        }
+    const glm::mat4 transform = node.world_from_node();
+    glm::vec3 scale;
+    glm::quat orientation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::decompose(transform, scale, orientation, translation, skew, perspective);
 
-        if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            edit_state.combine(make_angle_button(euler_angles.x, 0xff8888ffu, 0xff222266u, "X", "##R.X"));
-            edit_state.combine(make_angle_button(euler_angles.y, 0xff88ff88u, 0xff226622u, "Y", "##R.Y"));
-            edit_state.combine(make_angle_button(euler_angles.z, 0xffff8888u, 0xff662222u, "Z", "##R.Z"));
-            ImGui::TreePop();
-        }
+    const glm::mat4 orientation_matrix{orientation};
+    glm::vec3 euler_angles;
+    glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
 
-        if (ImGui::TreeNode("Scale"))
-        {
-            edit_state.combine(make_scalar_button(&scale.x, 0xff8888ffu, 0xff222266u, "X", "##S.X"));
-            edit_state.combine(make_scalar_button(&scale.y, 0xff88ff88u, 0xff226622u, "Y", "##S.Y"));
-            edit_state.combine(make_scalar_button(&scale.z, 0xffff8888u, 0xff662222u, "Z", "##S.Z"));
-            ImGui::TreePop();
-        }
-
-        erhe::scene::Transform new_parent_from_node;
-        if (
-            edit_state.value_changed ||
-            edit_state.edit_ended
-        )
-        {
-            node_state.touched = true;
-            const glm::mat4 new_translation     = erhe::toolkit::create_translation<float>(translation);
-            const glm::mat4 new_rotation        = glm::eulerAngleZYX(euler_angles.x, euler_angles.y, euler_angles.z);
-            const glm::mat4 new_scale           = erhe::toolkit::create_scale<float>(scale);
-            const glm::mat4 new_world_from_node = new_translation * new_rotation * new_scale;
-            const auto current_parent = node.parent().lock();
-            if (!current_parent)
-            {
-                new_parent_from_node = erhe::scene::Transform{new_world_from_node};
-            }
-            else
-            {
-                new_parent_from_node = current_parent->node_from_world_transform() * erhe::scene::Transform{new_world_from_node};
-            }
-            if (!edit_state.edit_ended)
-            {
-                node.set_parent_from_node(new_parent_from_node);
-            }
-        }
-
-        if (edit_state.edit_ended && node_state.touched)
-        {
-            m_operation_stack->push(
-                std::make_shared<Node_transform_operation>(
-                    Node_transform_operation::Parameters{
-                        .node                    = std::static_pointer_cast<erhe::scene::Node>(node.shared_from_this()),
-                        .parent_from_node_before = node_state.initial_parent_from_node_transform,
-                        .parent_from_node_after  = new_parent_from_node
-                    }
-                )
-            );
-            node_state.touched = false;
-        }
-
-        if (!node_state.touched)
-        {
-            drop_node_state(node);
-        }
-
+    Value_edit_state edit_state;
+    if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        edit_state.combine(make_scalar_button(&translation.x, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
+        edit_state.combine(make_scalar_button(&translation.y, 0xff88ff88u, 0xff226622u, "Y", "##T.Y"));
+        edit_state.combine(make_scalar_button(&translation.z, 0xffff8888u, 0xff662222u, "Z", "##T.Z"));
         ImGui::TreePop();
     }
-    ImGui::PopID();
+
+    if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        edit_state.combine(make_angle_button(euler_angles.x, 0xff8888ffu, 0xff222266u, "X", "##R.X"));
+        edit_state.combine(make_angle_button(euler_angles.y, 0xff88ff88u, 0xff226622u, "Y", "##R.Y"));
+        edit_state.combine(make_angle_button(euler_angles.z, 0xffff8888u, 0xff662222u, "Z", "##R.Z"));
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Scale"))
+    {
+        edit_state.combine(make_scalar_button(&scale.x, 0xff8888ffu, 0xff222266u, "X", "##S.X"));
+        edit_state.combine(make_scalar_button(&scale.y, 0xff88ff88u, 0xff226622u, "Y", "##S.Y"));
+        edit_state.combine(make_scalar_button(&scale.z, 0xffff8888u, 0xff662222u, "Z", "##S.Z"));
+        ImGui::TreePop();
+    }
+
+    erhe::scene::Transform new_parent_from_node;
+    if (
+        edit_state.value_changed ||
+        edit_state.edit_ended
+    )
+    {
+        node_state.touched = true;
+        const glm::mat4 new_translation     = erhe::toolkit::create_translation<float>(translation);
+        const glm::mat4 new_rotation        = glm::eulerAngleZYX(euler_angles.x, euler_angles.y, euler_angles.z);
+        const glm::mat4 new_scale           = erhe::toolkit::create_scale<float>(scale);
+        const glm::mat4 new_world_from_node = new_translation * new_rotation * new_scale;
+        const auto current_parent = node.parent().lock();
+        if (!current_parent)
+        {
+            new_parent_from_node = erhe::scene::Transform{new_world_from_node};
+        }
+        else
+        {
+            new_parent_from_node = current_parent->node_from_world_transform() * erhe::scene::Transform{new_world_from_node};
+        }
+        if (!edit_state.edit_ended)
+        {
+            node.set_parent_from_node(new_parent_from_node);
+        }
+    }
+
+    if (edit_state.edit_ended && node_state.touched)
+    {
+        m_operation_stack->push(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = std::static_pointer_cast<erhe::scene::Node>(node.shared_from_this()),
+                    .parent_from_node_before = node_state.initial_parent_from_node_transform,
+                    .parent_from_node_after  = new_parent_from_node
+                }
+            )
+        );
+        node_state.touched = false;
+    }
+
+    if (!node_state.touched)
+    {
+        drop_node_state(node);
+    }
+
+    ImGui::Unindent(indent);
+
+    ImGui::TreePop();
 }
 #endif
 
-void Node_properties::on_begin()
+void Properties::on_begin()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 0.0f);
 #endif
 }
 
-void Node_properties::on_end()
+void Properties::on_end()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar();
@@ -745,14 +732,10 @@ namespace {
 
 }
 
-void Node_properties::node_physics_properties(Node_physics& node_physics)
+void Properties::node_physics_properties(Node_physics& node_physics) const
 {
     erhe::physics::IRigid_body* rigid_body = node_physics.rigid_body();
     if (rigid_body == nullptr)
-    {
-        return;
-    }
-    if (!ImGui::TreeNodeEx("Physics", /*ImGuiTreeNodeFlags_DefaultOpen | */  ImGuiTreeNodeFlags_Framed))
     {
         return;
     }
@@ -805,65 +788,200 @@ void Node_properties::node_physics_properties(Node_physics& node_physics)
     {
         rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
     }
-
-    ImGui::TreePop();
 }
 
-void Node_properties::attachment_properties(erhe::scene::Node_attachment& attachment)
+void Properties::item_flags(const std::shared_ptr<erhe::scene::Scene_item>& item)
 {
-    if (!ImGui::TreeNodeEx(attachment.type_name()))
+    if (!ImGui::TreeNodeEx("Flags"))
     {
         return;
     }
 
-    auto* const node_physics = as_physics(&attachment);
+    ImGui::Indent(indent);
+
+    using namespace erhe::toolkit;
+    using Scene_item_flags = erhe::scene::Scene_item_flags;
+
+    const uint64_t flags = item->get_flag_bits();
+    bool visible     = test_all_rhs_bits_set(flags, Scene_item_flags::visible                  );
+    bool content     = test_all_rhs_bits_set(flags, Scene_item_flags::content                  );
+    bool shadow_cast = test_all_rhs_bits_set(flags, Scene_item_flags::shadow_cast              );
+    bool id          = test_all_rhs_bits_set(flags, Scene_item_flags::id                       );
+    bool tool        = test_all_rhs_bits_set(flags, Scene_item_flags::tool                     );
+    bool selected    = test_all_rhs_bits_set(flags, Scene_item_flags::selected                 );
+    bool show_debug  = test_all_rhs_bits_set(flags, Scene_item_flags::show_debug_visualizations);
+    if (ImGui::Checkbox("Show Debug", &show_debug))
+    {
+        item->set_flag_bits(Scene_item_flags::show_debug_visualizations, show_debug);
+    }
+    if (ImGui::Checkbox("Visible", &visible))
+    {
+        item->set_visible(visible);
+    }
+    if (ImGui::Checkbox("Content", &content))
+    {
+        item->set_flag_bits(Scene_item_flags::content, content);
+    }
+    if (ImGui::Checkbox("ID Render", &id))
+    {
+        item->set_flag_bits(Scene_item_flags::id, id);
+    }
+    if (ImGui::Checkbox("Shadow Cast", &shadow_cast))
+    {
+        item->set_flag_bits(Scene_item_flags::shadow_cast, shadow_cast);
+    }
+    if (ImGui::Checkbox("Selected", &selected))
+    {
+        if (selected)
+        {
+            m_selection_tool->add_to_selection(item);
+        }
+        else
+        {
+            m_selection_tool->remove_from_selection(item);
+        }
+    }
+    if (ImGui::Checkbox("Tool", &tool))
+    {
+        item->set_flag_bits(erhe::scene::Scene_item_flags::tool, tool);
+    }
+
+
+    ImGui::Unindent(indent);
+
+    ImGui::TreePop();
+}
+
+[[nodiscard]] auto show_item_details(const erhe::scene::Scene_item* const item)
+{
+    return
+        !is_physics         (item) &&
+        !is_frame_controller(item) &&
+        !is_raytrace        (item) &&
+        !is_rendertarget    (item);
+}
+
+void Properties::item_properties(const std::shared_ptr<erhe::scene::Scene_item>& item)
+{
+    if (is_raytrace(item)) // currently nothing to show, so hidden from user
+    {
+        return;
+    }
+
+    if (
+        !ImGui::TreeNodeEx(
+            item->type_name(),
+            ImGuiTreeNodeFlags_Framed |
+            ImGuiTreeNodeFlags_DefaultOpen
+        )
+    )
+    {
+        return;
+    }
+
+    ImGui::PushID(item->get_label().c_str());
+
+    if (show_item_details(item.get()))
+    {
+        std::string name = item->get_name();
+        if (ImGui::InputText("Name", &name, ImGuiInputTextFlags_EnterReturnsTrue))
+        {
+            if (name != item->get_name())
+            {
+                item->set_name(name);
+            }
+        }
+
+        item_flags(item);
+
+        if (!is_light(item)) // light uses light color, so hide item color
+        {
+            glm::vec4 color = item->get_wireframe_color();
+            if (
+                ImGui::ColorEdit4(
+                    "Item Color",
+                    &color.x,
+                    ImGuiColorEditFlags_Float |
+                    ImGuiColorEditFlags_NoInputs
+                )
+            )
+            {
+                item->set_wireframe_color(color);
+            }
+        }
+    }
+
+    auto node_physics = as_physics(item);
     if (node_physics)
     {
         node_physics_properties(*node_physics);
     }
 
-    const auto flag_bits = attachment.get_flag_bits();
-    bool show_debug_visualization = erhe::toolkit::test_all_rhs_bits_set(
-        flag_bits,
-        erhe::scene::Scene_item_flags::show_debug_visualizations
-    );
-    if (ImGui::Checkbox("Show Debug", &show_debug_visualization))
-    {
-        if (show_debug_visualization)
-        {
-            attachment.enable_flag_bits(erhe::scene::Scene_item_flags::show_debug_visualizations);
-        }
-        else
-        {
-            attachment.disable_flag_bits(erhe::scene::Scene_item_flags::show_debug_visualizations);
-        }
-    }
-
-    auto* const camera = as_camera(&attachment);
+    auto camera = as_camera(item);
     if (camera)
     {
-        icamera_properties(*camera);
+        camera_properties(*camera);
     }
 
-    auto* const light = as_light(&attachment);
+    auto light = as_light(item);
     if (light)
     {
         light_properties(*light);
     }
 
-    auto* const mesh = as_mesh(&attachment);
+    auto mesh = as_mesh(item);
     if (mesh)
     {
         mesh_properties(*mesh);
     }
 
+    auto rendertarget = as_rendertarget(item);
+    if (rendertarget)
+    {
+        rendertarget_properties(*rendertarget);
+    }
+
+    const auto node = as_node(item);
+    if (node)
+    {
+        transform_properties(*node.get());
+    }
+
     ImGui::TreePop();
+    ImGui::PopID();
 }
 
-void Node_properties::imgui()
+void Properties::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
+
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    const auto selected_material = m_content_library_window->selected_material();
+    if (selected_material)
+    {
+        if (
+            ImGui::TreeNodeEx(
+                "Material",
+                ImGuiTreeNodeFlags_Framed |
+                ImGuiTreeNodeFlags_DefaultOpen
+            )
+        )
+        {
+            std::string name = selected_material->get_name();
+            if (ImGui::InputText("Name", &name))
+            {
+                selected_material->set_name(name);
+            }
+            ImGui::SliderFloat("Metallic",    &selected_material->metallic,     0.0f, 1.0f);
+            ImGui::SliderFloat("Roughness X", &selected_material->roughness.x,  0.0f, 1.0f);
+            ImGui::SliderFloat("Roughness Y", &selected_material->roughness.y,  0.0f, 1.0f);
+            ImGui::ColorEdit4 ("Base Color",  &selected_material->base_color.x, ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4 ("Emissive",    &selected_material->emissive.x,   ImGuiColorEditFlags_Float);
+            ImGui::TreePop();
+        }
+    }
+#endif
 
     if (!m_selection_tool)
     {
@@ -874,88 +992,7 @@ void Node_properties::imgui()
     for (const auto& item : selection)
     {
         ERHE_VERIFY(item);
-
-        std::string name = item->name();
-        if (ImGui::InputText("Name", &name, ImGuiInputTextFlags_EnterReturnsTrue))
-        {
-            if (name != item->name())
-            {
-                item->set_name(name);
-            }
-        }
-
-        if (ImGui::TreeNodeEx("Flags", /*ImGuiTreeNodeFlags_DefaultOpen |*/ ImGuiTreeNodeFlags_Framed))
-        {
-            const uint64_t flags = item->get_flag_bits();
-            bool visible     = test_bits(flags, erhe::scene::Scene_item_flags::visible     );
-            bool content     = test_bits(flags, erhe::scene::Scene_item_flags::content     );
-            bool shadow_cast = test_bits(flags, erhe::scene::Scene_item_flags::shadow_cast );
-            bool id          = test_bits(flags, erhe::scene::Scene_item_flags::id          );
-            bool tool        = test_bits(flags, erhe::scene::Scene_item_flags::tool        );
-            bool selected    = test_bits(flags, erhe::scene::Scene_item_flags::selected    );
-            if (ImGui::Checkbox("Visible", &visible))
-            {
-                item->set_visible(visible);
-            }
-            if (ImGui::Checkbox("Content", &content))
-            {
-                item->set_flag_bits(erhe::scene::Scene_item_flags::content, content);
-            }
-            if (ImGui::Checkbox("ID Render", &id))
-            {
-                item->set_flag_bits(erhe::scene::Scene_item_flags::id, id);
-            }
-            if (ImGui::Checkbox("Shadow Cast", &shadow_cast))
-            {
-                item->set_flag_bits(erhe::scene::Scene_item_flags::shadow_cast, shadow_cast);
-            }
-            if (ImGui::Checkbox("Selected", &selected))
-            {
-                if (selected)
-                {
-                    m_selection_tool->add_to_selection(item);
-                }
-                else
-                {
-                    m_selection_tool->remove_from_selection(item);
-                }
-            }
-            if (ImGui::Checkbox("Tool", &tool))
-            {
-                item->set_flag_bits(erhe::scene::Scene_item_flags::tool, tool);
-            }
-            ImGui::TreePop();
-        }
-
-        glm::vec4 color = item->get_wireframe_color();
-        if (
-            ImGui::ColorEdit4(
-                "Item Color",
-                &color.x,
-                ImGuiColorEditFlags_Float |
-                ImGuiColorEditFlags_NoInputs
-            )
-        )
-        {
-            item->set_wireframe_color(color);
-        }
-
-        const auto attachment = as_node_attachment(item);
-        if (attachment)
-        {
-            attachment_properties(*attachment);
-        }
-
-        const auto node = as_node(item);
-        if (node)
-        {
-            //for (auto& attachment : node->attachments())
-            //{
-            //    attachment_properties(*attachment);
-            //}
-
-            transform_properties(*node.get());
-        }
+        item_properties(item);
     }
 #endif
 }

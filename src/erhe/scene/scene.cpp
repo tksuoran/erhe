@@ -35,6 +35,11 @@ auto Mesh_layer::get_mesh_by_id(
     return {};
 }
 
+auto Mesh_layer::get_name() const -> const std::string&
+{
+    return name;
+}
+
 void Mesh_layer::add(const std::shared_ptr<Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
@@ -43,7 +48,7 @@ void Mesh_layer::add(const std::shared_ptr<Mesh>& mesh)
     const auto i = std::find(meshes.begin(), meshes.end(), mesh);
     if (i != meshes.end())
     {
-        log->error("mesh {} already in layer meshes", mesh->name());
+        log->error("mesh {} already in layer meshes", mesh->get_name());
     }
     else
 #endif
@@ -61,7 +66,7 @@ void Mesh_layer::remove(
     const auto i = std::remove(meshes.begin(), meshes.end(), mesh);
     if (i == meshes.end())
     {
-        log->error("mesh {} not in layer meshes", mesh->name());
+        log->error("mesh {} not in layer meshes", mesh->get_name());
     }
     else
     {
@@ -88,20 +93,25 @@ auto Light_layer::get_light_by_id(
     return {};
 }
 
+auto Light_layer::get_name() const -> const std::string&
+{
+    return name;
+}
+
 void Light_layer::add(
     const std::shared_ptr<Light>& light
 )
 {
     ERHE_VERIFY(light);
 
-    log->trace("add_to_light_layer(light = {})", light->name());
+    log->trace("add_to_light_layer(light = {})", light->get_name());
 
     {
 #ifndef NDEBUG
         const auto i = std::find(lights.begin(), lights.end(), light);
         if (i != lights.end())
         {
-            log->error("light {} already in layer lights", light->name());
+            log->error("light {} already in layer lights", light->get_name());
         }
         else
 #endif
@@ -117,13 +127,13 @@ void Light_layer::remove(
 {
     ERHE_VERIFY(light);
 
-    log->trace("remove_from_scene_layer(light = {})`", light->name());
+    log->trace("remove_from_scene_layer(light = {})`", light->get_name());
 
     const auto i = std::remove(lights.begin(), lights.end(), light);
 
     if (i == lights.end())
     {
-        log->error("light {} not in layer lights", light->name());
+        log->error("light {} not in layer lights", light->get_name());
     }
     else
     {
@@ -233,7 +243,7 @@ void Scene::sort_transform_nodes()
         flat_node_vector.end(),
         [](const auto& lhs, const auto& rhs)
         {
-            return lhs->depth() < rhs->depth();
+            return lhs->get_depth() < rhs->get_depth();
         }
     );
     nodes_sorted = true;
@@ -279,7 +289,7 @@ void Scene::register_node(
     const auto i = std::find(flat_node_vector.begin(), flat_node_vector.end(), node);
     if (i != flat_node_vector.end())
     {
-        log->error("{} {} already in scene nodes", node->type_name(), node->name());
+        log->error("{} {} already in scene nodes", node->type_name(), node->get_name());
     }
     else
 #endif
@@ -310,7 +320,7 @@ void Scene::unregister_node(
     const auto i = std::remove(flat_node_vector.begin(), flat_node_vector.end(), node);
     if (i == flat_node_vector.end())
     {
-        log->error("Node {} not in scene nodes", node->name());
+        log->error("Node {} not in scene nodes", node->get_name());
     }
     else
     {
@@ -337,7 +347,7 @@ void Scene::register_camera(const std::shared_ptr<Camera>& camera)
     const auto i = std::find(cameras.begin(), cameras.end(), camera);
     if (i != cameras.end())
     {
-        log->error("camera {} already in scene cameras", camera->name());
+        log->error("camera {} already in scene cameras", camera->get_name());
     }
     else
 #endif
@@ -352,7 +362,7 @@ void Scene::unregister_camera(const std::shared_ptr<Camera>& camera)
     const auto i = std::remove(cameras.begin(), cameras.end(), camera);
     if (i == cameras.end())
     {
-        log->error("camera {} not in scene cameras", camera->name());
+        log->error("camera {} not in scene cameras", camera->get_name());
     }
     else
     {
@@ -390,7 +400,7 @@ void Scene::register_light(const std::shared_ptr<Light>& light)
     }
     else
     {
-        log->error("light {} layer not found", light->name());
+        log->error("light {} layer not found", light->get_name());
     }
 }
 
@@ -404,7 +414,7 @@ void Scene::unregister_light(const std::shared_ptr<Light>& light)
     }
     else
     {
-        log->error("light {} layer not found", light->name());
+        log->error("light {} layer not found", light->get_name());
     }
 }
 

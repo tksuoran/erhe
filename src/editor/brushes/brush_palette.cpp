@@ -1,6 +1,5 @@
 
-#include "brushes/brush_palette.hpp"
-#include "brushes/brushes.hpp"
+#include "brushes/brush_tool.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/toolkit/profile.hpp"

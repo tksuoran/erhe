@@ -30,6 +30,7 @@ namespace editor
 
 class Editor_scenes;
 class Headset_view;
+class Node_tree_window;
 class Scene_root;
 class Selection_tool;
 class Viewport_config;
@@ -135,9 +136,10 @@ public:
 
 private:
     void call_selection_change_subscriptions() const;
-    void toggle_selection(
-        const std::shared_ptr<erhe::scene::Scene_item>& item,
-        bool                                            clear_others
+    void toggle_mesh_selection(
+        const std::shared_ptr<erhe::scene::Mesh>& mesh,
+        bool                                      was_selected,
+        bool                                      clear_others
     );
 
     Selection_tool_select_command m_select_command;
@@ -147,6 +149,7 @@ private:
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<Editor_scenes>     m_editor_scenes;
     std::shared_ptr<Headset_view>      m_headset_view;
+    std::shared_ptr<Node_tree_window>  m_node_tree_window;
     std::shared_ptr<Viewport_windows>  m_viewport_windows;
     std::shared_ptr<Viewport_config>   m_viewport_config;
 

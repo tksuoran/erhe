@@ -6,7 +6,7 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
-#include "scene/material_library.hpp"
+#include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
@@ -64,6 +64,11 @@ Rendertarget_mesh::Rendertarget_mesh(
     add_primitive(components);
 }
 
+auto Rendertarget_mesh::static_type_name() -> const char*
+{
+    return "Rendertarget_mesh";
+}
+
 auto Rendertarget_mesh::type_name() const -> const char*
 {
     return "Rendertarget_mesh";
@@ -113,10 +118,10 @@ void Rendertarget_mesh::add_primitive(
     const erhe::components::Components& components
 )
 {
-    const auto& material_library = m_host_scene_root.material_library();
+    auto& material_library = m_host_scene_root.content_library()->materials;
     auto& mesh_memory      = *components.get<Mesh_memory>().get();
 
-    m_material = material_library->make_material(
+    m_material = material_library.make(
         "Rendertarget Node",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
@@ -449,6 +454,11 @@ void Rendertarget_mesh::render_done()
     return static_cast<float>(m_texture->height());
 }
 
+[[nodiscard]] auto Rendertarget_mesh::pixels_per_meter() const -> double
+{
+    return m_pixels_per_meter;
+}
+
 auto is_rendertarget(const erhe::scene::Scene_item* const scene_item) -> bool
 {
     if (scene_item == nullptr)
@@ -489,7 +499,7 @@ auto as_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item)
     {
         return {};
     }
-    return std::dynamic_pointer_cast<Rendertarget_mesh>(scene_item);
+    return std::static_pointer_cast<Rendertarget_mesh>(scene_item);
 }
 
 auto get_rendertarget(

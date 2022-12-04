@@ -149,7 +149,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
     {
         log_rendergraph->info(
             "Resizing Texture_rendergraph_node '{}' to {} x {}",
-            name(),
+            get_name(),
             output_viewport.width,
             output_viewport.height
         );
@@ -168,7 +168,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             }
         );
         m_color_texture->set_debug_label(
-            fmt::format("{} Texture_rendergraph_node color texture", name())
+            fmt::format("{} Texture_rendergraph_node color texture", get_name())
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
         gl::clear_tex_image(
@@ -192,7 +192,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             );
 
             m_depth_stencil_renderbuffer->set_debug_label(
-                fmt::format("{} Texture_rendergraph_node depth-stencil renderbuffer", name())
+                fmt::format("{} Texture_rendergraph_node depth-stencil renderbuffer", get_name())
             );
         }
 
@@ -222,7 +222,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             }
             m_framebuffer = std::make_unique<Framebuffer>(create_info);
             m_framebuffer->set_debug_label(
-                fmt::format("{} Texture_rendergraph_node framebuffer", name())
+                fmt::format("{} Texture_rendergraph_node framebuffer", get_name())
             );
 
             gl::Color_buffer draw_buffers[] = { gl::Color_buffer::color_attachment0 };
@@ -238,7 +238,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
 
             if (!m_framebuffer->check_status())
             {
-                log_rendergraph->error("{} Texture_rendergraph_node framebuffer not complete", name());
+                log_rendergraph->error("{} Texture_rendergraph_node framebuffer not complete", get_name());
                 m_framebuffer.reset();
                 return;
             }

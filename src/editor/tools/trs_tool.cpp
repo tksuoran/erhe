@@ -1375,7 +1375,7 @@ void Trs_tool::update_transforms()
     auto* scene_root = reinterpret_cast<Scene_root*>(target_node->node_data.host);
     if (scene_root == nullptr)
     {
-        log_trs_tool->error("Node '{}' has no scene root", target_node->name());
+        log_trs_tool->error("Node '{}' has no scene root", target_node->get_name());
         return;
     }
     m_visualization.update_transforms();
