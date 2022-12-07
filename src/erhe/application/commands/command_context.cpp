@@ -6,28 +6,17 @@
 namespace erhe::application
 {
 
-Input_context::~Input_context()
-{
-}
-
 Command_context::Command_context(
     Commands&      commands,
-    Input_context* input_context,
     const uint32_t button_bits,
     glm::dvec2     vec2_absolute_value,
     glm::dvec2     vec2_relative_value
 )
     : m_commands           {commands}
-    , m_input_context      {input_context}
     , m_button_bits        {button_bits}
     , m_vec2_absolute_value{vec2_absolute_value}
     , m_vec2_relative_value{vec2_relative_value}
 {
-}
-
-auto Command_context::get_input_context() const -> Input_context*
-{
-    return m_input_context;
 }
 
 auto Command_context::get_button_bits() const -> uint32_t

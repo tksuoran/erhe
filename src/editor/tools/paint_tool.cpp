@@ -2,6 +2,7 @@
 
 #include "tools/paint_tool.hpp"
 
+#include "editor_message_bus.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
@@ -43,20 +44,20 @@ void Paint_vertex_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
-    if (m_paint_tool.try_ready(scene_view))
+    if (m_paint_tool.try_ready())
     {
         set_ready(context);
     }
 }
 
-auto Paint_tool::try_ready(Scene_view* scene_view) -> bool
+auto Paint_tool::try_ready() -> bool
 {
     if (!is_enabled())
     {
         return false;
     }
 
+    auto* scene_view = get_scene_view();
     if (scene_view == nullptr)
     {
         return false;
@@ -86,14 +87,13 @@ auto Paint_vertex_command::try_call(
     {
         return false;
     }
-    if (context.get_input_context() == nullptr)
+    if (m_paint_tool.get_scene_view() == nullptr)
     {
         set_inactive(context);
         return false;
     }
 
-    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
-    m_paint_tool.paint(scene_view);
+    m_paint_tool.paint();
     return true;
 }
 
@@ -168,7 +168,7 @@ void Paint_tool::paint_vertex(
     }
 }
 
-void Paint_tool::paint(Scene_view* scene_view)
+void Paint_tool::paint()
 {
     if (!is_enabled())
     {
@@ -178,6 +178,7 @@ void Paint_tool::paint(Scene_view* scene_view)
     m_point_id.reset();
     m_corner_id.reset();
 
+    auto* scene_view = get_scene_view();
     if (scene_view == nullptr)
     {
         return;
@@ -291,8 +292,9 @@ void Paint_tool::declare_required_components()
 {
     require<erhe::application::Commands     >();
     require<erhe::application::Imgui_windows>();
-    require<Operations>();
-    require<Tools     >();
+    require<Editor_message_bus>();
+    require<Operations        >();
+    require<Tools             >();
 }
 
 void Paint_tool::initialize_component()
@@ -304,8 +306,8 @@ void Paint_tool::initialize_component()
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_paint_vertex_command);
-    commands->bind_command_to_mouse_drag        (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
-    commands->bind_command_to_controller_trigger(&m_paint_vertex_command, 0.5f, 0.45f, true);
+    commands->bind_command_to_mouse_drag             (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
+    commands->bind_command_to_controller_trigger_drag(&m_paint_vertex_command);
     get<Operations>()->register_active_tool(this);
     get<Tools     >()->register_tool(this);
 
@@ -360,6 +362,14 @@ void Paint_tool::initialize_component()
     m_ngon_colors.emplace_back(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
     m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 255.0f / 255.0f, 1.0f);
     m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+
+    get<Editor_message_bus>()->add_receiver(
+        [&](Editor_message& message)
+        {
+            Tool::on_message(message);
+        }
+    );
+
 }
 
 void Paint_tool::post_initialize()

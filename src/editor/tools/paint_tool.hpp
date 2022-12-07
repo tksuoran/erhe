@@ -26,6 +26,7 @@ namespace erhe::primitive
 namespace editor
 {
 
+class Editor_message;
 class Editor_scenes;
 class Mesh_memory;
 class Paint_tool;
@@ -95,8 +96,8 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
-    auto try_ready(Scene_view* scene_view) -> bool;
-    void paint(Scene_view* scene_view);
+    auto try_ready() -> bool;
+    void paint();
 
 private:
     void paint_corner(
@@ -116,10 +117,10 @@ private:
     std::shared_ptr<Viewport_windows> m_viewport_windows;
     std::shared_ptr<Mesh_memory     > m_mesh_memory;
 
-    Paint_vertex_command m_paint_vertex_command;
+    Paint_vertex_command    m_paint_vertex_command;
 
-    Paint_mode m_paint_mode{Paint_mode::Point};
-    glm::vec4  m_color     {1.0f, 1.0f, 1.0f, 1.0f};
+    Paint_mode              m_paint_mode{Paint_mode::Point};
+    glm::vec4               m_color     {1.0f, 1.0f, 1.0f, 1.0f};
 
     std::optional<uint32_t> m_point_id;
     std::optional<uint32_t> m_corner_id;

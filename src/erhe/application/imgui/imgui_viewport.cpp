@@ -175,13 +175,13 @@ Imgui_viewport::~Imgui_viewport()
 auto Imgui_viewport::want_capture_keyboard() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
-    return io.WantCaptureKeyboard;
+    return io.WantCaptureKeyboard && !m_request_keyboard;
 }
 
 auto Imgui_viewport::want_capture_mouse() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;
-    return io.WantCaptureMouse;
+    return io.WantCaptureMouse && !m_request_mouse;
 }
 
 void Imgui_viewport::on_focus(int focused)
@@ -203,6 +203,15 @@ void Imgui_viewport::on_focus(int focused)
 [[nodiscard]] auto Imgui_viewport::get_scale_value() const -> float
 {
     return 1.0f;
+}
+
+void Imgui_viewport::update_input_request(
+    const bool request_keyboard,
+    const bool request_mouse
+)
+{
+    m_request_keyboard = request_keyboard;
+    m_request_mouse    = request_mouse;
 }
 
 void Imgui_viewport::on_cursor_enter(int entered)

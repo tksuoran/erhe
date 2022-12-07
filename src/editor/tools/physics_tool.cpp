@@ -1,8 +1,8 @@
 #include "tools/physics_tool.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
@@ -49,8 +49,7 @@ void Physics_tool_drag_command::try_ready(
         return;
     }
 
-    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
-    if (m_physics_tool.on_drag_ready(scene_view))
+    if (m_physics_tool.on_drag_ready())
     {
         log_physics->trace("PT set ready");
         set_ready(context);
@@ -66,9 +65,8 @@ auto Physics_tool_drag_command::try_call(
         return false;
     }
 
-    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
     if (
-        m_physics_tool.on_drag(scene_view) &&
+        m_physics_tool.on_drag() &&
         (get_command_state() == erhe::application::State::Ready)
     )
     {
@@ -158,10 +156,10 @@ Physics_tool::~Physics_tool() noexcept
 void Physics_tool::declare_required_components()
 {
     require<erhe::application::Commands>();
-    require<Operations   >();
-    require<Tools        >();
-    require<Scene_builder>();
-    m_editor_scenes     = require<Editor_scenes>();
+    require<Editor_message_bus>();
+    require<Operations        >();
+    require<Tools             >();
+    require<Scene_builder     >();
 }
 
 void Physics_tool::initialize_component()
@@ -170,12 +168,11 @@ void Physics_tool::initialize_component()
 
     const auto& tools = get<Tools>();
     tools->register_tool(this);
-    tools->register_hover_tool(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_drag_command);
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
-    commands->bind_command_to_controller_trigger(&m_drag_command, 0.5f, 0.45f, true);
+    commands->bind_command_to_controller_trigger_drag(&m_drag_command);
     get<Operations>()->register_active_tool(this);
 
     erhe::physics::IWorld* world = get_physics_world();
@@ -206,7 +203,7 @@ void Physics_tool::initialize_component()
     );
     world->add_rigid_body(m_constraint_world_point_rigid_body.get());
 
-    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+    get<Editor_message_bus>()->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
@@ -228,11 +225,7 @@ auto Physics_tool::description() -> const char*
 
 void Physics_tool::on_message(Editor_message& message)
 {
-    using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_viewport))
-    {
-        release_target();
-    }
+    Tool::on_message(message);
 }
 
 [[nodiscard]] auto Physics_tool::get_mode() const -> Physics_tool_mode
@@ -276,9 +269,9 @@ void Physics_tool::set_motion_mode(const erhe::physics::Motion_mode motion_mode)
     static_cast<void>(motion_mode);
 }
 
-auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
+auto Physics_tool::acquire_target() -> bool
 {
-    log_physics->warn("acquire_target() ...");
+    log_physics->trace("acquire_target() ...");
 
     erhe::physics::IWorld* world = get_physics_world();
     if (world == nullptr)
@@ -287,6 +280,7 @@ auto Physics_tool::acquire_target(Scene_view* scene_view) -> bool
         return false;
     }
 
+    Scene_view* scene_view = get_scene_view();
     if (scene_view == nullptr)
     {
         log_physics->warn("Cant target: No scene_view");
@@ -444,14 +438,14 @@ void Physics_tool::release_target()
     m_target_mesh_size        = 0.0;
 }
 
-auto Physics_tool::on_drag_ready(Scene_view* scene_view) -> bool
+auto Physics_tool::on_drag_ready() -> bool
 {
     if (!is_enabled())
     {
         log_physics->trace("PT not enabled");
         return false;
     }
-    if (!acquire_target(scene_view))
+    if (!acquire_target())
     {
         return false;
     }
@@ -489,7 +483,7 @@ void Physics_tool::tool_hover(Scene_view* scene_view)
     m_hover_mesh = hover.mesh;
 }
 
-auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
+auto Physics_tool::on_drag() -> bool
 {
     if (!is_enabled())
     {
@@ -504,6 +498,7 @@ auto Physics_tool::on_drag(Scene_view* scene_view) -> bool
     {
         return false;
     }
+    Scene_view* scene_view = get_scene_view();
     if (scene_view == nullptr)
     {
         return false;

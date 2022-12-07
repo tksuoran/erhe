@@ -139,6 +139,16 @@ void Imgui_window::toolbar()
 {
 }
 
+auto Imgui_window::want_keyboard_events() const -> bool
+{
+    return false;
+}
+
+auto Imgui_window::want_mouse_events() const -> bool
+{
+    return false;
+}
+
 auto Imgui_window::get_window_type_hash() const -> uint32_t
 {
     return 0;
@@ -150,12 +160,6 @@ void Imgui_window::on_begin()
 
 void Imgui_window::on_end()
 {
-}
-
-auto Imgui_window::visit(Commands& commands) const -> bool
-{
-    static_cast<void>(commands);
-    return false;
 }
 
 #if 0

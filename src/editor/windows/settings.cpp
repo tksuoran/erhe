@@ -1,6 +1,6 @@
 #include "windows/settings.hpp"
 
-#include "editor_scenes.hpp"
+#include "editor_message_bus.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -31,13 +31,10 @@ void Settings_window::declare_required_components()
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
-    require<Editor_scenes>();
 }
 
 void Settings_window::initialize_component()
 {
-    Message_bus_node::initialize(get<Editor_scenes>()->get_editor_message_bus());
-
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const erhe::application::Scoped_gl_context gl_context{
@@ -120,6 +117,11 @@ void Settings_window::initialize_component()
     }
 }
 
+void Settings_window::post_initialize()
+{
+    m_editor_message_bus = get<Editor_message_bus>();
+}
+
 void Settings_window::show_settings(Settings& settings)
 {
     apply_limits(settings);
@@ -144,9 +146,9 @@ void Settings_window::use_settings(const Settings& settings)
     configuration->shadow_renderer.shadow_map_max_light_count = settings.shadow_light_count;
     configuration->graphics.msaa_sample_count                 = settings.msaa_sample_count;
 
-    send(
+    m_editor_message_bus->send_message(
         Editor_message{
-            .changed = Changed_flag_bit::c_flag_bit_graphics_settings
+            .update_flags = Message_flag_bit::c_flag_bit_graphics_settings
         }
     );
 }

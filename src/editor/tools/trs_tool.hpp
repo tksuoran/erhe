@@ -100,7 +100,6 @@ private:
 class Trs_tool
     : public erhe::application::Imgui_window
     , public erhe::components::Component
-    , public erhe::message_bus::Message_bus_node<Editor_message>
     , public Tool
 {
 public:
@@ -256,11 +255,11 @@ private:
     std::shared_ptr<Tools>                                m_tools;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
-    erhe::physics::Motion_mode                 m_motion_mode    {erhe::physics::Motion_mode::e_kinematic_physical};
-    bool                                       m_local          {true};
-    bool                                       m_touched        {false};
-    Handle                                     m_hover_handle   {Handle::e_handle_none};
-    Handle                                     m_active_handle  {Handle::e_handle_none};
+    erhe::physics::Motion_mode                 m_motion_mode  {erhe::physics::Motion_mode::e_kinematic_physical};
+    bool                                       m_local        {true};
+    bool                                       m_touched      {false};
+    Handle                                     m_hover_handle {Handle::e_handle_none};
+    Handle                                     m_active_handle{Handle::e_handle_none};
     std::weak_ptr<erhe::scene::Node>           m_target_node;
     std::shared_ptr<erhe::scene::Node>         m_tool_node;
     std::optional<erhe::physics::Motion_mode>  m_original_motion_mode;

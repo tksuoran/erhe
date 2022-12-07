@@ -3,6 +3,7 @@
 #include "scene/scene_view.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/grid_tool.hpp"
@@ -34,11 +35,6 @@ static const std::string empty_string{};
     return empty_string;
 }
 
-[[nodiscard]] auto Scene_view::get_type() const -> int
-{
-    return Input_context_type_scene_view;
-}
-
 void Scene_view::set_hover(
     const std::size_t  slot,
     const Hover_entry& entry
@@ -49,45 +45,14 @@ void Scene_view::set_hover(
     m_hover_entries[slot]      = entry;
     m_hover_entries[slot].slot = slot;
 
-    update_nearest_slot();
-
     if (mesh_changed || grid_changed)
     {
-        send(
+        get_scene_root()->get_editor_message_bus()->send_message(
             Editor_message{
-                .changed    = Changed_flag_bit::c_flag_bit_hover,
-                .scene_view = this
+                .update_flags = Message_flag_bit::c_flag_bit_hover | Message_flag_bit::c_flag_bit_scene_view,
+                .scene_view   = this
             }
         );
-    }
-}
-
-void Scene_view::update_nearest_slot()
-{
-    // Update nearest slot
-    if (!m_control_ray_origin_in_world.has_value())
-    {
-        m_nearest_slot = 0;
-        return;
-    }
-
-    double nearest_distance = std::numeric_limits<double>::max();
-    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
-    {
-        const Hover_entry& entry = m_hover_entries[slot];
-        if (!entry.valid || !entry.position.has_value())
-        {
-            continue;
-        }
-        const double distance = glm::distance(
-            m_control_ray_origin_in_world.value(),
-            entry.position.value()
-        );
-        if (distance < nearest_distance)
-        {
-            nearest_distance = distance;
-            m_nearest_slot = slot;
-        }
     }
 }
 
@@ -149,9 +114,44 @@ auto Scene_view::get_hover(size_t slot) const -> const Hover_entry&
     return m_hover_entries.at(slot);
 }
 
-auto Scene_view::get_nearest_hover() const -> const Hover_entry&
+auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entry&
 {
-    return m_hover_entries.at(m_nearest_slot);
+    std::size_t nearest_slot = 0;
+    double nearest_distance = std::numeric_limits<double>::max();
+    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
+    {
+        const uint32_t slot_bit = (1 << slot);
+        if ((slot_mask & slot_bit) == 0)
+        {
+            continue;
+        }
+
+        const Hover_entry& entry = m_hover_entries[slot];
+        if (!entry.valid || !entry.position.has_value())
+        {
+            continue;
+        }
+        const double distance = glm::distance(
+            m_control_ray_origin_in_world.value(),
+            entry.position.value()
+        );
+        if (distance < nearest_distance)
+        {
+            nearest_distance = distance;
+            nearest_slot = slot;
+        }
+    }
+    return m_hover_entries.at(nearest_slot);
+}
+
+auto Scene_view::as_viewport_window() -> Viewport_window*
+{
+    return nullptr;
+}
+
+auto Scene_view::as_viewport_window() const -> const Viewport_window*
+{
+    return nullptr;
 }
 
 void Scene_view::reset_control_ray()
@@ -191,7 +191,7 @@ void Scene_view::raytrace_update(
 
     for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
     {
-        const uint32_t slot_mask = Hover_entry::slot_masks[slot];
+        const uint32_t slot_mask = Hover_entry::raytrace_slot_masks[slot];
         Hover_entry entry {
             .slot = slot,
             .mask = slot_mask

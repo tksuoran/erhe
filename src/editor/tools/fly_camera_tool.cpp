@@ -1,10 +1,12 @@
 #include "tools/fly_camera_tool.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_scenes.hpp"
-#include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs_tool.hpp"
+#include "scene/scene_root.hpp"
+#include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "windows/imgui_viewport_window.hpp"
@@ -17,6 +19,7 @@
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/view.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -75,39 +78,42 @@ void Fly_camera_turn_command::try_ready(
 
 auto Fly_camera_tool::try_ready() -> bool
 {
-    // TODO use scene_view instead?
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
+    const Scene_view* scene_view = get_scene_view();
+    if (scene_view == nullptr)
     {
         return false;
     }
 
     if (
-        viewport_window->get_hover(Hover_entry::tool_slot        ).valid ||
-        viewport_window->get_hover(Hover_entry::rendertarget_slot).valid
+        scene_view->get_hover(Hover_entry::tool_slot        ).valid ||
+        scene_view->get_hover(Hover_entry::rendertarget_slot).valid
     )
     {
         return false;
     }
 
-    // Exclude safe border near viewport edges from mouse interaction
-    // to filter out viewport window resizing for example.
-    const auto position_opt = viewport_window->get_position_in_viewport();
-    if (!position_opt.has_value())
+    const Viewport_window* viewport_window = scene_view->as_viewport_window();
+    if (viewport_window != nullptr)
     {
-        return false;
-    }
-    constexpr float border   = 32.0f;
-    const glm::vec2 position = position_opt.value();
-    const erhe::scene::Viewport viewport = viewport_window->projection_viewport();
-    if (
-        (position.x <  border) ||
-        (position.y <  border) ||
-        (position.x >= viewport.width  - border) ||
-        (position.y >= viewport.height - border)
-    )
-    {
-        return false;
+        // Exclude safe border near viewport edges from mouse interaction
+        // to filter out viewport window resizing for example.
+        const auto position_opt = scene_view->get_position_in_viewport();
+        if (!position_opt.has_value())
+        {
+            return false;
+        }
+        constexpr float border   = 32.0f;
+        const glm::vec2 position = position_opt.value();
+        const erhe::scene::Viewport viewport = viewport_window->projection_viewport();
+        if (
+            (position.x <  border) ||
+            (position.y <  border) ||
+            (position.x >= viewport.width  - border) ||
+            (position.y >= viewport.height - border)
+        )
+        {
+            return false;
+        }
     }
 
     return true;
@@ -117,12 +123,13 @@ auto Fly_camera_turn_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    if (m_fly_camera_tool.viewport_window() == nullptr)
-    {
-        return false;
-    }
     if (get_command_state() == erhe::application::State::Ready)
     {
+        if (m_fly_camera_tool.get_scene_view() == nullptr)
+        {
+            set_inactive(context);
+            return false;
+        }
         const auto value = context.get_vec2_relative_value();
         if ((value.x != 0.0f) || (value.y != 0.0f))
         {
@@ -132,11 +139,6 @@ auto Fly_camera_turn_command::try_call(
 
     if (get_command_state() != erhe::application::State::Active)
     {
-        return false;
-    }
-    if (context.get_input_context() == nullptr)
-    {
-        set_inactive(context);
         return false;
     }
 
@@ -186,11 +188,11 @@ Fly_camera_tool::~Fly_camera_tool() noexcept
 
 void Fly_camera_tool::declare_required_components()
 {
-    m_editor_tools = require<Tools>();
-
     require<erhe::application::Commands>();
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
+    require<Editor_message_bus>();
+    m_editor_tools = require<Tools>();
 }
 
 void Fly_camera_tool::initialize_component()
@@ -241,6 +243,13 @@ void Fly_camera_tool::initialize_component()
 
     m_rotate_scale_x = config.invert_x ? -1.0f / 1024.0f : 1.0f / 1024.f;
     m_rotate_scale_y = config.invert_y ? -1.0f / 1024.0f : 1.0f / 1024.f;
+
+    get<Editor_message_bus>()->add_receiver(
+        [&](Editor_message& message)
+        {
+            Tool::on_message(message);
+        }
+    );
 }
 
 void Fly_camera_tool::post_initialize()
@@ -376,11 +385,6 @@ auto Fly_camera_tool::try_move(
     controller.set(item, active);
 
     return true;
-}
-
-auto Fly_camera_tool::viewport_window() const -> std::shared_ptr<Viewport_window>
-{
-    return m_viewport_windows->hover_window();
 }
 
 auto Fly_camera_tool::turn_relative(const double dx, const double dy) -> bool

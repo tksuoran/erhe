@@ -3,8 +3,8 @@
 #include "scene/viewport_windows.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -82,23 +82,22 @@ Viewport_windows::~Viewport_windows() noexcept
 void Viewport_windows::declare_required_components()
 {
     require<erhe::application::Commands>();
-    m_configuration   = require<erhe::application::Configuration>();
-    m_imgui_windows   = require<erhe::application::Imgui_windows>();
-    m_rendergraph     = require<erhe::application::Rendergraph  >();
-    m_window          = require<erhe::application::Window       >();
-    m_post_processing = require<Post_processing>();
-    m_shadow_renderer = require<Shadow_renderer >();
-    require<Editor_scenes>();
+    m_configuration      = require<erhe::application::Configuration>();
+    m_imgui_windows      = require<erhe::application::Imgui_windows>();
+    m_rendergraph        = require<erhe::application::Rendergraph  >();
+    m_window             = require<erhe::application::Window       >();
+    m_editor_message_bus = require<Editor_message_bus>();
+    m_post_processing    = require<Post_processing   >();
+    m_shadow_renderer    = require<Shadow_renderer   >();
 }
 
 void Viewport_windows::initialize_component()
 {
-    Message_bus_node::initialize(get<Editor_scenes>()->get_editor_message_bus());
     const auto commands = get<erhe::application::Commands>();
     commands->register_command   (&m_open_new_viewport_window_command);
     commands->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
 
-    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+    m_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
@@ -109,16 +108,16 @@ void Viewport_windows::initialize_component()
 void Viewport_windows::post_initialize()
 {
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_editor_rendering       = get<Editor_rendering>();
-    m_id_renderer            = get<Id_renderer     >();
-    m_viewport_config        = get<Viewport_config >();
-    m_tools                  = get<Tools           >();
+    m_editor_rendering       = get<Editor_rendering  >();
+    m_id_renderer            = get<Id_renderer       >();
+    m_viewport_config        = get<Viewport_config   >();
+    m_tools                  = get<Tools             >();
 }
 
 void Viewport_windows::on_message(Editor_message& message)
 {
     using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_graphics_settings))
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings))
     {
         handle_graphics_settings_changed();
     }
@@ -342,9 +341,9 @@ auto Viewport_windows::open_new_viewport_window(
             }
         }
         // Case for when no camera found in selection
-        if (!m_scene_root->scene().cameras.empty())
+        if (!m_scene_root->scene().get_cameras().empty())
         {
-            const auto& camera = scene_root->scene().cameras.front();
+            const auto& camera = scene_root->scene().get_cameras().front();
             create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
         }
         return true;
@@ -402,9 +401,10 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
 
     if (old_window != new_window)
     {
-        send(
+        m_editor_message_bus->send_message(
             Editor_message{
-                .changed = Changed_flag_bit::c_flag_bit_viewport
+                .update_flags = Message_flag_bit::c_flag_bit_viewport | Message_flag_bit::c_flag_bit_scene_view,
+                .scene_view   = new_window.get()
             }
         );
     }

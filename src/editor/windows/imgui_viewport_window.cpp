@@ -235,20 +235,14 @@ void Imgui_viewport_window::imgui()
 #endif
 }
 
-auto Imgui_viewport_window::visit(erhe::application::Commands& commands) const -> bool
+auto Imgui_viewport_window::want_mouse_events() const -> bool
 {
-    if (ImGui::IsWindowHovered())
-    {
-        const auto viewport_window_shared = m_viewport_window.lock();
-        if (viewport_window_shared)
-        {
-            Viewport_window* viewport_window = viewport_window_shared.get();
-            Scene_view* scene_view = viewport_window;
-            commands.set_input_context(scene_view);
-            return true;
-        }
-    }
-    return false;
+    return true;
+}
+
+auto Imgui_viewport_window::want_keyboard_events() const -> bool
+{
+    return true;
 }
 
 } // namespace editor

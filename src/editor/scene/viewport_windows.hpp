@@ -37,6 +37,7 @@ namespace editor
 
 class Basic_viewport_window;
 class Editor_message;
+class Editor_message_bus;
 class Editor_rendering;
 class Id_renderer;
 class Imgui_viewport_window;
@@ -72,7 +73,6 @@ private:
 /// (mouse cursor).
 class Viewport_windows
     : public erhe::components::Component
-    , public erhe::message_bus::Message_bus_node<Editor_message>
 {
 public:
     static constexpr std::string_view c_type_name{"Viewport_windows"};
@@ -176,6 +176,7 @@ private:
     std::shared_ptr<erhe::application::Rendergraph>       m_rendergraph;
     std::shared_ptr<erhe::application::Window>            m_window;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Editor_message_bus>                   m_editor_message_bus;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
     std::shared_ptr<Id_renderer>                          m_id_renderer;
     std::shared_ptr<Post_processing>                      m_post_processing;

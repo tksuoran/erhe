@@ -70,6 +70,11 @@ public:
 
     [[nodiscard]] virtual auto get_scene_host() const -> Scene_host*;
     [[nodiscard]] virtual auto type_name     () const -> const char*;
+    virtual void handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
+    {
+        static_cast<void>(old_flag_bits);
+        static_cast<void>(new_flag_bits);
+    }
 
     [[nodiscard]] auto get_name           () const -> const std::string&;
     [[nodiscard]] auto get_label          () const -> const std::string&;
@@ -87,7 +92,7 @@ public:
     void enable_flag_bits   (uint64_t mask);
     void disable_flag_bits  (uint64_t mask);
     void set_selected       (bool value);
-    void set_visible        (bool value);
+    virtual void set_visible        (bool value);
     void show               ();
     void hide               ();
     void set_wireframe_color(const glm::vec4& color);
@@ -110,8 +115,9 @@ public:
 
     void set_node(Node* node);
 
-    virtual void handle_node_transform_update      () {};
-    virtual void handle_node_visibility_mask_update(const uint64_t mask) { static_cast<void>(mask); };
+    virtual void handle_node_update           (Node* old_node, Node* new_node);
+    virtual void handle_node_flag_bits_update (const uint64_t old_node_flag_bits, const uint64_t new_node_flag_bits);
+    virtual void handle_node_transform_update () {};
     virtual void handle_node_scene_host_update(
         Scene_host* old_scene_host,
         Scene_host* new_scene_host
@@ -154,7 +160,6 @@ public:
     std::vector<std::shared_ptr<Node>>            children;
     std::vector<std::shared_ptr<Node_attachment>> attachments;
     std::size_t                                   depth {0};
-    std::string                                   name;
 
     static constexpr unsigned int bit_transform   {1u << 0};
     static constexpr unsigned int bit_host        {1u << 1};
@@ -182,6 +187,7 @@ public:
 
     // Implements Scene_item
     auto type_name() const -> const char* override;
+    void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
     // Public API
     void handle_parent_update    (Node* old_parent, Node* new_parent);

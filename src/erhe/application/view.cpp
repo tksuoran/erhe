@@ -78,9 +78,9 @@ void View::on_refresh()
     {
         if (m_time)
         {
-            m_time->update(); // Also does once per frame updates - moving to next slot in renderers
+            m_time->update(); // Does not do once per frame updates - moving to next slot in renderers
         }
-        m_view_client->update();
+        m_view_client->update(); // Should call once per frame updates
         if (m_window)
         {
             m_window->get_context_window()->swap_buffers();
@@ -133,10 +133,13 @@ void View::update()
     SPDLOG_LOGGER_TRACE(log_frame, "update()");
 
     m_time->update();
-
     if (m_view_client != nullptr)
     {
         m_view_client->update();
+    }
+    else
+    {
+        m_time->update_once_per_frame();
     }
 
     if (m_configuration->window.show)
@@ -203,10 +206,7 @@ void View::on_key(
         return;
     }
 
-    const bool imgui_capture_keyboard = get_imgui_capture_keyboard();
-    const bool has_input_context      = (m_commands->get_input_context() != nullptr);
-
-    if (imgui_capture_keyboard && !has_input_context)
+    if (get_imgui_capture_keyboard())
     {
         return;
     }
@@ -285,10 +285,7 @@ void View::on_mouse_click(
         return;
     }
 
-    const bool imgui_capture_mouse = get_imgui_capture_mouse();
-    const bool has_input_context   = (m_commands->get_input_context() != nullptr);
-
-    if (imgui_capture_mouse && !has_input_context)
+    if (get_imgui_capture_mouse())
     {
         return;
     }
@@ -319,10 +316,7 @@ void View::on_mouse_wheel(const double x, const double y)
         return;
     }
 
-    const bool imgui_capture_mouse = get_imgui_capture_mouse();
-    const bool has_input_context   = (m_commands->get_input_context() != nullptr);
-
-    if (imgui_capture_mouse && !has_input_context)
+    if (get_imgui_capture_mouse())
     {
         return;
     }
@@ -344,12 +338,8 @@ void View::on_mouse_move(const double x, const double y)
         return;
     }
 
-    const bool imgui_capture_mouse = get_imgui_capture_mouse();
-    const bool has_input_context   = (m_commands->get_input_context() != nullptr);
-
-    if (imgui_capture_mouse && !has_input_context)
+    if (get_imgui_capture_mouse())
     {
-        SPDLOG_LOGGER_TRACE(log_input_event_filtered, "ImGui WantCaptureMouse");
         return;
     }
 

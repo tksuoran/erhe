@@ -1,8 +1,24 @@
 #include "tools/tool.hpp"
 #include "editor_log.hpp"
+#include "editor_message.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 
 namespace editor
 {
+
+void Tool::on_message(Editor_message& message)
+{
+    using namespace erhe::toolkit;
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_scene_view))
+    {
+        m_scene_view = message.scene_view;
+    }
+}
+
+auto Tool::get_scene_view() const -> Scene_view*
+{
+    return m_scene_view;
+}
 
 void Tool::set_enable_state(const bool enable_state)
 {

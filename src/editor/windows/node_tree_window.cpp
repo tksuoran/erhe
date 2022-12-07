@@ -95,7 +95,7 @@ void Node_tree_window::select_all()
     for (const auto& scene_root : scene_roots)
     {
         const auto& scene = scene_root->scene();
-        for (const auto& node : scene.root_node->children())
+        for (const auto& node : scene.get_root_node()->children())
         {
             recursive_add_to_selection(node);
         }
@@ -1006,7 +1006,7 @@ void Node_tree_window::imgui()
         const auto& scene = scene_root->scene();
         {
             ERHE_PROFILE_SCOPE("nodes");
-            for (const auto& node : scene.root_node->children())
+            for (const auto& node : scene.get_root_node()->children())
             {
                 imgui_item_node(node);
             }

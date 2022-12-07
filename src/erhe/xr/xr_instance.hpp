@@ -81,8 +81,7 @@ public:
         Xr_path trigger_value;
         Xr_path menu_click;
         Xr_path squeeze_click;
-        Xr_path trackpad_x;
-        Xr_path trackpad_y;
+        Xr_path trackpad;
         Xr_path trackpad_click;
         Xr_path trackpad_touch;
         Xr_path grip_pose;
@@ -93,17 +92,25 @@ public:
     class Actions
     {
     public:
-        XrActionSet          action_set             {};
-        XrAction             trigger_value          {};
-        XrActionStateFloat   trigger_value_state    {.currentState = 0.0f, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction             menu_click             {};
-        XrActionStateBoolean menu_click_state       {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction             squeeze_click          {};
-        XrActionStateBoolean squeeze_click_state    {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction             aim_pose               {};
-        XrActionStatePose    aim_pose_state         {.isActive = XR_FALSE};
-        XrSpace              aim_pose_space         {};
-        XrSpaceLocation      aim_pose_space_location{.locationFlags = 0};
+        XrActionSet           action_set             {};
+        XrAction              trigger_value          {};
+        XrActionStateFloat    trigger_value_state    {.currentState = 0.0f, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction              trigger_click          {};
+        XrActionStateBoolean  trigger_click_state    {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction              menu_click             {};
+        XrActionStateBoolean  menu_click_state       {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction              squeeze_click          {};
+        XrActionStateBoolean  squeeze_click_state    {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction              aim_pose               {};
+        XrActionStatePose     aim_pose_state         {.isActive = XR_FALSE};
+        XrSpace               aim_pose_space         {};
+        XrSpaceLocation       aim_pose_space_location{.locationFlags = 0};
+        XrAction              trackpad_click         {};
+        XrActionStateBoolean  trackpad_click_state   {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction              trackpad_touch         {};
+        XrActionStateBoolean  trackpad_touch_state   {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrAction              trackpad               {};
+        XrActionStateVector2f trackpad_state         {.currentState = { .x = 0.0f, .y = 0.f }, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
     };
 
     Paths   paths;

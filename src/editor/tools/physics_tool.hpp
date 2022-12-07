@@ -107,15 +107,15 @@ public:
     void set_motion_mode         (const erhe::physics::Motion_mode motion_mode) override;
 
     // Public API
-    auto acquire_target(Scene_view* scene_view) -> bool;
+    auto acquire_target() -> bool;
     void release_target();
     void begin_point_to_point_constraint();
 
     [[nodiscard]] auto get_mode() const -> Physics_tool_mode;
     void set_mode(Physics_tool_mode value);
 
-    auto on_drag_ready(Scene_view* scene_view) -> bool;
-    auto on_drag      (Scene_view* scene_view) -> bool;
+    auto on_drag_ready() -> bool;
+    auto on_drag      () -> bool;
 
 private:
     void on_message(Editor_message& message);
@@ -133,7 +133,6 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<Fly_camera_tool>                      m_fly_camera;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 

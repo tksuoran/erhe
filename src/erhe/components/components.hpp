@@ -21,9 +21,9 @@ class Components;
 class Time_context
 {
 public:
-    double   dt;
-    double   time;
-    uint64_t frame_number;
+    double   dt          {0.0};
+    double   time        {0.0};
+    uint64_t frame_number{0};
 };
 
 class IUpdate_fixed_step

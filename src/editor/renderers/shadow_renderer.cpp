@@ -1,9 +1,9 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "renderers/shadow_renderer.hpp"
-#include "editor_scenes.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 
 #include "rendergraph/shadow_render_node.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -68,9 +68,9 @@ Shadow_renderer::~Shadow_renderer() noexcept
 void Shadow_renderer::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
-    require<Editor_scenes    >();
-    require<Program_interface>();
-    require<Programs         >();
+    require<Editor_message_bus>();
+    require<Program_interface >();
+    require<Programs          >();
     m_configuration = require<erhe::application::Configuration>();
     m_render_graph  = require<erhe::application::Rendergraph>();
     m_mesh_memory   = require<Mesh_memory>();
@@ -132,7 +132,7 @@ void Shadow_renderer::initialize_component()
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Shadow_renderer");
 
-    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+    get<Editor_message_bus>()->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
@@ -148,7 +148,7 @@ void Shadow_renderer::post_initialize()
 void Shadow_renderer::on_message(Editor_message& message)
 {
     using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_graphics_settings))
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings))
     {
         handle_graphics_settings_changed();
     }

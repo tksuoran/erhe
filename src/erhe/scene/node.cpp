@@ -128,6 +128,7 @@ auto Scene_item::get_flag_bits() const -> uint64_t
 
 void Scene_item::set_flag_bits(const uint64_t mask, const bool value)
 {
+    const auto old_flag_bits = m_flag_bits;
     if (value)
     {
         m_flag_bits = m_flag_bits | mask;
@@ -135,6 +136,11 @@ void Scene_item::set_flag_bits(const uint64_t mask, const bool value)
     else
     {
         m_flag_bits = m_flag_bits & ~mask;
+    }
+
+    if (m_flag_bits != old_flag_bits)
+    {
+        handle_flag_bits_update(old_flag_bits, m_flag_bits);
     }
 }
 
@@ -255,17 +261,47 @@ auto Node_attachment::get_scene_host() const -> Scene_host*
     return m_node->get_scene_host();
 }
 
+void Node_attachment::handle_node_update(
+    Node* const old_node,
+    Node* const new_node
+)
+{
+    const uint64_t old_flag_bits = old_node ? old_node->get_flag_bits() : 0;
+    const uint64_t new_flag_bits = new_node ? new_node->get_flag_bits() : 0;
+    const bool     visible       = (new_flag_bits & Scene_item_flags::visible) == Scene_item_flags::visible;
+    if (old_flag_bits != new_flag_bits)
+    {
+        handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
+    }
+    set_visible(visible);
+}
+
+void Node_attachment::handle_node_flag_bits_update(
+    const uint64_t old_node_flag_bits,
+    const uint64_t new_node_flag_bits
+)
+{
+    static_cast<void>(old_node_flag_bits);
+    const bool visible = (new_node_flag_bits & Scene_item_flags::visible) == Scene_item_flags::visible;
+    set_visible(visible);
+};
+
 void Node_attachment::set_node(Node* const node)
 {
+    Node* const old_node = m_node;
     Scene_host* const old_host = (m_node != nullptr) ? m_node->get_scene_host() : nullptr;
     m_node = node;
     Scene_host* const new_host = (m_node != nullptr) ? m_node->get_scene_host() : nullptr;
-    if (new_host != old_host)
+    if (m_node != old_node)
     {
-        handle_node_scene_host_update(old_host, new_host);
-        if (m_node != nullptr)
+        handle_node_update(old_node, node);
+        if (new_host != old_host)
         {
-            handle_node_transform_update();
+            handle_node_scene_host_update(old_host, new_host);
+            if (m_node != nullptr)
+            {
+                handle_node_transform_update();
+            }
         }
     }
 };
@@ -329,7 +365,6 @@ void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
 
     node_data.attachments.push_back(attachment);
     attachment->set_node(this);
-    //// handle_visibility_mask_update();
     sanity_check();
 }
 
@@ -598,6 +633,14 @@ void Node::set_depth_recursive(const std::size_t depth)
     for (const auto& child : node_data.children)
     {
         child->set_depth_recursive(depth + 1);
+    }
+}
+
+void Node::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
+{
+    for (const auto& attachment : node_data.attachments)
+    {
+        attachment->handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
     }
 }
 

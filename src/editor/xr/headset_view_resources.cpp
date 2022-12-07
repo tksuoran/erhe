@@ -78,7 +78,6 @@ Headset_view_resources::Headset_view_resources(
     gl::named_framebuffer_draw_buffers(framebuffer->gl_name(), 1, &draw_buffers[0]);
     gl::named_framebuffer_read_buffer (framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
-
     camera = std::make_shared<erhe::scene::Camera>(
         fmt::format("Headset Camera slot {}", slot)
     );

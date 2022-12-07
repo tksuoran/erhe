@@ -395,7 +395,7 @@ void Create::imgui()
 
     const auto parent = selected_node
         ? selected_node
-        : scene_root->get_scene()->root_node;
+        : scene_root->get_scene()->get_root_node();
 
     ERHE_VERIFY(parent);
 

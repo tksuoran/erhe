@@ -188,6 +188,16 @@ void Map_window::on_end()
     ImGui::PopStyleVar();
 }
 
+auto Map_window::want_keyboard_events() const -> bool
+{
+    return true;
+}
+
+auto Map_window::want_mouse_events() const -> bool
+{
+    return true;
+}
+
 auto Map_window::mouse_scroll_try_ready() const -> bool
 {
     return m_is_hovered;

@@ -77,17 +77,27 @@ private:
 class Icons
 {
 public:
+    glm::vec2 brush_tool       {};
     glm::vec2 camera           {};
     glm::vec2 directional_light{};
     glm::vec2 drag             {};
+    glm::vec2 hud              {};
     glm::vec2 point_light      {};
     glm::vec2 pull             {};
     glm::vec2 push             {};
     glm::vec2 spot_light       {};
+    glm::vec2 material         {};
     glm::vec2 mesh             {};
+    glm::vec2 mesh_cone        {};
+    glm::vec2 mesh_cube        {};
+    glm::vec2 mesh_cylinder    {};
+    glm::vec2 mesh_icosphere   {};
+    glm::vec2 mesh_torus       {};
+    glm::vec2 mesh_uvsphere    {};
     glm::vec2 move             {};
     glm::vec2 node             {};
     glm::vec2 rotate           {};
+    glm::vec2 select           {};
     glm::vec2 three_dots       {};
 };
 

@@ -23,7 +23,7 @@ void Rendering::post_initialize()
 {
     m_imgui_renderer = get<erhe::application::Imgui_renderer>();
     m_tile_renderer  = get<Tile_renderer>();
-    m_tiles          = get<Tiles       >();
+    m_tiles          = get<Tiles>();
 }
 
 auto Rendering::terrain_image(terrain_tile_t terrain_tile, const int scale) -> bool

@@ -67,10 +67,12 @@ namespace editor
 {
 
 class Content_library;
+class Editor_message_bus;
 class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
 class Rendertarget_mesh;
+class Scene_message_bus;
 class Scene_root;
 class Viewport_window;
 
@@ -100,21 +102,23 @@ class Scene_root
 {
 public:
     Scene_root(
-        erhe::message_bus::Message_bus<erhe::scene::Scene_message>* message_bus,
-        const std::shared_ptr<Content_library>&                     content_library,
-        const std::string_view                                      name
+        const erhe::components::Components&     components,
+        const std::shared_ptr<Content_library>& content_library,
+        const std::string_view                  name
     );
     ~Scene_root() noexcept override;
 
     // Implements Scene_host
-    [[nodiscard]] auto get_scene     () -> erhe::scene::Scene* override;
-    [[nodiscard]] auto layers        () -> Scene_layers&;
-    [[nodiscard]] auto layers        () const -> const Scene_layers&;
-    [[nodiscard]] auto physics_world () -> erhe::physics::IWorld&;
-    [[nodiscard]] auto raytrace_scene() -> erhe::raytrace::IScene&;
-    [[nodiscard]] auto scene         () -> erhe::scene::Scene&;
-    [[nodiscard]] auto scene         () const -> const erhe::scene::Scene&;
-    [[nodiscard]] auto get_name      () const -> const std::string&;
+    [[nodiscard]] auto get_scene() -> erhe::scene::Scene* override;
+
+    [[nodiscard]] auto get_editor_message_bus() const -> std::shared_ptr<Editor_message_bus>;
+    [[nodiscard]] auto layers                () -> Scene_layers&;
+    [[nodiscard]] auto layers                () const -> const Scene_layers&;
+    [[nodiscard]] auto physics_world         () -> erhe::physics::IWorld&;
+    [[nodiscard]] auto raytrace_scene        () -> erhe::raytrace::IScene&;
+    [[nodiscard]] auto scene                 () -> erhe::scene::Scene&;
+    [[nodiscard]] auto scene                 () const -> const erhe::scene::Scene&;
+    [[nodiscard]] auto get_name              () const -> const std::string&;
 
     auto camera_combo(
         const char*           label,
@@ -157,8 +161,10 @@ private:
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
     std::unique_ptr<erhe::scene::Scene>             m_scene;
     std::shared_ptr<erhe::scene::Camera>            m_camera;
-    std::shared_ptr<Frame_controller>               m_camera_controls;
     std::shared_ptr<Content_library>                m_content_library;
+    std::shared_ptr<Editor_message_bus>             m_editor_message_bus;
+    std::shared_ptr<Frame_controller>               m_camera_controls;
+    std::shared_ptr<Scene_message_bus>              m_scene_message_bus;
     std::mutex                                      m_rendertarget_meshes_mutex;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
     Scene_layers                                    m_layers;

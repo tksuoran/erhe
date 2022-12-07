@@ -144,8 +144,7 @@ public:
         erhe::application::Controller_item item,
         bool                               active
     ) -> bool;
-    [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
-    auto turn_relative(double dx, double dy) -> bool;
+    auto turn_relative (double dx, double dy) -> bool;
 
 private:
     void update_camera();

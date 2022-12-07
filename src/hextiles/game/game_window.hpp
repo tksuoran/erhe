@@ -32,6 +32,7 @@ public:
 
     // Implements Imgui_window
     void imgui() override;
+    auto flags() -> ImGuiWindowFlags override;
 
 private:
     // Component dependencies

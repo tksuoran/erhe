@@ -87,15 +87,16 @@ void Handle_visualizations::update_mesh_visibility(
     const bool translate_y   = m_trs_tool.is_y_translate_active() && (handle == Handle::e_handle_translate_y);
     const bool translate_z   = m_trs_tool.is_z_translate_active() && (handle == Handle::e_handle_translate_z);
 
-    mesh->set_visible(
-        show &&
+    const bool visible = show &&
         (
             !m_hide_inactive ||
             (active_handle == handle) ||
             (translate_x || translate_y || translate_z) ||
             show_all
-        )
-    );
+        );
+
+    erhe::scene::Node* node = mesh->get_node();
+    node->set_visible(visible);
 
     const Mode mode = (active_handle == handle) || (translate_x || translate_y || translate_z)
         ? Mode::Active
@@ -338,7 +339,7 @@ void Handle_visualizations::initialize(
 
     m_tool_node = std::make_shared<erhe::scene::Node>("Trs");
     const auto scene_root = m_trs_tool.get_tool_scene_root();
-    m_tool_node->set_parent(scene_root->get_scene()->root_node);
+    m_tool_node->set_parent(scene_root->get_scene()->get_root_node());
 
     m_scale          = configuration.trs_tool.scale;
     m_show_translate = configuration.trs_tool.show_translate;

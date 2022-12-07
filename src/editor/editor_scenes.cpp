@@ -27,8 +27,6 @@ void Editor_scenes::update_once_per_frame(
     const erhe::components::Time_context&
 )
 {
-    m_editor_message_bus.notify();
-    m_scene_message_bus.notify();
     for (const auto& scene_root : m_scene_roots)
     {
         scene_root->scene().update_node_transforms();
@@ -51,18 +49,6 @@ void Editor_scenes::update_once_per_frame(
         return m_scene_roots.front();
     }
     return m_current_scene_root;
-}
-
-[[nodiscard]] auto Editor_scenes::get_editor_message_bus(
-) -> erhe::message_bus::Message_bus<Editor_message>*
-{
-    return &m_editor_message_bus;
-}
-
-[[nodiscard]] auto Editor_scenes::get_scene_message_bus(
-) -> erhe::message_bus::Message_bus<erhe::scene::Scene_message>*
-{
-    return &m_scene_message_bus;
 }
 
 void Editor_scenes::sanity_check()

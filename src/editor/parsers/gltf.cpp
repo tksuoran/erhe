@@ -237,8 +237,6 @@ public:
         : m_scene_root{scene_root}
         , m_build_info{build_info}
     {
-        m_scene_root->scene().nodes_sorted = false;
-
         if (!open(path))
         {
             return;
@@ -1228,7 +1226,7 @@ private:
         {
             parse_node(
                 scene->nodes[i],
-                m_scene_root->scene().root_node
+                m_scene_root->scene().get_root_node()
             );
         }
 

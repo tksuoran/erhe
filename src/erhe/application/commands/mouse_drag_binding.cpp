@@ -54,7 +54,6 @@ auto Mouse_drag_binding::on_button(
     }
 
     auto* const command = get_command();
-
     if (command->get_command_state() == State::Disabled)
     {
         return false;
@@ -101,7 +100,6 @@ auto Mouse_drag_binding::on_button(
 auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
 {
     auto* const command = get_command();
-
     if (command->get_command_state() == State::Disabled)
     {
         return false;
@@ -121,7 +119,7 @@ auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
         return false;
     }
 
-    const bool consumed = command->try_call(context);;
+    const bool consumed = command->try_call(context);
     if (consumed)
     {
         log_input_event_consumed->trace(

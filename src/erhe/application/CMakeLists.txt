@@ -14,6 +14,14 @@ erhe_target_sources_grouped(
     commands/command_context.hpp
     commands/controller_trigger_binding.cpp
     commands/controller_trigger_binding.hpp
+    commands/controller_trigger_click_binding.cpp
+    commands/controller_trigger_click_binding.hpp
+    commands/controller_trigger_drag_binding.cpp
+    commands/controller_trigger_drag_binding.hpp
+    commands/controller_trigger_value_binding.cpp
+    commands/controller_trigger_value_binding.hpp
+    commands/controller_trackpad_binding.cpp
+    commands/controller_trackpad_binding.hpp
     commands/key_binding.cpp
     commands/key_binding.hpp
     commands/mouse_binding.cpp

@@ -335,7 +335,6 @@ void Merge_operation::undo(const Operation_context&)
             node->set_parent(entry.before_parent);
         }
     }
-    scene.nodes_sorted = false;
     m_parameters.selection_tool->set_selection(m_selection_before);
 
     scene.sanity_check();

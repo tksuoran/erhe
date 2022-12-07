@@ -185,7 +185,7 @@ void Rendertarget_mesh::update_headset(Headset_view& headset_view)
     if (headset != nullptr)
     {
         m_controller_pose = headset->controller_pose();
-        m_controller_trigger_value = headset->trigger_value();
+        m_controller_trigger_value = headset->trigger_value()->currentState;
         //// if (m_controller_trigger_value > 0.5f)
         //// {
         ////     const auto controller_orientation = glm::mat4_cast(m_controller_pose.orientation);

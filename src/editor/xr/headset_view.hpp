@@ -41,6 +41,7 @@ namespace editor
 {
 
 class Controller_visualization;
+class Editor_message_bus;
 class Editor_rendering;
 class Headset_view;
 class Hud;
@@ -71,9 +72,6 @@ public:
 
     Headset_view ();
     ~Headset_view() noexcept override;
-
-    // Implements erhe::application::Input_context
-    [[nodiscard]] auto get_type() const -> int override;
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
@@ -124,6 +122,7 @@ private:
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Editor_message_bus>                   m_editor_message_bus;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
     std::shared_ptr<Hand_tracker>                         m_hand_tracker;
     std::shared_ptr<Hud>                                  m_hud;

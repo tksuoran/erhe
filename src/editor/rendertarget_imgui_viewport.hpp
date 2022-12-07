@@ -88,7 +88,7 @@ private:
 #endif
     std::string m_name;
     std::string m_imgui_ini_path;
-    glm::vec4   m_clear_color {0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec4   m_clear_color {0.0f, 0.0f, 0.0f, 0.1f};
     double      m_time        {0.0};
     double      m_last_mouse_x{0.0};
     double      m_last_mouse_y{0.0};

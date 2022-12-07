@@ -69,15 +69,11 @@ public:
     void imgui() override;
 
 private:
-    void on_message(Editor_message& message);
-    void tool_hover(Scene_view* scene_view);
-
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
-    Scene_view* m_scene_view                {nullptr};
     bool        m_show_snapped_grid_position{false};
 };
 

@@ -44,6 +44,11 @@ void Game_window::post_initialize()
     m_tile_renderer = get<Tile_renderer>();
 }
 
+auto Game_window::flags() -> ImGuiWindowFlags
+{
+    return ImGuiWindowFlags_NoNavInputs;
+}
+
 void Game_window::imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};

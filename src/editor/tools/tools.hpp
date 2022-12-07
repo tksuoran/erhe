@@ -43,7 +43,6 @@ public:
     void render_tools            (const Render_context& context);
     void register_tool           (Tool* tool);
     void register_background_tool(Tool* tool);
-    void register_hover_tool     (Tool* tool);
 
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;
 
@@ -54,7 +53,6 @@ private:
     std::mutex                        m_mutex;
     std::vector<gsl::not_null<Tool*>> m_tools;
     std::vector<gsl::not_null<Tool*>> m_background_tools;
-    std::vector<gsl::not_null<Tool*>> m_hover_tools;
     std::shared_ptr<Scene_root>       m_scene_root;
 };
 

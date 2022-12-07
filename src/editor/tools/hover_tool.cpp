@@ -2,8 +2,8 @@
 
 #include "hover_tool.hpp"
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
@@ -53,8 +53,8 @@ auto Hover_tool::description() -> const char*
 void Hover_tool::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
-    require<Editor_scenes>();
-    require<Tools>();
+    require<Editor_message_bus>();
+    require<Tools             >();
 }
 
 void Hover_tool::initialize_component()
@@ -66,12 +66,11 @@ void Hover_tool::initialize_component()
 
     const auto& tools = get<Tools>();
     tools->register_background_tool(this);
-    tools->register_hover_tool(this);
 
-    get<Editor_scenes>()->get_editor_message_bus()->add_receiver(
+    get<Editor_message_bus>()->add_receiver(
         [&](Editor_message& message)
         {
-            on_message(message);
+            Tool::on_message(message);
         }
     );
 }
@@ -83,33 +82,19 @@ void Hover_tool::post_initialize()
     m_viewport_windows  = get<Viewport_windows                    >();
 }
 
-void Hover_tool::on_message(Editor_message& message)
-{
-    using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_hover))
-    {
-        log_trs_tool->trace("Hover changed");
-        tool_hover(message.scene_view);
-    }
-}
-
-void Hover_tool::tool_hover(Scene_view* scene_view)
-{
-    m_scene_view = scene_view;
-}
-
 void Hover_tool::imgui()
 {
-    if (m_scene_view == nullptr)
+    auto* scene_view = get_scene_view();
+    if (scene_view == nullptr)
     {
         return;
     }
 
-    const auto& hover        = m_scene_view->get_hover(Hover_entry::content_slot);
-    const auto& tool         = m_scene_view->get_hover(Hover_entry::tool_slot);
-    const auto& rendertarget = m_scene_view->get_hover(Hover_entry::rendertarget_slot);
-    const auto& grid         = m_scene_view->get_hover(Hover_entry::grid_slot);
-    const auto& nearest      = m_scene_view->get_nearest_hover();
+    const auto& hover        = scene_view->get_hover(Hover_entry::content_slot);
+    const auto& tool         = scene_view->get_hover(Hover_entry::tool_slot);
+    const auto& rendertarget = scene_view->get_hover(Hover_entry::rendertarget_slot);
+    const auto& grid         = scene_view->get_hover(Hover_entry::grid_slot);
+    const auto& nearest      = scene_view->get_nearest_hover(Hover_entry::all_bits);
     ImGui::Checkbox("Show Snapped Grid Position", &m_show_snapped_grid_position);
     ImGui::Text("Nearest: %s",      nearest.valid ? nearest.get_name().c_str() : "");
     ImGui::Text("Content: %s",      (hover       .valid && hover       .mesh) ? hover       .mesh->get_name().c_str() : "");
@@ -120,8 +105,8 @@ void Hover_tool::imgui()
         const std::string text = fmt::format("Grid: {}", grid.position.value());
         ImGui::TextUnformatted(text.c_str());
     }
-    const auto origin    = m_scene_view->get_control_ray_origin_in_world();
-    const auto direction = m_scene_view->get_control_ray_direction_in_world();
+    const auto origin    = scene_view->get_control_ray_origin_in_world();
+    const auto direction = scene_view->get_control_ray_direction_in_world();
     if (origin.has_value())
     {
         const std::string text = fmt::format("Ray Origin: {}", origin.value());
@@ -180,7 +165,7 @@ void Hover_tool::tool_render(
         return;
     }
 
-    const auto& entry = context.scene_view->get_nearest_hover();
+    const auto& entry = context.scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
 
     if (
         !entry.valid ||

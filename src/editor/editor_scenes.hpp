@@ -26,7 +26,7 @@ public:
     // Implements erhe::components::Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
 
-    // Implements  erhe::components::IUpdate_once_per_frame
+    // Implements erhe::components::IUpdate_once_per_frame
     void update_once_per_frame(const erhe::components::Time_context&) override;
 
     // Public API
@@ -35,15 +35,11 @@ public:
 
     [[nodiscard]] auto get_scene_roots       () -> const std::vector<std::shared_ptr<Scene_root>>&;
     [[nodiscard]] auto get_current_scene_root() -> const std::shared_ptr<Scene_root>&;
-    [[nodiscard]] auto get_editor_message_bus() -> erhe::message_bus::Message_bus<Editor_message>*;
-    [[nodiscard]] auto get_scene_message_bus () -> erhe::message_bus::Message_bus<erhe::scene::Scene_message>*;
 
 private:
-    std::mutex                                                 m_mutex;
-    std::vector<std::shared_ptr<Scene_root>>                   m_scene_roots;
-    std::shared_ptr<Scene_root>                                m_current_scene_root;
-    erhe::message_bus::Message_bus<Editor_message>             m_editor_message_bus; // TODO relocate?
-    erhe::message_bus::Message_bus<erhe::scene::Scene_message> m_scene_message_bus; // TODO relocate?
+    std::mutex                               m_mutex;
+    std::vector<std::shared_ptr<Scene_root>> m_scene_roots;
+    std::shared_ptr<Scene_root>              m_current_scene_root;
 };
 
 } // namespace editor

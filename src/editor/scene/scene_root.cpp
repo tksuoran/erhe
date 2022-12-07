@@ -1,9 +1,12 @@
 #include "scene/scene_root.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "rendertarget_mesh.hpp"
 
+#include "scene/content_library.hpp"
 #include "scene/debug_draw.hpp"
+#include "scene/scene_message_bus.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"
@@ -38,41 +41,27 @@ using erhe::scene::Light;
 using erhe::scene::Light_layer;
 using erhe::scene::Mesh;
 using erhe::scene::Mesh_layer;
-////using erhe::scene::Node_visibility;
 using erhe::scene::Scene;
 using erhe::primitive::Material;
-
-//Instance::Instance(
-//    const std::shared_ptr<erhe::scene::Mesh>& mesh,
-//    const std::shared_ptr<Node_physics>&      node_physics,
-//    const std::shared_ptr<Node_raytrace>&     node_raytrace
-//)
-//    : mesh         {mesh}
-//    , node_physics {node_physics}
-//    , node_raytrace{node_raytrace}
-//{
-//}
-//
-//Instance::~Instance() noexcept
-//{
-//}
 
 Scene_layers::Scene_layers(erhe::scene::Scene& scene)
 {
     using std::make_shared;
 
+    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::scene::Scene_item_flags::brush);
     m_content      = std::make_shared<Mesh_layer>("content",      erhe::scene::Scene_item_flags::content);
     m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::scene::Scene_item_flags::controller);
-    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::scene::Scene_item_flags::tool);
     m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::scene::Scene_item_flags::rendertarget);
-    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::scene::Scene_item_flags::brush);
-    m_light        = std::make_shared<Light_layer>("lights");
+    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::scene::Scene_item_flags::tool);
 
-    scene.mesh_layers .push_back(m_content);
-    scene.mesh_layers .push_back(m_controller);
-    scene.mesh_layers .push_back(m_tool);
-    scene.mesh_layers .push_back(m_brush);
-    scene.light_layers.push_back(m_light);
+    scene.add_mesh_layer(m_brush);
+    scene.add_mesh_layer(m_content);
+    scene.add_mesh_layer(m_controller);
+    scene.add_mesh_layer(m_rendertarget);
+    scene.add_mesh_layer(m_tool);
+
+    m_light = std::make_shared<Light_layer>("lights");
+    scene.add_light_layer(m_light);
 }
 
 auto Scene_layers::brush() const -> erhe::scene::Mesh_layer*
@@ -106,14 +95,16 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 }
 
 Scene_root::Scene_root(
-    erhe::message_bus::Message_bus<erhe::scene::Scene_message>* message_bus,
-    const std::shared_ptr<Content_library>&                     content_library,
-    const std::string_view                                      name
+    const erhe::components::Components&     components,
+    const std::shared_ptr<Content_library>& content_library,
+    const std::string_view                  name
 )
-    : m_name           {name}
-    , m_scene          {std::make_unique<Scene>(message_bus, this)}
-    , m_content_library{content_library}
-    , m_layers         (*m_scene.get())
+    : m_name              {name}
+    , m_scene             {std::make_unique<Scene>(components.get<Scene_message_bus>().get(), this)}
+    , m_content_library   {content_library}
+    , m_editor_message_bus{components.get<Editor_message_bus>()}
+    , m_scene_message_bus {components.get<Scene_message_bus >()}
+    , m_layers            (*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION
 
@@ -133,6 +124,11 @@ Scene_root::~Scene_root() noexcept
 [[nodiscard]] auto Scene_root::get_scene() -> Scene*
 {
     return m_scene.get();
+}
+
+[[nodiscard]] auto Scene_root::get_editor_message_bus() const -> std::shared_ptr<Editor_message_bus>
+{
+    return m_editor_message_bus;
 }
 
 [[nodiscard]] auto Scene_root::layers() -> Scene_layers&
@@ -190,7 +186,8 @@ auto Scene_root::camera_combo(
         names.push_back("(none)");
         cameras.push_back(nullptr);
     }
-    for (const auto& camera : scene().cameras)
+    const auto& scene_cameras = scene().get_cameras();
+    for (const auto& camera : scene_cameras)
     {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera.get());
@@ -232,7 +229,8 @@ auto Scene_root::camera_combo(
         names.push_back("(none)");
         cameras.push_back(nullptr);
     }
-    for (const auto& camera : scene().cameras)
+    const auto& scene_cameras = scene().get_cameras();
+    for (const auto& camera : scene_cameras)
     {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
@@ -274,7 +272,8 @@ auto Scene_root::camera_combo(
         names.push_back("(none)");
         cameras.push_back({});
     }
-    for (const auto& camera : scene().cameras)
+    const auto& scene_cameras = scene().get_cameras();
+    for (const auto& camera : scene_cameras)
     {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);

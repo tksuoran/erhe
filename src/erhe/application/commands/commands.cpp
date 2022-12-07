@@ -6,6 +6,10 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/commands/controller_trigger_binding.hpp"
+#include "erhe/application/commands/controller_trigger_click_binding.hpp"
+#include "erhe/application/commands/controller_trigger_drag_binding.hpp"
+#include "erhe/application/commands/controller_trigger_value_binding.hpp"
+#include "erhe/application/commands/controller_trackpad_binding.hpp"
 #include "erhe/application/commands/key_binding.hpp"
 #include "erhe/application/commands/mouse_click_binding.hpp"
 #include "erhe/application/commands/mouse_drag_binding.hpp"
@@ -74,9 +78,14 @@ void Commands::register_command(Command* const command)
     return m_mouse_wheel_bindings;
 }
 
-[[nodiscard]] auto Commands::get_controller_trigger_bindings() const -> const std::vector<Controller_trigger_binding>&
+[[nodiscard]] auto Commands::get_controller_trigger_bindings() const -> const std::vector<std::unique_ptr<Controller_trigger_binding>>&
 {
     return m_controller_trigger_bindings;
+}
+
+[[nodiscard]] auto Commands::get_controller_trackpad_bindings() const -> const std::vector<Controller_trackpad_binding>&
+{
+    return m_controller_trackpad_bindings;
 }
 
 [[nodiscard]] auto Commands::get_update_bindings() const -> const std::vector<Update_binding>&
@@ -147,27 +156,61 @@ auto Commands::bind_command_to_mouse_drag(
     return id;
 }
 
-auto Commands::bind_command_to_controller_trigger(
-    Command* const command,
-    const float    min_value_to_activate,
-    const float    max_value_to_deactivate,
-    const bool     drag
-) -> erhe::toolkit::Unique_id<Key_binding>::id_type
+auto Commands::bind_command_to_controller_trigger_click(
+    Command* const command
+) -> erhe::toolkit::Unique_id<Controller_trigger_click_binding>::id_type
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    auto& binding = m_controller_trigger_bindings.emplace_back(
+    auto binding = std::make_unique<Controller_trigger_click_binding>(command);
+    auto id = binding->get_id();
+    m_controller_trigger_bindings.push_back(std::move(binding));
+    return id;
+}
+
+auto Commands::bind_command_to_controller_trigger_drag(
+    Command* const command
+) -> erhe::toolkit::Unique_id<Controller_trigger_drag_binding>::id_type
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    auto binding = std::make_unique<Controller_trigger_drag_binding>(command);
+    auto id = binding->get_id();
+    m_controller_trigger_bindings.push_back(std::move(binding));
+    return id;
+}
+
+auto Commands::bind_command_to_controller_trigger_value(
+    Command* const command
+) -> erhe::toolkit::Unique_id<Controller_trigger_value_binding>::id_type
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    auto binding = std::make_unique<Controller_trigger_value_binding>(command);
+    auto id = binding->get_id();
+    m_controller_trigger_bindings.push_back(std::move(binding));
+    return id;
+}
+
+auto Commands::bind_command_to_controller_trackpad(
+    Command* const command,
+    const bool     click
+) -> erhe::toolkit::Unique_id<Controller_trackpad_binding>::id_type
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    auto& binding = m_controller_trackpad_bindings.emplace_back(
         command,
-        min_value_to_activate,
-        max_value_to_deactivate,
-        drag
+        click
+            ? Command_binding::Type::Controller_trackpad_clicked
+            : Command_binding::Type::Controller_trackpad_touched
     );
     return binding.get_id();
 }
 
 auto Commands::bind_command_to_update(
     Command* const                command
-) -> erhe::toolkit::Unique_id<Key_binding>::id_type
+) -> erhe::toolkit::Unique_id<Update_binding>::id_type
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
@@ -218,12 +261,23 @@ void Commands::remove_command_binding(
         std::remove_if(
             m_controller_trigger_bindings.begin(),
             m_controller_trigger_bindings.end(),
-            [binding_id](const Controller_trigger_binding& binding)
+            [binding_id](const std::unique_ptr<Controller_trigger_binding>& binding)
+            {
+                return binding.get()->get_id() == binding_id;
+            }
+        ),
+        m_controller_trigger_bindings.end()
+    );
+    m_controller_trackpad_bindings.erase(
+        std::remove_if(
+            m_controller_trackpad_bindings.begin(),
+            m_controller_trackpad_bindings.end(),
+            [binding_id](const Controller_trackpad_binding& binding)
             {
                 return binding.get_id() == binding_id;
             }
         ),
-        m_controller_trigger_bindings.end()
+        m_controller_trackpad_bindings.end()
     );
     m_update_bindings.erase(
         std::remove_if(
@@ -246,11 +300,10 @@ void Commands::command_inactivated(Command* const command)
     {
         m_active_mouse_command = nullptr;
     }
-}
-
-[[nodiscard]] auto Commands::get_input_context() const -> Input_context*
-{
-    return m_input_context;
+    if (m_active_trigger_command == command)
+    {
+        m_active_trigger_command = nullptr;
+    }
 }
 
 void Commands::on_key(
@@ -261,10 +314,7 @@ void Commands::on_key(
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    Command_context context{
-        *this,
-        m_input_context
-    };
+    Command_context context{*this};
 
     for (auto& binding : m_key_bindings)
     {
@@ -285,22 +335,31 @@ void Commands::on_update()
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    Command_context context{
-        *this,
-        m_input_context,
-        m_last_mouse_button_bits,
-        m_last_mouse_position,
-        glm::vec2{0.0f, 0.0f}
-    };
-
-    for (auto& binding : m_update_bindings)
     {
-        binding.on_update(context);
+        // TODO OpenXR?
+        Command_context context{
+            *this,
+            m_last_mouse_button_bits,
+            m_last_mouse_position,
+            glm::vec2{0.0f, 0.0f}
+        };
+
+        for (auto& binding : m_update_bindings)
+        {
+            binding.on_update(context);
+        }
     }
 
     // Call mouse drag bindings if buttons are being held down
     if (m_last_mouse_button_bits != 0)
     {
+        Command_context context{
+            *this,
+            m_last_mouse_button_bits,
+            m_last_mouse_position,
+            glm::vec2{0.0f, 0.0f}
+        };
+
         for (auto& binding : m_mouse_bindings)
         {
             if (binding->get_type() == Command_binding::Type::Mouse_drag)
@@ -308,46 +367,40 @@ void Commands::on_update()
                 auto*      drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
                 Command*   command      = binding->get_command();
                 const auto state        = command->get_command_state();
-                // log_frame->trace(
-                //     "{} state = {}",
-                //     command->get_name(),
-                //     c_state_str[static_cast<int>(state)]
-                // );
                 if ((state == State::Ready) || (state == State::Active))
                 {
                     const auto     button = drag_binding->get_button();
                     const uint32_t bit    = (1 << button);
                     if ((m_last_mouse_button_bits & bit) == bit)
                     {
-                        // log_frame->trace("calling {} on_motion", command->get_name());
                         drag_binding->on_motion(context);
                     }
                 }
             }
         }
     }
-}
 
-void Commands::on_controller_trigger(
-    const float trigger_value
-)
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    Command_context context{
-        *this,
-        m_input_context,
-        0,
-        glm::dvec2{trigger_value, 0.0}
-    };
-
-    for (auto& binding : m_controller_trigger_bindings)
+    if (m_last_controller_trigger_click)
     {
-        auto* command = binding.get_command();
-        if ((command != nullptr))
+        Command_context context{
+            *this,
+            m_last_controller_trigger_click ? uint32_t{1} : uint32_t{0},
+            glm::vec2{m_last_controller_trackpad_x, m_last_controller_trackpad_y},
+            glm::vec2{0.0f, 0.0f}
+        };
+
+        for (auto& binding : m_controller_trigger_bindings)
         {
-            //command->try_ready(context);
-            binding.on_trigger(context, trigger_value);
+            if (binding->get_type() == Command_binding::Type::Controller_trigger_drag)
+            {
+                auto*      drag_binding = reinterpret_cast<Controller_trigger_drag_binding*>(binding.get());
+                Command*   command      = binding->get_command();
+                const auto state        = command->get_command_state();
+                if ((state == State::Ready) || (state == State::Active))
+                {
+                    drag_binding->on_trigger_update(context);
+                }
+            }
         }
     }
 }
@@ -371,7 +424,12 @@ namespace {
 
 auto Commands::get_command_priority(Command* const command) const -> int
 {
+    // Give priority for active mouse / cpntroller trigger commands
     if (command == m_active_mouse_command)
+    {
+        return 0;
+    }
+    if (command == m_active_trigger_command)
     {
         return 0;
     }
@@ -397,14 +455,30 @@ void Commands::sort_mouse_bindings()
     );
 }
 
+void Commands::sort_trigger_bindings()
+{
+    std::sort(
+        m_controller_trigger_bindings.begin(),
+        m_controller_trigger_bindings.end(),
+        [this](
+            const std::unique_ptr<Controller_trigger_binding>& lhs,
+            const std::unique_ptr<Controller_trigger_binding>& rhs
+        ) -> bool
+        {
+            auto* const lhs_command = lhs.get()->get_command();
+            auto* const rhs_command = rhs.get()->get_command();
+            ERHE_VERIFY(lhs_command != nullptr);
+            ERHE_VERIFY(rhs_command != nullptr);
+            return get_command_priority(lhs_command) < get_command_priority(rhs_command);
+        }
+    );
+}
+
 void Commands::inactivate_ready_commands()
 {
     //std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    Command_context context{
-        *this,
-        m_input_context
-    };
+    Command_context context{*this};
     for (auto* command : m_commands)
     {
         if (command->get_command_state() == State::Ready)
@@ -412,26 +486,6 @@ void Commands::inactivate_ready_commands()
             command->set_inactive(context);
         }
     }
-}
-
-void Commands::set_input_context(Input_context* input_context)
-{
-    if (m_input_context == input_context)
-    {
-        return;
-    }
-    //if (input_context == nullptr)
-    //{
-    //    log_input->info("Changed input context nullptr");
-    //}
-    //else
-    //{
-    //    log_input->info(
-    //        "Changed input context type = {}",
-    //        input_context->get_type()
-    //    );
-    //}
-    m_input_context = input_context;
 }
 
 auto Commands::last_mouse_button_bits() const -> uint32_t
@@ -459,8 +513,19 @@ auto Commands::last_controller_trigger_value() const -> float
     return m_last_controller_trigger_value;
 }
 
+auto Commands::last_controller_trackpad_x() const -> float
+{
+    return m_last_controller_trackpad_x;
+}
+
+auto Commands::last_controller_trackpad_y() const -> float
+{
+    return m_last_controller_trackpad_y;
+}
+
 void Commands::update_active_mouse_command(
-    Command* const command)
+    Command* const command
+)
 {
     inactivate_ready_commands();
 
@@ -478,6 +543,29 @@ void Commands::update_active_mouse_command(
     )
     {
         m_active_mouse_command = nullptr;
+    }
+}
+
+void Commands::update_active_trigger_command(
+    Command* const command
+)
+{
+    inactivate_ready_commands();
+
+    if (
+        (command->get_command_state() == State::Active) &&
+        (m_active_trigger_command != command)
+    )
+    {
+        ERHE_VERIFY(m_active_trigger_command == nullptr);
+        m_active_trigger_command = command;
+    }
+    else if (
+        (command->get_command_state() != State::Active) &&
+        (m_active_trigger_command == command)
+    )
+    {
+        m_active_trigger_command = nullptr;
     }
 }
 
@@ -502,7 +590,6 @@ void Commands::on_mouse_click(
 
     Command_context context{
         *this,
-        m_input_context,
         m_last_mouse_button_bits,
         m_last_mouse_position
     };
@@ -529,7 +616,6 @@ void Commands::on_mouse_wheel(const double x, const double y)
 
     Command_context context{
         *this,
-        m_input_context,
         m_last_mouse_button_bits,
         m_last_mouse_position,
         m_last_mouse_wheel_delta
@@ -552,7 +638,6 @@ void Commands::on_mouse_move(const double x, const double y)
     m_last_mouse_position = new_mouse_position;
     Command_context context{
         *this,
-        m_input_context,
         m_last_mouse_button_bits,
         m_last_mouse_position,
         m_last_mouse_position_delta
@@ -566,6 +651,114 @@ void Commands::on_mouse_move(const double x, const double y)
         {
             update_active_mouse_command(command);
             break;
+        }
+    }
+}
+
+void Commands::on_controller_trigger_click(
+    const bool click
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    sort_trigger_bindings();
+
+    m_last_controller_trigger_click = click;
+
+    Command_context context{
+        *this,
+        (click ? uint32_t{1} : uint32_t{0}),
+        glm::dvec2{0.0, 0.0}
+    };
+
+    for (auto& binding : m_controller_trigger_bindings)
+    {
+        auto* const command = binding->get_command();
+        ERHE_VERIFY(command != nullptr);
+        if (binding->on_trigger_click(context, click))
+        {
+            update_active_trigger_command(command);
+            break;
+        }
+    }
+
+    log_input->trace("trigger click was not handled");
+}
+
+void Commands::on_controller_trigger_value(
+    const float trigger_value
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    sort_trigger_bindings();
+
+    Command_context context{
+        *this,
+        0,
+        glm::dvec2{trigger_value, 0.0}
+    };
+
+    for (auto& binding : m_controller_trigger_bindings)
+    {
+        binding->on_trigger_value(context);
+    }
+}
+
+void Commands::on_controller_trackpad_touch(
+    const float x,
+    const float y,
+    const bool  touch
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    m_last_controller_trackpad_touch = touch;
+
+    Command_context context{
+        *this,
+        touch ? uint32_t{1} : uint32_t{0},
+        glm::dvec2{x, y}
+    };
+
+    for (auto& binding : m_controller_trackpad_bindings)
+    {
+        if (binding.get_type() == Command_binding::Type::Controller_trackpad_touched)
+        {
+            auto* command = binding.get_command();
+            if (command != nullptr)
+            {
+                binding.on_trackpad(context);
+            }
+        }
+    }
+}
+
+void Commands::on_controller_trackpad_click(
+    const float x,
+    const float y,
+    const bool  click
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+
+    m_last_controller_trackpad_click = click;
+
+    Command_context context{
+        *this,
+        click ? uint32_t{1} : uint32_t{0},
+        glm::dvec2{x, y}
+    };
+
+    for (auto& binding : m_controller_trackpad_bindings)
+    {
+        if (binding.get_type() == Command_binding::Type::Controller_trackpad_clicked)
+        {
+            auto* command = binding.get_command();
+            if (command != nullptr)
+            {
+                binding.on_trackpad(context);
+            }
         }
     }
 }
@@ -584,6 +777,12 @@ void Commands::imgui()
         "Active mouse command: %s",
         (m_active_mouse_command != nullptr)
             ? m_active_mouse_command->get_name()
+            : "(none)"
+    );
+    ImGui::Text(
+        "Active trigger command: %s",
+        (m_active_trigger_command != nullptr)
+            ? m_active_trigger_command->get_name()
             : "(none)"
     );
 

@@ -57,6 +57,7 @@ class Editor;
 class Editor_scenes;
 class Grid;
 class Grid_tool;
+class Headset_view;
 class Mesh_memory;
 class Operation_stack;
 class Render_context;
@@ -69,14 +70,14 @@ class Brush_tool_preview_command
 public:
     explicit Brush_tool_preview_command(Brush_tool& Brush_tool)
         : Command     {"Brush_tool.motion_preview"}
-        , m_Brush_tool{Brush_tool}
+        , m_brush_tool{Brush_tool}
     {
     }
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
-    Brush_tool& m_Brush_tool;
+    Brush_tool& m_brush_tool;
 };
 
 class Brush_tool_insert_command
@@ -85,7 +86,7 @@ class Brush_tool_insert_command
 public:
     explicit Brush_tool_insert_command(Brush_tool& Brush_tool)
         : Command  {"Brush_tool.insert"}
-        , m_Brush_tool{Brush_tool}
+        , m_brush_tool{Brush_tool}
     {
     }
 
@@ -93,7 +94,7 @@ public:
     auto try_call (erhe::application::Command_context& context) -> bool override;
 
 private:
-    Brush_tool& m_Brush_tool;
+    Brush_tool& m_brush_tool;
 };
 
 class Brush_data;
@@ -154,6 +155,7 @@ private:
     std::shared_ptr<Operation_stack >       m_operation_stack;
     std::shared_ptr<Selection_tool  >       m_selection_tool;
     std::shared_ptr<Viewport_windows>       m_viewport_windows;
+    std::shared_ptr<Headset_view    >       m_headset_view;
 
     std::mutex                          m_brush_mutex;
     bool                                m_snap_to_hover_polygon{true};

@@ -132,7 +132,7 @@ auto Scene_commands::create_new_camera(
                             .node           = new_node,
                             .parent         = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                                : scene_root->get_scene()->root_node,
+                                : scene_root->get_scene()->get_root_node(),
                             .mode           = Scene_item_operation::Mode::insert
                         }
                     ),
@@ -164,7 +164,7 @@ auto Scene_commands::create_new_empty_node(
                 .node           = new_empty_node,
                 .parent         = (parent != nullptr)
                     ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                    : scene_root->get_scene()->root_node,
+                    : scene_root->get_scene()->get_root_node(),
                 .mode           = Scene_item_operation::Mode::insert
             }
         )
@@ -198,7 +198,7 @@ auto Scene_commands::create_new_light(
                             .node           = new_node,
                             .parent         = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                                : scene_root->get_scene()->root_node,
+                                : scene_root->get_scene()->get_root_node(),
                             .mode           = Scene_item_operation::Mode::insert
                         }
                     ),

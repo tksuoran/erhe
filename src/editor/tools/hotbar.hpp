@@ -2,6 +2,7 @@
 
 #include "tools/tool.hpp"
 
+#include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
@@ -21,6 +22,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Brush_tool;
 class Icon_set;
 class Operations;
 class Physics_tool;
@@ -30,19 +32,40 @@ class Selection_tool;
 class Trs_tool;
 class Viewport_windows;
 
-enum class Hotbar_action : int
+using Action = int;
+class Hotbar_action
 {
-    Move   = 0,
-    Rotate = 1,
-    Push   = 2,
-    Pull   = 3,
-    Drag   = 4
+public:
+    static constexpr Action First        = 0;
+    static constexpr Action Select       = 0;
+    static constexpr Action Move         = 1;
+    static constexpr Action Rotate       = 2;
+    static constexpr Action Drag         = 3;
+    static constexpr Action Brush_tool   = 4;
+    static constexpr Action Last         = 4;
+};
+
+class Hotbar;
+
+class Hotbar_trackpad_command
+    : public erhe::application::Command
+{
+public:
+    explicit Hotbar_trackpad_command(Hotbar& hotbar)
+        : Command {"Hotbar.trackpad"}
+        , m_hotbar{hotbar}
+    {
+    }
+
+    auto try_call(erhe::application::Command_context& context) -> bool override;
+
+private:
+    Hotbar& m_hotbar;
 };
 
 class Hotbar
     : public erhe::application::Imgui_window
     , public erhe::components::Component
-    , public erhe::components::IUpdate_once_per_frame
     , public Tool
 {
 public:
@@ -63,9 +86,6 @@ public:
     [[nodiscard]] auto description() -> const char* override;
     void tool_render(const Render_context& context)  override;
 
-    // Implements IUpdate_once_per_frame
-    void update_once_per_frame(const erhe::components::Time_context& time_context) override;
-
     // Implements Imgui_window
     [[nodiscard]] auto flags() -> ImGuiWindowFlags override;
     void on_begin() override;
@@ -74,13 +94,22 @@ public:
     // Public API
     void update_node_transform(const glm::mat4& world_from_camera);
 
-    auto get_color(int color) -> glm::vec4&;
+    auto try_call(erhe::application::Command_context& context) -> bool;
+
+    auto get_color (int color) -> glm::vec4&;
 
 private:
+    void set_action(Action action);
+    void button    (glm::vec2 icon, Action action, const char* tooltip);
+
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
+
+    // Commands
+    Hotbar_trackpad_command m_trackpad_command;
 
     // Component dependencies
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
+    std::shared_ptr<Brush_tool>                        m_brush_tool;
     std::shared_ptr<Icon_set>                          m_icon_set;
     std::shared_ptr<Operations>                        m_operations;
     std::shared_ptr<Physics_tool>                      m_physics_tool;
@@ -91,16 +120,17 @@ private:
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
+
     bool  m_show{true};
     float m_x{ 0.0f};
-    float m_y{-0.08f};
+    float m_y{ 0.07f};
     float m_z{-0.4f};
 
     glm::vec4 m_color_active  {0.3f, 0.3f, 0.8f, 0.8f};
-    glm::vec4 m_color_hover   {0.3f, 0.3f, 1.0f, 0.8f};
-    glm::vec4 m_color_inactive{0.2f, 0.2f, 0.6f, 0.8f};
+    glm::vec4 m_color_hover   {0.4f, 0.4f, 0.4f, 0.8f};
+    glm::vec4 m_color_inactive{0.1f, 0.1f, 0.4f, 0.8f};
 
-    Hotbar_action m_action{Hotbar_action::Move};
+    Action m_action{Hotbar_action::Select};
 };
 
 } // namespace editor

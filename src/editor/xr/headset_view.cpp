@@ -1,6 +1,7 @@
 #include "xr/headset_view.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "rendergraph/shadow_render_node.hpp"
@@ -51,11 +52,6 @@ namespace editor
 {
 
 using erhe::graphics::Color_blend_state;
-
-[[nodiscard]] auto Headset_view::get_type() const -> int
-{
-    return Input_context_type_headset_view;
-}
 
 Headset_view::Headset_view()
     : erhe::components::Component        {c_name}
@@ -141,10 +137,6 @@ void Headset_view::post_initialize()
     m_hand_tracker     = get<Hand_tracker    >();
     m_hud              = get<Hud             >();
     m_tools            = get<Tools           >();
-
-    erhe::message_bus::Message_bus_node<Editor_message>::initialize(
-        get<Editor_scenes>()->get_editor_message_bus()
-    );
 }
 
 auto Headset_view::description() -> const char*
@@ -336,24 +328,7 @@ void Headset_view::execute_rendergraph_node()
             );
             gl::enable(gl::Enable_cap::framebuffer_srgb);
 
-            {
-                const bool old_menu = m_menu_down;
-                m_menu_down = m_headset->menu_click();
-                if (m_menu_down != old_menu)
-                {
-                    if (!m_menu_down)
-                    {
-                        const auto& hud = get<Hud>();
-                        const bool is_hud_visible = hud->toggle_visibility();
-                        if (is_hud_visible)
-                        {
-                            const glm::mat4 world_from_view = m_headset->get_view_in_world();
-                            hud->update_node_transform(world_from_view);
-                        }
-                    }
-                }
-            }
-            if (m_headset->squeeze_click())
+            if (m_headset->squeeze_click()->currentState == XR_TRUE)
             {
                 ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
 
@@ -425,18 +400,19 @@ void Headset_view::setup_root_camera()
     projection.z_far           = 200.0f;
 
     const glm::mat4 m = erhe::toolkit::create_look_at(
-        glm::vec3{0.0f, 0.0f,  0.0f}, // eye
-        glm::vec3{0.0f, 0.0f,  0.0f}, // look at
-        glm::vec3{0.0f, 1.0f,  0.0f}  // up
+        glm::vec3{0.0f, 0.0f, 0.0f}, // eye
+        glm::vec3{0.0f, 0.0f, 0.0f}, // look at
+        glm::vec3{0.0f, 1.0f, 0.0f}  // up
     );
 
-    m_root_node = std::make_shared<erhe::scene::Node>(
+    m_root_node = m_scene_root->scene().get_root_node();
+    auto root_camera_node = std::make_shared<erhe::scene::Node>(
         "Headset Root Camera Node"
     );
 
-    m_root_node->set_parent_from_node(m);
-    m_root_node->attach(m_root_camera);
-    m_root_node->set_parent(m_scene_root->scene().root_node);
+    root_camera_node->set_parent_from_node(m);
+    root_camera_node->attach(m_root_camera);
+    root_camera_node->set_parent(m_root_node);
 }
 
 auto Headset_view::get_scene_root() const -> std::shared_ptr<Scene_root>
@@ -495,15 +471,61 @@ void Headset_view::begin_frame()
         return;
     }
 
-    m_commands->set_input_context(this);
+    // TODO Consider multiple scene view being able to be active
+    //      (viewport window and headset view).
+    m_editor_message_bus->send_message(
+        Editor_message{
+            .update_flags = Message_flag_bit::c_flag_bit_scene_view,
+            .scene_view   = this
+        }
+    );
+
     m_finger_inputs.clear();
     m_controller_inputs.clear();
     update_pointer_context_from_controller();
-    const float trigger_value = m_headset->trigger_value();
-    if (trigger_value > 0.0f)
+    const auto* trigger_value = m_headset->trigger_value();
+    if (trigger_value->changedSinceLastSync)
     {
-        m_commands->on_controller_trigger(trigger_value);
+        m_commands->on_controller_trigger_value(trigger_value->currentState);
     }
+    const auto* trigger_click = m_headset->trigger_click();
+    if (trigger_click->changedSinceLastSync)
+    {
+        m_commands->on_controller_trigger_click(trigger_click->currentState);
+    }
+    const auto* trackpad = m_headset->trackpad();
+    const auto* trackpad_touch = m_headset->trackpad_touch();
+    const auto* trackpad_click = m_headset->trackpad_click();
+    if (trackpad_click->changedSinceLastSync)
+    {
+        const float x = trackpad->currentState.x;
+        const float y = trackpad->currentState.y;
+        m_commands->on_controller_trackpad_click(x, y, trackpad_click->currentState == XR_TRUE);
+    }
+    else if (trackpad_touch->changedSinceLastSync)
+    {
+        const float x = trackpad->currentState.x;
+        const float y = trackpad->currentState.y;
+        m_commands->on_controller_trackpad_touch(x, y, trackpad_touch->currentState == XR_TRUE);
+    }
+
+    {
+        const auto* menu_click = m_headset->menu_click();
+        if (menu_click->changedSinceLastSync)
+        {
+            if (!menu_click->currentState)
+            {
+                const auto& hud = get<Hud>();
+                const bool is_hud_visible = hud->toggle_visibility();
+                if (is_hud_visible)
+                {
+                    const glm::mat4 world_from_view = m_headset->get_view_in_world();
+                    hud->update_node_transform(world_from_view);
+                }
+            }
+        }
+    }
+
     if (m_controller_visualization)
     {
         m_controller_visualization->update(m_headset->controller_pose());
@@ -514,6 +536,7 @@ void Headset_view::begin_frame()
     }
 
     const glm::mat4 world_from_view = m_headset->get_view_in_world();
+    get_camera()->get_node()->set_world_from_node(world_from_view);
 
     const auto& hotbar = get<Hotbar>();
     if (hotbar)

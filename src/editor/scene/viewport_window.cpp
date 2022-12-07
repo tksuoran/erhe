@@ -64,11 +64,6 @@ using erhe::graphics::Texture;
 
 int Viewport_window::s_serial = 0;
 
-[[nodiscard]] auto Viewport_window::get_type() const -> int
-{
-    return Input_context_type_viewport_window;
-}
-
 Viewport_window::Viewport_window(
     const std::string_view                      name,
     const erhe::components::Components&         components,
@@ -99,10 +94,6 @@ Viewport_window::Viewport_window(
         erhe::application::Resource_routing::Resource_provided_by_consumer,
         "viewport",
         erhe::application::Rendergraph_node_key::viewport
-    );
-
-    erhe::message_bus::Message_bus_node<Editor_message>::initialize(
-        components.get<Editor_scenes>()->get_editor_message_bus()
     );
 }
 
@@ -248,6 +239,16 @@ auto Viewport_window::projection_viewport() const -> const erhe::scene::Viewport
 auto Viewport_window::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
     return m_camera.lock();
+}
+
+auto Viewport_window::as_viewport_window() -> Viewport_window*
+{
+    return this;
+}
+
+auto Viewport_window::as_viewport_window() const -> const Viewport_window*
+{
+    return this;
 }
 
 auto Viewport_window::to_scene_content(

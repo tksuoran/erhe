@@ -88,16 +88,15 @@ public:
     ~Viewport_window();
 
     // Implements Scene_view
-    [[nodiscard]] auto get_scene_root() const -> std::shared_ptr<Scene_root> override;
-    [[nodiscard]] auto get_camera    () const -> std::shared_ptr<erhe::scene::Camera> override;
+    [[nodiscard]] auto get_scene_root    () const -> std::shared_ptr<Scene_root> override;
+    [[nodiscard]] auto get_camera        () const -> std::shared_ptr<erhe::scene::Camera> override;
+    [[nodiscard]] auto as_viewport_window() -> Viewport_window* override;
+    [[nodiscard]] auto as_viewport_window() const -> const Viewport_window* override;
 
     // Implements Rendergraph_node
     [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
     [[nodiscard]] auto type_hash() const -> uint32_t         override { return c_type_hash; }
     void execute_rendergraph_node() override;
-
-    // Implements erhe::application::Input_context
-    [[nodiscard]] auto get_type() const -> int override;
 
     // Public API
     void reconfigure        (int sample_count);
@@ -114,7 +113,6 @@ public:
     [[nodiscard]] auto projection_viewport() const -> const erhe::scene::Viewport&;
 
     // Pointer context API
-    void raytrace         (uint32_t mask);
     void raytrace         ();
     void update_grid_hover();
 

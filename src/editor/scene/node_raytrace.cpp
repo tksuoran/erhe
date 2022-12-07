@@ -183,6 +183,16 @@ void Node_raytrace::initialize()
         m_instance->commit();
     }
     m_instance->set_user_data(this);
+
+    const bool visible = is_visible();
+    if (visible)
+    {
+        m_instance->enable();
+    }
+    else
+    {
+        m_instance->disable();
+    }
 }
 
 Node_raytrace::Node_raytrace(
@@ -250,15 +260,25 @@ void Node_raytrace::handle_node_transform_update()
     m_instance->commit();
 }
 
-void Node_raytrace::handle_node_visibility_mask_update(const uint64_t mask)
+void Node_raytrace::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
-    const bool node_visible = (mask & erhe::scene::Scene_item_flags::visible) != 0;
-    if (node_visible && !m_instance->is_enabled())
+    const bool visibility_changed = (
+        (old_flag_bits ^ new_flag_bits) & erhe::scene::Scene_item_flags::visible
+    ) == erhe::scene::Scene_item_flags::visible;
+    if (!visibility_changed)
+    {
+        return;
+    }
+
+    ERHE_VERIFY(m_instance);
+
+    const bool visible = (new_flag_bits & erhe::scene::Scene_item_flags::visible) == erhe::scene::Scene_item_flags::visible;
+    if (visible && !m_instance->is_enabled())
     {
         SPDLOG_LOGGER_TRACE(log_raytrace, "enabling {} node raytrace", get_node()->name());
         m_instance->enable();
     }
-    else if (!node_visible && m_instance->is_enabled())
+    else if (!visible && m_instance->is_enabled())
     {
         SPDLOG_LOGGER_TRACE(log_raytrace, "disable {} node raytrace", get_node()->name());
         m_instance->disable();
@@ -266,7 +286,7 @@ void Node_raytrace::handle_node_visibility_mask_update(const uint64_t mask)
 
     SPDLOG_LOGGER_TRACE(
         log_raytrace,
-        "node {} visible = {}, node raytrace enabled = {}",
+        "node raytrace enabled = {}",
         get_node()->name(),
         node_visible,
         m_instance->is_enabled()

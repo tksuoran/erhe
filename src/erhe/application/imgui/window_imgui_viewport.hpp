@@ -66,7 +66,7 @@ public:
 
     // Implements Imgui_vewport
     [[nodiscard]] auto begin_imgui_frame() -> bool override;
-    void end_imgui_frame() override;
+    void end_imgui_frame     () override;
 
 private:
     void menu();

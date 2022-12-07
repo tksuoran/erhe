@@ -27,11 +27,18 @@ auto Toggle_hud_visibility_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
+    static_cast<void>(context);
+    // TODO Only toggle if has scene view, camera and node.
+    //      Otherwise transform will not be updated.
     const bool is_visible = m_hud.toggle_visibility();
     if (is_visible)
     {
-        Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
-        const auto& camera     = scene_view->get_camera();
+        Scene_view* scene_view = m_hud.get_scene_view();
+        if (scene_view == nullptr)
+        {
+            return false;
+        }
+        const auto& camera = scene_view->get_camera();
         if (camera)
         {
             const auto* node = camera->get_node();
@@ -104,11 +111,23 @@ void Hud::initialize_component()
         hud.height,
         hud.ppm
     );
+    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id.get_id();
+    m_rendertarget_mesh->enable_flag_bits(
+        erhe::scene::Scene_item_flags::content |
+        erhe::scene::Scene_item_flags::visible |
+        erhe::scene::Scene_item_flags::show_in_ui
+    );
 
-    m_rendertarget_mesh->disable_flag_bits(erhe::scene::Scene_item_flags::visible);
+    //m_rendertarget_mesh->disable_flag_bits(erhe::scene::Scene_item_flags::visible);
+
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
-    m_rendertarget_node->set_parent(scene_root->scene().root_node);
+    m_rendertarget_node->set_parent(scene_root->scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
+    m_rendertarget_node->enable_flag_bits(
+        erhe::scene::Scene_item_flags::content |
+        erhe::scene::Scene_item_flags::visible |
+        erhe::scene::Scene_item_flags::show_in_ui
+    );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         m_rendertarget_mesh.get(),

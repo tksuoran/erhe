@@ -1,6 +1,7 @@
 #include "tools/trs_tool.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
@@ -19,6 +20,7 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/commands/commands.hpp"
+#include "erhe/application/commands/command_binding.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -60,6 +62,7 @@ void Trs_tool_drag_command::try_ready(
 {
     if (!m_trs_tool.is_enabled())
     {
+        log_trs_tool->trace("Cannot set ready - TRS tool is disabled");
         return;
     }
 
@@ -135,6 +138,7 @@ void Trs_tool::declare_required_components()
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
+    require<Editor_message_bus>();
     m_editor_scenes  = require<Editor_scenes >();
     m_mesh_memory    = require<Mesh_memory   >();
     m_selection_tool = require<Selection_tool>();
@@ -144,8 +148,6 @@ void Trs_tool::declare_required_components()
 void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
-
-    Message_bus_node::initialize(get<Editor_scenes>()->get_editor_message_bus());
 
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()
@@ -166,15 +168,14 @@ void Trs_tool::initialize_component()
 
     const auto& tools = get<Tools>();
     tools->register_tool(this);
-    tools->register_hover_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_drag_command);
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_controller_trigger(&m_drag_command, 0.50f, 0.45f, true);
+    commands->bind_command_to_controller_trigger_drag(&m_drag_command);
 
-    m_editor_scenes->get_editor_message_bus()->add_receiver(
+    get<Editor_message_bus>()->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
@@ -184,14 +185,15 @@ void Trs_tool::initialize_component()
 
 void Trs_tool::on_message(Editor_message& message)
 {
+    Tool::on_message(message);
+
     using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_selection))
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection))
     {
         set_node(m_selection_tool->get_first_selected_node());
     }
-    if (test_all_rhs_bits_set(message.changed, Changed_flag_bit::c_flag_bit_hover))
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover))
     {
-        log_trs_tool->trace("Hover changed");
         tool_hover(message.scene_view);
     }
 }
@@ -400,16 +402,14 @@ void Trs_tool::tool_hover(Scene_view* scene_view)
 
 auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
 {
-    auto* input_context = context.get_input_context();
-    if (input_context == nullptr)
+    auto* scene_view = get_scene_view();
+    if (scene_view == nullptr)
     {
-        log_trs_tool->trace("TRS no input context");
+        log_trs_tool->trace("TRS no scene view");
         end_drag(context);
         return false;
     }
-    const int type = input_context->get_type();
-    Viewport_window* viewport_window = (type == Input_context_type_viewport_window) ? reinterpret_cast<Viewport_window*>(input_context) : nullptr;
-    Scene_view*      scene_view      = reinterpret_cast<Scene_view*>(input_context);
+    Viewport_window* viewport_window = scene_view->as_viewport_window();
 
     auto handle_type = get_handle_type(m_active_handle);
     switch (handle_type)
@@ -417,14 +417,12 @@ auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
         //using enum Handle_type;
         case Handle_type::e_handle_type_translate_axis:
         {
-            if (type == Input_context_type_viewport_window)
+            if (viewport_window != nullptr)
             {
-                //log_trs_tool->trace("update_axis_translate_2d(viewport_window);");
                 update_axis_translate_2d(viewport_window);
             }
-            else if (type == Input_context_type_headset_view)
+            else
             {
-                //log_trs_tool->trace("update_axis_translate_3d(scene_view);");
                 update_axis_translate_3d(scene_view);
             }
             return true;
@@ -432,14 +430,12 @@ auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
 
         case Handle_type::e_handle_type_translate_plane:
         {
-            if (type == Input_context_type_viewport_window)
+            if (viewport_window != nullptr)
             {
-                //log_trs_tool->trace("update_plane_translate_2d(viewport_window);");
                 update_plane_translate_2d(viewport_window);
             }
-            else if (type == Input_context_type_headset_view)
+            else
             {
-                //log_trs_tool->trace("update_plane_translate_3d(scene_view);");
                 update_plane_translate_3d(scene_view);
             }
             return true;
@@ -465,26 +461,19 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
 
     log_trs_tool->trace("TRS on_drag_ready");
 
-    //const auto viewport_window = m_viewport_windows->hover_window();
-    //if (!viewport_window)
-    //{
-    //    return false;
-    //}
-    //
+    m_active_handle = m_hover_handle;
 
-    m_active_handle = m_hover_handle; //get_handle(tool.mesh.get());
-
-    Scene_view* scene_view = reinterpret_cast<Scene_view*>(context.get_input_context());
+    auto* scene_view = get_scene_view();
     if (scene_view == nullptr)
     {
-        //log_trs_tool->trace("drag not possible - scene_view == nullptr");
+        log_trs_tool->trace("drag not possible - scene_view == nullptr");
         return false;
     }
 
     const auto& tool = scene_view->get_hover(Hover_entry::tool_slot);
     if (!tool.valid || !tool.mesh)
     {
-        //log_trs_tool->trace("drag not possible - !tool.valid || !tool.mesh");
+        log_trs_tool->trace("drag not possible - !tool.valid || !tool.mesh");
         return false;
     }
 
@@ -494,19 +483,20 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         (!target_node)
     )
     {
-        //log_trs_tool->trace("drag not possible - no handle, or no root");
+        log_trs_tool->trace("drag not possible - no handle, or no root");
         return false;
     }
 
     const auto camera = scene_view->get_camera();
     if (!camera)
     {
-        //log_trs_tool->trace("drag not possible - no camera");
+        log_trs_tool->trace("drag not possible - no camera");
         return false;
     }
     const auto* camera_node = camera->get_node();
     if (camera_node == nullptr)
     {
+        log_trs_tool->trace("drag not possible - no camera node");
         return false;
     }
 
@@ -543,22 +533,13 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         }
         else
         {
+            log_trs_tool->trace("drag not possible - no intersection");
             return false;
         }
     }
 
     //Tool::set_ready();
     update_visibility();
-
-    const auto node_physics = get_target_node_physics();
-    if (node_physics)
-    {
-        auto* const rigid_body = node_physics->rigid_body();
-        if (rigid_body != nullptr)
-        {
-            rigid_body->begin_move();
-        }
-    }
 
     log_trs_tool->trace("drag has been activated");
     return true;
@@ -622,7 +603,6 @@ void Trs_tool::update_axis_translate_2d(Viewport_window* viewport_window)
 {
     ERHE_PROFILE_FUNCTION
 
-    ////const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return;
@@ -1142,60 +1122,64 @@ void Trs_tool::tool_render(
 {
     ERHE_PROFILE_FUNCTION
 
+    if (context.camera != nullptr)
+    {
+        return;
+    }
     erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
     if (m_cast_rays)
     {
-    const auto target_node = m_target_node.lock();
-    std::shared_ptr<erhe::scene::Mesh> mesh = as_mesh(target_node);
-    if (mesh)
-    {
-        const auto* node = mesh->get_node();
-        if (node != nullptr)
+        const auto target_node = m_target_node.lock();
+        std::shared_ptr<erhe::scene::Mesh> mesh = as_mesh(target_node);
+        if (mesh)
         {
-            auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
-            if (scene_root != nullptr)
-                {
-                    glm::vec3 directions[] = {
-                        { 0.0f, -1.0f,  0.0f},
-                        { 1.0f,  0.0f,  0.0f},
-                        {-1.0f,  0.0f,  0.0f},
-                        { 0.0f,  0.0f,  1.0f},
-                        { 0.0f,  0.0f, -1.0f}
-                    };
-                    for (auto& d : directions)
+            const auto* node = mesh->get_node();
+            if (node != nullptr)
+            {
+                auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
+                if (scene_root != nullptr)
                     {
-                        auto& raytrace_scene = scene_root->raytrace_scene();
-                        erhe::raytrace::Ray ray{
-                            .origin    = node->position_in_world(),
-                            .t_near    = 0.0f,
-                            .direction = d,
-                            .time      = 0.0f,
-                            .t_far     = 9999.0f,
-                            .mask      = Raytrace_node_mask::content,
-                            .id        = 0,
-                            .flags     = 0
+                        glm::vec3 directions[] = {
+                            { 0.0f, -1.0f,  0.0f},
+                            { 1.0f,  0.0f,  0.0f},
+                            {-1.0f,  0.0f,  0.0f},
+                            { 0.0f,  0.0f,  1.0f},
+                            { 0.0f,  0.0f, -1.0f}
                         };
-
-                        erhe::raytrace::Hit hit;
-                        if (project_ray(&raytrace_scene, mesh.get(), ray, hit))
+                        for (auto& d : directions)
                         {
-                            Ray_hit_style ray_hit_style
-                            {
-                                .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
-                                .ray_thickness = 8.0f,
-                                .ray_length    = 0.5f,
-                                .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
-                                .hit_thickness = 8.0f,
-                                .hit_size      = 0.10f
+                            auto& raytrace_scene = scene_root->raytrace_scene();
+                            erhe::raytrace::Ray ray{
+                                .origin    = node->position_in_world(),
+                                .t_near    = 0.0f,
+                                .direction = d,
+                                .time      = 0.0f,
+                                .t_far     = 9999.0f,
+                                .mask      = Raytrace_node_mask::content,
+                                .id        = 0,
+                                .flags     = 0
                             };
 
-                            draw_ray_hit(line_renderer, ray, hit, ray_hit_style);
+                            erhe::raytrace::Hit hit;
+                            if (project_ray(&raytrace_scene, mesh.get(), ray, hit))
+                            {
+                                Ray_hit_style ray_hit_style
+                                {
+                                    .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
+                                    .ray_thickness = 8.0f,
+                                    .ray_length    = 0.5f,
+                                    .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
+                                    .hit_thickness = 8.0f,
+                                    .hit_size      = 0.10f
+                                };
+
+                                draw_ray_hit(line_renderer, ray, hit, ray_hit_style);
+                            }
                         }
                     }
                 }
             }
-        }
     }
 
     const auto target_node = m_target_node.lock();

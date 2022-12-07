@@ -98,10 +98,12 @@ erhe_target_sources_grouped(
     scene/scene_builder.hpp
     scene/scene_commands.cpp
     scene/scene_commands.hpp
-    scene/scene_view.cpp
-    scene/scene_view.hpp
+    scene/scene_message_bus.cpp
+    scene/scene_message_bus.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
+    scene/scene_view.cpp
+    scene/scene_view.hpp
     scene/viewport_window.cpp
     scene/viewport_window.hpp
     scene/viewport_windows.cpp
@@ -166,6 +168,8 @@ erhe_target_sources_grouped(
     editor_log.cpp
     editor_log.hpp
     editor_message.hpp
+    editor_message_bus.cpp
+    editor_message_bus.hpp
     editor_on_load.cpp
     editor_rendering.cpp
     editor_rendering.hpp

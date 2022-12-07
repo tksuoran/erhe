@@ -46,10 +46,8 @@ Controller_visualization::Controller_visualization(
 
     m_controller_node = std::make_shared<erhe::scene::Node>("Controller node");
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller", primitive);
-    m_controller_mesh->enable_flag_bits(
-        erhe::scene::Scene_item_flags::visible |
-        erhe::scene::Scene_item_flags::controller
-    );
+    m_controller_node->enable_flag_bits(erhe::scene::Scene_item_flags::visible);
+    m_controller_mesh->enable_flag_bits(erhe::scene::Scene_item_flags::controller);
     m_controller_mesh->mesh_data.layer_id = scene_root.layers().content()->id.get_id();
     m_controller_node->attach(m_controller_mesh);
     m_controller_node->set_parent(view_root);

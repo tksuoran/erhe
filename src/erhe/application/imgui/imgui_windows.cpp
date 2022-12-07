@@ -129,7 +129,6 @@ void Imgui_windows::imgui_windows()
 
     //Scoped_imgui_context scoped_context{m_imgui_context};
 
-    bool any_input_context{false};
     for (const auto& viewport : m_imgui_viewports)
     {
         Scoped_imgui_context imgui_context{*this, *viewport.get()};
@@ -137,6 +136,10 @@ void Imgui_windows::imgui_windows()
         if (viewport->begin_imgui_frame())
         {
             std::size_t i = 0;
+
+            bool window_wants_keyboard{false};
+            bool window_wants_mouse   {false};
+
             for (auto& imgui_window : m_imgui_windows)
             {
                 if (imgui_window->get_viewport() != viewport.get())
@@ -151,7 +154,6 @@ void Imgui_windows::imgui_windows()
                     if (is_window_visible)
                     {
                         imgui_window->imgui();
-                        any_input_context |= imgui_window->visit(*m_commands.get());
                     }
                     const auto window_position    = ImGui::GetWindowPos();
                     const auto content_region_min = ImGui::GetWindowContentRegionMin();
@@ -166,6 +168,8 @@ void Imgui_windows::imgui_windows()
                         window_position.y + content_region_min.y
                     };
 
+                    window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
+                    window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
                     imgui_window->end();
                     ImGui::PopID();
 
@@ -198,14 +202,9 @@ void Imgui_windows::imgui_windows()
                 }
             }
 
+            viewport->update_input_request(window_wants_keyboard, window_wants_mouse);
             viewport->end_imgui_frame();
         }
-    }
-
-    if (!any_input_context)
-    {
-        //log_input->info("!any_input_context");
-        m_commands->set_input_context(nullptr);
     }
 }
 

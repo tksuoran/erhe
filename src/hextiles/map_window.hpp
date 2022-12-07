@@ -6,6 +6,7 @@
 #include "types.hpp"
 
 #include "erhe/application/commands/command.hpp"
+#include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/windows/framebuffer_window.hpp"
 
 #include "erhe/components/components.hpp"
@@ -151,9 +152,11 @@ public:
     auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
 
     // Overrides Imgui_window
-    auto flags   () -> ImGuiWindowFlags override;
-    void on_begin() override;
-    void on_end  () override;
+    auto flags               () -> ImGuiWindowFlags override;
+    void on_begin            () override;
+    void on_end              () override;
+    auto want_keyboard_events() const -> bool override;
+    auto want_mouse_events   () const -> bool override;
 
     // Public API
     void set_map(const std::shared_ptr<Map>& map);

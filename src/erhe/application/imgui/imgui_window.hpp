@@ -33,7 +33,6 @@ class Imgui_window
 {
 public:
     explicit Imgui_window(const std::string_view title);
-    ////Imgui_window(const std::string_view title, const std::string_view label);
     virtual ~Imgui_window() noexcept;
 
     [[nodiscard]] auto is_visible     () const -> bool;
@@ -59,9 +58,10 @@ public:
     virtual void on_begin            ();
     virtual void on_end              ();
     virtual auto flags               () -> ImGuiWindowFlags;
-    virtual auto visit               (Commands& commands) const -> bool;
     virtual auto has_toolbar         () const -> bool;
     virtual void toolbar             ();
+    virtual auto want_keyboard_events() const -> bool;
+    virtual auto want_mouse_events   () const -> bool;
 
 protected:
     // Component dependencies

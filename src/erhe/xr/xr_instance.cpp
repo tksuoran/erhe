@@ -222,19 +222,25 @@ auto Xr_instance::create_instance() -> bool
 auto Xr_instance::get_proc_addr(const char* function) const -> PFN_xrVoidFunction
 {
     PFN_xrVoidFunction function_pointer;
+
+    XrResult result = xrGetInstanceProcAddr(
+        m_xr_instance,
+        function,
+        &function_pointer
+    );
     if (
-        !check(
-            xrGetInstanceProcAddr(
-                m_xr_instance,
-                function,
-                &function_pointer
-            )
-        )
+        (result == XR_SUCCESS) &&
+        (function_pointer != nullptr)
     )
     {
-        return nullptr;
+        return function_pointer;
     }
-    return function_pointer;
+    log_xr->log(
+        spdlog::level::level_enum::err,
+        "OpenXR returned error {}",
+        c_str(result)
+    );
+    return nullptr;
 }
 
 Xr_instance::~Xr_instance()
@@ -885,9 +891,13 @@ constexpr const char* c_user_hand_left  = "/user/hand/left";
 constexpr const char* c_user_hand_right = "/user/hand/right";
 
 constexpr const char* c_trigger_value   = "/user/hand/right/input/trigger/value";
+constexpr const char* c_trigger_click   = "/user/hand/right/input/trigger/click";
 constexpr const char* c_menu_click      = "/user/hand/right/input/menu/click";
 constexpr const char* c_squeeze_click   = "/user/hand/right/input/squeeze/click";
 constexpr const char* c_aim_pose        = "/user/hand/right/input/aim/pose";
+constexpr const char* c_trackpad        = "/user/hand/right/input/trackpad";
+constexpr const char* c_trackpad_click  = "/user/hand/right/input/trackpad/click";
+constexpr const char* c_trackpad_touch  = "/user/hand/right/input/trackpad/touch";
 
 Xr_path::Xr_path() = default;
 
@@ -911,103 +921,195 @@ auto Xr_instance::initialize_actions() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    const XrActionSetCreateInfo action_set_info
     {
-        .type                   = XR_TYPE_ACTION_SET_CREATE_INFO,
-        .next                   = nullptr,
-        .actionSetName          = { 'e', 'r', 'h', 'e', '\0' },
-        .localizedActionSetName = { 'e', 'r', 'h', 'e', '\0' },
-        .priority               = 0,
-    };
-    ERHE_XR_CHECK(
-        xrCreateActionSet(
-            m_xr_instance,
-            &action_set_info,
-            &actions.action_set
-        )
-    );
+        const XrActionSetCreateInfo action_set_info
+        {
+            .type                   = XR_TYPE_ACTION_SET_CREATE_INFO,
+            .next                   = nullptr,
+            .actionSetName          = { 'e', 'r', 'h', 'e', '\0' },
+            .localizedActionSetName = { 'e', 'r', 'h', 'e', '\0' },
+            .priority               = 0,
+        };
+        ERHE_XR_CHECK(
+            xrCreateActionSet(
+                m_xr_instance,
+                &action_set_info,
+                &actions.action_set
+            )
+        );
+    }
 
-    const XrActionCreateInfo trigger_value_action_create_info{
-        .type                = XR_TYPE_ACTION_CREATE_INFO,
-        .next                = nullptr,
-        .actionName          = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '\0' },
-        .actionType          = XR_ACTION_TYPE_FLOAT_INPUT,
-        .countSubactionPaths = 0,
-        .subactionPaths      = nullptr,
-        .localizedActionName = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '\0' }
-    };
-    ERHE_XR_CHECK(
-        xrCreateAction(
-            actions.action_set,
-            &trigger_value_action_create_info,
-            &actions.trigger_value
-        )
-    );
+    {
+        const XrActionCreateInfo trigger_value_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'v', 'a', 'l', 'u', 'e', '\0' },
+            .actionType          = XR_ACTION_TYPE_FLOAT_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'v', 'a', 'l', 'u', 'e', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &trigger_value_action_create_info,
+                &actions.trigger_value
+            )
+        );
+    }
 
-    const XrActionCreateInfo menu_click_action_create_info{
-        .type                = XR_TYPE_ACTION_CREATE_INFO,
-        .next                = nullptr,
-        .actionName          = { 'm', 'e', 'n', 'u', '\0' },
-        .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
-        .countSubactionPaths = 0,
-        .subactionPaths      = nullptr,
-        .localizedActionName = { 'm', 'e', 'n', 'u', '\0' }
-    };
-    ERHE_XR_CHECK(
-        xrCreateAction(
-            actions.action_set,
-            &menu_click_action_create_info,
-            &actions.menu_click
-        )
-    );
+    {
+        const XrActionCreateInfo trigger_click_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'c', 'l', 'i', 'c', 'k', '\0' },
+            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'c', 'l', 'i', 'c', 'k', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &trigger_click_action_create_info,
+                &actions.trigger_click
+            )
+        );
+    }
 
-    const XrActionCreateInfo squeeze_click_action_create_info{
-        .type                = XR_TYPE_ACTION_CREATE_INFO,
-        .next                = nullptr,
-        .actionName          = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' },
-        .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
-        .countSubactionPaths = 0,
-        .subactionPaths      = nullptr,
-        .localizedActionName = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' }
-    };
-    ERHE_XR_CHECK(
-        xrCreateAction(
-            actions.action_set,
-            &squeeze_click_action_create_info,
-            &actions.squeeze_click
-        )
-    );
+    {
+        const XrActionCreateInfo menu_click_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 'm', 'e', 'n', 'u', '\0' },
+            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 'm', 'e', 'n', 'u', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &menu_click_action_create_info,
+                &actions.menu_click
+            )
+        );
+    }
 
-    const XrActionCreateInfo aim_pose_action_create_info{
-        .type                = XR_TYPE_ACTION_CREATE_INFO,
-        .next                = nullptr,
-        .actionName          = { 'a', 'i', 'm', '\0' },
-        .actionType          = XR_ACTION_TYPE_POSE_INPUT,
-        .countSubactionPaths = 0,
-        .subactionPaths      = nullptr,
-        .localizedActionName = { 'a', 'i', 'm', '\0' }
-    };
-    ERHE_XR_CHECK(
-        xrCreateAction(
-            actions.action_set,
-            &aim_pose_action_create_info,
-            &actions.aim_pose
-        )
-    );
+    {
+        const XrActionCreateInfo squeeze_click_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' },
+            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &squeeze_click_action_create_info,
+                &actions.squeeze_click
+            )
+        );
+    }
+
+    {
+        const XrActionCreateInfo aim_pose_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 'a', 'i', 'm', '\0' },
+            .actionType          = XR_ACTION_TYPE_POSE_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 'a', 'i', 'm', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &aim_pose_action_create_info,
+                &actions.aim_pose
+            )
+        );
+    }
+
+    {
+        const XrActionCreateInfo trackpad_click_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 'c', 'l', 'i', 'c', 'k', '\0' },
+            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 'c', 'l', 'i', 'c', 'k', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &trackpad_click_action_create_info,
+                &actions.trackpad_click
+            )
+        );
+    }
+    {
+        const XrActionCreateInfo trackpad_touch_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 't', 'o', 'u', 'c', 'k', '\0' },
+            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 't', 'o', 'u', 'c', 'k', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &trackpad_touch_action_create_info,
+                &actions.trackpad_touch
+            )
+        );
+    }
+    {
+        const XrActionCreateInfo trackpad_action_create_info{
+            .type                = XR_TYPE_ACTION_CREATE_INFO,
+            .next                = nullptr,
+            .actionName          = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '\0' },
+            .actionType          = XR_ACTION_TYPE_VECTOR2F_INPUT,
+            .countSubactionPaths = 0,
+            .subactionPaths      = nullptr,
+            .localizedActionName = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '\0' }
+        };
+        ERHE_XR_CHECK(
+            xrCreateAction(
+                actions.action_set,
+                &trackpad_action_create_info,
+                &actions.trackpad
+            )
+        );
+    }
 
     paths.user_hand_left                      = path(c_user_hand_left);
     paths.user_hand_right                     = path(c_user_hand_right);
     paths.trigger_value                       = path(c_trigger_value);
+    paths.trigger_click                       = path(c_trigger_click);
     paths.menu_click                          = path(c_menu_click);
     paths.squeeze_click                       = path(c_squeeze_click);
     paths.aim_pose                            = path(c_aim_pose);
     paths.interaction_profile_vive_controller = path(c_interaction_profile_vive_controller);
+    paths.trackpad_click                      = path(c_trackpad_click);
+    paths.trackpad_touch                      = path(c_trackpad_touch);
+    paths.trackpad                            = path(c_trackpad);
 
-    const std::array<XrActionSuggestedBinding, 4> vive_controller_suggested_bindings{
+    const std::array<XrActionSuggestedBinding, 8> vive_controller_suggested_bindings{
         {
             {
                 .action  = actions.trigger_value,
                 .binding = paths.trigger_value.xr_path
+            },
+            {
+                .action  = actions.trigger_click,
+                .binding = paths.trigger_click.xr_path
             },
             {
                 .action  = actions.menu_click,
@@ -1020,7 +1122,19 @@ auto Xr_instance::initialize_actions() -> bool
             {
                 .action  = actions.aim_pose,
                 .binding = paths.aim_pose.xr_path
-            }
+            },
+            {
+                .action  = actions.trackpad_click,
+                .binding = paths.trackpad_click.xr_path
+            },
+            {
+                .action  = actions.trackpad_touch,
+                .binding = paths.trackpad_touch.xr_path
+            },
+            {
+                .action  = actions.trackpad,
+                .binding = paths.trackpad.xr_path
+            },
         }
     };
 
@@ -1056,6 +1170,15 @@ auto Xr_instance::initialize_actions() -> bool
         .isActive             = XR_FALSE
     };
 
+    actions.trigger_click_state = {
+        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
+        .next                 = nullptr,
+        .currentState         = XR_FALSE,
+        .changedSinceLastSync = false,
+        .lastChangeTime       = {},
+        .isActive             = XR_FALSE
+    };
+
     actions.menu_click_state = {
         .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
         .next                 = nullptr,
@@ -1066,6 +1189,31 @@ auto Xr_instance::initialize_actions() -> bool
     };
 
     actions.squeeze_click_state = {
+        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
+        .next                 = nullptr,
+        .currentState         = XR_FALSE,
+        .changedSinceLastSync = false,
+        .lastChangeTime       = {},
+        .isActive             = XR_FALSE
+    };
+
+    actions.trackpad_state = {
+        .type                 = XR_TYPE_ACTION_STATE_VECTOR2F,
+        .next                 = nullptr,
+        .currentState         = { .x = 0.0f, .y = 0.0f },
+        .changedSinceLastSync = false,
+        .lastChangeTime       = {},
+        .isActive             = XR_FALSE
+    };
+    actions.trackpad_click_state = {
+        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
+        .next                 = nullptr,
+        .currentState         = XR_FALSE,
+        .changedSinceLastSync = false,
+        .lastChangeTime       = {},
+        .isActive             = XR_FALSE
+    };
+    actions.trackpad_touch_state = {
         .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
         .next                 = nullptr,
         .currentState         = XR_FALSE,
@@ -1109,9 +1257,13 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             case XR_SESSION_NOT_FOCUSED:
             {
                 // TODO
-                actions.trigger_value_state.isActive = XR_FALSE;
-                actions.menu_click_state   .isActive = XR_FALSE;
-                actions.squeeze_click_state.isActive = XR_FALSE;
+                actions.trigger_value_state .isActive = XR_FALSE;
+                actions.trigger_click_state .isActive = XR_FALSE;
+                actions.menu_click_state    .isActive = XR_FALSE;
+                actions.squeeze_click_state .isActive = XR_FALSE;
+                actions.trackpad_touch_state.isActive = XR_FALSE;
+                actions.trackpad_click_state.isActive = XR_FALSE;
+                actions.trackpad_state      .isActive = XR_FALSE;
                 return true;
             }
 
@@ -1130,7 +1282,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             .action        = actions.trigger_value,
             .subactionPath = XR_NULL_PATH
         };
-
         ERHE_XR_CHECK(
             xrGetActionStateFloat(
                 session.get_xr_session(),
@@ -1144,10 +1295,25 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         const XrActionStateGetInfo action_state_get_info{
             .type          = XR_TYPE_ACTION_STATE_GET_INFO,
             .next          = nullptr,
+            .action        = actions.trigger_click,
+            .subactionPath = XR_NULL_PATH
+        };
+        ERHE_XR_CHECK(
+            xrGetActionStateBoolean(
+                session.get_xr_session(),
+                &action_state_get_info,
+                &actions.trigger_click_state
+            )
+        );
+    }
+
+    {
+        const XrActionStateGetInfo action_state_get_info{
+            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
+            .next          = nullptr,
             .action        = actions.menu_click,
             .subactionPath = XR_NULL_PATH
         };
-
         ERHE_XR_CHECK(
             xrGetActionStateBoolean(
                 session.get_xr_session(),
@@ -1164,7 +1330,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             .action        = actions.squeeze_click,
             .subactionPath = XR_NULL_PATH
         };
-
         ERHE_XR_CHECK(
             xrGetActionStateBoolean(
                 session.get_xr_session(),
@@ -1178,10 +1343,57 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         const XrActionStateGetInfo action_state_get_info{
             .type          = XR_TYPE_ACTION_STATE_GET_INFO,
             .next          = nullptr,
+            .action        = actions.trackpad_touch,
+            .subactionPath = XR_NULL_PATH
+        };
+        ERHE_XR_CHECK(
+            xrGetActionStateBoolean(
+                session.get_xr_session(),
+                &action_state_get_info,
+                &actions.trackpad_touch_state
+            )
+        );
+    }
+
+    {
+        const XrActionStateGetInfo action_state_get_info{
+            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
+            .next          = nullptr,
+            .action        = actions.trackpad_click,
+            .subactionPath = XR_NULL_PATH
+        };
+        ERHE_XR_CHECK(
+            xrGetActionStateBoolean(
+                session.get_xr_session(),
+                &action_state_get_info,
+                &actions.trackpad_click_state
+            )
+        );
+    }
+
+    {
+        const XrActionStateGetInfo action_state_get_info{
+            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
+            .next          = nullptr,
+            .action        = actions.trackpad,
+            .subactionPath = XR_NULL_PATH
+        };
+        ERHE_XR_CHECK(
+            xrGetActionStateVector2f(
+                session.get_xr_session(),
+                &action_state_get_info,
+                &actions.trackpad_state
+            )
+        );
+    }
+
+    {
+        const XrActionStateGetInfo action_state_get_info{
+            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
+            .next          = nullptr,
             .action        = actions.aim_pose,
             .subactionPath = XR_NULL_PATH
         };
-
         ERHE_XR_CHECK(
             xrGetActionStatePose(
                 session.get_xr_session(),
@@ -1210,7 +1422,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             }
         }
     };
-
     ERHE_XR_CHECK(
         xrLocateSpace(
             actions.aim_pose_space,

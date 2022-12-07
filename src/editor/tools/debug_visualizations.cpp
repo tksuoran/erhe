@@ -1,6 +1,7 @@
 #include "tools/debug_visualizations.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
@@ -54,13 +55,21 @@ Debug_visualizations::~Debug_visualizations() noexcept
 void Debug_visualizations::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
-    require<Tools>();
+    require<Editor_message_bus>();
+    require<Tools             >();
 }
 
 void Debug_visualizations::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     get<Tools>()->register_tool(this);
+
+    get<Editor_message_bus>()->add_receiver(
+        [&](Editor_message& message)
+        {
+            Tool::on_message(message);
+        }
+    );
 }
 
 void Debug_visualizations::post_initialize()
@@ -1060,7 +1069,7 @@ void Debug_visualizations::tool_render(
     if (m_cameras)
     //if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
     {
-        for (const auto& camera : scene_root->scene().cameras)
+        for (const auto& camera : scene_root->scene().get_cameras())
         {
             camera_visualization(context, camera.get());
         }
@@ -1085,6 +1094,29 @@ void Debug_visualizations::imgui()
     ////     ImGui::TextUnformatted(line.c_str());
     //// }
     //// m_lines.clear();
+    Scene_view* scene_view = get_scene_view();
+    if (scene_view == nullptr)
+    {
+        ImGui::Text("- No Scene_view - ");
+    }
+    else
+    {
+        const auto scene_view_camera = scene_view->get_camera();
+        if (!scene_view_camera)
+        {
+            ImGui::Text("- Scene_view without Camera - ");
+        }
+        else
+        {
+            const std::string text = fmt::format(
+                "- Scene_view with Camera {} @ {} - ",
+                scene_view_camera->get_name(),
+                glm::vec3{scene_view_camera->get_node()->position_in_world()}
+            );
+            ImGui::TextUnformatted(text.c_str());
+        }
+    }
+
     ImGui::Checkbox   ("Selection Axises",      &m_selection_node_axis_visible);
     ImGui::Checkbox   ("Selection Box",         &m_selection_box);
     ImGui::Checkbox   ("Selection Sphere",      &m_selection_sphere);

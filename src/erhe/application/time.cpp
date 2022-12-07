@@ -55,13 +55,12 @@ void Time::update()
 
     //log_update->trace("{} fixed update steps", steps);
 
-    update_once_per_frame(
-        erhe::components::Time_context{
-            .dt           = dt,
-            .time         = m_time,
-            .frame_number = m_frame_number
-        }
-    );
+    // For once per frame
+    m_last_update = erhe::components::Time_context{
+        .dt           = dt,
+        .time         = m_time,
+        .frame_number = m_frame_number
+    };
 
     ERHE_PROFILE_FRAME_END
 }
@@ -75,13 +74,11 @@ void Time::update_fixed_step(
     m_components->update_fixed_step(time_context);
 }
 
-void Time::update_once_per_frame(
-    const erhe::components::Time_context& time_context
-)
+void Time::update_once_per_frame()
 {
     ERHE_PROFILE_FUNCTION
 
-    m_components->update_once_per_frame(time_context);
+    m_components->update_once_per_frame(m_last_update);
     ++m_frame_number;
 }
 

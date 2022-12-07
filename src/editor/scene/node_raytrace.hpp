@@ -71,8 +71,8 @@ public:
         erhe::scene::Scene_host* old_scene_host,
         erhe::scene::Scene_host* new_scene_host
     ) override;
-    void handle_node_transform_update      () override;
-    void handle_node_visibility_mask_update(const uint64_t mask) override;
+    void handle_node_transform_update() override;
+    void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
     // Public API
     [[nodiscard]] auto source_geometry   () const -> std::shared_ptr<erhe::geometry::Geometry>;

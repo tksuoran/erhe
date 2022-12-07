@@ -85,17 +85,27 @@ void Icon_set::initialize_component()
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
+    icons.brush_tool        = load(icon_directory / "brush_tool.svg");
     icons.camera            = load(icon_directory / "camera.svg");
     icons.directional_light = load(icon_directory / "directional_light.svg");
     icons.drag              = load(icon_directory / "drag.svg");
+    icons.hud               = load(icon_directory / "hud.svg");
     icons.spot_light        = load(icon_directory / "spot_light.svg");
     icons.point_light       = load(icon_directory / "point_light.svg");
     icons.pull              = load(icon_directory / "pull.svg");
     icons.push              = load(icon_directory / "push.svg");
+    icons.material          = load(icon_directory / "material.svg");
     icons.mesh              = load(icon_directory / "mesh.svg");
+    icons.mesh_cone         = load(icon_directory / "mesh_cone");
+    icons.mesh_cube         = load(icon_directory / "mesh_cube");
+    icons.mesh_cylinder     = load(icon_directory / "mesh_cylinder");
+    icons.mesh_icosphere    = load(icon_directory / "mesh_icosphere");
+    icons.mesh_torus        = load(icon_directory / "mesh_torus");
+    icons.mesh_uvsphere     = load(icon_directory / "mesh_uvsphere");
     icons.move              = load(icon_directory / "move.svg");
     icons.node              = load(icon_directory / "node.svg");
     icons.rotate            = load(icon_directory / "rotate.svg");
+    icons.select            = load(icon_directory / "select.svg");
     icons.three_dots        = load(icon_directory / "three_dots.svg");
 }
 

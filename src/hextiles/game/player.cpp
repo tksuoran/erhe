@@ -148,7 +148,7 @@ void Player::move_unit(Game_context& context, direction_t direction)
 
     const size_t unit_index = m_current_unit - cities.size();
     Unit& unit = units.at(unit_index);
-    //const Unit_type&      unit_type    = context.tiles.get_unit_type(unit.type);
+    const Unit_type&      unit_type    = context.tiles.get_unit_type(unit.type);
     const Tile_coordinate old_location = unit.location;
     const Tile_coordinate new_location = map->wrap(old_location.neighbor(direction));
 
@@ -160,11 +160,11 @@ void Player::move_unit(Game_context& context, direction_t direction)
         .start_time = context.time
     };
 
-    //unit.location = new_location;
-    //context.game.update_map_unit_tile(old_location);
-    //context.game.update_map_unit_tile(new_location);
-    //context.game.reveal(*map.get(), old_location, unit_type.vision_range[0]);
-    //context.game.reveal(*map.get(), new_location, unit_type.vision_range[0]);
+    unit.location = new_location;
+    context.game.update_map_unit_tile(old_location);
+    context.game.update_map_unit_tile(new_location);
+    context.game.reveal(*map.get(), old_location, unit_type.vision_range[0]);
+    context.game.reveal(*map.get(), new_location, unit_type.vision_range[0]);
 }
 
 void Player::select_unit(Game_context& context, int direction)

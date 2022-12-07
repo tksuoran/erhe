@@ -1,4 +1,4 @@
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRAC
+// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
 #include "erhe/log/log_glm.hpp"

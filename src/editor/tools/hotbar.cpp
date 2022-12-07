@@ -1,5 +1,9 @@
 #include "tools/hotbar.hpp"
+#include "brushes/brush_tool.hpp"
+#include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "scene/content_library.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -16,6 +20,7 @@
 #endif
 #include "windows/operations.hpp"
 
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -23,6 +28,7 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -35,9 +41,15 @@ namespace editor
 
 using glm::vec3;
 
+auto Hotbar_trackpad_command::try_call(erhe::application::Command_context& context) -> bool
+{
+    return m_hotbar.try_call(context);
+}
+
 Hotbar::Hotbar()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
+    , m_trackpad_command             {*this}
 {
 }
 
@@ -47,6 +59,7 @@ Hotbar::~Hotbar() noexcept
 
 void Hotbar::declare_required_components()
 {
+    require<erhe::application::Commands           >();
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
@@ -68,6 +81,10 @@ void Hotbar::initialize_component()
         return;
     }
 
+    const auto commands = get<erhe::application::Commands>();
+    commands->register_command(&m_trackpad_command);
+    commands->bind_command_to_controller_trackpad(&m_trackpad_command, true);
+
     const erhe::application::Scoped_gl_context gl_context{
         get<erhe::application::Gl_context_provider>()
     };
@@ -88,9 +105,14 @@ void Hotbar::initialize_component()
     m_rendertarget_mesh = scene_root->create_rendertarget_mesh(
         *m_components,
         *primary_viewport_window.get(),
-        128 * 3,
+        128 * 5,
         128,
         4000.0
+    );
+    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id.get_id();
+
+    m_rendertarget_mesh->enable_flag_bits(
+        erhe::scene::Scene_item_flags::visible
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
@@ -101,7 +123,7 @@ void Hotbar::initialize_component()
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
-    m_rendertarget_node->set_parent(scene_root->scene().root_node);
+    m_rendertarget_node->set_parent(scene_root->scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
 
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
@@ -126,12 +148,15 @@ void Hotbar::initialize_component()
 void Hotbar::post_initialize()
 {
     m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
+    m_brush_tool       = get<Brush_tool      >();
     m_icon_set         = get<Icon_set        >();
     m_physics_tool     = get<Physics_tool    >();
     m_operations       = get<Operations      >();
     m_selection_tool   = get<Selection_tool  >();
     m_trs_tool         = get<Trs_tool        >();
     m_viewport_windows = get<Viewport_windows>();
+
+    set_action(Hotbar_action::Select);
 }
 
 auto Hotbar::description() -> const char*
@@ -156,17 +181,6 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
         return {};
     }
     return viewport_window->get_camera();
-}
-
-void Hotbar::update_once_per_frame(
-    const erhe::components::Time_context& /*time_context*/
-)
-{
-    //const auto viewport_window = m_viewport_windows->hover_window();
-    //if (viewport_window)
-    //{
-    //    update_node_transform(viewport_window->get_camera()->world_from_node());
-    //}
 }
 
 void Hotbar::update_node_transform(const glm::mat4& world_from_camera)
@@ -218,6 +232,38 @@ void Hotbar::on_begin()
     ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
 }
 
+auto Hotbar::try_call(erhe::application::Command_context& context) -> bool
+{
+    if (context.get_button_bits() == 0)
+    {
+        return false;
+    }
+
+    const auto position = context.get_vec2_absolute_value();
+
+    if (position.x < -0.2f)
+    {
+        --m_action;
+        if (m_action < Hotbar_action::First)
+        {
+            m_action = Hotbar_action::Last;
+        }
+        set_action(m_action);
+    }
+
+    if (position.x > 0.2f)
+    {
+        ++m_action;
+        if (m_action < Hotbar_action::First)
+        {
+            m_action = Hotbar_action::Last;
+        }
+        set_action(m_action);
+    }
+
+    return true;
+}
+
 auto Hotbar::get_color(const int color) -> glm::vec4&
 {
     switch (color)
@@ -229,6 +275,110 @@ auto Hotbar::get_color(const int color) -> glm::vec4&
     }
 }
 
+void Hotbar::button(const glm::vec2 icon, const Action action, const char* tooltip)
+{
+    const glm::vec4 background_color{0.0f, 0.0f, 0.0f, 0.0f};
+    const glm::vec4 tint_color      {1.0f, 1.0f, 1.0f, 1.0f};
+    const int       frame_padding      = 0;
+    const auto&     icon_rasterization = m_icon_set->get_hotbar_rasterization();
+    const bool      linear{false};
+
+    if (m_action == action)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
+    }
+
+    const bool is_pressed = icon_rasterization.icon_button(
+        icon,
+        frame_padding,
+        background_color,
+        tint_color,
+        linear
+    );
+
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(tooltip);
+    }
+
+    if (m_action == action)
+    {
+        ImGui::PopStyleColor();
+    }
+
+    if (is_pressed)
+    {
+        set_action(action);
+    }
+
+}
+
+void Hotbar::set_action(const Action action)
+{
+    m_action = action;
+
+    switch (action)
+    {
+        case Hotbar_action::Select:
+        {
+            m_operations    ->set_active_tool (m_selection_tool.get());
+            m_selection_tool->set_enable_state(true);
+            m_brush_tool    ->set_enable_state(false);
+            m_trs_tool      ->set_enable_state(false);
+            m_trs_tool      ->set_rotate   (false);
+            m_trs_tool      ->set_translate(false);
+            break;
+        }
+        case Hotbar_action::Move:
+        {
+            m_operations    ->set_active_tool (m_trs_tool.get());
+            m_selection_tool->set_enable_state(true);
+            m_brush_tool    ->set_enable_state(false);
+            m_trs_tool      ->set_enable_state(true);
+            m_trs_tool      ->set_rotate   (false);
+            m_trs_tool      ->set_translate(true);
+            break;
+        }
+        case Hotbar_action::Rotate:
+        {
+            m_operations    ->set_active_tool(m_trs_tool.get());
+            m_selection_tool->set_enable_state(true);
+            m_brush_tool    ->set_enable_state(false);
+            m_trs_tool      ->set_enable_state(true);
+            m_trs_tool      ->set_translate(false);
+            m_trs_tool      ->set_rotate   (true);
+            break;
+        }
+        case Hotbar_action::Drag:
+        {
+            m_operations    ->set_active_tool(m_physics_tool.get());
+            m_selection_tool->clear_selection();
+            m_selection_tool->set_enable_state(false);
+            m_brush_tool    ->set_enable_state(false);
+            m_trs_tool      ->set_enable_state(false);
+            m_trs_tool      ->set_translate(false);
+            m_trs_tool      ->set_rotate   (false);
+            m_physics_tool  ->set_mode(Physics_tool_mode::Drag);
+            break;
+        }
+        case Hotbar_action::Brush_tool:
+        {
+            m_operations    ->set_active_tool(m_brush_tool.get());
+            m_selection_tool->clear_selection();
+            m_selection_tool->set_enable_state(false);
+            m_brush_tool    ->set_enable_state(true);
+            m_trs_tool      ->set_enable_state(false);
+            m_trs_tool      ->set_translate(false);
+            m_trs_tool      ->set_rotate   (false);
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+}
+
 void Hotbar::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -236,124 +386,19 @@ void Hotbar::imgui()
     //ImGui::SliderFloat("X", &m_x, -2.0f, 2.0f);
     //ImGui::SliderFloat("Y", &m_y, -0.3f, 0.0f);
     //ImGui::SliderFloat("Z", &m_z, -2.0f, 2.0f);
-    const glm::vec4 background_color{0.0f, 0.0f, 0.0f, 0.0f};
-    const glm::vec4 tint_color      {1.0f, 1.0f, 1.0f, 1.0f};
-    const int       frame_padding      = 0;
-    const auto&     icon_rasterization = m_icon_set->get_hotbar_rasterization();
-    const bool      linear{false};
 
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  m_color_active);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_color_hover);
     ImGui::PushStyleColor(ImGuiCol_Button,        m_color_inactive);
 
-    const bool is_move   = m_action == Hotbar_action::Move;
-    const bool is_rotate = m_action == Hotbar_action::Rotate;
-    //const bool is_push   = m_action == Hotbar_action::Push;
-    //const bool is_pull   = m_action == Hotbar_action::Pull;
-    const bool is_drag   = m_action == Hotbar_action::Drag;
-
-    if (is_move) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    const bool move   = icon_rasterization.icon_button(m_icon_set->icons.move,   frame_padding, background_color, tint_color, linear);
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Move");
-    }
-    if (is_move) ImGui::PopStyleColor();
-
-    if (is_rotate) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    const bool rotate = icon_rasterization.icon_button(m_icon_set->icons.rotate, frame_padding, background_color, tint_color, linear);
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Rotate");
-    }
-    if (is_rotate) ImGui::PopStyleColor();
-
-    //if (is_push) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    //const bool push   = icon_rasterization.icon_button(m_icon_set->icons.push,   frame_padding, background_color, tint_color, linear);
-    //if (ImGui::IsItemHovered())
-    //{
-    //    ImGui::SetTooltip("Push");
-    //}
-    //if (is_push) ImGui::PopStyleColor();
-    //
-    //if (is_pull) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    //const bool pull   = icon_rasterization.icon_button(m_icon_set->icons.pull,   frame_padding, background_color, tint_color, linear);
-    //if (ImGui::IsItemHovered())
-    //{
-    //    ImGui::SetTooltip("Pull");
-    //}
-    //if (is_pull) ImGui::PopStyleColor();
-
-    if (is_drag) ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
-    const bool drag   = icon_rasterization.icon_button(m_icon_set->icons.drag,   frame_padding, background_color, tint_color, linear);
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Drag");
-    }
-    if (is_drag) ImGui::PopStyleColor();
-
-    if (move)
-    {
-        m_selection_tool->set_enable_state(true);
-        m_operations->set_active_tool(m_trs_tool.get());
-        m_trs_tool->set_rotate(false);
-        m_trs_tool->set_translate(true);
-        m_action = Hotbar_action::Move;
-    }
-    if (rotate)
-    {
-        m_selection_tool->set_enable_state(true);
-        m_operations->set_active_tool(m_trs_tool.get());
-        m_trs_tool->set_translate(false);
-        m_trs_tool->set_rotate(true);
-        m_action = Hotbar_action::Rotate;
-    }
-    //if (push)
-    //{
-    //    m_selection_tool->clear_selection();
-    //    m_selection_tool->set_enable_state(false);
-    //    m_operations->set_active_tool(m_physics_tool.get());
-    //    m_trs_tool->set_translate(false);
-    //    m_trs_tool->set_rotate(false);
-    //    m_physics_tool->set_mode(Physics_tool_mode::Push);
-    //    m_action = Hotbar_action::Push;
-    //}
-    //if (pull)
-    //{
-    //    m_selection_tool->clear_selection();
-    //    m_selection_tool->set_enable_state(false);
-    //    m_operations->set_active_tool(m_physics_tool.get());
-    //    m_trs_tool->set_translate(false);
-    //    m_trs_tool->set_rotate(false);
-    //    m_physics_tool->set_mode(Physics_tool_mode::Pull);
-    //    m_action = Hotbar_action::Pull;
-    //}
-    if (drag)
-    {
-        m_selection_tool->clear_selection();
-        m_selection_tool->set_enable_state(false);
-        m_operations->set_active_tool(m_physics_tool.get());
-        m_trs_tool->set_translate(false);
-        m_trs_tool->set_rotate(false);
-        m_physics_tool->set_mode(Physics_tool_mode::Drag);
-        m_action = Hotbar_action::Drag;
-    }
+    button(m_icon_set->icons.select,     Hotbar_action::Select,     "Select");
+    button(m_icon_set->icons.move,       Hotbar_action::Move,       "Move");
+    button(m_icon_set->icons.rotate,     Hotbar_action::Rotate,     "Rotate");
+    button(m_icon_set->icons.drag,       Hotbar_action::Drag,       "Drag");
+    button(m_icon_set->icons.brush_tool, Hotbar_action::Brush_tool, "Brush Tool");
 
     ImGui::PopStyleColor(3);
 
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (viewport_window)
-    {
-        const auto& camera = viewport_window->get_camera();
-        if (camera)
-        {
-            const auto* node = camera->get_node();
-            if (node != nullptr)
-            {
-                update_node_transform(node->world_from_node());
-            }
-        }
-    }
 #endif
 }
 

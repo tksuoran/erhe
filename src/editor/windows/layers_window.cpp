@@ -80,8 +80,9 @@ void Layers_window::imgui()
     {
         if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags))
         {
-            const auto& scene = scene_root->scene();
-            for (const auto& layer : scene.mesh_layers)
+            const auto& scene       = scene_root->scene();
+            const auto& mesh_layers = scene.get_mesh_layers();
+            for (const auto& layer : mesh_layers)
             {
                 if (ImGui::TreeNodeEx(layer->get_name().c_str(), parent_flags))
                 {

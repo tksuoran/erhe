@@ -52,7 +52,8 @@ public:
     void on_begin            () override;
     void on_end              () override;
     void set_viewport        (erhe::application::Imgui_viewport* imgui_viewport) override;
-    auto visit               (erhe::application::Commands& commands) const -> bool override;
+    auto want_mouse_events   () const -> bool override;
+    auto want_keyboard_events() const -> bool override;
 
     // Implements Rendergraph_node
     [[nodiscard]] auto get_consumer_input_viewport(

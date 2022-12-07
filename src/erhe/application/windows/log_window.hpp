@@ -79,7 +79,7 @@ private:
     int                             m_tail_buffer_show_size{10000};
     int                             m_tail_buffer_trim_size{10000};
     bool                            m_paused     {false};
-    bool                            m_last_on_top{false};
+    bool                            m_last_on_top{true};
 };
 
 } // namespace erhe::application

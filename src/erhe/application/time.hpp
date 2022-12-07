@@ -30,7 +30,7 @@ public:
     void start_time           ();
     void update               ();
     void update_fixed_step    (const erhe::components::Time_context& time_context);
-    void update_once_per_frame(const erhe::components::Time_context& time_context);
+    void update_once_per_frame();
     auto frame_number         () const -> uint64_t;
 
 private:
@@ -38,6 +38,7 @@ private:
     double                                m_time_accumulator{0.0};
     double                                m_time            {0.0};
     uint64_t                              m_frame_number{0};
+    erhe::components::Time_context        m_last_update;
 };
 
 } // namespace erhe::application

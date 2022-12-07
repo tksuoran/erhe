@@ -1,6 +1,7 @@
 #include "tools/selection_tool.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "operations/compound_operation.hpp"
@@ -21,6 +22,7 @@
 #endif
 
 #include "erhe/application/commands/commands.hpp"
+#include "erhe/application/commands/command_binding.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/time.hpp"
@@ -267,37 +269,34 @@ void Selection_tool::declare_required_components()
 {
     require<erhe::application::Commands>();
     require<erhe::application::Imgui_windows>();
-    require<Editor_scenes>();
-    require<Tools        >();
+    require<Tools>();
 }
 
 void Selection_tool::initialize_component()
 {
     get<Tools>()->register_tool(this);
-    Message_bus_node::initialize(get<Editor_scenes>()->get_editor_message_bus());
-
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     hide();
 
     const auto commands = get<erhe::application::Commands>();
-
-    commands->register_command                  (&m_select_command);
-    commands->register_command                  (&m_delete_command);
-    commands->bind_command_to_mouse_click       (&m_select_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_controller_trigger(&m_select_command, 0.5f, 0.45f, false);
-    commands->bind_command_to_key               (&m_delete_command, erhe::toolkit::Key_delete, true);
+    commands->register_command                        (&m_select_command);
+    commands->register_command                        (&m_delete_command);
+    commands->bind_command_to_mouse_click             (&m_select_command, erhe::toolkit::Mouse_button_left);
+    commands->bind_command_to_controller_trigger_click(&m_select_command);
+    commands->bind_command_to_key                     (&m_delete_command, erhe::toolkit::Key_delete, true);
 }
 
 void Selection_tool::post_initialize()
 {
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_editor_scenes     = get<Editor_scenes   >();
+    m_line_renderer_set  = get<erhe::application::Line_renderer_set>();
+    m_editor_message_bus = get<Editor_message_bus>();
+    m_editor_scenes      = get<Editor_scenes   >();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_headset_view      = get<Headset_view    >();
+    m_headset_view       = get<Headset_view    >();
 #endif
-    m_node_tree_window  = get<Node_tree_window>();
-    m_viewport_config   = get<Viewport_config >();
-    m_viewport_windows  = get<Viewport_windows>();
+    m_node_tree_window   = get<Node_tree_window>();
+    m_viewport_config    = get<Viewport_config >();
+    m_viewport_windows   = get<Viewport_windows>();
 }
 
 auto Selection_tool::description() -> const char*
@@ -340,7 +339,7 @@ void Selection_tool::set_selection(const std::vector<std::shared_ptr<erhe::scene
         item->set_selected(true);
     }
     m_selection = selection;
-    call_selection_change_subscriptions();
+    send_selection_change_message();
 }
 
 auto Selection_tool::on_select_try_ready() -> bool
@@ -357,7 +356,23 @@ auto Selection_tool::on_select_try_ready() -> bool
 
         if (m_hover_content && !m_hover_tool && !rendertarget.valid)
         {
+            log_selection->trace("Can select");
             return true;
+        }
+        else
+        {
+            if (!m_hover_content)
+            {
+                log_selection->trace("Cannot select: Not hovering over content");
+            }
+            if (!m_hover_tool)
+            {
+                log_selection->trace("Cannot select: Hovering over tool");
+            }
+            if (rendertarget.valid)
+            {
+                log_selection->trace("Cannot select: Hovering over rendertarget");
+            }
         }
     }
 #endif
@@ -425,7 +440,7 @@ auto Selection_tool::clear_selection() -> bool
     m_selection.clear();
     m_range_selection.reset();
     sanity_check();
-    call_selection_change_subscriptions();
+    send_selection_change_message();
     return true;
 }
 
@@ -498,7 +513,7 @@ void Selection_tool::toggle_mesh_selection(
         }
     }
 
-    call_selection_change_subscriptions();
+    send_selection_change_message();
 }
 
 auto Selection_tool::is_in_selection(
@@ -533,7 +548,7 @@ auto Selection_tool::is_in_selection(
     {
         log_selection->trace("Adding {} to selection", item->get_name());
         m_selection.push_back(item);
-        call_selection_change_subscriptions();
+        send_selection_change_message();
         return true;
     }
 
@@ -562,11 +577,11 @@ auto Selection_tool::remove_from_selection(
     {
         log_selection->trace("Removing item {} from selection", item->get_name());
         m_selection.erase(i, m_selection.end());
-        call_selection_change_subscriptions();
+        send_selection_change_message();
         return true;
     }
 
-    log_selection->info("Removing item {} from selection failed - was not in selection", item->get_name());
+    log_selection->trace("Removing item {} from selection failed - was not in selection", item->get_name());
     return false;
 }
 
@@ -580,7 +595,7 @@ void Selection_tool::update_selection_from_scene_item(
         if (!is_in(item, m_selection))
         {
             m_selection.push_back(item);
-            call_selection_change_subscriptions();
+            send_selection_change_message();
         }
     }
     else
@@ -595,7 +610,7 @@ void Selection_tool::update_selection_from_scene_item(
             if (i != m_selection.end())
             {
                 m_selection.erase(i, m_selection.end());
-                call_selection_change_subscriptions();
+                send_selection_change_message();
             }
         }
     }
@@ -610,7 +625,8 @@ void Selection_tool::sanity_check()
     for (const auto& scene_root : scene_roots)
     {
         const auto& scene = scene_root->scene();
-        for (const auto& node : scene.flat_node_vector)
+        const auto& flat_nodes = scene.get_flat_nodes();
+        for (const auto& node : flat_nodes)
         {
             const auto item = std::static_pointer_cast<erhe::scene::Scene_item>(node);
             if (
@@ -639,11 +655,11 @@ void Selection_tool::sanity_check()
 #endif
 }
 
-void Selection_tool::call_selection_change_subscriptions() const
+void Selection_tool::send_selection_change_message() const
 {
-    send(
+    m_editor_message_bus->send_message(
         Editor_message{
-            .changed = Changed_flag_bit::c_flag_bit_selection
+            .update_flags = Message_flag_bit::c_flag_bit_selection
         }
     );
 }

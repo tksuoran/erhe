@@ -1,3 +1,4 @@
+#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "editor_view_client.hpp"
@@ -23,6 +24,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
+#include "scene/scene_message_bus.hpp"
 
 #include "tools/debug_visualizations.hpp"
 #include "tools/fly_camera_tool.hpp"
@@ -179,6 +181,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Debug_draw            >());
         m_components.add(make_shared<editor::Debug_view_window     >());
         m_components.add(make_shared<editor::Debug_visualizations  >());
+        m_components.add(make_shared<editor::Editor_message_bus    >());
         m_components.add(make_shared<editor::Editor_rendering      >());
         m_components.add(make_shared<editor::Editor_scenes         >());
         m_components.add(make_shared<editor::Editor_view_client    >());
@@ -205,6 +208,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Rendergraph_window    >());
         m_components.add(make_shared<editor::Scene_builder         >());
         m_components.add(make_shared<editor::Scene_commands        >());
+        m_components.add(make_shared<editor::Scene_message_bus     >());
         m_components.add(make_shared<editor::Selection_tool        >());
         m_components.add(make_shared<editor::Settings_window       >());
         m_components.add(make_shared<editor::Shadow_renderer       >());

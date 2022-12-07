@@ -79,25 +79,39 @@ auto Headset::get_hand_tracking_active(const XrHandEXT hand) const -> bool
     return m;
 }
 
-auto Headset::trigger_value() const -> float
+auto Headset::trigger_value() const -> const XrActionStateFloat*
 {
-    return m_xr_instance
-        ? m_xr_instance->actions.trigger_value_state.currentState
-        : 0.0f;
+    return &m_xr_instance->actions.trigger_value_state;
 }
 
-auto Headset::menu_click() const -> bool
+auto Headset::trigger_click() const -> const XrActionStateBoolean*
 {
-    return m_xr_instance
-        ? (m_xr_instance->actions.menu_click_state.currentState == XR_TRUE)
-        : false;
+    return &m_xr_instance->actions.trigger_click_state;
 }
 
-auto Headset::squeeze_click() const -> bool
+auto Headset::menu_click() const -> const XrActionStateBoolean*
 {
-    return m_xr_instance
-        ? (m_xr_instance->actions.squeeze_click_state.currentState == XR_TRUE)
-        : false;
+    return &m_xr_instance->actions.menu_click_state;
+}
+
+auto Headset::squeeze_click() const -> const XrActionStateBoolean*
+{
+    return &m_xr_instance->actions.squeeze_click_state;
+}
+
+auto Headset::trackpad_click() const -> const XrActionStateBoolean*
+{
+    return &m_xr_instance->actions.trackpad_click_state;
+}
+
+auto Headset::trackpad_touch() const -> const XrActionStateBoolean*
+{
+    return &m_xr_instance->actions.trackpad_touch_state;
+}
+
+auto Headset::trackpad() const -> const XrActionStateVector2f*
+{
+    return &m_xr_instance->actions.trackpad_state;
 }
 
 auto Headset::begin_frame() -> Frame_timing

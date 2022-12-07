@@ -6,6 +6,7 @@ namespace erhe::scene
 {
 
 class Node;
+class Scene;
 
 enum class Scene_event_type : int
 {
@@ -20,6 +21,7 @@ class Scene_message
 {
 public:
     Scene_event_type      event_type;
+    Scene*                scene{nullptr};
     std::shared_ptr<Node> lhs;
     std::shared_ptr<Node> rhs;
 };

@@ -187,7 +187,7 @@ void Node_physics::set_world_from_node(
 
     const glm::mat4& matrix{world_from_node};
     // TODO don't unparent, call set_world_from_node() instead?
-    get_node()->set_parent(get_node()->get_scene()->root_node);
+    get_node()->set_parent(get_node()->get_scene()->get_root_node());
     get_node()->set_parent_from_node(matrix);
 
     m_transform_change_from_physics = false;
@@ -221,7 +221,7 @@ void Node_physics::set_world_from_node(
         1.0f
     };
     // TODO don't unparent, call set_world_from_node() instead?
-    get_node()->set_parent(get_node()->get_scene()->root_node);
+    get_node()->set_parent(get_node()->get_scene()->get_root_node());
     get_node()->set_parent_from_node(matrix);
 
     m_transform_change_from_physics = false;

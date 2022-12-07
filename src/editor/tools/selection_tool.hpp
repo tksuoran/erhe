@@ -28,6 +28,7 @@ namespace erhe::application
 namespace editor
 {
 
+class Editor_message_bus;
 class Editor_scenes;
 class Headset_view;
 class Node_tree_window;
@@ -91,7 +92,6 @@ private:
 class Selection_tool
     : public erhe::application::Imgui_window
     , public erhe::components::Component
-    , public erhe::message_bus::Message_bus_node<Editor_message>
     , public Tool
 {
 public:
@@ -135,7 +135,7 @@ public:
     auto delete_selection() -> bool;
 
 private:
-    void call_selection_change_subscriptions() const;
+    void send_selection_change_message() const;
     void toggle_mesh_selection(
         const std::shared_ptr<erhe::scene::Mesh>& mesh,
         bool                                      was_selected,
@@ -147,11 +147,12 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Editor_scenes>     m_editor_scenes;
-    std::shared_ptr<Headset_view>      m_headset_view;
-    std::shared_ptr<Node_tree_window>  m_node_tree_window;
-    std::shared_ptr<Viewport_windows>  m_viewport_windows;
-    std::shared_ptr<Viewport_config>   m_viewport_config;
+    std::shared_ptr<Editor_message_bus> m_editor_message_bus;
+    std::shared_ptr<Editor_scenes>      m_editor_scenes;
+    std::shared_ptr<Headset_view>       m_headset_view;
+    std::shared_ptr<Node_tree_window>   m_node_tree_window;
+    std::shared_ptr<Viewport_windows>   m_viewport_windows;
+    std::shared_ptr<Viewport_config>    m_viewport_config;
 
     std::vector<std::shared_ptr<erhe::scene::Scene_item>> m_selection;
     Range_selection                                       m_range_selection;
