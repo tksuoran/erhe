@@ -6,3 +6,4 @@ build
 cmake-build-debug
 vscode-cmake-build
 log.txt
+releases

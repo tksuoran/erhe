@@ -19,8 +19,6 @@
 #include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
 #include "windows/operations.hpp"
-#include "xr/headset_view.hpp"
-
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
@@ -148,7 +146,6 @@ void Brush_tool::post_initialize()
     m_content_library_window = get<Content_library_window>();
     m_editor_scenes          = get<Editor_scenes         >();
     m_grid_tool              = get<Grid_tool             >();
-    m_headset_view           = get<Headset_view          >();
     m_operation_stack        = get<Operation_stack       >();
     m_selection_tool         = get<Selection_tool        >();
     m_viewport_windows       = get<Viewport_windows      >();

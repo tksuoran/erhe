@@ -293,7 +293,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 material_library.combo("Material", primitive.material, false);
                 if (primitive.material)
                 {
-                    ImGui::Text("Material Buffer Index: %zu", primitive.material->material_buffer_index);
+                    ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
                 }
                 else
                 {

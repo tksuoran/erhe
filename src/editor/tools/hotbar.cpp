@@ -298,7 +298,7 @@ void Hotbar::button(const glm::vec2 icon, const Action action, const char* toolt
 
     if (ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip(tooltip);
+        ImGui::SetTooltip("%s", tooltip);
     }
 
     if (m_action == action)
