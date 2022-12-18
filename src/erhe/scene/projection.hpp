@@ -68,10 +68,10 @@ public:
     [[nodiscard]] auto get_fov_sides(const Viewport viewport) const -> Fov_sides;
 
     Type  projection_type{Type::perspective_vertical};
-    float z_near         {  1.0f};
-    float z_far          {100.0};
-    float fov_x          {glm::half_pi<float>()};
-    float fov_y          {glm::half_pi<float>()};
+    float z_near         {  0.03f};
+    float z_far          {64.0};
+    float fov_x          {glm::pi<float>() / 4.0f};
+    float fov_y          {glm::pi<float>() / 4.0f};
     float fov_left       {-glm::pi<float>() / 4.0f};
     float fov_right      { glm::pi<float>() / 4.0f};
     float fov_up         { glm::pi<float>() / 4.0f};

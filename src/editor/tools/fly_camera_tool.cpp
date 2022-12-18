@@ -78,7 +78,7 @@ void Fly_camera_turn_command::try_ready(
 
 auto Fly_camera_tool::try_ready() -> bool
 {
-    const Scene_view* scene_view = get_scene_view();
+    const Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         return false;
@@ -125,7 +125,7 @@ auto Fly_camera_turn_command::try_call(
 {
     if (get_command_state() == erhe::application::State::Ready)
     {
-        if (m_fly_camera_tool.get_scene_view() == nullptr)
+        if (m_fly_camera_tool.get_hover_scene_view() == nullptr)
         {
             set_inactive(context);
             return false;

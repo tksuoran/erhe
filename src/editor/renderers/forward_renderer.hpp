@@ -34,7 +34,7 @@ namespace erhe::scene
     class Mesh;
     class Mesh_layer;
     class Node;
-    class Scene_item_filter;
+    class Item_filter;
 }
 
 namespace erhe::application
@@ -82,7 +82,7 @@ public:
         const std::initializer_list<Renderpass* const>                     passes;
         const erhe::graphics::Texture*                                     shadow_texture   {nullptr};
         const erhe::scene::Viewport&                                       viewport;
-        const erhe::scene::Scene_item_filter                               filter{};
+        const erhe::scene::Item_filter                                     filter{};
     };
 
     void render(const Render_parameters& parameters);

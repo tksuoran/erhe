@@ -46,8 +46,9 @@ public:
 
     // Implements Imgui_window
     void imgui               () override;
+    void hidden              () override;
     auto has_toolbar         () const -> bool override { return true; }
-    void toolbar             () override;
+    void toolbar             (bool& hovered) override;
     auto get_window_type_hash() const -> uint32_t override { return c_type_hash; }
     void on_begin            () override;
     void on_end              () override;

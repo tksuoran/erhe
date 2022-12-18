@@ -21,6 +21,11 @@ public:
         static_cast<void>(scale);
     }
 
+    void calculate_local_inertia(float mass, glm::mat4& inertia) const override;
+    auto is_convex              () const -> bool                       override;
+    auto get_center_of_mass     () const -> glm::vec3                  override;
+    auto get_mass_properties    () const -> Mass_properties            override;
+
 private:
     //ICollision_shape* m_shape{nullptr};
     //float             m_scale{1.0f};

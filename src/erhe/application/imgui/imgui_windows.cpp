@@ -146,6 +146,8 @@ void Imgui_windows::imgui_windows()
                 {
                     continue;
                 }
+                bool hidden = true;
+                bool toolbar_hovered = false;
                 if (imgui_window->is_visible())
                 {
                     auto window_id = fmt::format("##window-{}", ++i);
@@ -153,9 +155,17 @@ void Imgui_windows::imgui_windows()
                     const auto is_window_visible = imgui_window->begin();
                     if (is_window_visible)
                     {
+                        const auto before_cursor_pos = ImGui::GetCursorPos();
                         imgui_window->imgui();
+                        hidden = false;
+                        if (imgui_window->has_toolbar())
+                        {
+                            ImGui::SetCursorPos(before_cursor_pos);
+                            imgui_window->toolbar(toolbar_hovered);
+                        }
                     }
                     const auto window_position    = ImGui::GetWindowPos();
+                    const auto window_size        = ImGui::GetWindowSize();
                     const auto content_region_min = ImGui::GetWindowContentRegionMin();
                     const auto content_region_max = ImGui::GetWindowContentRegionMin();
                     const ImVec2 content_region_size{
@@ -167,38 +177,20 @@ void Imgui_windows::imgui_windows()
                         window_position.x + content_region_min.x,
                         window_position.y + content_region_min.y
                     };
-
-                    window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
-                    window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
-                    imgui_window->end();
-                    ImGui::PopID();
-
-                    if (is_window_visible && imgui_window->has_toolbar())
+                    const bool window_hovered = ImGui::IsWindowHovered();
+                    if (!toolbar_hovered && window_hovered)
                     {
-                        auto toolbar_id = fmt::format("##window-{}-toolbar", ++i);
-                        ImGui::SetNextWindowPos(
-                            ImVec2{
-                                window_position.x + content_region_min.x,
-                                window_position.y + content_region_min.y
-                            },
-                            ImGuiCond_Always
-                        );
-                        ImGui::SetNextWindowSize(content_region_size, ImGuiCond_Always);
-                        ImGui::SetNextWindowBgAlpha(0.0f); // Transparent background
-                        constexpr ImGuiWindowFlags toolbar_window_flags =
-                            ImGuiWindowFlags_NoDecoration       |
-                            ImGuiWindowFlags_NoDocking          |
-                            ImGuiWindowFlags_AlwaysAutoResize   |
-                            ImGuiWindowFlags_NoSavedSettings    |
-                            ImGuiWindowFlags_NoFocusOnAppearing |
-                            ImGuiWindowFlags_NoNav;
-
-                        if (ImGui::Begin(toolbar_id.c_str(), nullptr, toolbar_window_flags))
-                        {
-                            imgui_window->toolbar();
-                        }
-                        ImGui::End();
+                        window_wants_keyboard = window_wants_keyboard || imgui_window->want_keyboard_events();
+                        window_wants_mouse    = window_wants_mouse    || imgui_window->want_mouse_events();
                     }
+
+                    imgui_window->end();
+
+                    ImGui::PopID();
+                }
+                if (hidden)
+                {
+                    imgui_window->hidden();
                 }
             }
 

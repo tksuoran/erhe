@@ -25,18 +25,18 @@ namespace editor
 using erhe::raytrace::IGeometry;
 using erhe::raytrace::IInstance;
 using erhe::scene::Node_attachment;
-using erhe::scene::Scene_item_flags;
+using erhe::scene::Item_flags;
 
-auto raytrace_node_mask(erhe::scene::Scene_item& item) -> uint32_t
+auto raytrace_node_mask(erhe::scene::Item& item) -> uint32_t
 {
     uint32_t result{0};
     const uint64_t flags = item.get_flag_bits();
-    if ((flags & Scene_item_flags::content     ) != 0) result |= Raytrace_node_mask::content     ;
-    if ((flags & Scene_item_flags::shadow_cast ) != 0) result |= Raytrace_node_mask::shadow_cast ;
-    if ((flags & Scene_item_flags::tool        ) != 0) result |= Raytrace_node_mask::tool        ;
-    if ((flags & Scene_item_flags::brush       ) != 0) result |= Raytrace_node_mask::brush       ;
-    if ((flags & Scene_item_flags::rendertarget) != 0) result |= Raytrace_node_mask::rendertarget;
-    if ((flags & Scene_item_flags::controller  ) != 0) result |= Raytrace_node_mask::controller  ;
+    if ((flags & Item_flags::content     ) != 0) result |= Raytrace_node_mask::content     ;
+    if ((flags & Item_flags::shadow_cast ) != 0) result |= Raytrace_node_mask::shadow_cast ;
+    if ((flags & Item_flags::tool        ) != 0) result |= Raytrace_node_mask::tool        ;
+    if ((flags & Item_flags::brush       ) != 0) result |= Raytrace_node_mask::brush       ;
+    if ((flags & Item_flags::rendertarget) != 0) result |= Raytrace_node_mask::rendertarget;
+    if ((flags & Item_flags::controller  ) != 0) result |= Raytrace_node_mask::controller  ;
     return result;
 }
 
@@ -121,8 +121,6 @@ Node_raytrace::Node_raytrace(
 void Node_raytrace::initialize()
 {
     ERHE_PROFILE_FUNCTION
-
-    enable_flag_bits(erhe::scene::Scene_item_flags::raytrace);
 
     m_geometry = erhe::raytrace::IGeometry::create_unique(
         m_source_geometry->name + "_triangle_geometry",
@@ -210,14 +208,26 @@ Node_raytrace::~Node_raytrace() noexcept
     // TODO
 }
 
+auto Node_raytrace::static_type() -> uint64_t
+{
+    return
+        erhe::scene::Item_type::node_attachment |
+        erhe::scene::Item_type::raytrace;
+}
+
 auto Node_raytrace::static_type_name() -> const char*
 {
     return "Node_raytrace";
 }
 
+auto Node_raytrace::get_type() const -> uint64_t
+{
+    return static_type();
+}
+
 auto Node_raytrace::type_name() const -> const char*
 {
-    return "Node_raytrace";
+    return static_type_name();
 }
 
 void Node_raytrace::handle_node_scene_host_update(
@@ -263,8 +273,8 @@ void Node_raytrace::handle_node_transform_update()
 void Node_raytrace::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
     const bool visibility_changed = (
-        (old_flag_bits ^ new_flag_bits) & erhe::scene::Scene_item_flags::visible
-    ) == erhe::scene::Scene_item_flags::visible;
+        (old_flag_bits ^ new_flag_bits) & erhe::scene::Item_flags::visible
+    ) == erhe::scene::Item_flags::visible;
     if (!visibility_changed)
     {
         return;
@@ -272,7 +282,7 @@ void Node_raytrace::handle_flag_bits_update(const uint64_t old_flag_bits, const 
 
     ERHE_VERIFY(m_instance);
 
-    const bool visible = (new_flag_bits & erhe::scene::Scene_item_flags::visible) == erhe::scene::Scene_item_flags::visible;
+    const bool visible = (new_flag_bits & erhe::scene::Item_flags::visible) == erhe::scene::Item_flags::visible;
     if (visible && !m_instance->is_enabled())
     {
         SPDLOG_LOGGER_TRACE(log_raytrace, "enabling {} node raytrace", get_node()->name());
@@ -359,7 +369,7 @@ auto Node_raytrace::raytrace_instance() const -> const IInstance*
     return {};
 }
 
-auto is_raytrace(const erhe::scene::Scene_item* const scene_item) -> bool
+auto is_raytrace(const erhe::scene::Item* const scene_item) -> bool
 {
     if (scene_item == nullptr)
     {
@@ -367,17 +377,17 @@ auto is_raytrace(const erhe::scene::Scene_item* const scene_item) -> bool
     }
     using namespace erhe::toolkit;
     return test_all_rhs_bits_set(
-        scene_item->get_flag_bits(),
-        erhe::scene::Scene_item_flags::raytrace
+        scene_item->get_type(),
+        erhe::scene::Item_type::raytrace
     );
 }
 
-auto is_raytrace(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool
+auto is_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
 {
     return is_raytrace(scene_item.get());
 }
 
-auto as_raytrace(erhe::scene::Scene_item* scene_item) -> Node_raytrace*
+auto as_raytrace(erhe::scene::Item* scene_item) -> Node_raytrace*
 {
     if (scene_item == nullptr)
     {
@@ -386,8 +396,8 @@ auto as_raytrace(erhe::scene::Scene_item* scene_item) -> Node_raytrace*
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            scene_item->get_flag_bits(),
-            erhe::scene::Scene_item_flags::raytrace
+            scene_item->get_type(),
+            erhe::scene::Item_type::raytrace
         )
     )
     {
@@ -397,7 +407,7 @@ auto as_raytrace(erhe::scene::Scene_item* scene_item) -> Node_raytrace*
 }
 
 auto as_raytrace(
-    const std::shared_ptr<erhe::scene::Scene_item>& scene_item
+    const std::shared_ptr<erhe::scene::Item>& scene_item
 ) -> std::shared_ptr<Node_raytrace>
 {
     if (!scene_item)
@@ -407,8 +417,8 @@ auto as_raytrace(
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            scene_item->get_flag_bits(),
-            erhe::scene::Scene_item_flags::raytrace
+            scene_item->get_type(),
+            erhe::scene::Item_type::raytrace
         )
     )
     {

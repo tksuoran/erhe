@@ -14,11 +14,15 @@ namespace erhe::scene
 Camera::Camera(const std::string_view name)
     : Node_attachment{name}
 {
-    enable_flag_bits(Scene_item_flags::camera);
 }
 
 Camera::~Camera() noexcept
 {
+}
+
+auto Camera::static_type() -> uint64_t
+{
+    return Item_type::node_attachment | Item_type::camera;
 }
 
 auto Camera::static_type_name() -> const char*
@@ -26,9 +30,14 @@ auto Camera::static_type_name() -> const char*
     return "Camera";
 }
 
+auto Camera::get_type() const -> uint64_t
+{
+    return static_type();
+}
+
 auto Camera::type_name() const -> const char*
 {
-    return "Camera";
+    return static_type_name();
 }
 
 void Camera::handle_node_scene_host_update(
@@ -38,7 +47,7 @@ void Camera::handle_node_scene_host_update(
 {
     if (old_scene_host)
     {
-        Scene* scene = old_scene_host->get_scene();
+        Scene* scene = old_scene_host->get_hosted_scene();
         if (scene != nullptr)
         {
             scene->unregister_camera(
@@ -48,7 +57,7 @@ void Camera::handle_node_scene_host_update(
     }
     if (new_scene_host)
     {
-        Scene* scene = new_scene_host->get_scene();
+        Scene* scene = new_scene_host->get_hosted_scene();
         if (scene != nullptr)
         {
             scene->register_camera(
@@ -102,47 +111,47 @@ auto Camera::projection() const -> const Projection*
     return &m_projection;
 }
 
-auto is_camera(const Scene_item* const scene_item) -> bool
+auto is_camera(const Item* const item) -> bool
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return false;
     }
     using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::camera);
+    return test_all_rhs_bits_set(item->get_type(), Item_type::camera);
 }
 
-auto is_camera(const std::shared_ptr<Scene_item>& scene_item) -> bool
+auto is_camera(const std::shared_ptr<Item>& item) -> bool
 {
-    return is_camera(scene_item.get());
+    return is_camera(item.get());
 }
 
-auto as_camera(Scene_item* const scene_item) -> Camera*
+auto as_camera(Item* const item) -> Camera*
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return nullptr;
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::camera))
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::camera))
     {
         return nullptr;
     }
-    return reinterpret_cast<Camera*>(scene_item);
+    return reinterpret_cast<Camera*>(item);
 }
 
-auto as_camera(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<Camera>
+auto as_camera(const std::shared_ptr<Item>& item) -> std::shared_ptr<Camera>
 {
-    if (!scene_item)
+    if (!item)
     {
         return {};
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::camera))
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::camera))
     {
         return {};
     }
-    return std::static_pointer_cast<Camera>(scene_item);
+    return std::static_pointer_cast<Camera>(item);
 }
 
 auto get_camera(

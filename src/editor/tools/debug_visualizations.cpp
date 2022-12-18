@@ -224,7 +224,7 @@ void Debug_visualizations::light_visualization(
     const erhe::scene::Light*            light
 )
 {
-    if (!test_bits(light->get_flag_bits(), erhe::scene::Scene_item_flags::show_debug_visualizations))
+    if (!test_bits(light->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations))
     {
         return;
     }
@@ -532,7 +532,7 @@ void Debug_visualizations::camera_visualization(
         return;
     }
 
-    if (!test_bits(camera->get_flag_bits(), erhe::scene::Scene_item_flags::show_debug_visualizations))
+    if (!test_bits(camera->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations))
     {
         return;
     }
@@ -566,6 +566,12 @@ void Debug_visualizations::camera_visualization(
 
 void Debug_visualizations::selection_visualization(const Render_context& context)
 {
+    const auto* scene = context.get_scene();
+    if (scene == nullptr)
+    {
+        return;
+    }
+
     auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
     const auto& selection = m_selection_tool->selection();
@@ -576,6 +582,10 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         const auto& node = as_node(scene_item);
         if (node)
         {
+            if (node->get_scene() != scene)
+            {
+                continue;
+            }
             if (m_selection_node_axis_visible)
             {
                 const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
@@ -1094,7 +1104,7 @@ void Debug_visualizations::imgui()
     ////     ImGui::TextUnformatted(line.c_str());
     //// }
     //// m_lines.clear();
-    Scene_view* scene_view = get_scene_view();
+    Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         ImGui::Text("- No Scene_view - ");

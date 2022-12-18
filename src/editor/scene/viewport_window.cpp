@@ -3,6 +3,7 @@
 #include "scene/viewport_window.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_scenes.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/id_renderer.hpp"
@@ -73,6 +74,7 @@ Viewport_window::Viewport_window(
     : erhe::application::Rendergraph_node{name}
     , m_configuration                    {components.get<erhe::application::Configuration    >()}
     , m_pipeline_state_tracker           {components.get<erhe::graphics::OpenGL_state_tracker>()}
+    , m_editor_scenes                    {components.get<Editor_scenes   >()}
     , m_editor_rendering                 {components.get<Editor_rendering>()}
     , m_grid_tool                        {components.get<Grid_tool       >()}
     , m_physics_window                   {components.get<Physics_window  >()}
@@ -146,6 +148,19 @@ void Viewport_window::execute_rendergraph_node()
     {
         return;
     }
+
+    auto scene_root = m_scene_root.lock();
+    if (!scene_root)
+    {
+        return;
+    }
+
+    scene_root->get_editor_message_bus()->send_message(
+        Editor_message{
+            .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,
+            .scene_view   = this
+        }
+    );
 
     const Render_context context
     {
@@ -312,7 +327,7 @@ auto Viewport_window::unproject_to_world(
     );
 }
 
-void Viewport_window::raytrace()
+void Viewport_window::raytrace(Scene_root* tool_scene_root)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -328,7 +343,7 @@ void Viewport_window::raytrace()
     const glm::dvec3 ray_origin   {pointer_near.value()};
     const glm::dvec3 ray_direction{glm::normalize(pointer_far.value() - pointer_near.value())};
 
-    raytrace_update(ray_origin, ray_direction);
+    raytrace_update(ray_origin, ray_direction, tool_scene_root);
 }
 
 void Viewport_window::update_grid_hover()
@@ -361,7 +376,8 @@ void Viewport_window::update_grid_hover()
 
 void Viewport_window::update_pointer_context(
     Id_renderer&    id_renderer,
-    const glm::vec2 position_in_viewport
+    const glm::vec2 position_in_viewport,
+    Scene_root*     tool_scene_root
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -453,14 +469,14 @@ void Viewport_window::update_pointer_context(
 
         const uint64_t flags = id_query.mesh ? entry.mesh->get_flag_bits() : 0;
 
-        const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::content     );
-        const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::tool        );
-        const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::brush       );
-        const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Scene_item_flags::rendertarget);
+        const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::content     );
+        const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::tool        );
+        const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::brush       );
+        const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::rendertarget);
         SPDLOG_LOGGER_TRACE(
-            log_controller_ray,
+            log_frame,
             "hover mesh = {} primitive = {} local index {} {}{}{}{}",
-            entry.mesh ? entry.mesh->name() : "()",
+            entry.mesh ? entry.mesh->get_name() : "()",
             entry.primitive,
             entry.local_index,
             hover_content      ? "content "      : "",
@@ -481,7 +497,7 @@ void Viewport_window::update_pointer_context(
     }
     else
     {
-        raytrace();
+        raytrace(tool_scene_root);
     }
 
     update_grid_hover();
@@ -535,36 +551,91 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
     return shadow_render_node;
 }
 
-void Viewport_window::imgui_toolbar()
+auto Viewport_window::imgui_toolbar() -> bool
 {
+    bool hovered = false;
     if (m_trs_tool)
     {
-        m_trs_tool->viewport_toolbar();
+        m_trs_tool->viewport_toolbar(hovered);
     }
 
     if (m_grid_tool)
     {
-        m_grid_tool->viewport_toolbar();
+        m_grid_tool->viewport_toolbar(hovered);
     }
 
     if (m_physics_window)
     {
-        m_physics_window->viewport_toolbar();
+        m_physics_window->viewport_toolbar(hovered);
     }
 
     const float  rounding        {3.0f};
     const ImVec4 background_color{0.20f, 0.26f, 0.25f, 0.72f};
 
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(150.0f);
-    erhe::application::make_text_with_background("Camera:", rounding, background_color);
+    ImGui::SetNextItemWidth(110.0f);
+    erhe::application::make_text_with_background("Scene:", rounding, background_color);
+    if (ImGui::IsItemHovered())
+    {
+        hovered = true;
+    }
     ImGui::SameLine();
+    auto       old_scene_root = m_scene_root;
+    auto       scene_root     = get_scene_root();
+    ImGui::SetNextItemWidth(110.0f);
+    const bool combo_used     = m_editor_scenes->scene_combo("##Scene", scene_root, false);
+    if (ImGui::IsItemHovered())
+    {
+        hovered = true;
+    }
+    if (combo_used)
+    {
+        m_scene_root = scene_root;
+        if (old_scene_root.lock() != scene_root)
+        {
+            if (scene_root)
+            {
+                const auto& cameras = scene_root->get_hosted_scene()->get_cameras();
+                m_camera = cameras.empty() ? std::weak_ptr<erhe::scene::Camera>{} : cameras.front();
+            }
+            else
+            {
+                m_camera.reset();
+            }
+        }
+    }
+    scene_root = get_scene_root();
+    if (!scene_root)
+    {
+        return hovered;
+    }
+
+    //get_scene_root()->camera_combo("##Camera", m_camera);
+
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(110.0f);
+    erhe::application::make_text_with_background("Camera:", rounding, background_color);
+    if (ImGui::IsItemHovered())
+    {
+        hovered = true;
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(110.0f);
     get_scene_root()->camera_combo("##Camera", m_camera);
+    if (ImGui::IsItemHovered())
+    {
+        hovered = true;
+    }
+
     ImGui::SameLine();
 
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(140.0f);
+    ImGui::SetNextItemWidth(110.0f);
     erhe::application::make_text_with_background("Shader:", rounding, background_color);
+    if (ImGui::IsItemHovered())
+    {
+        hovered = true;
+    }
     ImGui::SameLine();
     ImGui::Combo(
         "##Shader",
@@ -573,14 +644,18 @@ void Viewport_window::imgui_toolbar()
         IM_ARRAYSIZE(c_shader_stages_variant_strings),
         IM_ARRAYSIZE(c_shader_stages_variant_strings)
     );
-    ImGui::SameLine();
-
-    const auto& post_processing_node = m_post_processing_node.lock();
-    if (post_processing_node)
+    if (ImGui::IsItemHovered())
     {
-        ImGui::SameLine();
-        post_processing_node->imgui_toolbar();
+        hovered = true;
     }
+
+    //// const auto& post_processing_node = m_post_processing_node.lock();
+    //// if (post_processing_node)
+    //// {
+    ////     ImGui::SameLine();
+    ////     post_processing_node->imgui_toolbar();
+    //// }
+    return hovered;
 }
 
 void Viewport_window::link_to(std::weak_ptr<erhe::application::Multisample_resolve_node> node)

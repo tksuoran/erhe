@@ -509,7 +509,7 @@ private:
         new_light->inner_spot_angle = light->spot_inner_cone_angle;
         new_light->outer_spot_angle = light->spot_outer_cone_angle;
 
-        new_light->layer_id = m_scene_root->layers().light()->id.get_id();
+        new_light->layer_id = m_scene_root->layers().light()->id;
 
         erhe_node->attach(new_light);
         m_lights[light_index] = new_light;
@@ -1152,13 +1152,13 @@ private:
         }
 
         erhe_mesh->enable_flag_bits(
-            erhe::scene::Scene_item_flags::visible     |
-            erhe::scene::Scene_item_flags::content     |
-            erhe::scene::Scene_item_flags::shadow_cast |
-            erhe::scene::Scene_item_flags::id
+            erhe::scene::Item_flags::visible     |
+            erhe::scene::Item_flags::content     |
+            erhe::scene::Item_flags::shadow_cast |
+            erhe::scene::Item_flags::id
         );
 
-        erhe_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id.get_id();
+        erhe_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
         erhe_node->attach(erhe_mesh);
         m_meshes[mesh_index] = erhe_mesh;
     }

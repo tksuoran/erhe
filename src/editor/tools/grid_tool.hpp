@@ -116,7 +116,7 @@ public:
     void imgui() override;
 
     // Public API
-    void viewport_toolbar();
+    void viewport_toolbar(bool& hovered);
 
     auto update_hover(
         const glm::dvec3 ray_origin,

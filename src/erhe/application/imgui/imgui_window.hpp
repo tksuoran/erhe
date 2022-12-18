@@ -54,12 +54,13 @@ public:
     virtual void set_viewport(Imgui_viewport* imgui_viewport);
 
     virtual void imgui               () = 0;
+    virtual void hidden              ();
     virtual auto get_window_type_hash() const -> uint32_t;
     virtual void on_begin            ();
     virtual void on_end              ();
     virtual auto flags               () -> ImGuiWindowFlags;
     virtual auto has_toolbar         () const -> bool;
-    virtual void toolbar             ();
+    virtual void toolbar             (bool& hovered);
     virtual auto want_keyboard_events() const -> bool;
     virtual auto want_mouse_events   () const -> bool;
 

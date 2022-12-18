@@ -94,11 +94,26 @@ public:
     glm::vec2 mesh_icosphere   {};
     glm::vec2 mesh_torus       {};
     glm::vec2 mesh_uvsphere    {};
+    glm::vec2 mouse_lmb        {};
+    glm::vec2 mouse_lmb_drag   {};
+    glm::vec2 mouse_mmb        {};
+    glm::vec2 mouse_mmb_drag   {};
+    glm::vec2 mouse_move       {};
+    glm::vec2 mouse_rmb        {};
+    glm::vec2 mouse_rmb_drag   {};
     glm::vec2 move             {};
     glm::vec2 node             {};
     glm::vec2 rotate           {};
     glm::vec2 select           {};
+    glm::vec2 scene            {};
+    glm::vec2 space_mouse      {};
+    glm::vec2 space_mouse_lmb  {};
+    glm::vec2 space_mouse_rmb  {};
     glm::vec2 three_dots       {};
+    glm::vec2 vive             {};
+    glm::vec2 vive_menu        {};
+    glm::vec2 vive_trigger     {};
+    glm::vec2 vive_trackpad    {};
 };
 
 class Icon_set

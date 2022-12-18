@@ -130,7 +130,9 @@ public:
 
     auto open_new_viewport_window(
         const std::shared_ptr<Scene_root>& scene_root = {}
-    ) -> bool;
+    ) -> std::shared_ptr<Viewport_window>;
+
+    void open_new_imgui_viewport_window();
 
     //void update_hover();
     void reset_hover ();

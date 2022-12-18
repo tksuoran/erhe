@@ -35,6 +35,11 @@ public:
 
     [[nodiscard]] auto get_scene_roots       () -> const std::vector<std::shared_ptr<Scene_root>>&;
     [[nodiscard]] auto get_current_scene_root() -> const std::shared_ptr<Scene_root>&;
+    [[nodiscard]] auto scene_combo(
+        const char*                  label,
+        std::shared_ptr<Scene_root>& in_out_selected_entry,
+        const bool                   empty_option
+    ) const -> bool;
 
 private:
     std::mutex                               m_mutex;

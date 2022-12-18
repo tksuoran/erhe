@@ -31,7 +31,6 @@ Node_physics::Node_physics(
     , m_rigid_body     {IRigid_body::create_rigid_body_shared(create_info, this)}
     , m_collision_shape{create_info.collision_shape}
 {
-    enable_flag_bits(erhe::scene::Scene_item_flags::physics);
     log_physics->trace("Created Node_physics {}", create_info.debug_label);
 }
 
@@ -40,14 +39,24 @@ Node_physics::~Node_physics() noexcept
     set_node(nullptr);
 }
 
+auto Node_physics::static_type() -> uint64_t
+{
+    return erhe::scene::Item_type::node_attachment | erhe::scene::Item_type::physics;
+}
+
 auto Node_physics::static_type_name() -> const char*
 {
     return "Node_physics";
 }
 
+auto Node_physics::get_type() const -> uint64_t
+{
+    return static_type();
+}
+
 auto Node_physics::type_name() const -> const char*
 {
-    return "Node_physics";
+    return static_type_name();
 }
 
 void Node_physics::handle_node_scene_host_update(
@@ -237,7 +246,7 @@ auto Node_physics::rigid_body() const -> const IRigid_body*
     return m_rigid_body.get();
 }
 
-auto is_physics(const erhe::scene::Scene_item* const scene_item) -> bool
+auto is_physics(const erhe::scene::Item* const scene_item) -> bool
 {
     if (scene_item == nullptr)
     {
@@ -245,17 +254,17 @@ auto is_physics(const erhe::scene::Scene_item* const scene_item) -> bool
     }
     using namespace erhe::toolkit;
     return test_all_rhs_bits_set(
-        scene_item->get_flag_bits(),
-        erhe::scene::Scene_item_flags::physics
+        scene_item->get_type(),
+        erhe::scene::Item_type::physics
     );
 }
 
-auto is_physics(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool
+auto is_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
 {
     return is_physics(scene_item.get());
 }
 
-auto as_physics(erhe::scene::Scene_item* scene_item) -> Node_physics*
+auto as_physics(erhe::scene::Item* scene_item) -> Node_physics*
 {
     if (scene_item == nullptr)
     {
@@ -264,8 +273,8 @@ auto as_physics(erhe::scene::Scene_item* scene_item) -> Node_physics*
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            scene_item->get_flag_bits(),
-            erhe::scene::Scene_item_flags::physics
+            scene_item->get_type(),
+            erhe::scene::Item_type::physics
         )
     )
     {
@@ -275,7 +284,7 @@ auto as_physics(erhe::scene::Scene_item* scene_item) -> Node_physics*
 }
 
 auto as_physics(
-    const std::shared_ptr<erhe::scene::Scene_item>& scene_item
+    const std::shared_ptr<erhe::scene::Item>& scene_item
 ) -> std::shared_ptr<Node_physics>
 {
     if (!scene_item)
@@ -285,8 +294,8 @@ auto as_physics(
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            scene_item->get_flag_bits(),
-            erhe::scene::Scene_item_flags::physics
+            scene_item->get_type(),
+            erhe::scene::Item_type::physics
         )
     )
     {

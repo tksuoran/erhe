@@ -75,19 +75,20 @@ auto Handle_visualizations::get_handle_visibility(const Handle handle) const -> 
 }
 
 void Handle_visualizations::update_mesh_visibility(
-    const std::shared_ptr<erhe::scene::Mesh>& mesh
+    const std::shared_ptr<erhe::scene::Mesh>& mesh,
+    bool                                      trs_visible
 )
 {
     const auto active_handle = m_trs_tool.get_active_handle();
     const auto hover_handle  = m_trs_tool.get_hover_handle();
-    const bool show_all      = m_is_visible && (active_handle == Handle::e_handle_none); // nothing is active, so show all handles
+    const bool show_all      = (active_handle == Handle::e_handle_none); // nothing is active, so show all handles
     const auto handle        = m_trs_tool.get_handle(mesh.get());
     const bool show          = get_handle_visibility(handle);
     const bool translate_x   = m_trs_tool.is_x_translate_active() && (handle == Handle::e_handle_translate_x);
     const bool translate_y   = m_trs_tool.is_y_translate_active() && (handle == Handle::e_handle_translate_y);
     const bool translate_z   = m_trs_tool.is_z_translate_active() && (handle == Handle::e_handle_translate_z);
 
-    const bool visible = show &&
+    const bool visible = trs_visible && show &&
         (
             !m_hide_inactive ||
             (active_handle == handle) ||
@@ -110,23 +111,24 @@ void Handle_visualizations::update_visibility(
     const bool visible
 )
 {
-    m_is_visible = visible;
-    update_mesh_visibility(m_x_arrow_cylinder_mesh);
-    update_mesh_visibility(m_x_arrow_neg_cone_mesh);
-    update_mesh_visibility(m_x_arrow_pos_cone_mesh);
-    update_mesh_visibility(m_y_arrow_cylinder_mesh);
-    update_mesh_visibility(m_y_arrow_neg_cone_mesh);
-    update_mesh_visibility(m_y_arrow_pos_cone_mesh);
-    update_mesh_visibility(m_z_arrow_cylinder_mesh);
-    update_mesh_visibility(m_z_arrow_neg_cone_mesh);
-    update_mesh_visibility(m_z_arrow_pos_cone_mesh);
-    update_mesh_visibility(m_xy_box_mesh          );
-    update_mesh_visibility(m_xz_box_mesh          );
-    update_mesh_visibility(m_yz_box_mesh          );
-    update_mesh_visibility(m_x_rotate_ring_mesh   );
-    update_mesh_visibility(m_y_rotate_ring_mesh   );
-    update_mesh_visibility(m_z_rotate_ring_mesh   );
+    update_mesh_visibility(m_x_arrow_cylinder_mesh, visible);
+    update_mesh_visibility(m_x_arrow_neg_cone_mesh, visible);
+    update_mesh_visibility(m_x_arrow_pos_cone_mesh, visible);
+    update_mesh_visibility(m_y_arrow_cylinder_mesh, visible);
+    update_mesh_visibility(m_y_arrow_neg_cone_mesh, visible);
+    update_mesh_visibility(m_y_arrow_pos_cone_mesh, visible);
+    update_mesh_visibility(m_z_arrow_cylinder_mesh, visible);
+    update_mesh_visibility(m_z_arrow_neg_cone_mesh, visible);
+    update_mesh_visibility(m_z_arrow_pos_cone_mesh, visible);
+    update_mesh_visibility(m_xy_box_mesh          , visible);
+    update_mesh_visibility(m_xz_box_mesh          , visible);
+    update_mesh_visibility(m_yz_box_mesh          , visible);
+    update_mesh_visibility(m_x_rotate_ring_mesh   , visible);
+    update_mesh_visibility(m_y_rotate_ring_mesh   , visible);
+    update_mesh_visibility(m_z_rotate_ring_mesh   , visible);
 }
+
+//// TODO Fix https://github.com/tksuoran/erhe/issues/31
 
 auto Handle_visualizations::make_mesh(
     const std::string_view                            name,
@@ -148,9 +150,9 @@ auto Handle_visualizations::make_mesh(
     );
 
     mesh->enable_flag_bits(
-        //erhe::scene::Scene_item_flags::visible |
-        erhe::scene::Scene_item_flags::tool |
-        erhe::scene::Scene_item_flags::id
+        //erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::tool |
+        erhe::scene::Item_flags::id
     );
 
     node->attach(mesh);
@@ -164,7 +166,7 @@ auto Handle_visualizations::make_mesh(
     }
 
     const auto scene_root    = m_trs_tool.get_tool_scene_root();
-    const auto tool_layer_id = scene_root->layers().tool()->id.get_id();
+    const auto tool_layer_id = scene_root->layers().tool()->id;
     mesh->mesh_data.layer_id = tool_layer_id;
     node->set_parent(m_tool_node);
     return mesh;
@@ -339,7 +341,7 @@ void Handle_visualizations::initialize(
 
     m_tool_node = std::make_shared<erhe::scene::Node>("Trs");
     const auto scene_root = m_trs_tool.get_tool_scene_root();
-    m_tool_node->set_parent(scene_root->get_scene()->get_root_node());
+    m_tool_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
 
     m_scale          = configuration.trs_tool.scale;
     m_show_translate = configuration.trs_tool.show_translate;
@@ -547,11 +549,11 @@ void Handle_visualizations::imgui()
 #endif
 }
 
-void Handle_visualizations::viewport_toolbar(const Icon_set& icon_set)
+void Handle_visualizations::viewport_toolbar(bool& hovered, const Icon_set& icon_set)
 {
     const auto& icon_rasterication = icon_set.get_small_rasterization();
 
-    ImGui::SameLine();
+    //ImGui::SameLine();
     const auto local_pressed = erhe::application::make_button(
         "L",
         m_local
@@ -560,6 +562,7 @@ void Handle_visualizations::viewport_toolbar(const Icon_set& icon_set)
     );
     if (ImGui::IsItemHovered())
     {
+        hovered = true;
         ImGui::SetTooltip("Transform in Local space");
     }
     if (local_pressed)
@@ -576,6 +579,7 @@ void Handle_visualizations::viewport_toolbar(const Icon_set& icon_set)
     );
     if (ImGui::IsItemHovered())
     {
+        hovered = true;
         ImGui::SetTooltip("Transform in World space");
     }
     if (global_pressed)
@@ -600,6 +604,7 @@ void Handle_visualizations::viewport_toolbar(const Icon_set& icon_set)
         erhe::application::end_button_style(mode);
         if (ImGui::IsItemHovered())
         {
+            hovered = true;
             ImGui::SetTooltip(
                 m_show_translate
                     ? "Hide Translate Tool"
@@ -629,6 +634,7 @@ void Handle_visualizations::viewport_toolbar(const Icon_set& icon_set)
         erhe::application::end_button_style(mode);
         if (ImGui::IsItemHovered())
         {
+            hovered = true;
             ImGui::SetTooltip(
                 m_show_rotate
                     ? "Hide Rotate Tool"

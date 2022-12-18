@@ -1,3 +1,8 @@
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4702) // unreachable code
+#endif
+
 #include <fmt/chrono.h>
 
 #include "erhe/raytrace/bvh/bvh_geometry.hpp"
@@ -12,11 +17,14 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timer.hpp"
 
-#include <bvh/sphere.hpp>
-#include <bvh/ray.hpp>
-#include <bvh/sweep_sah_builder.hpp>
-#include <bvh/single_ray_traverser.hpp>
-#include <bvh/primitive_intersectors.hpp>
+#include <bvh/v2/bvh.h>
+#include <bvh/v2/default_builder.h>
+#include <bvh/v2/executor.h>
+#include <bvh/v2/node.h>
+#include <bvh/v2/ray.h>
+#include <bvh/v2/sphere.h>
+#include <bvh/v2/stack.h>
+#include <bvh/v2/thread_pool.h>
 
 #include <set>
 
@@ -58,36 +66,25 @@ Bvh_geometry::Bvh_geometry(
 
 Bvh_geometry::~Bvh_geometry() noexcept = default;
 
-//// auto Bvh_geometry::get_element_count() const -> std::size_t
-//// {
-////     return 1;
-//// }
-//// 
-//// auto Bvh_geometry::get_element_point_count(std::size_t element_index) const -> std::size_t
-//// {
-////     static_cast<void>(element_index);
-////     return m_points.size();
-//// }
-//// 
-//// auto Bvh_geometry::get_point(std::size_t element_index, std::size_t point_index) const -> std::optional<glm::vec3>
-//// {
-////     static_cast<void>(element_index);
-////     if (point_index < m_points.size())
-////     {
-////         return m_points[point_index];
-////     }
-////     return {};
-//// }
+using Scalar         = float;
+using Vec3           = bvh::v2::Vec<Scalar, 3>;
+using BBox           = bvh::v2::BBox<Scalar, 3>;
+using Tri            = bvh::v2::Tri<Scalar, 3>;
+using Node           = bvh::v2::Node<Scalar, 3>;
+using Bvh            = bvh::v2::Bvh<Node>;
+using PrecomputedTri = bvh::v2::PrecomputedTri<Scalar>;
+
+static constexpr bool should_permute = false; //// TODO
+
+// TODO Are these ok here?
+bvh::v2::ThreadPool thread_pool;
+bvh::v2::ParallelExecutor executor{thread_pool};
 
 void Bvh_geometry::commit()
 {
     ERHE_PROFILE_FUNCTION
 
-    //// erhe::toolkit::Timer build_timer{"Bvh_geometry::commit()"};
-
     {
-        //// erhe::toolkit::Scoped_timer scoped_timer{build_timer};
-
         const Buffer_info* index_buffer_info{nullptr};
         const Buffer_info* vertex_buffer_info{nullptr};
         for (const auto& buffer : m_buffer_infos)
@@ -133,22 +130,20 @@ void Bvh_geometry::commit()
 
         const char* raw_index_ptr  = reinterpret_cast<char*>(index_buffer ->span().data()) + index_buffer_info ->byte_offset;
         const char* raw_vertex_ptr = reinterpret_cast<char*>(vertex_buffer->span().data()) + vertex_buffer_info->byte_offset;
+        const std::size_t triangle_count = index_buffer_info->item_count;
 
-        m_triangles.clear();
-        m_triangles.reserve(index_buffer_info->item_count / 3);
-        ////std::set<uint32_t> unique_indices;
+        std::vector<Tri> tris;
+
+        std::vector<BBox> bboxes(triangle_count);
+        std::vector<Vec3> centers(triangle_count);
         {
             ERHE_PROFILE_SCOPE("collect indices")
 
-            for (std::size_t i = 0; i < index_buffer_info->item_count; ++i)
+            for (std::size_t i = 0; i < triangle_count; ++i)
             {
                 const uint32_t i0 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(uint32_t));
                 const uint32_t i1 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(uint32_t));
                 const uint32_t i2 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(uint32_t));
-
-                ////unique_indices.insert(i0);
-                ////unique_indices.insert(i1);
-                ////unique_indices.insert(i2);
 
                 const float p0_x = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 0 * sizeof(float));
                 const float p0_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i0 * index_buffer_info->byte_stride + 1 * sizeof(float));
@@ -162,75 +157,44 @@ void Bvh_geometry::commit()
                 const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 1 * sizeof(float));
                 const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 2 * sizeof(float));
 
-                m_triangles.emplace_back(
-                    bvh::Vector3<float>(p0_x, p0_y, p0_z),
-                    bvh::Vector3<float>(p1_x, p1_y, p1_z),
-                    bvh::Vector3<float>(p2_x, p2_y, p2_z)
-                );
+                const bvh::v2::Tri<float, 3> triangle{
+                    Vec3{p0_x, p0_y, p0_z},
+                    Vec3{p1_x, p1_y, p1_z},
+                    Vec3{p2_x, p2_y, p2_z}
+                };
+                tris.emplace_back(triangle);
+                bboxes[i] = triangle.get_bbox();
+                centers[i] = triangle.get_center();
             }
         }
 
-        //// {
-        ////     ERHE_PROFILE_SCOPE("collect vertices")
-        ////     for (const auto i : unique_indices)
-        ////     {
-        ////         const float x = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(float));
-        ////         const float y = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(float));
-        ////         const float z = *reinterpret_cast<const float*>(raw_vertex_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(float));
-        //// 
-        ////         m_points.emplace_back(x, y, z);
-        ////     }
-        //// }
+        typename bvh::v2::DefaultBuilder<Node>::Config config;
+        //config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High;
+        config.quality = bvh::v2::DefaultBuilder<Node>::Quality::Low;
+        m_bvh = bvh::v2::DefaultBuilder<Node>::build(
+            thread_pool,
+            bboxes,
+            centers,
+            config
+        );
 
-        {
-            ERHE_PROFILE_SCOPE("bbox")
-            auto [bboxes, centers] = bvh::compute_bounding_boxes_and_centers<bvh::Triangle<float>>(
-                m_triangles.data(),
-                m_triangles.size()
-            );
-            m_bounding_boxes = std::move(bboxes);
-            m_centers        = std::move(centers);
-        }
-        {
-            ERHE_PROFILE_SCOPE("bbox union")
-            m_global_bbox    = bvh::compute_bounding_boxes_union<float>(
-                m_bounding_boxes.get(),
-                m_triangles.size()
-            );
-        }
-
-        // Create an acceleration data structure on the primitives
-        {
-            ERHE_PROFILE_SCOPE("SweepSahBuilder")
-            bvh::SweepSahBuilder<bvh::Bvh<float>> builder{m_bvh};
-            builder.build(
-                m_global_bbox,
-                m_bounding_boxes.get(),
-                m_centers.get(),
-                m_triangles.size()
-            );
-        }
-
-        //// erhe::toolkit::calculate_bounding_volume(*this, m_bounding_box, m_bounding_sphere);
+        // This precomputes some data to speed up traversal further.
+        m_precomputed_triangles.clear();
+        m_precomputed_triangles.resize(tris.size());
+        executor.for_each(
+            0,
+            tris.size(),
+            [&] (const size_t begin, const size_t end)
+            {
+                for (size_t i = begin; i < end; ++i)
+                {
+                    auto j = should_permute ? m_bvh.prim_ids[i] : i;
+                    m_precomputed_triangles[i] = tris[j];
+                }
+            }
+        );
     }
 
-    //// const auto duration = build_timer.duration().value();
-    //// if (duration >= std::chrono::milliseconds(1))
-    //// {
-    ////     log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::milliseconds>(build_timer.duration().value()));
-    //// }
-    //// else if (duration >= std::chrono::microseconds(1))
-    //// {
-    ////     log_geometry->trace("build time:             {}", std::chrono::duration_cast<std::chrono::microseconds>(build_timer.duration().value()));
-    //// }
-    //// else
-    //// {
-    ////     log_geometry->trace("build time:             {}", build_timer.duration().value());
-    //// }
-    //// log_geometry->trace("bvh triangle count:     {}", m_triangles.size());
-    //// log_geometry->trace("bvh point count:        {}", m_points.size());
-    //// log_geometry->trace("bounding box volume:    {}", m_bounding_box.volume());
-    //// log_geometry->trace("bounding sphere volume: {}", m_bounding_sphere.volume());
 }
 
 void Bvh_geometry::enable()
@@ -294,29 +258,50 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
     const auto transform = (instance != nullptr)
         ? instance->get_transform()
         : glm::mat4{1.0};
-    bvh::Ray bvh_ray{
+    bvh::v2::Ray<Scalar, 3> bvh_ray{
         to_bvh(ray.origin),
         to_bvh(ray.direction),
         ray.t_near,
         ray.t_far
     };
 
-    bvh::ClosestPrimitiveIntersector<bvh::Bvh<float>, bvh::Triangle<float>> primitive_intersector{
-        m_bvh,
-        m_triangles.data()
-    };
-    bvh::SingleRayTraverser<bvh::Bvh<float>> traverser{m_bvh};
+    static constexpr size_t invalid_id = std::numeric_limits<size_t>::max();
+    static constexpr size_t stack_size = 64;
+    static constexpr bool   use_robust_traversal = false;
 
-    if (auto bvh_hit = traverser.traverse(bvh_ray, primitive_intersector))
+    auto  prim_id = invalid_id;
+    float u;
+    float v;
+
+    // Traverse the BVH and get the u, v coordinates of the closest intersection.
+    bvh::v2::SmallStack<Bvh::Index, stack_size> stack;
+    m_bvh.intersect<false, use_robust_traversal>(
+        bvh_ray,
+        m_bvh.get_root().index,
+        stack,
+        [&] (const size_t begin, const size_t end)
+        {
+            for (size_t i = begin; i < end; ++i)
+            {
+                size_t j = should_permute ? i : m_bvh.prim_ids[i];
+                if (auto hit = m_precomputed_triangles[j].intersect(bvh_ray))
+                {
+                    prim_id = i;
+                    std::tie(u, v) = *hit;
+                }
+            }
+            return prim_id != invalid_id;
+        }
+    );
+
+    if (prim_id != invalid_id)
     {
-        const auto triangle_index = bvh_hit->primitive_index;
-        const auto intersection   = bvh_hit->intersection;
+        const auto triangle_index = should_permute ? prim_id : m_bvh.prim_ids[prim_id];
+        const auto& triangle = m_precomputed_triangles.at(triangle_index);
 
-        const auto& triangle = m_triangles.at(triangle_index);
-
-        ray.t_far        = intersection.t;
+        ray.t_far        = bvh_ray.tmax;
         hit.primitive_id = static_cast<unsigned int>(triangle_index);
-        hit.uv           = glm::vec2{intersection.u, intersection.v};
+        hit.uv           = glm::vec2{u, v};
         hit.normal       = glm::vec3{transform * glm::vec4{from_bvh(triangle.n), 0.0f}};
         hit.instance     = instance;
         hit.geometry     = this;
@@ -347,3 +332,7 @@ auto Bvh_geometry::debug_label() const -> std::string_view
 
 
 } // namespace erhe::raytrace
+
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#endif

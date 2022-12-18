@@ -95,7 +95,8 @@ public:
     ) const -> erhe::scene::Viewport override;
 
     // Overrides Framebuffer_window / Imgui_window
-    void imgui() override;
+    void imgui () override;
+    void hidden() override;
 
 private:
     // Component dependencies

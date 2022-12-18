@@ -58,9 +58,13 @@ public:
     ~Light() noexcept override;
 
     // Implements Node_attachment
+    [[nodiscard]] static auto static_type     () -> uint64_t;
     [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto type_name() const -> const char* override;
     void handle_node_scene_host_update(Scene_host* old_scene_host, Scene_host* new_scene_host) override;
+
+    // Implements Item
+    [[nodiscard]] auto get_type () const -> uint64_t override;
+    [[nodiscard]] auto type_name() const -> const char* override;
 
     // Public API
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
@@ -105,10 +109,10 @@ private:
     };
 };
 
-[[nodiscard]] auto is_light(const Scene_item* const scene_item) -> bool;
-[[nodiscard]] auto is_light(const std::shared_ptr<Scene_item>& scene_item) -> bool;
-[[nodiscard]] auto as_light(Scene_item* const scene_item) -> Light*;
-[[nodiscard]] auto as_light(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<Light>;
+[[nodiscard]] auto is_light(const Item* const scene_item) -> bool;
+[[nodiscard]] auto is_light(const std::shared_ptr<Item>& scene_item) -> bool;
+[[nodiscard]] auto as_light(Item* const scene_item) -> Light*;
+[[nodiscard]] auto as_light(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Light>;
 
 auto get_light(const erhe::scene::Node* node) -> std::shared_ptr<Light>;
 

@@ -40,7 +40,7 @@ enum class Selection_usage : unsigned int
     Selection_used
 };
 
-class Node_state
+class Tree_node_state
 {
 public:
     bool is_open      {false};
@@ -73,8 +73,8 @@ public:
     [[nodiscard]] auto expand_attachments() const -> bool;
 
 private:
-    void set_item_selection_terminator(const std::shared_ptr<erhe::scene::Scene_item>& item);
-    void set_item_selection           (const std::shared_ptr<erhe::scene::Scene_item>& item, bool selected);
+    void set_item_selection_terminator(const std::shared_ptr<erhe::scene::Item>& item);
+    void set_item_selection           (const std::shared_ptr<erhe::scene::Item>& item, bool selected);
     void clear_selection              ();
     void recursive_add_to_selection   (const std::shared_ptr<erhe::scene::Node>& node);
     void select_all                   ();
@@ -89,15 +89,15 @@ private:
         erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
     );
 
-    void item_popup_menu      (const std::shared_ptr<erhe::scene::Scene_item>& item);
-    void item_icon            (const std::shared_ptr<erhe::scene::Scene_item>& item);
-    auto item_icon_and_text   (const std::shared_ptr<erhe::scene::Scene_item>& item, bool update) -> Node_state;
-    void item_update_selection(const std::shared_ptr<erhe::scene::Scene_item>& item);
-    void imgui_item_node      (const std::shared_ptr<erhe::scene::Scene_item>& item);
+    void item_popup_menu      (const std::shared_ptr<erhe::scene::Item>& item);
+    void item_icon            (const std::shared_ptr<erhe::scene::Item>& item);
+    auto item_icon_and_text   (const std::shared_ptr<erhe::scene::Item>& item, bool update) -> Tree_node_state;
+    void item_update_selection(const std::shared_ptr<erhe::scene::Item>& item);
+    void imgui_item_node      (const std::shared_ptr<erhe::scene::Item>& item);
 
     auto get_item_by_id(
-        const erhe::toolkit::Unique_id<erhe::scene::Scene_item>::id_type id
-    ) const -> std::shared_ptr<erhe::scene::Scene_item>;
+        const erhe::toolkit::Unique_id<erhe::scene::Item>::id_type id
+    ) const -> std::shared_ptr<erhe::scene::Item>;
 
     void try_add_to_attach(
         Compound_operation::Parameters&           compound_parameters,
@@ -113,8 +113,8 @@ private:
         Placement                                 placement,
         Selection_usage                           selection_usage
     );
-    void drag_and_drop_source(const std::shared_ptr<erhe::scene::Scene_item>& node);
-    auto drag_and_drop_target(const std::shared_ptr<erhe::scene::Scene_item>& node) -> bool;
+    void drag_and_drop_source(const std::shared_ptr<erhe::scene::Item>& node);
+    auto drag_and_drop_target(const std::shared_ptr<erhe::scene::Item>& node) -> bool;
 
     // Component dependencies
     std::shared_ptr<Editor_scenes>  m_editor_scenes;
@@ -123,25 +123,27 @@ private:
     std::shared_ptr<Selection_tool> m_selection_tool;
 
     robin_hood::unordered_map<
-        erhe::toolkit::Unique_id<erhe::scene::Scene_item>::id_type,
-        std::shared_ptr<erhe::scene::Scene_item>
+        erhe::toolkit::Unique_id<erhe::scene::Item>::id_type,
+        std::shared_ptr<erhe::scene::Item>
     > m_tree_items;
 
     robin_hood::unordered_map<
-        erhe::toolkit::Unique_id<erhe::scene::Scene_item>::id_type,
-        std::shared_ptr<erhe::scene::Scene_item>
+        erhe::toolkit::Unique_id<erhe::scene::Item>::id_type,
+        std::shared_ptr<erhe::scene::Item>
     > m_tree_items_last_frame;
 
-    std::shared_ptr<IOperation>              m_operation;
-    std::vector<std::function<void()>>       m_operations;
+    std::shared_ptr<IOperation>        m_operation;
+    std::vector<std::function<void()>> m_operations;
 
-    bool                                     m_expand_attachments{false};
-    std::weak_ptr<erhe::scene::Scene_item>   m_last_focus_item;
-    std::shared_ptr<erhe::scene::Scene_item> m_popup_item;
-    std::string                              m_popup_id_string;
-    unsigned int                             m_popup_id{0};
+    bool                               m_expand_attachments{false};
+    bool                               m_toggled_open      {false};
+    std::weak_ptr<erhe::scene::Item>   m_last_focus_item;
+    std::shared_ptr<erhe::scene::Item> m_popup_item;
+    std::string                        m_popup_id_string;
+    unsigned int                       m_popup_id{0};
 
-    erhe::scene::Scene_item_filter           m_filter;
+    erhe::scene::Item_filter           m_filter;
+
 };
 
 } // namespace editor

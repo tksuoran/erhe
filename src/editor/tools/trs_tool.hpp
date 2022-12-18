@@ -147,8 +147,7 @@ public:
     void imgui() override;
 
     // Public API
-    void update_for_view (Scene_view* scene_view);
-    void viewport_toolbar();
+    void viewport_toolbar(bool& hovered);
     void set_translate   (const bool enabled);
     void set_rotate      (const bool enabled);
     [[nodiscard]] auto is_active() const -> bool;
@@ -170,11 +169,12 @@ public:
     [[nodiscard]] auto get_tool_scene_root  () -> std::shared_ptr<Scene_root>;
 
 private:
-    void on_message(Editor_message& message);
-    void tool_hover(Scene_view* scene_view);
-    void touch     ();
-    void begin_move();
-    void end_move  ();
+    void on_message     (Editor_message& message);
+    void update_for_view(Scene_view* scene_view);
+    void tool_hover     (Scene_view* scene_view);
+    void touch          ();
+    void begin_move     ();
+    void end_move       ();
 
     class Debug_rendering
     {
@@ -240,7 +240,7 @@ private:
     void update_rotate_final        ();
     void set_node_world_transform   (const glm::dmat4 world_from_node);
     void update_transforms          ();
-    void update_visibility          ();
+    void update_visibility          (const erhe::scene::Scene* view_scene);
 
     Trs_tool_drag_command                         m_drag_command;
 

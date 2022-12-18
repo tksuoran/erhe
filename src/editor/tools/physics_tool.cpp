@@ -280,7 +280,7 @@ auto Physics_tool::acquire_target() -> bool
         return false;
     }
 
-    Scene_view* scene_view = get_scene_view();
+    Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         log_physics->warn("Cant target: No scene_view");
@@ -498,7 +498,7 @@ auto Physics_tool::on_drag() -> bool
     {
         return false;
     }
-    Scene_view* scene_view = get_scene_view();
+    Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         return false;

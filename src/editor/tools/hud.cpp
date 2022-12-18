@@ -1,5 +1,7 @@
 #include "tools/hud.hpp"
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -16,6 +18,7 @@
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 namespace editor
@@ -28,26 +31,7 @@ auto Toggle_hud_visibility_command::try_call(
 ) -> bool
 {
     static_cast<void>(context);
-    // TODO Only toggle if has scene view, camera and node.
-    //      Otherwise transform will not be updated.
-    const bool is_visible = m_hud.toggle_visibility();
-    if (is_visible)
-    {
-        Scene_view* scene_view = m_hud.get_scene_view();
-        if (scene_view == nullptr)
-        {
-            return false;
-        }
-        const auto& camera = scene_view->get_camera();
-        if (camera)
-        {
-            const auto* node = camera->get_node();
-            if (node)
-            {
-                m_hud.update_node_transform(node->world_from_node());
-            }
-        }
-    }
+    m_hud.toggle_visibility();
     return true;
 }
 
@@ -68,9 +52,10 @@ void Hud::declare_required_components()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
     require<erhe::application::Rendergraph        >();
-    require<Scene_builder   >();
-    require<Tools           >();
-    require<Viewport_windows>();
+    require<Editor_message_bus>();
+    require<Scene_builder     >();
+    require<Tools             >();
+    require<Viewport_windows  >();
 }
 
 void Hud::initialize_component()
@@ -111,23 +96,28 @@ void Hud::initialize_component()
         hud.height,
         hud.ppm
     );
-    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id.get_id();
+    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
-        erhe::scene::Scene_item_flags::content |
-        erhe::scene::Scene_item_flags::visible |
-        erhe::scene::Scene_item_flags::show_in_ui
+        erhe::scene::Item_flags::content |
+        erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::show_in_ui
     );
 
-    //m_rendertarget_mesh->disable_flag_bits(erhe::scene::Scene_item_flags::visible);
+    //m_rendertarget_mesh->disable_flag_bits(erhe::scene::Item_flags::visible);
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
     m_rendertarget_node->set_parent(scene_root->scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
     m_rendertarget_node->enable_flag_bits(
-        erhe::scene::Scene_item_flags::content |
-        erhe::scene::Scene_item_flags::visible |
-        erhe::scene::Scene_item_flags::show_in_ui
+        erhe::scene::Item_flags::content |
+        erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::show_in_ui
     );
+    auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
+    if (node_raytrace)
+    {
+        m_rendertarget_node->attach(node_raytrace);
+    }
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         m_rendertarget_mesh.get(),
@@ -138,6 +128,13 @@ void Hud::initialize_component()
     imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
 
     set_visibility(m_is_visible);
+
+    get<Editor_message_bus>()->add_receiver(
+        [&](Editor_message& message)
+        {
+            on_message(message);
+        }
+    );
 }
 
 [[nodiscard]] auto Hud::get_rendertarget_imgui_viewport() -> std::shared_ptr<Rendertarget_imgui_viewport>
@@ -153,6 +150,26 @@ void Hud::post_initialize()
 auto Hud::description() -> const char*
 {
    return c_title.data();
+}
+
+void Hud::on_message(Editor_message& message)
+{
+    Tool::on_message(message);
+
+    using namespace erhe::toolkit;
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
+    {
+        const auto& camera = message.scene_view->get_camera();
+        if (camera)
+        {
+            const auto* camera_node = camera->get_node();
+            if (camera_node != nullptr)
+            {
+                const auto& world_from_camera = camera_node->world_from_node();
+                update_node_transform(world_from_camera);
+            }
+        }
+    }
 }
 
 void Hud::update_node_transform(const glm::mat4& world_from_camera)

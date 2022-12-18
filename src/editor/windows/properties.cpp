@@ -250,7 +250,7 @@ void Properties::light_properties(erhe::scene::Light& light) const
     const auto* node = light.get_node();
     if (node != nullptr)
     {
-        auto* scene_root = reinterpret_cast<Scene_root*>(node->get_scene_host());
+        auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
         if (scene_root != nullptr)
         {
             const auto& layers = scene_root->layers();
@@ -271,7 +271,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
     auto& mesh_data  = mesh.mesh_data;
     const auto* node = mesh.get_node();
-    auto* scene_root = reinterpret_cast<Scene_root*>(node->get_scene_host());
+    auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
     if (scene_root == nullptr)
     {
         ImGui::Text("Mesh host not set");
@@ -790,7 +790,7 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
     }
 }
 
-void Properties::item_flags(const std::shared_ptr<erhe::scene::Scene_item>& item)
+void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
 {
     if (!ImGui::TreeNodeEx("Flags"))
     {
@@ -800,19 +800,19 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Scene_item>& item
     ImGui::Indent(indent);
 
     using namespace erhe::toolkit;
-    using Scene_item_flags = erhe::scene::Scene_item_flags;
+    using Item_flags = erhe::scene::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();
-    bool visible     = test_all_rhs_bits_set(flags, Scene_item_flags::visible                  );
-    bool content     = test_all_rhs_bits_set(flags, Scene_item_flags::content                  );
-    bool shadow_cast = test_all_rhs_bits_set(flags, Scene_item_flags::shadow_cast              );
-    bool id          = test_all_rhs_bits_set(flags, Scene_item_flags::id                       );
-    bool tool        = test_all_rhs_bits_set(flags, Scene_item_flags::tool                     );
-    bool selected    = test_all_rhs_bits_set(flags, Scene_item_flags::selected                 );
-    bool show_debug  = test_all_rhs_bits_set(flags, Scene_item_flags::show_debug_visualizations);
+    bool visible     = test_all_rhs_bits_set(flags, Item_flags::visible                  );
+    bool content     = test_all_rhs_bits_set(flags, Item_flags::content                  );
+    bool shadow_cast = test_all_rhs_bits_set(flags, Item_flags::shadow_cast              );
+    bool id          = test_all_rhs_bits_set(flags, Item_flags::id                       );
+    bool tool        = test_all_rhs_bits_set(flags, Item_flags::tool                     );
+    bool selected    = test_all_rhs_bits_set(flags, Item_flags::selected                 );
+    bool show_debug  = test_all_rhs_bits_set(flags, Item_flags::show_debug_visualizations);
     if (ImGui::Checkbox("Show Debug", &show_debug))
     {
-        item->set_flag_bits(Scene_item_flags::show_debug_visualizations, show_debug);
+        item->set_flag_bits(Item_flags::show_debug_visualizations, show_debug);
     }
     if (ImGui::Checkbox("Visible", &visible))
     {
@@ -820,15 +820,15 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Scene_item>& item
     }
     if (ImGui::Checkbox("Content", &content))
     {
-        item->set_flag_bits(Scene_item_flags::content, content);
+        item->set_flag_bits(Item_flags::content, content);
     }
     if (ImGui::Checkbox("ID Render", &id))
     {
-        item->set_flag_bits(Scene_item_flags::id, id);
+        item->set_flag_bits(Item_flags::id, id);
     }
     if (ImGui::Checkbox("Shadow Cast", &shadow_cast))
     {
-        item->set_flag_bits(Scene_item_flags::shadow_cast, shadow_cast);
+        item->set_flag_bits(Item_flags::shadow_cast, shadow_cast);
     }
     if (ImGui::Checkbox("Selected", &selected))
     {
@@ -843,7 +843,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Scene_item>& item
     }
     if (ImGui::Checkbox("Tool", &tool))
     {
-        item->set_flag_bits(erhe::scene::Scene_item_flags::tool, tool);
+        item->set_flag_bits(erhe::scene::Item_flags::tool, tool);
     }
 
 
@@ -852,7 +852,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Scene_item>& item
     ImGui::TreePop();
 }
 
-[[nodiscard]] auto show_item_details(const erhe::scene::Scene_item* const item)
+[[nodiscard]] auto show_item_details(const erhe::scene::Item* const item)
 {
     return
         !is_physics         (item) &&
@@ -861,7 +861,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Scene_item>& item
         !is_rendertarget    (item);
 }
 
-void Properties::item_properties(const std::shared_ptr<erhe::scene::Scene_item>& item)
+void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
 {
     if (is_raytrace(item)) // currently nothing to show, so hidden from user
     {

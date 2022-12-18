@@ -12,20 +12,37 @@ template <typename Message_type>
 class Message_bus
 {
 public:
-    Message_bus() {}
-    ~Message_bus() { }
+    Message_bus()
+    {
+    }
 
-    void add_receiver(std::function<void(Message_type&)> message_receiver) {
+    ~Message_bus()
+    {
+    }
+
+    void add_receiver(std::function<void(Message_type&)> message_receiver)
+    {
         m_receivers.push_back(message_receiver);
     }
 
-    void send_message(Message_type message) {
+    void send_message(Message_type message)
+    {
+        for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++) {
+            (*iter)(message);
+        }
+    }
+
+    void queue_message(Message_type message)
+    {
         m_messages.push(message);
     }
 
-    void update() {
-        while (!m_messages.empty()) {
-            for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++) {
+    void update()
+    {
+        while (!m_messages.empty())
+        {
+            for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++)
+            {
                 (*iter)(m_messages.front());
             }
             m_messages.pop();

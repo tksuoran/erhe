@@ -2,8 +2,6 @@
 
 #include "erhe/raytrace/iinstance.hpp"
 
-#include <bvh/sphere.hpp>
-
 #include <glm/glm.hpp>
 
 #include <string>
@@ -37,11 +35,7 @@ public:
     [[nodiscard]] auto debug_label  () const -> std::string_view override;
 
     // Bvh_instance public API
-    void intersect      (Ray& ray, Hit& hit);
-    //// void collect_spheres(
-    ////     std::vector<bvh::Sphere<float>>& spheres,
-    ////     std::vector<Bvh_instance*>&      instances
-    //// );
+    void intersect(Ray& ray, Hit& hit);
 
 private:
     glm::mat4   m_transform{1.0f};

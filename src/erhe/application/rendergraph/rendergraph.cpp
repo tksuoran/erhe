@@ -166,9 +166,12 @@ void Rendergraph::execute()
 
     for (const auto& node : m_nodes)
     {
-        SPDLOG_LOGGER_TRACE(log_rendergraph, "Execute render graph node '{}'", node->get_name());
-        erhe::graphics::Scoped_debug_group render_graph_node_scope{node->get_name()};
-        node->execute_rendergraph_node();
+        if (node->is_enabled())
+        {
+            SPDLOG_LOGGER_TRACE(log_rendergraph, "Execute render graph node '{}'", node->get_name());
+            erhe::graphics::Scoped_debug_group render_graph_node_scope{node->get_name()};
+            node->execute_rendergraph_node();
+        }
     }
 }
 

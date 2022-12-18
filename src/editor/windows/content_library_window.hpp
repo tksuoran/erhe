@@ -50,7 +50,7 @@ private:
         void imgui(const Library<T>& library)
         {
             constexpr ImGuiTreeNodeFlags parent_flags{
-                ImGuiTreeNodeFlags_DefaultOpen       |
+                //ImGuiTreeNodeFlags_DefaultOpen       |
                 ImGuiTreeNodeFlags_OpenOnArrow       |
                 ImGuiTreeNodeFlags_OpenOnDoubleClick |
                 ImGuiTreeNodeFlags_SpanFullWidth

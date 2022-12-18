@@ -5,56 +5,24 @@ namespace erhe::physics
 {
 
 auto IConstraint::create_point_to_point_constraint(
-    IRigid_body*    rigid_body,
-    const glm::vec3 point
+    const Point_to_point_constraint_settings& settings
 ) -> IConstraint*
 {
-    return new Null_point_to_point_constraint(rigid_body, point);
+    return new Null_point_to_point_constraint(settings);
 }
 
 auto IConstraint::create_point_to_point_constraint_shared(
-    IRigid_body*    rigid_body,
-    const glm::vec3 point
+    const Point_to_point_constraint_settings& settings
 ) -> std::shared_ptr<IConstraint>
 {
-    return std::make_shared<Null_point_to_point_constraint>(rigid_body, point);
+    return std::make_shared<Null_point_to_point_constraint>(settings);
 }
 
 auto IConstraint::create_point_to_point_constraint_unique(
-    IRigid_body*    rigid_body,
-    const glm::vec3 point
+    const Point_to_point_constraint_settings& settings
 ) -> std::unique_ptr<IConstraint>
 {
-    return std::make_unique<Null_point_to_point_constraint>(rigid_body, point);
-}
-
-auto IConstraint::create_point_to_point_constraint(
-    IRigid_body*    rigid_body_a,
-    IRigid_body*    rigid_body_b,
-    const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b
-) -> IConstraint*
-{
-    return new Null_point_to_point_constraint(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
-}
-
-auto IConstraint::create_point_to_point_constraint_shared(
-    IRigid_body*    rigid_body_a,
-    IRigid_body*    rigid_body_b,
-    const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b
-) -> std::shared_ptr<IConstraint>
-{
-    return std::make_shared<Null_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
-}
-auto IConstraint::create_point_to_point_constraint_unique(
-    IRigid_body*    rigid_body_a,
-    IRigid_body*    rigid_body_b,
-    const glm::vec3 pivot_in_a,
-    const glm::vec3 pivot_in_b
-) -> std::unique_ptr<IConstraint>
-{
-    return std::make_unique<Null_point_to_point_constraint>(rigid_body_a, rigid_body_b, pivot_in_a, pivot_in_b);
+    return std::make_unique<Null_point_to_point_constraint>(settings);
 }
 
 } // namespace erhe::physics

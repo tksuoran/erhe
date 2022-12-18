@@ -102,11 +102,26 @@ void Icon_set::initialize_component()
     icons.mesh_icosphere    = load(icon_directory / "mesh_icosphere");
     icons.mesh_torus        = load(icon_directory / "mesh_torus");
     icons.mesh_uvsphere     = load(icon_directory / "mesh_uvsphere");
+    icons.mouse_lmb         = load(icon_directory / "mouse_lmb.svg");
+    icons.mouse_lmb_drag    = load(icon_directory / "mouse_lmb_drag.svg");
+    icons.mouse_mmb         = load(icon_directory / "mouse_mmb.svg");
+    icons.mouse_mmb_drag    = load(icon_directory / "mouse_mmb_drag.svg");
+    icons.mouse_move        = load(icon_directory / "mouse_move.svg");
+    icons.mouse_rmb         = load(icon_directory / "mouse_rmb.svg");
+    icons.mouse_rmb_drag    = load(icon_directory / "mouse_rmb_drag.svg");
     icons.move              = load(icon_directory / "move.svg");
     icons.node              = load(icon_directory / "node.svg");
     icons.rotate            = load(icon_directory / "rotate.svg");
     icons.select            = load(icon_directory / "select.svg");
+    icons.scene             = load(icon_directory / "scene.svg");
+    icons.space_mouse       = load(icon_directory / "space_mouse.svg");
+    icons.space_mouse_lmb   = load(icon_directory / "space_mouse_lmb.svg");
+    icons.space_mouse_rmb   = load(icon_directory / "space_mouse_rmb.svg");
     icons.three_dots        = load(icon_directory / "three_dots.svg");
+    icons.vive              = load(icon_directory / "vive.svg");
+    icons.vive_menu         = load(icon_directory / "vive_menu.svg");
+    icons.vive_trigger      = load(icon_directory / "vive_trigger.svg");
+    icons.vive_trackpad     = load(icon_directory / "vive_trackpad.svg");
 }
 
 void Icon_set::post_initialize()

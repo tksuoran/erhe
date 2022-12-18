@@ -20,8 +20,6 @@ using glm::vec4;
 Frame_controller::Frame_controller()
     : Node_attachment{"frame controller"}
 {
-    m_flag_bits |= erhe::scene::Scene_item_flags::frame_controller;
-
     reset();
     rotate_x      .set_damp     (0.700f);
     rotate_y      .set_damp     (0.700f);
@@ -95,14 +93,24 @@ auto Frame_controller::heading() const -> float
     return m_heading;
 }
 
+auto Frame_controller::static_type() -> uint64_t
+{
+    return erhe::scene::Item_type::node_attachment | erhe::scene::Item_type::frame_controller;
+}
+
 auto Frame_controller::static_type_name() -> const char*
 {
     return "Frame_controller";
 }
 
+auto Frame_controller::get_type() const -> uint64_t
+{
+    return static_type();
+}
+
 auto Frame_controller::type_name() const -> const char*
 {
-    return "Frame_controller";
+    return static_type_name();
 }
 
 void Frame_controller::handle_node_transform_update()
@@ -275,7 +283,7 @@ void Frame_controller::update_fixed_step()
 }
 
 auto is_frame_controller(
-    const erhe::scene::Scene_item* const item
+    const erhe::scene::Item* const item
 ) -> bool
 {
     if (item == nullptr)
@@ -284,20 +292,20 @@ auto is_frame_controller(
     }
     using namespace erhe::toolkit;
     return test_all_rhs_bits_set(
-        item->get_flag_bits(),
-        erhe::scene::Scene_item_flags::frame_controller
+        item->get_type(),
+        erhe::scene::Item_type::frame_controller
     );
 }
 
 auto is_frame_controller(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
     return is_frame_controller(item.get());
 }
 
 auto as_frame_controller(
-    erhe::scene::Scene_item* item
+    erhe::scene::Item* item
 ) -> Frame_controller*
 {
     if (item == nullptr)
@@ -307,8 +315,8 @@ auto as_frame_controller(
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            item->get_flag_bits(),
-            erhe::scene::Scene_item_flags::frame_controller
+            item->get_type(),
+            erhe::scene::Item_type::frame_controller
         )
     )
     {
@@ -318,7 +326,7 @@ auto as_frame_controller(
 }
 
 auto as_frame_controller(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 ) -> std::shared_ptr<Frame_controller>
 {
     if (!item)
@@ -328,8 +336,8 @@ auto as_frame_controller(
     using namespace erhe::toolkit;
     if (
         !test_all_rhs_bits_set(
-            item->get_flag_bits(),
-            erhe::scene::Scene_item_flags::frame_controller
+            item->get_type(),
+            erhe::scene::Item_type::frame_controller
         )
     )
     {

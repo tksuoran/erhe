@@ -20,11 +20,15 @@ namespace erhe::scene
 Light::Light(const std::string_view name)
     : Node_attachment{name}
 {
-    enable_flag_bits(Scene_item_flags::light);
 }
 
 Light::~Light() noexcept
 {
+}
+
+auto Light::static_type() -> uint64_t
+{
+    return Item_type::node_attachment | Item_type::light;
 }
 
 auto Light::static_type_name() -> const char*
@@ -32,9 +36,14 @@ auto Light::static_type_name() -> const char*
     return "Light";
 }
 
+auto Light::get_type() const -> uint64_t
+{
+    return static_type();
+}
+
 auto Light::type_name() const -> const char*
 {
-    return "Light";
+    return static_type_name();
 }
 
 void Light::handle_node_scene_host_update(
@@ -44,7 +53,7 @@ void Light::handle_node_scene_host_update(
 {
     if (old_scene_host)
     {
-        Scene* scene = old_scene_host->get_scene();
+        Scene* scene = old_scene_host->get_hosted_scene();
         if (scene != nullptr)
         {
             scene->unregister_light(
@@ -54,7 +63,7 @@ void Light::handle_node_scene_host_update(
     }
     if (new_scene_host)
     {
-        Scene* scene = new_scene_host->get_scene();
+        Scene* scene = new_scene_host->get_hosted_scene();
         if (scene != nullptr)
         {
             scene->register_light(
@@ -430,47 +439,47 @@ auto Light::stable_directional_light_projection_transforms(
     };
 }
 
-auto is_light(const Scene_item* const scene_item) -> bool
+auto is_light(const Item* const item) -> bool
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return false;
     }
     using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::light);
+    return test_all_rhs_bits_set(item->get_type(), Item_type::light);
 }
 
-auto is_light(const std::shared_ptr<Scene_item>& scene_item) -> bool
+auto is_light(const std::shared_ptr<Item>& item) -> bool
 {
-    return is_light(scene_item.get());
+    return is_light(item.get());
 }
 
-auto as_light(Scene_item* const scene_item) -> Light*
+auto as_light(Item* const item) -> Light*
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return nullptr;
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::light))
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::light))
     {
         return nullptr;
     }
-    return reinterpret_cast<Light*>(scene_item);
+    return reinterpret_cast<Light*>(item);
 }
 
-auto as_light(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<Light>
+auto as_light(const std::shared_ptr<Item>& item) -> std::shared_ptr<Light>
 {
-    if (!scene_item)
+    if (!item)
     {
         return {};
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::light))
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::light))
     {
         return {};
     }
-    return std::static_pointer_cast<Light>(scene_item);
+    return std::static_pointer_cast<Light>(item);
 }
 
 auto get_light(

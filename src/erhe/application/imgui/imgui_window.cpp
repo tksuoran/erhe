@@ -135,8 +135,9 @@ auto Imgui_window::has_toolbar() const -> bool
     return false;
 }
 
-void Imgui_window::toolbar()
+void Imgui_window::toolbar(bool& hovered)
 {
+    static_cast<void>(hovered);
 }
 
 auto Imgui_window::want_keyboard_events() const -> bool
@@ -159,6 +160,10 @@ void Imgui_window::on_begin()
 }
 
 void Imgui_window::on_end()
+{
+}
+
+void Imgui_window::hidden()
 {
 }
 

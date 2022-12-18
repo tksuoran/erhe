@@ -47,6 +47,7 @@ namespace editor
 {
 
 class Editor_rendering;
+class Editor_scenes;
 class Grid_tool;
 class Id_renderer;
 class Light_projections;
@@ -113,20 +114,21 @@ public:
     [[nodiscard]] auto projection_viewport() const -> const erhe::scene::Viewport&;
 
     // Pointer context API
-    void raytrace         ();
+    void raytrace         (Scene_root* tool_scene_root);
     void update_grid_hover();
 
     // call with const glm::vec2 position_in_window = m_window.to_scene_content(position);
     void update_pointer_context(
         Id_renderer& id_renderer,
-        glm::vec2    position_in_viewport
+        glm::vec2    position_in_viewport,
+        Scene_root*  tool_scene_root
     );
 
     [[nodiscard]] auto position_in_world_viewport_depth(double viewport_depth) const -> std::optional<glm::dvec3>;
 
     auto get_shadow_render_node() const -> Shadow_render_node* override;
 
-    void imgui_toolbar();
+    [[nodiscard]] auto imgui_toolbar() -> bool;
 
     // TODO Consider if these links are a good thing, or if they should
     //      be discovered from the graph instead.
@@ -145,6 +147,7 @@ private:
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::application::Rendergraph>       m_render_graph;
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
+    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
     std::shared_ptr<Grid_tool>                            m_grid_tool;
     std::shared_ptr<Physics_window>                       m_physics_window;

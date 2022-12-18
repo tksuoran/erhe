@@ -2,7 +2,7 @@
 #include "erhe/physics/null/null_constraint.hpp"
 #include "erhe/physics/null/null_rigid_body.hpp"
 #include "erhe/physics/idebug_draw.hpp"
-#include "erhe/physics/log.hpp"
+#include "erhe/physics/physics_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include "erhe/toolkit/profile.hpp"
@@ -103,6 +103,10 @@ void Null_world::set_debug_drawer(IDebug_draw* debug_draw)
 }
 
 void Null_world::debug_draw()
+{
+}
+
+void Null_world::sanity_check()
 {
 }
 

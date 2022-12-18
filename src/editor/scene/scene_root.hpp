@@ -40,6 +40,11 @@ namespace erhe::raytrace
     class IScene;
 }
 
+namespace erhe::scene
+{
+    using Layer_id = uint64_t;
+}
+
 namespace erhe::primitive
 {
     class Material;
@@ -76,6 +81,16 @@ class Scene_message_bus;
 class Scene_root;
 class Viewport_window;
 
+class Mesh_layer_id
+{
+public:
+    static constexpr erhe::scene::Layer_id brush        = 0;
+    static constexpr erhe::scene::Layer_id content      = 1;
+    static constexpr erhe::scene::Layer_id controller   = 2;
+    static constexpr erhe::scene::Layer_id tool         = 3;
+    static constexpr erhe::scene::Layer_id rendertarget = 4;
+};
+
 class Scene_layers
 {
 public:
@@ -109,8 +124,9 @@ public:
     ~Scene_root() noexcept override;
 
     // Implements Scene_host
-    [[nodiscard]] auto get_scene() -> erhe::scene::Scene* override;
+    [[nodiscard]] auto get_hosted_scene() -> erhe::scene::Scene* override;
 
+    [[nodiscard]] auto get_shared_scene      () -> std::shared_ptr<erhe::scene::Scene>;
     [[nodiscard]] auto get_editor_message_bus() const -> std::shared_ptr<Editor_message_bus>;
     [[nodiscard]] auto layers                () -> Scene_layers&;
     [[nodiscard]] auto layers                () const -> const Scene_layers&;
@@ -155,11 +171,10 @@ public:
     void sanity_check();
 
 private:
-    std::string                                     m_name;
     mutable std::mutex                              m_mutex;
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
-    std::unique_ptr<erhe::scene::Scene>             m_scene;
+    std::shared_ptr<erhe::scene::Scene>             m_scene;
     std::shared_ptr<erhe::scene::Camera>            m_camera;
     std::shared_ptr<Content_library>                m_content_library;
     std::shared_ptr<Editor_message_bus>             m_editor_message_bus;

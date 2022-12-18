@@ -65,8 +65,8 @@ auto Open_new_viewport_window_command::try_call(
 ) -> bool
 {
     static_cast<void>(context);
-
-    return m_viewport_windows.open_new_viewport_window();
+    m_viewport_windows.open_new_imgui_viewport_window();
+    return true;
 }
 
 Viewport_windows::Viewport_windows()
@@ -300,7 +300,7 @@ auto Viewport_windows::create_imgui_viewport_window(
     const auto& window_imgui_viewport = m_imgui_windows->get_window_viewport();
 
     auto imgui_viewport_window = std::make_shared<Imgui_viewport_window>(
-        fmt::format("Imgui_viewport_window for '{}'", viewport_window->get_name()),
+        fmt::format("Viewport {}", m_imgui_viewport_windows.size()),
         viewport_window
     );
     m_imgui_viewport_windows.push_back(imgui_viewport_window);
@@ -321,12 +321,12 @@ auto Viewport_windows::create_imgui_viewport_window(
 
 auto Viewport_windows::open_new_viewport_window(
     const std::shared_ptr<Scene_root>& scene_root
-) -> bool
+) -> std::shared_ptr<Viewport_window>
 {
+    const std::string name = fmt::format("Viewport {}", m_viewport_windows.size());
+
     if (scene_root)
     {
-        const std::string name = fmt::format("Viewport for {}", scene_root->get_name());
-
         auto selection_tool = try_get<Selection_tool>();
         if (selection_tool)
         {
@@ -335,8 +335,7 @@ auto Viewport_windows::open_new_viewport_window(
                 if (is_camera(entry))
                 {
                     const auto camera = as_camera(entry);
-                    create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
-                    return true;
+                    return create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
                 }
             }
         }
@@ -344,14 +343,31 @@ auto Viewport_windows::open_new_viewport_window(
         if (!m_scene_root->scene().get_cameras().empty())
         {
             const auto& camera = scene_root->scene().get_cameras().front();
-            create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
+            return create_viewport_window(name, scene_root, camera, m_configuration->graphics.msaa_sample_count);
         }
-        return true;
     }
 
     // Case for when no cameras found in scene
-    create_viewport_window("Viewport", {}, nullptr, m_configuration->graphics.msaa_sample_count);
-    return true;
+    return create_viewport_window(
+        name,
+        {},
+        nullptr,
+        m_configuration->graphics.msaa_sample_count
+    );
+}
+
+void Viewport_windows::open_new_imgui_viewport_window()
+{
+    auto        viewport_window = open_new_viewport_window();
+    const auto& configuration   = get<erhe::application::Configuration>();
+    if (configuration->imgui.window_viewport)
+    {
+        create_imgui_viewport_window(viewport_window);
+    }
+    else
+    {
+        create_basic_viewport_window(viewport_window);
+    }
 }
 
 //void Viewport_windows::update_hover()
@@ -403,7 +419,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
     {
         m_editor_message_bus->send_message(
             Editor_message{
-                .update_flags = Message_flag_bit::c_flag_bit_viewport | Message_flag_bit::c_flag_bit_scene_view,
+                .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
                 .scene_view   = new_window.get()
             }
         );
@@ -445,9 +461,10 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
             );
             viewport_window->update_pointer_context(
                 *m_id_renderer.get(),
-                viewport_position
+                viewport_position,
+                m_tools->get_tool_scene_root().get()
             );
-            ERHE_VERIFY(m_hover_stack.empty());
+            //// ERHE_VERIFY(m_hover_stack.empty());
             m_last_window = viewport_window;
             m_hover_stack.push_back(m_last_window);
         }
@@ -496,7 +513,8 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
 
             viewport_window->update_pointer_context(
                 *m_id_renderer.get(),
-                viewport_position
+                viewport_position,
+                m_tools->get_tool_scene_root().get()
             );
             ERHE_VERIFY(m_hover_stack.empty());
             m_last_window = viewport_window;

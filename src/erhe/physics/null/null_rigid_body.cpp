@@ -32,14 +32,17 @@ Null_rigid_body::Null_rigid_body(
 )
     : m_collision_shape{create_info.collision_shape}
     , m_mass           {create_info.mass}
-    , m_local_inertia  {create_info.local_inertia}
     , m_motion_mode{
-        (create_info.mass > 0.0f)
+        (create_info.mass.has_value())
             ? Motion_mode::e_dynamic
             : Motion_mode::e_static
     }
     , m_debug_label{create_info.debug_label}
 {
+    if (create_info.inertia_override.has_value())
+    {
+        m_local_inertia = create_info.inertia_override.value();
+    }
 }
 
 IRigid_body::~IRigid_body() noexcept
@@ -53,11 +56,6 @@ Null_rigid_body::~Null_rigid_body() noexcept
 auto Null_rigid_body::get_motion_mode() const -> Motion_mode
 {
     return m_motion_mode;
-}
-
-void Null_rigid_body::set_collision_shape(const std::shared_ptr<ICollision_shape>& collision_shape)
-{
-    m_collision_shape = collision_shape;
 }
 
 auto Null_rigid_body::get_collision_shape() const -> std::shared_ptr<ICollision_shape>
@@ -75,9 +73,19 @@ void Null_rigid_body::set_friction(const float friction)
     m_friction = friction;
 }
 
+void Null_rigid_body::set_gravity_factor(float gravity_factor)
+{
+    m_gravity_factor = gravity_factor;
+}
+
 auto Null_rigid_body::get_restitution() const -> float
 {
     return m_restitution;
+}
+
+auto Null_rigid_body::get_world_transform() const -> Transform
+{
+    return m_transform;
 }
 
 void Null_rigid_body::set_restitution(float restitution)
@@ -125,9 +133,19 @@ void Null_rigid_body::set_angular_velocity(const glm::vec3 velocity)
     m_angular_velocity = velocity;
 }
 
+auto Null_rigid_body::get_gravity_factor() const -> float
+{
+    return m_gravity_factor;
+}
+
 auto Null_rigid_body::get_linear_damping() const -> float
 {
     return m_linear_damping;
+}
+
+auto Null_rigid_body::get_linear_velocity() const -> glm::vec3
+{
+    return m_linear_velocity;
 }
 
 void Null_rigid_body::set_damping(const float linear_damping, const float angular_damping)
@@ -139,6 +157,11 @@ void Null_rigid_body::set_damping(const float linear_damping, const float angula
 auto Null_rigid_body::get_angular_damping () const -> float
 {
     return m_linear_damping;
+}
+
+auto Null_rigid_body::get_angular_velocity() const -> glm::vec3
+{
+    return m_angular_velocity;
 }
 
 auto Null_rigid_body::get_local_inertia() const -> glm::mat4
@@ -153,7 +176,7 @@ auto Null_rigid_body::get_center_of_mass_transform() const -> Transform
 
 auto Null_rigid_body::get_mass() const -> float
 {
-    return m_mass;
+    return m_mass.has_value() ? m_mass.value() : 0.0f;
 }
 
 void Null_rigid_body::set_mass_properties(const float mass, const glm::mat4 local_inertia)

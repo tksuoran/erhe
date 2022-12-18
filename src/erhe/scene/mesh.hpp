@@ -17,13 +17,15 @@ namespace erhe::geometry
 namespace erhe::scene
 {
 
+using Layer_id = uint64_t;
+
 class Mesh_data
 {
 public:
-    erhe::toolkit::Unique_id<Mesh_layer>::id_type layer_id;
-    std::vector<erhe::primitive::Primitive>       primitives;
-    float                                         point_size{3.0f};
-    float                                         line_width{1.0f};
+    Layer_id                                layer_id;
+    std::vector<erhe::primitive::Primitive> primitives;
+    float                                   point_size{3.0f};
+    float                                   line_width{1.0f};
 };
 
 class Mesh
@@ -36,9 +38,13 @@ public:
     ~Mesh        () noexcept override;
 
     // Implements Node_attachment
+    [[nodiscard]] static auto static_type     () -> uint64_t;
     [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto type_name() const -> const char* override;
     void handle_node_scene_host_update(Scene_host* old_scene_host, Scene_host* new_scene_host) override;
+
+    // Implements Item
+    [[nodiscard]] auto get_type () const -> uint64_t override;
+    [[nodiscard]] auto type_name() const -> const char* override;
 
     Mesh_data mesh_data;
 
@@ -47,10 +53,10 @@ public:
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
 
-[[nodiscard]] auto is_mesh(const Scene_item* const scene_item) -> bool;
-[[nodiscard]] auto is_mesh(const std::shared_ptr<Scene_item>& scene_item) -> bool;
-[[nodiscard]] auto as_mesh(Scene_item* const scene_item) -> Mesh*;
-[[nodiscard]] auto as_mesh(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<Mesh>;
+[[nodiscard]] auto is_mesh(const Item* const scene_item) -> bool;
+[[nodiscard]] auto is_mesh(const std::shared_ptr<Item>& scene_item) -> bool;
+[[nodiscard]] auto as_mesh(Item* const scene_item) -> Mesh*;
+[[nodiscard]] auto as_mesh(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Mesh>;
 
 [[nodiscard]] auto get_mesh(const erhe::scene::Node* node) -> std::shared_ptr<Mesh>;
 

@@ -58,7 +58,7 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Primitive_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    const erhe::scene::Scene_item_filter&                      filter,
+    const erhe::scene::Item_filter&                            filter,
     bool                                                       use_id_ranges
 ) -> erhe::application::Buffer_range
 {

@@ -50,30 +50,30 @@ public:
     [[nodiscard]] static auto create_box_shape                   (const glm::vec3 half_extents) -> ICollision_shape*;
     [[nodiscard]] static auto create_box_shape_shared            (const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>;
 
-    [[nodiscard]] static auto create_capsule_shape               (const Axis axis, const float radius, const float length) -> ICollision_shape*;
-    [[nodiscard]] static auto create_capsule_shape_shared        (const Axis axis, const float radius, const float length) -> std::shared_ptr<ICollision_shape>;
+    [[nodiscard]] static auto create_capsule_shape               (Axis axis, float radius, float length) -> ICollision_shape*;
+    [[nodiscard]] static auto create_capsule_shape_shared        (Axis axis, float radius, float length) -> std::shared_ptr<ICollision_shape>;
 
     [[nodiscard]] static auto create_compound_shape              (const Compound_shape_create_info& create_info) -> ICollision_shape*;
     [[nodiscard]] static auto create_compound_shape_shared       (const Compound_shape_create_info& create_info) -> std::shared_ptr<ICollision_shape>;
 
 #if 0
-    [[nodiscard]] static auto create_cone_shape                  (const Axis axis, const float base_radius, const float height) -> ICollision_shape*;
-    [[nodiscard]] static auto create_cone_shape_shared           (const Axis axis, const float base_radius, const float height) -> std::shared_ptr<ICollision_shape>;
+    [[nodiscard]] static auto create_cone_shape                  (Axis axis, float base_radius, float height) -> ICollision_shape*;
+    [[nodiscard]] static auto create_cone_shape_shared           (Axis axis, float base_radius, float height) -> std::shared_ptr<ICollision_shape>;
 #endif
 
-    [[nodiscard]] static auto create_convex_hull_shape           (const float* points, const int point_count, const int stride) -> ICollision_shape*;
-    [[nodiscard]] static auto create_convex_hull_shape_shared    (const float* points, const int point_count, const int stride) -> std::shared_ptr<ICollision_shape>;
+    [[nodiscard]] static auto create_convex_hull_shape           (const float* points, int point_count, int stride) -> ICollision_shape*;
+    [[nodiscard]] static auto create_convex_hull_shape_shared    (const float* points, int point_count, int stride) -> std::shared_ptr<ICollision_shape>;
 
-    [[nodiscard]] static auto create_cylinder_shape              (const Axis axis, const glm::vec3 half_extents) -> ICollision_shape*;
-    [[nodiscard]] static auto create_cylinder_shape_shared       (const Axis axis, const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>;
+    [[nodiscard]] static auto create_cylinder_shape              (Axis axis, const glm::vec3 half_extents) -> ICollision_shape*;
+    [[nodiscard]] static auto create_cylinder_shape_shared       (Axis axis, const glm::vec3 half_extents) -> std::shared_ptr<ICollision_shape>;
 
-    [[nodiscard]] static auto create_sphere_shape                (const float radius) -> ICollision_shape*;
-    [[nodiscard]] static auto create_sphere_shape_shared         (const float radius) -> std::shared_ptr<ICollision_shape>;
+    [[nodiscard]] static auto create_sphere_shape                (float radius) -> ICollision_shape*;
+    [[nodiscard]] static auto create_sphere_shape_shared         (float radius) -> std::shared_ptr<ICollision_shape>;
 
-    [[nodiscard]] static auto create_uniform_scaling_shape       (ICollision_shape* shape, const float scale) -> ICollision_shape*;
-    [[nodiscard]] static auto create_uniform_scaling_shape_shared(ICollision_shape* shape, const float scale) -> std::shared_ptr<ICollision_shape>;
+    [[nodiscard]] static auto create_uniform_scaling_shape       (ICollision_shape* shape, float scale) -> ICollision_shape*;
+    [[nodiscard]] static auto create_uniform_scaling_shape_shared(ICollision_shape* shape, float scale) -> std::shared_ptr<ICollision_shape>;
 
-                  virtual void calculate_local_inertia           (const float mass, glm::mat4& inertia) const = 0;
+                  virtual void calculate_local_inertia           (float mass, glm::mat4& inertia) const = 0;
     [[nodiscard]] virtual auto is_convex                         () const -> bool = 0;
     [[nodiscard]] virtual auto get_center_of_mass                () const -> glm::vec3 = 0;
     [[nodiscard]] virtual auto get_mass_properties               () const -> Mass_properties = 0;

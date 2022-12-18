@@ -281,9 +281,35 @@ void Debug_view_window::execute_rendergraph_node()
     };
 }
 
+void Debug_view_window::hidden()
+{
+    Rendergraph_node::set_enabled(false);
+
+    // TODO
+    const auto* input = get_input(
+        erhe::application::Resource_routing::Resource_provided_by_producer,
+        erhe::application::Rendergraph_node_key::depth_visualization
+    );
+    if (
+        (input == nullptr) ||
+        input->producer_nodes.empty())
+    {
+        return;
+    }
+
+    const auto& producer_node = input->producer_nodes.front().lock();
+    if (!producer_node)
+    {
+        return;
+    }
+    producer_node->set_enabled(false);
+}
+
 void Debug_view_window::imgui()
 {
     SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui()");
+
+    Rendergraph_node::set_enabled(true);
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
@@ -314,6 +340,10 @@ void Debug_view_window::imgui()
     if (!producer_node)
     {
         log_render->error("Debug_view_window input producer is expired or not set.");
+    }
+    if (producer_node) // TODO
+    {
+        producer_node->set_enabled(true);
     }
 
     // TODO add safety?

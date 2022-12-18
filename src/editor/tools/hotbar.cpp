@@ -1,6 +1,7 @@
 #include "tools/hotbar.hpp"
 #include "brushes/brush_tool.hpp"
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/content_library.hpp"
@@ -30,6 +31,7 @@
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -64,10 +66,11 @@ void Hotbar::declare_required_components()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
     require<erhe::application::Rendergraph        >();
-    require<Fly_camera_tool >();
-    require<Scene_builder   >();
-    require<Tools           >();
-    require<Viewport_windows>();
+    require<Editor_message_bus>();
+    require<Fly_camera_tool   >();
+    require<Scene_builder     >();
+    require<Tools             >();
+    require<Viewport_windows  >();
 }
 
 void Hotbar::initialize_component()
@@ -109,10 +112,10 @@ void Hotbar::initialize_component()
         128,
         4000.0
     );
-    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id.get_id();
+    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
 
     m_rendertarget_mesh->enable_flag_bits(
-        erhe::scene::Scene_item_flags::visible
+        erhe::scene::Item_flags::visible
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
@@ -123,8 +126,12 @@ void Hotbar::initialize_component()
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
-    m_rendertarget_node->set_parent(scene_root->scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
+    auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
+    if (node_raytrace)
+    {
+        m_rendertarget_node->attach(node_raytrace);
+    }
 
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
@@ -143,6 +150,13 @@ void Hotbar::initialize_component()
     {
         hide();
     }
+
+    get<Editor_message_bus>()->add_receiver(
+        [&](Editor_message& message)
+        {
+            on_message(message);
+        }
+    );
 }
 
 void Hotbar::post_initialize()
@@ -162,6 +176,35 @@ void Hotbar::post_initialize()
 auto Hotbar::description() -> const char*
 {
    return c_title.data();
+}
+
+void Hotbar::on_message(Editor_message& message)
+{
+    Tool::on_message(message);
+
+    using namespace erhe::toolkit;
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
+    {
+        const auto& camera = message.scene_view->get_camera();
+        if (camera)
+        {
+            const auto* camera_node = camera->get_node();
+            if (camera_node != nullptr)
+            {
+                const auto& world_from_camera = camera_node->world_from_node();
+                update_node_transform(world_from_camera);
+                auto scene_root = message.scene_view->get_scene_root();
+                if (scene_root)
+                {
+                    auto* scene = scene_root->get_hosted_scene();
+                    if (scene != nullptr)
+                    {
+                        m_rendertarget_node->set_parent(scene->get_root_node());
+                    }
+                }
+            }
+        }
+    }
 }
 
 auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
@@ -321,7 +364,7 @@ void Hotbar::set_action(const Action action)
     {
         case Hotbar_action::Select:
         {
-            m_operations    ->set_active_tool (m_selection_tool.get());
+            m_operations->set_active_tool(m_selection_tool.get());
             m_selection_tool->set_enable_state(true);
             m_brush_tool    ->set_enable_state(false);
             m_trs_tool      ->set_enable_state(false);
@@ -331,7 +374,7 @@ void Hotbar::set_action(const Action action)
         }
         case Hotbar_action::Move:
         {
-            m_operations    ->set_active_tool (m_trs_tool.get());
+            m_operations->set_active_tool(m_trs_tool.get());
             m_selection_tool->set_enable_state(true);
             m_brush_tool    ->set_enable_state(false);
             m_trs_tool      ->set_enable_state(true);
@@ -341,7 +384,7 @@ void Hotbar::set_action(const Action action)
         }
         case Hotbar_action::Rotate:
         {
-            m_operations    ->set_active_tool(m_trs_tool.get());
+            m_operations->set_active_tool(m_trs_tool.get());
             m_selection_tool->set_enable_state(true);
             m_brush_tool    ->set_enable_state(false);
             m_trs_tool      ->set_enable_state(true);
@@ -351,25 +394,25 @@ void Hotbar::set_action(const Action action)
         }
         case Hotbar_action::Drag:
         {
-            m_operations    ->set_active_tool(m_physics_tool.get());
+            m_operations->set_active_tool(m_physics_tool.get());
             m_selection_tool->clear_selection();
             m_selection_tool->set_enable_state(false);
             m_brush_tool    ->set_enable_state(false);
             m_trs_tool      ->set_enable_state(false);
             m_trs_tool      ->set_translate(false);
             m_trs_tool      ->set_rotate   (false);
-            m_physics_tool  ->set_mode(Physics_tool_mode::Drag);
+            m_physics_tool->set_mode(Physics_tool_mode::Drag);
             break;
         }
         case Hotbar_action::Brush_tool:
         {
-            m_operations    ->set_active_tool(m_brush_tool.get());
-            m_selection_tool->clear_selection();
-            m_selection_tool->set_enable_state(false);
-            m_brush_tool    ->set_enable_state(true);
-            m_trs_tool      ->set_enable_state(false);
-            m_trs_tool      ->set_translate(false);
-            m_trs_tool      ->set_rotate   (false);
+            m_operations->set_active_tool(m_brush_tool.get());
+            //// m_selection_tool->clear_selection();
+            //// m_selection_tool->set_enable_state(false);
+            //// m_brush_tool    ->set_enable_state(true);
+            //// m_trs_tool      ->set_enable_state(false);
+            //// m_trs_tool      ->set_translate(false);
+            //// m_trs_tool      ->set_rotate   (false);
             break;
         }
         default:

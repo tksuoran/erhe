@@ -23,6 +23,7 @@ namespace editor
 {
 
 class Brush_tool;
+class Editor_message;
 class Icon_set;
 class Operations;
 class Physics_tool;
@@ -92,15 +93,14 @@ public:
     void imgui   () override;
 
     // Public API
-    void update_node_transform(const glm::mat4& world_from_camera);
-
-    auto try_call(erhe::application::Command_context& context) -> bool;
-
-    auto get_color (int color) -> glm::vec4&;
+    auto try_call (erhe::application::Command_context& context) -> bool;
+    auto get_color(int color) -> glm::vec4&;
 
 private:
-    void set_action(Action action);
-    void button    (glm::vec2 icon, Action action, const char* tooltip);
+    void on_message           (Editor_message& message);
+    void update_node_transform(const glm::mat4& world_from_camera);
+    void set_action           (Action action);
+    void button               (glm::vec2 icon, Action action, const char* tooltip);
 
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 

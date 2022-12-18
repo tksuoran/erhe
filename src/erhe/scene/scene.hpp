@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/message_bus/message_bus.hpp"
+#include "erhe/scene/item.hpp"
 #include "erhe/scene/scene_message.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
@@ -20,33 +21,39 @@ class Mesh;
 class Node;
 class Scene;
 
+using Layer_id = uint64_t;
+
 class Mesh_layer
 {
 public:
     Mesh_layer(
         const std::string_view name,
-        uint64_t               flags
+        uint64_t               flags,
+        Layer_id               id
     );
 
+    // Public API
     [[nodiscard]] auto get_mesh_by_id(
-        const erhe::toolkit::Unique_id<Node>::id_type id
+        const erhe::toolkit::Unique_id<Node>::id_type mesh_id
     ) const -> std::shared_ptr<Mesh>;
-
     [[nodiscard]] auto get_name() const -> const std::string&;
 
     void add   (const std::shared_ptr<Mesh>& mesh);
     void remove(const std::shared_ptr<Mesh>& mesh);
 
-    std::vector<std::shared_ptr<Mesh>>   meshes;
-    std::string                          name;
-    uint64_t                             flags{0};
-    erhe::toolkit::Unique_id<Mesh_layer> id;
+    std::vector<std::shared_ptr<Mesh>> meshes;
+    std::string                        name;
+    uint64_t                           flags{0};
+    Layer_id                           id;
 };
 
 class Light_layer
 {
 public:
-    explicit Light_layer(const std::string_view name);
+    explicit Light_layer(
+        const std::string_view name,
+        Layer_id               id
+    );
 
     [[nodiscard]] auto get_light_by_id(
         const erhe::toolkit::Unique_id<Node>::id_type id
@@ -57,24 +64,31 @@ public:
     void add   (const std::shared_ptr<Light>& light);
     void remove(const std::shared_ptr<Light>& light);
 
-    std::vector<std::shared_ptr<Light>>   lights;
-    glm::vec4                             ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
-    std::string                           name;
-    erhe::toolkit::Unique_id<Light_layer> id;
+    std::vector<std::shared_ptr<Light>> lights;
+    glm::vec4                           ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
+    std::string                         name;
+    Layer_id                            id;
 };
 
 class Scene_host;
 
 class Scene
+    : public Item
 {
 public:
     explicit Scene(
+        const std::string_view                         name,
         erhe::message_bus::Message_bus<Scene_message>* message_bus,
         Scene_host*                                    host = nullptr
     );
 
     ~Scene();
 
+    // Implements Item
+    [[nodiscard]] auto get_type () const -> uint64_t override;
+    [[nodiscard]] auto type_name() const -> const char* override;
+
+    // Public API
     void sanity_check          () const;
     void sort_transform_nodes  ();
     void update_node_transforms();
@@ -83,8 +97,8 @@ public:
     [[nodiscard]] auto get_mesh_by_id       (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
     [[nodiscard]] auto get_light_by_id      (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
     [[nodiscard]] auto get_camera_by_id     (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>;
-    [[nodiscard]] auto get_mesh_layer_by_id (erhe::toolkit::Unique_id<Mesh_layer>::id_type id) const -> std::shared_ptr<Mesh_layer>;
-    [[nodiscard]] auto get_light_layer_by_id(erhe::toolkit::Unique_id<Light_layer>::id_type id) const -> std::shared_ptr<Light_layer>;
+    [[nodiscard]] auto get_mesh_layer_by_id (Layer_id id) const -> std::shared_ptr<Mesh_layer>;
+    [[nodiscard]] auto get_light_layer_by_id(Layer_id id) const -> std::shared_ptr<Light_layer>;
     [[nodiscard]] auto get_root_node        () const -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_cameras          () -> std::vector<std::shared_ptr<Camera>>&;
     [[nodiscard]] auto get_cameras          () const -> const std::vector<std::shared_ptr<Camera>>&;
@@ -117,5 +131,10 @@ private:
     std::vector<std::shared_ptr<Camera>>           m_cameras;
     bool                                           m_nodes_sorted{false};
 };
+
+[[nodiscard]] auto is_scene(const Item* const scene_item) -> bool;
+[[nodiscard]] auto is_scene(const std::shared_ptr<Item>& scene_item) -> bool;
+[[nodiscard]] auto as_scene(Item* const scene_item) -> Scene*;
+[[nodiscard]] auto as_scene(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Scene>;
 
 } // namespace erhe::scene

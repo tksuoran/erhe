@@ -21,4 +21,14 @@ auto Render_context::get_camera_node() const  -> const erhe::scene::Node*
     return view_camera->get_node();
 }
 
+auto Render_context::get_scene() const -> const erhe::scene::Scene*
+{
+    const auto* camera_node = get_camera_node();
+    if (camera_node == nullptr)
+    {
+        return nullptr;
+    }
+    return camera_node->get_scene();
+}
+
 } // namespace editor

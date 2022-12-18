@@ -116,6 +116,13 @@ template <typename T>
     m_rendertarget_mesh->update_headset(*m_headset_view.get());
 #endif
 
+    // TODO Where this should be executed?
+    if (!m_configuration->headset.openxr)
+    {
+        // TODO Figure out better way to combine different input methods
+        m_rendertarget_mesh->update_pointer();
+    }
+
     const auto pointer = m_rendertarget_mesh->get_pointer();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

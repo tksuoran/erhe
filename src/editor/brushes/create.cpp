@@ -370,34 +370,49 @@ void Create::brush_create_button(const char* label, Brush_create* brush_create)
     }
 }
 
-void Create::imgui()
+auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    const auto selected_node   = m_selection_tool->get_first_selected_node();
+    const auto selected_scene  = m_selection_tool->get_first_selected_scene();
     const auto viewport_window = get<Viewport_windows>()->last_window();
-    if (!viewport_window)
-    {
-        return;
-    }
-
-    const auto selected_node = m_selection_tool->get_first_selected_node();
 
     erhe::scene::Scene_host* scene_host = selected_node
-        ? reinterpret_cast<Scene_root*>(selected_node->node_data.host)
-        : viewport_window->get_scene_root().get();
+        ? reinterpret_cast<Scene_root*>(selected_node->get_item_host())
+        : selected_scene
+            ? reinterpret_cast<Scene_root*>(selected_scene->get_root_node()->get_item_host())
+            : viewport_window
+                ? viewport_window->get_scene_root().get()
+                : nullptr;
     if (scene_host == nullptr)
     {
-        return;
+        return {};
     }
     Scene_root* scene_root = reinterpret_cast<Scene_root*>(scene_host);
-    ERHE_VERIFY(scene_root != nullptr);
+    if (scene_root == nullptr)
+    {
+        return {};
+    }
 
     auto content_library = scene_root->content_library();
 
     const auto parent = selected_node
         ? selected_node
-        : scene_root->get_scene()->get_root_node();
+        : scene_root->get_hosted_scene()->get_root_node();
 
-    ERHE_VERIFY(parent);
+    return parent;
+}
+
+void Create::imgui()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    const auto parent = find_parent();
+    if (!parent)
+    {
+        return;
+    }
+
+    Scene_root* scene_root = reinterpret_cast<Scene_root*>(parent->get_item_host());
+    auto content_library = scene_root->content_library();
 
     const glm::mat4 world_from_node = parent->world_from_node();
 
@@ -448,11 +463,11 @@ void Create::imgui()
             if (m_brush && create_instance)
             {
                 const uint64_t mesh_flags =
-                    erhe::scene::Scene_item_flags::visible     |
-                    erhe::scene::Scene_item_flags::content     |
-                    erhe::scene::Scene_item_flags::shadow_cast |
-                    erhe::scene::Scene_item_flags::id          |
-                    erhe::scene::Scene_item_flags::show_in_ui;
+                    erhe::scene::Item_flags::visible     |
+                    erhe::scene::Item_flags::content     |
+                    erhe::scene::Item_flags::shadow_cast |
+                    erhe::scene::Item_flags::id          |
+                    erhe::scene::Item_flags::show_in_ui;
 
                 const Instance_create_info brush_instance_create_info
                 {
@@ -546,10 +561,18 @@ void Create::imgui()
 
 void Create::tool_render(const Render_context& context)
 {
-    const auto node = m_selection_tool->get_first_selected_node();
-    const auto parent = node
-        ? node
-        : std::shared_ptr<erhe::scene::Node>{};
+    const auto parent = find_parent();
+    if (!parent)
+    {
+        return;
+    }
+
+    Scene_root* scene_root = reinterpret_cast<Scene_root*>(parent->get_item_host());
+    if (context.get_scene() != scene_root->get_hosted_scene())
+    {
+        return;
+    }
+
     const erhe::scene::Transform transform = parent
         ? parent->world_from_node_transform()
         : erhe::scene::Transform{};

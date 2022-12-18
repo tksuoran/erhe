@@ -17,16 +17,10 @@ public:
     ~Null_collision_shape() noexcept override = default;
 
     // Implements ICollision_shape
-    void calculate_local_inertia(float mass, glm::mat4& inertia) const override
-    {
-        static_cast<void>(mass);
-        inertia = glm::mat4{0.0f};
-    }
-
-    auto is_convex() const -> bool override
-    {
-        return true;
-    }
+    void calculate_local_inertia(float mass, glm::mat4& inertia) const override;
+    auto is_convex              () const -> bool                       override;
+    auto get_center_of_mass     () const -> glm::vec3                  override;
+    auto get_mass_properties    () const -> Mass_properties            override;
 
     //virtual void calculate_principal_axis_transform(
     //    const std::vector<float>& /*child_masses*/,

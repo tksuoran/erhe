@@ -7,6 +7,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/content_library.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "windows/viewport_config.hpp"
@@ -58,10 +59,18 @@ Rendertarget_mesh::Rendertarget_mesh(
     , m_viewport_config     {components.get<Viewport_config>()}
     , m_pixels_per_meter    {pixels_per_meter}
 {
-    enable_flag_bits(erhe::scene::Scene_item_flags::rendertarget);
+    enable_flag_bits(erhe::scene::Item_flags::rendertarget);
 
     init_rendertarget(width, height);
     add_primitive(components);
+}
+
+auto Rendertarget_mesh::static_type() -> uint64_t
+{
+    return
+        erhe::scene::Item_type::node_attachment |
+        erhe::scene::Item_type::mesh            |
+        erhe::scene::Item_type::rendertarget;
 }
 
 auto Rendertarget_mesh::static_type_name() -> const char*
@@ -69,9 +78,14 @@ auto Rendertarget_mesh::static_type_name() -> const char*
     return "Rendertarget_mesh";
 }
 
+auto Rendertarget_mesh::get_type() const -> uint64_t
+{
+    return static_type();
+}
+
 auto Rendertarget_mesh::type_name() const -> const char*
 {
-    return "Rendertarget_mesh";
+    return static_type_name();
 }
 
 void Rendertarget_mesh::init_rendertarget(
@@ -157,15 +171,12 @@ void Rendertarget_mesh::add_primitive(
     mesh_memory.gl_buffer_transfer_queue->flush();
 
     enable_flag_bits(
-        erhe::scene::Scene_item_flags::visible |
-        erhe::scene::Scene_item_flags::id      |
-        erhe::scene::Scene_item_flags::rendertarget
+        erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::id      |
+        erhe::scene::Item_flags::rendertarget
     );
 
-    //// m_node_raytrace = std::make_shared<Node_raytrace>(shared_geometry);
-
-    //// add_to_raytrace_scene(m_host_scene_root.raytrace_scene(), m_node_raytrace);
-    //// this->attach(m_node_raytrace);
+    m_node_raytrace = std::make_shared<Node_raytrace>(shared_geometry);
 }
 
 auto Rendertarget_mesh::texture() const -> std::shared_ptr<erhe::graphics::Texture>
@@ -382,6 +393,11 @@ auto Rendertarget_mesh::update_pointer() -> bool
     };
 }
 
+[[nodiscard]] auto Rendertarget_mesh::get_node_raytrace() -> std::shared_ptr<Node_raytrace>
+{
+    return m_node_raytrace;
+}
+
 void Rendertarget_mesh::bind()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
@@ -459,43 +475,43 @@ void Rendertarget_mesh::render_done()
     return m_pixels_per_meter;
 }
 
-auto is_rendertarget(const erhe::scene::Scene_item* const scene_item) -> bool
+auto is_rendertarget(const erhe::scene::Item* const scene_item) -> bool
 {
     if (scene_item == nullptr)
     {
         return false;
     }
     using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Scene_item_flags::rendertarget);
+    return test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Item_flags::rendertarget);
 }
 
-auto is_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool
+auto is_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
 {
     return is_rendertarget(scene_item.get());
 }
 
-auto as_rendertarget(erhe::scene::Scene_item* const scene_item) -> Rendertarget_mesh*
+auto as_rendertarget(erhe::scene::Item* const scene_item) -> Rendertarget_mesh*
 {
     if (scene_item == nullptr)
     {
         return nullptr;
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Scene_item_flags::rendertarget))
+    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Item_flags::rendertarget))
     {
         return nullptr;
     }
     return reinterpret_cast<Rendertarget_mesh*>(scene_item);
 }
 
-auto as_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>
+auto as_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>
 {
     if (!scene_item)
     {
         return {};
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Scene_item_flags::rendertarget))
+    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Item_flags::rendertarget))
     {
         return {};
     }

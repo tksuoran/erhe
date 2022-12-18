@@ -48,7 +48,7 @@ Range_selection::Range_selection(Selection_tool& selection_tool)
 }
 
 void Range_selection::set_terminator(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     if (!m_primary_terminator)
@@ -58,6 +58,7 @@ void Range_selection::set_terminator(
             item->type_name(),
             item->get_name()
         );
+
         m_primary_terminator = item;
         m_edited = true;
         return;
@@ -80,16 +81,29 @@ void Range_selection::set_terminator(
         );
         return;
     }
+
     log_selection->trace("setting secondary terminator to {} {}", item->type_name(), item->get_name());
     m_secondary_terminator = item;
     m_edited = true;
 }
 
 void Range_selection::entry(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item,
+    const bool                                attachments_expanded
 )
 {
     m_entries.push_back(item);
+    if (!attachments_expanded)
+    {
+        const auto& node = as_node(item);
+        if (node && !attachments_expanded)
+        {
+            for (const auto& attachment : node->attachments())
+            {
+                m_entries.push_back(attachment);
+            }
+        }
+    }
 }
 
 void Range_selection::begin()
@@ -98,7 +112,7 @@ void Range_selection::begin()
     m_entries.clear();
 }
 
-void Range_selection::end()
+void Range_selection::end(const bool attachments_expanded)
 {
     if (m_entries.empty() || !m_edited || !m_primary_terminator || !m_secondary_terminator)
     {
@@ -107,18 +121,39 @@ void Range_selection::end()
     }
     log_selection->trace("setting selection since range was modified");
 
-    std::vector<std::shared_ptr<erhe::scene::Scene_item>> selection;
+    std::vector<std::shared_ptr<erhe::scene::Item>> selection;
     bool between_terminators{false};
+
+    auto primary_terminator   = m_primary_terminator;
+    auto secondary_terminator = m_secondary_terminator;
+    auto primary_node         = as_node(m_primary_terminator);
+    auto secondary_node       = as_node(m_secondary_terminator);
+
     for (const auto& item : m_entries)
     {
-        if (
-            (item == m_primary_terminator) ||
-            (item == m_secondary_terminator)
-        )
+        const bool match_primary   = item == primary_terminator;
+        const bool match_secondary = item == secondary_terminator;
+        if (match_primary || match_secondary)
         {
             log_selection->trace("   T. {} {} {}", item->type_name(), item->get_name(), item->get_id());
             selection.push_back(item);
             between_terminators = !between_terminators;
+            if (!attachments_expanded && between_terminators)
+            {
+                if (match_secondary && primary_node && !primary_node->attachments().empty())
+                {
+                    primary_terminator = primary_node->attachments().back();
+                }
+                if (match_primary && secondary_node && !secondary_node->attachments().empty())
+                {
+                    secondary_terminator = secondary_node->attachments().back();
+                }
+            }
+            else
+            {
+                primary_terminator   = m_primary_terminator;
+                secondary_terminator = m_secondary_terminator;
+            }
             continue;
         }
         if (between_terminators)
@@ -252,6 +287,18 @@ auto Selection_tool::get_first_selected_node() -> std::shared_ptr<erhe::scene::N
     return {};
 }
 
+auto Selection_tool::get_first_selected_scene() -> std::shared_ptr<erhe::scene::Scene>
+{
+    for (const auto& i : m_selection)
+    {
+        if (is_scene(i))
+        {
+            return as_scene(i);
+        }
+    }
+    return {};
+}
+
 Selection_tool::Selection_tool()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
@@ -304,7 +351,11 @@ auto Selection_tool::description() -> const char*
     return c_title.data();
 }
 
-auto Selection_tool::selection() const -> const std::vector<std::shared_ptr<erhe::scene::Scene_item>>&
+void Selection_tool::on_inactived()
+{
+}
+
+auto Selection_tool::selection() const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&
 {
     return m_selection;
 }
@@ -322,7 +373,7 @@ template <typename T>
     ) != items.end();
 }
 
-void Selection_tool::set_selection(const std::vector<std::shared_ptr<erhe::scene::Scene_item>>& selection)
+void Selection_tool::set_selection(const std::vector<std::shared_ptr<erhe::scene::Item>>& selection)
 {
     for (auto& item : m_selection)
     {
@@ -517,7 +568,7 @@ void Selection_tool::toggle_mesh_selection(
 }
 
 auto Selection_tool::is_in_selection(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 ) const -> bool
 {
     if (!item)
@@ -533,7 +584,7 @@ auto Selection_tool::is_in_selection(
 }
 
     auto Selection_tool::add_to_selection(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
     if (!item)
@@ -557,7 +608,7 @@ auto Selection_tool::is_in_selection(
 }
 
 auto Selection_tool::remove_from_selection(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
     if (!item)
@@ -586,8 +637,8 @@ auto Selection_tool::remove_from_selection(
 }
 
 void Selection_tool::update_selection_from_scene_item(
-    const std::shared_ptr<erhe::scene::Scene_item>& item,
-    const bool                                      added
+    const std::shared_ptr<erhe::scene::Item>& item,
+    const bool                                added
 )
 {
     if (item->is_selected() && added)
@@ -628,7 +679,7 @@ void Selection_tool::sanity_check()
         const auto& flat_nodes = scene.get_flat_nodes();
         for (const auto& node : flat_nodes)
         {
-            const auto item = std::static_pointer_cast<erhe::scene::Scene_item>(node);
+            const auto item = std::static_pointer_cast<erhe::scene::Item>(node);
             if (
                 node->is_selected() &&
                 !is_in(item, m_selection)

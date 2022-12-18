@@ -2,6 +2,8 @@
 #include "scene/scene_root.hpp"
 #include "erhe/scene/scene.hpp"
 
+#include <imgui.h>
+
 namespace editor
 {
 
@@ -59,6 +61,50 @@ void Editor_scenes::sanity_check()
         scene_root->sanity_check();
     }
 #endif
+}
+
+auto Editor_scenes::scene_combo(
+    const char*                  label,
+    std::shared_ptr<Scene_root>& in_out_selected_entry,
+    const bool                   empty_option
+) const -> bool
+{
+    int selection_index = 0;
+    int index = 0;
+    std::vector<const char*> names;
+    std::vector<std::shared_ptr<Scene_root>> entries;
+    const bool empty_entry = empty_option || (!in_out_selected_entry);
+    if (empty_entry)
+    {
+        names.push_back("(none)");
+        entries.push_back({});
+        ++index;
+    }
+    for (const auto& entry : m_scene_roots)
+    {
+        names.push_back(entry->get_name().c_str());
+        entries.push_back(entry);
+        if (in_out_selected_entry == entry)
+        {
+            selection_index = index;
+        }
+        ++index;
+    }
+
+    // TODO Move to begin / end combo
+    const bool selection_changed =
+        ImGui::Combo(
+            label,
+            &selection_index,
+            names.data(),
+            static_cast<int>(names.size())
+        ) &&
+        (in_out_selected_entry != entries.at(selection_index));
+    if (selection_changed)
+    {
+        in_out_selected_entry = entries.at(selection_index);
+    }
+    return selection_changed;
 }
 
 } // namespace hextiles

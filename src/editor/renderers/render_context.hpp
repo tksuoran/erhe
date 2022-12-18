@@ -11,6 +11,7 @@ namespace erhe::scene
 {
     class Camera;
     class Node;
+    class Scene;
 }
 
 namespace editor
@@ -24,6 +25,7 @@ class Render_context
 {
 public:
     [[nodiscard]] auto get_camera_node() const -> const erhe::scene::Node*;
+    [[nodiscard]] auto get_scene      () const -> const erhe::scene::Scene*;
 
     Scene_view*                    scene_view            {nullptr};
     Viewport_window*               viewport_window       {nullptr};

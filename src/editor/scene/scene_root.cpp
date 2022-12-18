@@ -48,11 +48,11 @@ Scene_layers::Scene_layers(erhe::scene::Scene& scene)
 {
     using std::make_shared;
 
-    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::scene::Scene_item_flags::brush);
-    m_content      = std::make_shared<Mesh_layer>("content",      erhe::scene::Scene_item_flags::content);
-    m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::scene::Scene_item_flags::controller);
-    m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::scene::Scene_item_flags::rendertarget);
-    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::scene::Scene_item_flags::tool);
+    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::scene::Item_flags::brush,        Mesh_layer_id::brush);
+    m_content      = std::make_shared<Mesh_layer>("content",      erhe::scene::Item_flags::content,      Mesh_layer_id::content);
+    m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::scene::Item_flags::controller,   Mesh_layer_id::controller);
+    m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::scene::Item_flags::rendertarget, Mesh_layer_id::rendertarget);
+    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::scene::Item_flags::tool,         Mesh_layer_id::tool);
 
     scene.add_mesh_layer(m_brush);
     scene.add_mesh_layer(m_content);
@@ -60,7 +60,7 @@ Scene_layers::Scene_layers(erhe::scene::Scene& scene)
     scene.add_mesh_layer(m_rendertarget);
     scene.add_mesh_layer(m_tool);
 
-    m_light = std::make_shared<Light_layer>("lights");
+    m_light = std::make_shared<Light_layer>("lights", 0);
     scene.add_light_layer(m_light);
 }
 
@@ -99,8 +99,7 @@ Scene_root::Scene_root(
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name
 )
-    : m_name              {name}
-    , m_scene             {std::make_unique<Scene>(components.get<Scene_message_bus>().get(), this)}
+    : m_scene             {std::make_shared<Scene>(name, components.get<Scene_message_bus>().get(), this)}
     , m_content_library   {content_library}
     , m_editor_message_bus{components.get<Editor_message_bus>()}
     , m_scene_message_bus {components.get<Scene_message_bus >()}
@@ -121,9 +120,14 @@ Scene_root::~Scene_root() noexcept
 {
 }
 
-[[nodiscard]] auto Scene_root::get_scene() -> Scene*
+[[nodiscard]] auto Scene_root::get_hosted_scene() -> Scene*
 {
     return m_scene.get();
+}
+
+[[nodiscard]] auto Scene_root::get_shared_scene() -> std::shared_ptr<erhe::scene::Scene>
+{
+    return m_scene;
 }
 
 [[nodiscard]] auto Scene_root::get_editor_message_bus() const -> std::shared_ptr<Editor_message_bus>
@@ -167,7 +171,8 @@ auto Scene_root::scene() const -> const erhe::scene::Scene&
 
 [[nodiscard]] auto Scene_root::get_name() const -> const std::string&
 {
-    return m_name;
+    ERHE_VERIFY(m_scene);
+    return m_scene->get_name();
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -373,7 +378,7 @@ auto Scene_root::create_rendertarget_mesh(
         height,
         pixels_per_meter
     );
-    rendertarget_mesh->mesh_data.layer_id = layers().rendertarget()->id.get_id();
+    rendertarget_mesh->mesh_data.layer_id = layers().rendertarget()->id;
     m_rendertarget_meshes.push_back(rendertarget_mesh);
     return rendertarget_mesh;
 }

@@ -113,6 +113,8 @@ erhe_target_sources_grouped(
     tools/debug_visualizations.hpp
     tools/fly_camera_tool.cpp
     tools/fly_camera_tool.hpp
+    tools/grid.cpp
+    tools/grid.hpp
     tools/grid_tool.cpp
     tools/grid_tool.hpp
     tools/hotbar.cpp

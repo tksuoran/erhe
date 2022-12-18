@@ -1,13 +1,18 @@
 #pragma once
 
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4702) // unreachable code
+#endif
+
 #include "erhe/raytrace/igeometry.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <glm/glm.hpp>
 
-#include <bvh/bvh.hpp>
-#include <bvh/vector.hpp>
-#include <bvh/triangle.hpp>
+#include <bvh/v2/bvh.h>
+#include <bvh/v2/vec.h>
+#include <bvh/v2/tri.h>
 
 #include <string>
 #include <vector>
@@ -83,14 +88,20 @@ private:
 
     std::vector<Buffer_info> m_buffer_infos;
 
-    std::vector<bvh::Triangle<float>>          m_triangles;
+    std::vector<bvh::v2::PrecomputedTri<float>> m_precomputed_triangles;
     ////std::vector<glm::vec3>                     m_points;
-    std::unique_ptr<bvh::BoundingBox<float>[]> m_bounding_boxes;
-    std::unique_ptr<bvh::Vector3<float>[]>     m_centers;
-    bvh::BoundingBox<float>                    m_global_bbox;
-    bvh::Bvh<float>                            m_bvh;
+    std::unique_ptr<bvh::v2::BBox<float, 3>[]> m_bounding_boxes;
+    std::unique_ptr<bvh::v2::Vec<float, 3>[]>  m_centers;
+    bvh::v2::BBox<float, 3>                    m_global_bbox;
+    bvh::v2::Bvh<
+         bvh::v2::Node<float, 3>
+    >                                          m_bvh;
     erhe::toolkit::Bounding_box                m_bounding_box   {};
     erhe::toolkit::Bounding_sphere             m_bounding_sphere{};
 };
 
 }
+
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#endif

@@ -192,9 +192,13 @@ void Trs_tool::on_message(Editor_message& message)
     {
         set_node(m_selection_tool->get_first_selected_node());
     }
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover))
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh))
     {
         tool_hover(message.scene_view);
+    }
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
+    {
+        update_for_view(message.scene_view);
     }
 }
 
@@ -215,13 +219,11 @@ void Trs_tool::post_initialize()
 void Trs_tool::set_translate(const bool enabled)
 {
     m_visualization.set_translate(enabled);
-    update_visibility();
 }
 
 void Trs_tool::set_rotate(const bool enabled)
 {
     m_visualization.set_rotate(enabled);
-    update_visibility();
 }
 
 auto Trs_tool::get_target_node() const -> std::shared_ptr<erhe::scene::Node>
@@ -250,7 +252,6 @@ void Trs_tool::set_node(
 
     m_target_node = node;
     m_visualization.set_target(m_target_node.lock());
-    update_visibility();
 }
 
 void Trs_tool::touch()
@@ -312,11 +313,11 @@ void Trs_tool::set_local(const bool local)
     m_visualization.set_local(local);
 }
 
-void Trs_tool::viewport_toolbar()
+void Trs_tool::viewport_toolbar(bool& hovered)
 {
     if (m_icon_set)
     {
-        m_visualization.viewport_toolbar(*m_icon_set.get());
+        m_visualization.viewport_toolbar(hovered, *m_icon_set.get());
     }
 }
 
@@ -386,7 +387,6 @@ void Trs_tool::tool_hover(Scene_view* scene_view)
         if (m_hover_handle != Handle::e_handle_none)
         {
             m_hover_handle = Handle::e_handle_none;
-            update_visibility();
         }
         return;
     }
@@ -397,12 +397,11 @@ void Trs_tool::tool_hover(Scene_view* scene_view)
         return;
     }
     m_hover_handle = get_handle(tool.mesh.get());
-    update_visibility();
 }
 
 auto Trs_tool::on_drag(erhe::application::Command_context& context) -> bool
 {
-    auto* scene_view = get_scene_view();
+    auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         log_trs_tool->trace("TRS no scene view");
@@ -463,7 +462,7 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
 
     m_active_handle = m_hover_handle;
 
-    auto* scene_view = get_scene_view();
+    auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         log_trs_tool->trace("drag not possible - scene_view == nullptr");
@@ -538,9 +537,6 @@ auto Trs_tool::on_drag_ready(erhe::application::Command_context& context) -> boo
         }
     }
 
-    //Tool::set_ready();
-    update_visibility();
-
     log_trs_tool->trace("drag has been activated");
     return true;
 }
@@ -555,7 +551,6 @@ void Trs_tool::end_drag(erhe::application::Command_context& context)
     m_drag.initial_position_in_world = dvec3{0.0};
     m_drag.initial_world_from_local  = dmat4{1};
     m_drag.initial_distance          = 0.0;
-    update_visibility();
 
     const auto target_node = m_target_node.lock();
     if (m_touched && target_node)
@@ -1098,6 +1093,9 @@ void Trs_tool::update_for_view(Scene_view* scene_view)
 
     const vec3 view_position_in_world = vec3{camera_node->position_in_world()};
 
+    erhe::scene::Scene* const view_scene = camera_node->get_scene();
+
+    update_visibility(view_scene);
     m_visualization.update_scale(view_position_in_world);
     update_transforms();
 
@@ -1368,13 +1366,13 @@ void Trs_tool::update_transforms()
 void Trs_tool::on_enable_state_changed()
 {
     log_trs_tool->info("on_enable_state_changed()");
-
-    update_visibility();
 }
 
-void Trs_tool::update_visibility()
+void Trs_tool::update_visibility(const erhe::scene::Scene* view_scene)
 {
-    m_visualization.update_visibility(!m_target_node.expired());
+    const auto target_node = m_target_node.lock();
+    const bool visible = target_node && (target_node->get_scene() == view_scene);
+    m_visualization.update_visibility(visible);
     update_transforms();
 }
 

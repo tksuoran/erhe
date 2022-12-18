@@ -156,15 +156,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
     m_material_buffers->update(materials, m_programs);
     m_material_buffers->bind();
 
-    if (!lights.empty())
-    {
-        m_light_buffers->update(
-            lights,
-            parameters.light_projections,
-            parameters.ambient_light
-        );
-        m_light_buffers->bind_light_buffer();
-    }
+    // This must be done even if lights is empty.
+    // For example, the number of lights is read from the light buffer.
+    m_light_buffers->update(
+        lights,
+        parameters.light_projections,
+        parameters.ambient_light
+    );
+    m_light_buffers->bind_light_buffer();
 
     if (erhe::graphics::Instance::info.use_bindless_texture)
     {

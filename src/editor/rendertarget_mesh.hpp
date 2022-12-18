@@ -38,6 +38,7 @@ namespace editor
 
 class Forward_renderer;
 class Hand_tracker;
+class Node_raytrace;
 class Render_context;
 class Scene_root;
 class Viewport_config;
@@ -56,8 +57,10 @@ public:
         const double                        pixels_per_meter
     );
 
-    // Implements Scene_item
+    // Implements Item
+    [[nodiscard]] static auto static_type     () -> uint64_t;
     [[nodiscard]] static auto static_type_name() -> const char*;
+    [[nodiscard]] auto get_type () const -> uint64_t    override;
     [[nodiscard]] auto type_name() const -> const char* override;
 
     // Public API
@@ -68,6 +71,8 @@ public:
     [[nodiscard]] auto pixels_per_meter() const -> double;
     [[nodiscard]] auto get_pointer     () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto world_to_window (glm::vec3 world_position) const -> std::optional<glm::vec2>;
+
+    [[nodiscard]] auto get_node_raytrace() -> std::shared_ptr<Node_raytrace>;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void update_headset(Headset_view& headset_view);
@@ -98,6 +103,7 @@ private:
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;
     std::shared_ptr<erhe::primitive::Material>   m_material;
     std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
+    std::shared_ptr<Node_raytrace>               m_node_raytrace;
     std::optional<glm::vec2>                     m_pointer;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -108,10 +114,10 @@ private:
 #endif
 };
 
-[[nodiscard]] auto is_rendertarget(const erhe::scene::Scene_item* const scene_item) -> bool;
-[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool;
-[[nodiscard]] auto as_rendertarget(erhe::scene::Scene_item* const scene_item) -> Rendertarget_mesh*;
-[[nodiscard]] auto as_rendertarget(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>;
+[[nodiscard]] auto is_rendertarget(const erhe::scene::Item* const scene_item) -> bool;
+[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
+[[nodiscard]] auto as_rendertarget(erhe::scene::Item* const scene_item) -> Rendertarget_mesh*;
+[[nodiscard]] auto as_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>;
 
 [[nodiscard]] auto get_rendertarget(const erhe::scene::Node* const node) -> std::shared_ptr<Rendertarget_mesh>;
 

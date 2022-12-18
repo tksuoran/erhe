@@ -86,7 +86,7 @@ auto Physics_window::description() -> const char*
     return c_title.data();
 }
 
-void Physics_window::viewport_toolbar()
+void Physics_window::viewport_toolbar(bool& hovered)
 {
     const auto viewport_window = m_viewport_windows->last_window();
     if (!viewport_window)
@@ -112,6 +112,7 @@ void Physics_window::viewport_toolbar()
     );
     if (ImGui::IsItemHovered())
     {
+        hovered = true;
         ImGui::SetTooltip(
             physics_enabled
                 ? "Toggle physics on -> off"

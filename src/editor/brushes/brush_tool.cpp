@@ -154,12 +154,12 @@ void Brush_tool::post_initialize()
 void Brush_tool::on_message(Editor_message& message)
 {
     using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_scene_view))
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view))
     {
         remove_brush_mesh();
         m_scene_view = message.scene_view;
     }
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover))
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh))
     {
         on_motion();
     }
@@ -375,7 +375,7 @@ void Brush_tool::update_mesh_node_transform()
         ERHE_VERIFY(m_scene_view != nullptr);
         const auto& scene_root = m_scene_view->get_scene_root();
         ERHE_VERIFY(scene_root);
-        m_brush_node->set_parent(scene_root->get_scene()->get_root_node());
+        m_brush_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
         m_brush_node->set_parent_from_node(transform);
     }
 
@@ -407,11 +407,11 @@ void Brush_tool::do_insert_operation()
         ? get_hover_mesh_transform()
         : get_hover_grid_transform();
     const uint64_t mesh_flags =
-        erhe::scene::Scene_item_flags::visible     |
-        erhe::scene::Scene_item_flags::content     |
-        erhe::scene::Scene_item_flags::shadow_cast |
-        erhe::scene::Scene_item_flags::id          |
-        erhe::scene::Scene_item_flags::show_in_ui;
+        erhe::scene::Item_flags::visible     |
+        erhe::scene::Item_flags::content     |
+        erhe::scene::Item_flags::shadow_cast |
+        erhe::scene::Item_flags::id          |
+        erhe::scene::Item_flags::show_in_ui;
 
     ERHE_VERIFY(m_scene_view != nullptr);
     const auto& scene_root = m_scene_view->get_scene_root();
@@ -433,7 +433,7 @@ void Brush_tool::do_insert_operation()
 
     std::shared_ptr<erhe::scene::Node> parent = (hover_node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this())
-        : scene_root->get_scene()->get_root_node();
+        : scene_root->get_hosted_scene()->get_root_node();
     const auto& first_selected_node = m_selection_tool->get_first_selected_node();
     if (first_selected_node)
     {
@@ -491,17 +491,17 @@ void Brush_tool::add_brush_mesh()
         }
     );
     m_brush_node->enable_flag_bits(
-        erhe::scene::Scene_item_flags::visible |
-        erhe::scene::Scene_item_flags::brush   |
-        erhe::scene::Scene_item_flags::no_message
+        erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::brush   |
+        erhe::scene::Item_flags::no_message
     );
     m_brush_mesh->enable_flag_bits(
-        erhe::scene::Scene_item_flags::visible |
-        erhe::scene::Scene_item_flags::brush   |
-        erhe::scene::Scene_item_flags::no_message
+        erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::brush   |
+        erhe::scene::Item_flags::no_message
     );
 
-    m_brush_mesh->mesh_data.layer_id = scene_root->layers().brush()->id.get_id();
+    m_brush_mesh->mesh_data.layer_id = scene_root->layers().brush()->id;
 
     m_brush_node->attach(m_brush_mesh);
     m_brush_node->set_parent(scene_root->scene().get_root_node());

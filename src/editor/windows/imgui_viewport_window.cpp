@@ -44,8 +44,6 @@ namespace editor
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
-//int Imgui_viewport_window::s_serial = 0;
-
 Imgui_viewport_window::Imgui_viewport_window()
     : erhe::application::Imgui_window{"(default constructed Imgui_viewport_window)"}
     , erhe::application::Texture_rendergraph_node{
@@ -60,7 +58,6 @@ Imgui_viewport_window::Imgui_viewport_window()
 {
 }
 
-// TODO Only really needed when there is no post processing and no MSAA
 Imgui_viewport_window::Imgui_viewport_window(
     const std::string_view                  name,
     const std::shared_ptr<Viewport_window>& viewport_window
@@ -160,7 +157,7 @@ void Imgui_viewport_window::set_viewport(
     return m_viewport;
 }
 
-void Imgui_viewport_window::toolbar()
+void Imgui_viewport_window::toolbar(bool& hovered)
 {
     const auto viewport_window = m_viewport_window.lock();
     if (!viewport_window)
@@ -168,13 +165,23 @@ void Imgui_viewport_window::toolbar()
         return;
     }
 
-    viewport_window->imgui_toolbar();
+    if (viewport_window->imgui_toolbar())
+    {
+        hovered = true;
+    }
+}
+
+void Imgui_viewport_window::hidden()
+{
+    Rendergraph_node::set_enabled(false);
 }
 
 void Imgui_viewport_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
+
+    Rendergraph_node::set_enabled(true);
 
     const auto viewport_window = m_viewport_window.lock();
     if (!viewport_window)
@@ -184,8 +191,8 @@ void Imgui_viewport_window::imgui()
 
     const auto size = ImGui::GetContentRegionAvail();
 
-    m_viewport.width  = static_cast<int>(size.x);
-    m_viewport.height = static_cast<int>(size.y);
+    m_viewport.width  = std::max(1, static_cast<int>(size.x));
+    m_viewport.height = std::max(1, static_cast<int>(size.y));
 
     const auto& color_texture = get_consumer_input_texture(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -213,8 +220,8 @@ void Imgui_viewport_window::imgui()
             m_is_hovered = ImGui::IsItemHovered();
             const auto rect_min = ImGui::GetItemRectMin();
             const auto rect_max = ImGui::GetItemRectMax();
-            ERHE_VERIFY(m_viewport.width  == static_cast<int>(rect_max.x - rect_min.x));
-            ERHE_VERIFY(m_viewport.height == static_cast<int>(rect_max.y - rect_min.y));
+            //ERHE_VERIFY(m_viewport.width  == static_cast<int>(rect_max.x - rect_min.x));
+            //ERHE_VERIFY(m_viewport.height == static_cast<int>(rect_max.y - rect_min.y));
 
             viewport_window->set_window_viewport(
                 static_cast<int>(rect_min.x),

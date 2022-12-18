@@ -458,7 +458,7 @@ auto Brush::make_instance(
 
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
 
-    mesh->mesh_data.layer_id = instance_create_info.scene_root->layers().content()->id.get_id();
+    mesh->mesh_data.layer_id = instance_create_info.scene_root->layers().content()->id;
     mesh->enable_flag_bits(instance_create_info.mesh_flags);
     node->set_world_from_node(instance_create_info.world_from_node);
     node->attach             (mesh);

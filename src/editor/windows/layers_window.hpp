@@ -16,7 +16,7 @@ namespace erhe::scene
 {
     class Node;
     enum class Light_type : unsigned int;
-    class Scene_item;
+    class Item;
 }
 
 namespace editor
@@ -53,7 +53,7 @@ private:
     std::shared_ptr<Selection_tool> m_selection_tool;
     std::shared_ptr<Icon_set>       m_icon_set;
 
-    std::shared_ptr<erhe::scene::Scene_item> m_item_clicked;
+    std::shared_ptr<erhe::scene::Item> m_item_clicked;
 };
 
 } // namespace editor

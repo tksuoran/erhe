@@ -29,6 +29,7 @@ public:
     void remove_constraint         (IConstraint* constraint) override;
     void set_debug_drawer          (IDebug_draw* debug_draw) override;
     void debug_draw                ()                        override;
+    void sanity_check              ()                        override;
 
 private:
     bool                      m_physics_enabled{false};

@@ -75,18 +75,18 @@ class Range_selection
 public:
     explicit Range_selection(Selection_tool& selection_tool);
 
-    void set_terminator(const std::shared_ptr<erhe::scene::Scene_item>& item);
-    void entry         (const std::shared_ptr<erhe::scene::Scene_item>& item);
+    void set_terminator(const std::shared_ptr<erhe::scene::Item>& item);
+    void entry         (const std::shared_ptr<erhe::scene::Item>& item, bool attachments_expanded);
     void begin         ();
-    void end           ();
+    void end           (bool attachments_expanded);
     void reset         ();
 
 private:
-    Selection_tool&                                       m_selection_tool;
-    std::shared_ptr<erhe::scene::Scene_item>              m_primary_terminator;
-    std::shared_ptr<erhe::scene::Scene_item>              m_secondary_terminator;
-    bool                                                  m_edited{false};
-    std::vector<std::shared_ptr<erhe::scene::Scene_item>> m_entries;
+    Selection_tool&                                 m_selection_tool;
+    std::shared_ptr<erhe::scene::Item>              m_primary_terminator;
+    std::shared_ptr<erhe::scene::Item>              m_secondary_terminator;
+    bool                                            m_edited{false};
+    std::vector<std::shared_ptr<erhe::scene::Item>> m_entries;
 };
 
 class Selection_tool
@@ -112,20 +112,22 @@ public:
     // Implements Tool
     [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
     [[nodiscard]] auto description  () -> const char* override;
+    void on_inactived() override;
 
     // Implements Imgui_window
     void imgui() override;
 
     // Public API
-    [[nodiscard]] auto selection              () const -> const std::vector<std::shared_ptr<erhe::scene::Scene_item>>&;
-    [[nodiscard]] auto is_in_selection        (const std::shared_ptr<erhe::scene::Scene_item>& item) const -> bool;
-    [[nodiscard]] auto range_selection        () -> Range_selection&;
-    [[nodiscard]] auto get_first_selected_node() -> std::shared_ptr<erhe::scene::Node>;
-    void set_selection                   (const std::vector<std::shared_ptr<erhe::scene::Scene_item>>& selection);
-    auto add_to_selection                (const std::shared_ptr<erhe::scene::Scene_item>& item) -> bool;
+    [[nodiscard]] auto selection               () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
+    [[nodiscard]] auto is_in_selection         (const std::shared_ptr<erhe::scene::Item>& item) const -> bool;
+    [[nodiscard]] auto range_selection         () -> Range_selection&;
+    [[nodiscard]] auto get_first_selected_node () -> std::shared_ptr<erhe::scene::Node>;
+    [[nodiscard]] auto get_first_selected_scene() -> std::shared_ptr<erhe::scene::Scene>;
+    void set_selection                   (const std::vector<std::shared_ptr<erhe::scene::Item>>& selection);
+    auto add_to_selection                (const std::shared_ptr<erhe::scene::Item>& item) -> bool;
     auto clear_selection                 () -> bool;
-    auto remove_from_selection           (const std::shared_ptr<erhe::scene::Scene_item>& item) -> bool;
-    void update_selection_from_scene_item(const std::shared_ptr<erhe::scene::Scene_item>& item, const bool added);
+    auto remove_from_selection           (const std::shared_ptr<erhe::scene::Item>& item) -> bool;
+    void update_selection_from_scene_item(const std::shared_ptr<erhe::scene::Item>& item, const bool added);
     void sanity_check                    ();
 
     // Commands
@@ -154,8 +156,8 @@ private:
     std::shared_ptr<Viewport_windows>   m_viewport_windows;
     std::shared_ptr<Viewport_config>    m_viewport_config;
 
-    std::vector<std::shared_ptr<erhe::scene::Scene_item>> m_selection;
-    Range_selection                                       m_range_selection;
+    std::vector<std::shared_ptr<erhe::scene::Item>> m_selection;
+    Range_selection                                 m_range_selection;
 
     std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
     bool                               m_hover_content{false};

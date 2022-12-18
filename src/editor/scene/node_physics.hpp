@@ -29,8 +29,10 @@ public:
     );
     ~Node_physics() noexcept override;
 
-    // Implements Scene_item
+    // Implements Item
+    [[nodiscard]] static auto static_type     () -> uint64_t;
     [[nodiscard]] static auto static_type_name() -> const char*;
+    [[nodiscard]] auto get_type () const -> uint64_t override;
     [[nodiscard]] auto type_name() const -> const char* override;
 
     // Implements Node_attachment
@@ -66,10 +68,10 @@ private:
     bool                                             m_transform_change_from_physics{false};
 };
 
-auto is_physics(const erhe::scene::Scene_item* const scene_item) -> bool;
-auto is_physics(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool;
-auto as_physics(erhe::scene::Scene_item* scene_item) -> Node_physics*;
-auto as_physics(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> std::shared_ptr<Node_physics>;
+auto is_physics(const erhe::scene::Item* const scene_item) -> bool;
+auto is_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
+auto as_physics(erhe::scene::Item* scene_item) -> Node_physics*;
+auto as_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Node_physics>;
 
 auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>;
 

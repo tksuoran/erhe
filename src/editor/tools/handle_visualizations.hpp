@@ -89,7 +89,7 @@ public:
     [[nodiscard]] auto get_translate        () const -> bool;
     [[nodiscard]] auto get_rotate           () const -> bool;
     void imgui           ();
-    void viewport_toolbar(const Icon_set& icon_set);
+    void viewport_toolbar(bool& hovered, const Icon_set& icon_set);
 
     void initialize(
         const erhe::application::Configuration& configuration,
@@ -101,7 +101,8 @@ public:
     void update_transforms(); //const uint64_t serial);
 
     void update_mesh_visibility(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh
+        const std::shared_ptr<erhe::scene::Mesh>& mesh,
+        bool                                      trs_visible
     );
 
     void set_target   (const std::shared_ptr<erhe::scene::Node>& node);
@@ -135,7 +136,6 @@ private:
     ) -> std::shared_ptr<erhe::primitive::Material>;
 
     Trs_tool& m_trs_tool;
-    bool      m_is_visible    {false};
     bool      m_show_translate{true};
     bool      m_show_rotate   {false};
     bool      m_hide_inactive {true};

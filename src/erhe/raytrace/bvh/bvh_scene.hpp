@@ -1,9 +1,14 @@
 #pragma once
 
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4702) // unreachable code
+#endif
+
 #include "erhe/raytrace/iscene.hpp"
 
-#include <bvh/bvh.hpp>
-#include <bvh/sphere.hpp>
+#include <bvh/v2/bvh.h>
+#include <bvh/v2/sphere.h>
 
 #include <string>
 #include <vector>
@@ -45,9 +50,15 @@ private:
     std::string                m_debug_label;
 
     //// std::vector<bvh::Sphere<float>> m_collected_spheres;   // flat
-    std::vector<Bvh_instance*>      m_collected_instances; // flat
-    bvh::BoundingBox<float>         m_global_bbox;
-    bvh::Bvh<float>                 m_bvh;
+    std::vector<Bvh_instance*>   m_collected_instances; // flat
+    bvh::v2::BBox<float, 3>      m_global_bbox;
+    bvh::v2::Bvh<
+         bvh::v2::Node<float, 3>
+    >                            m_bvh;
 };
 
 }
+
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#endif

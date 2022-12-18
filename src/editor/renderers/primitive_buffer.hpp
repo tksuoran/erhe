@@ -10,7 +10,7 @@ namespace erhe::scene
 {
     class Mesh;
     class Mesh_layer;
-    class Scene_item_filter;
+    class Item_filter;
 }
 
 namespace editor
@@ -88,7 +88,7 @@ public:
 
     auto update(
         const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-        const erhe::scene::Scene_item_filter&                      filter,
+        const erhe::scene::Item_filter&                            filter,
         bool                                                       use_id_ranges = false
     ) -> erhe::application::Buffer_range;
 

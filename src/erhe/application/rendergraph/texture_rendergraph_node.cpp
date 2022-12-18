@@ -240,7 +240,6 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             {
                 log_rendergraph->error("{} Texture_rendergraph_node framebuffer not complete", get_name());
                 m_framebuffer.reset();
-                return;
             }
         }
 

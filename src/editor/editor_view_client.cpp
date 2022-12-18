@@ -92,32 +92,6 @@ void Editor_view_client::update()
     m_editor_message_bus->update();
     m_scene_message_bus->update();
 
-    const auto& last_window = m_viewport_windows->last_window();
-    if (last_window)
-    {
-        const auto& camera = last_window->get_camera();
-        if (camera)
-        {
-            const auto* camera_node = camera->get_node();
-            if (camera_node != nullptr)
-            {
-                // TODO check this logic, probably not all calls to update_node_transforms() are needed
-                last_window->get_scene_root()->get_scene()->update_node_transforms();
-                const auto config = get<erhe::application::Configuration>()->headset;
-                if (!config.openxr)
-                {
-                    const auto& world_from_camera = camera_node->world_from_node();
-
-                    m_hotbar->update_node_transform(world_from_camera);
-                    m_hud   ->update_node_transform(world_from_camera);
-                }
-                last_window->get_scene_root()->get_scene()->update_node_transforms();
-                m_trs_tool->update_for_view(last_window.get());
-                m_tools->get_tool_scene_root()->get_scene()->update_node_transforms();
-            }
-        }
-    }
-
     m_editor_rendering->begin_frame  ();
     m_imgui_windows   ->imgui_windows();
     m_render_graph    ->execute      ();

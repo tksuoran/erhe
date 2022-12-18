@@ -84,7 +84,7 @@ void Hover_tool::post_initialize()
 
 void Hover_tool::imgui()
 {
-    auto* scene_view = get_scene_view();
+    auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         return;
@@ -104,6 +104,33 @@ void Hover_tool::imgui()
     {
         const std::string text = fmt::format("Grid: {}", grid.position.value());
         ImGui::TextUnformatted(text.c_str());
+    }
+
+    if (nearest.valid)
+    {
+        {
+            const std::string text = fmt::format("Nearest Primitive: {}", nearest.primitive);
+            ImGui::TextUnformatted(text.c_str());
+        }
+        {
+            const std::string text = fmt::format("Nearest local_index: {}", nearest.local_index);
+            ImGui::TextUnformatted(text.c_str());
+        }
+        if (nearest.position.has_value())
+        {
+            const std::string text = fmt::format("Nearest Position: {}", nearest.position.value());
+            ImGui::TextUnformatted(text.c_str());
+        }
+        if (nearest.normal.has_value())
+        {
+            const std::string text = fmt::format("Nearest Normal: {}", nearest.normal.value());
+            ImGui::TextUnformatted(text.c_str());
+        }
+        if (nearest.uv.has_value())
+        {
+            const std::string text = fmt::format("Nearest UV: {}", nearest.uv.value());
+            ImGui::TextUnformatted(text.c_str());
+        }
     }
     const auto origin    = scene_view->get_control_ray_origin_in_world();
     const auto direction = scene_view->get_control_ray_direction_in_world();

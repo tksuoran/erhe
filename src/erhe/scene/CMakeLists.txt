@@ -6,12 +6,14 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     camera.cpp
     camera.hpp
-    node.cpp
-    node.hpp
-    mesh.cpp
-    mesh.hpp
+    item.cpp
+    item.hpp
     light.cpp
     light.hpp
+    mesh.cpp
+    mesh.hpp
+    node.cpp
+    node.hpp
     projection.cpp
     projection.hpp
     scene.cpp

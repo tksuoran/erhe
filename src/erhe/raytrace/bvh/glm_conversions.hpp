@@ -1,12 +1,12 @@
 #pragma once
 
-#include <bvh/vector.hpp>
+#include <bvh/v2/vec.h>
 #include <glm/glm.hpp>
 
 namespace erhe::raytrace
 {
 
-[[nodiscard]] inline auto from_bvh(const bvh::Vector<float, 3> v) -> glm::vec3
+[[nodiscard]] inline auto from_bvh(const bvh::v2::Vec<float, 3> v) -> glm::vec3
 {
     return glm::vec3{
         v[0],
@@ -15,9 +15,9 @@ namespace erhe::raytrace
     };
 }
 
-[[nodiscard]] inline auto to_bvh(const glm::vec3 v) -> bvh::Vector<float, 3>
+[[nodiscard]] inline auto to_bvh(const glm::vec3 v) -> bvh::v2::Vec<float, 3>
 {
-    return bvh::Vector<float, 3>{v.x, v.y, v.z};
+    return bvh::v2::Vec<float, 3>{v.x, v.y, v.z};
 }
 
 } // namespace erhe::physics

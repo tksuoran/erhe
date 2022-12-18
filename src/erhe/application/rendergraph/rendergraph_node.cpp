@@ -250,6 +250,11 @@ auto Rendergraph_node::get_producer_output_viewport(
     return m_outputs;
 }
 
+[[nodiscard]] auto Rendergraph_node::is_enabled() const -> bool
+{
+    return m_enabled;
+}
+
 [[nodiscard]] auto Rendergraph_node::get_name() const -> const std::string&
 {
     return m_name;

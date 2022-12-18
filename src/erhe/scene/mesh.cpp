@@ -12,13 +12,11 @@ namespace erhe::scene
 
 Mesh::Mesh()
 {
-    m_flag_bits |= (Scene_item_flags::mesh);
 }
 
 Mesh::Mesh(const std::string_view name)
     : Node_attachment{name}
 {
-    enable_flag_bits(Scene_item_flags::mesh);
 }
 
 Mesh::Mesh(
@@ -27,7 +25,6 @@ Mesh::Mesh(
 )
     : Node_attachment{name}
 {
-    enable_flag_bits(Scene_item_flags::mesh);
     mesh_data.primitives.emplace_back(primitive);
 }
 
@@ -35,14 +32,24 @@ Mesh::~Mesh() noexcept
 {
 }
 
+auto Mesh::static_type() -> uint64_t
+{
+    return Item_type::node_attachment | Item_type::mesh;
+}
+
 auto Mesh::static_type_name() -> const char*
 {
     return "Mesh";
 }
 
+auto Mesh::get_type() const -> uint64_t
+{
+    return static_type();
+}
+
 auto Mesh::type_name() const -> const char*
 {
-    return "Mesh";
+    return static_type_name();
 }
 
 void Mesh::handle_node_scene_host_update(
@@ -52,7 +59,7 @@ void Mesh::handle_node_scene_host_update(
 {
     if (old_scene_host)
     {
-        Scene* scene = old_scene_host->get_scene();
+        Scene* scene = old_scene_host->get_hosted_scene();
         if (scene != nullptr)
         {
             scene->unregister_mesh(
@@ -62,7 +69,7 @@ void Mesh::handle_node_scene_host_update(
     }
     if (new_scene_host)
     {
-        Scene* scene = new_scene_host->get_scene();
+        Scene* scene = new_scene_host->get_hosted_scene();
         if (scene != nullptr)
         {
             scene->register_mesh(
@@ -77,47 +84,47 @@ auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool
     return lhs.m_id.get_id() < rhs.m_id.get_id();
 }
 
-auto is_mesh(const Scene_item* const scene_item) -> bool
+auto is_mesh(const Item* const item) -> bool
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return false;
     }
     using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::mesh);
+    return test_all_rhs_bits_set(item->get_type(), Item_type::mesh);
 }
 
-auto is_mesh(const std::shared_ptr<Scene_item>& scene_item) -> bool
+auto is_mesh(const std::shared_ptr<Item>& item) -> bool
 {
-    return is_mesh(scene_item.get());
+    return is_mesh(item.get());
 }
 
-auto as_mesh(Scene_item* const scene_item) -> Mesh*
+auto as_mesh(Item* const item) -> Mesh*
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return nullptr;
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::mesh))
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::mesh))
     {
         return nullptr;
     }
-    return reinterpret_cast<Mesh*>(scene_item);
+    return reinterpret_cast<Mesh*>(item);
 }
 
-auto as_mesh(const std::shared_ptr<Scene_item>& scene_item) -> std::shared_ptr<Mesh>
+auto as_mesh(const std::shared_ptr<Item>& item) -> std::shared_ptr<Mesh>
 {
-    if (!scene_item)
+    if (!item)
     {
         return {};
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), Scene_item_flags::mesh))
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::mesh))
     {
         return {};
     }
-    return std::static_pointer_cast<Mesh>(scene_item);
+    return std::static_pointer_cast<Mesh>(item);
 }
 
 auto get_mesh(

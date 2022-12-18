@@ -9,7 +9,9 @@
 #include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -39,9 +41,9 @@ Node_tree_window::Node_tree_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
     , m_filter{
-        .require_all_bits_set           = erhe::scene::Scene_item_flags::content,
+        .require_all_bits_set           = erhe::scene::Item_flags::content,
         .require_at_least_one_bit_set   = 0,
-        .require_all_bits_clear         = erhe::scene::Scene_item_flags::tool | erhe::scene::Scene_item_flags::brush,
+        .require_all_bits_clear         = erhe::scene::Item_flags::tool | erhe::scene::Item_flags::brush,
         .require_at_least_one_bit_clear = 0
     }
 {
@@ -116,8 +118,8 @@ template <typename T, typename U>
 }
 
 auto Node_tree_window::get_item_by_id(
-    const erhe::toolkit::Unique_id<erhe::scene::Scene_item>::id_type id
-) const -> std::shared_ptr<erhe::scene::Scene_item>
+    const erhe::toolkit::Unique_id<erhe::scene::Item>::id_type id
+) const -> std::shared_ptr<erhe::scene::Item>
 {
     const auto i = m_tree_items_last_frame.find(id);
     if (i == m_tree_items_last_frame.end())
@@ -197,8 +199,8 @@ void Node_tree_window::move_selection(
 namespace {
 
 [[nodiscard]] auto get_ancestor_in(
-    const std::shared_ptr<erhe::scene::Node>&                    node,
-    const std::vector<std::shared_ptr<erhe::scene::Scene_item>>& selection
+    const std::shared_ptr<erhe::scene::Node>&              node,
+    const std::vector<std::shared_ptr<erhe::scene::Item>>& selection
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     const auto& node_parent = node->parent().lock();
@@ -416,7 +418,7 @@ void Node_tree_window::attach_selection_to(
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Node_tree_window::drag_and_drop_source(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -503,7 +505,7 @@ void drag_and_drop_gradient_preview(
 }
 
 auto Node_tree_window::drag_and_drop_target(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION
@@ -585,21 +587,18 @@ auto Node_tree_window::drag_and_drop_target(
     return false;
 }
 
-void Node_tree_window::set_item_selection_terminator(const std::shared_ptr<erhe::scene::Scene_item>& item)
+void Node_tree_window::set_item_selection_terminator(
+    const std::shared_ptr<erhe::scene::Item>& item
+)
 {
     auto& range_selection = m_selection_tool->range_selection();
-    const auto& node = as_node(item);
-    if (node && !m_expand_attachments && !node->attachments().empty())
-    {
-        range_selection.set_terminator(node->attachments().back());
-    }
-    else
-    {
-        range_selection.set_terminator(item);
-    }
+    range_selection.set_terminator(item);
 }
 
-void Node_tree_window::set_item_selection(const std::shared_ptr<erhe::scene::Scene_item>& item, bool selected)
+void Node_tree_window::set_item_selection(
+    const std::shared_ptr<erhe::scene::Item>& item,
+    const bool                                selected
+)
 {
     const auto& node = as_node(item);
 
@@ -628,7 +627,7 @@ void Node_tree_window::set_item_selection(const std::shared_ptr<erhe::scene::Sce
 }
 
 void Node_tree_window::item_update_selection(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -741,7 +740,7 @@ void Node_tree_window::item_update_selection(
 }
 
 void Node_tree_window::item_popup_menu(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     if (
@@ -769,7 +768,7 @@ void Node_tree_window::item_popup_menu(
     if (begin_popup_context_item)
     {
         const auto& node       = as_node(item);
-        Scene_root* scene_root = reinterpret_cast<Scene_root*>(item->get_scene_host());
+        Scene_root* scene_root = reinterpret_cast<Scene_root*>(item->get_item_host());
         if (node && (scene_root != nullptr))
         {
             auto parent_node = node->parent().lock();
@@ -824,7 +823,7 @@ void Node_tree_window::item_popup_menu(
     }
 }
 
-void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Scene_item>& item)
+void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Item>& item)
 {
     std::optional<glm::vec2> icon;
 
@@ -857,6 +856,11 @@ void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Scene_item>&
     {
         icon = m_icon_set->icons.camera;
     }
+    const auto& scene = as_scene(item);
+    if (scene)
+    {
+        icon = m_icon_set->icons.scene;
+    }
 
     if (icon.has_value())
     {
@@ -868,9 +872,9 @@ void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Scene_item>&
 }
 
 auto Node_tree_window::item_icon_and_text(
-    const std::shared_ptr<erhe::scene::Scene_item>& item,
-    const bool                                      update
-) -> Node_state
+    const std::shared_ptr<erhe::scene::Item>& item,
+    const bool                                update
+) -> Tree_node_state
 {
     ERHE_PROFILE_FUNCTION
 
@@ -885,28 +889,77 @@ auto Node_tree_window::item_icon_and_text(
         }
     }
 
-    const bool is_leaf = !node || (node->child_count(m_filter) == 0);
+    const auto& scene = as_scene(item);
+
+    bool is_leaf = true;
+    if (node && (node->child_count(m_filter) > 0))
+    {
+        is_leaf = false;
+    }
+    if (scene && scene->get_root_node()->child_count(m_filter) > 0)
+    {
+        is_leaf = false;
+    }
+
+    const ImGuiTreeNodeFlags flags =
+        ImGuiTreeNodeFlags_SpanAvailWidth |
+        (scene
+            ? ImGuiTreeNodeFlags_DefaultOpen
+            : ImGuiTreeNodeFlags_None
+        ) |
+        (is_leaf
+            ? (ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf)
+            : ImGuiTreeNodeFlags_OpenOnArrow
+        ) |
+        (update && item->is_selected()
+            ? ImGuiTreeNodeFlags_Selected
+            : ImGuiTreeNodeFlags_None
+        );
 
     const bool item_node_open = ImGui::TreeNodeEx(
         item->get_label().c_str(),
-        ImGuiTreeNodeFlags_SpanAvailWidth |
-        (is_leaf ? ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Leaf : 0) |
-        (update && item->is_selected() ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None)
+        flags
     );
 
-    item_popup_menu(item);
-
-    if (update)
+    std::stringstream ss;
+    if (ImGui::IsItemClicked()) ss << "clicked ";
+    if (ImGui::IsItemToggledOpen()) ss << "toggled_open ";
+    if (ImGui::IsItemToggledSelection()) ss << "toggled_selection ";
+    //if (ImGui::IsItemHovered()) ss << "hovered ";
+    //if (ImGui::IsItemActive()) ss << "active ";
+    if (ImGui::IsItemActivated()) ss << "activated ";
+    if (ImGui::IsItemDeactivated()) ss << "deactivated ";
+    //if (ImGui::IsItemFocused()) ss << "focused ";
+    //if (ImGui::IsItemVisible()) ss << "visible ";
+    if (ImGui::IsItemEdited()) ss << "edited ";
+    const std::string message = ss.str();
+    if (!message.empty())
     {
-        ERHE_PROFILE_SCOPE("update");
-        const bool consumed_by_drag_and_drop = drag_and_drop_target(item);
-        if (!consumed_by_drag_and_drop)
-        {
-            item_update_selection(item);
-        }
+        log_node_properties->info("{} {}", item->get_label(), message);
     }
 
-    return Node_state
+    const bool is_item_toggled_open = ImGui::IsItemToggledOpen();
+    if (is_item_toggled_open)
+    {
+        m_toggled_open = true;
+    }
+    if (!m_toggled_open)
+    {
+        item_popup_menu(item);
+
+        if (update)
+        {
+            ERHE_PROFILE_SCOPE("update");
+            const bool consumed_by_drag_and_drop = drag_and_drop_target(item);
+            if (!consumed_by_drag_and_drop)
+            {
+                item_update_selection(item);
+            }
+        }
+    }
+    //// log_frame->info("{} - is_leaf = {}", item->get_label(), is_leaf);
+
+    return Tree_node_state
     {
         .is_open       = item_node_open,
         .need_tree_pop = !is_leaf
@@ -914,7 +967,7 @@ auto Node_tree_window::item_icon_and_text(
 }
 
 void Node_tree_window::imgui_item_node(
-    const std::shared_ptr<erhe::scene::Scene_item>& item
+    const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -927,37 +980,44 @@ void Node_tree_window::imgui_item_node(
 
     if (m_selection_tool)
     {
-        m_selection_tool->range_selection().entry(item);
+        m_selection_tool->range_selection().entry(item, m_expand_attachments);
     }
 
-    const auto node_state = item_icon_and_text(item, true);
-    if (node_state.is_open)
+    const auto tree_node_state = item_icon_and_text(item, true);
+    if (tree_node_state.is_open)
     {
-        const auto& node = as_node(item);
-        if (node)
         {
-            if (m_expand_attachments)
+            const auto& node = as_node(item);
+            if (node)
             {
-                const float attachment_indent = 15.0f; // TODO
-                ImGui::Indent(attachment_indent);
-                for (const auto& node_attachment : node->attachments())
+                if (m_expand_attachments)
                 {
-                    imgui_item_node(node_attachment);
+                    const float attachment_indent = 15.0f; // TODO
+                    ImGui::Indent(attachment_indent);
+                    for (const auto& node_attachment : node->attachments())
+                    {
+                        imgui_item_node(node_attachment);
+                    }
+                    ImGui::Unindent(attachment_indent);
                 }
-                ImGui::Unindent(attachment_indent);
-            }
-            for (const auto& child_node : node->children())
-            {
-                imgui_item_node(child_node);
+                for (const auto& child_node : node->children())
+                {
+                    imgui_item_node(child_node);
+                }
             }
         }
-        if (node_state.need_tree_pop)
         {
-            log_tree->trace(
-                "{} {} TreePop",
-                item->type_name(),
-                item->get_label()
-            );
+            const auto& scene = as_scene(item);
+            if (scene)
+            {
+                for (const auto& node : scene->get_root_node()->children())
+                {
+                    imgui_item_node(node);
+                }
+            }
+        }
+        if (tree_node_state.need_tree_pop)
+        {
             ImGui::TreePop();
         }
     }
@@ -989,7 +1049,9 @@ void Node_tree_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
+#if 0 //// TODO
     ImGui::Checkbox("Expand Attachments", &m_expand_attachments);
+#endif
 
     m_tree_items_last_frame = m_tree_items;
     m_tree_items.clear();
@@ -1000,17 +1062,30 @@ void Node_tree_window::imgui()
     }
 
     // TODO Handle cross scene drags and drops
+#if 0 //// TODO
+    if (ImGui::Button("Create Scene"))
+    {
+        auto content_library = std::make_shared<Content_library>();
+        content_library->materials.make("Default");
+        auto scene_root = std::make_shared<Scene_root>(
+            *m_components,
+            content_library,
+            "new scene"
+        );
+        auto camera_node = std::make_shared<erhe::scene::Node>("Camera Node");
+        auto camera = std::make_shared<erhe::scene::Camera>("Camera");
+        camera_node->enable_flag_bits(erhe::scene::Item_flags::content);
+        camera->enable_flag_bits(erhe::scene::Item_flags::content);
+        camera_node->attach(camera);
+        camera_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
+        m_editor_scenes->register_scene_root(scene_root);
+    }
+#endif
     const auto& scene_roots = m_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {
-        const auto& scene = scene_root->scene();
-        {
-            ERHE_PROFILE_SCOPE("nodes");
-            for (const auto& node : scene.get_root_node()->children())
-            {
-                imgui_item_node(node);
-            }
-        }
+        const auto& scene = scene_root->get_shared_scene();
+        imgui_item_node(scene);
     }
 
     for (const auto& fun : m_operations)
@@ -1027,7 +1102,12 @@ void Node_tree_window::imgui()
 
     if (m_selection_tool)
     {
-        m_selection_tool->range_selection().end();
+        m_selection_tool->range_selection().end(m_expand_attachments);
+    }
+
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        m_toggled_open = false;
     }
 
     get<Editor_scenes>()->sanity_check();

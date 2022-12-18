@@ -98,6 +98,7 @@ public:
     std::shared_ptr<erhe::geometry::Geometry> geometry     {};
     std::optional<glm::dvec3>                 position     {};
     std::optional<glm::dvec3>                 normal       {};
+    std::optional<glm::vec2>                  uv           {};
     std::size_t                               primitive    {std::numeric_limits<std::size_t>::max()};
     std::size_t                               local_index  {std::numeric_limits<std::size_t>::max()};
 };

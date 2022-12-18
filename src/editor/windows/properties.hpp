@@ -14,7 +14,7 @@ namespace erhe::scene
     class Light;
     class Mesh;
     class Node;
-    class Scene_item;
+    class Item;
 }
 
 namespace editor
@@ -57,8 +57,8 @@ private:
     void transform_properties   (erhe::scene::Node& node);
     void rendertarget_properties(Rendertarget_mesh& rendertarget) const;
     void node_physics_properties(Node_physics& node_physics) const;
-    void item_flags             (const std::shared_ptr<erhe::scene::Scene_item>& item);
-    void item_properties        (const std::shared_ptr<erhe::scene::Scene_item>& item);
+    void item_flags             (const std::shared_ptr<erhe::scene::Item>& item);
+    void item_properties        (const std::shared_ptr<erhe::scene::Item>& item);
 
     class Value_edit_state
     {

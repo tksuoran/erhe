@@ -57,7 +57,7 @@ auto Paint_tool::try_ready() -> bool
         return false;
     }
 
-    auto* scene_view = get_scene_view();
+    auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         return false;
@@ -87,7 +87,7 @@ auto Paint_vertex_command::try_call(
     {
         return false;
     }
-    if (m_paint_tool.get_scene_view() == nullptr)
+    if (m_paint_tool.get_hover_scene_view() == nullptr)
     {
         set_inactive(context);
         return false;
@@ -178,7 +178,7 @@ void Paint_tool::paint()
     m_point_id.reset();
     m_corner_id.reset();
 
-    auto* scene_view = get_scene_view();
+    auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
         return;

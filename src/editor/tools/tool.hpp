@@ -17,9 +17,10 @@ public:
     virtual void cancel_ready           () {}
     virtual void tool_properties        () {}
     virtual void on_enable_state_changed() {}
+    virtual void on_inactived           () {}
 
-    [[nodiscard]] auto is_enabled    () const -> bool;
-    [[nodiscard]] auto get_scene_view() const -> Scene_view*;
+    [[nodiscard]] auto is_enabled          () const -> bool;
+    [[nodiscard]] auto get_hover_scene_view() const -> Scene_view*;
     void set_enable_state(const bool enable_state);
 
 protected:
@@ -27,7 +28,7 @@ protected:
 
 private:
     bool        m_enabled   {true};
-    Scene_view* m_scene_view{nullptr};
+    Scene_view* m_hover_scene_view{nullptr};
 };
 
 } // namespace editor

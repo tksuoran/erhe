@@ -33,7 +33,9 @@ public:
     Frame_controller();
 
     // Implements Node_attachment
+    [[nodiscard]] static auto static_type     () -> uint64_t;
     [[nodiscard]] static auto static_type_name() -> const char*;
+    [[nodiscard]] auto get_type () const -> uint64_t override;
     [[nodiscard]] auto type_name() const -> const char* override;
     void handle_node_transform_update() override;
 
@@ -70,10 +72,10 @@ private:
     bool      m_transform_update{false};
 };
 
-auto is_frame_controller(const erhe::scene::Scene_item* const item) -> bool;
-auto is_frame_controller(const std::shared_ptr<erhe::scene::Scene_item>& item) -> bool;
-auto as_frame_controller(erhe::scene::Scene_item* item) -> Frame_controller*;
-auto as_frame_controller(const std::shared_ptr<erhe::scene::Scene_item>& item) -> std::shared_ptr<Frame_controller>;
+auto is_frame_controller(const erhe::scene::Item* const item) -> bool;
+auto is_frame_controller(const std::shared_ptr<erhe::scene::Item>& item) -> bool;
+auto as_frame_controller(erhe::scene::Item* item) -> Frame_controller*;
+auto as_frame_controller(const std::shared_ptr<erhe::scene::Item>& item) -> std::shared_ptr<Frame_controller>;
 
 auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 

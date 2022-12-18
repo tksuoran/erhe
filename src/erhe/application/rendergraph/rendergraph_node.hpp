@@ -69,6 +69,7 @@ public:
     [[nodiscard]] auto get_inputs ()       ->       std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_outputs() const -> const std::vector<Rendergraph_producer_connector>&;
     [[nodiscard]] auto get_outputs()       ->       std::vector<Rendergraph_producer_connector>&;
+    [[nodiscard]] auto is_enabled () const -> bool;
 
     void connect          (Rendergraph* rendergraph);
     void set_enabled      (bool value);
@@ -141,12 +142,13 @@ public:
         int              depth = 0
     ) const -> erhe::scene::Viewport;
 
-    void set_depth(int depth);
-    [[nodiscard]] auto get_depth() const -> int;
-    void set_position(glm::vec2 position);
+    [[nodiscard]] auto get_depth   () const -> int;
     [[nodiscard]] auto get_position() const -> glm::vec2;
-    void set_selected(bool selected);
     [[nodiscard]] auto get_selected() const -> bool;
+
+    void set_depth   (int depth);
+    void set_position(glm::vec2 position);
+    void set_selected(bool selected);
 
 protected:
     virtual auto inputs_allowed () const -> bool;

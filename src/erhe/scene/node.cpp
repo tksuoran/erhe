@@ -12,35 +12,6 @@
 namespace erhe::scene
 {
 
-[[nodiscard]] auto Scene_item_flags::to_string(uint64_t mask) -> std::string
-{
-    if (mask == none) return std::string{"no flags "};
-    std::stringstream ss;
-    if (mask & no_message               ) ss << "no_message ";
-    if (mask & show_debug_visualizations) ss << "show_debug_visualizations ";
-    if (mask & shadow_cast              ) ss << "shadow_cast ";
-    if (mask & selected                 ) ss << "selected ";
-    if (mask & visible                  ) ss << "visible ";
-    if (mask & render_wireframe         ) ss << "render_wireframe ";
-    if (mask & render_bounding_box      ) ss << "render_bounding_box ";
-    if (mask & node                     ) ss << "node ";
-    if (mask & attachment               ) ss << "attachment ";
-    if (mask & physics                  ) ss << "physics ";
-    if (mask & raytrace                 ) ss << "raytrace ";
-    if (mask & frame_controller         ) ss << "frame_controller ";
-    if (mask & grid                     ) ss << "grid ";
-    if (mask & light                    ) ss << "light ";
-    if (mask & camera                   ) ss << "camera ";
-    if (mask & mesh                     ) ss << "mesh ";
-    if (mask & rendertarget             ) ss << "rendertarget ";
-    if (mask & controller               ) ss << "controller ";
-    if (mask & content                  ) ss << "content ";
-    if (mask & id                       ) ss << "id ";
-    if (mask & tool                     ) ss << "tool ";
-    if (mask & brush                    ) ss << "brush ";
-    return ss.str();
-}
-
 uint64_t Node_transforms::s_global_update_serial = 0;
 
 auto Node_transforms::get_current_serial() -> uint64_t
@@ -53,184 +24,15 @@ auto Node_transforms::get_next_serial() -> uint64_t
     return ++s_global_update_serial;
 }
 
-auto Scene_item_filter::operator()(const uint64_t visibility_mask) const -> bool
-{
-    if ((visibility_mask & require_all_bits_set) != require_all_bits_set)
-    {
-        return false;
-    }
-    if (require_at_least_one_bit_set != 0u)
-    {
-        if ((visibility_mask & require_at_least_one_bit_set) == 0u)
-        {
-            return false;
-        }
-    }
-    if ((visibility_mask & require_all_bits_clear) != 0u)
-    {
-        return false;
-    }
-    if (require_at_least_one_bit_clear != 0u)
-    {
-        if ((visibility_mask & require_at_least_one_bit_clear) == require_at_least_one_bit_clear)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-// -----------------------------------------------------------------------------
-
-Scene_item::Scene_item()
-{
-    m_label = fmt::format("##Node{}", m_id.get_id());
-}
-
-Scene_item::Scene_item(const std::string_view name)
-    : m_name{name}
-{
-    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
-}
-
-Scene_item::~Scene_item() noexcept = default;
-
-auto Scene_item::get_name() const -> const std::string&
-{
-    return m_name;
-}
-
-void Scene_item::set_name(const std::string_view name)
-{
-    m_name = name;
-    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
-}
-
-auto Scene_item::get_label() const -> const std::string&
-{
-    return m_label;
-}
-
-auto Scene_item::get_scene_host() const -> Scene_host*
-{
-    return nullptr;
-}
-
-auto Scene_item::type_name() const -> const char*
-{
-    return "Scene_item";
-}
-
-auto Scene_item::get_flag_bits() const -> uint64_t
-{
-    return m_flag_bits;
-}
-
-void Scene_item::set_flag_bits(const uint64_t mask, const bool value)
-{
-    const auto old_flag_bits = m_flag_bits;
-    if (value)
-    {
-        m_flag_bits = m_flag_bits | mask;
-    }
-    else
-    {
-        m_flag_bits = m_flag_bits & ~mask;
-    }
-
-    if (m_flag_bits != old_flag_bits)
-    {
-        handle_flag_bits_update(old_flag_bits, m_flag_bits);
-    }
-}
-
-void Scene_item::enable_flag_bits(const uint64_t mask)
-{
-    set_flag_bits(mask, true);
-}
-
-void Scene_item::disable_flag_bits(const uint64_t mask)
-{
-    set_flag_bits(mask, false);
-}
-
-auto Scene_item::get_id() const -> erhe::toolkit::Unique_id<Scene_item>::id_type
-{
-    return m_id.get_id();
-}
-
-auto Scene_item::is_selected() const -> bool
-{
-    return (m_flag_bits & Scene_item_flags::selected) == Scene_item_flags::selected;
-}
-
-void Scene_item::set_selected(const bool selected)
-{
-    set_flag_bits(Scene_item_flags::selected, selected);
-}
-
-void Scene_item::set_visible(const bool value)
-{
-    set_flag_bits(Scene_item_flags::visible, value);
-}
-
-void Scene_item::show()
-{
-    set_flag_bits(Scene_item_flags::visible, true);
-}
-
-void Scene_item::hide()
-{
-    set_flag_bits(Scene_item_flags::visible, false);
-}
-
-auto Scene_item::is_visible() const -> bool
-{
-    return (m_flag_bits & Scene_item_flags::visible) == Scene_item_flags::visible;
-}
-
-auto Scene_item::is_shown_in_ui() const -> bool
-{
-    return (m_flag_bits & Scene_item_flags::show_in_ui) == Scene_item_flags::show_in_ui;
-}
-
-auto Scene_item::is_hidden() const -> bool
-{
-    return !is_visible();
-}
-
-auto Scene_item::describe() -> std::string
-{
-    return fmt::format(
-        "type = {}, name = {}, id = {}, flags = {}",
-        type_name(),
-        get_name(),
-        get_id(),
-        Scene_item_flags::to_string(get_flag_bits())
-    );
-}
-
-void Scene_item::set_wireframe_color(const glm::vec4& color)
-{
-    m_wireframe_color = color;
-}
-
- auto Scene_item::get_wireframe_color() const -> glm::vec4
-{
-    return m_wireframe_color;
-}
-
 // -----------------------------------------------------------------------------
 
 Node_attachment::Node_attachment()
 {
-    enable_flag_bits(Scene_item_flags::attachment);
 }
 
 Node_attachment::Node_attachment(const std::string_view name)
-    : Scene_item{name}
+    : Item{name}
 {
-    enable_flag_bits(Scene_item_flags::attachment);
 }
 
 Node_attachment::~Node_attachment() noexcept
@@ -252,13 +54,13 @@ auto Node_attachment::get_node() const -> const Node*
     return m_node;
 }
 
-auto Node_attachment::get_scene_host() const -> Scene_host*
+auto Node_attachment::get_item_host() const -> Scene_host*
 {
     if (m_node == nullptr)
     {
         return nullptr;
     }
-    return m_node->get_scene_host();
+    return m_node->get_item_host();
 }
 
 void Node_attachment::handle_node_update(
@@ -268,7 +70,7 @@ void Node_attachment::handle_node_update(
 {
     const uint64_t old_flag_bits = old_node ? old_node->get_flag_bits() : 0;
     const uint64_t new_flag_bits = new_node ? new_node->get_flag_bits() : 0;
-    const bool     visible       = (new_flag_bits & Scene_item_flags::visible) == Scene_item_flags::visible;
+    const bool     visible       = (new_flag_bits & Item_flags::visible) == Item_flags::visible;
     if (old_flag_bits != new_flag_bits)
     {
         handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
@@ -282,16 +84,16 @@ void Node_attachment::handle_node_flag_bits_update(
 )
 {
     static_cast<void>(old_node_flag_bits);
-    const bool visible = (new_node_flag_bits & Scene_item_flags::visible) == Scene_item_flags::visible;
+    const bool visible = (new_node_flag_bits & Item_flags::visible) == Item_flags::visible;
     set_visible(visible);
 };
 
 void Node_attachment::set_node(Node* const node)
 {
     Node* const old_node = m_node;
-    Scene_host* const old_host = (m_node != nullptr) ? m_node->get_scene_host() : nullptr;
+    Scene_host* const old_host = (m_node != nullptr) ? m_node->get_item_host() : nullptr;
     m_node = node;
-    Scene_host* const new_host = (m_node != nullptr) ? m_node->get_scene_host() : nullptr;
+    Scene_host* const new_host = (m_node != nullptr) ? m_node->get_item_host() : nullptr;
     if (m_node != old_node)
     {
         handle_node_update(old_node, node);
@@ -310,13 +112,11 @@ void Node_attachment::set_node(Node* const node)
 
 Node::Node()
 {
-    enable_flag_bits(Scene_item_flags::node);
 }
 
 Node::Node(const std::string_view name)
-    : Scene_item{name}
+    : Item{name}
 {
-    enable_flag_bits(Scene_item_flags::node);
 }
 
 Node::~Node() noexcept
@@ -334,6 +134,11 @@ Node::~Node() noexcept
         attachment->set_node(nullptr);
     }
     sanity_check();
+}
+
+auto Node::get_type() const -> uint64_t
+{
+    return Item_type::node;
 }
 
 auto Node::type_name() const -> const char*
@@ -436,7 +241,7 @@ auto Node::child_count() const -> std::size_t
     return node_data.children.size();
 }
 
-auto Node::child_count(const Scene_item_filter& filter) const -> std::size_t
+auto Node::child_count(const Item_filter& filter) const -> std::size_t
 {
     std::size_t result{};
     for (const auto& child : node_data.children)
@@ -449,7 +254,7 @@ auto Node::child_count(const Scene_item_filter& filter) const -> std::size_t
     return result;
 }
 
-auto Node::attachment_count(const Scene_item_filter& filter) const -> std::size_t
+auto Node::attachment_count(const Item_filter& filter) const -> std::size_t
 {
     std::size_t result{};
     for (const auto& attachment : node_data.attachments)
@@ -503,7 +308,7 @@ auto Node::is_ancestor(const Node* ancestor_candidate) const -> bool
     return current_parent->is_ancestor(ancestor_candidate);
 }
 
-auto Node::get_scene_host() const -> Scene_host*
+auto Node::get_item_host() const -> Scene_host*
 {
     return node_data.host;
 }
@@ -511,7 +316,7 @@ auto Node::get_scene_host() const -> Scene_host*
 auto Node::get_scene() const -> Scene*
 {
     return (node_data.host != nullptr)
-        ? node_data.host->get_scene()
+        ? node_data.host->get_hosted_scene()
         : nullptr;
 }
 
@@ -649,8 +454,8 @@ void Node::handle_parent_update(
     Node* const new_parent)
 {
     ERHE_VERIFY(old_parent != new_parent);
-    Scene_host* old_scene_host = old_parent != nullptr ? old_parent->get_scene_host() : nullptr;
-    Scene_host* new_scene_host = new_parent != nullptr ? new_parent->get_scene_host() : nullptr;
+    Scene_host* old_scene_host = old_parent != nullptr ? old_parent->get_item_host() : nullptr;
+    Scene_host* new_scene_host = new_parent != nullptr ? new_parent->get_item_host() : nullptr;
     if (old_scene_host != new_scene_host)
     {
         handle_scene_host_update(old_scene_host, new_scene_host);
@@ -667,7 +472,7 @@ void Node::handle_scene_host_update(
 
     if (old_scene_host != nullptr)
     {
-        Scene* old_scene = old_scene_host->get_scene();
+        Scene* old_scene = old_scene_host->get_hosted_scene();
         if (old_scene != nullptr)
         {
             old_scene->unregister_node(
@@ -679,7 +484,7 @@ void Node::handle_scene_host_update(
     }
     if (new_scene_host != nullptr)
     {
-        Scene* new_scene = new_scene_host->get_scene();
+        Scene* new_scene = new_scene_host->get_hosted_scene();
         if (new_scene != nullptr)
         {
             new_scene->register_node(
@@ -814,7 +619,7 @@ void Node::sanity_check() const
                 child->get_depth()
             );
         }
-        if (child->get_scene_host() != get_scene_host())
+        if (child->get_item_host() != get_item_host())
         {
             log->error(
                 "Scene host mismatch: parent node = {}, child node = {}",
@@ -1034,85 +839,67 @@ auto Node_data::diff_mask(
     return mask;
 }
 
-auto is_node(const Scene_item* const scene_item) -> bool
+auto is_node(const Item* const item) -> bool
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return false;
     }
     using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(
-        scene_item->get_flag_bits(),
-        Scene_item_flags::node
-    );
+    return test_all_rhs_bits_set(item->get_type(), Item_type::node);
 }
 
 auto is_node(
-    const std::shared_ptr<Scene_item>& scene_item
+    const std::shared_ptr<Item>& item
 ) -> bool
 {
-    return is_node(scene_item.get());
+    return is_node(item.get());
 }
 
-auto as_node(Scene_item* const scene_item) -> Node*
+auto as_node(Item* const item) -> Node*
 {
-    if (scene_item == nullptr)
+    if (item == nullptr)
     {
         return nullptr;
     }
     using namespace erhe::toolkit;
-    if (
-        !test_all_rhs_bits_set(
-            scene_item->get_flag_bits(),
-            Scene_item_flags::mesh
-        )
-    )
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::node))
     {
         return nullptr;
     }
-    return reinterpret_cast<Node*>(scene_item);
+    return reinterpret_cast<Node*>(item);
 }
 
 auto as_node(
-    const std::shared_ptr<Scene_item>& scene_item
+    const std::shared_ptr<Item>& item
 ) -> std::shared_ptr<Node>
 {
-    if (!scene_item)
+    if (!item)
     {
         return {};
     }
     using namespace erhe::toolkit;
-    if (
-        !test_all_rhs_bits_set(
-            scene_item->get_flag_bits(),
-            Scene_item_flags::node
-        )
-    )
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::node))
     {
         return {};
     }
-    return std::static_pointer_cast<Node>(scene_item);
+    return std::static_pointer_cast<Node>(item);
 }
 
 auto as_node_attachment(
-    const std::shared_ptr<Scene_item>& scene_item
+    const std::shared_ptr<Item>& item
 ) -> std::shared_ptr<Node_attachment>
 {
-    if (!scene_item)
+    if (!item)
     {
         return {};
     }
     using namespace erhe::toolkit;
-    if (
-        !test_all_rhs_bits_set(
-            scene_item->get_flag_bits(),
-            Scene_item_flags::attachment
-        )
-    )
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::node_attachment))
     {
         return {};
     }
-    return std::static_pointer_cast<Node_attachment>(scene_item);
+    return std::static_pointer_cast<Node_attachment>(item);
 }
 
 

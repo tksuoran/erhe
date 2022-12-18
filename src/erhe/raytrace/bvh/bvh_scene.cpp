@@ -1,3 +1,8 @@
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4702) // unreachable code
+#endif
+
 #include "erhe/raytrace/bvh/bvh_scene.hpp"
 #include "erhe/raytrace/bvh/bvh_geometry.hpp"
 #include "erhe/raytrace/bvh/bvh_instance.hpp"
@@ -6,7 +11,7 @@
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 
-#include <bvh/sweep_sah_builder.hpp>
+#include <bvh/v2/default_builder.h>
 
 namespace erhe::raytrace
 {
@@ -195,3 +200,7 @@ auto Bvh_scene::debug_label() const -> std::string_view
 }
 
 }
+
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#endif

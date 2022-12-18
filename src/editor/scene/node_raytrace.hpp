@@ -35,7 +35,7 @@ namespace editor
 {
 
 [[nodiscard]] auto raytrace_node_mask(
-    erhe::scene::Scene_item& scene_item
+    erhe::scene::Item& scene_item
 ) -> uint32_t;
 
 class Raytrace_primitive
@@ -65,7 +65,9 @@ public:
     ~Node_raytrace() noexcept override;
 
     // Implements Node_attachment
+    [[nodiscard]] static auto static_type     () -> uint64_t;
     [[nodiscard]] static auto static_type_name() -> const char*;
+    [[nodiscard]] auto get_type () const -> uint64_t    override;
     [[nodiscard]] auto type_name() const -> const char* override;
     void handle_node_scene_host_update(
         erhe::scene::Scene_host* old_scene_host,
@@ -94,10 +96,10 @@ private:
     std::unique_ptr<erhe::raytrace::IInstance> m_instance;
 };
 
-auto is_raytrace(const erhe::scene::Scene_item* const scene_item) -> bool;
-auto is_raytrace(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> bool;
-auto as_raytrace(erhe::scene::Scene_item* scene_item) -> Node_raytrace*;
-auto as_raytrace(const std::shared_ptr<erhe::scene::Scene_item>& scene_item) -> std::shared_ptr<Node_raytrace>;
+auto is_raytrace(const erhe::scene::Item* const scene_item) -> bool;
+auto is_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
+auto as_raytrace(erhe::scene::Item* scene_item) -> Node_raytrace*;
+auto as_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Node_raytrace>;
 
 auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>;
 

@@ -568,9 +568,9 @@ void Editor_rendering::render_viewport_main(
         erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
         erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
 
-        render_content    (context, true);
-        render_selection  (context, true);
-        render_brush      (context);
+        render_content  (context, true);
+        render_selection(context, true);
+        render_brush    (context);
 
         auto& state_tracker = *m_pipeline_state_tracker.get();
         state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
@@ -648,6 +648,7 @@ void Editor_rendering::render_id(const Render_context& context)
 
     const auto& tool_layers = tool_scene_root->layers();
 
+    // TODO listen to viewport changes in msg bus?
     m_id_renderer->render(
         {
             .viewport           = context.viewport,
@@ -691,12 +692,12 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
     const auto& material_library = scene_root->content_library()->materials;
     const auto& materials        = material_library.entries();
 
-    using Scene_item_filter = erhe::scene::Scene_item_filter;
-    using Scene_item_flags  = erhe::scene::Scene_item_flags;
-    constexpr Scene_item_filter content_not_selected_filter{
-        .require_all_bits_set         = Scene_item_flags::visible,
-        .require_at_least_one_bit_set = Scene_item_flags::content | Scene_item_flags::controller,
-        .require_all_bits_clear       = Scene_item_flags::selected
+    using Item_filter = erhe::scene::Item_filter;
+    using Item_flags  = erhe::scene::Item_flags;
+    constexpr Item_filter content_not_selected_filter{
+        .require_all_bits_set         = Item_flags::visible,
+        .require_at_least_one_bit_set = Item_flags::content | Item_flags::controller,
+        .require_all_bits_clear       = Item_flags::selected
     };
 
     if (polygon_fill && render_style.polygon_fill)
@@ -828,8 +829,8 @@ void Editor_rendering::render_rendertarget_meshes(
             .filter =
             {
                 .require_all_bits_set = (
-                    erhe::scene::Scene_item_flags::visible |
-                    erhe::scene::Scene_item_flags::rendertarget
+                    erhe::scene::Item_flags::visible |
+                    erhe::scene::Item_flags::rendertarget
                 )
             }
         }
@@ -858,11 +859,11 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
     const auto& material_library = scene_root->content_library()->materials;
     const auto& materials        = material_library.entries();
 
-    constexpr erhe::scene::Scene_item_filter content_selected_filter{
+    constexpr erhe::scene::Item_filter content_selected_filter{
         .require_all_bits_set =
-            erhe::scene::Scene_item_flags::visible |
-            erhe::scene::Scene_item_flags::content |
-            erhe::scene::Scene_item_flags::selected
+            erhe::scene::Item_flags::visible |
+            erhe::scene::Item_flags::content |
+            erhe::scene::Item_flags::selected
     };
 
     if (polygon_fill && render_style.polygon_fill)
@@ -979,12 +980,6 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         return;
     }
 
-    const auto trs_tool = get<Trs_tool>();
-    if (trs_tool)
-    {
-        trs_tool->update_for_view(context.scene_view);
-    }
-
     const auto& scene_root = m_tools->get_tool_scene_root();
     if (!scene_root)
     {
@@ -1019,8 +1014,8 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
             .filter     =
             {
                 .require_all_bits_set =
-                    erhe::scene::Scene_item_flags::visible |
-                    erhe::scene::Scene_item_flags::tool
+                    erhe::scene::Item_flags::visible |
+                    erhe::scene::Item_flags::tool
             }
         }
     );
@@ -1065,8 +1060,8 @@ void Editor_rendering::render_brush(const Render_context& context)
             .filter        =
             {
                 .require_all_bits_set =
-                    erhe::scene::Scene_item_flags::visible |
-                    erhe::scene::Scene_item_flags::brush
+                    erhe::scene::Item_flags::visible |
+                    erhe::scene::Item_flags::brush
             }
         }
     );

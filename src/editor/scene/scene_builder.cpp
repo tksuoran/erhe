@@ -84,7 +84,7 @@ using erhe::geometry::shapes::make_cylinder;
 using erhe::scene::Light;
 using erhe::scene::Node;
 using erhe::scene::Projection;
-using erhe::scene::Scene_item_flags;
+using erhe::scene::Item_flags;
 using erhe::geometry::shapes::make_box;
 using erhe::primitive::Normal_style;
 using glm::mat3;
@@ -93,6 +93,8 @@ using glm::ivec3;
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
+
+constexpr bool global_instantiate = true;
 
 Scene_builder::Scene_builder()
     : Component{c_type_name}
@@ -268,7 +270,7 @@ auto Scene_builder::make_camera(
     camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 80.0f;
-    camera->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::show_in_ui);
+    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     node->attach(camera);
     node->set_parent(m_scene_root->scene().get_root_node());
 
@@ -278,7 +280,7 @@ auto Scene_builder::make_camera(
         vec3{0.0f, 1.0f,  0.0f}  // up
     );
     node->set_parent_from_node(m);
-    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::show_in_ui);
+    node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
 
     return camera;
 }
@@ -580,7 +582,7 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
-                constexpr bool instantiate = true;
+                constexpr bool instantiate = global_instantiate;
                 const auto scale = config.object_scale;
 
                 make_brush(make_dodecahedron (scale), instantiate);
@@ -611,7 +613,7 @@ void Scene_builder::make_brushes()
             [this, &config, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Sphere");
-                constexpr bool instantiate = true;
+                constexpr bool instantiate = global_instantiate;
 
                 make_brush(
                     Brush_data{
@@ -643,7 +645,7 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Torus");
 
-                constexpr bool instantiate = true;
+                constexpr bool instantiate = global_instantiate;
 
                 const float major_radius = 1.0f  * config.object_scale;
                 const float minor_radius = 0.25f * config.object_scale;
@@ -730,7 +732,7 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
-                constexpr bool instantiate = true;
+                constexpr bool instantiate = global_instantiate;
                 const float scale = config.object_scale;
                 auto cylinder_geometry = make_cylinder(
                     -1.0f * scale,
@@ -770,7 +772,7 @@ void Scene_builder::make_brushes()
             {
                 ERHE_PROFILE_SCOPE("Cone");
 
-                constexpr bool instantiate = true;
+                constexpr bool instantiate = global_instantiate;
                 auto cone_geometry = make_cone( // always axis = x
                     -config.object_scale,             // min x
                     config.object_scale,              // max x
@@ -849,10 +851,10 @@ void Scene_builder::make_brushes()
                 }
             );
             mesh->enable_flag_bits(
-                Scene_item_flags::visible |
-                Scene_item_flags::content
+                Item_flags::visible |
+                Item_flags::content
             );
-            mesh->mesh_data.layer_id = m_scene_root->layers().content()->id.get_id();
+            mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
 
             auto node = std::make_shared<erhe::scene::Node>(name);
             node->attach              (mesh);
@@ -937,7 +939,7 @@ void Scene_builder::add_room()
     // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info
     {
-        .mesh_flags      = Scene_item_flags::visible | Scene_item_flags::content | Scene_item_flags::id | Scene_item_flags::show_in_ui,
+        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::show_in_ui,
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
         .material        = floor_material,
@@ -1094,10 +1096,10 @@ void Scene_builder::make_mesh_nodes()
             const Instance_create_info brush_instance_create_info
             {
                 .mesh_flags = (
-                    Scene_item_flags::visible |
-                    Scene_item_flags::content |
-                    Scene_item_flags::id      |
-                    Scene_item_flags::shadow_cast
+                    Item_flags::visible |
+                    Item_flags::content |
+                    Item_flags::id      |
+                    Item_flags::shadow_cast
                 ),
                 .scene_root      = m_scene_root.get(),
                 .world_from_node = erhe::toolkit::create_translation(x, y, z),
@@ -1144,10 +1146,10 @@ void Scene_builder::make_cube_benchmark()
                 const vec3 pos{scale * x_rel, 1.0f + scale * y_rel, scale * z_rel};
                 auto node = std::make_shared<erhe::scene::Node>();
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
-                mesh->mesh_data.layer_id = m_scene_root->layers().content()->id.get_id();
+                mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
                 mesh->enable_flag_bits(
-                    Scene_item_flags::content |
-                    Scene_item_flags::shadow_cast
+                    Item_flags::content |
+                    Item_flags::shadow_cast
                 );
                 node->attach(mesh);
                 node->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
@@ -1172,11 +1174,11 @@ auto Scene_builder::make_directional_light(
     light->color     = color;
     light->intensity = intensity;
     light->range     = 0.0f;
-    light->layer_id  = m_scene_root->layers().light()->id.get_id();
-    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
+    light->layer_id  = m_scene_root->layers().light()->id;
+    light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     node->attach          (light);
     node->set_parent      (m_scene_root->scene().get_root_node());
-    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
+    node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::toolkit::create_look_at(
         position,                // eye
@@ -1205,11 +1207,11 @@ auto Scene_builder::make_spot_light(
     light->range            = 25.0f;
     light->inner_spot_angle = spot_cone_angle[0];
     light->outer_spot_angle = spot_cone_angle[1];
-    light->layer_id         = m_scene_root->layers().light()->id.get_id();
-    light->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
+    light->layer_id         = m_scene_root->layers().light()->id;
+    light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     node->attach          (light);
     node->set_parent      (m_scene_root->scene().get_root_node());
-    node->enable_flag_bits(Scene_item_flags::content | Scene_item_flags::visible | Scene_item_flags::show_in_ui);
+    node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
     node->set_parent_from_node(m);

@@ -110,15 +110,15 @@ public:
     void undo   (const Operation_context& context) override;
 
 private:
-    Mode                                                  m_mode;
-    std::shared_ptr<erhe::scene::Node>                    m_node;
-    std::shared_ptr<erhe::scene::Node>                    m_before_parent;
-    std::shared_ptr<erhe::scene::Node>                    m_after_parent;
-    std::vector<std::shared_ptr<Node_attach_operation>>   m_parent_changes;
+    Mode                                                m_mode;
+    std::shared_ptr<erhe::scene::Node>                  m_node;
+    std::shared_ptr<erhe::scene::Node>                  m_before_parent;
+    std::shared_ptr<erhe::scene::Node>                  m_after_parent;
+    std::vector<std::shared_ptr<Node_attach_operation>> m_parent_changes;
 
-    erhe::scene::Scene_host*                              m_scene_host;
-    std::vector<std::shared_ptr<erhe::scene::Scene_item>> m_selection_before;
-    std::vector<std::shared_ptr<erhe::scene::Scene_item>> m_selection_after;
+    erhe::scene::Scene_host*                            m_scene_host;
+    std::vector<std::shared_ptr<erhe::scene::Item>>     m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Item>>     m_selection_after;
 };
 
 }

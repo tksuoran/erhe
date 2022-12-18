@@ -12,7 +12,7 @@ class Scene_host
 public:
     virtual ~Scene_host() noexcept;
 
-    [[nodiscard]] virtual auto get_scene() -> Scene* = 0;
+    [[nodiscard]] virtual auto get_hosted_scene() -> Scene* = 0;
 };
 
 } // namespace erhe::scene

@@ -32,7 +32,7 @@ Draw_indirect_buffer::Draw_indirect_buffer(std::size_t max_draw_count)
 auto Draw_indirect_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     erhe::primitive::Primitive_mode                            primitive_mode,
-    const erhe::scene::Scene_item_filter&                      filter
+    const erhe::scene::Item_filter&                            filter
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION

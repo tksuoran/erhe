@@ -17,6 +17,11 @@ namespace erhe::application
     class Line_renderer_set;
 }
 
+namespace erhe::scene
+{
+    class Node;
+}
+
 namespace editor
 {
 
@@ -159,6 +164,8 @@ public:
 
     // Implements Imgui_window
     void imgui() override;
+
+    [[nodiscard]] auto find_parent() -> std::shared_ptr<erhe::scene::Node>;
 
 private:
     void brush_create_button(const char* label, Brush_create* brush_create);

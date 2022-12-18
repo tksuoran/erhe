@@ -471,11 +471,11 @@ void Headset_view::begin_frame()
         return;
     }
 
-    // TODO Consider multiple scene view being able to be active
+    // TODO Consider multiple scene view being able to be (hover) active
     //      (viewport window and headset view).
     m_editor_message_bus->send_message(
         Editor_message{
-            .update_flags = Message_flag_bit::c_flag_bit_scene_view,
+            .update_flags = Message_flag_bit::c_flag_bit_hover_scene_view | Message_flag_bit::c_flag_bit_render_scene_view,
             .scene_view   = this
         }
     );
@@ -509,21 +509,14 @@ void Headset_view::begin_frame()
         m_commands->on_controller_trackpad_touch(x, y, trackpad_touch->currentState == XR_TRUE);
     }
 
+    const auto* menu_click = m_headset->menu_click();
+    if (
+        menu_click->changedSinceLastSync &&
+        !menu_click->currentState &&
+        m_hud
+    )
     {
-        const auto* menu_click = m_headset->menu_click();
-        if (menu_click->changedSinceLastSync)
-        {
-            if (!menu_click->currentState)
-            {
-                const auto& hud = get<Hud>();
-                const bool is_hud_visible = hud->toggle_visibility();
-                if (is_hud_visible)
-                {
-                    const glm::mat4 world_from_view = m_headset->get_view_in_world();
-                    hud->update_node_transform(world_from_view);
-                }
-            }
-        }
+        m_hud->toggle_visibility();
     }
 
     if (m_controller_visualization)
@@ -538,18 +531,9 @@ void Headset_view::begin_frame()
     const glm::mat4 world_from_view = m_headset->get_view_in_world();
     get_camera()->get_node()->set_world_from_node(world_from_view);
 
-    const auto& hotbar = get<Hotbar>();
-    if (hotbar)
+    if (!m_scene_root)
     {
-        hotbar->update_node_transform(world_from_view);
-    }
-
-    if (m_hud)
-    {
-        if (m_configuration->hud.locked)
-        {
-            m_hud->update_node_transform(world_from_view);
-        }
+        return;
     }
 }
 

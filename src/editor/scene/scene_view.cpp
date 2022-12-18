@@ -49,7 +49,7 @@ void Scene_view::set_hover(
     {
         get_scene_root()->get_editor_message_bus()->send_message(
             Editor_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover | Message_flag_bit::c_flag_bit_scene_view,
+                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh | Message_flag_bit::c_flag_bit_hover_scene_view,
                 .scene_view   = this
             }
         );
@@ -222,6 +222,7 @@ void Scene_view::raytrace_update(
         if (entry.valid)
         {
             void* user_data     = hit.instance->get_user_data();
+            entry.uv            = hit.uv;
             entry.raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
             entry.position      = ray.origin + ray.t_far * ray.direction;
             entry.local_index   = std::numeric_limits<std::size_t>::max();

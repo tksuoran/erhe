@@ -296,8 +296,8 @@ void Id_renderer::render(
 {
     ERHE_PROFILE_FUNCTION
 
-    const erhe::scene::Scene_item_filter id_filter{
-        .require_all_bits_set           = erhe::scene::Scene_item_flags::visible | erhe::scene::Scene_item_flags::id,
+    const erhe::scene::Item_filter id_filter{
+        .require_all_bits_set           = erhe::scene::Item_flags::visible | erhe::scene::Item_flags::id,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u

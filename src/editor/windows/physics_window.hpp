@@ -42,7 +42,7 @@ public:
     void imgui() override;
 
     // Public API
-    void viewport_toolbar();
+    void viewport_toolbar(bool& hovered);
 
     class Debug_draw_parameters
     {
