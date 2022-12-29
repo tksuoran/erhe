@@ -42,6 +42,7 @@ class Hand_tracker;
 class Node_raytrace;
 class Render_context;
 class Scene_root;
+class Scene_view;
 class Viewport_config;
 class Viewport_window;
 

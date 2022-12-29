@@ -1041,18 +1041,16 @@ void Scene_builder::make_mesh_nodes()
             //const auto& material = m_scene_root->materials().at(material_index);
             const Instance_create_info brush_instance_create_info
             {
-                .node_flags = {
+                .node_flags =
                     Item_flags::show_in_ui |
                     Item_flags::visible    |
-                    Item_flags::content
-                },
-                .mesh_flags = (
+                    Item_flags::content,
+                .mesh_flags =
                     Item_flags::show_in_ui |
                     Item_flags::visible    |
                     Item_flags::content    |
                     Item_flags::id         |
-                    Item_flags::shadow_cast
-                ),
+                    Item_flags::shadow_cast,
                 .scene_root      = m_scene_root.get(),
                 .world_from_node = erhe::toolkit::create_translation(x, y, z),
                 .material        = materials.at(material_index),
