@@ -1,5 +1,6 @@
 #include "tools/grid_tool.hpp"
 #include "editor_rendering.hpp"
+#include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -39,13 +40,17 @@ void Grid_tool::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
-    require<Tools>();
+    require<Icon_set>();
+    require<Tools   >();
 }
 
 void Grid_tool::initialize_component()
 {
+    set_description(c_title);
+    set_flags      (Tool_flags::background);
+    set_icon       (get<Icon_set>()->icons.grid);
+    get<Tools>()->register_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-    get<Tools                           >()->register_background_tool(this);
 
     //const auto& config = get<erhe::application::Configuration>()->grid;
 
@@ -70,11 +75,6 @@ void Grid_tool::post_initialize()
 {
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_selection_tool    = get<Selection_tool>();
-}
-
-auto Grid_tool::description() -> const char*
-{
-   return c_title.data();
 }
 
 void Grid_tool::tool_render(
@@ -223,20 +223,23 @@ auto Grid_tool::update_hover(
     };
     double min_distance = std::numeric_limits<double>::max();
 
-    for (auto& grid : m_grids)
+    if (m_enable)
     {
-        const auto position_in_world_opt = grid->intersect_ray(ray_origin_in_world, ray_direction_in_world);
-        if (!position_in_world_opt.has_value())
+        for (auto& grid : m_grids)
         {
-            continue;
-        }
-        const glm::dvec3 position_in_world = position_in_world_opt.value();
-        const double     distance          = glm::distance(ray_origin_in_world, position_in_world);
-        if (distance < min_distance)
-        {
-            min_distance    = distance;
-            result.position = position_in_world;
-            result.grid     = grid.get();
+            const auto position_in_world_opt = grid->intersect_ray(ray_origin_in_world, ray_direction_in_world);
+            if (!position_in_world_opt.has_value())
+            {
+                continue;
+            }
+            const glm::dvec3 position_in_world = position_in_world_opt.value();
+            const double     distance          = glm::distance(ray_origin_in_world, position_in_world);
+            if (distance < min_distance)
+            {
+                min_distance    = distance;
+                result.position = position_in_world;
+                result.grid     = grid.get();
+            }
         }
     }
     return result;

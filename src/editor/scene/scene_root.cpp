@@ -112,6 +112,7 @@ Scene_root::Scene_root(
     using std::make_unique;
     using erhe::scene::Node;
 
+    m_scene->enable_flag_bits(erhe::scene::Item_flags::show_in_ui);
     m_physics_world  = erhe::physics::IWorld::create_unique();
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 }
@@ -124,6 +125,91 @@ Scene_root::~Scene_root() noexcept
 {
     return m_scene.get();
 }
+
+void Scene_root::register_node(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    if (m_scene)
+    {
+        m_scene->register_node(node);
+    }
+}
+
+void Scene_root::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    if (m_scene)
+    {
+        m_scene->unregister_node(node);
+    }
+}
+
+void Scene_root::register_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
+{
+    if (m_scene)
+    {
+        m_scene->register_camera(camera);
+    }
+}
+void Scene_root::unregister_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
+{
+    if (m_scene)
+    {
+        m_scene->unregister_camera(camera);
+    }
+}
+
+void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (m_scene)
+    {
+        m_scene->register_mesh(mesh);
+    }
+
+    if (is_rendertarget(mesh))
+    {
+        const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
+        m_rendertarget_meshes.push_back(as_rendertarget(mesh));
+    }
+}
+
+void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (m_scene)
+    {
+        m_scene->unregister_mesh(mesh);
+    }
+
+    if (is_rendertarget(mesh))
+    {
+        const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
+        const auto rendertarget = as_rendertarget(mesh);
+        const auto i = std::remove(m_rendertarget_meshes.begin(), m_rendertarget_meshes.end(), rendertarget);
+        if (i == m_rendertarget_meshes.end())
+        {
+            log_scene->error("rendertarget mesh {} not in scene root", rendertarget->get_name());
+        }
+        else
+        {
+            m_rendertarget_meshes.erase(i, m_rendertarget_meshes.end());
+        }
+    }
+}
+
+void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light)
+{
+    if (m_scene)
+    {
+        m_scene->register_light(light);
+    }
+}
+
+void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& light)
+{
+    if (m_scene)
+    {
+        m_scene->unregister_light(light);
+    }
+}
+
 
 [[nodiscard]] auto Scene_root::get_shared_scene() -> std::shared_ptr<erhe::scene::Scene>
 {
@@ -345,42 +431,19 @@ void Scene_root::sort_lights()
     );
 }
 
-void Scene_root::update_pointer_for_rendertarget_meshes()
+void Scene_root::update_pointer_for_rendertarget_meshes(Scene_view* scene_view)
 {
     std::lock_guard<std::mutex> lock(m_rendertarget_meshes_mutex);
 
     for (const auto& rendertarget_mesh : m_rendertarget_meshes)
     {
-        rendertarget_mesh->update_pointer();
+        rendertarget_mesh->update_pointer(scene_view);
     }
 }
 
 auto Scene_root::content_library() const -> std::shared_ptr<Content_library>
 {
     return m_content_library;
-}
-
-auto Scene_root::create_rendertarget_mesh(
-    const erhe::components::Components& components,
-    Viewport_window&                    host_viewport_window,
-    const int                           width,
-    const int                           height,
-    const double                        pixels_per_meter
-) -> std::shared_ptr<Rendertarget_mesh>
-{
-    std::lock_guard<std::mutex> lock(m_rendertarget_meshes_mutex);
-
-    auto rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
-        *this,
-        host_viewport_window,
-        components,
-        width,
-        height,
-        pixels_per_meter
-    );
-    rendertarget_mesh->mesh_data.layer_id = layers().rendertarget()->id;
-    m_rendertarget_meshes.push_back(rendertarget_mesh);
-    return rendertarget_mesh;
 }
 
 void Scene_root::sanity_check()

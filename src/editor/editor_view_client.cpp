@@ -1,17 +1,12 @@
 #include "editor_view_client.hpp"
 
-#include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "scene/scene_builder.hpp"
-#include "scene/scene_message_bus.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
-#include "tools/hotbar.hpp"
-#include "tools/hud.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs_tool.hpp"
 
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
@@ -57,14 +52,9 @@ void Editor_view_client::post_initialize()
     m_imgui_windows    = get<erhe::application::Imgui_windows >();
     m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
     m_render_graph     = get<erhe::application::Rendergraph   >();
-    m_editor_message_bus = get<Editor_message_bus>();
-    m_editor_rendering   = get<Editor_rendering  >();
-    m_hotbar             = get<Hotbar            >();
-    m_hud                = get<Hud               >();
-    m_scene_message_bus  = get<Scene_message_bus >();
-    m_tools              = get<Tools             >();
-    m_trs_tool           = get<Trs_tool          >();
-    m_viewport_windows   = get<Viewport_windows  >();
+    m_editor_rendering = get<Editor_rendering>();
+    m_tools            = get<Tools           >();
+    m_viewport_windows = get<Viewport_windows>();
 }
 
 // TODO Something nicer
@@ -89,8 +79,6 @@ void Editor_view_client::update()
     }
 
     get<erhe::application::Time>()->update_once_per_frame();
-    m_editor_message_bus->update();
-    m_scene_message_bus->update();
 
     m_editor_rendering->begin_frame  ();
     m_imgui_windows   ->imgui_windows();

@@ -1,5 +1,5 @@
 #include "windows/content_library_window.hpp"
-#include "brushes/brush.hpp"
+#include "tools/brushes/brush.hpp"
 #include "editor_scenes.hpp"
 
 #include "scene/material_library.hpp"

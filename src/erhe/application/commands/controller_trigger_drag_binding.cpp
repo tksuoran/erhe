@@ -44,7 +44,7 @@ auto Controller_trigger_drag_binding::on_trigger_click(
         return false;
     }
 
-    if (!context.accept_mouse_command(command))
+    if (!context.accept_controller_trigger_command(command))
     {
         ERHE_VERIFY(command->get_command_state() == State::Inactive);
         log_input_event_filtered->trace(
@@ -54,14 +54,31 @@ auto Controller_trigger_drag_binding::on_trigger_click(
         return false;
     }
 
-    // Mouse button down when in Inactive state -> transition to Ready state
+    // Trigger button down when in Inactive state -> transition to Ready state
     if (click)
     {
         if (command->get_command_state() == State::Inactive)
         {
             command->try_ready(context);
         }
-        return command->get_command_state() == State::Active; // Consumes event if command transitioned directly to active
+        if (command->get_command_state() == State::Ready)
+        {
+            command->set_active(context);
+        }
+        if (command->get_command_state() != State::Active)
+        {
+            return false;
+        }
+
+        const bool consumed = command->try_call(context);
+        if (consumed)
+        {
+            log_input_event_consumed->trace(
+                "{} consumed controller trigger click press",
+                command->get_name()
+            );
+        }
+        return consumed;
     }
     else
     {
@@ -69,7 +86,7 @@ auto Controller_trigger_drag_binding::on_trigger_click(
         if (command->get_command_state() != State::Inactive)
         {
             // Drag binding consumes button release event only
-            // if command was ini active state.
+            // if command was in active state.
             consumed = command->get_command_state() == State::Active;
             command->set_inactive(context);
             log_input_event_consumed->trace(

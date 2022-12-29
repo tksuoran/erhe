@@ -66,44 +66,6 @@ auto Operations::count_selected_meshes() const -> size_t
     return count;
 }
 
-void Operations::set_active_tool(Tool* tool)
-{
-    if (m_current_active_tool == tool)
-    {
-        return;
-    }
-
-    if (m_current_active_tool != nullptr)
-    {
-        log_tools->trace("disabling tool {}", m_current_active_tool->description());
-        m_current_active_tool->set_enable_state(false);
-    }
-
-    m_current_active_tool = tool;
-
-    if (m_current_active_tool != nullptr)
-    {
-        log_tools->trace("enabling tool {}", m_current_active_tool->description());
-        m_current_active_tool->set_enable_state(true);
-    }
-    else
-    {
-        log_tools->trace("active tool reset");
-    }
-}
-
-[[nodiscard]] auto Operations::get_active_tool() const -> Tool*
-{
-    return m_current_active_tool;
-}
-
-void Operations::register_active_tool(Tool* tool)
-{
-    tool->set_enable_state(false);
-
-    std::lock_guard<std::mutex> lock{m_mutex};
-    m_active_tools.push_back(tool);
-}
 
 void Operations::imgui()
 {
@@ -116,25 +78,26 @@ void Operations::imgui()
     }
 
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
-    for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i)
-    {
-        auto* tool = m_active_tools.at(i);
-        const bool button_pressed = erhe::application::make_button(
-            tool->description(),
-            tool->is_enabled()
-                ? erhe::application::Item_mode::active
-                : erhe::application::Item_mode::normal,
-            button_size
-        );
-        if (button_pressed)
-        {
-            if (get_active_tool() != tool) {
-                set_active_tool(tool);
-            } else {
-                set_active_tool(nullptr);
-            }
-        }
-    }
+
+    //// for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i)
+    //// {
+    ////     auto* tool = m_active_tools.at(i);
+    ////     const bool button_pressed = erhe::application::make_button(
+    ////         tool->description(),
+    ////         tool->is_active()
+    ////             ? erhe::application::Item_mode::active
+    ////             : erhe::application::Item_mode::normal,
+    ////         button_size
+    ////     );
+    ////     if (button_pressed)
+    ////     {
+    ////         if (get_active_tool() != tool) {
+    ////             set_active_tool(tool);
+    ////         } else {
+    ////             set_active_tool(nullptr);
+    ////         }
+    ////     }
+    //// }
 
     const auto mesh_context = [this](){
         return Mesh_operation::Parameters{

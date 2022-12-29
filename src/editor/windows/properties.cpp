@@ -803,49 +803,29 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
     using Item_flags = erhe::scene::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();
-    bool visible     = test_all_rhs_bits_set(flags, Item_flags::visible                  );
-    bool content     = test_all_rhs_bits_set(flags, Item_flags::content                  );
-    bool shadow_cast = test_all_rhs_bits_set(flags, Item_flags::shadow_cast              );
-    bool id          = test_all_rhs_bits_set(flags, Item_flags::id                       );
-    bool tool        = test_all_rhs_bits_set(flags, Item_flags::tool                     );
-    bool selected    = test_all_rhs_bits_set(flags, Item_flags::selected                 );
-    bool show_debug  = test_all_rhs_bits_set(flags, Item_flags::show_debug_visualizations);
-    if (ImGui::Checkbox("Show Debug", &show_debug))
+    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position)
     {
-        item->set_flag_bits(Item_flags::show_debug_visualizations, show_debug);
-    }
-    if (ImGui::Checkbox("Visible", &visible))
-    {
-        item->set_visible(visible);
-    }
-    if (ImGui::Checkbox("Content", &content))
-    {
-        item->set_flag_bits(Item_flags::content, content);
-    }
-    if (ImGui::Checkbox("ID Render", &id))
-    {
-        item->set_flag_bits(Item_flags::id, id);
-    }
-    if (ImGui::Checkbox("Shadow Cast", &shadow_cast))
-    {
-        item->set_flag_bits(Item_flags::shadow_cast, shadow_cast);
-    }
-    if (ImGui::Checkbox("Selected", &selected))
-    {
-        if (selected)
+        const uint64_t bit_mask = uint64_t{1} << bit_position;
+        bool           value    = test_all_rhs_bits_set(flags, bit_mask);
+        if (ImGui::Checkbox(Item_flags::c_bit_labels[bit_position], &value))
         {
-            m_selection_tool->add_to_selection(item);
-        }
-        else
-        {
-            m_selection_tool->remove_from_selection(item);
+            if (bit_mask == Item_flags::selected)
+            {
+                if (value)
+                {
+                    m_selection_tool->add_to_selection(item);
+                }
+                else
+                {
+                    m_selection_tool->remove_from_selection(item);
+                }
+            }
+            else
+            {
+                item->set_flag_bits(bit_mask, value);
+            }
         }
     }
-    if (ImGui::Checkbox("Tool", &tool))
-    {
-        item->set_flag_bits(erhe::scene::Item_flags::tool, tool);
-    }
-
 
     ImGui::Unindent(indent);
 

@@ -59,23 +59,15 @@ void Mesh::handle_node_scene_host_update(
 {
     if (old_scene_host)
     {
-        Scene* scene = old_scene_host->get_hosted_scene();
-        if (scene != nullptr)
-        {
-            scene->unregister_mesh(
-                std::static_pointer_cast<Mesh>(shared_from_this())
-            );
-        }
+        old_scene_host->unregister_mesh(
+            std::static_pointer_cast<Mesh>(shared_from_this())
+        );
     }
     if (new_scene_host)
     {
-        Scene* scene = new_scene_host->get_hosted_scene();
-        if (scene != nullptr)
-        {
-            scene->register_mesh(
-                std::static_pointer_cast<Mesh>(shared_from_this())
-            );
-        }
+        new_scene_host->register_mesh(
+            std::static_pointer_cast<Mesh>(shared_from_this())
+        );
     }
 }
 

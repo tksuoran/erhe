@@ -64,9 +64,6 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
 
-    // Implements Tool
-    [[nodiscard]] auto description() -> const char* override;
-
     // Implements Window
     void imgui() override;
 

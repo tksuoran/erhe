@@ -305,7 +305,7 @@ auto Jolt_rigid_body::get_center_of_mass_transform() const -> Transform
     };
 }
 
-void Jolt_rigid_body::set_center_of_mass_transform(const Transform transform)
+void Jolt_rigid_body::set_center_of_mass_transform(const Transform& transform)
 {
     if (m_body == nullptr)
     {
@@ -319,7 +319,7 @@ void Jolt_rigid_body::set_center_of_mass_transform(const Transform transform)
     //const auto position = m_body->GetCenterOfMassPosition();
 }
 
-void Jolt_rigid_body::move_world_transform(const Transform transform, float delta_time)
+void Jolt_rigid_body::move_world_transform(const Transform& transform, const float delta_time)
 {
     if (m_body == nullptr)
     {
@@ -366,7 +366,7 @@ auto Jolt_rigid_body::get_world_transform() const -> Transform
     };
 }
 
-void Jolt_rigid_body::set_world_transform(const Transform transform)
+void Jolt_rigid_body::set_world_transform(const Transform& transform)
 {
     if (m_body == nullptr)
     {
@@ -438,7 +438,7 @@ auto Jolt_rigid_body::get_linear_velocity() const -> glm::vec3
     return from_jolt(m_body->GetLinearVelocity());
 }
 
-void Jolt_rigid_body::set_linear_velocity(const glm::vec3 velocity)
+void Jolt_rigid_body::set_linear_velocity(const glm::vec3& velocity)
 {
     if (m_body == nullptr)
     {
@@ -461,7 +461,7 @@ auto Jolt_rigid_body::get_angular_velocity() const -> glm::vec3
     return from_jolt(m_body->GetAngularVelocity());
 }
 
-void Jolt_rigid_body::set_angular_velocity(const glm::vec3 velocity)
+void Jolt_rigid_body::set_angular_velocity(const glm::vec3& velocity)
 {
     if (m_body == nullptr)
     {
@@ -534,8 +534,8 @@ auto Jolt_rigid_body::get_mass() const -> float
 }
 
 void Jolt_rigid_body::set_mass_properties(
-    const float     mass,
-    const glm::mat4 inertia_tensor
+    const float      mass,
+    const glm::mat4& inertia_tensor
 )
 {
     m_mass_properties.mMass    = mass;

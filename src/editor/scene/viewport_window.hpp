@@ -57,6 +57,7 @@ class Post_processing;
 class Post_processing_node;
 class Render_context;
 class Scene_root;
+class Selection_tool;
 class Shadow_render_node;
 class Trs_tool;
 class Viewport_window;
@@ -75,6 +76,7 @@ class Viewport_windows;
 class Viewport_window
     : public Scene_view
     , public erhe::application::Rendergraph_node
+    , public std::enable_shared_from_this<Viewport_window>
 {
 public:
     static constexpr std::string_view c_type_name{"Viewport_window"};
@@ -89,10 +91,11 @@ public:
     ~Viewport_window();
 
     // Implements Scene_view
-    [[nodiscard]] auto get_scene_root    () const -> std::shared_ptr<Scene_root> override;
-    [[nodiscard]] auto get_camera        () const -> std::shared_ptr<erhe::scene::Camera> override;
-    [[nodiscard]] auto as_viewport_window() -> Viewport_window* override;
-    [[nodiscard]] auto as_viewport_window() const -> const Viewport_window* override;
+    [[nodiscard]] auto get_scene_root      () const -> std::shared_ptr<Scene_root>                    override;
+    [[nodiscard]] auto get_camera          () const -> std::shared_ptr<erhe::scene::Camera>           override;
+    [[nodiscard]] auto get_rendergraph_node() -> std::shared_ptr<erhe::application::Rendergraph_node> override;
+    [[nodiscard]] auto as_viewport_window  () -> Viewport_window*                                     override;
+    [[nodiscard]] auto as_viewport_window  () const -> const Viewport_window*                         override;
 
     // Implements Rendergraph_node
     [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
@@ -153,6 +156,7 @@ private:
     std::shared_ptr<Physics_window>                       m_physics_window;
     std::shared_ptr<Post_processing>                      m_post_processing;
     std::shared_ptr<Programs>                             m_programs;
+    std::shared_ptr<Selection_tool>                       m_selection_tool;
     std::shared_ptr<Trs_tool>                             m_trs_tool;
     std::shared_ptr<Viewport_config>                      m_viewport_config;
 

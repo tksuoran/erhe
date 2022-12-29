@@ -83,12 +83,6 @@ public:
     // Implements Window
     void imgui() override;
 
-    // Public API
-    // TODO XXX FIXME Move to erhe::application::View
-    void set_active_tool(Tool* tool);
-    [[nodiscard]] auto get_active_tool() const -> Tool*;
-    void register_active_tool(Tool* tool);
-
 private:
     [[nodiscard]]auto count_selected_meshes() const -> size_t;
 
@@ -96,10 +90,6 @@ private:
     std::shared_ptr<Mesh_memory>     m_mesh_memory;
     std::shared_ptr<Operation_stack> m_operation_stack;
     std::shared_ptr<Selection_tool>  m_selection_tool;
-
-    Tool*              m_current_active_tool{nullptr};
-    std::mutex         m_mutex;
-    std::vector<Tool*> m_active_tools;
 };
 
 } // namespace editor

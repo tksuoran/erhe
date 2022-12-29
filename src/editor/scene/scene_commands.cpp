@@ -122,8 +122,8 @@ auto Scene_commands::create_new_camera(
 
     auto new_node = std::make_shared<erhe::scene::Node>("new camera node");
     auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
-    new_node->enable_flag_bits(Item_flags::content);
-    new_camera->enable_flag_bits(erhe::scene::Item_flags::content);
+    new_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    new_camera->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
     get<Operation_stack>()->push(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{
@@ -158,7 +158,7 @@ auto Scene_commands::create_new_empty_node(
     }
 
     auto new_empty_node = std::make_shared<erhe::scene::Node>("new empty node");
-    new_empty_node->enable_flag_bits(Item_flags::content);
+    new_empty_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     get<Operation_stack>()->push(
         std::make_shared<Node_insert_remove_operation>(
             Node_insert_remove_operation::Parameters{
@@ -187,8 +187,8 @@ auto Scene_commands::create_new_light(
 
     auto new_node = std::make_shared<erhe::scene::Node>("new light node");
     auto new_light = std::make_shared<erhe::scene::Light>("new light");
-    new_node->enable_flag_bits(erhe::scene::Item_flags::content);
-    new_light->enable_flag_bits(erhe::scene::Item_flags::content);
+    new_node->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
+    new_light->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
     new_light->layer_id = scene_root->layers().light()->id;
     get<Operation_stack>()->push(
         std::make_shared<Compound_operation>(

@@ -1,4 +1,4 @@
-#include "brushes/brush.hpp"
+#include "tools/brushes/brush.hpp"
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -459,10 +459,10 @@ auto Brush::make_instance(
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
 
     mesh->mesh_data.layer_id = instance_create_info.scene_root->layers().content()->id;
-    mesh->enable_flag_bits(instance_create_info.mesh_flags);
+    mesh->enable_flag_bits   (instance_create_info.mesh_flags);
     node->set_world_from_node(instance_create_info.world_from_node);
     node->attach             (mesh);
-    node->enable_flag_bits   (instance_create_info.mesh_flags);
+    node->enable_flag_bits   (instance_create_info.node_flags);
 
     if (data.collision_shape || data.collision_shape_generator)
     {

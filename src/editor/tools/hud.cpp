@@ -36,8 +36,9 @@ auto Toggle_hud_visibility_command::try_call(
 }
 
 Hud::Hud()
-    : erhe::components::Component{c_type_name}
-    , m_toggle_visibility_command{*this}
+    : erhe::components::Component    {c_type_name}
+    , erhe::application::Imgui_window{c_title}
+    , m_toggle_visibility_command    {*this}
 {
 }
 
@@ -62,6 +63,10 @@ void Hud::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    const auto& imgui_windows = get<erhe::application::Imgui_windows>();
+
+    imgui_windows->register_imgui_window(this);
+
     const auto& configuration = get<erhe::application::Configuration>();
     const auto& hud           = configuration->hud;
     if (!hud.enabled)
@@ -73,7 +78,9 @@ void Hud::initialize_component()
         get<erhe::application::Gl_context_provider>()
     };
 
-    get<Tools>()->register_background_tool(this);
+    set_description(c_title);
+    set_flags      (Tool_flags::background);
+    get<Tools>()->register_tool(this);
 
     m_is_visible = hud.show;
     m_x          = hud.x;
@@ -84,18 +91,14 @@ void Hud::initialize_component()
     commands->register_command   (&m_toggle_visibility_command);
     commands->bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true);
 
-    const auto& imgui_windows           = get<erhe::application::Imgui_windows>();
-    const auto& scene_builder           = get<Scene_builder>();
-    const auto& primary_viewport_window = scene_builder->get_primary_viewport_window();
-    const auto& scene_root              = scene_builder->get_scene_root();
-
-    m_rendertarget_mesh = scene_root->create_rendertarget_mesh(
+    m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
         *m_components,
-        *primary_viewport_window.get(),
         hud.width,
         hud.height,
         hud.ppm
     );
+    const auto& scene_builder = get<Scene_builder>();
+    const auto& scene_root    = scene_builder->get_scene_root();
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
         erhe::scene::Item_flags::content |
@@ -147,26 +150,24 @@ void Hud::post_initialize()
     m_viewport_windows = get<Viewport_windows>();
 }
 
-auto Hud::description() -> const char*
-{
-   return c_title.data();
-}
-
 void Hud::on_message(Editor_message& message)
 {
     Tool::on_message(message);
 
-    using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
+    if (m_locked_to_head)
     {
-        const auto& camera = message.scene_view->get_camera();
-        if (camera)
+        using namespace erhe::toolkit;
+        if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
         {
-            const auto* camera_node = camera->get_node();
-            if (camera_node != nullptr)
+            const auto& camera = message.scene_view->get_camera();
+            if (camera)
             {
-                const auto& world_from_camera = camera_node->world_from_node();
-                update_node_transform(world_from_camera);
+                const auto* camera_node = camera->get_node();
+                if (camera_node != nullptr)
+                {
+                    const auto& world_from_camera = camera_node->world_from_node();
+                    update_node_transform(world_from_camera);
+                }
             }
         }
     }
@@ -179,6 +180,7 @@ void Hud::update_node_transform(const glm::mat4& world_from_camera)
         return;
     }
 
+    m_world_from_camera = world_from_camera;
     const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}};
     const glm::vec3 eye_position{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
     const glm::vec3 up_direction{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
@@ -198,6 +200,19 @@ void Hud::tool_render(
 {
 }
 
+void Hud::imgui()
+{
+    ImGui::Checkbox("Locked to Head", &m_locked_to_head);
+    ImGui::Checkbox("Visible",        &m_is_visible);
+    const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
+    const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
+    const bool z_changed = ImGui::DragFloat("Z", &m_z, 0.0001f);
+    if (x_changed || y_changed || z_changed)
+    {
+        update_node_transform(m_world_from_camera);
+    }
+}
+
 auto Hud::toggle_visibility() -> bool
 {
     set_visibility(!m_is_visible);
@@ -211,6 +226,21 @@ void Hud::set_visibility(const bool value)
     if (!m_rendertarget_mesh)
     {
         return;
+    }
+
+    Scene_view* hover_scene_view = get_hover_scene_view();
+    if (hover_scene_view != nullptr)
+    {
+        const auto& camera = get_hover_scene_view()->get_camera();
+        if (camera)
+        {
+            const auto* camera_node = camera->get_node();
+            if (camera_node != nullptr)
+            {
+                const auto& world_from_camera = camera_node->world_from_node();
+                update_node_transform(world_from_camera);
+            }
+        }
     }
 
     m_rendertarget_imgui_viewport->set_enabled(m_is_visible);

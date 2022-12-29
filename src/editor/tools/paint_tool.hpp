@@ -38,12 +38,7 @@ class Paint_vertex_command
     : public erhe::application::Command
 {
 public:
-    explicit Paint_vertex_command(Paint_tool& paint_tool)
-        : Command     {"Paint_tool.paint_vertex"}
-        , m_paint_tool{paint_tool}
-    {
-    }
-
+    explicit Paint_vertex_command(Paint_tool& paint_tool);
     auto try_call (erhe::application::Command_context& context) -> bool override;
     void try_ready(erhe::application::Command_context& context) override;
 
@@ -71,6 +66,7 @@ class Paint_tool
     , public Tool
 {
 public:
+    static constexpr int              c_priority {4};
     static constexpr std::string_view c_type_name{"Paint_tool"};
     static constexpr std::string_view c_title{"Paint Tool"};
     static constexpr uint32_t c_type_hash{
@@ -89,9 +85,6 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
-
-    // Implements Tool
-    [[nodiscard]] auto description() -> const char* override;
 
     // Implements Imgui_window
     void imgui() override;

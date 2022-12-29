@@ -14,6 +14,12 @@
 
 #include <memory>
 
+
+namespace erhe::application
+{
+    class Rendergraph;
+}
+
 namespace erhe::graphics
 {
     class Framebuffer;
@@ -25,9 +31,11 @@ namespace editor
 {
 
 class Debug_view_window;
+class Depth_to_color_rendergraph_node;
 class Forward_renderer;
 class Programs;
 class Shadow_renderer;
+class Shadow_render_node;
 
 /// <summary>
 /// Rendergraph processor node for converting depth texture into color texture.
@@ -68,6 +76,7 @@ class Debug_view_window
     : public erhe::components::Component
     , public erhe::application::Rendergraph_node
     , public erhe::application::Imgui_window
+    , public std::enable_shared_from_this<Debug_view_window>
 {
 public:
     static constexpr std::string_view c_type_name{"Viewport_window"};
@@ -98,11 +107,20 @@ public:
     void imgui () override;
     void hidden() override;
 
+    // Public API
+    //// void register_node(const std::shared_ptr<Shadow_render_node>& shadow_renderer_node)
+
 private:
+    void set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& node);
+
     // Component dependencies
+    std::shared_ptr<erhe::application::Rendergraph> m_rendergraph;
     std::shared_ptr<Shadow_renderer> m_shadow_renderer;
 
-    int m_area_size{0};
+    std::shared_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node;
+    std::shared_ptr<Shadow_render_node>              m_shadow_renderer_node;
+    int m_area_size    {0};
+    int m_selected_node{0};
 };
 
 } // namespace editor

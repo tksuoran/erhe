@@ -89,6 +89,7 @@ public:
 class Instance_create_info final
 {
 public:
+    uint64_t                                   node_flags     {0};
     uint64_t                                   mesh_flags     {0};
     Scene_root*                                scene_root     {nullptr};
     glm::mat4                                  world_from_node{1.0f};

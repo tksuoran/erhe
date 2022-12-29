@@ -144,8 +144,8 @@ class Create
 {
 public:
     static constexpr int              c_priority {4};
-    static constexpr std::string_view c_type_name{"Create"};
     static constexpr std::string_view c_title    {"Create"};
+    static constexpr std::string_view c_type_name{"Create"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Create ();
@@ -158,8 +158,6 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override { return c_title.data(); }
     void tool_render            (const Render_context& context) override;
 
     // Implements Imgui_window

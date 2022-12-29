@@ -1,7 +1,7 @@
 #include "windows/tool_properties_window.hpp"
 
 #include "tools/tool.hpp"
-#include "windows/operations.hpp"
+#include "tools/tools.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -37,7 +37,7 @@ void Tool_properties_window::initialize_component()
 
 void Tool_properties_window::post_initialize()
 {
-    m_operations = get<Operations>();
+    m_tools = get<Tools>();
 }
 
 void Tool_properties_window::imgui()
@@ -45,11 +45,11 @@ void Tool_properties_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    if (!m_operations)
+    if (!m_tools)
     {
         return;
     }
-    auto* const tool = m_operations->get_active_tool();
+    auto* const tool = m_tools->get_priority_tool();
     if (tool == nullptr)
     {
         return;

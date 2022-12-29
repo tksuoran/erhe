@@ -39,6 +39,11 @@ auto Command_context::accept_mouse_command(Command* command) -> bool
     return m_commands.accept_mouse_command(command);
 }
 
+auto Command_context::accept_controller_trigger_command(Command* command) -> bool
+{
+    return m_commands.accept_controller_trigger_command(command);
+}
+
 auto Command_context::commands() const -> Commands&
 {
     return m_commands;

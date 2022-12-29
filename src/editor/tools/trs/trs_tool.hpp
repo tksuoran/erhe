@@ -1,7 +1,7 @@
 #pragma once
 
 #include "editor_message.hpp"
-#include "tools/handle_visualizations.hpp"
+#include "tools/trs/handle_visualizations.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
@@ -69,10 +69,12 @@ class Icon_set;
 class Material_library;
 class Materials;
 class Mesh_memory;
+class Move_tool;
 class Node_physics;
 class Node_raytrace;
 class Operation_stack;
 class Raytrace_primitive;
+class Rotate_tool;
 class Scene_view;
 class Tools;
 class Trs_tool;
@@ -83,11 +85,7 @@ class Trs_tool_drag_command
     : public erhe::application::Command
 {
 public:
-    explicit Trs_tool_drag_command(Trs_tool& trs_tool)
-        : Command   {"Trs_tool.drag"}
-        , m_trs_tool{trs_tool}
-    {
-    }
+    explicit Trs_tool_drag_command(Trs_tool& trs_tool);
 
     auto try_call   (erhe::application::Command_context& context) -> bool override;
     void try_ready  (erhe::application::Command_context& context) override;
@@ -138,10 +136,7 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override;
-    void tool_render            (const Render_context& context) override;
-    void on_enable_state_changed() override;
+    void tool_render(const Render_context& context) override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -150,7 +145,7 @@ public:
     void viewport_toolbar(bool& hovered);
     void set_translate   (const bool enabled);
     void set_rotate      (const bool enabled);
-    [[nodiscard]] auto is_active() const -> bool;
+    [[nodiscard]] auto is_trs_active() const -> bool;
 
     // Commands
     auto on_drag_ready(erhe::application::Command_context& context) -> bool;
@@ -167,11 +162,12 @@ public:
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_handle_type      (const Handle handle) const -> Handle_type;
     [[nodiscard]] auto get_tool_scene_root  () -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_target_scene_root() -> Scene_root*;
 
 private:
     void on_message     (Editor_message& message);
     void update_for_view(Scene_view* scene_view);
-    void tool_hover     (Scene_view* scene_view);
+    void tool_hover     ();
     void touch          ();
     void begin_move     ();
     void end_move       ();
@@ -190,7 +186,7 @@ private:
         float     m_v_dot_n{0.0f};
         glm::vec3 m_pw{};
         glm::vec3 m_q0{};
-        glm::vec3 m_q{} ;
+        glm::vec3 m_q{};
     };
 
     class Drag
@@ -249,14 +245,15 @@ private:
     std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
     std::shared_ptr<Editor_scenes>                        m_editor_scenes;
     std::shared_ptr<Mesh_memory>                          m_mesh_memory;
+    std::shared_ptr<Move_tool>                            m_move_tool;
     std::shared_ptr<Icon_set>                             m_icon_set;
     std::shared_ptr<Operation_stack>                      m_operation_stack;
+    std::shared_ptr<Rotate_tool>                          m_rotate_tool;
     std::shared_ptr<Selection_tool>                       m_selection_tool;
     std::shared_ptr<Tools>                                m_tools;
     std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     erhe::physics::Motion_mode                 m_motion_mode  {erhe::physics::Motion_mode::e_kinematic_physical};
-    bool                                       m_local        {true};
     bool                                       m_touched      {false};
     Handle                                     m_hover_handle {Handle::e_handle_none};
     Handle                                     m_active_handle{Handle::e_handle_none};

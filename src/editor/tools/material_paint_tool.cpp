@@ -3,6 +3,7 @@
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 
+#include "graphics/icon_set.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -37,6 +38,13 @@ void Material_paint_command::try_ready(
     {
         set_ready(context);
     }
+}
+
+Material_paint_command::Material_paint_command(Material_paint_tool& material_paint_tool)
+    : Command              {"Material_paint.paint"}
+    , m_material_paint_tool{material_paint_tool}
+{
+    set_host(&material_paint_tool);
 }
 
 auto Material_paint_command::try_call(
@@ -76,6 +84,13 @@ void Material_pick_command::try_ready(
     }
 }
 
+Material_pick_command::Material_pick_command(Material_paint_tool& material_paint_tool)
+    : Command              {"Material_paint.pick"}
+    , m_material_paint_tool{material_paint_tool}
+{
+    set_host(&material_paint_tool);
+}
+
 auto Material_pick_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
@@ -109,6 +124,7 @@ Material_paint_tool::Material_paint_tool()
 void Material_paint_tool::declare_required_components()
 {
     require<erhe::application::Commands>();
+    require<Icon_set  >();
     require<Operations>();
     require<Tools     >();
 }
@@ -117,6 +133,10 @@ void Material_paint_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::toolbox);
+    set_icon         (get<Icon_set>()->icons.material);
     get<Tools>()->register_tool(this);
 
     const auto commands = get<erhe::application::Commands>();
@@ -130,8 +150,6 @@ void Material_paint_tool::initialize_component()
         *commands.get()
     };
     set_active_command(c_command_paint);
-
-    get<Operations>()->register_active_tool(this);
 }
 
 void Material_paint_tool::post_initialize()
@@ -140,18 +158,8 @@ void Material_paint_tool::post_initialize()
     m_viewport_windows = get<Viewport_windows>();
 }
 
-auto Material_paint_tool::description() -> const char*
-{
-    return c_title.data();
-}
-
 auto Material_paint_tool::on_paint_ready() -> bool
 {
-    if (!is_enabled())
-    {
-        return false;
-    }
-
     const auto viewport_window = m_viewport_windows->hover_window();
     if (!viewport_window)
     {
@@ -163,11 +171,6 @@ auto Material_paint_tool::on_paint_ready() -> bool
 
 auto Material_paint_tool::on_pick_ready() -> bool
 {
-    if (!is_enabled())
-    {
-        return false;
-    }
-
     const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
@@ -179,11 +182,6 @@ auto Material_paint_tool::on_pick_ready() -> bool
 
 auto Material_paint_tool::on_paint() -> bool
 {
-    if (!is_enabled())
-    {
-        return false;
-    }
-
     if (m_material == nullptr)
     {
         return false;
@@ -209,11 +207,6 @@ auto Material_paint_tool::on_paint() -> bool
 
 auto Material_paint_tool::on_pick() -> bool
 {
-    if (!is_enabled())
-    {
-        return false;
-    }
-
     const auto viewport_window = m_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {

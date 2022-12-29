@@ -172,6 +172,9 @@ private:
     void update_hover_from_basic_viewport_windows();
     void layout_basic_viewport_windows           ();
 
+    // Commands
+    Open_new_viewport_window_command m_open_new_viewport_window_command;
+
     // Component dependencies
     std::shared_ptr<erhe::application::Configuration>     m_configuration;
     std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
@@ -187,14 +190,12 @@ private:
     std::shared_ptr<Tools>                                m_tools;
     std::shared_ptr<Viewport_config>                      m_viewport_config;
 
-    // Commands
-    Open_new_viewport_window_command m_open_new_viewport_window_command;
-
     std::mutex                                          m_mutex;
     std::vector<std::shared_ptr<Basic_viewport_window>> m_basic_viewport_windows;
     std::vector<std::shared_ptr<Imgui_viewport_window>> m_imgui_viewport_windows;
     std::vector<std::shared_ptr<Viewport_window>>       m_viewport_windows;
     std::vector<std::weak_ptr<Viewport_window>>         m_hover_stack;
+    std::shared_ptr<Viewport_window>                    m_hover_window;
     std::weak_ptr<Viewport_window>                      m_last_window;
 
     class Mouse_button

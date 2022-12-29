@@ -30,8 +30,9 @@ class Imgui_viewport
     : public Rendergraph_node
 {
 public:
-    explicit Imgui_viewport(
+    Imgui_viewport(
         const std::string_view name,
+        Imgui_windows*         imgui_windows,
         ImFontAtlas*           font_atlas
     );
     virtual ~Imgui_viewport();
@@ -47,6 +48,8 @@ public:
     [[nodiscard]] auto has_cursor           () const -> bool;
     [[nodiscard]] auto imgui_context        () const -> ImGuiContext*;
 
+    void menu();
+
     void update_input_request(bool request_keyboard, bool request_mouse);
 
     void on_key         (signed int keycode, uint32_t modifier_mask, bool pressed);
@@ -58,11 +61,12 @@ public:
     void on_mouse_wheel (double x, double y);
 
 protected:
-    std::string   m_name;
-    double        m_time      {0.0};
-    bool          m_has_cursor{false};
-    bool          m_request_keyboard{false}; // hovered window requests keyboard events
-    bool          m_request_mouse   {false}; // hovered winodw requests mouse events
+    Imgui_windows* m_imgui_windows   {nullptr};
+    std::string    m_name;
+    double         m_time            {0.0};
+    bool           m_has_cursor      {false};
+    bool           m_request_keyboard{false}; // hovered window requests keyboard events
+    bool           m_request_mouse   {false}; // hovered winodw requests mouse events
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGuiContext* m_imgui_context{nullptr};

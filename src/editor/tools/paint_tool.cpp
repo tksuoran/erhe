@@ -3,6 +3,7 @@
 #include "tools/paint_tool.hpp"
 
 #include "editor_message_bus.hpp"
+#include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
@@ -52,11 +53,6 @@ void Paint_vertex_command::try_ready(
 
 auto Paint_tool::try_ready() -> bool
 {
-    if (!is_enabled())
-    {
-        return false;
-    }
-
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr)
     {
@@ -72,6 +68,13 @@ auto Paint_tool::try_ready() -> bool
     }
 
     return scene_view->get_hover(Hover_entry::content_slot).valid;
+}
+
+Paint_vertex_command::Paint_vertex_command(Paint_tool& paint_tool)
+    : Command     {"Paint_tool.paint_vertex"}
+    , m_paint_tool{paint_tool}
+{
+    set_host(&paint_tool);
 }
 
 auto Paint_vertex_command::try_call(
@@ -170,11 +173,6 @@ void Paint_tool::paint_vertex(
 
 void Paint_tool::paint()
 {
-    if (!is_enabled())
-    {
-        return;
-    }
-
     m_point_id.reset();
     m_corner_id.reset();
 
@@ -283,16 +281,12 @@ Paint_tool::~Paint_tool() noexcept
 {
 }
 
-auto Paint_tool::description() -> const char*
-{
-    return c_title.data();
-}
-
 void Paint_tool::declare_required_components()
 {
     require<erhe::application::Commands     >();
     require<erhe::application::Imgui_windows>();
     require<Editor_message_bus>();
+    require<Icon_set          >();
     require<Operations        >();
     require<Tools             >();
 }
@@ -301,15 +295,20 @@ void Paint_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::toolbox);
+    set_icon         (get<Icon_set>()->icons.brush_small);
+
     const auto& imgui_windows = get<erhe::application::Imgui_windows>();
     imgui_windows->register_imgui_window(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_paint_vertex_command);
+    commands->bind_command_to_mouse_click            (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
     commands->bind_command_to_mouse_drag             (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
     commands->bind_command_to_controller_trigger_drag(&m_paint_vertex_command);
-    get<Operations>()->register_active_tool(this);
-    get<Tools     >()->register_tool(this);
+    get<Tools>()->register_tool(this);
 
 #if 0
     m_ngon_colors.emplace_back(240.0f / 255.0f, 163.0f / 255.0f, 255.0f / 255.0f, 1.0f);

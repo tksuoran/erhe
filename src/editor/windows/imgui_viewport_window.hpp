@@ -12,6 +12,7 @@ namespace erhe::application
 {
     class Imgui_viewport;
     class Multisample_resolve_node;
+    class Rendergraph_node;
 }
 
 namespace editor
@@ -57,14 +58,14 @@ public:
     auto want_keyboard_events() const -> bool override;
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto get_consumer_input_viewport(
+    auto get_consumer_input_viewport(
         erhe::application::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
     ) const -> erhe::scene::Viewport override;
 
     // Overridden to source viewport size from ImGui window
-    [[nodiscard]] auto get_producer_output_viewport(
+    auto get_producer_output_viewport(
         erhe::application::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0

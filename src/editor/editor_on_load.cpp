@@ -2,8 +2,8 @@
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "editor_view_client.hpp"
-#include "brushes/brush_tool.hpp"
-#include "brushes/create.hpp"
+#include "tools/brushes/brush_tool.hpp"
+#include "tools/brushes/create.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/image_transfer.hpp"
 #include "operations/operation_stack.hpp"
@@ -37,7 +37,9 @@
 #include "tools/physics_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs_tool.hpp"
+#include "tools/trs/move_tool.hpp"
+#include "tools/trs/rotate_tool.hpp"
+#include "tools/trs/trs_tool.hpp"
 
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
@@ -195,6 +197,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Layers_window         >());
         m_components.add(make_shared<editor::Material_paint_tool   >());
         m_components.add(make_shared<editor::Mesh_memory           >());
+        m_components.add(make_shared<editor::Move_tool             >());
         m_components.add(make_shared<editor::Properties            >());
         m_components.add(make_shared<editor::Node_tree_window      >());
         m_components.add(make_shared<editor::Operation_stack       >());
@@ -206,6 +209,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Post_processing       >());
         m_components.add(make_shared<editor::Post_processing_window>());
         m_components.add(make_shared<editor::Rendergraph_window    >());
+        m_components.add(make_shared<editor::Rotate_tool           >());
         m_components.add(make_shared<editor::Scene_builder         >());
         m_components.add(make_shared<editor::Scene_commands        >());
         m_components.add(make_shared<editor::Scene_message_bus     >());
@@ -269,6 +273,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<editor::Headset_view          >(), config.headset_view        );
 #endif
     init_window(m_components.get<editor::Hover_tool            >(), config.hover_tool          );
+    init_window(m_components.get<editor::Hud                   >(), config.hud                 );
     init_window(m_components.get<editor::Layers_window         >(), config.layers              );
     init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree           );
     init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack     );
@@ -280,6 +285,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
     init_window(m_components.get<editor::Rendergraph_window    >(), config.render_graph        );
     init_window(m_components.get<editor::Settings_window       >(), config.settings            );
     init_window(m_components.get<editor::Trs_tool              >(), config.trs                 );
+    init_window(m_components.get<editor::Tools                 >(), config.tools               );
     init_window(m_components.get<editor::Tool_properties_window>(), config.tool_properties     );
     init_window(m_components.get<editor::Viewport_config       >(), config.viewport_config     );
 

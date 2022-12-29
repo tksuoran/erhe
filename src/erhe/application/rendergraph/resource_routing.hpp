@@ -5,10 +5,11 @@ namespace erhe::application {
 class Rendergraph_node_key
 {
 public:
-    constexpr static int window              = 1;
-    constexpr static int viewport            = 2;
-    constexpr static int shadow_maps         = 3;
-    constexpr static int depth_visualization = 4;
+    constexpr static int window               = 1;
+    constexpr static int viewport             = 2;
+    constexpr static int shadow_maps          = 3;
+    constexpr static int depth_visualization  = 4;
+    constexpr static int rendertarget_texture = 5;
 };
 
 /// <summary>

@@ -48,7 +48,7 @@ void Imgui_window::image(
         glm::vec2{0.0f, 1.0f},
         glm::vec2{1.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-        false
+        true
     );
 #endif
 }
@@ -61,6 +61,11 @@ auto Imgui_window::get_viewport() const -> Imgui_viewport*
 void Imgui_window::set_viewport(Imgui_viewport* imgui_viewport)
 {
     m_imgui_viewport = imgui_viewport;
+}
+
+void Imgui_window::set_visibility(const bool visible)
+{
+    m_is_visible = visible;
 }
 
 void Imgui_window::show()

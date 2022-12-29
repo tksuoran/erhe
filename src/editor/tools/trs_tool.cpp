@@ -60,9 +60,9 @@ void Trs_tool_drag_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (!m_trs_tool.is_enabled())
+    if (!m_trs_tool.is_active())
     {
-        log_trs_tool->trace("Cannot set ready - TRS tool is disabled");
+        log_trs_tool->trace("Cannot set ready - TRS tool is not active");
         return;
     }
 
@@ -76,14 +76,14 @@ auto Trs_tool_drag_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    if (!m_trs_tool.is_enabled())
+    if (!m_trs_tool.is_active())
     {
         return false;
     }
 
     if (
         (get_command_state() == erhe::application::State::Ready) &&
-        m_trs_tool.is_enabled()
+        m_trs_tool.is_active()
     )
     {
         set_active(context);
@@ -139,6 +139,7 @@ void Trs_tool::declare_required_components()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
     require<Editor_message_bus>();
+    require<Icon_set          >();
     m_editor_scenes  = require<Editor_scenes >();
     m_mesh_memory    = require<Mesh_memory   >();
     m_selection_tool = require<Selection_tool>();
@@ -148,6 +149,9 @@ void Trs_tool::declare_required_components()
 void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+
+    set_flags(Tool_flags::toolbox);
+    set_icon(get<Icon_set>()->icons.move);
 
     const erhe::application::Scoped_gl_context gl_context{
         Component::get<erhe::application::Gl_context_provider>()

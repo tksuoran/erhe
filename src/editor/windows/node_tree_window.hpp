@@ -136,6 +136,7 @@ private:
     std::vector<std::function<void()>> m_operations;
 
     bool                               m_expand_attachments{false};
+    bool                               m_show_all          {false};
     bool                               m_toggled_open      {false};
     std::weak_ptr<erhe::scene::Item>   m_last_focus_item;
     std::shared_ptr<erhe::scene::Item> m_popup_item;

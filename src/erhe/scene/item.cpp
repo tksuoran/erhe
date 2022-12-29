@@ -1,4 +1,5 @@
 #include "erhe/scene/item.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 
 #include <fmt/format.h>
 
@@ -7,35 +8,30 @@
 namespace erhe::scene
 {
 
-[[nodiscard]] auto Item_flags::to_string(uint64_t mask) -> std::string
+[[nodiscard]] auto Item_flags::to_string(uint64_t flags) -> std::string
 {
-    if (mask == none) return std::string{"no flags "};
     std::stringstream ss;
-    if (mask & no_message               ) ss << "no_message ";
-    if (mask & show_debug_visualizations) ss << "show_debug_visualizations ";
-    if (mask & shadow_cast              ) ss << "shadow_cast ";
-    if (mask & selected                 ) ss << "selected ";
-    if (mask & visible                  ) ss << "visible ";
-    if (mask & render_wireframe         ) ss << "render_wireframe ";
-    if (mask & render_bounding_box      ) ss << "render_bounding_box ";
-    if (mask & content                  ) ss << "content ";
-    if (mask & id                       ) ss << "id ";
-    if (mask & tool                     ) ss << "tool ";
-    if (mask & brush                    ) ss << "brush ";
+
+    using namespace erhe::toolkit;
+    using Item_flags = erhe::scene::Item_flags;
+
+    bool first = true;
+    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position)
+    {
+        const uint64_t bit_mask = (uint64_t{1} << bit_position);
+        const bool     value    = test_all_rhs_bits_set(flags, bit_mask);
+        if (value)
+        {
+            if (!first)
+            {
+                ss << " | ";
+            }
+            ss << Item_flags::c_bit_labels[bit_position];
+            first = false;
+        }
+    }
     return ss.str();
 }
-
-//    if (mask & node                     ) ss << "node ";
-//    if (mask & attachment               ) ss << "attachment ";
-//    if (mask & physics                  ) ss << "physics ";
-//    if (mask & raytrace                 ) ss << "raytrace ";
-//    if (mask & frame_controller         ) ss << "frame_controller ";
-//    if (mask & grid                     ) ss << "grid ";
-//    if (mask & light                    ) ss << "light ";
-//    if (mask & camera                   ) ss << "camera ";
-//    if (mask & mesh                     ) ss << "mesh ";
-//    if (mask & rendertarget             ) ss << "rendertarget ";
-//    if (mask & controller               ) ss << "controller ";
 
 auto Item_filter::operator()(const uint64_t visibility_mask) const -> bool
 {

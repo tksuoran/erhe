@@ -59,7 +59,7 @@ public:
     void register_imgui_window            (Imgui_window* window);
     void make_current                     (const Imgui_viewport* imgui_viewport);
     void imgui_windows                    ();
-    void window_menu                      ();
+    void window_menu                      (Imgui_viewport* imgui_viewport);
 
     [[nodiscard]] auto want_capture_keyboard() const -> bool;
     [[nodiscard]] auto want_capture_mouse   () const -> bool;

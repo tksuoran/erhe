@@ -85,10 +85,22 @@ Imgui_viewport_window::Imgui_viewport_window(
         erhe::application::Rendergraph_node_key::viewport
     );
 
+    // "rendertarget texture" is slot / pseudo-resource which allows use rendergraph
+    // connection to make Rendertarget_imgui_viewport a dependency for Imgui_viewport,
+    // forcing correct rendering order; Rendertarget_imgui_viewport must be rendered
+    // before Imgui_viewport.
+    //
+    // TODO Texture dependencies should be handled in a generic way.
+    register_input(
+        erhe::application::Resource_routing::Resource_provided_by_producer,
+        "rendertarget texture",
+        erhe::application::Rendergraph_node_key::rendertarget_texture
+    );
+
     // "window" is slot / pseudo-resource which allows use rendergraph connection
-    // to make Imgui_viewport_window a dependency for Imgui_viewport, forcing
-    // correct rendering order (Imgui_viewport_window must be rendered before
-    // Imgui_viewport).
+    // to make Imgui_viewport_window a dependency for (Window) Imgui_viewport,
+    // forcing correct rendering order; Imgui_viewport_window must be rendered before
+    // (Window) Imgui_viewport.
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(

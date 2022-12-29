@@ -228,7 +228,7 @@ auto Light_buffer::update(
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
         write(light_gpu_data, light_offset + offsets.light.radiance_and_range,           as_span(radiance));
     }
-    writer.write_offset += max_light_index * light_struct_size;
+    writer.write_offset += (max_light_index + 1) * light_struct_size;
 
     // Late write to begin of buffer to full in light counts
     write(light_gpu_data, common_offset + offsets.shadow_texture,          as_span(shadow_map_texture_handle_uvec2));

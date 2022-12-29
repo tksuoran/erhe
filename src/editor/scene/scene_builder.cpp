@@ -6,8 +6,8 @@
 #include "rendertarget_imgui_viewport.hpp"
 #include "task_queue.hpp"
 
-#include "brushes/brush.hpp"
-#include "brushes/brush_tool.hpp"
+#include "tools/brushes/brush.hpp"
+#include "tools/brushes/brush_tool.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
@@ -23,7 +23,6 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/grid_tool.hpp"
-#include "tools/trs_tool.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -147,21 +146,20 @@ void Scene_builder::initialize_component()
 void Scene_builder::add_rendertarget_viewports(int count)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto& rendergraph             = get<erhe::application::Rendergraph  >();
-    const auto& imgui_windows           = get<erhe::application::Imgui_windows>();
-    const auto& primary_viewport_window = get_primary_viewport_window();
-    const auto& test_scene_root         = get_scene_root();
+    const auto& rendergraph     = get<erhe::application::Rendergraph  >();
+    const auto& imgui_windows   = get<erhe::application::Imgui_windows>();
+    const auto& test_scene_root = get_scene_root();
 
     if (count >= 1)
     {
         auto rendertarget_node_1 = std::make_shared<erhe::scene::Node>("RT Node 1");
-        auto rendertarget_mesh_1 = test_scene_root->create_rendertarget_mesh(
+        auto rendertarget_mesh_1 = std::make_shared<Rendertarget_mesh>(
             *m_components,
-            *primary_viewport_window.get(),
-            1920,
-            1080,
-            2000.0
+            1920,  // width
+            1080,  // height
+            2000.0 // pixels per meter
         );
+        rendertarget_mesh_1->mesh_data.layer_id = Mesh_layer_id::rendertarget;
         rendertarget_node_1->attach(rendertarget_mesh_1);
         rendertarget_node_1->set_parent(test_scene_root->scene().get_root_node());
 
@@ -214,12 +212,10 @@ void Scene_builder::add_rendertarget_viewports(int count)
         auto secondary_imgui_viewport_window = viewport_windows->create_imgui_viewport_window(
             secondary_viewport_window
         );
-        //secondary_viewport_window->set_post_processing_enable(false); // TODO Post processing currently only handles one viewport
 
         auto rendertarget_node_2 = std::make_shared<erhe::scene::Node>("RT Node 2");
-        auto rendertarget_mesh_2 = test_scene_root->create_rendertarget_mesh(
+        auto rendertarget_mesh_2 = std::make_shared<Rendertarget_mesh>(
             *m_components,
-            *primary_viewport_window.get(),
             1920,
             1080,
             2000.0
@@ -245,16 +241,12 @@ void Scene_builder::add_rendertarget_viewports(int count)
         secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
         secondary_imgui_viewport_window->show();
 
-        // const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
-
         rendergraph->connect(
             erhe::application::Rendergraph_node_key::window,
             secondary_imgui_viewport_window,
             imgui_viewport_2
         );
     }
-
-    //secondary_viewport_window->show();
 #endif
 }
 
@@ -303,80 +295,33 @@ void Scene_builder::setup_cameras()
     //camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
     const auto& configuration = get<erhe::application::Configuration>();
-    if (configuration->window.show)
+    if (!configuration->window.show)
     {
-        const auto& viewport_windows = get<Viewport_windows>();
-        m_primary_viewport_window = viewport_windows->create_viewport_window(
-            "Primary Viewport",
-            m_scene_root,
-            camera_a,
-            std::min(2, configuration->graphics.msaa_sample_count), //// TODO Fix rendergraph
-            configuration->graphics.post_processing
-        );
-
-        if (configuration->imgui.window_viewport)
-        {
-            //auto primary_imgui_viewport_window =
-            viewport_windows->create_imgui_viewport_window(
-                m_primary_viewport_window
-            );
-        }
-        else
-        {
-            viewport_windows->create_basic_viewport_window(
-                m_primary_viewport_window
-            );
-        }
+        return;
     }
 
-    const auto& shadow_renderer = get<Shadow_renderer>();
-    const auto& render_graph    = get<erhe::application::Rendergraph>();
+    const auto& viewport_windows = get<Viewport_windows>();
+    m_primary_viewport_window = viewport_windows->create_viewport_window(
+        "Primary Viewport",
+        m_scene_root,
+        camera_a,
+        std::min(2, configuration->graphics.msaa_sample_count), //// TODO Fix rendergraph
+        configuration->graphics.post_processing
+    );
 
-    if (configuration->window.show)
+    if (configuration->imgui.window_viewport)
     {
-        const auto shadow_render_node = shadow_renderer->create_node_for_viewport(
+        //auto primary_imgui_viewport_window =
+        viewport_windows->create_imgui_viewport_window(
             m_primary_viewport_window
         );
-        render_graph->register_node(shadow_render_node);
-        render_graph->connect(
-            erhe::application::Rendergraph_node_key::shadow_maps,
-            shadow_render_node,
-            m_primary_viewport_window
-        );
-
-        const auto& debug_view_window = get<Debug_view_window>();
-        auto depth_to_color_node = std::make_shared<Depth_to_color_rendergraph_node>(
-            *m_components
-        );
-        render_graph->register_node(depth_to_color_node);
-        render_graph->connect(
-            erhe::application::Rendergraph_node_key::shadow_maps,
-            shadow_render_node,
-            depth_to_color_node
-        );
-        render_graph->connect(
-            erhe::application::Rendergraph_node_key::depth_visualization,
-            depth_to_color_node,
-            debug_view_window
-        );
-        render_graph->register_node(debug_view_window);
-
-        const auto& imgui_windows         = get<erhe::application::Imgui_windows>();
-        const auto& window_imgui_viewport = imgui_windows->get_window_viewport();
-        //render_graph->register_node(window_imgui_viewport);
-
-        if (window_imgui_viewport)
-        {
-            render_graph->connect(
-                erhe::application::Rendergraph_node_key::window,
-                debug_view_window,
-                window_imgui_viewport
-            );
-        }
-
     }
-
-    // TODO debug_view_window should also depend on debug_view_render_node
+    else
+    {
+        viewport_windows->create_basic_viewport_window(
+            m_primary_viewport_window
+        );
+    }
 }
 
 auto Scene_builder::build_info() -> erhe::primitive::Build_info&
@@ -939,6 +884,7 @@ void Scene_builder::add_room()
     // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info
     {
+        .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui,
         .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::show_in_ui,
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
@@ -1095,10 +1041,16 @@ void Scene_builder::make_mesh_nodes()
             //const auto& material = m_scene_root->materials().at(material_index);
             const Instance_create_info brush_instance_create_info
             {
+                .node_flags = {
+                    Item_flags::show_in_ui |
+                    Item_flags::visible    |
+                    Item_flags::content
+                },
                 .mesh_flags = (
-                    Item_flags::visible |
-                    Item_flags::content |
-                    Item_flags::id      |
+                    Item_flags::show_in_ui |
+                    Item_flags::visible    |
+                    Item_flags::content    |
+                    Item_flags::id         |
                     Item_flags::shadow_cast
                 ),
                 .scene_root      = m_scene_root.get(),

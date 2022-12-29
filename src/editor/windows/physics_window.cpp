@@ -11,7 +11,6 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
-#include "tools/tools.hpp"
 
 #include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -47,13 +46,10 @@ void Physics_window::declare_required_components()
 
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows>();
-    require<Tools>();
 }
 
 void Physics_window::initialize_component()
 {
-    get<Tools>()->register_tool(this);
-
     //const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
     //
     //auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
@@ -79,11 +75,6 @@ void Physics_window::post_initialize()
 {
     m_selection_tool   = get<Selection_tool  >();
     m_viewport_windows = get<Viewport_windows>();
-}
-
-auto Physics_window::description() -> const char*
-{
-    return c_title.data();
 }
 
 void Physics_window::viewport_toolbar(bool& hovered)

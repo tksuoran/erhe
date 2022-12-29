@@ -38,11 +38,7 @@ class Material_paint_command
     : public erhe::application::Command
 {
 public:
-    explicit Material_paint_command(Material_paint_tool& material_paint_tool)
-        : Command              {"Material_paint.paint"}
-        , m_material_paint_tool{material_paint_tool}
-    {
-    }
+    explicit Material_paint_command(Material_paint_tool& material_paint_tool);
 
     auto try_call (erhe::application::Command_context& context) -> bool override;
     void try_ready(erhe::application::Command_context& context) override;
@@ -55,11 +51,7 @@ class Material_pick_command
     : public erhe::application::Command
 {
 public:
-    explicit Material_pick_command(Material_paint_tool& material_paint_tool)
-        : Command              {"Material_paint.pick"}
-        , m_material_paint_tool{material_paint_tool}
-    {
-    }
+    explicit Material_pick_command(Material_paint_tool& material_paint_tool);
 
     auto try_call (erhe::application::Command_context& context) -> bool override;
     void try_ready(erhe::application::Command_context& context) override;
@@ -87,8 +79,6 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override;
     void tool_properties() override;
 
     // Commands

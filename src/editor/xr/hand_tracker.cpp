@@ -440,11 +440,6 @@ Hand_tracker::Hand_tracker()
 {
 }
 
-auto Hand_tracker::description() -> const char*
-{
-    return c_description.data();
-}
-
 void Hand_tracker::declare_required_components()
 {
     require<Tools>();
@@ -452,7 +447,9 @@ void Hand_tracker::declare_required_components()
 
 void Hand_tracker::initialize_component()
 {
-    get<Tools>()->register_background_tool(this);
+    set_flags      (Tool_flags::background);
+    set_description(c_description);
+    get<Tools>()->register_tool(this);
 }
 
 void Hand_tracker::post_initialize()

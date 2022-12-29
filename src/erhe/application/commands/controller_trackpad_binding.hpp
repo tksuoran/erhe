@@ -26,7 +26,7 @@ public:
     auto on_trackpad(Command_context& context) -> bool;
 
 private:
-    Command_binding::Type m_type{Type::Controller_trigger_click};
+    Command_binding::Type m_type{Type::Controller_trackpad_touched};
 };
 
 } // namespace erhe/application

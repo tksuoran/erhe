@@ -45,7 +45,7 @@ auto Controller_trigger_click_binding::on_trigger_click(
         return false;
     }
 
-    if (!context.accept_mouse_command(command))
+    if (!context.accept_controller_trigger_command(command))
     {
         // Paranoid check
         if (command->get_command_state() != State::Inactive)

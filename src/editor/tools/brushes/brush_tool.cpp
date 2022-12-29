@@ -1,10 +1,10 @@
 
-#include "brushes/brush_tool.hpp"
-#include "brushes/brush.hpp"
+#include "tools/brushes/brush_tool.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
+#include "graphics/icon_set.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
@@ -14,6 +14,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
+#include "tools/brushes/brush.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -54,6 +55,13 @@ using glm::vec3;
 using glm::vec4;
 using erhe::geometry::Polygon; // Resolve conflict with wingdi.h BOOL Polygon(HDC,const POINT *,int)
 
+Brush_tool_preview_command::Brush_tool_preview_command(Brush_tool& brush_tool)
+    : Command     {"Brush_tool.motion_preview"}
+    , m_brush_tool{brush_tool}
+{
+    set_host(&brush_tool);
+}
+
 auto Brush_tool_preview_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
@@ -69,6 +77,13 @@ auto Brush_tool_preview_command::try_call(
     }
     m_brush_tool.on_motion();
     return true;
+}
+
+Brush_tool_insert_command::Brush_tool_insert_command(Brush_tool& brush_tool)
+    : Command     {"Brush_tool.insert"}
+    , m_brush_tool{brush_tool}
+{
+    set_host(&brush_tool);
 }
 
 void Brush_tool_insert_command::try_ready(
@@ -111,16 +126,18 @@ void Brush_tool::declare_required_components()
     m_configuration = require<erhe::application::Configuration>();
     require<Editor_message_bus>();
     require<Editor_scenes     >();
+    require<Icon_set          >();
     require<Operations        >();
     require<Tools             >();
 }
 
 void Brush_tool::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
-
-    const auto& tools = get<Tools>();
-    tools->register_tool(this);
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::toolbox);
+    set_icon         (get<Icon_set>()->icons.brush_big);
+    get<Tools>()->register_tool(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_preview_command);
@@ -128,8 +145,6 @@ void Brush_tool::initialize_component()
     commands->bind_command_to_update                  (&m_preview_command);
     commands->bind_command_to_mouse_click             (&m_insert_command, erhe::toolkit::Mouse_button_right);
     commands->bind_command_to_controller_trigger_click(&m_insert_command);
-
-    get<Operations>()->register_active_tool(this);
 
     get<Editor_message_bus>()->add_receiver(
         [&](Editor_message& message)
@@ -163,6 +178,32 @@ void Brush_tool::on_message(Editor_message& message)
     {
         on_motion();
     }
+    //// if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_tool_select))
+    //// {
+    ////     remove_brush_mesh();
+    //// }
+}
+
+void Brush_tool::handle_priority_update(int old_priority, int new_priority)
+{
+    const auto& commands = get<erhe::application::Commands>();
+    erhe::application::Command_context command_context{
+        *commands.get()
+    };
+
+    if (new_priority < old_priority)
+    {
+        disable();
+        m_preview_command.set_inactive(command_context);
+        m_hover = Hover_entry{};
+        remove_brush_mesh();
+    }
+    if (new_priority > old_priority)
+    {
+        enable();
+        m_preview_command.set_active(command_context);
+        on_motion();
+    }
 }
 
 void Brush_tool::remove_brush_mesh()
@@ -182,7 +223,8 @@ void Brush_tool::remove_brush_mesh()
 
 auto Brush_tool::try_insert_ready() -> bool
 {
-    return is_enabled() && (m_hover.mesh || (m_hover.grid != nullptr));
+    return is_enabled() &&
+        (m_hover.mesh || (m_hover.grid != nullptr));
 }
 
 auto Brush_tool::try_insert() -> bool
@@ -209,26 +251,6 @@ auto Brush_tool::try_insert() -> bool
         get<Editor_scenes>()->sanity_check();
 
     return true;
-}
-
-void Brush_tool::on_enable_state_changed()
-{
-    const auto& commands = get<erhe::application::Commands>();
-    erhe::application::Command_context command_context{
-        *commands.get()
-    };
-
-    if (is_enabled())
-    {
-        m_preview_command.set_active(command_context);
-        on_motion();
-    }
-    else
-    {
-        m_preview_command.set_inactive(command_context);
-        m_hover = Hover_entry{};
-        remove_brush_mesh();
-    }
 }
 
 void Brush_tool::on_motion()
@@ -412,6 +434,10 @@ void Brush_tool::do_insert_operation()
         erhe::scene::Item_flags::shadow_cast |
         erhe::scene::Item_flags::id          |
         erhe::scene::Item_flags::show_in_ui;
+    const uint64_t node_flags =
+        erhe::scene::Item_flags::visible     |
+        erhe::scene::Item_flags::content     |
+        erhe::scene::Item_flags::show_in_ui;
 
     ERHE_VERIFY(m_scene_view != nullptr);
     const auto& scene_root = m_scene_view->get_scene_root();
@@ -420,6 +446,7 @@ void Brush_tool::do_insert_operation()
     auto* const hover_node = m_hover.mesh ? m_hover.mesh->get_node() : nullptr;
     const Instance_create_info brush_instance_create_info
     {
+        .node_flags       = node_flags,
         .mesh_flags       = mesh_flags,
         .scene_root       = scene_root.get(),
         .world_from_node  = (hover_node != nullptr)

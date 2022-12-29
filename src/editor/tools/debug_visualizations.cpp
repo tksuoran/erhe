@@ -12,7 +12,7 @@
 #include "scene/viewport_window.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs_tool.hpp"
+#include "tools/trs/trs_tool.hpp"
 #include "windows/viewport_config.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"
@@ -61,8 +61,11 @@ void Debug_visualizations::declare_required_components()
 
 void Debug_visualizations::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    set_base_priority(c_priority);
+    set_description  (c_title);
     get<Tools>()->register_tool(this);
+
+    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     get<Editor_message_bus>()->add_receiver(
         [&](Editor_message& message)
@@ -79,11 +82,6 @@ void Debug_visualizations::post_initialize()
     m_selection_tool    = get<Selection_tool >();
     m_trs_tool          = get<Trs_tool       >();
     m_viewport_config   = get<Viewport_config>();
-}
-
-auto Debug_visualizations::description() -> const char*
-{
-    return c_title.data();
 }
 
 namespace
@@ -1029,7 +1027,7 @@ void Debug_visualizations::tool_render(
         return;
     }
 
-    if (m_tool_hide && m_trs_tool && m_trs_tool->is_active())
+    if (m_tool_hide && m_trs_tool && m_trs_tool->is_trs_active())
     {
         return;
     }

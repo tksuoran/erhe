@@ -30,12 +30,13 @@ namespace erhe::primitive
 
 namespace erhe::scene
 {
-    class Mesh;
+    class Scene_host;
 }
 
 namespace editor
 {
 
+class Editor_message;
 class Forward_renderer;
 class Hand_tracker;
 class Node_raytrace;
@@ -49,12 +50,10 @@ class Rendertarget_mesh
 {
 public:
     Rendertarget_mesh(
-        Scene_root&                         host_scene_root,
-        Viewport_window&                    host_viewport_window,
         const erhe::components::Components& components,
-        const int                           width,
-        const int                           height,
-        const double                        pixels_per_meter
+        int                                 width,
+        int                                 height,
+        double                              pixels_per_meter
     );
 
     // Implements Item
@@ -62,6 +61,12 @@ public:
     [[nodiscard]] static auto static_type_name() -> const char*;
     [[nodiscard]] auto get_type () const -> uint64_t    override;
     [[nodiscard]] auto type_name() const -> const char* override;
+
+    // Overrides Mesh
+    void handle_node_scene_host_update(
+        erhe::scene::Scene_host* old_scene_host,
+        erhe::scene::Scene_host* new_scene_host
+    ) override;
 
     // Public API
     [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
@@ -76,23 +81,23 @@ public:
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void update_headset(Headset_view& headset_view);
-    [[nodiscard]] auto get_pointer_finger    () const -> std::optional<Finger_point>;
-    [[nodiscard]] auto get_finger_trigger    () const -> bool;
-    [[nodiscard]] auto get_controller_pose   () const -> const erhe::xr::Pose&;
-    [[nodiscard]] auto get_controller_trigger() const -> float;
+    [[nodiscard]] auto get_pointer_finger                  () const -> std::optional<Finger_point>;
+    [[nodiscard]] auto get_finger_trigger                  () const -> bool;
+    [[nodiscard]] auto get_controller_pose                 () const -> const erhe::xr::Pose&;
+    [[nodiscard]] auto get_controller_trigger_click        () const -> bool;
+    [[nodiscard]] auto get_controller_trigger_click_changed() const -> bool;
+    [[nodiscard]] auto get_controller_trigger_value        () const -> float;
+    [[nodiscard]] auto get_controller_trigger_value_changed() const -> bool;
 #endif
 
-    auto update_pointer() -> bool;
+    auto update_pointer(Scene_view* scene_view) -> bool;
     void bind          ();
     void clear         (glm::vec4 clear_color);
     void render_done   (); // generates mipmaps, updates lod bias
 
 private:
-    void init_rendertarget(const int width, const int height);
+    void init_rendertarget(int width, int height);
     void add_primitive    (const erhe::components::Components& components);
-
-    Scene_root&                                  m_host_scene_root;
-    Viewport_window&                             m_host_viewport_window;
 
     std::shared_ptr<Viewport_config>             m_viewport_config;
     double                                       m_pixels_per_meter{0.0};
@@ -108,9 +113,12 @@ private:
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     std::optional<Finger_point> m_pointer_finger;
-    bool                        m_finger_trigger          {false};
-    erhe::xr::Pose              m_controller_pose         {};
-    float                       m_controller_trigger_value{0.0f};
+    bool                        m_finger_trigger                  {false};
+    erhe::xr::Pose              m_controller_pose                 {};
+    bool                        m_controller_trigger_click        {false};
+    bool                        m_controller_trigger_click_changed{false};
+    float                       m_controller_trigger_value_float  {0.0f};
+    bool                        m_controller_trigger_value_changed{false};
 #endif
 };
 

@@ -31,6 +31,7 @@ namespace editor
 class Editor_message_bus;
 class Editor_scenes;
 class Headset_view;
+class Icon_set;
 class Node_tree_window;
 class Scene_root;
 class Selection_tool;
@@ -41,11 +42,7 @@ class Selection_tool_delete_command
     : public erhe::application::Command
 {
 public:
-    explicit Selection_tool_delete_command(Selection_tool& selection_tool)
-        : Command         {"Selection_tool.delete"}
-        , m_selection_tool{selection_tool}
-    {
-    }
+    explicit Selection_tool_delete_command(Selection_tool& selection_tool);
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
 
@@ -57,12 +54,7 @@ class Selection_tool_select_command
     : public erhe::application::Command
 {
 public:
-    explicit Selection_tool_select_command(Selection_tool& selection_tool)
-        : Command         {"Selection_tool.select"}
-        , m_selection_tool{selection_tool}
-    {
-    }
-
+    explicit Selection_tool_select_command(Selection_tool& selection_tool);
     void try_ready(erhe::application::Command_context& context) override;
     auto try_call (erhe::application::Command_context& context) -> bool override;
 
@@ -110,14 +102,13 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override;
-    void on_inactived() override;
+    void handle_priority_update(int old_priority, int new_priority) override;
 
     // Implements Imgui_window
     void imgui() override;
 
     // Public API
+    void viewport_toolbar(bool& hovered);
     [[nodiscard]] auto selection               () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
     [[nodiscard]] auto is_in_selection         (const std::shared_ptr<erhe::scene::Item>& item) const -> bool;
     [[nodiscard]] auto range_selection         () -> Range_selection&;
@@ -152,6 +143,7 @@ private:
     std::shared_ptr<Editor_message_bus> m_editor_message_bus;
     std::shared_ptr<Editor_scenes>      m_editor_scenes;
     std::shared_ptr<Headset_view>       m_headset_view;
+    std::shared_ptr<Icon_set>           m_icon_set;
     std::shared_ptr<Node_tree_window>   m_node_tree_window;
     std::shared_ptr<Viewport_windows>   m_viewport_windows;
     std::shared_ptr<Viewport_config>    m_viewport_config;

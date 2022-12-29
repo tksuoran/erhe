@@ -28,6 +28,25 @@ public:
         Controller_trackpad_clicked = 12,
         Update                      = 13
     };
+
+    static constexpr const char* c_type_strings[] =
+    {
+        "None",
+        "Key",
+        "Mouse",
+        "Mouse_click",
+        "Mouse_drag",
+        "Mouse_motion",
+        "Mouse_wheel",
+        "Controller_trigger",
+        "Controller_trigger_value",
+        "Controller_trigger_click",
+        "Controller_trigger_drag",
+        "Controller_trackpad_touched",
+        "Controller_trackpad_clicked",
+        "Update"
+    };
+
     explicit Command_binding(Command* const command);
     virtual ~Command_binding() noexcept;
 
@@ -37,9 +56,10 @@ public:
     auto operator=(const Command_binding&) -> Command_binding& = delete;
     auto operator=(Command_binding&& other) noexcept -> Command_binding&;
 
-    [[nodiscard]] virtual auto get_type   () const -> Type { return Type::None; }
-    [[nodiscard]] auto         get_id     () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
-    [[nodiscard]] auto         get_command() const -> Command*;
+    [[nodiscard]] virtual auto get_type               () const -> Type { return Type::None; }
+    [[nodiscard]] auto         get_id                 () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
+    [[nodiscard]] auto         get_command            () const -> Command*;
+    [[nodiscard]] auto         is_command_host_enabled() const -> bool;
 
 private:
     Command*                                  m_command{nullptr};

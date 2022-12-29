@@ -182,16 +182,27 @@ auto Viewport_windows::create_viewport_window(
 
     if (m_configuration->shadow_renderer.enabled)
     {
-        const auto& shadow_render_nodes = m_shadow_renderer->get_nodes();
-        if (!shadow_render_nodes.empty())
-        {
-            auto& shadow_render_node = shadow_render_nodes.front();
-            m_rendergraph->connect(
-                erhe::application::Rendergraph_node_key::shadow_maps,
-                shadow_render_node,
-                new_viewport_window
-            );
-        }
+        //// TODO: Share Shadow_render_node for each unique (scene, camera) pair
+        const auto shadow_render_node = m_shadow_renderer->create_node_for_viewport(
+            new_viewport_window
+        );
+        m_rendergraph->register_node(shadow_render_node);
+        m_rendergraph->connect(
+            erhe::application::Rendergraph_node_key::shadow_maps,
+            shadow_render_node,
+            new_viewport_window
+        );
+
+        //// const auto& shadow_render_nodes = m_shadow_renderer->get_nodes();
+        //// if (!shadow_render_nodes.empty())
+        //// {
+        ////     auto& shadow_render_node = shadow_render_nodes.front();
+        ////     m_rendergraph->connect(
+        ////         erhe::application::Rendergraph_node_key::shadow_maps,
+        ////         shadow_render_node,
+        ////         new_viewport_window
+        ////     );
+        //// }
     }
 
     std::shared_ptr<erhe::application::Rendergraph_node> previous_node;
@@ -396,9 +407,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
 {
     ERHE_PROFILE_FUNCTION
 
-    std::shared_ptr<Viewport_window> old_window = m_hover_stack.empty()
-        ? std::shared_ptr<Viewport_window>{}
-        : m_hover_stack.back().lock();
+    std::shared_ptr<Viewport_window> old_window = m_hover_window;
     m_hover_stack.clear();
 
     if (imgui_viewport != nullptr)
@@ -411,16 +420,16 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
         update_hover_from_basic_viewport_windows();
     }
 
-    std::shared_ptr<Viewport_window> new_window = m_hover_stack.empty()
+    m_hover_window = m_hover_stack.empty()
         ? std::shared_ptr<Viewport_window>{}
         : m_hover_stack.back().lock();
 
-    if (old_window != new_window)
+    if (old_window != m_hover_window)
     {
         m_editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
-                .scene_view   = new_window.get()
+                .scene_view   = m_hover_window.get()
             }
         );
     }
@@ -462,7 +471,9 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
             viewport_window->update_pointer_context(
                 *m_id_renderer.get(),
                 viewport_position,
-                m_tools->get_tool_scene_root().get()
+                viewport_window->is_hovered()
+                    ? m_tools->get_tool_scene_root().get()
+                    : nullptr
             );
             //// ERHE_VERIFY(m_hover_stack.empty());
             m_last_window = viewport_window;

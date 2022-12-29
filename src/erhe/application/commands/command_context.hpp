@@ -20,11 +20,12 @@ public:
         glm::dvec2 vec2_relative_value = glm::dvec2{0.0, 0.0}
     );
 
-    [[nodiscard]] auto get_button_bits        () const -> uint32_t;
-    [[nodiscard]] auto get_vec2_absolute_value() const -> glm::dvec2;
-    [[nodiscard]] auto get_vec2_relative_value() const -> glm::dvec2;
-    [[nodiscard]] auto accept_mouse_command   (Command* const command) -> bool;
-    [[nodiscard]] auto commands               () const -> Commands&;
+    [[nodiscard]] auto get_button_bits                  () const -> uint32_t;
+    [[nodiscard]] auto get_vec2_absolute_value          () const -> glm::dvec2;
+    [[nodiscard]] auto get_vec2_relative_value          () const -> glm::dvec2;
+    [[nodiscard]] auto accept_mouse_command             (Command* const command) -> bool;
+    [[nodiscard]] auto accept_controller_trigger_command(Command* const command) -> bool;
+    [[nodiscard]] auto commands                         () const -> Commands&;
 
 private:
     Commands&  m_commands;

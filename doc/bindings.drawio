@@ -1,0 +1,241 @@
+<mxfile host="65bd71144e">
+    <diagram id="o3DfANCC2KI2XuiQe4bT" name="Page-1">
+        <mxGraphModel dx="2014" dy="1131" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="Selection Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="200" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="Trs Tool" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry y="360" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="Hover Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="960" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="Grid Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="1080" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="Brush Tool" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry y="440" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="Physics Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="560" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="67" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="8" target="2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="Select Hovered Mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="200" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="68" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="9" target="2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="Select All" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="240" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="69" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="10" target="2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" value="Delete Selection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="280" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="70" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="11" target="3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" value="Trs Drag Hovered Handle" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="360" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="71" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="12" target="6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="12" value="Brush Preview" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="440" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="72" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="13" target="6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="13" value="Brush Insert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="480" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="14" value="Fly Camera Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=default;" parent="1" vertex="1">
+                    <mxGeometry y="80" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="65" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="15" target="14" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" value="Turn Camera" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="80" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="66" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="16" target="14" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="16" value="Move L/R/... Begin/End" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="120" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="73" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="17" target="7" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="17" value="Physics Drag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="560" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="60" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="28" target="15" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="28" value="LMB Drag (No hover tool handle)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="80" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="61" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="29" target="16" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="29" value="Key WASD pressed/release" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="120" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="62" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="30" target="8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="30" value="LMB Click with hover mesh" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="200" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="63" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="31" target="9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="31" value="Key CTRL-A" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="240" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="64" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="32" target="10" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="32" value="Key Delete" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="280" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="78" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="33" target="11" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="33" value="LMB Drag with hover tool handle" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="360" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="79" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="34" target="12" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="34" value="Mouse move in viewport" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="440" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="80" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="35" target="13" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="35" value="RMB click (No hover tool handle)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="480" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="81" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="36" target="17" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="36" value="RMB drag with hover mesh" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="560" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="38" value="Vertex Paint Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="640" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="74" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="39" target="38" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="39" value="Paint Vertex" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="640" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="82" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="40" target="39" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="40" value="RMB click with hover mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="640" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="83" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="41" target="39" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="41" value="RMB drag with hover mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="680" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="45" value="Material Paint Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="760" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="75" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="46" target="45" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="46" value="Material Paint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="760" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="84" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="47" target="46" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="47" value="LMB Click with hover mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="760" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="50" value="Hotbar" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="1000" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="51" value="HUD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="1040" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="52" value="Operation Stack" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry y="840" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="76" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="53" target="52" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="53" value="Undo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="840" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="77" style="edgeStyle=entityRelationEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="54" target="52" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="54" value="Redo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="880" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="85" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="57" target="53" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="57" value="Key CTRL-Z" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="840" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="86" style="edgeStyle=entityRelationEdgeStyle;html=1;" parent="1" source="58" target="54" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="58" value="Key CTRL-Y" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="880" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="87" value="Tool" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;" parent="1" vertex="1">
+                    <mxGeometry width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="88" value="Command" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;" parent="1" vertex="1">
+                    <mxGeometry x="240" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="89" value="Default Bindings" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;" parent="1" vertex="1">
+                    <mxGeometry x="480" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="90" value="OpenXR" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;" parent="1" vertex="1">
+                    <mxGeometry x="720" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="91" value="Click" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="200" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="92" value="Drag Handle" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="360" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="93" value="Click" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="480" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="94" value="Drag Mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="560" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="95" value="Click Mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="640" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="97" value="Drag Mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="680" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="98" value="Click Mesh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="760" width="80" height="40" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

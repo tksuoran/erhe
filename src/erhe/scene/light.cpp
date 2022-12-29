@@ -53,23 +53,15 @@ void Light::handle_node_scene_host_update(
 {
     if (old_scene_host)
     {
-        Scene* scene = old_scene_host->get_hosted_scene();
-        if (scene != nullptr)
-        {
-            scene->unregister_light(
-                std::static_pointer_cast<Light>(shared_from_this())
-            );
-        }
+        old_scene_host->unregister_light(
+            std::static_pointer_cast<Light>(shared_from_this())
+        );
     }
     if (new_scene_host)
     {
-        Scene* scene = new_scene_host->get_hosted_scene();
-        if (scene != nullptr)
-        {
-            scene->register_light(
-                std::static_pointer_cast<Light>(shared_from_this())
-            );
-        }
+        new_scene_host->register_light(
+            std::static_pointer_cast<Light>(shared_from_this())
+        );
     }
 }
 

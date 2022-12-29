@@ -44,7 +44,7 @@ public:
     void set_clear_color(const glm::vec4& value);
 
     // Implements Imgui_viewport
-    [[nodiscard]] auto get_scale_value() const -> float override;
+    [[nodiscard]] auto get_scale_value  () const -> float override;
     [[nodiscard]] auto begin_imgui_frame() -> bool override;
     void end_imgui_frame() override;
 
@@ -69,6 +69,12 @@ public:
         int                                 depth = 0
     ) const -> erhe::scene::Viewport override;
 
+    [[nodiscard]] auto get_producer_output_texture(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> std::shared_ptr<erhe::graphics::Texture> override;
+
     [[nodiscard]] auto get_producer_output_viewport(
         erhe::application::Resource_routing resource_routing,
         int                                 key,
@@ -84,11 +90,10 @@ private:
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     std::shared_ptr<Hand_tracker>                      m_hand_tracker;
     std::shared_ptr<Headset_view>                      m_headset_view;
-    bool                                               m_last_mouse_finger{false};
 #endif
     std::string m_name;
     std::string m_imgui_ini_path;
-    glm::vec4   m_clear_color {0.0f, 0.0f, 0.0f, 0.1f};
+    glm::vec4   m_clear_color {0.0f, 0.0f, 0.0f, 0.2f};
     double      m_time        {0.0};
     double      m_last_mouse_x{0.0};
     double      m_last_mouse_y{0.0};

@@ -54,8 +54,6 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override;
     void tool_render(const Render_context& context) override;
 
     // Implements Imgui_window

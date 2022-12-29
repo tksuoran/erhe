@@ -200,6 +200,7 @@ public:
         Window_entry grid                {false};
         Window_entry headset_view        {false};
         Window_entry hover_tool          {false};
+        Window_entry hud                 {false};
         Window_entry layers              {false};
         Window_entry line_renderer       {false};
         Window_entry log                 {false};
@@ -215,6 +216,7 @@ public:
         Window_entry render_graph        {false};
         Window_entry settings            {false};
         Window_entry tool_properties     {false};
+        Window_entry tools               {false};
         Window_entry trs                 {false};
         Window_entry viewport            {true};
         Window_entry viewport_config     {false};

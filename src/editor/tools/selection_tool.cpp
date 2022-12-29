@@ -4,6 +4,7 @@
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
+#include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -14,7 +15,7 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs_tool.hpp"
+#include "tools/trs/trs_tool.hpp"
 #include "windows/node_tree_window.hpp"
 #include "windows/viewport_config.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -23,6 +24,7 @@
 
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_binding.hpp"
+#include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/time.hpp"
@@ -187,15 +189,17 @@ void Range_selection::reset()
     m_secondary_terminator.reset();
 }
 
+Selection_tool_select_command::Selection_tool_select_command(Selection_tool& selection_tool)
+    : Command         {"Selection_tool.select"}
+    , m_selection_tool{selection_tool}
+{
+    set_host(&selection_tool);
+}
+
 void Selection_tool_select_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (!m_selection_tool.is_enabled())
-    {
-        log_selection->trace("selection tool not enabled");
-        return;
-    }
     if (m_selection_tool.on_select_try_ready())
     {
         set_ready(context);
@@ -206,12 +210,6 @@ auto Selection_tool_select_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
-    if (!m_selection_tool.is_enabled())
-    {
-        log_selection->trace("selection tool not enabled");
-        return false;
-    }
-
     if (get_command_state() != erhe::application::State::Ready)
     {
         log_selection->trace("selection tool not in ready state");
@@ -221,6 +219,13 @@ auto Selection_tool_select_command::try_call(
     const bool consumed = m_selection_tool.on_select();
     set_inactive(context);
     return consumed;
+}
+
+Selection_tool_delete_command::Selection_tool_delete_command(Selection_tool& selection_tool)
+    : Command         {"Selection_tool.delete"}
+    , m_selection_tool{selection_tool}
+{
+    set_host(&selection_tool);
 }
 
 auto Selection_tool_delete_command::try_call(
@@ -316,12 +321,19 @@ void Selection_tool::declare_required_components()
 {
     require<erhe::application::Commands>();
     require<erhe::application::Imgui_windows>();
-    require<Tools>();
+    require<Editor_message_bus>();
+    require<Icon_set          >();
+    require<Tools             >();
 }
 
 void Selection_tool::initialize_component()
 {
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::toolbox | Tool_flags::secondary);
+    set_icon         (get<Icon_set>()->icons.select);
     get<Tools>()->register_tool(this);
+
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     hide();
 
@@ -331,6 +343,13 @@ void Selection_tool::initialize_component()
     commands->bind_command_to_mouse_click             (&m_select_command, erhe::toolkit::Mouse_button_left);
     commands->bind_command_to_controller_trigger_click(&m_select_command);
     commands->bind_command_to_key                     (&m_delete_command, erhe::toolkit::Key_delete, true);
+
+    get<Editor_message_bus>()->add_receiver(
+        [&](Editor_message& message)
+        {
+            Tool::on_message(message);
+        }
+    );
 }
 
 void Selection_tool::post_initialize()
@@ -341,18 +360,18 @@ void Selection_tool::post_initialize()
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_headset_view       = get<Headset_view    >();
 #endif
+    m_icon_set           = get<Icon_set        >();
     m_node_tree_window   = get<Node_tree_window>();
     m_viewport_config    = get<Viewport_config >();
     m_viewport_windows   = get<Viewport_windows>();
 }
 
-auto Selection_tool::description() -> const char*
+void Selection_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    return c_title.data();
-}
-
-void Selection_tool::on_inactived()
-{
+    if (new_priority < old_priority)
+    {
+        clear_selection();
+    }
 }
 
 auto Selection_tool::selection() const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&
@@ -395,52 +414,40 @@ void Selection_tool::set_selection(const std::vector<std::shared_ptr<erhe::scene
 
 auto Selection_tool::on_select_try_ready() -> bool
 {
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_headset_view)
-    {
-        const auto& content      = m_headset_view->get_hover(Hover_entry::content_slot);
-        const auto& tool         = m_headset_view->get_hover(Hover_entry::tool_slot);
-        const auto& rendertarget = m_headset_view->get_hover(Hover_entry::rendertarget_slot);
-        m_hover_mesh    = content.mesh;
-        m_hover_content = content.valid;
-        m_hover_tool    = tool.valid;
-
-        if (m_hover_content && !m_hover_tool && !rendertarget.valid)
-        {
-            log_selection->trace("Can select");
-            return true;
-        }
-        else
-        {
-            if (!m_hover_content)
-            {
-                log_selection->trace("Cannot select: Not hovering over content");
-            }
-            if (!m_hover_tool)
-            {
-                log_selection->trace("Cannot select: Hovering over tool");
-            }
-            if (rendertarget.valid)
-            {
-                log_selection->trace("Cannot select: Hovering over rendertarget");
-            }
-        }
-    }
-#endif
-
-    const auto viewport_window = m_viewport_windows->hover_window();
-    if (!viewport_window)
+    auto* scene_view = get_hover_scene_view();
+    if (!scene_view)
     {
         return false;
     }
 
-    const auto& content = viewport_window->get_hover(Hover_entry::content_slot);
-    const auto& tool    = viewport_window->get_hover(Hover_entry::tool_slot);
+    const auto& content      = scene_view->get_hover(Hover_entry::content_slot);
+    const auto& tool         = scene_view->get_hover(Hover_entry::tool_slot);
+    const auto& rendertarget = scene_view->get_hover(Hover_entry::rendertarget_slot);
     m_hover_mesh    = content.mesh;
     m_hover_content = content.valid;
     m_hover_tool    = tool.valid;
 
-    return m_hover_content;
+    if (m_hover_content && !m_hover_tool && !rendertarget.valid)
+    {
+        log_selection->trace("Can select");
+        return true;
+    }
+    else
+    {
+        if (!m_hover_content)
+        {
+            log_selection->trace("Cannot select: Not hovering over content");
+        }
+        if (!m_hover_tool)
+        {
+            log_selection->trace("Cannot select: Hovering over tool");
+        }
+        if (rendertarget.valid)
+        {
+            log_selection->trace("Cannot select: Hovering over rendertarget");
+        }
+    }
+    return false;
 }
 
 auto Selection_tool::on_select() -> bool
@@ -735,6 +742,40 @@ void Selection_tool::imgui()
         }
     }
 #endif
+}
+
+void Selection_tool::viewport_toolbar(bool& hovered)
+{
+    const auto& icon_rasterication = m_icon_set->get_small_rasterization();
+
+    int boost = get_priority_boost();
+    const auto mode = boost > 0
+        ? erhe::application::Item_mode::active
+        : erhe::application::Item_mode::normal;
+
+    erhe::application::begin_button_style(mode);
+    const bool button_pressed = icon_rasterication.icon_button(
+        m_icon_set->icons.select,
+        -1,
+        glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
+    erhe::application::end_button_style(mode);
+    if (ImGui::IsItemHovered())
+    {
+        hovered = true;
+        ImGui::SetTooltip(
+            boost > 0
+                ? "De-prioritize Selection Tool"
+                : "Prioritize Selection Tool"
+        );
+    }
+    if (button_pressed)
+    {
+        set_priority_boost(boost == 0 ? 10 : 0);
+    }
+
 }
 
 }

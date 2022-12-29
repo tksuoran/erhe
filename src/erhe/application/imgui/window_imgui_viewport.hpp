@@ -69,10 +69,7 @@ public:
     void end_imgui_frame     () override;
 
 private:
-    void menu();
-
     std::shared_ptr<Imgui_renderer>          m_imgui_renderer;
-    Imgui_windows*                           m_imgui_windows{nullptr};
     std::shared_ptr<erhe::application::View> m_view;
     std::shared_ptr<Window>                  m_window;
 };

@@ -1,8 +1,6 @@
-#include "brushes/create.hpp"
+#include "tools/brushes/create.hpp"
 
 #include "editor_scenes.hpp"
-#include "brushes/brush.hpp"
-#include "brushes/brush_tool.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -12,8 +10,10 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
-#include "tools/tools.hpp"
+#include "tools/brushes/brush.hpp"
+#include "tools/brushes/brush_tool.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
 
 #include "erhe/application/configuration.hpp"
@@ -335,7 +335,11 @@ void Create::initialize_component()
     ERHE_PROFILE_FUNCTION
 
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-    get<Tools>()->register_background_tool(this);
+
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::background);
+    get<Tools>()->register_tool(this);
 }
 
 void Create::post_initialize()
@@ -462,15 +466,21 @@ void Create::imgui()
             m_brush = m_brush_create->create(brush_create_info);
             if (m_brush && create_instance)
             {
+                using Item_flags = erhe::scene::Item_flags;
+                const uint64_t node_flags =
+                    Item_flags::visible     |
+                    Item_flags::content     |
+                    Item_flags::show_in_ui;
                 const uint64_t mesh_flags =
-                    erhe::scene::Item_flags::visible     |
-                    erhe::scene::Item_flags::content     |
-                    erhe::scene::Item_flags::shadow_cast |
-                    erhe::scene::Item_flags::id          |
-                    erhe::scene::Item_flags::show_in_ui;
+                    Item_flags::visible     |
+                    Item_flags::content     |
+                    Item_flags::shadow_cast |
+                    Item_flags::id          |
+                    Item_flags::show_in_ui;
 
                 const Instance_create_info brush_instance_create_info
                 {
+                    .node_flags       = node_flags,
                     .mesh_flags       = mesh_flags,
                     .scene_root       = scene_root,
                     .world_from_node  = world_from_node,
@@ -489,6 +499,7 @@ void Create::imgui()
                 );
                 m_operation_stack->push(op);
             }
+            m_brush_create = nullptr;
         }
         if (m_brush && create_brush)
         {

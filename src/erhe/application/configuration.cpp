@@ -270,6 +270,7 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "grid",                 windows.grid                );
         get_window(ini, "headset_view",         windows.headset_view        );
         get_window(ini, "hover_tool",           windows.hover_tool          );
+        get_window(ini, "hud",                  windows.hud                 );
         get_window(ini, "layers",               windows.layers              );
         get_window(ini, "line_renderer",        windows.line_renderer       );
         get_window(ini, "log",                  windows.log                 );
@@ -285,6 +286,7 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "render_graph",         windows.render_graph        );
         get_window(ini, "settings",             windows.settings            );
         get_window(ini, "tool_properties",      windows.tool_properties     );
+        get_window(ini, "tools",                windows.tools               );
         get_window(ini, "trs",                  windows.trs                 );
         get_window(ini, "viewport",             windows.viewport            );
         get_window(ini, "viewport_config",      windows.viewport_config     );

@@ -55,11 +55,7 @@ class Fly_camera_turn_command
     : public erhe::application::Command
 {
 public:
-    explicit Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool)
-        : Command          {"Fly_camera.turn_camera"}
-        , m_fly_camera_tool{fly_camera_tool}
-    {
-    }
+    explicit Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool);
 
     auto try_call (erhe::application::Command_context& context) -> bool override;
     void try_ready(erhe::application::Command_context& context) override;
@@ -77,14 +73,7 @@ public:
         const Control                            control,
         const erhe::application::Controller_item item,
         const bool                               active
-    )
-        : Command          {"Fly_camera.move"}
-        , m_fly_camera_tool{fly_camera_tool  }
-        , m_control        {control          }
-        , m_item           {item             }
-        , m_active         {active           }
-    {
-    }
+    );
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
 
@@ -116,10 +105,6 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
     void post_initialize            () override;
-
-    // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override;
 
     // Implements Window
     void imgui() override;
@@ -167,10 +152,8 @@ private:
     float                             m_rotate_scale_y{1.0f};
 
     // Component dependencies
-    std::shared_ptr<Tools>             m_editor_tools;
     std::shared_ptr<Editor_scenes>     m_editor_scenes;
     std::shared_ptr<Scene_root>        m_scene_root;
-    std::shared_ptr<Trs_tool>          m_trs_tool;
     std::shared_ptr<Viewport_windows>  m_viewport_windows;
 
     std::mutex                         m_mutex;

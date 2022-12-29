@@ -209,7 +209,7 @@ auto Commands::bind_command_to_controller_trackpad(
 }
 
 auto Commands::bind_command_to_update(
-    Command* const                command
+    Command* const command
 ) -> erhe::toolkit::Unique_id<Update_binding>::id_type
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
@@ -318,6 +318,10 @@ void Commands::on_key(
 
     for (auto& binding : m_key_bindings)
     {
+        if (!binding.is_command_host_enabled())
+        {
+            continue;
+        }
         if (binding.on_key(context, pressed, code, modifier_mask))
         {
             return;
@@ -346,6 +350,10 @@ void Commands::on_update()
 
         for (auto& binding : m_update_bindings)
         {
+            if (!binding.is_command_host_enabled())
+            {
+                continue;
+            }
             binding.on_update(context);
         }
     }
@@ -362,6 +370,11 @@ void Commands::on_update()
 
         for (auto& binding : m_mouse_bindings)
         {
+            if (!binding->is_command_host_enabled())
+            {
+                continue;
+            }
+
             if (binding->get_type() == Command_binding::Type::Mouse_drag)
             {
                 auto*      drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
@@ -391,49 +404,44 @@ void Commands::on_update()
 
         for (auto& binding : m_controller_trigger_bindings)
         {
+            if (!binding->is_command_host_enabled())
+            {
+                continue;
+            }
+
             if (binding->get_type() == Command_binding::Type::Controller_trigger_drag)
             {
-                auto*      drag_binding = reinterpret_cast<Controller_trigger_drag_binding*>(binding.get());
-                Command*   command      = binding->get_command();
-                const auto state        = command->get_command_state();
-                if ((state == State::Ready) || (state == State::Active))
+                auto*    drag_binding = reinterpret_cast<Controller_trigger_drag_binding*>(binding.get());
+                Command* command      = binding->get_command();
+                if (command->get_command_state() == State::Disabled)
                 {
-                    drag_binding->on_trigger_update(context);
+                    continue;
                 }
+
+                drag_binding->on_trigger_update(context);
             }
         }
     }
 }
 
-namespace {
-
-[[nodiscard]] auto get_priority(const State state) -> int
-{
-    switch (state)
-    {
-        //using enum State;
-        case State::Active:   return 1;
-        case State::Ready:    return 2;
-        case State::Inactive: return 3;
-        case State::Disabled: return 4;
-    }
-    return 999;
-}
-
-};
-
 auto Commands::get_command_priority(Command* const command) const -> int
 {
+    auto* host = command->get_host();
+    if (host && !host->is_enabled())
+    {
+        return 0; // Disabled command host -> minimum priority for command
+    }
+
     // Give priority for active mouse / cpntroller trigger commands
     if (command == m_active_mouse_command)
     {
-        return 0;
+        return 10000; // TODO max priority
     }
     if (command == m_active_trigger_command)
     {
-        return 0;
+        return 10000; // TODO max priority
     }
-    return get_priority(command->get_command_state());
+    return command->get_priority();
 }
 
 void Commands::sort_mouse_bindings()
@@ -450,7 +458,7 @@ void Commands::sort_mouse_bindings()
             auto* const rhs_command = rhs.get()->get_command();
             ERHE_VERIFY(lhs_command != nullptr);
             ERHE_VERIFY(rhs_command != nullptr);
-            return get_command_priority(lhs_command) < get_command_priority(rhs_command);
+            return get_command_priority(lhs_command) > get_command_priority(rhs_command);
         }
     );
 }
@@ -469,7 +477,7 @@ void Commands::sort_trigger_bindings()
             auto* const rhs_command = rhs.get()->get_command();
             ERHE_VERIFY(lhs_command != nullptr);
             ERHE_VERIFY(rhs_command != nullptr);
-            return get_command_priority(lhs_command) < get_command_priority(rhs_command);
+            return get_command_priority(lhs_command) > get_command_priority(rhs_command);
         }
     );
 }
@@ -595,6 +603,11 @@ void Commands::on_mouse_click(
     };
     for (const auto& binding : m_mouse_bindings)
     {
+        if (!binding->is_command_host_enabled())
+        {
+            continue;
+        }
+
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
         if (binding->on_button(context, button, count))
@@ -622,6 +635,11 @@ void Commands::on_mouse_wheel(const double x, const double y)
     };
     for (const auto& binding : m_mouse_wheel_bindings)
     {
+        if (!binding->is_command_host_enabled())
+        {
+            continue;
+        }
+
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
         binding->on_wheel(context); // does not set active mouse command - each wheel event is one shot
@@ -645,6 +663,11 @@ void Commands::on_mouse_move(const double x, const double y)
 
     for (const auto& binding : m_mouse_bindings)
     {
+        if (!binding->is_command_host_enabled())
+        {
+            continue;
+        }
+
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
         if (binding->on_motion(context))
@@ -673,6 +696,11 @@ void Commands::on_controller_trigger_click(
 
     for (auto& binding : m_controller_trigger_bindings)
     {
+        if (!binding->is_command_host_enabled())
+        {
+            continue;
+        }
+
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
         if (binding->on_trigger_click(context, click))
@@ -701,6 +729,11 @@ void Commands::on_controller_trigger_value(
 
     for (auto& binding : m_controller_trigger_bindings)
     {
+        if (!binding->is_command_host_enabled())
+        {
+            continue;
+        }
+
         binding->on_trigger_value(context);
     }
 }
@@ -723,6 +756,11 @@ void Commands::on_controller_trackpad_touch(
 
     for (auto& binding : m_controller_trackpad_bindings)
     {
+        if (!binding.is_command_host_enabled())
+        {
+            continue;
+        }
+
         if (binding.get_type() == Command_binding::Type::Controller_trackpad_touched)
         {
             auto* command = binding.get_command();
@@ -752,6 +790,11 @@ void Commands::on_controller_trackpad_click(
 
     for (auto& binding : m_controller_trackpad_bindings)
     {
+        if (!binding.is_command_host_enabled())
+        {
+            continue;
+        }
+
         if (binding.get_type() == Command_binding::Type::Controller_trackpad_clicked)
         {
             auto* command = binding.get_command();
@@ -763,15 +806,33 @@ void Commands::on_controller_trackpad_click(
     }
 }
 
+void Commands::commands(const State filter)
+{
+    for (auto* command : m_commands)
+    {
+        if (command->get_command_state() == filter)
+        {
+            const auto* host = command->get_host();
+            const std::string label = fmt::format(
+                "{} {} : {} {}",
+                command->get_priority(),
+                command->get_name(),
+                host ? host->get_description() : "",
+                host ? host->get_priority() : 0
+            );
+            ImGui::TreeNodeEx(
+                label.c_str(),
+                ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                ImGuiTreeNodeFlags_Leaf
+            );
+        }
+    }
+}
+
 void Commands::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    const ImGuiTreeNodeFlags leaf_flags{
-        ImGuiTreeNodeFlags_NoTreePushOnOpen |
-        ImGuiTreeNodeFlags_Leaf
-    };
 
     ImGui::Text(
         "Active mouse command: %s",
@@ -786,51 +847,32 @@ void Commands::imgui()
             : "(none)"
     );
 
-    if (ImGui::TreeNodeEx("Active", ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::TreeNodeEx("Commands", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        for (auto* command : m_commands)
+        if (ImGui::TreeNodeEx("Active", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            if (command->get_command_state() == State::Active)
-            {
-                ImGui::TreeNodeEx(command->get_name(), leaf_flags);
-            }
+            commands(State::Active);
+            ImGui::TreePop();
         }
-        ImGui::TreePop();
-    }
 
-    if (ImGui::TreeNodeEx("Ready", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto* command : m_commands)
+        if (ImGui::TreeNodeEx("Ready", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            if (command->get_command_state() == State::Ready)
-            {
-                ImGui::TreeNodeEx(command->get_name(), leaf_flags);
-            }
+            commands(State::Ready);
+            ImGui::TreePop();
         }
-        ImGui::TreePop();
-    }
 
-    if (ImGui::TreeNodeEx("Inactive", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto* command : m_commands)
+        if (ImGui::TreeNodeEx("Inactive", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            if (command->get_command_state() == State::Inactive)
-            {
-                ImGui::TreeNodeEx(command->get_name(), leaf_flags);
-            }
+            commands(State::Inactive);
+            ImGui::TreePop();
         }
-        ImGui::TreePop();
-    }
 
-    if (ImGui::TreeNodeEx("Disabled", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto* command : m_commands)
+        if (ImGui::TreeNodeEx("Disabled", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            if (command->get_command_state() == State::Disabled)
-            {
-                ImGui::TreeNodeEx(command->get_name(), leaf_flags);
-            }
+            commands(State::Disabled);
+            ImGui::TreePop();
         }
+
         ImGui::TreePop();
     }
 
@@ -838,7 +880,7 @@ void Commands::imgui()
     {
         for (const auto& command : m_commands)
         {
-            ImGui::BulletText("%s", command->get_name());
+            ImGui::Text("%d %s", command->get_priority(), command->get_name());
         }
         ImGui::TreePop();
     }
@@ -847,14 +889,15 @@ void Commands::imgui()
     {
         for (const auto& binding : m_key_bindings)
         {
-            ImGui::BulletText(
-                "%zu %s %s -> %s",
-                binding.get_id(),
+            ImGui::Text(
+                "%d %s <- %s %s %s",
+                binding.get_command()->get_priority(),
+                binding.get_command()->get_name(),
+                Command_binding::c_type_strings[static_cast<int>(binding.get_type())],
                 erhe::toolkit::c_str(binding.get_keycode()),
                 binding.get_pressed()
                     ? "pressed"
-                    : "released",
-                binding.get_command()->get_name()
+                    : "released"
             );
         }
         ImGui::TreePop();
@@ -864,10 +907,11 @@ void Commands::imgui()
     {
         for (const auto& binding : m_update_bindings)
         {
-            ImGui::BulletText(
-                "%zu -> %s",
-                binding.get_id(),
-                binding.get_command()->get_name()
+            ImGui::Text(
+                "%d %s <- %s",
+                binding.get_command()->get_priority(),
+                binding.get_command()->get_name(),
+                Command_binding::c_type_strings[static_cast<int>(binding.get_type())]
             );
         }
         ImGui::TreePop();
@@ -888,31 +932,34 @@ void Commands::imgui()
                     case erhe::application::Command_binding::Type::Mouse_click:
                     {
                         const auto click_binding = reinterpret_cast<erhe::application::Mouse_click_binding*>(binding.get());
-                        ImGui::BulletText(
-                            "%zu click button %d -> %s",
-                            binding->get_id(),
-                            click_binding->get_button(),
-                            binding->get_command()->get_name()
+                        ImGui::Text(
+                            "%d %s <- %s %d",
+                            binding->get_command()->get_priority(),
+                            binding->get_command()->get_name(),
+                            Command_binding::c_type_strings[static_cast<int>(binding->get_type())],
+                            click_binding->get_button()
                         );
                         break;
                     }
                     case erhe::application::Command_binding::Type::Mouse_drag:
                     {
                         const auto drag_binding = reinterpret_cast<erhe::application::Mouse_drag_binding*>(binding.get());
-                        ImGui::BulletText(
-                            "%zu drag button %d -> %s",
-                            binding->get_id(),
-                            drag_binding->get_button(),
-                            binding->get_command()->get_name()
+                        ImGui::Text(
+                            "%d %s <- %s %d",
+                            binding->get_command()->get_priority(),
+                            binding->get_command()->get_name(),
+                            Command_binding::c_type_strings[static_cast<int>(binding->get_type())],
+                            drag_binding->get_button()
                         );
                         break;
                     }
                     case erhe::application::Command_binding::Type::Mouse_motion:
                     {
-                        ImGui::BulletText(
-                            "%zu motion -> %s",
-                            binding->get_id(),
-                            binding->get_command()->get_name()
+                        ImGui::Text(
+                            "%d %s ,_ %s",
+                            binding->get_command()->get_priority(),
+                            binding->get_command()->get_name(),
+                            Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
                         );
                         break;
                     }
@@ -923,17 +970,51 @@ void Commands::imgui()
         {
             for (const auto& binding : m_mouse_wheel_bindings)
             {
-                ImGui::BulletText(
-                    "%zu wheel -> %s",
-                    binding->get_id(),
-                    binding->get_command()->get_name()
+                ImGui::Text(
+                    "%d %s <- %s",
+                    binding->get_command()->get_priority(),
+                    binding->get_command()->get_name(),
+                    Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
                 );
             }
         }
         ImGui::TreePop();
     }
 
+    if (ImGui::TreeNodeEx("Controller Trackpad Bindings"))
+    {
+        for (const auto& binding : m_controller_trackpad_bindings)
+        {
+            ImGui::Text(
+                "%d %s <- %s",
+                binding.get_command()->get_priority(),
+                binding.get_command()->get_name(),
+                Command_binding::c_type_strings[static_cast<int>(binding.get_type())]
+            );
+        }
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNodeEx("Controller Trigger Bindings", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        for (const auto& binding : m_controller_trigger_bindings)
+        {
+            ImGui::Text(
+                "%d %s: <- %s",
+                binding->get_command()->get_priority(),
+                binding->get_command()->get_name(),
+                Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
+            );
+        }
+        ImGui::TreePop();
+    }
+
 #endif
+}
+
+void Commands::sort_bindings()
+{
+    sort_mouse_bindings();
+    sort_trigger_bindings();
 }
 
 }  // namespace editor

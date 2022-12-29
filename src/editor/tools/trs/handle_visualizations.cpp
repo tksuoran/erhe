@@ -1,6 +1,4 @@
-#include "tools/handle_visualizations.hpp"
-#include "tools/trs_tool.hpp"
-#include "tools/tools.hpp"
+#include "tools/trs/handle_visualizations.hpp"
 
 #include "editor_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -9,6 +7,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
+#include "tools/trs/trs_tool.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -484,6 +483,11 @@ void Handle_visualizations::set_rotate(const bool enabled)
 void Handle_visualizations::set_local(const bool local)
 {
     m_local = local;
+}
+
+auto Handle_visualizations::get_local() const -> bool
+{
+    return m_local;
 }
 
 auto Handle_visualizations::get_scale() const -> float

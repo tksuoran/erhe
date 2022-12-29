@@ -21,20 +21,39 @@ class Item_flags
 {
 public:
     static constexpr uint64_t none                      = 0u;
-    static constexpr uint64_t no_message                = (1u <<  1);
-    static constexpr uint64_t show_in_ui                = (1u <<  2);
-    static constexpr uint64_t show_debug_visualizations = (1u <<  3);
-    static constexpr uint64_t shadow_cast               = (1u <<  4);
-    static constexpr uint64_t selected                  = (1u <<  5);
-    static constexpr uint64_t visible                   = (1u <<  6);
-    static constexpr uint64_t render_wireframe          = (1u <<  7); // TODO
-    static constexpr uint64_t render_bounding_box       = (1u <<  8); // TODO
-    static constexpr uint64_t content                   = (1u <<  9);
-    static constexpr uint64_t id                        = (1u << 10);
-    static constexpr uint64_t tool                      = (1u << 11);
-    static constexpr uint64_t brush                     = (1u << 12);
-    static constexpr uint64_t controller                = (1u << 13);
-    static constexpr uint64_t rendertarget              = (1u << 14);
+    static constexpr uint64_t no_message                = (1u <<  0);
+    static constexpr uint64_t show_in_ui                = (1u <<  1);
+    static constexpr uint64_t show_debug_visualizations = (1u <<  2);
+    static constexpr uint64_t shadow_cast               = (1u <<  3);
+    static constexpr uint64_t selected                  = (1u <<  4);
+    static constexpr uint64_t visible                   = (1u <<  5);
+    static constexpr uint64_t render_wireframe          = (1u <<  6); // TODO
+    static constexpr uint64_t render_bounding_volume    = (1u <<  7); // TODO
+    static constexpr uint64_t content                   = (1u <<  8);
+    static constexpr uint64_t id                        = (1u <<  9);
+    static constexpr uint64_t tool                      = (1u << 10);
+    static constexpr uint64_t brush                     = (1u << 11);
+    static constexpr uint64_t controller                = (1u << 12);
+    static constexpr uint64_t rendertarget              = (1u << 13);
+    static constexpr uint64_t count                     = 14;
+
+    static constexpr const char* c_bit_labels[] =
+    {
+        "No Message",
+        "Show In UI",
+        "Show Debug",
+        "Shadow Cast",
+        "Selected",
+        "Visible",
+        "Render Wireframe",
+        "Render Bounding Volume",
+        "Content",
+        "ID",
+        "Tool",
+        "Brush",
+        "Controller",
+        "Rendertarget"
+    };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
 };

@@ -58,6 +58,11 @@ Headset_view::Headset_view()
     , erhe::application::Imgui_window    {c_description}
     , erhe::application::Rendergraph_node{c_description}
 {
+    register_input(
+        erhe::application::Resource_routing::Resource_provided_by_producer,
+        "rendertarget texture",
+        erhe::application::Rendergraph_node_key::rendertarget_texture
+    );
 }
 
 Headset_view::~Headset_view()
@@ -121,7 +126,9 @@ void Headset_view::initialize_component()
         );
     }
 
-    get<Tools>()->register_background_tool(this);
+    set_flags      (Tool_flags::background);
+    set_description(c_description);
+    get<Tools>()->register_tool(this);
 
     //hide();
 }
@@ -133,15 +140,11 @@ void Headset_view::post_initialize()
     m_text_renderer          = get<erhe::application::Text_renderer    >();
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
 
-    m_editor_rendering = get<Editor_rendering>();
-    m_hand_tracker     = get<Hand_tracker    >();
-    m_hud              = get<Hud             >();
-    m_tools            = get<Tools           >();
-}
-
-auto Headset_view::description() -> const char*
-{
-    return c_description.data();
+    m_editor_message_bus = get<Editor_message_bus>();
+    m_editor_rendering   = get<Editor_rendering>();
+    m_hand_tracker       = get<Hand_tracker    >();
+    m_hud                = get<Hud             >();
+    m_tools              = get<Tools           >();
 }
 
 void Headset_view::tool_render(const Render_context& context)
@@ -297,7 +300,10 @@ void Headset_view::execute_rendergraph_node()
                 return false;
             }
 
-            view_resources->update(render_view);
+            if (m_head_tracking_enabled)
+            {
+                view_resources->update(render_view);
+            }
 
             auto* framebuffer = view_resources->framebuffer.get();
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
@@ -430,7 +436,12 @@ auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return m_root_camera;
 }
 
-[[nodiscard]] auto Headset_view::get_shadow_render_node() const -> Shadow_render_node*
+auto Headset_view::get_rendergraph_node() -> std::shared_ptr<erhe::application::Rendergraph_node>
+{
+    return shared_from_this();
+}
+
+auto Headset_view::get_shadow_render_node() const -> Shadow_render_node*
 {
     return m_shadow_render_node.get();
 }
@@ -546,24 +557,26 @@ void Headset_view::imgui()
 {
     m_mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
 
-    ImGui::SliderFloat("Finger Distance Threshold", &m_finger_to_viewport_distance_threshold, 0.01f, 0.50f);
+    ImGui::Checkbox("Head Tracking Enabled", &m_head_tracking_enabled);
 
-    constexpr ImVec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
-    constexpr ImVec4 green{0.0f, 1.0f, 0.0f, 1.0f};
-    for (const auto& finger_input : m_finger_inputs)
-    {
-        const float  distance = glm::distance(finger_input.finger_point, finger_input.point);
-        const ImVec4 color    = ImGui::IsMouseDown(ImGuiMouseButton_Left)
-            ? green
-            : red;
-        const std::string text = fmt::format(
-            "{} : {} - {}",
-            distance,
-            finger_input.finger_point,
-            finger_input.point
-        );
-        ImGui::TextColored(color, "%s", text.c_str());
-    }
+    //// ImGui::SliderFloat("Finger Distance Threshold", &m_finger_to_viewport_distance_threshold, 0.01f, 0.50f);
+    ////
+    //// constexpr ImVec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+    //// constexpr ImVec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+    //// for (const auto& finger_input : m_finger_inputs)
+    //// {
+    ////     const float  distance = glm::distance(finger_input.finger_point, finger_input.point);
+    ////     const ImVec4 color    = ImGui::IsMouseDown(ImGuiMouseButton_Left)
+    ////         ? green
+    ////         : red;
+    ////     const std::string text = fmt::format(
+    ////         "{} : {} - {}",
+    ////         distance,
+    ////         finger_input.finger_point,
+    ////         finger_input.point
+    ////     );
+    ////     ImGui::TextColored(color, "%s", text.c_str());
+    //// }
 
     for (const auto& controller_input : m_controller_inputs)
     {

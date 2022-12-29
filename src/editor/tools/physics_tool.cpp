@@ -3,6 +3,7 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
+#include "graphics/icon_set.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
@@ -11,7 +12,6 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/fly_camera_tool.hpp"
 #include "tools/tools.hpp"
-#include "windows/operations.hpp"
 
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/commands/commands.hpp"
@@ -54,6 +54,13 @@ void Physics_tool_drag_command::try_ready(
         log_physics->trace("PT set ready");
         set_ready(context);
     }
+}
+
+Physics_tool_drag_command::Physics_tool_drag_command(Physics_tool& physics_tool)
+    : Command       {"Physics_tool.drag"}
+    , m_physics_tool{physics_tool}
+{
+    set_host(&physics_tool);
 }
 
 auto Physics_tool_drag_command::try_call(
@@ -157,23 +164,23 @@ void Physics_tool::declare_required_components()
 {
     require<erhe::application::Commands>();
     require<Editor_message_bus>();
-    require<Operations        >();
+    require<Icon_set          >();
     require<Tools             >();
     require<Scene_builder     >();
 }
 
 void Physics_tool::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
-
-    const auto& tools = get<Tools>();
-    tools->register_tool(this);
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::toolbox);
+    set_icon         (get<Icon_set>()->icons.drag);
+    get<Tools>()->register_tool(this);
 
     const auto commands = get<erhe::application::Commands>();
     commands->register_command(&m_drag_command);
     commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
     commands->bind_command_to_controller_trigger_drag(&m_drag_command);
-    get<Operations>()->register_active_tool(this);
 
     erhe::physics::IWorld* world = get_physics_world();
     if (world == nullptr)
@@ -216,11 +223,6 @@ void Physics_tool::post_initialize()
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_fly_camera        = get<Fly_camera_tool>();
     m_viewport_windows  = get<Viewport_windows>();
-}
-
-auto Physics_tool::description() -> const char*
-{
-    return c_title.data();
 }
 
 void Physics_tool::on_message(Editor_message& message)
@@ -440,11 +442,6 @@ void Physics_tool::release_target()
 
 auto Physics_tool::on_drag_ready() -> bool
 {
-    if (!is_enabled())
-    {
-        log_physics->trace("PT not enabled");
-        return false;
-    }
     if (!acquire_target())
     {
         return false;
@@ -485,10 +482,6 @@ void Physics_tool::tool_hover(Scene_view* scene_view)
 
 auto Physics_tool::on_drag() -> bool
 {
-    if (!is_enabled())
-    {
-        return false;
-    }
     auto* world = get_physics_world();
     if (world == nullptr)
     {

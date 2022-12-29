@@ -8,6 +8,8 @@
 namespace erhe::message_bus
 {
 
+
+//// TODO use something like https://github.com/TheWisp/signals instead
 template <typename Message_type>
 class Message_bus
 {
@@ -27,7 +29,8 @@ public:
 
     void send_message(Message_type message)
     {
-        for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++) {
+        for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++)
+        {
             (*iter)(message);
         }
     }

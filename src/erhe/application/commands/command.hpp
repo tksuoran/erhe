@@ -3,10 +3,28 @@
 #include "erhe/application/commands/state.hpp"
 
 #include <optional>
+#include <string>
 
 namespace erhe::application {
 
 class Command_context;
+
+class Command_host
+{
+public:
+    [[nodiscard]] virtual auto get_priority() const -> int = 0;
+
+    [[nodiscard]] auto is_enabled     () const -> bool;
+    [[nodiscard]] auto get_description() const -> const char*;
+    void set_description(const std::string_view description);
+    void set_enabled    (bool enabled);
+    void enable         ();
+    void disable        ();
+
+private:
+    std::string m_description;
+    bool        m_enabled{true};
+};
 
 class Command
 {
@@ -27,6 +45,9 @@ public:
     // Non-virtual public API
     [[nodiscard]] auto get_command_state() const -> State;
     [[nodiscard]] auto get_name         () const -> const char*;
+    [[nodiscard]] auto get_priority     () const -> int;
+    [[nodiscard]] auto get_host         () const -> Command_host*;
+    void set_host    (Command_host* host);
     void disable     (Command_context& context);
     void enable      (Command_context& context);
     void set_inactive(Command_context& context);
@@ -34,8 +55,12 @@ public:
     void set_active  (Command_context& context);
 
 private:
-    State       m_state{State::Inactive};
-    const char* m_name {nullptr};
+    auto get_base_priority() const -> int;
+    auto get_host_priority() const -> int;
+
+    State         m_state{State::Inactive};
+    Command_host* m_host {nullptr};
+    const char*   m_name {nullptr};
 };
 
 } // namespace erhe::application

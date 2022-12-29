@@ -81,11 +81,6 @@ void Operation_stack::initialize_component()
     commands->bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
 }
 
-auto Operation_stack::description() -> const char*
-{
-    return c_title.data();
-}
-
 void Operation_stack::push(const std::shared_ptr<IOperation>& operation)
 {
     Operation_context context

@@ -59,12 +59,7 @@ class Physics_tool_drag_command
     : public erhe::application::Command
 {
 public:
-    explicit Physics_tool_drag_command(Physics_tool& physics_tool)
-        : Command       {"Physics_tool.drag"}
-        , m_physics_tool{physics_tool}
-    {
-    }
-
+    explicit Physics_tool_drag_command(Physics_tool& physics_tool);
     auto try_call   (erhe::application::Command_context& context) -> bool override;
     void try_ready  (erhe::application::Command_context& context) override;
     void on_inactive(erhe::application::Command_context& context) override;
@@ -94,10 +89,8 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int     override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char*   override;
     void tool_render    (const Render_context& context) override;
-    void tool_properties() override;
+    void tool_properties()                              override;
 
     // Implements erhe::physics::IMotion_state
     [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform   override;

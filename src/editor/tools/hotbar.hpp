@@ -11,6 +11,7 @@
 namespace erhe::application
 {
     class Imgui_renderer;
+    class Rendergraph;
 }
 
 namespace erhe::scene
@@ -22,29 +23,13 @@ namespace erhe::scene
 namespace editor
 {
 
-class Brush_tool;
 class Editor_message;
 class Icon_set;
-class Operations;
-class Physics_tool;
 class Rendertarget_imgui_viewport;
 class Rendertarget_mesh;
-class Selection_tool;
-class Trs_tool;
+class Scene_root;
+class Tools;
 class Viewport_windows;
-
-using Action = int;
-class Hotbar_action
-{
-public:
-    static constexpr Action First        = 0;
-    static constexpr Action Select       = 0;
-    static constexpr Action Move         = 1;
-    static constexpr Action Rotate       = 2;
-    static constexpr Action Drag         = 3;
-    static constexpr Action Brush_tool   = 4;
-    static constexpr Action Last         = 4;
-};
 
 class Hotbar;
 
@@ -84,7 +69,6 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto description() -> const char* override;
     void tool_render(const Render_context& context)  override;
 
     // Implements Imgui_window
@@ -93,14 +77,19 @@ public:
     void imgui   () override;
 
     // Public API
-    auto try_call (erhe::application::Command_context& context) -> bool;
-    auto get_color(int color) -> glm::vec4&;
+    auto try_call      (erhe::application::Command_context& context) -> bool;
+    auto get_color     (int color) -> glm::vec4&;
+    void set_visibility(bool value);
+    auto get_position  () const -> glm::vec3;
+    void set_position  (glm::vec3 position);
+    auto get_locked    () const -> bool;
+    void set_locked    (bool value);
 
 private:
     void on_message           (Editor_message& message);
     void update_node_transform(const glm::mat4& world_from_camera);
-    void set_action           (Action action);
-    void button               (glm::vec2 icon, Action action, const char* tooltip);
+    void tool_button          (Tool* tool);
+    void handle_slot_update   ();
 
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 
@@ -109,28 +98,30 @@ private:
 
     // Component dependencies
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<Brush_tool>                        m_brush_tool;
+    std::shared_ptr<erhe::application::Rendergraph>    m_rendergraph;
     std::shared_ptr<Icon_set>                          m_icon_set;
-    std::shared_ptr<Operations>                        m_operations;
-    std::shared_ptr<Physics_tool>                      m_physics_tool;
-    std::shared_ptr<Selection_tool>                    m_selection_tool;
-    std::shared_ptr<Trs_tool>                          m_trs_tool;
+    std::shared_ptr<Tools>                             m_tools;
     std::shared_ptr<Viewport_windows>                  m_viewport_windows;
 
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
+    Scene_view*                                  m_hover_scene_view{nullptr};
 
-    bool  m_show{true};
-    float m_x{ 0.0f};
-    float m_y{ 0.07f};
-    float m_z{-0.4f};
+    bool  m_show  {true};
+    bool  m_locked{false};
+    float m_x     { 0.0f};
+    float m_y     { 0.07f};
+    float m_z     {-0.4f};
+
+    std::size_t        m_slot      {0};
+    std::size_t        m_slot_first{0};
+    std::size_t        m_slot_last {0};
+    std::vector<Tool*> m_slots;
 
     glm::vec4 m_color_active  {0.3f, 0.3f, 0.8f, 0.8f};
     glm::vec4 m_color_hover   {0.4f, 0.4f, 0.4f, 0.8f};
     glm::vec4 m_color_inactive{0.1f, 0.1f, 0.4f, 0.8f};
-
-    Action m_action{Hotbar_action::Select};
 };
 
 } // namespace editor

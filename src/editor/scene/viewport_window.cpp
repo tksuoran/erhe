@@ -16,7 +16,7 @@
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs_tool.hpp"
+#include "tools/trs/trs_tool.hpp"
 #include "windows/physics_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -84,6 +84,7 @@ Viewport_window::Viewport_window(
     , m_viewport_config                  {components.get<Viewport_config >()}
     , m_name                             {name}
     , m_scene_root                       {scene_root}
+    , m_selection_tool                   {components.get<Selection_tool>()}
     , m_tool_scene_root                  {components.get<Tools>()->get_tool_scene_root()}
     , m_camera                           {camera}
 {
@@ -91,6 +92,11 @@ Viewport_window::Viewport_window(
         erhe::application::Resource_routing::Resource_provided_by_producer,
         "shadow_maps",
         erhe::application::Rendergraph_node_key::shadow_maps
+    );
+    register_input(
+        erhe::application::Resource_routing::Resource_provided_by_producer,
+        "rendertarget texture",
+        erhe::application::Rendergraph_node_key::rendertarget_texture
     );
     register_output(
         erhe::application::Resource_routing::Resource_provided_by_consumer,
@@ -254,6 +260,11 @@ auto Viewport_window::projection_viewport() const -> const erhe::scene::Viewport
 auto Viewport_window::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
     return m_camera.lock();
+}
+
+auto Viewport_window::get_rendergraph_node() -> std::shared_ptr<erhe::application::Rendergraph_node>
+{
+    return shared_from_this();
 }
 
 auto Viewport_window::as_viewport_window() -> Viewport_window*
@@ -488,12 +499,6 @@ void Viewport_window::update_pointer_context(
         set_hover(Hover_entry::tool_slot        , hover_tool         ? entry : Hover_entry{});
         set_hover(Hover_entry::brush_slot       , hover_brush        ? entry : Hover_entry{});
         set_hover(Hover_entry::rendertarget_slot, hover_rendertarget ? entry : Hover_entry{});
-
-        const auto scene_root = m_scene_root.lock();
-        if (scene_root)
-        {
-            scene_root->update_pointer_for_rendertarget_meshes();
-        }
     }
     else
     {
@@ -501,6 +506,12 @@ void Viewport_window::update_pointer_context(
     }
 
     update_grid_hover();
+
+    const auto scene_root = m_scene_root.lock();
+    if (scene_root)
+    {
+        scene_root->update_pointer_for_rendertarget_meshes(this);
+    }
 }
 
 auto Viewport_window::position_in_world_viewport_depth(
@@ -554,6 +565,11 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
 auto Viewport_window::imgui_toolbar() -> bool
 {
     bool hovered = false;
+    //// TODO Tool_flags::viewport_toolbar
+    if (m_selection_tool)
+    {
+        m_selection_tool->viewport_toolbar(hovered);
+    }
     if (m_trs_tool)
     {
         m_trs_tool->viewport_toolbar(hovered);

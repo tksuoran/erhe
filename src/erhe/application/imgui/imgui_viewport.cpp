@@ -1,6 +1,7 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/application/imgui/imgui_viewport.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/scoped_imgui_context.hpp"
 #include "erhe/application/application_log.hpp"
 #include "erhe/toolkit/window.hpp"
@@ -138,9 +139,11 @@ void update_key_modifiers(ImGuiIO& io, uint32_t modifier_mask)
 
 Imgui_viewport::Imgui_viewport(
     const std::string_view name,
+    Imgui_windows*         imgui_windows,
     ImFontAtlas*           font_atlas
 )
     : Rendergraph_node{fmt::format("Viewport {}", name)}
+    , m_imgui_windows {imgui_windows}
     , m_name          {name}
 {
     log_imgui->info("creating imgui viewport {}", name);
@@ -318,6 +321,39 @@ void Imgui_viewport::on_char(
 
     ImGuiIO& io = m_imgui_context->IO;
     io.AddInputCharacter(codepoint);
+}
+
+void Imgui_viewport::menu()
+{
+    ERHE_VERIFY(m_imgui_windows != nullptr);
+
+    if (ImGui::BeginMainMenuBar())
+    {
+        m_imgui_windows->window_menu(this);
+        ImGui::EndMainMenuBar();
+    }
+    auto& imgui_builtin_windows = m_imgui_windows->get_imgui_builtin_windows();
+    if (imgui_builtin_windows.demo)
+    {
+        ImGui::ShowDemoWindow(&imgui_builtin_windows.demo);
+    }
+
+    if (imgui_builtin_windows.style_editor)
+    {
+        ImGui::Begin("Dear ImGui Style Editor", &imgui_builtin_windows.style_editor);
+        ImGui::ShowStyleEditor();
+        ImGui::End();
+    }
+
+    if (imgui_builtin_windows.metrics)
+    {
+        ImGui::ShowMetricsWindow(&imgui_builtin_windows.metrics);
+    }
+
+    if (imgui_builtin_windows.stack_tool)
+    {
+        ImGui::ShowStackToolWindow(&imgui_builtin_windows.stack_tool);
+    }
 }
 
 #else

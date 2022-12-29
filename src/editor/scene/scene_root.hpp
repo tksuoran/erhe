@@ -60,6 +60,7 @@ namespace erhe::scene
     class Mesh;
     class Mesh_layer;
     class Message_bus;
+    class Node;
     class Scene;
 }
 
@@ -79,6 +80,7 @@ class Raytrace_primitive;
 class Rendertarget_mesh;
 class Scene_message_bus;
 class Scene_root;
+class Scene_view;
 class Viewport_window;
 
 class Mesh_layer_id
@@ -124,7 +126,15 @@ public:
     ~Scene_root() noexcept override;
 
     // Implements Scene_host
-    [[nodiscard]] auto get_hosted_scene() -> erhe::scene::Scene* override;
+    [[nodiscard]] auto get_hosted_scene() -> erhe::scene::Scene*  override;
+    void register_node    (const std::shared_ptr<erhe::scene::Node>&   node)   override;
+    void unregister_node  (const std::shared_ptr<erhe::scene::Node>&   node)   override;
+    void register_camera  (const std::shared_ptr<erhe::scene::Camera>& camera) override;
+    void unregister_camera(const std::shared_ptr<erhe::scene::Camera>& camera) override;
+    void register_mesh    (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
+    void unregister_mesh  (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
+    void register_light   (const std::shared_ptr<erhe::scene::Light>&  light)  override;
+    void unregister_light (const std::shared_ptr<erhe::scene::Light>&  light)  override;
 
     [[nodiscard]] auto get_shared_scene      () -> std::shared_ptr<erhe::scene::Scene>;
     [[nodiscard]] auto get_editor_message_bus() const -> std::shared_ptr<Editor_message_bus>;
@@ -139,34 +149,26 @@ public:
     auto camera_combo(
         const char*           label,
         erhe::scene::Camera*& camera,
-        const bool            nullptr_option = false
+        bool                  nullptr_option = false
     ) const -> bool;
 
     auto camera_combo(
         const char*                           label,
         std::shared_ptr<erhe::scene::Camera>& selected_camera,
-        const bool                            nullptr_option = false
+        bool                                  nullptr_option = false
     ) const -> bool;
 
     auto camera_combo(
         const char*                         label,
         std::weak_ptr<erhe::scene::Camera>& selected_camera,
-        const bool                          nullptr_option = false
+        bool                                nullptr_option = false
     ) const -> bool;
 
     void sort_lights();
 
     [[nodiscard]] auto content_library() const -> std::shared_ptr<Content_library>;
 
-    [[nodiscard]] auto create_rendertarget_mesh(
-        const erhe::components::Components& components,
-        Viewport_window&                    host_viewport_window,
-        const int                           width,
-        const int                           height,
-        const double                        pixels_per_meter
-    ) -> std::shared_ptr<Rendertarget_mesh>;
-
-    void update_pointer_for_rendertarget_meshes();
+    void update_pointer_for_rendertarget_meshes(Scene_view* scene_view);
 
     void sanity_check();
 

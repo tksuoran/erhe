@@ -1,6 +1,6 @@
 #pragma once
 
-#include "brushes/brush_tool.hpp"
+#include "tools/brushes/brush_tool.hpp"
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 

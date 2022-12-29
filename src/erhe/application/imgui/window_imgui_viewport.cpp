@@ -44,6 +44,7 @@ Window_imgui_viewport::Window_imgui_viewport(
 )
     : Imgui_viewport{
         name,
+        components.get<Imgui_windows>().get(),
         components.get<Imgui_renderer>()->get_font_atlas()
     }
     , m_imgui_renderer{components.get<Imgui_renderer>()}
@@ -77,9 +78,8 @@ void Window_imgui_viewport::post_initialize(
     erhe::components::Components& components
 )
 {
-    m_imgui_windows = components.get<Imgui_windows>().get();
-    m_view          = components.get<View         >();
-    m_window        = components.get<Window       >();
+    m_view   = components.get<View  >();
+    m_window = components.get<Window>();
 }
 
 auto Window_imgui_viewport::begin_imgui_frame() -> bool
@@ -141,29 +141,6 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
     menu();
-
-    auto& imgui_builtin_windows = m_imgui_windows->get_imgui_builtin_windows();
-    if (imgui_builtin_windows.demo)
-    {
-        ImGui::ShowDemoWindow(&imgui_builtin_windows.demo);
-    }
-
-    if (imgui_builtin_windows.style_editor)
-    {
-        ImGui::Begin("Dear ImGui Style Editor", &imgui_builtin_windows.style_editor);
-        ImGui::ShowStyleEditor();
-        ImGui::End();
-    }
-
-    if (imgui_builtin_windows.metrics)
-    {
-        ImGui::ShowMetricsWindow(&imgui_builtin_windows.metrics);
-    }
-
-    if (imgui_builtin_windows.stack_tool)
-    {
-        ImGui::ShowStackToolWindow(&imgui_builtin_windows.stack_tool);
-    }
     return true;
 }
 
@@ -202,17 +179,6 @@ auto Window_imgui_viewport::get_producer_output_viewport(
         .height        = m_window->get_context_window()->get_height(),
         // .reverse_depth = false // unused
     };
-}
-
-void Window_imgui_viewport::menu()
-{
-    ERHE_VERIFY(m_imgui_windows != nullptr);
-
-    if (ImGui::BeginMainMenuBar())
-    {
-        m_imgui_windows->window_menu();
-        ImGui::EndMainMenuBar();
-    }
 }
 
 }  // namespace editor

@@ -35,6 +35,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
 )
     : erhe::application::Imgui_viewport{
         name,
+        components.get<erhe::application::Imgui_windows>().get(),
         components.get<erhe::application::Imgui_renderer>()->get_font_atlas()
     }
     , m_rendertarget_mesh{rendertarget_mesh}
@@ -49,6 +50,12 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     , m_name             {name}
     , m_imgui_ini_path   {imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
 {
+    register_output(
+        erhe::application::Resource_routing::Resource_provided_by_producer,
+        "rendertarget texture",
+        erhe::application::Rendergraph_node_key::rendertarget_texture
+    );
+
     m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
     auto& style = ImGui::GetStyle();
@@ -115,13 +122,6 @@ template <typename T>
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_rendertarget_mesh->update_headset(*m_headset_view.get());
 #endif
-
-    // TODO Where this should be executed?
-    if (!m_configuration->headset.openxr)
-    {
-        // TODO Figure out better way to combine different input methods
-        m_rendertarget_mesh->update_pointer();
-    }
 
     const auto pointer = m_rendertarget_mesh->get_pointer();
 
@@ -237,10 +237,11 @@ template <typename T>
         const auto* node                   = m_rendertarget_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
         const auto& pose                   = m_rendertarget_mesh->get_controller_pose();
-        const float trigger_value          = m_rendertarget_mesh->get_controller_trigger();
+        const bool  trigger_click          = m_rendertarget_mesh->get_controller_trigger_click();
+        const bool  trigger_click_changed  = m_rendertarget_mesh->get_controller_trigger_click_changed();
+        const float trigger_value          = m_rendertarget_mesh->get_controller_trigger_value();
         const auto  controller_orientation = glm::mat4_cast(pose.orientation);
         const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
-        const bool  trigger                = trigger_value > 0.5f;
 
         const auto intersection = erhe::toolkit::intersect_plane<float>(
             glm::vec3{node->direction_in_world()},
@@ -283,24 +284,20 @@ template <typename T>
             }
         }
 
-        m_headset_view->add_controller_input(
-            Controller_input{
-                .position      = pose.position,
-                .direction     = controller_direction,
-                .trigger_value = trigger_value
-            }
-        );
-        if (trigger && (!m_last_mouse_finger))
+        // TODO update logic in Headset_view if (trigger_value_changed)
         {
-            m_last_mouse_finger = true;
-            ImGuiIO& io = m_imgui_context->IO;
-            io.AddMouseButtonEvent(0, true);
+            m_headset_view->add_controller_input(
+                Controller_input{
+                    .position      = pose.position,
+                    .direction     = controller_direction,
+                    .trigger_value = trigger_value
+                }
+            );
         }
-        if (!trigger && (m_last_mouse_finger))
+        if (trigger_click_changed)
         {
-            m_last_mouse_finger = false;
             ImGuiIO& io = m_imgui_context->IO;
-            io.AddMouseButtonEvent(0, false);
+            io.AddMouseButtonEvent(0, trigger_click);
         }
     }
 #endif
@@ -314,6 +311,8 @@ template <typename T>
 
     ImGui::NewFrame();
     ////ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
+
+    menu();
 
     return true;
 }
@@ -358,6 +357,18 @@ auto Rendertarget_imgui_viewport::get_consumer_input_texture(
     const erhe::application::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
+) const -> std::shared_ptr<erhe::graphics::Texture>
+{
+    static_cast<void>(resource_routing); // TODO Validate
+    static_cast<void>(key); // TODO Validate
+    static_cast<void>(depth);
+    return m_rendertarget_mesh->texture();
+}
+
+auto Rendertarget_imgui_viewport::get_producer_output_texture(
+    erhe::application::Resource_routing resource_routing,
+    int                                 key,
+    int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     static_cast<void>(resource_routing); // TODO Validate

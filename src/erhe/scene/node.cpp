@@ -472,27 +472,19 @@ void Node::handle_scene_host_update(
 
     if (old_scene_host != nullptr)
     {
-        Scene* old_scene = old_scene_host->get_hosted_scene();
-        if (old_scene != nullptr)
-        {
-            old_scene->unregister_node(
-                std::static_pointer_cast<Node>(
-                    shared_from_this()
-                )
-            );
-        }
+        old_scene_host->unregister_node(
+            std::static_pointer_cast<Node>(
+                shared_from_this()
+            )
+        );
     }
     if (new_scene_host != nullptr)
     {
-        Scene* new_scene = new_scene_host->get_hosted_scene();
-        if (new_scene != nullptr)
-        {
-            new_scene->register_node(
-                std::static_pointer_cast<Node>(
-                    shared_from_this()
-                )
-            );
-        }
+        new_scene_host->register_node(
+            std::static_pointer_cast<Node>(
+                shared_from_this()
+            )
+        );
     }
 
     for (const auto& attachment : node_data.attachments)

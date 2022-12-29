@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "hover_tool.hpp"
+#include "tools/hover_tool.hpp"
+
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
@@ -11,9 +12,7 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/grid_tool.hpp"
-#include "tools/hover_tool.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs_tool.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
@@ -45,11 +44,6 @@ Hover_tool::~Hover_tool() noexcept
 {
 }
 
-auto Hover_tool::description() -> const char*
-{
-    return c_title.data();
-}
-
 void Hover_tool::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
@@ -61,11 +55,14 @@ void Hover_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    set_flags(Tool_flags::background);
+
     const auto& imgui_windows = get<erhe::application::Imgui_windows>();
     imgui_windows->register_imgui_window(this);
 
-    const auto& tools = get<Tools>();
-    tools->register_background_tool(this);
+    set_description(c_title);
+    set_flags      (Tool_flags::toolbox);
+    get<Tools>()->register_tool(this);
 
     get<Editor_message_bus>()->add_receiver(
         [&](Editor_message& message)

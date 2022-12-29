@@ -64,6 +64,7 @@ class Headset_view
     , public erhe::application::Rendergraph_node
     , public Scene_view
     , public Tool
+    , public std::enable_shared_from_this<Headset_view>
 {
 public:
     static constexpr std::string_view c_name       {"Headset_view"};
@@ -87,7 +88,6 @@ public:
     void imgui() override;
 
     // Implements Tool
-    [[nodiscard]] auto description() -> const char* override;
     void tool_render(const Render_context& context) override;
 
     // Public API
@@ -103,9 +103,10 @@ public:
     [[nodiscard]] auto get_root_node() const -> std::shared_ptr<erhe::scene::Node>;
 
     // Implements Scene_view
-    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
-    [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
-    [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                  override;
+    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>                    override;
+    [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera>           override;
+    [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                            override;
+    [[nodiscard]] auto get_rendergraph_node  () -> std::shared_ptr<erhe::application::Rendergraph_node> override;
 
 private:
     [[nodiscard]] auto get_headset_view_resources(
@@ -138,6 +139,7 @@ private:
     std::vector<Finger_point>                            m_finger_inputs;
     std::vector<Controller_input>                        m_controller_inputs;
     float                                                m_finger_to_viewport_distance_threshold{0.1f};
+    bool                                                 m_head_tracking_enabled{true};
     bool                                                 m_mouse_down{false};
     bool                                                 m_menu_down {false};
 };

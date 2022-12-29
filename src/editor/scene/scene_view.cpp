@@ -49,8 +49,7 @@ void Scene_view::set_hover(
     {
         get_scene_root()->get_editor_message_bus()->send_message(
             Editor_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh | Message_flag_bit::c_flag_bit_hover_scene_view,
-                .scene_view   = this
+                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
             }
         );
     }
@@ -230,7 +229,7 @@ void Scene_view::raytrace_update(
             SPDLOG_LOGGER_TRACE(
                 log_controller_ray,
                 "{}: Hit position: {}",
-                Hover_entry::slot_names[i],
+                Hover_entry::slot_names[slot],
                 entry.position.value()
             );
 
@@ -242,8 +241,8 @@ void Scene_view::raytrace_update(
                     SPDLOG_LOGGER_TRACE(
                         log_controller_ray,
                         "{}: Hit node: {}",
-                        Hover_entry::slot_names[i],
-                        node->name()
+                        Hover_entry::slot_names[slot],
+                        node->get_name()
                     );
                     const auto* rt_instance = entry.raytrace_node->raytrace_instance();
                     if (rt_instance != nullptr)
@@ -251,7 +250,7 @@ void Scene_view::raytrace_update(
                         SPDLOG_LOGGER_TRACE(
                             log_controller_ray,
                             "{}: RT instance: {}",
-                            Hover_entry::slot_names[i],
+                            Hover_entry::slot_names[slot],
                             rt_instance->is_enabled()
                                 ? "enabled"
                                 : "disabled"
@@ -270,7 +269,7 @@ void Scene_view::raytrace_update(
                             SPDLOG_LOGGER_TRACE(
                                 log_controller_ray,
                                 "{}: Hit geometry: {}",
-                                Hover_entry::slot_names[i],
+                                Hover_entry::slot_names[slot],
                                 entry.geometry->name
                             );
                         }
@@ -280,7 +279,7 @@ void Scene_view::raytrace_update(
                             SPDLOG_LOGGER_TRACE(
                                 log_controller_ray,
                                 "{}: Hit polygon: {}",
-                                Hover_entry::slot_names[i],
+                                Hover_entry::slot_names[slot],
                                 polygon_id
                             );
                             entry.local_index = polygon_id;
@@ -316,7 +315,7 @@ void Scene_view::raytrace_update(
             SPDLOG_LOGGER_TRACE(
                 log_controller_ray,
                 "{}: no hit",
-                Hover_entry::slot_names[i]
+                Hover_entry::slot_names[slot]
             );
         }
         set_hover(slot, entry);

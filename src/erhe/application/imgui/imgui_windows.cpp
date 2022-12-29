@@ -200,7 +200,7 @@ void Imgui_windows::imgui_windows()
     }
 }
 
-void Imgui_windows::window_menu()
+void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
 {
     ERHE_VERIFY(m_current_viewport != nullptr);
 
@@ -216,6 +216,7 @@ void Imgui_windows::window_menu()
                 if (enabled)
                 {
                     window->show();
+                    window->set_viewport(imgui_viewport);
                 }
                 else
                 {

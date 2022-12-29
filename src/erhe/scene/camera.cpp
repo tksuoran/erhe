@@ -47,23 +47,15 @@ void Camera::handle_node_scene_host_update(
 {
     if (old_scene_host)
     {
-        Scene* scene = old_scene_host->get_hosted_scene();
-        if (scene != nullptr)
-        {
-            scene->unregister_camera(
-                std::static_pointer_cast<Camera>(shared_from_this())
-            );
-        }
+        old_scene_host->unregister_camera(
+            std::static_pointer_cast<Camera>(shared_from_this())
+        );
     }
     if (new_scene_host)
     {
-        Scene* scene = new_scene_host->get_hosted_scene();
-        if (scene != nullptr)
-        {
-            scene->register_camera(
-                std::static_pointer_cast<Camera>(shared_from_this())
-            );
-        }
+        new_scene_host->register_camera(
+            std::static_pointer_cast<Camera>(shared_from_this())
+        );
     }
 }
 

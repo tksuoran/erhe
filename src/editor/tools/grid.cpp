@@ -28,7 +28,7 @@ Grid::Grid()
 {
 }
 
-[[nodiscard]] auto Grid::get_type () const -> uint64_t
+[[nodiscard]] auto Grid::get_type() const -> uint64_t
 {
     return
         erhe::scene::Item_type::node_attachment |
@@ -268,6 +268,7 @@ auto Grid::intersect_ray(
     {
         return {};
     }
+
     const glm::dvec3 ray_origin_in_grid    = glm::dvec3{grid_from_world() * glm::dvec4{ray_origin_in_world, 1.0}};
     const glm::dvec3 ray_direction_in_grid = glm::dvec3{grid_from_world() * glm::dvec4{ray_direction_in_world, 0.0}};
     const auto intersection = erhe::toolkit::intersect_plane<double>(

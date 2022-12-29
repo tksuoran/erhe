@@ -85,15 +85,13 @@ void Icon_set::initialize_component()
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
-    icons.brush_tool        = load(icon_directory / "brush_tool.svg");
+    icons.brush_big         = load(icon_directory / "brush_big.svg");
+    icons.brush_small       = load(icon_directory / "brush_small.svg");
     icons.camera            = load(icon_directory / "camera.svg");
     icons.directional_light = load(icon_directory / "directional_light.svg");
     icons.drag              = load(icon_directory / "drag.svg");
+    icons.grid              = load(icon_directory / "grid.svg");
     icons.hud               = load(icon_directory / "hud.svg");
-    icons.spot_light        = load(icon_directory / "spot_light.svg");
-    icons.point_light       = load(icon_directory / "point_light.svg");
-    icons.pull              = load(icon_directory / "pull.svg");
-    icons.push              = load(icon_directory / "push.svg");
     icons.material          = load(icon_directory / "material.svg");
     icons.mesh              = load(icon_directory / "mesh.svg");
     icons.mesh_cone         = load(icon_directory / "mesh_cone");
@@ -111,17 +109,21 @@ void Icon_set::initialize_component()
     icons.mouse_rmb_drag    = load(icon_directory / "mouse_rmb_drag.svg");
     icons.move              = load(icon_directory / "move.svg");
     icons.node              = load(icon_directory / "node.svg");
+    icons.point_light       = load(icon_directory / "point_light.svg");
+    icons.pull              = load(icon_directory / "pull.svg");
+    icons.push              = load(icon_directory / "push.svg");
     icons.rotate            = load(icon_directory / "rotate.svg");
-    icons.select            = load(icon_directory / "select.svg");
     icons.scene             = load(icon_directory / "scene.svg");
+    icons.select            = load(icon_directory / "select.svg");
     icons.space_mouse       = load(icon_directory / "space_mouse.svg");
     icons.space_mouse_lmb   = load(icon_directory / "space_mouse_lmb.svg");
     icons.space_mouse_rmb   = load(icon_directory / "space_mouse_rmb.svg");
+    icons.spot_light        = load(icon_directory / "spot_light.svg");
     icons.three_dots        = load(icon_directory / "three_dots.svg");
     icons.vive              = load(icon_directory / "vive.svg");
     icons.vive_menu         = load(icon_directory / "vive_menu.svg");
-    icons.vive_trigger      = load(icon_directory / "vive_trigger.svg");
     icons.vive_trackpad     = load(icon_directory / "vive_trackpad.svg");
+    icons.vive_trigger      = load(icon_directory / "vive_trigger.svg");
 }
 
 void Icon_set::post_initialize()
@@ -254,6 +256,11 @@ auto imvec_from_glm(glm::vec4 v) -> ImVec4
     return ImVec4{v.x, v.y, v.z, v.w};
 }
 #endif
+
+[[nodiscard]] auto Icon_rasterization::get_size() const -> int
+{
+    return m_icon_width;
+}
 
 void Icon_rasterization::icon(
     const glm::vec2 uv0,

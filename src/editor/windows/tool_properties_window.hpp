@@ -10,7 +10,7 @@
 namespace editor
 {
 
-class Operations;
+class Tools;
 
 class Tool_properties_window
     : public erhe::components::Component
@@ -35,7 +35,7 @@ public:
 
 private:
     // Component dependencies
-    std::shared_ptr<Operations> m_operations;
+    std::shared_ptr<Tools> m_tools;
 };
 
 } // namespace erhe::application

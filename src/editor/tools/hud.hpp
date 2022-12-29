@@ -3,6 +3,7 @@
 #include "tools/tool.hpp"
 
 #include "erhe/application/commands/command.hpp"
+#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <glm/glm.hpp>
@@ -40,6 +41,7 @@ private:
 
 class Hud
     : public erhe::components::Component
+    , public erhe::application::Imgui_window
     , public Tool
 {
 public:
@@ -57,8 +59,10 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto description() -> const char* override;
-    void tool_render(const Render_context& context)  override;
+    void tool_render(const Render_context& context) override;
+
+    // Implements Imgui_window
+    void imgui() override;
 
     // Public APi
     [[nodiscard]] auto get_rendertarget_imgui_viewport() -> std::shared_ptr<Rendertarget_imgui_viewport>;
@@ -76,12 +80,14 @@ private:
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
-    float m_x           {-0.09f};
-    float m_y           { 0.0f};
-    float m_z           {-0.38f};
-    int   m_width_items {10};
-    int   m_height_items{10};
-    bool  m_is_visible  {false};
+    glm::mat4                                    m_world_from_camera{1.0f};
+    float m_x             {-0.09f};
+    float m_y             { 0.0f};
+    float m_z             {-0.38f};
+    int   m_width_items   {10};
+    int   m_height_items  {10};
+    bool  m_is_visible    {false};
+    bool  m_locked_to_head{false};
 };
 
 } // namespace editor

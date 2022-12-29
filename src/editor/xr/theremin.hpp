@@ -60,7 +60,6 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto description() -> const char* override;
     void tool_render(const Render_context& context) override;
 
     // Implements Imgui_window

@@ -181,7 +181,19 @@ void Viewport_config::imgui()
             ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
+
+            auto position = hotbar->get_position();
+            if (ImGui::DragFloat3("Position", &position.x, 0.1f))
+            {
+                hotbar->set_position(position);
+            }
             ImGui::TreePop();
+
+            bool locked = hotbar->get_locked();
+            if (ImGui::Checkbox("Locked", &locked))
+            {
+                hotbar->set_locked(locked);
+            }
         }
     }
 #endif

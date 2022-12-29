@@ -68,11 +68,7 @@ class Brush_tool_preview_command
     : public erhe::application::Command
 {
 public:
-    explicit Brush_tool_preview_command(Brush_tool& Brush_tool)
-        : Command     {"Brush_tool.motion_preview"}
-        , m_brush_tool{Brush_tool}
-    {
-    }
+    explicit Brush_tool_preview_command(Brush_tool& brush_tool);
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
 
@@ -84,11 +80,7 @@ class Brush_tool_insert_command
     : public erhe::application::Command
 {
 public:
-    explicit Brush_tool_insert_command(Brush_tool& Brush_tool)
-        : Command  {"Brush_tool.insert"}
-        , m_brush_tool{Brush_tool}
-    {
-    }
+    explicit Brush_tool_insert_command(Brush_tool& brush_tool);
 
     void try_ready(erhe::application::Command_context& context) override;
     auto try_call (erhe::application::Command_context& context) -> bool override;
@@ -120,11 +112,9 @@ public:
     void post_initialize            () override;
 
     // Implements Tool
-    [[nodiscard]] auto tool_priority() const -> int   override { return c_priority; }
-    [[nodiscard]] auto description  () -> const char* override { return c_title.data(); }
-    void tool_render            (const Render_context& context) override;
-    void tool_properties        () override;
-    void on_enable_state_changed() override;
+    void tool_render           (const Render_context& context) override;
+    void tool_properties       () override;
+    void handle_priority_update(int old_priority, int new_priority) override;
 
     // Commands
     auto try_insert_ready() -> bool;

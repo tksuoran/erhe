@@ -49,6 +49,8 @@ public:
         int                row
     );
 
+    [[nodiscard]] auto get_size() const -> int;
+
     void icon(
         glm::vec2 uv0,
         glm::vec4 tint_color = glm::vec4{1.0f}
@@ -77,15 +79,13 @@ private:
 class Icons
 {
 public:
-    glm::vec2 brush_tool       {};
+    glm::vec2 brush_small      {}; // for vertex paint
+    glm::vec2 brush_big        {}; // for brush tool
     glm::vec2 camera           {};
     glm::vec2 directional_light{};
     glm::vec2 drag             {};
+    glm::vec2 grid             {};
     glm::vec2 hud              {};
-    glm::vec2 point_light      {};
-    glm::vec2 pull             {};
-    glm::vec2 push             {};
-    glm::vec2 spot_light       {};
     glm::vec2 material         {};
     glm::vec2 mesh             {};
     glm::vec2 mesh_cone        {};
@@ -103,17 +103,21 @@ public:
     glm::vec2 mouse_rmb_drag   {};
     glm::vec2 move             {};
     glm::vec2 node             {};
+    glm::vec2 point_light      {};
+    glm::vec2 pull             {};
+    glm::vec2 push             {};
     glm::vec2 rotate           {};
-    glm::vec2 select           {};
     glm::vec2 scene            {};
+    glm::vec2 select           {};
     glm::vec2 space_mouse      {};
     glm::vec2 space_mouse_lmb  {};
     glm::vec2 space_mouse_rmb  {};
+    glm::vec2 spot_light       {};
     glm::vec2 three_dots       {};
     glm::vec2 vive             {};
     glm::vec2 vive_menu        {};
-    glm::vec2 vive_trigger     {};
     glm::vec2 vive_trackpad    {};
+    glm::vec2 vive_trigger     {};
 };
 
 class Icon_set

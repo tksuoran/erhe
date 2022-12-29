@@ -383,7 +383,7 @@ void Jolt_world::remove_constraint(IConstraint* constraint)
     }
 }
 
-void Jolt_world::set_gravity(const glm::vec3 gravity)
+void Jolt_world::set_gravity(const glm::vec3& gravity)
 {
     log_physics->trace("set gravity from {} to {}", m_gravity, gravity);
     m_gravity = gravity;
@@ -411,7 +411,10 @@ auto Jolt_world::get_physics_system() -> JPH::PhysicsSystem&
     return m_physics_system;
 }
 
-void Jolt_world::OnBodyActivated(const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData)
+void Jolt_world::OnBodyActivated(
+    const JPH::BodyID& inBodyID,
+    JPH::uint64        inBodyUserData
+)
 {
     //const auto userdata = m_physics_system.GetBodyInterface().GetUserData(inBodyID);
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);

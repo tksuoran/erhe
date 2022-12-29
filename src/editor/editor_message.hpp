@@ -14,6 +14,7 @@ public:
     static constexpr uint64_t c_flag_bit_hover_scene_view  = (1u << 3);
     static constexpr uint64_t c_flag_bit_graphics_settings = (1u << 4);
     static constexpr uint64_t c_flag_bit_render_scene_view = (1u << 5);
+    static constexpr uint64_t c_flag_bit_tool_select       = (1u << 6);
 };
 
 class Scene_view;

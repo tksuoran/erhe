@@ -17,8 +17,8 @@ namespace erhe::xr {
 class Pose
 {
 public:
-    glm::quat orientation;
-    glm::vec3 position;
+    glm::quat orientation{};
+    glm::vec3 position{};
 };
 
 class Render_view

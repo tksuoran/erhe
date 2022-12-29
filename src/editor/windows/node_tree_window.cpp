@@ -41,9 +41,9 @@ Node_tree_window::Node_tree_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
     , m_filter{
-        .require_all_bits_set           = erhe::scene::Item_flags::content,
+        .require_all_bits_set           = erhe::scene::Item_flags::show_in_ui,
         .require_at_least_one_bit_set   = 0,
-        .require_all_bits_clear         = erhe::scene::Item_flags::tool | erhe::scene::Item_flags::brush,
+        .require_all_bits_clear         = 0, //erhe::scene::Item_flags::tool | erhe::scene::Item_flags::brush,
         .require_at_least_one_bit_clear = 0
     }
 {
@@ -1049,8 +1049,27 @@ void Node_tree_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-#if 0 //// TODO
+#if 1 //// TODO
     ImGui::Checkbox("Expand Attachments", &m_expand_attachments);
+    ImGui::Checkbox("Show All",           &m_show_all);
+    if (m_show_all)
+    {
+        m_filter = erhe::scene::Item_filter{
+            .require_all_bits_set           = 0,
+            .require_at_least_one_bit_set   = 0,
+            .require_all_bits_clear         = 0, //erhe::scene::Item_flags::tool | erhe::scene::Item_flags::brush,
+            .require_at_least_one_bit_clear = 0
+        };
+    }
+    else
+    {
+        m_filter = erhe::scene::Item_filter{
+            .require_all_bits_set           = erhe::scene::Item_flags::show_in_ui,
+            .require_at_least_one_bit_set   = 0,
+            .require_all_bits_clear         = 0, //erhe::scene::Item_flags::tool | erhe::scene::Item_flags::brush,
+            .require_at_least_one_bit_clear = 0
+        };
+    }
 #endif
 
     m_tree_items_last_frame = m_tree_items;
@@ -1062,7 +1081,7 @@ void Node_tree_window::imgui()
     }
 
     // TODO Handle cross scene drags and drops
-#if 0 //// TODO
+#if 1 //// TODO
     if (ImGui::Button("Create Scene"))
     {
         auto content_library = std::make_shared<Content_library>();
@@ -1072,12 +1091,38 @@ void Node_tree_window::imgui()
             content_library,
             "new scene"
         );
+
+        using Item_flags = erhe::scene::Item_flags;
+
         auto camera_node = std::make_shared<erhe::scene::Node>("Camera Node");
         auto camera = std::make_shared<erhe::scene::Camera>("Camera");
-        camera_node->enable_flag_bits(erhe::scene::Item_flags::content);
-        camera->enable_flag_bits(erhe::scene::Item_flags::content);
-        camera_node->attach(camera);
+        camera_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        camera     ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        camera_node->attach    (camera);
         camera_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
+        camera_node->set_world_from_node(
+            erhe::toolkit::create_look_at(
+                glm::vec3{0.0f, 1.0f,  1.0f},
+                glm::vec3{0.0f, 1.0f,  0.0f},
+                glm::vec3{0.0f, 1.0f,  0.0f}
+            )
+        );
+
+        auto light_node = std::make_shared<erhe::scene::Node>("Light Node");
+        auto light = std::make_shared<erhe::scene::Light>("Light");
+        light_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        light     ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        light     ->layer_id  = scene_root->layers().light()->id;
+        light_node->attach    (light);
+        light_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
+        light_node->set_world_from_node(
+            erhe::toolkit::create_look_at(
+                glm::vec3{0.0f, 3.0f,  0.0f},
+                glm::vec3{0.0f, 0.0f,  0.0f},
+                glm::vec3{0.0f, 0.0f,  1.0f}
+            )
+        );
+
         m_editor_scenes->register_scene_root(scene_root);
     }
 #endif

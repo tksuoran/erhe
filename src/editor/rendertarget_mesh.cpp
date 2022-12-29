@@ -45,19 +45,14 @@ namespace editor
 {
 
 Rendertarget_mesh::Rendertarget_mesh(
-    Scene_root&                         host_scene_root,
-    Viewport_window&                    host_viewport_window,
     const erhe::components::Components& components,
     const int                           width,
     const int                           height,
     const double                        pixels_per_meter
 )
-    : erhe::scene::Mesh     {"Rendertarget Node"}
-    , m_host_scene_root     {host_scene_root}
-    , m_host_viewport_window{host_viewport_window}
-    //, m_pipeline_state_tracker{components.get<erhe::graphics::OpenGL_state_tracker>()}
-    , m_viewport_config     {components.get<Viewport_config>()}
-    , m_pixels_per_meter    {pixels_per_meter}
+    : erhe::scene::Mesh {"Rendertarget Node"}
+    , m_viewport_config {components.get<Viewport_config>()}
+    , m_pixels_per_meter{pixels_per_meter}
 {
     enable_flag_bits(erhe::scene::Item_flags::rendertarget);
 
@@ -132,10 +127,9 @@ void Rendertarget_mesh::add_primitive(
     const erhe::components::Components& components
 )
 {
-    auto& material_library = m_host_scene_root.content_library()->materials;
-    auto& mesh_memory      = *components.get<Mesh_memory>().get();
+    auto& mesh_memory = *components.get<Mesh_memory>().get();
 
-    m_material = material_library.make(
+    m_material = std::make_shared<erhe::primitive::Material>(
         "Rendertarget Node",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
@@ -189,6 +183,27 @@ auto Rendertarget_mesh::framebuffer() const -> std::shared_ptr<erhe::graphics::F
     return m_framebuffer;
 }
 
+void Rendertarget_mesh::handle_node_scene_host_update(
+    erhe::scene::Scene_host* old_scene_host,
+    erhe::scene::Scene_host* new_scene_host
+)
+{
+    Mesh::handle_node_scene_host_update(old_scene_host, new_scene_host);
+
+    auto* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
+    auto* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
+    if (old_scene_root != nullptr)
+    {
+        auto& old_material_library = old_scene_root->content_library()->materials;
+        old_material_library.remove(m_material);
+    }
+    if (new_scene_root != nullptr)
+    {
+        auto& new_material_library = new_scene_root->content_library()->materials;
+        new_material_library.add(m_material);
+    }
+}
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 void Rendertarget_mesh::update_headset(Headset_view& headset_view)
 {
@@ -196,34 +211,10 @@ void Rendertarget_mesh::update_headset(Headset_view& headset_view)
     if (headset != nullptr)
     {
         m_controller_pose = headset->controller_pose();
-        m_controller_trigger_value = headset->trigger_value()->currentState;
-        //// if (m_controller_trigger_value > 0.5f)
-        //// {
-        ////     const auto controller_orientation = glm::mat4_cast(m_controller_pose.orientation);
-        ////     const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
-        ////     const auto intersection = erhe::toolkit::intersect_plane<float>(
-        ////         glm::vec3{this->direction_in_world()},
-        ////         glm::vec3{this->position_in_world()},
-        ////         m_controller_pose.position,
-        ////         controller_direction
-        ////     );
-        ////     if (!intersection.has_value())
-        ////     {
-        ////         return;
-        ////     }
-        ////     const auto world_position      = m_controller_pose.position + intersection.value() * controller_direction;
-        ////     const auto window_position_opt = world_to_window(world_position);
-        ////     if (window_position_opt.has_value())
-        ////     {
-        ////         m_pointer = window_position_opt;
-        ////         m_pointer_finger = Finger_point{
-        ////             .finger       = static_cast<std::size_t>(XR_HAND_JOINT_INDEX_TIP_EXT),
-        ////             .finger_point = m_controller_pose.position,
-        ////             .point        = world_position
-        ////         };
-        ////     }
-        ////     return;
-        //// }
+        m_controller_trigger_click         = headset->trigger_click()->currentState;
+        m_controller_trigger_click_changed = headset->trigger_click()->changedSinceLastSync;
+        m_controller_trigger_value_float   = headset->trigger_value()->currentState;
+        m_controller_trigger_value_changed = headset->trigger_value()->changedSinceLastSync;
     }
 
     auto* hand_tracker = headset_view.get_hand_tracker();
@@ -279,17 +270,21 @@ void Rendertarget_mesh::update_headset(Headset_view& headset_view)
 }
 #endif
 
-auto Rendertarget_mesh::update_pointer() -> bool
+auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
 {
     m_pointer.reset();
 
-    const auto& rendertarget_hover = m_host_viewport_window.get_hover(Hover_entry::rendertarget_slot);
+    if (scene_view == nullptr)
+    {
+        return false;
+    }
+    const auto& rendertarget_hover = scene_view->get_hover(Hover_entry::rendertarget_slot);
     if (!rendertarget_hover.valid)
     {
         return false;
     }
-    const auto opt_origin_in_world    = m_host_viewport_window.get_control_ray_origin_in_world();
-    const auto opt_direction_in_world = m_host_viewport_window.get_control_ray_direction_in_world();
+    const auto opt_origin_in_world    = scene_view->get_control_ray_origin_in_world();
+    const auto opt_direction_in_world = scene_view->get_control_ray_direction_in_world();
     if (
         !opt_origin_in_world.has_value() ||
         !opt_direction_in_world.has_value()
@@ -307,10 +302,10 @@ auto Rendertarget_mesh::update_pointer() -> bool
     const glm::vec3 origin_position_in_world = opt_origin_in_world.value();
     const glm::vec3 direction_in_world       = opt_direction_in_world.value();
     const glm::vec3 origin_in_mesh           = node->transform_point_from_world_to_local(origin_position_in_world);
-    const glm::vec3 direction_in_mesh        = node->transform_direction_from_world_to_local(direction_in_world      );
+    const glm::vec3 direction_in_mesh        = node->transform_direction_from_world_to_local(direction_in_world);
 
-    const glm::vec3 origo      { 0.0f, 0.0f, 0.0f};
-    const glm::vec3 unit_axis_z{ 0.0f, 0.0f, 1.0f};
+    const glm::vec3 origo      {0.0f, 0.0f, 0.0f};
+    const glm::vec3 unit_axis_z{0.0f, 0.0f, 1.0f};
     const auto hit = erhe::toolkit::intersect_plane<float>(
         unit_axis_z,
         origo,
@@ -454,10 +449,26 @@ void Rendertarget_mesh::render_done()
     return m_controller_pose;
 }
 
-[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger() const -> float
+[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_click() const -> bool
 {
-    return m_controller_trigger_value;
+    return m_controller_trigger_click;
 }
+
+[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_click_changed() const -> bool
+{
+    return m_controller_trigger_click_changed;
+}
+
+[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_value() const -> float
+{
+    return m_controller_trigger_value_float;
+}
+
+[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_value_changed() const -> bool
+{
+    return m_controller_trigger_value_changed;
+}
+
 #endif
 
 [[nodiscard]] auto Rendertarget_mesh::width() const -> float

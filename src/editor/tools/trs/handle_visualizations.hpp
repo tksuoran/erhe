@@ -85,6 +85,7 @@ public:
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
+    [[nodiscard]] auto get_local            () const -> bool;
     [[nodiscard]] auto get_scale            () const -> float;
     [[nodiscard]] auto get_translate        () const -> bool;
     [[nodiscard]] auto get_rotate           () const -> bool;

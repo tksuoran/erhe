@@ -47,7 +47,8 @@ public:
         const bool          empty_option
     ) const -> bool;
 
-    void add(const std::shared_ptr<T>& entry);
+    void add   (const std::shared_ptr<T>& entry);
+    auto remove(const std::shared_ptr<T>& entry) -> bool;
 
 private:
     mutable std::mutex              m_mutex;
@@ -142,6 +143,19 @@ void Library<T>::add(const std::shared_ptr<T>& entry)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_entries.push_back(entry);
+}
+
+template <typename T>
+auto Library<T>::remove(const std::shared_ptr<T>& entry) -> bool
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    const auto i = std::remove(m_entries.begin(), m_entries.end(), entry);
+    if (i == m_entries.end())
+    {
+        return false;
+    }
+    m_entries.erase(i, m_entries.end());
+    return true;
 }
 
 } // namespace editor

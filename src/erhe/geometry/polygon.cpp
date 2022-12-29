@@ -26,7 +26,6 @@ auto Polygon::compute_normal(
     }
 
     vec3 newell_normal{0.0f};
-
     for_each_corner_neighborhood_const(
         geometry,
         [&newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i)
@@ -40,9 +39,8 @@ auto Polygon::compute_normal(
     );
 
     newell_normal = glm::normalize(newell_normal);
-
     return newell_normal;
- }
+}
 
 void Polygon::compute_normal(
     const Polygon_id                    this_polygon_id,

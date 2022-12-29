@@ -21,7 +21,6 @@ class Hotbar;
 class Hud;
 class Scene_message_bus;
 class Tools;
-class Trs_tool;
 class Viewport_windows;
 
 class Editor_view_client
@@ -62,15 +61,10 @@ private:
     std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
     std::shared_ptr<erhe::application::Rendergraph   > m_render_graph;
 
-    std::shared_ptr<Editor_message_bus> m_editor_message_bus;
-    std::shared_ptr<Editor_rendering  > m_editor_rendering;
-    std::shared_ptr<Editor_scenes     > m_editor_scenes;
-    std::shared_ptr<Viewport_windows  > m_viewport_windows;
-    std::shared_ptr<Hotbar            > m_hotbar;
-    std::shared_ptr<Hud               > m_hud;
-    std::shared_ptr<Scene_message_bus > m_scene_message_bus;
-    std::shared_ptr<Trs_tool          > m_trs_tool;
-    std::shared_ptr<Tools             > m_tools;
+    std::shared_ptr<Editor_rendering> m_editor_rendering;
+    std::shared_ptr<Editor_scenes   > m_editor_scenes;
+    std::shared_ptr<Viewport_windows> m_viewport_windows;
+    std::shared_ptr<Tools           > m_tools;
 };
 
 } // namespace editor

@@ -40,6 +40,7 @@ public:
     [[nodiscard]] auto get_scale_value() const -> float;
     auto begin            () -> bool;
     void end              ();
+    void set_visibility   (bool visible);
     void show             ();
     void hide             ();
     void toggle_visibility();

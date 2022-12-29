@@ -26,6 +26,7 @@ namespace erhe::application
     class Imgui_windows;
     class Multisample_resolve_node;
     class Rendergraph;
+    class Rendergraph_node;
     class View;
 }
 
@@ -115,7 +116,8 @@ public:
     // Virtual interface
     [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
-    [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* = 0;
+    [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
+    [[nodiscard]] virtual auto get_rendergraph_node  () -> std::shared_ptr<erhe::application::Rendergraph_node> = 0;
     [[nodiscard]] virtual auto as_viewport_window    () -> Viewport_window*;
     [[nodiscard]] virtual auto as_viewport_window    () const -> const Viewport_window*;
 

@@ -61,7 +61,8 @@ public:
 
     // Public API
     void register_command(Command* const command);
-    void imgui();
+    void imgui           ();
+    void sort_bindings   ();
 
     [[nodiscard]] auto get_commands                    () const -> const std::vector<Command*>&;
     [[nodiscard]] auto get_key_bindings                () const -> const std::vector<Key_binding>&;
@@ -126,6 +127,13 @@ public:
             (m_active_mouse_command == command);
     }
 
+    [[nodiscard]] auto accept_controller_trigger_command(Command* command) const -> bool
+    {
+        return
+            (m_active_trigger_command == nullptr) ||
+            (m_active_trigger_command == command);
+    }
+
     void command_inactivated(Command* const command);
 
     [[nodiscard]] auto last_mouse_button_bits       () const -> uint32_t;
@@ -155,6 +163,7 @@ private:
     void inactivate_ready_commands    ();
     void update_active_mouse_command  (Command* const command);
     void update_active_trigger_command(Command* const command);
+    void commands                     (State filter);
 
     // Component dependencies
     std::shared_ptr<Configuration> m_configuration;

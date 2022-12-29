@@ -164,11 +164,6 @@ Theremin::~Theremin()
     //// ma_device_uninit(&m_audio_device);
 }
 
-auto Theremin::description() -> const char*
-{
-    return c_description.data();
-}
-
 void Theremin::declare_required_components()
 {
     m_hand_tracker = require<Hand_tracker>();
@@ -201,7 +196,7 @@ void Theremin::initialize_component()
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
     m_hand_tracker->set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
 
-    get<Tools>()->register_background_tool(this);
+    //// get<Tools>()->register_background_tool(this);
 }
 
 void Theremin::post_initialize()

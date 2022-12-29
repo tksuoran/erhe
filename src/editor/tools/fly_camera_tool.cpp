@@ -4,7 +4,6 @@
 #include "editor_message_bus.hpp"
 #include "editor_scenes.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs_tool.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
@@ -119,6 +118,13 @@ auto Fly_camera_tool::try_ready() -> bool
     return true;
 }
 
+Fly_camera_turn_command::Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool)
+    : Command          {"Fly_camera.turn_camera"}
+    , m_fly_camera_tool{fly_camera_tool}
+{
+    set_host(&fly_camera_tool);
+}
+
 auto Fly_camera_turn_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
@@ -145,6 +151,21 @@ auto Fly_camera_turn_command::try_call(
     const auto relative = context.get_vec2_relative_value();
     m_fly_camera_tool.turn_relative(-relative.x, -relative.y);
     return true;
+}
+
+Fly_camera_move_command::Fly_camera_move_command(
+    Fly_camera_tool&                         fly_camera_tool,
+    const Control                            control,
+    const erhe::application::Controller_item item,
+    const bool                               active
+)
+    : Command          {"Fly_camera.move"}
+    , m_fly_camera_tool{fly_camera_tool  }
+    , m_control        {control          }
+    , m_item           {item             }
+    , m_active         {active           }
+{
+    set_host(&fly_camera_tool);
 }
 
 auto Fly_camera_move_command::try_call(
@@ -192,7 +213,7 @@ void Fly_camera_tool::declare_required_components()
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
     require<Editor_message_bus>();
-    m_editor_tools = require<Tools>();
+    require<Tools>();
 }
 
 void Fly_camera_tool::initialize_component()
@@ -201,7 +222,10 @@ void Fly_camera_tool::initialize_component()
     m_space_mouse_listener.set_active(true);
 #endif
 
-    m_editor_tools->register_tool(this);
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::background);
+    get<Tools>()->register_tool(this);
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
 
     const auto& commands = get<erhe::application::Commands>();
@@ -255,7 +279,6 @@ void Fly_camera_tool::initialize_component()
 void Fly_camera_tool::post_initialize()
 {
     m_editor_scenes    = get<Editor_scenes   >();
-    m_trs_tool         = get<Trs_tool        >();
     m_viewport_windows = get<Viewport_windows>();
 }
 
@@ -317,11 +340,6 @@ auto Fly_camera_tool::get_camera() const -> erhe::scene::Camera*
     return erhe::scene::get_camera(
         m_camera_controller->get_node()
     ).get();
-}
-
-auto Fly_camera_tool::description() -> const char*
-{
-    return c_title.data();
 }
 
 void Fly_camera_tool::translation(

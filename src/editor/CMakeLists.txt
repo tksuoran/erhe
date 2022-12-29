@@ -5,12 +5,6 @@ add_executable(${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    brushes/brush.cpp
-    brushes/brush.hpp
-    brushes/brush_tool.cpp
-    brushes/brush_tool.hpp
-    brushes/create.cpp
-    brushes/create.hpp
 
     graphics/gradients.cpp
     graphics/gradients.hpp
@@ -109,6 +103,20 @@ erhe_target_sources_grouped(
     scene/viewport_windows.cpp
     scene/viewport_windows.hpp
 
+    tools/brushes/brush.cpp
+    tools/brushes/brush.hpp
+    tools/brushes/brush_tool.cpp
+    tools/brushes/brush_tool.hpp
+    tools/brushes/create.cpp
+    tools/brushes/create.hpp
+    tools/trs/handle_visualizations.cpp
+    tools/trs/handle_visualizations.hpp
+    tools/trs/move_tool.cpp
+    tools/trs/move_tool.hpp
+    tools/trs/rotate_tool.cpp
+    tools/trs/rotate_tool.hpp
+    tools/trs/trs_tool.cpp
+    tools/trs/trs_tool.hpp
     tools/debug_visualizations.cpp
     tools/debug_visualizations.hpp
     tools/fly_camera_tool.cpp
@@ -121,8 +129,6 @@ erhe_target_sources_grouped(
     tools/hotbar.hpp
     tools/hover_tool.cpp
     tools/hover_tool.hpp
-    tools/handle_visualizations.cpp
-    tools/handle_visualizations.hpp
     tools/hud.cpp
     tools/hud.hpp
     tools/material_paint_tool.cpp
@@ -137,8 +143,6 @@ erhe_target_sources_grouped(
     tools/tool.hpp
     tools/tools.cpp
     tools/tools.hpp
-    tools/trs_tool.cpp
-    tools/trs_tool.hpp
 
     windows/content_library_window.cpp
     windows/content_library_window.hpp
