@@ -156,6 +156,14 @@ void Rendergraph_window::imgui()
     ImGui::SliderFloat("Image Size", &m_image_size, 4.0f, 1000.0f);
     ImGui::SetNextItemWidth(200.0f);
     ImGui::SliderFloat("Curve Strength", &m_curve_strength, 0.0f, 100.0f);
+    ImGui::SetNextItemWidth(400.0f);
+    const bool x_gap_changed = ImGui::SliderFloat("X Gap", &m_render_graph->x_gap, 0.0f, 200.0f);
+    ImGui::SetNextItemWidth(400.0f);
+    const bool y_gap_changed = ImGui::SliderFloat("Y Gap", &m_render_graph->y_gap, 0.0f, 200.0f);
+    if (ImGui::Button("Automatic Layout") || x_gap_changed || y_gap_changed)
+    {
+        m_render_graph->automatic_layout(m_image_size);
+    }
 
     if (m_imnodes_context == nullptr)
     {
@@ -170,6 +178,19 @@ void Rendergraph_window::imgui()
     const float zoom = canvas_state->Zoom;
 
     const auto& render_graph_nodes = m_render_graph->get_nodes();
+
+    for (const auto& node : render_graph_nodes)
+    {
+        if (node->is_enabled())
+        {
+            ImGui::Text("Execute render graph node '%s'", node->get_name().c_str());
+        }
+        else
+        {
+            ImGui::Text("Disabled render graph node '%s'", node->get_name().c_str());
+        }
+    }
+
     ImNodes::Ez::PushStyleVar(ImNodesStyleVar_CurveStrength, m_curve_strength);
     for (const auto& node : render_graph_nodes)
     {
@@ -179,7 +200,8 @@ void Rendergraph_window::imgui()
         const bool   start_selected = node->get_selected();
         ImVec2       position = start_position;
         bool         selected = start_selected;
-        if (ImNodes::Ez::BeginNode(node.get(), node->get_name().c_str(), &position, &selected))
+        const std::string label = fmt::format("{}: {} ", node->get_depth(), node->get_name());
+        if (ImNodes::Ez::BeginNode(node.get(), label.c_str(), &position, &selected))
         {
             const auto& inputs  = node->get_inputs();
             const auto& outputs = node->get_outputs();

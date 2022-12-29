@@ -128,6 +128,7 @@ void Hud::initialize_component()
         *m_components
     );
 
+    m_rendertarget_imgui_viewport->set_menu_visible(true);
     imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
 
     set_visibility(m_is_visible);

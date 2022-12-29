@@ -55,7 +55,10 @@ public:
         std::weak_ptr<Rendergraph_node> sink_node
     ) -> bool;
 
-    void automatic_layout();
+    void automatic_layout(float image_size);
+
+    float x_gap{100.0f};
+    float y_gap{100.0f};
 
 private:
     std::mutex                                     m_mutex;

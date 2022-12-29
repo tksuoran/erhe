@@ -201,9 +201,10 @@ void Hotbar::on_message(Editor_message& message)
                         old_node
                     );
                 }
+                m_hover_scene_view = message.scene_view;
+                set_visibility(static_cast<bool>(new_node));
                 if (new_node)
                 {
-                    m_hover_scene_view = message.scene_view;
                     m_rendergraph->connect(
                         erhe::application::Rendergraph_node_key::rendertarget_texture,
                         m_rendertarget_imgui_viewport,
@@ -216,9 +217,7 @@ void Hotbar::on_message(Editor_message& message)
 
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
     {
-        const bool should_show = (m_hover_scene_view != nullptr) && (m_hover_scene_view == message.scene_view);
-        set_visibility(should_show);
-        if (should_show)
+        if ((m_hover_scene_view != nullptr) && (m_hover_scene_view == message.scene_view))
         {
             if (message.scene_view != nullptr)
             {

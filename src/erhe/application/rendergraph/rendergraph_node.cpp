@@ -3,7 +3,8 @@
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/application_log.hpp"
-//#include <mango/include/mango/math/vector256_int8x32.hpp>
+#include "erhe/gl/gl_helpers.hpp"
+#include "erhe/graphics/texture.hpp"
 
 namespace erhe::application {
 
@@ -248,6 +249,42 @@ auto Rendergraph_node::get_producer_output_viewport(
 ) -> std::vector<Rendergraph_producer_connector>&
 {
     return m_outputs;
+}
+
+[[nodiscard]] auto Rendergraph_node::get_size() const -> std::optional<glm::vec2>
+{
+    std::optional<glm::vec2> size;
+
+    for (const auto& output : m_outputs)
+    {
+        if (output.resource_routing == erhe::application::Resource_routing::None)
+        {
+            continue;
+        }
+
+        const auto& texture = get_producer_output_texture(
+            output.resource_routing,
+            output.key
+        );
+        if (
+            texture &&
+            (texture->target() == gl::Texture_target::texture_2d) &&
+            (texture->width () >= 1) &&
+            (texture->height() >= 1) &&
+            (gl_helpers::has_color(texture->internal_format()))
+        )
+        {
+            if (!size.has_value())
+            {
+                size = glm::vec2{texture->width(), texture->height()};
+            }
+            else
+            {
+                size = glm::max(size.value(), glm::vec2{texture->width(), texture->height()});
+            }
+        }
+    }
+    return size;
 }
 
 [[nodiscard]] auto Rendergraph_node::is_enabled() const -> bool

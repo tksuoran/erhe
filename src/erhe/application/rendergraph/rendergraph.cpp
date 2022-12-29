@@ -34,10 +34,10 @@ void Rendergraph::sort()
         bool found_node{false};
         for (const auto& node : unsorted_nodes)
         {
-            //// SPDLOG_LOGGER_TRACE(
-            ////     log_rendergraph,
-            ////     "Sort: Considering node '{}'", node->get_name()
-            //// );
+            SPDLOG_LOGGER_TRACE(
+                log_rendergraph,
+                "Sort: Considering node '{}'", node->get_name()
+            );
             {
                 bool any_missing_dependency{false};
                 for (const Rendergraph_consumer_connector& input : node->get_inputs())
@@ -56,13 +56,13 @@ void Rendergraph::sort()
                         if (i == sorted_nodes.end())
                         {
                             //// const auto& producer = producer_node.lock();
-                            //// SPDLOG_LOGGER_TRACE(
-                            ////     log_rendergraph,
-                            ////     "Sort: Considering node '{}' failed - has unmet dependency key '{}' node '{}'",
-                            ////     node->get_name(),
-                            ////     input.key,
-                            ////     producer ? producer->get_name() : std::string{"(empty)"}
-                            //// );
+                            SPDLOG_LOGGER_TRACE(
+                                log_rendergraph,
+                                "Sort: Considering node '{}' failed - has unmet dependency key '{}' node '{}'",
+                                node->get_name(),
+                                input.key,
+                                producer ? producer->get_name() : std::string{"(empty)"}
+                            );
                             any_missing_dependency = true;
                             break;
                         }
@@ -74,11 +74,11 @@ void Rendergraph::sort()
                 }
             }
 
-            //// SPDLOG_LOGGER_TRACE(
-            ////     log_rendergraph,
-            ////     "Sort: Selected node '{}' - all dependencies are met",
-            ////     node->get_name()
-            //// );
+            SPDLOG_LOGGER_TRACE(
+                log_rendergraph,
+                "Sort: Selected node '{}' - all dependencies are met",
+                node->get_name()
+            );
             found_node = true;
 
             // Add selected node to sorted nodes
@@ -263,12 +263,20 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
     log_rendergraph->info("Unregistered Rendergraph_node {}", node->get_name());
 }
 
-void Rendergraph::automatic_layout()
+void Rendergraph::automatic_layout(const float image_size)
 {
+    if (m_nodes.empty())
+    {
+        return;
+    }
+
+    // First, count how many nodes are at each depth (== column)
     std::vector<int> node_count_per_depth(1);
+    int max_depth{0};
     for (const auto& node : m_nodes)
     {
         const int depth = node->get_depth();
+        max_depth = std::max(depth, max_depth);
         if (node_count_per_depth.size() < static_cast<std::size_t>(depth) + 1)
         {
             node_count_per_depth.resize(depth + 1);
@@ -276,19 +284,62 @@ void Rendergraph::automatic_layout()
         ++node_count_per_depth[depth];
     }
 
-    constexpr float layout_width  = 400.0f;
-    constexpr float layout_height = 160.0f;
-
+    // Figure out
+    //  - total height for each depth (== column)
+    //  - maximum column height
+    std::vector<float> total_height_per_depth;
+    float max_total_height{0.0f};
+    total_height_per_depth.resize(node_count_per_depth.size());
     for (const auto& node : m_nodes)
     {
-        const int depth = node->get_depth();
-        const int row = node_count_per_depth[depth]--;
-        node->set_position(
-            glm::vec2{
-                static_cast<float>(depth) * layout_width,
-                static_cast<float>(row) * layout_height
+        const int   depth          = node->get_depth();
+        const auto  node_size_opt  = node->get_size();
+        const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
+        const float aspect         = node_size.x / node_size.y;
+        const auto  effective_size = glm::vec2{aspect * image_size, image_size};
+
+        if (total_height_per_depth[depth] != 0.0f)
+        {
+            total_height_per_depth[depth] += y_gap;
+        }
+        total_height_per_depth[depth] += effective_size.y;
+        max_total_height = std::max(total_height_per_depth[depth], max_total_height);
+    }
+
+    float x_offset = 0.0f;
+    for (int depth = 0; depth <= max_depth; ++depth)
+    {
+        int   row_count    = node_count_per_depth[depth];
+        float column_width = 0.0f;
+        float y_offset     = 0.0f;
+        for (
+            auto i = m_nodes.begin(), end = m_nodes.end();
+            i != end;
+            ++i
+        )
+        {
+            const auto& node           = *i;
+            const auto  node_size_opt  = node->get_size();
+            const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
+            const float aspect         = node_size.x / node_size.y;
+            const auto  effective_size = glm::vec2{aspect * image_size, image_size};
+            const int   node_depth     = node->get_depth();
+            if (node_depth != depth)
+            {
+                continue;
             }
-        );
+            column_width = std::max(column_width, effective_size.x);
+            if (row_count == 1)
+            {
+                node->set_position(glm::vec2{x_offset, max_total_height * 0.5f - effective_size.y});
+            }
+            else
+            {
+                node->set_position(glm::vec2{x_offset, y_offset});
+            }
+            y_offset += effective_size.y + y_gap;
+        }
+        x_offset += column_width + x_gap;
     }
 }
 
@@ -324,7 +375,7 @@ auto Rendergraph::connect(
     }
 
     log_rendergraph->info("Rendergraph: Connected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
-    automatic_layout();
+    //// automatic_layout();
     return true;
 }
 

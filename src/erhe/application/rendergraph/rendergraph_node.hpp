@@ -69,6 +69,7 @@ public:
     [[nodiscard]] auto get_inputs ()       ->       std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_outputs() const -> const std::vector<Rendergraph_producer_connector>&;
     [[nodiscard]] auto get_outputs()       ->       std::vector<Rendergraph_producer_connector>&;
+    [[nodiscard]] auto get_size   () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto is_enabled () const -> bool;
 
     void connect          (Rendergraph* rendergraph);

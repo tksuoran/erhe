@@ -107,6 +107,11 @@ template <typename T>
     return 2.0f;
 }
 
+void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
+{
+    m_show_menu = visible;
+}
+
 [[nodiscard]] auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
 {
     SPDLOG_LOGGER_TRACE(
@@ -157,79 +162,6 @@ template <typename T>
             }
         }
     }
-
-#if 0
-    if (m_hand_tracker)
-    {
-        m_rendertarget_node->update_headset(*m_headset_view.get());
-        const auto& pointer_finger_opt = m_rendertarget_node->get_pointer_finger();
-        if (pointer_finger_opt.has_value())
-        {
-            const auto& pointer_finger           = pointer_finger_opt.value();
-            m_headset_view->add_finger_input(pointer_finger);
-            const auto  finger_world_position    = pointer_finger.finger_point;
-            const auto  viewport_world_position  = pointer_finger.point;
-            //const float distance                 = glm::distance(finger_world_position, viewport_world_position);
-            const auto  window_position_opt      = m_rendertarget_node->world_to_window(viewport_world_position);
-
-            if (window_position_opt.has_value())
-            {
-                if (!has_cursor())
-                {
-                    on_cursor_enter(1);
-                }
-                const auto position = window_position_opt.value();
-                if (
-                    (m_last_mouse_x != position.x) ||
-                    (m_last_mouse_y != position.y)
-                )
-                {
-                    m_last_mouse_x = position.x;
-                    m_last_mouse_y = position.y;
-                    on_mouse_move(position.x, position.y);
-                }
-            }
-            else
-            {
-                if (has_cursor())
-                {
-                    on_cursor_enter(0);
-                    m_last_mouse_x = -FLT_MAX;
-                    m_last_mouse_y = -FLT_MAX;
-                    on_mouse_move(-FLT_MAX, -FLT_MAX);
-                }
-            }
-
-            ////const float finger_press_threshold = m_headset_view->finger_to_viewport_distance_threshold();
-            ////if ((distance < finger_press_threshold * 0.98f) && (!m_last_mouse_finger))
-            ////{
-            ////    m_last_mouse_finger = true;
-            ////    ImGuiIO& io = m_imgui_context->IO;
-            ////    io.AddMouseButtonEvent(0, true);
-            ////}
-            ////if ((distance > finger_press_threshold * 1.02f) && (m_last_mouse_finger))
-            ////{
-            ////    m_last_mouse_finger = false;
-            ////    ImGuiIO& io = m_imgui_context->IO;
-            ////    io.AddMouseButtonEvent(0, false);
-            ////}
-        }
-        const bool finger_trigger = m_rendertarget_node->get_finger_trigger();
-
-        if (finger_trigger && (!m_last_mouse_finger))
-        {
-            m_last_mouse_finger = true;
-            ImGuiIO& io = m_imgui_context->IO;
-            io.AddMouseButtonEvent(0, true);
-        }
-        if (!finger_trigger && (m_last_mouse_finger))
-        {
-            m_last_mouse_finger = false;
-            ImGuiIO& io = m_imgui_context->IO;
-            io.AddMouseButtonEvent(0, false);
-        }
-    }
-#endif
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
@@ -312,7 +244,10 @@ template <typename T>
     ImGui::NewFrame();
     ////ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
-    menu();
+    if (m_show_menu)
+    {
+        menu();
+    }
 
     return true;
 }
@@ -426,3 +361,78 @@ auto Rendertarget_imgui_viewport::get_producer_output_viewport(
 }
 
 }  // namespace editor
+
+
+
+#if 0
+    if (m_hand_tracker)
+    {
+        m_rendertarget_node->update_headset(*m_headset_view.get());
+        const auto& pointer_finger_opt = m_rendertarget_node->get_pointer_finger();
+        if (pointer_finger_opt.has_value())
+        {
+            const auto& pointer_finger           = pointer_finger_opt.value();
+            m_headset_view->add_finger_input(pointer_finger);
+            const auto  finger_world_position    = pointer_finger.finger_point;
+            const auto  viewport_world_position  = pointer_finger.point;
+            //const float distance                 = glm::distance(finger_world_position, viewport_world_position);
+            const auto  window_position_opt      = m_rendertarget_node->world_to_window(viewport_world_position);
+
+            if (window_position_opt.has_value())
+            {
+                if (!has_cursor())
+                {
+                    on_cursor_enter(1);
+                }
+                const auto position = window_position_opt.value();
+                if (
+                    (m_last_mouse_x != position.x) ||
+                    (m_last_mouse_y != position.y)
+                )
+                {
+                    m_last_mouse_x = position.x;
+                    m_last_mouse_y = position.y;
+                    on_mouse_move(position.x, position.y);
+                }
+            }
+            else
+            {
+                if (has_cursor())
+                {
+                    on_cursor_enter(0);
+                    m_last_mouse_x = -FLT_MAX;
+                    m_last_mouse_y = -FLT_MAX;
+                    on_mouse_move(-FLT_MAX, -FLT_MAX);
+                }
+            }
+
+            ////const float finger_press_threshold = m_headset_view->finger_to_viewport_distance_threshold();
+            ////if ((distance < finger_press_threshold * 0.98f) && (!m_last_mouse_finger))
+            ////{
+            ////    m_last_mouse_finger = true;
+            ////    ImGuiIO& io = m_imgui_context->IO;
+            ////    io.AddMouseButtonEvent(0, true);
+            ////}
+            ////if ((distance > finger_press_threshold * 1.02f) && (m_last_mouse_finger))
+            ////{
+            ////    m_last_mouse_finger = false;
+            ////    ImGuiIO& io = m_imgui_context->IO;
+            ////    io.AddMouseButtonEvent(0, false);
+            ////}
+        }
+        const bool finger_trigger = m_rendertarget_node->get_finger_trigger();
+
+        if (finger_trigger && (!m_last_mouse_finger))
+        {
+            m_last_mouse_finger = true;
+            ImGuiIO& io = m_imgui_context->IO;
+            io.AddMouseButtonEvent(0, true);
+        }
+        if (!finger_trigger && (m_last_mouse_finger))
+        {
+            m_last_mouse_finger = false;
+            ImGuiIO& io = m_imgui_context->IO;
+            io.AddMouseButtonEvent(0, false);
+        }
+    }
+#endif
