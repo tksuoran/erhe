@@ -133,6 +133,7 @@ vec3 brdf(
     float roughness_x,
     float roughness_y,
     float metalness,
+    float reflectance,
     vec3  L,
     vec3  V,
     vec3  T,
@@ -152,15 +153,16 @@ vec3 brdf(
     float B_dot_L = dot(B, L);
     float T_dot_H = dot(T, H);
     float B_dot_H = dot(B, H);
-    //float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
-    //float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
-    float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
-    float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
-    vec3  F0_     = vec3(0.04);
-    vec3  F0      = mix(F0_, base_color, 1.0);
-    vec3  F       = fresnel_schlick(max(N_dot_V, 0.0), F0);
-    vec3  direct  = D * Vis * F;
-    return N_dot_L * direct;
+    float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
+    float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
+    //float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
+    //float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
+    vec3  F0                  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
+    vec3  F                   = fresnel_schlick(max(dot(V, H), 0.0), F0);
+    vec3  specular_microfacet = D * Vis * F;
+    vec3  diffuse_lambert     = m_i_pi * (1.0 - metalness) * base_color;
+    vec3  diffuse_factor      = vec3(1.0) - F;
+    return N_dot_L * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
 void main() {
@@ -182,6 +184,8 @@ void main() {
     uint directional_light_offset = 0;
     uint spot_light_offset        = directional_light_count;
     vec3 color = vec3(0);
+    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * material.base_color.rgb;
+    color += material.emissive.rgb;
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;
         Light light          = light_block.lights[light_index];
@@ -195,6 +199,7 @@ void main() {
                 material.roughness.x,
                 material.roughness.y,
                 material.metallic,
+                material.reflectance,
                 L,
                 V,
                 T,
@@ -220,6 +225,7 @@ void main() {
                 material.roughness.x,
                 material.roughness.y,
                 material.metallic,
+                material.reflectance,
                 L,
                 V,
                 T,
@@ -233,4 +239,5 @@ void main() {
     out_color.rgb = color * exposure;
 
     out_color.a = 1.0;
+    //out_color.b = 1.0;
 }

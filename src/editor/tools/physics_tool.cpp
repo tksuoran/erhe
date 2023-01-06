@@ -561,12 +561,21 @@ auto Physics_tool::on_drag() -> bool
     return true;
 }
 
+void Physics_tool::handle_priority_update(int old_priority, int new_priority)
+{
+    if (new_priority < old_priority)
+    {
+        release_target();
+    }
+}
+
 void Physics_tool::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
 
     erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
 
+#if 0 // This is currently too slow, at least in debug build
     if (m_target_mesh)
     {
         auto* raytrace_scene = get_raytrace_scene();
@@ -590,6 +599,7 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
             }
         }
     }
+#endif
 
     if (m_target_constraint)
     {

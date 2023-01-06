@@ -20,11 +20,12 @@ Material_interface::Material_interface(std::size_t max_material_count)
     , offsets        {
         .roughness    = material_struct.add_vec2 ("roughness"   )->offset_in_parent(),
         .metallic     = material_struct.add_float("metallic"    )->offset_in_parent(),
-        .transparency = material_struct.add_float("transparency")->offset_in_parent(),
+        .reflectance  = material_struct.add_float("reflectance" )->offset_in_parent(),
         .base_color   = material_struct.add_vec4 ("base_color"  )->offset_in_parent(),
         .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent(),
         .base_texture = material_struct.add_uvec2("base_texture")->offset_in_parent(),
-        .reserved     = material_struct.add_uvec2("reserved"    )->offset_in_parent()
+        .transparency = material_struct.add_float("transparency")->offset_in_parent(),
+        .reserved     = material_struct.add_float("reserved"    )->offset_in_parent()
     },
     max_material_count{max_material_count}
 {
@@ -98,9 +99,10 @@ auto Material_buffer::update(
 
         write(gpu_data, m_writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
         write(gpu_data, m_writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
-        write(gpu_data, m_writer.write_offset + offsets.transparency, as_span(material->transparency));
+        write(gpu_data, m_writer.write_offset + offsets.reflectance , as_span(material->reflectance ));
         write(gpu_data, m_writer.write_offset + offsets.base_color  , as_span(material->base_color  ));
         write(gpu_data, m_writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
+        write(gpu_data, m_writer.write_offset + offsets.transparency, as_span(material->transparency));
 
         if (erhe::graphics::Instance::info.use_bindless_texture)
         {

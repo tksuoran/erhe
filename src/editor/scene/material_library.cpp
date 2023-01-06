@@ -10,7 +10,8 @@ namespace editor
 
 void add_default_materials(Library<erhe::primitive::Material>& library)
 {
-    const glm::vec2 roughness{0.68f, 0.34f};
+    //const glm::vec2 roughness{0.68f, 0.34f};
+    const glm::vec2 roughness{0.34f, 0.20f};
 
     library.make("Default",   glm::vec3{0.500f, 0.500f, 0.500f}, roughness, 0.0f);
     library.make("Titanium",  glm::vec3{0.542f, 0.497f, 0.449f}, roughness, 1.0f);
@@ -51,9 +52,9 @@ void add_default_materials(Library<erhe::primitive::Material>& library)
 
     for (size_t i = 0, end = 10; i < end; ++i)
     {
-        const float hue_rel    = static_cast<float>(i) / static_cast<float>(end - 1);
-        const float hue        = hue_rel * 360.0f;
-        const float saturation = 0.0f;
+        const float rel        = static_cast<float>(i + 1) / static_cast<float>(end + 1);
+        const float hue        = rel * 360.0f;
+        const float saturation = 0.8f;
         const float value      = 0.25f;
         float R, G, B;
         erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
@@ -61,8 +62,8 @@ void add_default_materials(Library<erhe::primitive::Material>& library)
         library.make(
             fmt::format("Hue {}", static_cast<int>(hue)),
             glm::vec3{R, G, B},
-            glm::vec2{0.1f, 0.1f}, // roughness
-            0.0f // metalness
+            glm::vec2{rel, rel}, // roughness
+            0.95f // metalness
         );
     }
 }

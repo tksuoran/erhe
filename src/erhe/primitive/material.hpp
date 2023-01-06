@@ -43,6 +43,7 @@ public:
     glm::vec4                                base_color  {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec2                                roughness   {0.5f, 0.5f};
     float                                    metallic    {0.0f};
+    float                                    reflectance {0.5f};
     glm::vec4                                emissive    {0.0f, 0.0f, 0.0f, 0.0f};
     float                                    transparency{0.0f};
     std::shared_ptr<erhe::graphics::Texture> texture;

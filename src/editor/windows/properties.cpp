@@ -984,9 +984,10 @@ void Properties::imgui()
             {
                 selected_material->set_name(name);
             }
-            ImGui::SliderFloat("Metallic",    &selected_material->metallic,     0.0f, 1.0f);
-            ImGui::SliderFloat("Roughness X", &selected_material->roughness.x,  0.0f, 1.0f);
-            ImGui::SliderFloat("Roughness Y", &selected_material->roughness.y,  0.0f, 1.0f);
+            ImGui::SliderFloat("Metallic",    &selected_material->metallic,     0.0f,  1.0f);
+            ImGui::SliderFloat("Reflectance", &selected_material->reflectance,  0.35f, 1.0f);
+            ImGui::SliderFloat("Roughness X", &selected_material->roughness.x,  0.0f,  1.0f);
+            ImGui::SliderFloat("Roughness Y", &selected_material->roughness.y,  0.0f,  1.0f);
             ImGui::ColorEdit4 ("Base Color",  &selected_material->base_color.x, ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4 ("Emissive",    &selected_material->emissive.x,   ImGuiColorEditFlags_Float);
             ImGui::TreePop();
