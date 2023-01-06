@@ -104,10 +104,10 @@ public:
 
     // Public API
     void reconfigure        (int sample_count);
-    void connect            (Viewport_windows* viewport_windows);
     void set_window_viewport(int x, int y, int width, int height);
     void set_is_hovered     (bool is_hovered);
     void set_camera         (const std::shared_ptr<erhe::scene::Camera>& camera);
+    auto get_config         () -> Viewport_config_data*;
 
     [[nodiscard]] auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
     [[nodiscard]] auto project_to_viewport(const glm::dvec3 position_in_world) const -> std::optional<glm::dvec3>;
@@ -158,7 +158,8 @@ private:
     std::shared_ptr<Programs>                             m_programs;
     std::shared_ptr<Selection_tool>                       m_selection_tool;
     std::shared_ptr<Trs_tool>                             m_trs_tool;
-    std::shared_ptr<Viewport_config>                      m_viewport_config;
+
+    Viewport_config_data               m_viewport_config;
 
     // TODO Consider if these links are a good thing, or if they should
     //      be discovered from the graph instead.

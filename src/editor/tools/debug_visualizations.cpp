@@ -80,7 +80,7 @@ void Debug_visualizations::post_initialize()
     m_line_renderer_set = get<erhe::application::Line_renderer_set>();
     m_text_renderer     = get<erhe::application::Text_renderer    >();
     m_selection_tool    = get<Selection_tool >();
-    m_trs_tool          = get<Trs_tool       >();
+    m_trs_tool          = try_get<Trs_tool   >();
     m_viewport_config   = get<Viewport_config>();
 }
 
@@ -606,7 +606,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 const auto camera = as_camera(attachment);
                 if (
                     camera &&
-                    (m_viewport_config->debug_visualizations.camera == Visualization_mode::selected)
+                    (m_viewport_config->data.debug_visualizations.camera == Visualization_mode::selected)
                 )
                 {
                     camera_visualization(context, camera.get());

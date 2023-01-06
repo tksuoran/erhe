@@ -51,18 +51,18 @@ void add_default_materials(Library<erhe::primitive::Material>& library)
 
     for (size_t i = 0, end = 10; i < end; ++i)
     {
-        const float rel        = static_cast<float>(i) / static_cast<float>(end);
-        const float hue        = rel * 360.0f;
-        const float saturation = 0.9f;
-        const float value      = 0.5f;
+        const float hue_rel    = static_cast<float>(i) / static_cast<float>(end - 1);
+        const float hue        = hue_rel * 360.0f;
+        const float saturation = 0.0f;
+        const float value      = 0.25f;
         float R, G, B;
         erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
         //const std::string label = fmt::format("Hue {}", static_cast<int>(hue));
         library.make(
             fmt::format("Hue {}", static_cast<int>(hue)),
             glm::vec3{R, G, B},
-            glm::vec2{0.02f, 0.02f},
-            0.00f
+            glm::vec2{0.1f, 0.1f}, // roughness
+            0.0f // metalness
         );
     }
 }

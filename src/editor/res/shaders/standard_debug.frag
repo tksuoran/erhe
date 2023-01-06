@@ -67,13 +67,13 @@ void main()
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
 #endif
 #if defined(ERHE_DEBUG_TANGENT)
-    out_color.rgb = srgb_to_linear(0.25 * vec3(0.5) + 0.5 * T);
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * T0);
 #endif
 #if defined(ERHE_DEBUG_BITANGENT)
-    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B);
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B0);
 #endif
 #if defined(ERHE_DEBUG_TEXCOORD)
-    out_color.rgb = srgb_to_linear(0.25 * vec3(v_texcoord, 0.0));
+    out_color.rgb = srgb_to_linear(vec3(v_texcoord, 0.0));
 #endif
 #if defined(ERHE_DEBUG_VERTEX_COLOR_RGB)
     out_color.rgb = srgb_to_linear(v_color.rgb);

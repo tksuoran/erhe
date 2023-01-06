@@ -36,7 +36,7 @@ void initialize_logging()
     log_subdivide         = erhe::log::make_logger("erhe::geometry::subdivide",         spdlog::level::warn);
     log_attribute_maps    = erhe::log::make_logger("erhe::geometry::attribute_maps",    spdlog::level::warn);
     log_merge             = erhe::log::make_logger("erhe::geometry::merge",             spdlog::level::warn);
-    log_weld              = erhe::log::make_logger("erhe::geometry::weld",              spdlog::level::trace);
+    log_weld              = erhe::log::make_logger("erhe::geometry::weld",              spdlog::level::warn);
 }
 
 } // namespace erhe::geometry

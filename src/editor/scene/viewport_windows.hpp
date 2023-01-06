@@ -39,6 +39,7 @@ class Basic_viewport_window;
 class Editor_message;
 class Editor_message_bus;
 class Editor_rendering;
+class Icon_set;
 class Id_renderer;
 class Imgui_viewport_window;
 class Post_processing;
@@ -164,6 +165,8 @@ public:
     [[nodiscard]] auto mouse_x              () const -> double;
     [[nodiscard]] auto mouse_y              () const -> double;
 
+    void viewport_toolbar(Viewport_window& viewport_window, bool& hovered);
+
 private:
     void on_message                      (Editor_message& message);
     void handle_graphics_settings_changed();
@@ -183,6 +186,7 @@ private:
     std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<Editor_message_bus>                   m_editor_message_bus;
     std::shared_ptr<Editor_rendering>                     m_editor_rendering;
+    std::shared_ptr<Icon_set>                             m_icon_set;
     std::shared_ptr<Id_renderer>                          m_id_renderer;
     std::shared_ptr<Post_processing>                      m_post_processing;
     std::shared_ptr<Scene_root>                           m_scene_root;

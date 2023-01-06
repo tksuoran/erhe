@@ -60,6 +60,8 @@ Property_maps::Property_maps(
         }
     }
 
+    // TODO This should be done externally before calling primitive builder
+#if 1
     if (format_info.features.normal)
     {
         if (polygon_normals == nullptr)
@@ -135,6 +137,7 @@ Property_maps::Property_maps(
             );
         }
     }
+#endif
 
     corner_indices = corner_attributes.create<unsigned int>(erhe::geometry::c_corner_indices);
 }

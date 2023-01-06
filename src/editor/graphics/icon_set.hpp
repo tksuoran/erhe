@@ -88,12 +88,6 @@ public:
     glm::vec2 hud              {};
     glm::vec2 material         {};
     glm::vec2 mesh             {};
-    glm::vec2 mesh_cone        {};
-    glm::vec2 mesh_cube        {};
-    glm::vec2 mesh_cylinder    {};
-    glm::vec2 mesh_icosphere   {};
-    glm::vec2 mesh_torus       {};
-    glm::vec2 mesh_uvsphere    {};
     glm::vec2 mouse_lmb        {};
     glm::vec2 mouse_lmb_drag   {};
     glm::vec2 mouse_mmb        {};

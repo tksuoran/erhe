@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
+#include "graphics/icon_set.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -109,6 +110,7 @@ void Viewport_windows::post_initialize()
 {
     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
     m_editor_rendering       = get<Editor_rendering  >();
+    m_icon_set               = get<Icon_set          >();
     m_id_renderer            = get<Id_renderer       >();
     m_viewport_config        = get<Viewport_config   >();
     m_tools                  = get<Tools             >();
@@ -617,9 +619,28 @@ auto Viewport_windows::mouse_x() const -> double
 {
     return m_mouse_x;
 }
+
 auto Viewport_windows::mouse_y() const -> double
 {
     return m_mouse_y;
+}
+
+void Viewport_windows::viewport_toolbar(
+    Viewport_window& viewport_window,
+    bool&            hovered
+)
+{
+    const auto& rasterization = m_icon_set->get_small_rasterization();
+    const bool button_pressed = rasterization.icon_button(m_icon_set->icons.three_dots, 0);
+    if (ImGui::IsItemHovered())
+    {
+        hovered = true;
+    }
+    if (button_pressed)
+    {
+        m_viewport_config->show();
+        m_viewport_config->edit_data = viewport_window.get_config();
+    }
 }
 
 } // namespace editor

@@ -40,17 +40,16 @@ public:
     [[nodiscard]] auto get_id        () const -> erhe::toolkit::Unique_id<Material>::id_type;
 
     uint32_t                                 material_buffer_index{0}; // updated by Material_buffer::update()
-
-    std::string                              name;
-    float                                    metallic    {0.0f};
-    glm::vec2                                roughness   {0.5f, 0.5f};
-    float                                    transparency{0.0f};
     glm::vec4                                base_color  {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec2                                roughness   {0.5f, 0.5f};
+    float                                    metallic    {0.0f};
     glm::vec4                                emissive    {0.0f, 0.0f, 0.0f, 0.0f};
+    float                                    transparency{0.0f};
     std::shared_ptr<erhe::graphics::Texture> texture;
     std::shared_ptr<erhe::graphics::Sampler> sampler;
 
     erhe::toolkit::Unique_id<Material>       m_id;
+    std::string                              m_name;
     std::string                              m_label;
     bool                                     m_shown_in_ui{true};
 };

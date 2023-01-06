@@ -86,6 +86,7 @@ private:
     float m_z             {-0.38f};
     int   m_width_items   {10};
     int   m_height_items  {10};
+    bool  m_enabled       {true};
     bool  m_is_visible    {false};
     bool  m_locked_to_head{false};
 };

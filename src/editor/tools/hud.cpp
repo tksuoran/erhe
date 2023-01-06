@@ -63,16 +63,23 @@ void Hud::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& imgui_windows = get<erhe::application::Imgui_windows>();
-
-    imgui_windows->register_imgui_window(this);
-
     const auto& configuration = get<erhe::application::Configuration>();
-    const auto& hud           = configuration->hud;
-    if (!hud.enabled)
+    const auto& config        = configuration->hud;
+
+    m_enabled    = config.enabled;
+    m_is_visible = config.show;
+    m_x          = config.x;
+    m_y          = config.y;
+    m_z          = config.z;
+
+    if (!m_enabled)
     {
         return;
     }
+
+    const auto& imgui_windows = get<erhe::application::Imgui_windows>();
+
+    imgui_windows->register_imgui_window(this);
 
     const erhe::application::Scoped_gl_context gl_context{
         get<erhe::application::Gl_context_provider>()
@@ -82,20 +89,15 @@ void Hud::initialize_component()
     set_flags      (Tool_flags::background);
     get<Tools>()->register_tool(this);
 
-    m_is_visible = hud.show;
-    m_x          = hud.x;
-    m_y          = hud.y;
-    m_z          = hud.z;
-
     const auto& commands = get<erhe::application::Commands>();
     commands->register_command   (&m_toggle_visibility_command);
     commands->bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true);
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
         *m_components,
-        hud.width,
-        hud.height,
-        hud.ppm
+        config.width,
+        config.height,
+        config.ppm
     );
     const auto& scene_builder = get<Scene_builder>();
     const auto& scene_root    = scene_builder->get_scene_root();
@@ -216,12 +218,22 @@ void Hud::imgui()
 
 auto Hud::toggle_visibility() -> bool
 {
+    if (!m_enabled)
+    {
+        return false;
+    }
+
     set_visibility(!m_is_visible);
     return m_is_visible;
 }
 
 void Hud::set_visibility(const bool value)
 {
+    if (!m_enabled)
+    {
+        return;
+    }
+
     m_is_visible = value;
 
     if (!m_rendertarget_mesh)

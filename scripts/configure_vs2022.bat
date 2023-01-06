@@ -15,7 +15,7 @@ cmake ^
     -DERHE_GUI_LIBRARY=imgui ^
     -DERHE_PHYSICS_LIBRARY=jolt ^
     -DERHE_PNG_LIBRARY=mango ^
-    -DERHE_PROFILE_LIBRARY=none ^
+    -DERHE_PROFILE_LIBRARY=tracy ^
     -DERHE_RAYTRACE_LIBRARY=bvh ^
     -DERHE_SVG_LIBRARY=lunasvg ^
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^

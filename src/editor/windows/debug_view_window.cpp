@@ -454,7 +454,10 @@ void Debug_view_window::imgui()
     for (int i = 0; i < count; ++i)
     {
         const auto& light_projection_transform = light_projection_transforms.at(i);
-        ERHE_VERIFY(light_projection_transform.light != nullptr);
+        if (light_projection_transform.light == nullptr)
+        {
+            continue;
+        }
 
         if (i > 0)
         {

@@ -39,6 +39,23 @@ static constexpr uint8_t NUM_LAYERS    = 3u;
 
 };
 
+class Jolt_collision_filter
+    : public JPH::ObjectVsBroadPhaseLayerFilter
+    , public JPH::ObjectLayerPairFilter
+{
+    // Implements JPH::ObjectVsBroadPhaseLayerFilter
+	auto ShouldCollide(
+        JPH::ObjectLayer     inLayer1,
+        JPH::BroadPhaseLayer inLayer2
+    ) const -> bool override;
+
+    // Implements JPH::ObjectLayerPairFilter
+    auto ShouldCollide(
+        JPH::ObjectLayer inLayer1,
+        JPH::ObjectLayer inLayer2
+    ) const -> bool override;
+};
+
 class Jolt_world
     : public IWorld
     , public JPH::BodyActivationListener
@@ -95,6 +112,8 @@ private:
     static constexpr unsigned int cNumBodyMutexes        = 0;
     static constexpr unsigned int cMaxBodyPairs          = 1024 * 8;
     static constexpr unsigned int cMaxContactConstraints = 1024;
+
+    const Jolt_collision_filter                    m_collision_filter;
 
     JPH::TempAllocatorImpl                         m_temp_allocator;
     JPH::JobSystemThreadPool                       m_job_system;

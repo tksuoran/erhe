@@ -81,11 +81,12 @@ Viewport_window::Viewport_window(
     , m_post_processing                  {components.get<Post_processing >()}
     , m_programs                         {components.get<Programs        >()}
     , m_trs_tool                         {components.get<Trs_tool        >()}
-    , m_viewport_config                  {components.get<Viewport_config >()}
+    , m_viewport_config                  {components.get<Viewport_config >()->data}
     , m_name                             {name}
     , m_scene_root                       {scene_root}
     , m_selection_tool                   {components.get<Selection_tool>()}
     , m_tool_scene_root                  {components.get<Tools>()->get_tool_scene_root()}
+    , m_viewport_windows                 {components.get<Viewport_windows>().get()}
     , m_camera                           {camera}
 {
     register_input(
@@ -118,6 +119,9 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
     switch (m_shader_stages_variant)
     {
         case Shader_stages_variant::standard:                 return m_programs->standard.get();
+        case Shader_stages_variant::anisotropic_slope:        return m_programs->anisotropic_slope.get();
+        case Shader_stages_variant::anisotropic_engine_ready: return m_programs->anisotropic_engine_ready.get();
+        case Shader_stages_variant::circular_brushed_metal:   return m_programs->circular_brushed_metal.get();
         case Shader_stages_variant::debug_depth:              return m_programs->debug_depth.get();
         case Shader_stages_variant::debug_normal:             return m_programs->debug_normal.get();
         case Shader_stages_variant::debug_tangent:            return m_programs->debug_tangent.get();
@@ -172,7 +176,7 @@ void Viewport_window::execute_rendergraph_node()
     {
         .scene_view             = this,
         .viewport_window        = this,
-        .viewport_config        = m_viewport_config.get(),
+        .viewport_config        = &m_viewport_config,
         .camera                 = m_camera.lock().get(),
         .viewport               = output_viewport,
         .override_shader_stages = get_override_shader_stages()
@@ -202,11 +206,6 @@ void Viewport_window::reconfigure(const int sample_count)
     {
         resolve_node->reconfigure(sample_count);
     }
-}
-
-void Viewport_window::connect(Viewport_windows* viewport_windows)
-{
-    m_viewport_windows = viewport_windows;
 }
 
 void Viewport_window::set_window_viewport(
@@ -562,9 +561,18 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
     return shadow_render_node;
 }
 
+auto Viewport_window::get_config() -> Viewport_config_data*
+{
+    return &m_viewport_config;
+}
+
 auto Viewport_window::imgui_toolbar() -> bool
 {
     bool hovered = false;
+    if (m_viewport_windows != nullptr)
+    {
+        m_viewport_windows->viewport_toolbar(*this, hovered);
+    }
     //// TODO Tool_flags::viewport_toolbar
     if (m_selection_tool)
     {

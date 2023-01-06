@@ -171,7 +171,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
         const auto& pose                   = m_rendertarget_mesh->get_controller_pose();
         const bool  trigger_click          = m_rendertarget_mesh->get_controller_trigger_click();
         const bool  trigger_click_changed  = m_rendertarget_mesh->get_controller_trigger_click_changed();
-        const float trigger_value          = m_rendertarget_mesh->get_controller_trigger_value();
+        ////const float trigger_value          = m_rendertarget_mesh->get_controller_trigger_value();
         const auto  controller_orientation = glm::mat4_cast(pose.orientation);
         const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
@@ -216,16 +216,6 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
             }
         }
 
-        // TODO update logic in Headset_view if (trigger_value_changed)
-        {
-            m_headset_view->add_controller_input(
-                Controller_input{
-                    .position      = pose.position,
-                    .direction     = controller_direction,
-                    .trigger_value = trigger_value
-                }
-            );
-        }
         if (trigger_click_changed)
         {
             ImGuiIO& io = m_imgui_context->IO;

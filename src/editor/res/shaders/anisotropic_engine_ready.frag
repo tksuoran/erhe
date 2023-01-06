@@ -3,10 +3,6 @@ in vec4      v_position;
 in vec4      v_color;
 in mat3      v_TBN;
 in flat uint v_material_index;
-in float     v_tangent_scale;
-
-const float m_pi   = 3.1415926535897932384626434;
-const float m_i_pi = 0.3183098861837906715377675;
 
 float sample_light_visibility(
     vec4  position,
@@ -70,50 +66,104 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
     return 0.0;
 }
 
-float clamped_dot(vec3 x, vec3 y)
+const float m_pi   = 3.1415926535897932384626434;
+const float m_i_pi = 0.3183098861837906715377675;
+
+// https://www.shadertoy.com/view/NtlyWX
+
+
+float ggx_isotropic_ndf(float N_dot_H, float alpha) {
+    float a = N_dot_H * alpha;
+    float k = alpha / (1.0 - N_dot_H * N_dot_H + a * a);
+    return k * k * m_i_pi;
+}
+
+float ggx_anisotropic_ndf(
+    float alpha_t,
+    float alpha_b,
+    float T_dot_H,
+    float B_dot_H,
+    float N_dot_H
+) {
+    vec3 v = vec3(
+        alpha_b * T_dot_H,
+        alpha_t * B_dot_H,
+        alpha_t * alpha_b * N_dot_H
+    );
+    float v2 = dot(v, v);
+    float a2 = alpha_t * alpha_b;
+    float w2 = a2 / v2;
+    return a2 * w2 * w2 * m_i_pi;
+}
+
+float ggx_isotropic_visibility(float N_dot_V, float N_dot_L, float alpha) {
+    float a2 = alpha * alpha;
+    float GV = N_dot_L * sqrt(N_dot_V * N_dot_V * (1.0 - a2) + a2);
+    float GL = N_dot_V * sqrt(N_dot_L * N_dot_L * (1.0 - a2) + a2);
+    return 0.5 / (GV + GL);
+}
+
+float ggx_anisotropic_visibility(
+    float alpha_t,
+    float alpha_b,
+	float T_dot_V,
+    float B_dot_V,
+    float N_dot_V,
+    float T_dot_L,
+    float B_dot_L,
+    float N_dot_L
+) {
+    float lambda_V = N_dot_L * length(vec3(alpha_t * T_dot_V, alpha_b * B_dot_V, N_dot_V));
+    float lambda_L = N_dot_V * length(vec3(alpha_t * T_dot_L, alpha_b * B_dot_L, N_dot_L));
+    float v = 0.5 / (lambda_V + lambda_L);
+    return clamp(v, 0.0, 1.0);
+}
+
+vec3 fresnel_schlick(float cos_theta, vec3 f0)
 {
+    return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
+}
+
+float clamped_dot(vec3 x, vec3 y) {
     return clamp(dot(x, y), 0.001, 1.0);
 }
 
-float heaviside(float v)
+vec3 brdf(
+    vec3  base_color,
+    float roughness_x,
+    float roughness_y,
+    float metalness,
+    vec3  L,
+    vec3  V,
+    vec3  T,
+    vec3  B,
+    vec3  N
+)
 {
-    if (v > 0.0) {
-        return 1.0;
-    } else {
-        return 0.0;
-    }
-}
-
-vec3 brdf(vec3 base_color, float roughness, float metalness, vec3 L, vec3 V, vec3 N)
-{
+    float alpha_x = roughness_x * roughness_x;
+    float alpha_y = roughness_y * roughness_y;
     vec3  H       = normalize(L + V);
-    float N_dot_L = clamped_dot(N, L);
-    float N_dot_V = clamped_dot(N, V);
     float N_dot_H = clamped_dot(N, H);
-    float V_dot_H = clamped_dot(V, H); // Note: H.L == L.H == H.V == V.H
-    float N_dot_H_squared   = N_dot_H * N_dot_H;
-    float N_dot_L_squared   = N_dot_L * N_dot_L;
-    float N_dot_V_squared   = N_dot_V * N_dot_V;
-    float alpha             = roughness * roughness;
-    float a2                = alpha * alpha;
-    float one_minus_a2      = 1.0 - a2;
-    float d_denom           = N_dot_H * N_dot_H * (a2 - 1.0) + 1.0;
-    float distribution      = a2 * heaviside(N_dot_H) / (m_pi * d_denom * d_denom);
-    float V_denominator_l   = N_dot_L + sqrt(a2 + one_minus_a2 * N_dot_L_squared);
-    float V_denominator_v   = N_dot_V + sqrt(a2 + one_minus_a2 * N_dot_V_squared);
-    float visibility        = heaviside(V_dot_H) / (V_denominator_l * V_denominator_v);
-    float specular_brdf     = N_dot_L * visibility * distribution;
-    vec3  diffuse_brdf      = N_dot_L * base_color * m_i_pi;
-    float fresnel           = pow(1.0 - abs(V_dot_H), 5.0);
-    vec3  conductor_fresnel = specular_brdf * (base_color + (1.0 - base_color) * fresnel);
-    float f0                = 0.04;
-    float fr                = f0 + (1.0 - f0) * fresnel;
-    vec3  fresnel_mix       = mix(diffuse_brdf, vec3(specular_brdf), fr);
-    return mix(fresnel_mix, conductor_fresnel, metalness);
+    float N_dot_V = clamped_dot(N, V);
+    float N_dot_L = clamped_dot(N, L);
+    float T_dot_V = dot(T, V);
+    float B_dot_V = dot(B, V);
+    float T_dot_L = dot(T, L);
+    float B_dot_L = dot(B, L);
+    float T_dot_H = dot(T, H);
+    float B_dot_H = dot(B, H);
+    //float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
+    //float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
+    float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
+    float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
+    vec3  F0_     = vec3(0.04);
+    vec3  F0      = mix(F0_, base_color, 1.0);
+    vec3  F       = fresnel_schlick(max(N_dot_V, 0.0), F0);
+    vec3  direct  = D * Vis * F;
+    return N_dot_L * direct;
 }
 
-void main()
-{
+void main() {
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
@@ -124,22 +174,14 @@ void main()
     vec3  T       = normalize(v_TBN[0]);
     vec3  B       = normalize(v_TBN[1]);
     vec3  N       = normalize(v_TBN[2]);
-
-    mat3  TBN     = mat3(T, B, N);
-    mat3  TBN_t   = transpose(TBN);
     float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];
-
-    uint  directional_light_count  = light_block.directional_light_count;
-    uint  spot_light_count         = light_block.spot_light_count;
-    uint  directional_light_offset = 0;
-    uint  spot_light_offset        = directional_light_count;
-
+    uint directional_light_count  = light_block.directional_light_count;
+    uint spot_light_count         = light_block.spot_light_count;
+    uint directional_light_offset = 0;
+    uint spot_light_offset        = directional_light_count;
     vec3 color = vec3(0);
-    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * material.base_color.rgb;
-    color += material.emissive.rgb;
-
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;
         Light light          = light_block.lights[light_index];
@@ -151,9 +193,12 @@ void main()
             color += intensity * brdf(
                 material.base_color.rgb,
                 material.roughness.x,
+                material.roughness.y,
                 material.metallic,
                 L,
                 V,
+                T,
+                B,
                 N
             );
         }
@@ -173,9 +218,12 @@ void main()
             color += intensity * brdf(
                 material.base_color.rgb,
                 material.roughness.x,
+                material.roughness.y,
                 material.metallic,
                 L,
                 V,
+                T,
+                B,
                 N
             );
         }

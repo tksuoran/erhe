@@ -27,6 +27,9 @@ class Program_interface;
 enum class Shader_stages_variant : int
 {
     standard,
+    anisotropic_slope,
+    anisotropic_engine_ready,
+    circular_brushed_metal,
     debug_depth,
     debug_normal,
     debug_tangent,
@@ -40,6 +43,9 @@ enum class Shader_stages_variant : int
 static constexpr const char* c_shader_stages_variant_strings[] =
 {
     "Standard",
+    "Anisotropic Slope",
+    "Anisotropic Engine-Ready",
+    "Circular Brushed Metal",
     "Debug Depth",
     "Debug Normal",
     "Debug Tangent",
@@ -82,6 +88,9 @@ public:
 
     std::unique_ptr<erhe::graphics::Shader_stages> brush;
     std::unique_ptr<erhe::graphics::Shader_stages> standard;
+    std::unique_ptr<erhe::graphics::Shader_stages> anisotropic_slope;
+    std::unique_ptr<erhe::graphics::Shader_stages> anisotropic_engine_ready;
+    std::unique_ptr<erhe::graphics::Shader_stages> circular_brushed_metal;
     std::unique_ptr<erhe::graphics::Shader_stages> textured;
     std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_draw_color;
     std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_vertex_color;

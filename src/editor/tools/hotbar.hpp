@@ -108,11 +108,12 @@ private:
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
     Scene_view*                                  m_hover_scene_view{nullptr};
 
-    bool  m_show  {true};
-    bool  m_locked{false};
-    float m_x     { 0.0f};
-    float m_y     { 0.07f};
-    float m_z     {-0.4f};
+    bool  m_enabled{true};
+    bool  m_show   {true};
+    bool  m_locked {false};
+    float m_x      { 0.0f};
+    float m_y      { 0.07f};
+    float m_z      {-0.4f};
 
     std::size_t        m_slot      {0};
     std::size_t        m_slot_first{0};

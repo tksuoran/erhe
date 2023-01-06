@@ -32,12 +32,15 @@ void Rotate_tool::initialize_component()
 
 void Rotate_tool::post_initialize()
 {
-    m_trs_tool = get<Trs_tool>();
+    m_trs_tool = try_get<Trs_tool>();
 }
 
 void Rotate_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    m_trs_tool->set_rotate(new_priority > old_priority);
+    if (m_trs_tool)
+    {
+        m_trs_tool->set_rotate(new_priority > old_priority);
+    }
 }
 
 } // namespace editor

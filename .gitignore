@@ -2,6 +2,8 @@
 .vs
 .vscode/compile_commands.json
 src/editor/user.ini
+src/editor/cache/bvh/*
+!src/editor/cache/bvh/keep
 build
 cmake-build-debug
 vscode-cmake-build

@@ -95,11 +95,14 @@ void Programs::initialize_component()
 
     std::vector<Program_prototype> prototypes;
 
-    prototypes.emplace_back(&standard                , make_prototype(CI{ .name = "standard"  , .default_uniform_block = shadow_default_uniform_block, .dump_interface = true } ));
-    prototypes.emplace_back(&brush                   , make_prototype(CI{ .name = "brush"     , .default_uniform_block = shadow_default_uniform_block } ));
-    prototypes.emplace_back(&textured                , make_prototype(CI{ .name = "textured"  , .default_uniform_block = base_texture_default_uniform_block } ));
-    prototypes.emplace_back(&wide_lines_draw_color   , make_prototype(CI{ .name = "wide_lines", .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}}));
-    prototypes.emplace_back(&wide_lines_vertex_color , make_prototype(CI{ .name = "wide_lines", .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}}));
+    prototypes.emplace_back(&standard                , make_prototype(CI{ .name = "standard"                , .default_uniform_block = shadow_default_uniform_block, .dump_interface = true } ));
+    prototypes.emplace_back(&anisotropic_slope       , make_prototype(CI{ .name = "anisotropic_slope"       , .default_uniform_block = shadow_default_uniform_block} ));
+    prototypes.emplace_back(&anisotropic_engine_ready, make_prototype(CI{ .name = "anisotropic_engine_ready", .default_uniform_block = shadow_default_uniform_block} ));
+    prototypes.emplace_back(&circular_brushed_metal  , make_prototype(CI{ .name = "circular_brushed_metal"  , .default_uniform_block = shadow_default_uniform_block} ));
+    prototypes.emplace_back(&brush                   , make_prototype(CI{ .name = "brush"                   , .default_uniform_block = shadow_default_uniform_block} ));
+    prototypes.emplace_back(&textured                , make_prototype(CI{ .name = "textured"                , .default_uniform_block = base_texture_default_uniform_block } ));
+    prototypes.emplace_back(&wide_lines_draw_color   , make_prototype(CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}}));
+    prototypes.emplace_back(&wide_lines_vertex_color , make_prototype(CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}}));
     prototypes.emplace_back(&points                  , make_prototype(CI{ .name = "points" } ));
     prototypes.emplace_back(&depth                   , make_prototype(CI{ .name = "depth"  } ));
     prototypes.emplace_back(&id                      , make_prototype(CI{ .name = "id"     } ));

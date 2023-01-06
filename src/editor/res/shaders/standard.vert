@@ -11,8 +11,6 @@ void main()
     mat4 world_from_node = primitive.primitives[gl_DrawID].world_from_node;
     mat4 clip_from_world = camera.cameras[0].clip_from_world;
 
-    //vec3 normal          = a_normal;
-
     vec3 normal          = normalize(vec3(world_from_node * vec4(a_normal,        0.0)));
     vec3 tangent         = normalize(vec3(world_from_node * vec4(a_tangent.xyz,   0.0)));
     vec3 bitangent       = normalize(vec3(world_from_node * vec4(a_bitangent.xyz, 0.0)));
@@ -20,8 +18,9 @@ void main()
     vec4 position        = world_from_node * vec4(a_position, 1.0);
 
     v_tangent_scale  = a_tangent.w;
-    v_position       = position;
     v_TBN            = mat3(tangent, bitangent, normal);
+
+    v_position       = position;
     gl_Position      = clip_from_world * position;
     v_material_index = primitive.primitives[gl_DrawID].material_index;
     v_texcoord       = a_texcoord;

@@ -88,7 +88,7 @@ void Mesh_memory::initialize_component()
         .centroid_points  = true,
         .position         = true,
         .normal           = true,
-        .normal_smooth    = true,
+        .normal_smooth    = true, // TODO false?
         .tangent          = true,
         .bitangent        = true,
         .color            = true,

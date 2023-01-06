@@ -32,12 +32,15 @@ void Move_tool::initialize_component()
 
 void Move_tool::post_initialize()
 {
-    m_trs_tool = get<Trs_tool>();
+    m_trs_tool = try_get<Trs_tool>();
 }
 
 void Move_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    m_trs_tool->set_translate(new_priority > old_priority);
+    if (m_trs_tool)
+    {
+        m_trs_tool->set_translate(new_priority > old_priority);
+    }
 }
 
 } // namespace editor

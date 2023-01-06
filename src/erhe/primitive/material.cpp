@@ -18,14 +18,15 @@ Material::Material(
     const glm::vec2        roughness,
     const float            metallic
 )
-    : name         {name}
-    , metallic     {metallic}
+    : base_color   {base_color, 1.0f}
     , roughness    {roughness}
-    , base_color   {base_color, 1.0f}
+    , metallic     {metallic}
     , emissive     {0.0f, 0.0f, 0.0f, 0.0f}
+    , m_id         {}
+    , m_name       {name}
+    , m_label      {fmt::format("{}##Node{}", name, m_id.get_id())}
     , m_shown_in_ui{true}
 {
-    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
 }
 
 auto Material::static_type_name() -> const char*
@@ -40,24 +41,19 @@ auto Material::type_name() const -> const char*
 
 auto Material::get_name() const -> const std::string&
 {
-    return name;
+    return m_name;
 }
 
 void Material::set_name(const std::string_view in_name)
 {
-    this->name = in_name;
-    m_label = fmt::format("{}##Node{}", name, m_id.get_id());
+    m_name = in_name;
+    m_label = fmt::format("{}##Node{}", m_name, m_id.get_id());
 }
 
 auto Material::get_label() const -> const std::string&
 {
     return m_label;
 }
-
-//auto Material::get_name() -> std::string&
-//{
-//    return name;
-//}
 
 auto Material::is_shown_in_ui() const -> bool
 {

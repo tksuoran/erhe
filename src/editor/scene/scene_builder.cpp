@@ -405,16 +405,17 @@ void Scene_builder::make_brushes()
     }
 
     const auto& config = configuration->scene;
-    auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
-        0.5f * vec3{config.floor_size, 1.0f, config.floor_size}
-    );
-
-    // Otherwise it will be destructed when leave add_floor() scope
-    m_collision_shapes.push_back(floor_box_shape);
 
     // Floor
     if (config.floor)
     {
+        auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+            0.5f * vec3{config.floor_size, 1.0f, config.floor_size}
+        );
+
+        // Otherwise it will be destructed when leave add_floor() scope
+        m_collision_shapes.push_back(floor_box_shape);
+
         execution_queue->enqueue(
             [this, &floor_box_shape, &config, &configuration]()
             {
@@ -455,19 +456,15 @@ void Scene_builder::make_brushes()
                 //constexpr bool instantiate = true;
 
                 const char* files_names[] = {
-                    "res/models/SM_Deccer_Cubes.gltf"
-                    //"res/models/MetalRoughSpheresNoTextures.gltf"
+                    //"res/models/SM_Deccer_Cubes.gltf"
+                    "res/models/MetalRoughSpheresNoTextures.gltf"
+                    //"res/models/Box.gltf"
+                    //"res/models/test.gltf"
                     //"res/models/Suzanne.gltf"
                 };
                 for (auto* path : files_names)
                 {
                     parse_gltf(m_scene_root, build_info(), path);
-
-                    //for (auto& geometry : geometries)
-                    //{
-                    //    geometry->compute_polygon_normals();
-                    //    make_brush(instantiate, move(geometry), context);
-                    //}
                 }
             }
         //);

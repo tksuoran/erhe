@@ -56,6 +56,10 @@ void Content_library_window::post_initialize()
     for (const auto& scene_root : scene_roots)
     {
         const auto& content_library = scene_root->content_library();
+        if (!content_library)
+        {
+            continue;
+        }
         if (!content_library->is_shown_in_ui)
         {
             continue;
@@ -90,6 +94,10 @@ void Content_library_window::imgui()
     for (const auto& scene_root : scene_roots)
     {
         const auto& content_library = scene_root->content_library();
+        if (!content_library)
+        {
+            continue;
+        }
         if (!content_library->is_shown_in_ui)
         {
             continue;

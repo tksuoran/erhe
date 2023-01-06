@@ -1,6 +1,7 @@
 #if defined(_MSC_VER)
 #   pragma warning(push)
 #   pragma warning(disable : 4702) // unreachable code
+#   pragma warning(disable : 4714) // marked as __forceinline not inlined
 #endif
 
 #include <fmt/chrono.h>
@@ -14,6 +15,7 @@
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 
+#include "erhe/toolkit/hash.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/timer.hpp"
 
@@ -26,10 +28,54 @@
 #include <bvh/v2/stack.h>
 #include <bvh/v2/thread_pool.h>
 
+#include <fstream>
+#include <iostream>
 #include <set>
 
 namespace erhe::raytrace
 {
+
+using Bvh = bvh::v2::Bvh<bvh::v2::Node<float, 3>>;
+
+auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
+{
+    std::string file_name = fmt::format("cache/bvh/{}", hash_code);
+    std::ofstream out{file_name, std::ofstream::binary};
+    if (!out)
+    {
+        return false;
+    }
+    try
+    {
+        bvh::v2::StdOutputStream stream{out};
+        bvh.serialize(stream);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
+{
+    std::string file_name = fmt::format("cache/bvh/{}", hash_code);
+    std::ifstream in{file_name, std::ofstream::binary};
+    if (!in)
+    {
+        return false;
+    }
+    try
+    {
+        bvh::v2::StdInputStream stream{in};
+        bvh = Bvh::deserialize(stream);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
 
 auto IGeometry::create(
     const std::string_view debug_label,
@@ -134,10 +180,11 @@ void Bvh_geometry::commit()
 
         std::vector<Tri> tris;
 
+        uint64_t hash_code{0xcbf29ce484222325};
         std::vector<BBox> bboxes(triangle_count);
         std::vector<Vec3> centers(triangle_count);
         {
-            ERHE_PROFILE_SCOPE("collect indices")
+            ERHE_PROFILE_SCOPE("collect");
 
             for (std::size_t i = 0; i < triangle_count; ++i)
             {
@@ -157,6 +204,10 @@ void Bvh_geometry::commit()
                 const float p2_y = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 1 * sizeof(float));
                 const float p2_z = *reinterpret_cast<const float*>(raw_vertex_ptr + i2 * index_buffer_info->byte_stride + 2 * sizeof(float));
 
+                hash_code = erhe::toolkit::hash(p0_x, p0_y, p0_z, hash_code);
+                hash_code = erhe::toolkit::hash(p1_x, p1_y, p1_z, hash_code);
+                hash_code = erhe::toolkit::hash(p2_x, p2_y, p2_z, hash_code);
+
                 const bvh::v2::Tri<float, 3> triangle{
                     Vec3{p0_x, p0_y, p0_z},
                     Vec3{p1_x, p1_y, p1_z},
@@ -166,33 +217,56 @@ void Bvh_geometry::commit()
                 bboxes[i] = triangle.get_bbox();
                 centers[i] = triangle.get_center();
             }
+            log_geometry->info("BVH hash for {} : {:x}", debug_label(), hash_code);
         }
 
-        typename bvh::v2::DefaultBuilder<Node>::Config config;
-        //config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High;
-        config.quality = bvh::v2::DefaultBuilder<Node>::Quality::Low;
-        m_bvh = bvh::v2::DefaultBuilder<Node>::build(
-            thread_pool,
-            bboxes,
-            centers,
-            config
-        );
+        const bool load_ok = load_bvh(m_bvh, hash_code);
+        if (!load_ok)
+        {
+            typename bvh::v2::DefaultBuilder<Node>::Config config;
+            //config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High;
+            config.quality = bvh::v2::DefaultBuilder<Node>::Quality::Low;
+
+            {
+                ERHE_PROFILE_SCOPE("bvh build")
+                erhe::toolkit::Timer timer{m_debug_label.c_str()};
+
+                timer.begin();
+                m_bvh = bvh::v2::DefaultBuilder<Node>::build(
+                    thread_pool,
+                    bboxes,
+                    centers,
+                    config
+                );
+                timer.end();
+
+                const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(timer.duration().value()).count();
+                log_geometry->info("BVH build {} in {} ms", debug_label(), time);
+            }
+
+            const bool save_ok = save_bvh(m_bvh, hash_code);
+            log_geometry->info("BVH save status = {}", save_ok);
+        }
+
 
         // This precomputes some data to speed up traversal further.
-        m_precomputed_triangles.clear();
-        m_precomputed_triangles.resize(tris.size());
-        executor.for_each(
-            0,
-            tris.size(),
-            [&] (const size_t begin, const size_t end)
-            {
-                for (size_t i = begin; i < end; ++i)
+        {
+            ERHE_PROFILE_SCOPE("bvh precompute")
+            m_precomputed_triangles.clear();
+            m_precomputed_triangles.resize(tris.size());
+            executor.for_each(
+                0,
+                tris.size(),
+                [&] (const size_t begin, const size_t end)
                 {
-                    auto j = should_permute ? m_bvh.prim_ids[i] : i;
-                    m_precomputed_triangles[i] = tris[j];
+                    for (size_t i = begin; i < end; ++i)
+                    {
+                        auto j = should_permute ? m_bvh.prim_ids[i] : i;
+                        m_precomputed_triangles[i] = tris[j];
+                    }
                 }
-            }
-        );
+            );
+        }
     }
 
 }

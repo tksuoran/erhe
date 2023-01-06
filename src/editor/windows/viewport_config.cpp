@@ -19,10 +19,10 @@ Viewport_config::Viewport_config()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
 {
-    render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    render_style_not_selected.edge_lines = false;
+    data.render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    data.render_style_not_selected.edge_lines = false;
 
-    render_style_selected.edge_lines = false;
+    data.render_style_selected.edge_lines = false;
 }
 
 void Viewport_config::declare_required_components()
@@ -35,26 +35,26 @@ void Viewport_config::initialize_component()
 {
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
     const auto& config = get<erhe::application::Configuration>()->viewport;
-    render_style_not_selected.polygon_fill      = config.polygon_fill;
-    render_style_not_selected.edge_lines        = config.edge_lines;
-    render_style_not_selected.corner_points     = config.corner_points;
-    render_style_not_selected.polygon_centroids = config.polygon_centroids;
-    render_style_not_selected.line_color        = config.edge_color;
-    render_style_not_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
-    render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
+    data.render_style_not_selected.polygon_fill      = config.polygon_fill;
+    data.render_style_not_selected.edge_lines        = config.edge_lines;
+    data.render_style_not_selected.corner_points     = config.corner_points;
+    data.render_style_not_selected.polygon_centroids = config.polygon_centroids;
+    data.render_style_not_selected.line_color        = config.edge_color;
+    data.render_style_not_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
+    data.render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
 
-    render_style_selected.polygon_fill      = config.selection_polygon_fill;
-    render_style_selected.edge_lines        = config.selection_edge_lines;
-    render_style_selected.corner_points     = config.corner_points;
-    render_style_selected.polygon_centroids = config.polygon_centroids;
-    render_style_selected.line_color        = config.selection_edge_color;
-    render_style_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
-    render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
-    //render_style_selected.edge_lines = false;
+    data.render_style_selected.polygon_fill      = config.selection_polygon_fill;
+    data.render_style_selected.edge_lines        = config.selection_edge_lines;
+    data.render_style_selected.corner_points     = config.corner_points;
+    data.render_style_selected.polygon_centroids = config.polygon_centroids;
+    data.render_style_selected.line_color        = config.selection_edge_color;
+    data.render_style_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
+    data.render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
+    //data.render_style_selected.edge_lines = false;
 
-    selection_bounding_box    = config.selection_bounding_box;
-    selection_bounding_sphere = config.selection_bounding_sphere;
-    clear_color               = config.clear_color;
+    data.selection_bounding_box    = config.selection_bounding_box;
+    data.selection_bounding_sphere = config.selection_bounding_sphere;
+    data.clear_color               = config.clear_color;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -140,9 +140,6 @@ void Viewport_config::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    ImGui::ColorEdit4("Clear Color", &clear_color.x, ImGuiColorEditFlags_Float);
-    ImGui::Checkbox  ("Post Processing", &post_processing_enable);
-
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -150,24 +147,33 @@ void Viewport_config::imgui()
         ImGuiTreeNodeFlags_SpanFullWidth
     };
 
-    if (ImGui::TreeNodeEx("Default Style", flags))
+    if (edit_data != nullptr)
     {
-        render_style_ui(render_style_not_selected);
-        ImGui::TreePop();
+        ImGui::ColorEdit4("Clear Color", &edit_data->clear_color.x, ImGuiColorEditFlags_Float);
+        ImGui::Checkbox  ("Post Processing", &edit_data->post_processing_enable);
+
+        if (ImGui::TreeNodeEx("Default Style", flags))
+        {
+            render_style_ui(edit_data->render_style_not_selected);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Selection", flags))
+        {
+            render_style_ui(edit_data->render_style_selected);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Debug Visualizations", flags))
+        {
+            erhe::application::make_combo("Light",  edit_data->debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+            erhe::application::make_combo("Camera", edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+            ImGui::TreePop();
+        }
     }
 
-    if (ImGui::TreeNodeEx("Selection", flags))
-    {
-        render_style_ui(render_style_selected);
-        ImGui::TreePop();
-    }
+    ImGui::Separator();
 
-    if (ImGui::TreeNodeEx("Debug Visualizations", flags))
-    {
-        erhe::application::make_combo("Light",  debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        erhe::application::make_combo("Camera", debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-        ImGui::TreePop();
-    }
     ImGui::SliderFloat("LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
 
     const auto& hotbar = get<Hotbar>();

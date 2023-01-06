@@ -94,12 +94,6 @@ void Icon_set::initialize_component()
     icons.hud               = load(icon_directory / "hud.svg");
     icons.material          = load(icon_directory / "material.svg");
     icons.mesh              = load(icon_directory / "mesh.svg");
-    icons.mesh_cone         = load(icon_directory / "mesh_cone");
-    icons.mesh_cube         = load(icon_directory / "mesh_cube");
-    icons.mesh_cylinder     = load(icon_directory / "mesh_cylinder");
-    icons.mesh_icosphere    = load(icon_directory / "mesh_icosphere");
-    icons.mesh_torus        = load(icon_directory / "mesh_torus");
-    icons.mesh_uvsphere     = load(icon_directory / "mesh_uvsphere");
     icons.mouse_lmb         = load(icon_directory / "mouse_lmb.svg");
     icons.mouse_lmb_drag    = load(icon_directory / "mouse_lmb_drag.svg");
     icons.mouse_mmb         = load(icon_directory / "mouse_mmb.svg");

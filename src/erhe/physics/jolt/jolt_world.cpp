@@ -67,21 +67,6 @@ namespace Layers {
 
 } // namespace Layers
 
-// Function that determines if two object layers can collide
-static bool object_can_collide(
-    JPH::ObjectLayer in_object1,
-    JPH::ObjectLayer in_object2
-)
-{
-    switch (in_object1)
-    {
-        case Layers::NON_MOVING:    return in_object2 == Layers::MOVING;        // Non moving only collides with moving
-        case Layers::MOVING:        return in_object2 != Layers::NON_COLLIDING;
-        case Layers::NON_COLLIDING: return false; // Does not collide with anything
-        default:                 ERHE_VERIFY(false); return false;
-    }
-};
-
 // Each broadphase layer results in a separate bounding volume tree in the broad phase. You at least want to have
 // a layer for non-moving and moving objects to avoid having to update a tree full of static objects every frame.
 // You can have a 1-on-1 mapping between object layers and broadphase layers (like in this case) but if you have
@@ -141,21 +126,34 @@ private:
     JPH::BroadPhaseLayer m_object_to_broad_phase[Layers::NUM_LAYERS];
 };
 
-// Function that determines if two broadphase layers can collide
-static bool broad_phase_can_collide(
-    JPH::ObjectLayer     in_layer1,
-    JPH::BroadPhaseLayer in_layer2
-)
+bool Jolt_collision_filter::ShouldCollide(
+    JPH::ObjectLayer     inLayer1,
+    JPH::BroadPhaseLayer inLayer2
+) const
 {
-    switch (in_layer1)
+    switch (inLayer1)
     {
-        case Layers::NON_MOVING:    return in_layer2 == BroadPhaseLayers::MOVING;
-        case Layers::MOVING:        return in_layer2 != BroadPhaseLayers::NON_COLLIDING;
+        case Layers::NON_MOVING:    return inLayer2 == BroadPhaseLayers::MOVING;
+        case Layers::MOVING:        return inLayer2 != BroadPhaseLayers::NON_COLLIDING;
         case Layers::NON_COLLIDING: return false;
         default:
         {
             return false;
         }
+    }
+}
+
+bool Jolt_collision_filter::ShouldCollide(
+    JPH::ObjectLayer inLayer1,
+    JPH::ObjectLayer inLayer2
+) const
+{
+    switch (inLayer1)
+    {
+        case Layers::NON_MOVING:    return inLayer2 == Layers::MOVING;        // Non moving only collides with moving
+        case Layers::MOVING:        return inLayer2 != Layers::NON_COLLIDING;
+        case Layers::NON_COLLIDING: return false; // Does not collide with anything
+        default:                    ERHE_VERIFY(false); return false;
     }
 }
 
@@ -209,8 +207,8 @@ Jolt_world::Jolt_world()
         cMaxBodyPairs,
         cMaxContactConstraints,
         *m_broad_phase_layer_interface.get(),
-        broad_phase_can_collide,
-        object_can_collide
+        m_collision_filter,
+        m_collision_filter
     );
 
     m_physics_system.SetBodyActivationListener(this);

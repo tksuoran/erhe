@@ -47,6 +47,28 @@ enum class Visualization_mode : unsigned int
     all
 };
 
+class Viewport_config_data
+{
+public:
+    Render_style render_style_not_selected;
+    Render_style render_style_selected;
+    //glm::vec4    clear_color{0.18f, 0.41f, 0.58f, 0.4f};
+    glm::vec4    clear_color{0.0f, 0.0f, 0.0, 0.4f};
+    bool         post_processing_enable{true};
+    //glm::vec4    clear_color{0.02f, 0.02f, 0.02f, 1.0f};
+
+    class Debug_visualizations
+    {
+    public:
+        Visualization_mode light {Visualization_mode::selected};
+        Visualization_mode camera{Visualization_mode::selected};
+    };
+
+    Debug_visualizations debug_visualizations;
+    bool                 selection_bounding_box;
+    bool                 selection_bounding_sphere;
+};
+
 class Viewport_config
     : public erhe::components::Component
     , public erhe::application::Imgui_window
@@ -76,24 +98,9 @@ public:
     // Public API
     void render_style_ui(Render_style& render_style);
 
-    Render_style render_style_not_selected;
-    Render_style render_style_selected;
-    //glm::vec4    clear_color{0.18f, 0.41f, 0.58f, 0.4f};
-    glm::vec4    clear_color{0.0f, 0.0f, 0.0, 0.4f};
-    bool         post_processing_enable{true};
-    //glm::vec4    clear_color{0.02f, 0.02f, 0.02f, 1.0f};
-
-    class Debug_visualizations
-    {
-    public:
-        Visualization_mode light {Visualization_mode::selected};
-        Visualization_mode camera{Visualization_mode::selected};
-    };
-
-    Debug_visualizations debug_visualizations;
-    bool                 selection_bounding_box;
-    bool                 selection_bounding_sphere;
-    float                rendertarget_mesh_lod_bias{-0.666f};
+    Viewport_config_data  data;
+    float                 rendertarget_mesh_lod_bias{-0.666f};
+    Viewport_config_data* edit_data{nullptr};
 };
 
 } // namespace editor

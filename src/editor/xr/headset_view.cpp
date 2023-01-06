@@ -344,7 +344,7 @@ void Headset_view::execute_rendergraph_node()
             else
             {
                 const auto& global_viewport_config = get<Viewport_config>();
-                const auto& clear_color = global_viewport_config->clear_color;
+                const auto& clear_color = global_viewport_config->data.clear_color;
 
                 gl::clear_color(
                     clear_color[0],
@@ -362,7 +362,7 @@ void Headset_view::execute_rendergraph_node()
 
                 Render_context render_context {
                     .scene_view      = this,
-                    .viewport_config = &viewport_config,
+                    .viewport_config = &viewport_config.data,
                     .camera          = as_camera(view_resources->camera.get()),
                     .viewport        = viewport
                 };
@@ -504,6 +504,20 @@ void Headset_view::begin_frame()
     {
         m_commands->on_controller_trigger_click(trigger_click->currentState);
     }
+
+    {
+        const auto& pose = m_headset->controller_pose();
+        const auto  controller_orientation = glm::mat4_cast(pose.orientation);
+        const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+        add_controller_input(
+            Controller_input{
+                .position      = pose.position,
+                .direction     = controller_direction,
+                .trigger_value = trigger_value->currentState
+            }
+        );
+    }
+
     const auto* trackpad = m_headset->trackpad();
     const auto* trackpad_touch = m_headset->trackpad_touch();
     const auto* trackpad_click = m_headset->trackpad_click();

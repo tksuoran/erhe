@@ -75,8 +75,14 @@ void Hotbar::initialize_component()
     ERHE_PROFILE_FUNCTION
 
     const auto& configuration = get<erhe::application::Configuration>();
-    const auto& hotbar        = configuration->hotbar;
-    if (!hotbar.enabled)
+    const auto& config        = configuration->hotbar;
+    m_enabled = config.enabled;
+    m_show    = config.show;
+    m_x       = config.x;
+    m_y       = config.y;
+    m_z       = config.z;
+
+    if (!m_enabled)
     {
         return;
     }
@@ -94,11 +100,6 @@ void Hotbar::initialize_component()
     get<Tools>()->register_tool(this);
 
     get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-
-    m_show = hotbar.show;
-    m_x    = hotbar.x;
-    m_y    = hotbar.y;
-    m_z    = hotbar.z;
 
     const auto& imgui_windows = get<erhe::application::Imgui_windows>();
     const auto& scene_builder = get<Scene_builder>();
@@ -142,8 +143,6 @@ void Hotbar::initialize_component()
 
     this->set_viewport(m_rendertarget_imgui_viewport.get());
 
-    m_rendertarget_imgui_viewport->set_enabled(m_show);
-    m_rendertarget_mesh->set_visible(m_show);
     set_visibility(m_show);
 
     get<Editor_message_bus>()->add_receiver(
@@ -181,6 +180,11 @@ void Hotbar::post_initialize()
 void Hotbar::on_message(Editor_message& message)
 {
     Tool::on_message(message);
+
+    if (!m_enabled || !m_show)
+    {
+        return;
+    }
 
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view))
@@ -324,6 +328,10 @@ void Hotbar::handle_slot_update()
 
 auto Hotbar::try_call(erhe::application::Command_context& context) -> bool
 {
+    if (!m_enabled)
+    {
+        return false;
+    }
     if (context.get_button_bits() == 0)
     {
         return false;
@@ -461,8 +469,8 @@ void Hotbar::set_visibility(const bool value)
         return;
     }
 
-    m_rendertarget_imgui_viewport->set_enabled(m_is_visible);
-    m_rendertarget_mesh->set_visible(m_is_visible);
+    m_rendertarget_imgui_viewport->set_enabled(value);
+    m_rendertarget_mesh->set_visible(value);
 }
 
 } // namespace editor

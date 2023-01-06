@@ -24,6 +24,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
+#include "scene/material_preview.hpp"
 #include "scene/scene_message_bus.hpp"
 
 #include "tools/debug_visualizations.hpp"
@@ -196,6 +197,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         m_components.add(make_shared<editor::Id_renderer           >());
         m_components.add(make_shared<editor::Layers_window         >());
         m_components.add(make_shared<editor::Material_paint_tool   >());
+        m_components.add(make_shared<editor::Material_preview      >());
         m_components.add(make_shared<editor::Mesh_memory           >());
         m_components.add(make_shared<editor::Move_tool             >());
         m_components.add(make_shared<editor::Properties            >());
@@ -316,6 +318,12 @@ auto Application::initialize_components(int argc, char** argv) -> bool
         //scene_builder->add_rendertarget_viewports(1);
     }
 #endif
+
+    {
+        const auto& tools        = m_components.get<editor::Tools       >();
+        const auto& physics_tool = m_components.get<editor::Physics_tool>();
+        tools->set_priority_tool(physics_tool.get());
+    }
 
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     gl::disable     (gl::Enable_cap::primitive_restart);

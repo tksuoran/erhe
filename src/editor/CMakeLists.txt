@@ -80,10 +80,10 @@ erhe_target_sources_grouped(
     scene/debug_draw.hpp
     scene/frame_controller.cpp
     scene/frame_controller.hpp
-    scene/helpers.cpp
-    scene/helpers.hpp
     scene/material_library.cpp
     scene/material_library.hpp
+    scene/material_preview.cpp
+    scene/material_preview.hpp
     scene/node_physics.cpp
     scene/node_physics.hpp
     scene/node_raytrace.cpp
@@ -205,6 +205,12 @@ erhe_target_sources_grouped(
 
     res/shaders/brush.vert
     res/shaders/brush.frag
+    res/shaders/anisotropic_slope.vert
+    res/shaders/anisotropic_slope.frag
+    res/shaders/anisotropic_engine_ready.vert
+    res/shaders/anisotropic_engine_ready.frag
+    res/shaders/circular_brushed_metal.vert
+    res/shaders/circular_brushed_metal.frag
     res/shaders/depth.vert
     res/shaders/depth.frag
     res/shaders/compose.frag

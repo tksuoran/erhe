@@ -279,49 +279,59 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
     }
     auto& material_library = scene_root->content_library()->materials;
 
+    int primitive_index = 0;
     for (auto& primitive : mesh_data.primitives)
     {
         const auto& geometry = primitive.source_geometry;
-        if (geometry)
+
+        ++primitive_index;
+        const std::string label = geometry
+            ? fmt::format("Primitive: {}", geometry->name)
+            : fmt::format("Primitive: {}", primitive_index);
+
+        if (ImGui::TreeNodeEx(label.c_str()))
         {
-            const std::string label = fmt::format("Primitive: {}", geometry->name);
+            ImGui::Indent(indent);
+            material_library.combo("Material", primitive.material, false);
+            if (primitive.material)
+            {
+                ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
+            }
+            else
+            {
+                ImGui::Text("Null material");
+            }
             if (
-                ImGui::TreeNodeEx(label.c_str())
+                geometry &&
+                ImGui::TreeNodeEx("Statistics")
             )
             {
                 ImGui::Indent(indent);
-                material_library.combo("Material", primitive.material, false);
-                if (primitive.material)
-                {
-                    ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
-                }
-                else
-                {
-                    ImGui::Text("Null material");
-                }
-                if (
-                    ImGui::TreeNodeEx("Statistics")
-                )
-                {
-                    ImGui::Indent(indent);
-                    int point_count   = geometry->get_point_count();
-                    int polygon_count = geometry->get_polygon_count();
-                    int edge_count    = geometry->get_edge_count();
-                    int corner_count  = geometry->get_corner_count();
-                    ImGui::InputInt("Points",      &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Polygons",    &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Edges",       &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Corners",     &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
-                    float bbox_volume    = primitive.gl_primitive_geometry.bounding_box.volume();
-                    float bsphere_volume = primitive.gl_primitive_geometry.bounding_sphere.volume();
-                    ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
-                    ImGui::Unindent(indent);
-                    ImGui::TreePop();
-                }
+                int point_count   = geometry->get_point_count();
+                int polygon_count = geometry->get_polygon_count();
+                int edge_count    = geometry->get_edge_count();
+                int corner_count  = geometry->get_corner_count();
+                ImGui::InputInt("Points",      &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputInt("Polygons",    &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputInt("Edges",       &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputInt("Corners",     &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
                 ImGui::Unindent(indent);
                 ImGui::TreePop();
             }
+            if (
+                ImGui::TreeNodeEx("Debug")
+            )
+            {
+                float bbox_volume    = primitive.gl_primitive_geometry.bounding_box.volume();
+                float bsphere_volume = primitive.gl_primitive_geometry.bounding_sphere.volume();
+                ImGui::Indent(indent);
+                ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
+                ImGui::Unindent(indent);
+                ImGui::TreePop();
+            }
+            ImGui::Unindent(indent);
+            ImGui::TreePop();
         }
     }
 }
