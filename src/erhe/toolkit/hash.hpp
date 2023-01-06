@@ -11,7 +11,7 @@ namespace erhe::toolkit
 static const uint64_t c_prime = 0x100000001b3;
 static const uint64_t c_seed  = 0xcbf29ce484222325;
 
-[[nodiscard]] inline const auto hash(
+[[nodiscard]] inline auto hash(
     const void*       data,
     const std::size_t byte_count,
     uint64_t          seed = c_seed

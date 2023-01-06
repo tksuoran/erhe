@@ -80,14 +80,14 @@ Viewport_window::Viewport_window(
     , m_physics_window                   {components.get<Physics_window  >()}
     , m_post_processing                  {components.get<Post_processing >()}
     , m_programs                         {components.get<Programs        >()}
+    , m_selection_tool                   {components.get<Selection_tool>()}
     , m_trs_tool                         {components.get<Trs_tool        >()}
     , m_viewport_config                  {components.get<Viewport_config >()->data}
     , m_name                             {name}
     , m_scene_root                       {scene_root}
-    , m_selection_tool                   {components.get<Selection_tool>()}
     , m_tool_scene_root                  {components.get<Tools>()->get_tool_scene_root()}
-    , m_viewport_windows                 {components.get<Viewport_windows>().get()}
     , m_camera                           {camera}
+    , m_viewport_windows                 {components.get<Viewport_windows>().get()}
 {
     register_input(
         erhe::application::Resource_routing::Resource_provided_by_producer,

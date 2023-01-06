@@ -276,6 +276,7 @@ auto Application::initialize_components(int argc, char** argv) -> bool
 #endif
     init_window(m_components.get<editor::Hover_tool            >(), config.hover_tool          );
     init_window(m_components.get<editor::Hud                   >(), config.hud                 );
+    init_window(m_components.get<editor::Material_preview      >(), config.material_preview    );
     init_window(m_components.get<editor::Layers_window         >(), config.layers              );
     init_window(m_components.get<editor::Node_tree_window      >(), config.node_tree           );
     init_window(m_components.get<editor::Operation_stack       >(), config.operation_stack     );

@@ -274,6 +274,7 @@ Configuration::Configuration(int argc, char** argv)
         get_window(ini, "layers",               windows.layers              );
         get_window(ini, "line_renderer",        windows.line_renderer       );
         get_window(ini, "log",                  windows.log                 );
+        get_window(ini, "material_preview",     windows.material_preview    );
         get_window(ini, "node_tree",            windows.node_tree           );
         get_window(ini, "operation_stack",      windows.operation_stack     );
         get_window(ini, "operations",           windows.operations          );

@@ -204,6 +204,7 @@ public:
         Window_entry layers              {false};
         Window_entry line_renderer       {false};
         Window_entry log                 {false};
+        Window_entry material_preview    {false};
         Window_entry node_tree           {false};
         Window_entry operation_stack     {false};
         Window_entry operations          {false};
