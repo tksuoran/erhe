@@ -75,39 +75,35 @@ public:
         const scalar sin_theta = std::sin(theta);
         const scalar cos_theta = std::cos(theta);
 
-        const scalar phi_t0     = phi + glm::half_pi<scalar>();
-        const scalar sin_phi_t0 = std::sin(phi_t0);
-        const scalar cos_phi_t0 = std::cos(phi_t0);
+        //const scalar phi_t0     = phi + glm::half_pi<scalar>();
+        //const scalar sin_phi_t0 = std::sin(phi_t0);
+        //const scalar cos_phi_t0 = std::cos(phi_t0);
 
-        const scalar theta_b0     = theta + glm::half_pi<scalar>();
-        const scalar sin_theta_b0 = std::sin(theta_b0);
-        const scalar cos_theta_b0 = std::cos(theta_b0);
+        //const scalar theta_b0     = theta + glm::half_pi<scalar>();
+        //const scalar sin_theta_b0 = std::sin(theta_b0);
+        //const scalar cos_theta_b0 = std::cos(theta_b0);
 
-        const scalar stack_radius    = cos_theta;
-        const scalar stack_radius_b0 = cos_theta_b0;
+        //const scalar stack_radius    = cos_theta;
+        //const scalar stack_radius_b0 = cos_theta_b0;
 
-        const auto xVN = static_cast<float>(stack_radius * cos_phi);
-        const auto yVN = static_cast<float>(sin_theta);
-        const auto zVN = static_cast<float>(stack_radius * sin_phi);
+        const auto N_x = static_cast<float>(cos_theta * cos_phi);
+        const auto N_y = static_cast<float>(sin_theta);
+        const auto N_z = static_cast<float>(cos_theta * sin_phi);
 
-        const auto xT0 = static_cast<float>(stack_radius * cos_phi_t0);
-        const auto yT0 = static_cast<float>(sin_theta);
-        const auto zT0 = static_cast<float>(stack_radius * sin_phi_t0);
+        const auto T_x = static_cast<float>(-sin_phi);
+        const auto T_y = static_cast<float>(0.0f);
+        const auto T_z = static_cast<float>(cos_phi);
 
-        const auto xB0 = static_cast<float>(stack_radius_b0 * cos_phi);
-        const auto yB0 = static_cast<float>(sin_theta_b0);
-        const auto zB0 = static_cast<float>(stack_radius_b0 * sin_phi);
+        const vec3 N{N_x, N_y, N_z};
+        const vec3 T{T_x, T_y, T_z};
+        const vec3 B = glm::normalize(glm::cross(N, T));
 
-        const auto xP = static_cast<float>(radius * xVN);
-        const auto yP = static_cast<float>(radius * yVN);
-        const auto zP = static_cast<float>(radius * zVN);
+        const auto xP = static_cast<float>(radius * N_x);
+        const auto yP = static_cast<float>(radius * N_y);
+        const auto zP = static_cast<float>(radius * N_z);
 
         const auto s = static_cast<float>(rel_slice);
         const auto t = static_cast<float>(rel_stack);
-
-        const vec3  N{xVN, yVN, zVN};
-        const vec3  T{xT0, yT0, zT0};
-        const vec3  B{xB0, yB0, zB0};
 
         SPDLOG_LOGGER_TRACE(
             log_sphere,
@@ -123,8 +119,8 @@ public:
         return Point_data{
             .position  = vec3{xP, yP, zP},
             .normal    = N,
-            .tangent   = vec4{xT0, yT0, zT0, 1.0f},
-            .bitangent = vec4{xB0, yB0, zB0, 1.0f},
+            .tangent   = vec4{T, 1.0f},
+            .bitangent = vec4{B, 1.0f},
             .texcoord  = vec2{static_cast<float>(s), static_cast<float>(t)}
         };
     }

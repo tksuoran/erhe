@@ -45,9 +45,19 @@ void main()
     );
 
     vec3  V     = normalize(view_position_in_world - v_position.xyz);
-    vec3  N     = normalize(v_TBN[2]);
     vec3  T0    = normalize(v_TBN[0]);
     vec3  B0    = normalize(v_TBN[1]);
+    vec3  N     = normalize(v_TBN[2]);
+
+    Light light          = light_block.lights[0];
+    vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
+    vec3  L              = normalize(point_to_light);
+
+    mat3 TBN   = mat3(T0, B0, N);
+    mat3 TBN_t = transpose(TBN);
+    vec3 wo    = normalize(TBN_t * V);
+    vec3 wi    = normalize(TBN_t * L);
+    vec3 wg    = normalize(TBN_t * N);
 
     // Anisitropy direction
     vec2  T_    = normalize(v_texcoord);
@@ -71,6 +81,18 @@ void main()
 #endif
 #if defined(ERHE_DEBUG_BITANGENT)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B0);
+#endif
+#if defined(ERHE_DEBUG_OMEGA_O)
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * wo);
+    out_color.r = 1.0;
+#endif
+#if defined(ERHE_DEBUG_OMEGA_I)
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * wi);
+    out_color.g = 1.0;
+#endif
+#if defined(ERHE_DEBUG_OMEGA_G)
+    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * wg);
+    out_color.b = 1.0;
 #endif
 #if defined(ERHE_DEBUG_TEXCOORD)
     out_color.rgb = srgb_to_linear(vec3(v_texcoord, 0.0));
@@ -114,11 +136,8 @@ void main()
     // Show Directional light L . N
     out_color.rgb = srgb_to_linear(palette[v_material_index % 24]);
 
-    Light light          = light_block.lights[0];
-    vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-    vec3  L              = normalize(point_to_light);   // Direction from surface point to light
-    float N_dot_L        = dot(N, L);
-    float N_dot_V        = dot(N, V);
+    float N_dot_L = dot(N, L);
+    float N_dot_V = dot(N, V);
 
     out_color.rgb = srgb_to_linear(vec3(N_dot_V));
 
@@ -127,6 +146,5 @@ void main()
     //out_color.rgb = srgb_to_linear(material.base_color.rgb);
 
 #endif
-
     out_color.a = 1.0;
 }

@@ -69,9 +69,6 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
 
-// https://www.shadertoy.com/view/NtlyWX
-
-
 float ggx_isotropic_ndf(float N_dot_H, float alpha) {
     float a = N_dot_H * alpha;
     float k = alpha / (1.0 - N_dot_H * N_dot_H + a * a);
@@ -132,7 +129,7 @@ vec3 brdf(
     vec3  base_color,
     float roughness_x,
     float roughness_y,
-    float metalness,
+    float metallic,
     float reflectance,
     vec3  L,
     vec3  V,
@@ -143,6 +140,7 @@ vec3 brdf(
 {
     float alpha_x = roughness_x * roughness_x;
     float alpha_y = roughness_y * roughness_y;
+    vec3  F0      = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color * metallic;
     vec3  H       = normalize(L + V);
     float N_dot_H = clamped_dot(N, H);
     float N_dot_V = clamped_dot(N, V);
@@ -153,14 +151,13 @@ vec3 brdf(
     float B_dot_L = dot(B, L);
     float T_dot_H = dot(T, H);
     float B_dot_H = dot(B, H);
-    float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
-    float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
-    //float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
-    //float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
-    vec3  F0                  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
+    //float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
+    //float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
+    float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
+    float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
     vec3  F                   = fresnel_schlick(max(dot(V, H), 0.0), F0);
     vec3  specular_microfacet = D * Vis * F;
-    vec3  diffuse_lambert     = m_i_pi * (1.0 - metalness) * base_color;
+    vec3  diffuse_lambert     = m_i_pi * (1.0 - metallic) * base_color;
     vec3  diffuse_factor      = vec3(1.0) - F;
     return N_dot_L * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
@@ -190,7 +187,7 @@ void main() {
         uint  light_index    = directional_light_offset + i;
         Light light          = light_block.lights[light_index];
         vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-        vec3  L              = normalize(point_to_light);   // Direction from surface point to light
+        vec3  L              = normalize(point_to_light);
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);

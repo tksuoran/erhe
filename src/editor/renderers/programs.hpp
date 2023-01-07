@@ -37,6 +37,9 @@ enum class Shader_stages_variant : int
     debug_texcoord,
     debug_vertex_color_rgb,
     debug_vertex_color_alpha,
+    debug_omega_o,
+    debug_omega_i,
+    debug_omega_g,
     debug_misc
 };
 
@@ -53,6 +56,9 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Debug TexCoord",
     "Debug Vertex Color RGB",
     "Debug Vertex Color Alpha",
+    "Debug Omega o",
+    "Debug Omega i",
+    "Debug Omega g",
     "Debug Miscellaneous"
 };
 
@@ -105,6 +111,9 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> debug_texcoord;
     std::unique_ptr<erhe::graphics::Shader_stages> debug_vertex_color_rgb;
     std::unique_ptr<erhe::graphics::Shader_stages> debug_vertex_color_alpha;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_o;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_i;
+    std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_g;
     std::unique_ptr<erhe::graphics::Shader_stages> debug_misc;
 
 private:

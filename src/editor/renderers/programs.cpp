@@ -114,6 +114,9 @@ void Programs::initialize_component()
     prototypes.emplace_back(&debug_texcoord          , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
     prototypes.emplace_back(&debug_vertex_color_rgb  , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
     prototypes.emplace_back(&debug_vertex_color_alpha, make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
+    prototypes.emplace_back(&debug_omega_o           , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_O",            "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
+    prototypes.emplace_back(&debug_omega_i           , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_I",            "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
+    prototypes.emplace_back(&debug_omega_g           , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
     prototypes.emplace_back(&debug_misc              , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
 
     // Compile shaders

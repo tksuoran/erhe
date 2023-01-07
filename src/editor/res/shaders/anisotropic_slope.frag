@@ -121,7 +121,8 @@ float slope_ndf_ggx_anisotropic(vec3 omega_h, float alpha_x, float alpha_y) {
 
 float lambda_ggx_isotropic(vec3 omega, float alpha) {
     float a = 1.0 / (alpha * tan_theta(omega));
-    return 0.5 * (-1.0 + sqrt(1.0 + 1.0 / (a * a)));
+    return ( (-1.0 + sqrt(1.0 + 1.0 / (a * a))) * 0.5);
+    //return 0.5 * (-1.0 + sqrt(1.0 + 1.0 / (a * a)));
 }
 
 float lambda_ggx_anisotropic(vec3 omega, float alpha_x, float alpha_y) {
@@ -188,11 +189,13 @@ float clamped_dot(vec3 x, vec3 y) {
     return clamp(dot(x, y), 0.001, 1.0);
 }
 
+// This shader is adapted from https://www.shadertoy.com/view/3tyXRt - Arthur Cavalier
 vec3 slope_brdf(
     vec3  base_color,
     float roughness_x,
     float roughness_y,
-    float metalness,
+    float metallic,
+    float reflectance,
     mat3  TBN_t,
     vec3  L,
     vec3  V,
@@ -203,8 +206,9 @@ vec3 slope_brdf(
 {
     float alpha_x   = roughness_x * roughness_x;
     float alpha_y   = roughness_y * roughness_y;
+    vec3  F0        = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color * metallic;
     vec3  wo        = normalize(TBN_t * V);
-    vec3  wg        = normalize(TBN_t * N); // ( should be (0,0,1)^T )
+    vec3  wg        = normalize(TBN_t * N);
     vec3  wi        = normalize(TBN_t * L);
     vec3  wh        = normalize(wo + wi);
     float wi_dot_wh = clamp(dot(wi, wh), 0.0, 1.0);
@@ -216,57 +220,16 @@ vec3 slope_brdf(
     //float lambda_wi = lambda_ggx_isotropic(wi, alpha_x);
     //float D         = slope_ndf_ggx_isotropic(wh, alpha_x);
     float G         = 1.0 / (1.0 + lambda_wo + lambda_wi);
-    float specular_brdf = max(
-        wg_dot_wi * (D * G) / (4.0 * cos_theta(wi) * cos_theta(wo)),
-        0.0
-    );
+    vec3  F         = fresnel_schlick(wi_dot_wh, F0);
+    vec3  specular_microfacet = (D * F * G) / (4.0 * cos_theta(wi) * cos_theta(wo));
+    vec3  diffuse_lambert     = m_i_pi * (1.0 - metallic) * base_color;
+    vec3  diffuse_factor      = vec3(1.0) - F;
 
-    vec3  H                 = normalize(L + V);
-    float N_dot_L           = clamped_dot(N, L);
-    float V_dot_H           = clamped_dot(V, H);
-    vec3  diffuse_brdf      = N_dot_L * base_color * m_i_pi;
-    float fresnel           = pow(1.0 - abs(V_dot_H), 5.0);
-    vec3  conductor_fresnel = specular_brdf * (base_color + (1.0 - base_color) * fresnel);
-    float f0                = 0.04;
-    float fr                = f0 + (1.0 - f0) * fresnel;
-    vec3  fresnel_mix       = mix(diffuse_brdf, vec3(specular_brdf), fr);
-    return mix(fresnel_mix, conductor_fresnel, metalness);
-}
-
-vec3 brdf(
-    vec3  base_color,
-    float roughness_x,
-    float roughness_y,
-    float metalness,
-    mat3  TBN_t,
-    vec3  L,
-    vec3  V,
-    vec3  T,
-    vec3  B,
-    vec3  N
-)
-{
-    float alpha_x = roughness_x * roughness_x;
-    float alpha_y = roughness_y * roughness_y;
-    vec3  H       = normalize(L + V);
-    float N_dot_H = clamped_dot(N, H);
-    float N_dot_V = clamped_dot(N, V);
-    float N_dot_L = clamped_dot(N, L);
-    float T_dot_V = dot(T, V);
-    float B_dot_V = dot(B, V);
-    float T_dot_L = dot(T, L);
-    float B_dot_L = dot(B, L);
-    float T_dot_H = dot(T, H);
-    float B_dot_H = dot(B, H);
-    //float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
-    //float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
-    float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
-    float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
-    vec3  F0_     = vec3(0.04);
-    vec3  F0      = mix(F0_, base_color, 1.0);
-    vec3  F       = fresnel_schlick(max(N_dot_V, 0.0), F0);
-    vec3  direct  = D * Vis * F;
-    return N_dot_L * direct;
+    return wg_dot_wi * (diffuse_factor * diffuse_lambert + specular_microfacet);
+    //return wg_dot_wi * vec3(1.0);
+    //return wg_dot_wi * (specular_microfacet);
+    //return vec3(metallic);
+    //return 0.5 * vec3(wo) + vec3(0.5);
 }
 
 void main() {
@@ -285,39 +248,27 @@ void main() {
     float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];
-    float roughness_x  = material.roughness.x;
-    float roughness_y  = material.roughness.y;
-    float alpha_x      = roughness_x * roughness_x;
-    float alpha_y      = roughness_y * roughness_y;
-    vec3  base_color   = material.base_color.rgb;
-    float metallic     = material.metallic;
-    float f0_ior       = 0.001; // The default index of refraction of 1.5 yields a dielectric normal incidence reflectance of 0.04.
-    vec3  f0_met       = vec3(f0_ior); // Achromatic f0 based on IOR.
-    vec3  f0           = mix(f0_met, base_color, metallic);
-    float reflectance  = max(max(f0.r, f0.g), f0.b);
-    vec3  f90          = vec3(reflectance);
-    vec3  albedo_color = mix(base_color * (vec3(1.0) - f0_met), vec3(0), metallic);
-
-    uint  directional_light_count  = light_block.directional_light_count;
-    uint  spot_light_count         = light_block.spot_light_count;
-    uint  directional_light_offset = 0;
-    uint  spot_light_offset        = directional_light_count;
-
+    uint directional_light_count  = light_block.directional_light_count;
+    uint spot_light_count         = light_block.spot_light_count;
+    uint directional_light_offset = 0;
+    uint spot_light_offset        = directional_light_count;
     vec3 color = vec3(0);
+    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * material.base_color.rgb;
+    color += material.emissive.rgb;
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;
         Light light          = light_block.lights[light_index];
         vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
-        vec3  L              = normalize(point_to_light);   // Direction from surface point to light
+        vec3  L              = normalize(point_to_light);
         float N_dot_L        = clamped_dot(N, L);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
-            //color += intensity * brdf(
             color += intensity * slope_brdf(
                 material.base_color.rgb,
                 material.roughness.x,
                 material.roughness.y,
                 material.metallic,
+                material.reflectance,
                 TBN_t,
                 L,
                 V,
@@ -344,6 +295,7 @@ void main() {
                 material.roughness.x,
                 material.roughness.y,
                 material.metallic,
+                material.reflectance,
                 TBN_t,
                 L,
                 V,

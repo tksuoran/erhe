@@ -129,6 +129,9 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
         case Shader_stages_variant::debug_texcoord:           return m_programs->debug_texcoord.get();
         case Shader_stages_variant::debug_vertex_color_rgb:   return m_programs->debug_vertex_color_rgb.get();
         case Shader_stages_variant::debug_vertex_color_alpha: return m_programs->debug_vertex_color_alpha.get();
+        case Shader_stages_variant::debug_omega_o:            return m_programs->debug_omega_o.get();
+        case Shader_stages_variant::debug_omega_i:            return m_programs->debug_omega_i.get();
+        case Shader_stages_variant::debug_omega_g:            return m_programs->debug_omega_g.get();
         case Shader_stages_variant::debug_misc:               return m_programs->debug_misc.get();
         default:                                              return m_programs->standard.get();
     }
