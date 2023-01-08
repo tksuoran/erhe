@@ -172,7 +172,7 @@ vec3 brdf(
     vec3  base_color,
     float roughness_x,
     float roughness_y,
-    float metalness,
+    float metallic,
     float reflectance,
     vec3  L,
     vec3  V,
@@ -183,6 +183,7 @@ vec3 brdf(
 {
     float alpha_x = roughness_x * roughness_x;
     float alpha_y = roughness_y * roughness_y;
+    vec3  F0      = 0.16 * reflectance * reflectance * (1.0 - metallic) + base_color * metallic;
     vec3  H       = normalize(L + V);
     float N_dot_H = clamped_dot(N, H);
     float N_dot_V = clamped_dot(N, V);
@@ -193,14 +194,13 @@ vec3 brdf(
     float B_dot_L = dot(B, L);
     float T_dot_H = dot(T, H);
     float B_dot_H = dot(B, H);
-    float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
-    float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
-    //float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
-    //float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
-    vec3  F0                  = 0.16 * reflectance * reflectance * (1.0 - metalness) + base_color * metalness;
+    //float D       = ggx_isotropic_ndf       (N_dot_H, alpha_x);
+    //float Vis     = ggx_isotropic_visibility(N_dot_V, N_dot_L, alpha_x);
+    float D       = ggx_anisotropic_ndf       (alpha_x, alpha_y, T_dot_H, B_dot_H, N_dot_H);
+    float Vis     = ggx_anisotropic_visibility(alpha_x, alpha_y, T_dot_V, B_dot_V, N_dot_V, T_dot_L, B_dot_L, N_dot_L);
     vec3  F                   = fresnel_schlick(max(dot(V, H), 0.0), F0);
     vec3  specular_microfacet = D * Vis * F;
-    vec3  diffuse_lambert     = m_i_pi * (1.0 - metalness) * base_color;
+    vec3  diffuse_lambert     = m_i_pi * (1.0 - metallic) * base_color;
     vec3  diffuse_factor      = vec3(1.0) - F;
     return N_dot_L * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }

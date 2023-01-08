@@ -198,7 +198,11 @@ auto Geometry::compute_tangents(
             const int iVert
         ) const -> vec3
         {
+            static_cast<void>(iVert);
             const Polygon_id polygon_id = get_polygon_id(iFace);
+            const vec3 normal = polygon_normals->get(polygon_id);
+            return normal;
+#if 0
             if (iVert == 0)
             {
                 const vec3 normal = polygon_normals->get(polygon_id);
@@ -228,6 +232,7 @@ auto Geometry::compute_tangents(
             }
             ERHE_FATAL("No normal source");
             // unreachable return vec3{0.0f, 1.0f, 0.0f};
+#endif
         }
 
         [[nodiscard]] auto get_texcoord(
@@ -451,16 +456,24 @@ auto Geometry::compute_tangents(
             static_cast<void>(fMagS);
             static_cast<void>(fMagT);
             static_cast<void>(bIsOrientationPreserving);
-            auto*       context = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
-            const auto  N     = context->get_normal(iFace, iVert);
-            const vec3  T     = vec3{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
-            const vec3  B     = vec3{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
-            const vec3  t_xyz = glm::normalize(T - N * glm::dot(N, T));
-            const float t_w   = (glm::dot(glm::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
-            const vec3  b_xyz = glm::normalize(B - N * glm::dot(N, B));
-            const float b_w   = (glm::dot(glm::cross(B, N), T) < 0.0f) ? -1.0f : 1.0f;
-            context->set_tangent  (iFace, iVert, t_xyz, t_w);
-            context->set_bitangent(iFace, iVert, b_xyz, b_w);
+            auto*       context  = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            const auto  N        = context->get_normal(iFace, iVert);
+            const vec3  T0       = vec3{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
+            const vec3  B0       = vec3{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
+            const float N_dot_T0 = glm::dot(N, T0);
+            const float N_dot_B0 = glm::dot(N, B0);
+            const vec3  T        = glm::normalize(T0 - N_dot_T0 * N);
+            const float t_w      = (glm::dot(glm::cross(N, T0), B0) < 0.0f) ? -1.0f : 1.0f;
+            const vec3  B        = glm::normalize(B0 - N_dot_B0 * N);
+            const float b_w      = (glm::dot(glm::cross(B0, N), T0) < 0.0f) ? -1.0f : 1.0f;
+            const float N_dot_T  = glm::dot(N, T);
+            const float N_dot_B  = glm::dot(N, B);
+            ERHE_VERIFY(std::abs(N_dot_T0) < 0.01f);
+            ERHE_VERIFY(std::abs(N_dot_B0) < 0.01f);
+            ERHE_VERIFY(std::abs(N_dot_T) < 0.01f);
+            ERHE_VERIFY(std::abs(N_dot_B) < 0.01f);
+            context->set_tangent  (iFace, iVert, T, t_w);
+            context->set_bitangent(iFace, iVert, B, b_w);
         }
     };
 

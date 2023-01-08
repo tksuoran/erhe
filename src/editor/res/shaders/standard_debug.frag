@@ -53,25 +53,35 @@ void main()
     vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
     vec3  L              = normalize(point_to_light);
 
+    Material material = material.materials[v_material_index];
+
+    vec2  T_circular                    = normalize(v_texcoord);
+    float circular_anisotropy_magnitude = pow(length(v_texcoord) * 8.0, 0.25);
+    // Vertex red channel is used to modulate anisotropy level:
+    //   0.0 -- Anisotropic
+    //   1.0 -- Isotropic when approaching texcoord (0, 0)
+    // Vertex color green channel is used for tangent space selection/control:
+    //   0.0 -- Use geometry T and B (from vertex attribute
+    //   1.0 -- Use T and B derived from texcoord
+    float tangent_space_control = v_color.g;
+    float anisotropy_strength = mix(
+        1.0,
+        min(1.0, circular_anisotropy_magnitude),
+        tangent_space_control
+    ) * v_color.r;
+    // Mix tangent space geometric .. texcoord generated
+    vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, tangent_space_control);
+    vec3  B                   = mix(B0, T_circular.y * T0 - T_circular.x * B0, tangent_space_control);
+    float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
+    // Mix roughness based on anisotropy_strength
+    float roughness_x         = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);
+    float roughness_y         = mix(isotropic_roughness, material.roughness.y, anisotropy_strength);
+
     mat3 TBN   = mat3(T0, B0, N);
     mat3 TBN_t = transpose(TBN);
     vec3 wo    = normalize(TBN_t * V);
     vec3 wi    = normalize(TBN_t * L);
     vec3 wg    = normalize(TBN_t * N);
-
-    // Anisitropy direction
-    vec2  T_    = normalize(v_texcoord);
-
-    // Anisotropy strength:
-    //  - 0.0 where alpha is 0.0
-    //  - relative to texture coordinate magnitude, clamped from 0 to 1
-    float anisotropy_texcoord = v_color.g;
-    float texcoord_factor     = length(v_texcoord) * 8.0;
-    float anisotropy_strength = mix(1.0, min(1.0, pow(texcoord_factor, 0.25)), anisotropy_texcoord) * v_color.r;
-
-    // Anisotropic tangent and bitangent, mixed with non-aniso T and B based on vertex alpha aniso control
-    vec3  T     = mix(T0, T_.x * T0 + T_.y * B0, anisotropy_texcoord);
-    vec3  B     = mix(B0, T_.y * T0 - T_.x * B0, anisotropy_texcoord);
 
 #if defined(ERHE_DEBUG_NORMAL)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
@@ -138,8 +148,11 @@ void main()
 
     float N_dot_L = dot(N, L);
     float N_dot_V = dot(N, V);
+    float N_dot_T = dot(N, T);
+    float N_dot_B = dot(N, B);
+    float T_dot_B = dot(T, B);
 
-    out_color.rgb = srgb_to_linear(vec3(N_dot_V));
+    out_color.rgb = srgb_to_linear(vec3(N_dot_T, N_dot_B, T_dot_B));
 
     // Show material
     //Material material = material.materials[v_material_index];
