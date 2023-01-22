@@ -77,8 +77,6 @@ erhe_target_sources_grouped(
     windows/pipelines.cpp
     windows/pipelines.hpp
 
-    application.cpp
-    application.hpp
     application_log.cpp
     application_log.hpp
     configuration.cpp
@@ -89,8 +87,8 @@ erhe_target_sources_grouped(
     renderdoc_capture_support.hpp
     time.cpp
     time.hpp
-    view.cpp
-    view.hpp
+    application_view.cpp
+    application_view.hpp
     window.cpp
     window.hpp
 )
@@ -129,6 +127,7 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(${_target}
     PUBLIC
         cxxopts
+        etl::etl
         fmt::fmt
         erhe::concurrency
         erhe::gl

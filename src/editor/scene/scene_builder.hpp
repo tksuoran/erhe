@@ -20,35 +20,25 @@ namespace erhe::geometry
 
 namespace erhe::graphics
 {
-    class Buffer;
     class Buffer_transfer_queue;
-    class Vertex_format;
 }
 
 namespace erhe::primitive
 {
     class Build_info;
-    class Primitive;
-    class Primitive_geometry;
 }
 
 namespace erhe::scene
 {
     class Camera;
     class Light;
-    class Mesh;
-    class Mesh_layer;
-    class Scene;
 }
 
 namespace editor
 {
 
 class Brush;
-class Debug_draw;
-class Materials;
-class Mesh_memory;
-class Node_physics;
+class Brush_data;
 class Scene_root;
 class Viewport_window;
 
@@ -66,6 +56,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Public API
     void add_rendertarget_viewports(int count);
@@ -126,9 +117,6 @@ private:
     void make_cube_benchmark();
     void setup_lights       ();
 
-    // Component dependencies
-    std::shared_ptr<Mesh_memory> m_mesh_memory;
-
     // Self owned parts
     std::mutex                          m_brush_mutex;
     std::unique_ptr<Brush>              m_floor_brush;
@@ -142,5 +130,7 @@ private:
     std::shared_ptr<Viewport_window> m_primary_viewport_window;
     std::shared_ptr<Scene_root>      m_scene_root;
 };
+
+extern Scene_builder* g_scene_builder;
 
 } // namespace editor

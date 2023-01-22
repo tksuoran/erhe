@@ -90,12 +90,9 @@ public:
     [[nodiscard]] auto get_translate        () const -> bool;
     [[nodiscard]] auto get_rotate           () const -> bool;
     void imgui           ();
-    void viewport_toolbar(bool& hovered, const Icon_set& icon_set);
+    void viewport_toolbar(bool& hovered);
 
-    void initialize(
-        const erhe::application::Configuration& configuration,
-        Mesh_memory&                            mesh_memory
-    );
+    void initialize();
 
     void update_visibility(const bool show);
     void update_scale     (const glm::vec3 view_position_in_world);
@@ -112,10 +109,10 @@ public:
     void set_local    (bool local);
 
 private:
-    [[nodiscard]] auto make_arrow_cylinder(Mesh_memory& mesh_memory) -> Part;
-    [[nodiscard]] auto make_arrow_cone    (Mesh_memory& mesh_memory) -> Part;
-    [[nodiscard]] auto make_box           (Mesh_memory& mesh_memory) -> Part;
-    [[nodiscard]] auto make_rotate_ring   (Mesh_memory& mesh_memory) -> Part;
+    [[nodiscard]] auto make_arrow_cylinder() -> Part;
+    [[nodiscard]] auto make_arrow_cone    () -> Part;
+    [[nodiscard]] auto make_box           () -> Part;
+    [[nodiscard]] auto make_rotate_ring   () -> Part;
 
     [[nodiscard]] auto make_material(
         const char*      name,

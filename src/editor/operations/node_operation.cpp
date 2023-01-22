@@ -108,10 +108,9 @@ void Attach_operation::execute(const Operation_context& context)
 
     if (context.components != nullptr)
     {
-        const auto& selection_tool = context.components->get<Selection_tool>();
-        if (selection_tool)
+        if (g_selection_tool != nullptr)
         {
-            selection_tool->sanity_check();
+            g_selection_tool->sanity_check();
         }
     }
 }
@@ -137,10 +136,9 @@ void Attach_operation::undo(const Operation_context& context)
 
     if (context.components != nullptr)
     {
-        const auto& selection_tool = context.components->get<Selection_tool>();
-        if (selection_tool)
+        if (g_selection_tool != nullptr)
         {
-            selection_tool->sanity_check();
+            g_selection_tool->sanity_check();
         }
     }
 }
@@ -199,10 +197,9 @@ void Node_attach_operation::execute(const Operation_context& context)
 
     if (context.components != nullptr)
     {
-        const auto& selection_tool = context.components->get<Selection_tool>();
-        if (selection_tool)
+        if (g_selection_tool != nullptr)
         {
-            selection_tool->sanity_check();
+            g_selection_tool->sanity_check();
         }
     }
 }
@@ -224,10 +221,9 @@ void Node_attach_operation::undo(const Operation_context& context)
 
     if (context.components != nullptr)
     {
-        const auto& selection_tool = context.components->get<Selection_tool>();
-        if (selection_tool)
+        if (g_selection_tool != nullptr)
         {
-            selection_tool->sanity_check();
+            g_selection_tool->sanity_check();
         }
     }
 }
@@ -283,10 +279,9 @@ void Node_reposition_in_parent_operation::execute(const Operation_context& conte
 
     if (context.components != nullptr)
     {
-        const auto& selection_tool = context.components->get<Selection_tool>();
-        if (selection_tool)
+        if (g_selection_tool != nullptr)
         {
-            selection_tool->sanity_check();
+            g_selection_tool->sanity_check();
         }
     }
 }
@@ -310,10 +305,9 @@ void Node_reposition_in_parent_operation::undo(const Operation_context& context)
 
     if (context.components != nullptr)
     {
-        const auto& selection_tool = context.components->get<Selection_tool>();
-        if (selection_tool)
+        if (g_selection_tool != nullptr)
         {
-            selection_tool->sanity_check();
+            g_selection_tool->sanity_check();
         }
     }
 }

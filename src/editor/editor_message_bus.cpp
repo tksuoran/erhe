@@ -1,27 +1,28 @@
 #include "editor_message_bus.hpp"
 
-//#include "editor_log.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace editor
 {
 
+Editor_message_bus* g_editor_message_bus{nullptr};
+
 Editor_message_bus::Editor_message_bus()
     : erhe::components::Component{c_type_name}
 {
+
 }
 
-Editor_message_bus::~Editor_message_bus() noexcept = default;
+Editor_message_bus::~Editor_message_bus() noexcept
+{
+    ERHE_VERIFY(g_editor_message_bus == this);
+    g_editor_message_bus = nullptr;
+}
 
-//void Scene_message_bus::declare_required_components()
-//{
-//}
-//
-//void Scene_message_bus::initialize_component()
-//{
-//}
-//
-//void Scene_message_bus::post_initialize()
-//{
-//}
+void Editor_message_bus::initialize_component()
+{
+    ERHE_VERIFY(g_editor_message_bus == nullptr);
+    g_editor_message_bus = this;
+}
 
 } // namespace editor

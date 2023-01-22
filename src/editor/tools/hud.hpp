@@ -19,7 +19,6 @@ namespace editor
 class Editor_message;
 class Rendertarget_imgui_viewport;
 class Rendertarget_mesh;
-class Viewport_windows;
 
 class Hud;
 
@@ -56,7 +55,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -65,7 +64,7 @@ public:
     void imgui() override;
 
     // Public APi
-    [[nodiscard]] auto get_rendertarget_imgui_viewport() -> std::shared_ptr<Rendertarget_imgui_viewport>;
+    [[nodiscard]] auto get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_viewport>;
     auto toggle_visibility    () -> bool;
     void set_visibility       (bool value);
 
@@ -74,8 +73,6 @@ private:
     void update_node_transform(const glm::mat4& world_from_camera);
 
     Toggle_hud_visibility_command m_toggle_visibility_command;
-
-    std::shared_ptr<Viewport_windows> m_viewport_windows;
 
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
@@ -90,5 +87,7 @@ private:
     bool  m_is_visible    {false};
     bool  m_locked_to_head{false};
 };
+
+extern Hud* g_hud;
 
 } // namespace editor

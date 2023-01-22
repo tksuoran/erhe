@@ -1,4 +1,5 @@
 #include "map_window.hpp"
+
 #include "hextiles_log.hpp"
 #include "map.hpp"
 #include "menu_window.hpp"
@@ -9,7 +10,6 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -18,6 +18,7 @@
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 
@@ -41,7 +42,7 @@ auto Map_free_zoom_command::try_call(erhe::application::Command_context& context
     //    window_position
     //);
 
-    m_map_window.scale_zoom(static_cast<float>(1.0 + v * k));
+    g_map_window->scale_zoom(static_cast<float>(1.0 + v * k));
     return true;
 }
 
@@ -61,7 +62,7 @@ auto Map_mouse_scroll_command::try_call(erhe::application::Command_context& cont
     //m_map_window.hover(
     //    window_position
     //);
-    m_map_window.scroll(
+    g_map_window->scroll(
         glm::vec2{context.get_vec2_relative_value()}
     );
     return true;
@@ -81,7 +82,7 @@ auto Map_scroll_command::try_call(erhe::application::Command_context& context) -
 {
     static_cast<void>(context);
 
-    m_map_window.scroll_tiles(m_offset);
+    g_map_window->scroll_tiles(m_offset);
     return true;
 }
 
@@ -89,37 +90,38 @@ auto Map_zoom_command::try_call(erhe::application::Command_context& context) -> 
 {
     static_cast<void>(context);
 
-    m_map_window.scale_zoom(m_scale);
+    g_map_window->scale_zoom(m_scale);
     return true;
 }
 
 auto Map_grid_cycle_command::try_call(erhe::application::Command_context& context) -> bool
 {
     static_cast<void>(context);
-    m_map_window.grid_cycle();
+    g_map_window->grid_cycle();
     return true;
 }
 
 #pragma endregion commands
 
 
+Map_window* g_map_window{nullptr};
+
 Map_window::Map_window()
     : erhe::components::Component{c_type_name}
     , Framebuffer_window         {c_title, c_type_name}
-    , m_free_zoom_command        {*this}
-    , m_mouse_scroll_command     {*this}
-    , m_scroll_left_command      {*this, -4.0f,  0.0f }
-    , m_scroll_right_command     {*this,  4.0f,  0.0f }
-    , m_scroll_up_command        {*this,  0.0f, -4.0f }
-    , m_scroll_down_command      {*this,  0.0f,  4.0f }
-    , m_zoom_in_command          {*this, 0.5f}
-    , m_zoom_out_command         {*this, 2.0f}
-    , m_grid_cycle_command       {*this}
+    , m_scroll_left_command      {-4.0f,  0.0f }
+    , m_scroll_right_command     { 4.0f,  0.0f }
+    , m_scroll_up_command        { 0.0f, -4.0f }
+    , m_scroll_down_command      { 0.0f,  4.0f }
+    , m_zoom_in_command          {0.5f}
+    , m_zoom_out_command         {2.0f}
 {
 }
 
 Map_window::~Map_window() noexcept
 {
+    ERHE_VERIFY(g_map_window == this);
+    g_map_window = nullptr;
 }
 
 #pragma region Component
@@ -129,46 +131,43 @@ void Map_window::declare_required_components()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_renderer     >(); // required for Imgui_window
     require<erhe::application::Imgui_windows      >();
-
-    m_tiles = require<Tiles>();
+    require<Tiles>();
 }
 
 void Map_window::initialize_component()
 {
-    Framebuffer_window::initialize(
-        *m_components
-    );
+    ERHE_VERIFY(g_map_window == nullptr);
+
+    Framebuffer_window::initialize();
 
     m_pixel_lookup = std::make_unique<Pixel_lookup>();
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_free_zoom_command);
-    commands->register_command(&m_mouse_scroll_command);
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command(&m_free_zoom_command);
+    commands.register_command(&m_mouse_scroll_command);
 
-    commands->register_command(&m_scroll_left_command);
-    commands->register_command(&m_scroll_right_command);
-    commands->register_command(&m_scroll_up_command);
-    commands->register_command(&m_scroll_down_command);
-    commands->register_command(&m_zoom_in_command);
-    commands->register_command(&m_zoom_out_command);
-    commands->register_command(&m_grid_cycle_command);
+    commands.register_command(&m_scroll_left_command);
+    commands.register_command(&m_scroll_right_command);
+    commands.register_command(&m_scroll_up_command);
+    commands.register_command(&m_scroll_down_command);
+    commands.register_command(&m_zoom_in_command);
+    commands.register_command(&m_zoom_out_command);
+    commands.register_command(&m_grid_cycle_command);
 
-    commands->bind_command_to_mouse_wheel(&m_free_zoom_command);
-    commands->bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_wheel(&m_free_zoom_command);
+    commands.bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right);
 
-    commands->bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_w, false);
-    commands->bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);
-    commands->bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_s, false);
-    commands->bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_d, false);
-    commands->bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_period, false);
-    commands->bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_comma,  false);
-    commands->bind_command_to_key(&m_grid_cycle_command,   erhe::toolkit::Key_g,  false);
-}
+    commands.bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_w, false);
+    commands.bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);
+    commands.bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_s, false);
+    commands.bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_d, false);
+    commands.bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_period, false);
+    commands.bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_comma,  false);
+    commands.bind_command_to_key(&m_grid_cycle_command,   erhe::toolkit::Key_g,  false);
 
-void Map_window::post_initialize()
-{
-    m_text_renderer = get<erhe::application::Text_renderer>();
-    m_tile_renderer = get<Tile_renderer>();
+    hide();
+
+    g_map_window = this;
 }
 
 #pragma endregion Component
@@ -348,14 +347,14 @@ void Map_window::set_zoom(float scale)
 
 auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> bool
 {
-    const auto& terrain_shapes = m_tile_renderer->get_terrain_shapes();
+    const auto& terrain_shapes = g_tile_renderer->get_terrain_shapes();
     if (terrain_tile >= terrain_shapes.size())
     {
         return false;
     }
 
     const auto&     texel           = terrain_shapes.at(terrain_tile);
-    const auto&     tileset_texture = m_tile_renderer->tileset_texture();
+    const auto&     tileset_texture = g_tile_renderer->tileset_texture();
     const glm::vec2 uv0{
         static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
         static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
@@ -365,7 +364,7 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
         static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
     };
 
-    return m_imgui_renderer->image(
+    return erhe::application::g_imgui_renderer->image(
         tileset_texture,
         Tile_shape::full_width * scale,
         Tile_shape::height * scale,
@@ -376,7 +375,7 @@ auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> boo
     );
 }
 
-void Map_window::set_map(const std::shared_ptr<Map>& map)
+void Map_window::set_map(Map* map)
 {
     m_map = map;
 }
@@ -428,15 +427,15 @@ void Map_window::render()
     const float center_pixel_x = std::floor(extent_x / 2.0f);
     const float center_pixel_y = std::floor(extent_y / 2.0f);
 
-    const auto  grid_shape     = m_tile_renderer->get_extra_shape(Extra_tiles::grid_offset + std::max(0, m_grid - 1));
-    const auto& terrain_shapes = m_tile_renderer->get_terrain_shapes();
-    const auto& unit_shapes    = m_tile_renderer->get_unit_shapes();
+    const auto  grid_shape     = g_tile_renderer->get_extra_shape(Extra_tiles::grid_offset + std::max(0, m_grid - 1));
+    const auto& terrain_shapes = g_tile_renderer->get_terrain_shapes();
+    const auto& unit_shapes    = g_tile_renderer->get_unit_shapes();
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
     gl::clear_color     (0.2f, 0.0f, 0.2f, 1.0f);
     gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
 
-    m_tile_renderer->begin();
+    g_tile_renderer->begin();
     coordinate_t half_width_in_tiles  = 2 + static_cast<coordinate_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
     coordinate_t half_height_in_tiles = 2 + static_cast<coordinate_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
     for (coordinate_t vx = -half_width_in_tiles; vx < half_width_in_tiles; ++vx)
@@ -474,7 +473,7 @@ void Map_window::render()
             //}
 
             const Pixel_coordinate& terrain_shape = terrain_shapes[terrain_tile];
-            m_tile_renderer->blit(
+            g_tile_renderer->blit(
                 terrain_shape.x,
                 terrain_shape.y,
                 Tile_shape::full_width,
@@ -490,7 +489,7 @@ void Map_window::render()
             {
                 const Pixel_coordinate& unit_shape = unit_shapes[unit_tile];
                 //int player = unit_id / (Unit_group::width * Unit_group::height);
-                m_tile_renderer->blit(
+                g_tile_renderer->blit(
                     unit_shape.x,
                     unit_shape.y, // + player * Unit_group::height * Tile_shape::height,
                     Tile_shape::full_width,
@@ -505,7 +504,7 @@ void Map_window::render()
 
             if (m_grid > 0)
             {
-                m_tile_renderer->blit(
+                g_tile_renderer->blit(
                     grid_shape.x,
                     grid_shape.y,
                     Tile_shape::full_width,
@@ -546,7 +545,7 @@ void Map_window::render()
 
     //m_map_editor->render();
 
-    m_tile_renderer->end();
+    g_tile_renderer->end();
 
     erhe::scene::Viewport viewport
     {
@@ -554,13 +553,13 @@ void Map_window::render()
         .y             = 0,
         .width         = static_cast<int>(extent_x),
         .height        = static_cast<int>(extent_y),
-        .reverse_depth = get<erhe::application::Configuration>()->graphics.reverse_depth
+        .reverse_depth = erhe::application::g_configuration->graphics.reverse_depth
 
     };
-    m_tile_renderer->render(viewport);
+    g_tile_renderer->render(viewport);
 
-    m_text_renderer->render(viewport);
-    m_text_renderer->next_frame();
+    erhe::application::g_text_renderer->render(viewport);
+    erhe::application::g_text_renderer->next_frame();
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
 }
@@ -572,7 +571,7 @@ void Map_window::blit(
 ) const
 {
     const auto pixel_position = tile_position(tile_location);
-    m_tile_renderer->blit(
+    g_tile_renderer->blit(
         shape.x,
         shape.y,
         Tile_shape::full_width,
@@ -593,8 +592,8 @@ void Map_window::print(
 {
     const auto pixel_position = tile_position(tile_location);
     static const float z = -0.5f;
-    const auto bounds = m_text_renderer->measure(text);
-    m_text_renderer->print(
+    const auto bounds = erhe::application::g_text_renderer->measure(text);
+    erhe::application::g_text_renderer->print(
         glm::vec3{
             pixel_position.x + Tile_shape::center_x * m_zoom - bounds.half_size().x,
             pixel_position.y - Tile_shape::center_y * m_zoom - bounds.half_size().y,

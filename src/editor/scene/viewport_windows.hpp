@@ -19,17 +19,8 @@
 
 namespace erhe::application
 {
-    class Configuration;
     class Imgui_viewport;
-    class Imgui_windows;
-    class Rendergraph;
     class View;
-    class Window;
-}
-
-namespace erhe::graphics
-{
-    class OpenGL_state_tracker;
 }
 
 namespace editor
@@ -37,17 +28,9 @@ namespace editor
 
 class Basic_viewport_window;
 class Editor_message;
-class Editor_message_bus;
-class Editor_rendering;
-class Icon_set;
-class Id_renderer;
 class Imgui_viewport_window;
-class Post_processing;
 class Scene_root;
-class Shadow_renderer;
-class Tools;
 class Viewport_window;
-
 class Viewport_windows;
 
 class Open_new_viewport_window_command
@@ -93,7 +76,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
 
@@ -178,22 +161,6 @@ private:
     // Commands
     Open_new_viewport_window_command m_open_new_viewport_window_command;
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Configuration>     m_configuration;
-    std::shared_ptr<erhe::application::Imgui_windows>     m_imgui_windows;
-    std::shared_ptr<erhe::application::Rendergraph>       m_rendergraph;
-    std::shared_ptr<erhe::application::Window>            m_window;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Editor_message_bus>                   m_editor_message_bus;
-    std::shared_ptr<Editor_rendering>                     m_editor_rendering;
-    std::shared_ptr<Icon_set>                             m_icon_set;
-    std::shared_ptr<Id_renderer>                          m_id_renderer;
-    std::shared_ptr<Post_processing>                      m_post_processing;
-    std::shared_ptr<Scene_root>                           m_scene_root;
-    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
-    std::shared_ptr<Tools>                                m_tools;
-    std::shared_ptr<Viewport_config>                      m_viewport_config;
-
     std::mutex                                          m_mutex;
     std::vector<std::shared_ptr<Basic_viewport_window>> m_basic_viewport_windows;
     std::vector<std::shared_ptr<Imgui_viewport_window>> m_imgui_viewport_windows;
@@ -216,5 +183,7 @@ private:
     bool         m_control{false};
     bool         m_alt    {false};
 };
+
+extern Viewport_windows* g_viewport_windows;
 
 } // namespace editor

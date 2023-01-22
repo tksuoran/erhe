@@ -1,12 +1,11 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/application/imgui/window_imgui_viewport.hpp"
-
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/application_log.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/application_view.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -39,17 +38,14 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
 Window_imgui_viewport::Window_imgui_viewport(
-    const std::string_view        name,
-    erhe::components::Components& components
+    const std::string_view name
 )
     : Imgui_viewport{
         name,
-        components.get<Imgui_windows>().get(),
-        components.get<Imgui_renderer>()->get_font_atlas()
+        g_imgui_renderer->get_font_atlas()
     }
-    , m_imgui_renderer{components.get<Imgui_renderer>()}
 {
-    m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
+    g_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
     ImGuiIO& io     = m_imgui_context->IO;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
@@ -74,25 +70,17 @@ Window_imgui_viewport::Window_imgui_viewport(
     m_time = 0.0;
 }
 
-void Window_imgui_viewport::post_initialize(
-    erhe::components::Components& components
-)
-{
-    m_view   = components.get<View  >();
-    m_window = components.get<Window>();
-}
-
 auto Window_imgui_viewport::begin_imgui_frame() -> bool
 {
     SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_viewport::begin_imgui_frame()");
 
     ERHE_PROFILE_FUNCTION
 
-    const auto& context_window = m_window->get_context_window();
+    const auto& context_window = g_window->get_context_window();
     auto*       glfw_window    = context_window->get_glfw_window();
 
-    const auto w         = m_view->width();
-    const auto h         = m_view->height();
+    const auto w         = g_view->width();
+    const auto h         = g_view->height();
     const bool visible   = glfwGetWindowAttrib(glfw_window, GLFW_VISIBLE  ) == GLFW_TRUE;
     const bool iconified = glfwGetWindowAttrib(glfw_window, GLFW_ICONIFIED) == GLFW_TRUE;
 
@@ -153,14 +141,14 @@ void Window_imgui_viewport::end_imgui_frame()
 
 void Window_imgui_viewport::execute_rendergraph_node()
 {
-    Scoped_imgui_context imgui_context{*m_imgui_windows, *this};
+    Scoped_imgui_context imgui_context{*this};
 
-    const auto& context_window = m_window->get_context_window();
+    const auto& context_window = g_window->get_context_window();
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     gl::viewport        (0, 0, context_window->get_width(), context_window->get_height());
     gl::clear_color     (0.0f, 0.0f, 0.0f, 0.0f);
     gl::clear           (gl::Clear_buffer_mask::color_buffer_bit);
-    m_imgui_renderer->render_draw_data();
+    g_imgui_renderer->render_draw_data();
 }
 
 auto Window_imgui_viewport::get_producer_output_viewport(
@@ -175,8 +163,8 @@ auto Window_imgui_viewport::get_producer_output_viewport(
     return erhe::scene::Viewport{
         .x             = 0,
         .y             = 0,
-        .width         = m_window->get_context_window()->get_width(),
-        .height        = m_window->get_context_window()->get_height(),
+        .width         = g_window->get_context_window()->get_width(),
+        .height        = g_window->get_context_window()->get_height(),
         // .reverse_depth = false // unused
     };
 }

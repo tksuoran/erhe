@@ -44,13 +44,12 @@ void Log_window::declare_required_components()
 
 void Log_window::initialize_component()
 {
-    get<Imgui_windows>()->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this);
     m_min_size[0] = 220.0f;
     m_min_size[1] = 120.0f;
 
-    const auto commands = get<Commands>();
-    commands->register_command   (&m_toggle_pause_command);
-    commands->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
+    g_commands->register_command   (&m_toggle_pause_command);
+    g_commands->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
 }
 
 void Log_window::toggle_pause()
@@ -124,7 +123,7 @@ void Log_window::imgui()
             static_cast<size_t>(m_tail_buffer_show_size),
             tail_entries.size()
         );
-        ImGui::PushFont(get<Imgui_renderer>()->mono_font());
+        ImGui::PushFont(g_imgui_renderer->mono_font());
         if (m_last_on_top)
         {
             for (

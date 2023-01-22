@@ -139,11 +139,9 @@ void update_key_modifiers(ImGuiIO& io, uint32_t modifier_mask)
 
 Imgui_viewport::Imgui_viewport(
     const std::string_view name,
-    Imgui_windows*         imgui_windows,
     ImFontAtlas*           font_atlas
 )
     : Rendergraph_node{fmt::format("Viewport {}", name)}
-    , m_imgui_windows {imgui_windows}
     , m_name          {name}
 {
     log_imgui->info("creating imgui viewport {}", name);
@@ -167,6 +165,7 @@ Imgui_viewport::~Imgui_viewport()
 {
     log_imgui->info("destroying imgui viewport {}", m_name);
     ImGui::DestroyContext(m_imgui_context);
+    m_imgui_context = nullptr;
 }
 
 [[nodiscard]] auto Imgui_viewport::name() const -> const std::string&
@@ -325,14 +324,14 @@ void Imgui_viewport::on_char(
 
 void Imgui_viewport::menu()
 {
-    ERHE_VERIFY(m_imgui_windows != nullptr);
+    ERHE_VERIFY(g_imgui_windows != nullptr);
 
     if (ImGui::BeginMainMenuBar())
     {
-        m_imgui_windows->window_menu(this);
+        g_imgui_windows->window_menu(this);
         ImGui::EndMainMenuBar();
     }
-    auto& imgui_builtin_windows = m_imgui_windows->get_imgui_builtin_windows();
+    auto& imgui_builtin_windows = g_imgui_windows->get_imgui_builtin_windows();
     if (imgui_builtin_windows.demo)
     {
         ImGui::ShowDemoWindow(&imgui_builtin_windows.demo);

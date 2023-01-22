@@ -84,13 +84,12 @@ public:
     [[nodiscard]] auto get_viewport       () const -> const erhe::scene::Viewport&;
     void set_viewport  (erhe::scene::Viewport viewport);
     void set_is_hovered(bool is_hovered);
-    void connect       (Viewport_windows* viewport_windows);
 
 private:
     // Does *not* directly point to erhe::application::window,
     // because layout is done by Viewport_windows.
     std::weak_ptr<Viewport_window> m_viewport_window;
-    Viewport_windows*              m_viewport_windows;
+    //Viewport_windows*              m_viewport_windows;
     erhe::scene::Viewport          m_viewport;
 };
 

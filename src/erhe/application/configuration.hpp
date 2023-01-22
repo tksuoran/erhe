@@ -34,10 +34,14 @@ public:
         )
     };
 
-    Configuration(int argc, char** argv);
+    Configuration();
+    ~Configuration();
+
+    void parse_args(int argc, char** argv);
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void initialize_component() override;
 
     // Public API
     [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
@@ -323,5 +327,7 @@ public:
     };
     Hotbar hotbar;
 };
+
+extern Configuration* g_configuration;
 
 } // namespace erhe::application

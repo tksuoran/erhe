@@ -7,6 +7,8 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
 
+#include "Geometry/Sphere.h"
+
 #include <algorithm>
 #include <array>
 #include <stdexcept>
@@ -568,24 +570,7 @@ void calculate_bounding_volume(
         }
     }
 
-    const float x_diff = bounding_box.max.x - bounding_box.min.x;
-    const float y_diff = bounding_box.max.y - bounding_box.min.y;
-    const float z_diff = bounding_box.max.z - bounding_box.min.z;
-
-    const glm::vec3 mid = (bounding_box.max + bounding_box.min) * (0.5f);
-
-    const float max_dist = std::max(
-        x_diff,
-        std::max(
-            y_diff,
-            z_diff
-        )
-    );
-
-    glm::vec3 c  = mid;
-    float     r  = max_dist / 2.0f;
-    float     r2 = r * r;
-
+    std::vector<math::vec> points;
     for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i)
     {
         for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j)
@@ -593,29 +578,17 @@ void calculate_bounding_volume(
             const auto point = source.get_point(i, j);
             if (point.has_value())
             {
-                const vec3      p         = point.value();
-                const glm::vec3 direction = p - c;
-                const float     dist2     = glm::length2(direction);
-
-                if (dist2 > r2)
-                {
-                    float distance = std::sqrt(dist2);
-                    float diff     = distance - r;
-                    float diameter = 2.0f * r;
-                    diameter += diff;
-                    r = diameter / 2.0f;
-                    r2 = r * r;
-
-                    diff /= 2.0f;
-
-                    c += diff * direction;
-                }
+                const auto p = point.value();
+                points.push_back(math::vec{p.x, p.y, p.z});
             }
         }
     }
-
-    bounding_sphere.center = c;
-    bounding_sphere.radius = r;
+    const math::Sphere sphere = math::Sphere::OptimalEnclosingSphere(
+        points.data(),
+        static_cast<int>(points.size())
+    );
+    bounding_sphere.radius = sphere.r;
+    bounding_sphere.center = glm::vec3{sphere.pos.x, sphere.pos.y, sphere.pos.z};
 }
 
 } // namespace erhe::toolkit

@@ -5,11 +5,6 @@
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/enums.hpp"
 
-namespace erhe::geometry
-{
-    class Geometry;
-}
-
 namespace erhe::graphics
 {
     class Buffer;
@@ -20,25 +15,7 @@ namespace erhe::graphics
 
 namespace erhe::primitive
 {
-    class Raytrace_buffer_sink;
     class Gl_buffer_sink;
-    class Material;
-    class Primitive;
-    class Primitive_geometry;
-}
-
-namespace erhe::raytrace
-{
-    class IBuffer;
-}
-
-namespace erhe::scene
-{
-    class Camera;
-    class Light;
-    class Mesh;
-    class Mesh_layer;
-    class Scene;
 }
 
 namespace editor
@@ -55,9 +32,10 @@ public:
     ~Mesh_memory() noexcept override;
 
     // Implements Component
-    auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Public API
     [[nodiscard]] auto gl_vertex_format() const -> erhe::graphics::Vertex_format&;
@@ -70,5 +48,7 @@ public:
     std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
     erhe::primitive::Build_info                            build_info;
 };
+
+extern Mesh_memory* g_mesh_memory;
 
 } // namespace editor

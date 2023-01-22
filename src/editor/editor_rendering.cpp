@@ -21,7 +21,6 @@
 #   include "xr/headset_view.hpp"
 #endif
 
-#include "erhe/application/application.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -31,7 +30,7 @@
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/time.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/application_view.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -41,6 +40,7 @@
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace editor {
 
@@ -54,6 +54,8 @@ auto Capture_frame_command::try_call(erhe::application::Command_context& context
     return true;
 }
 
+Editor_rendering* g_editor_rendering{nullptr};
+
 Editor_rendering::Editor_rendering()
     : erhe::components::Component{c_type_name}
     , m_capture_frame_command    {*this}
@@ -62,25 +64,72 @@ Editor_rendering::Editor_rendering()
 
 Editor_rendering::~Editor_rendering() noexcept
 {
+    ERHE_VERIFY(g_editor_rendering == nullptr);
+}
+
+void Editor_rendering::deinitialize_component()
+{
+    ERHE_VERIFY(g_editor_rendering == this);
+    m_rp_polygon_fill_standard.reset();
+    m_rp_tool1_hidden_stencil.reset();
+    m_rp_tool2_visible_stencil.reset();
+    m_rp_tool3_depth_clear.reset();
+    m_rp_tool4_depth.reset();
+    m_rp_tool5_visible_color.reset();
+    m_rp_tool6_hidden_color.reset();
+    m_rp_line_hidden_blend.reset();
+    m_rp_brush_back.reset();
+    m_rp_brush_front.reset();
+    m_rp_edge_lines.reset();
+    m_rp_corner_points.reset();
+    m_rp_polygon_centroids.reset();
+    m_rp_rendertarget_meshes.reset();
+
+    m_content_timer.reset();
+    m_selection_timer.reset();
+    m_gui_timer.reset();
+    m_brush_timer.reset();
+    m_tools_timer.reset();
+
+    g_editor_rendering = nullptr;
 }
 
 void Editor_rendering::declare_required_components()
 {
-    require<Programs   >();
-    require<Mesh_memory>();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Commands           >();
-    m_configuration = require<erhe::application::Configuration>();
+    require<erhe::application::Configuration      >();
+    require<Programs   >();
+    require<Mesh_memory>();
+}
+
+void Editor_rendering::initialize_component()
+{
+    ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_editor_rendering == nullptr);
+
+    erhe::application::g_commands->register_command(&m_capture_frame_command);
+    erhe::application::g_commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+    g_editor_rendering = this;
+}
+
+void Editor_rendering::post_initialize()
+{
+    ERHE_PROFILE_FUNCTION
+
+    setup_renderpasses();
+
+    // Init here (in main thread) so no scoped GL context needed
+    m_content_timer = std::make_unique<erhe::graphics::Gpu_timer>("Content");
 }
 
 void Editor_rendering::setup_renderpasses()
 {
     ERHE_PROFILE_FUNCTION
 
-    const bool reverse_depth = m_configuration->graphics.reverse_depth;
+    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
-    auto& programs     = *get<Programs>().get();
-    auto* vertex_input = get<Mesh_memory>()->vertex_input.get();
+    auto* vertex_input = g_mesh_memory->vertex_input.get();
 
     using erhe::graphics::Vertex_input_state;
     using erhe::graphics::Input_assembly_state;
@@ -90,7 +139,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_polygon_fill_standard.pipeline.data = {
         .name           = "Polygon Fill",
-        .shader_stages  = programs.standard.get(),
+        .shader_stages  = g_programs->standard.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -102,14 +151,14 @@ void Editor_rendering::setup_renderpasses()
     // Only reads depth buffer, only writes stencil buffer.
     m_rp_tool1_hidden_stencil.pipeline.data = {
         .name                    = "Tool pass 1: Tag depth hidden with stencil = 1",
-        .shader_stages           = programs.tool.get(),
+        .shader_stages           = g_programs->tool.get(),
         .vertex_input            = vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
         .rasterization           = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = m_configuration->depth_function(gl::Depth_function::greater),
+            .depth_compare_op    = erhe::application::g_configuration->depth_function(gl::Depth_function::greater),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -137,14 +186,14 @@ void Editor_rendering::setup_renderpasses()
     // Only reads depth buffer, only writes stencil buffer.
     m_rp_tool2_visible_stencil.pipeline.data = {
         .name                    = "Tool pass 2: Tag visible tool parts with stencil = 2",
-        .shader_stages           = programs.tool.get(),
+        .shader_stages           = g_programs->tool.get(),
         .vertex_input            = vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
         .rasterization           = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = false,
-            .depth_compare_op    = m_configuration->depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = erhe::application::g_configuration->depth_function(gl::Depth_function::lequal),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -172,7 +221,7 @@ void Editor_rendering::setup_renderpasses()
     // Only writes depth buffer, depth test always.
     m_rp_tool3_depth_clear.pipeline.data = {
         .name           = "Tool pass 3: Set depth to fixed value",
-        .shader_stages  = programs.tool.get(),
+        .shader_stages  = g_programs->tool.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -186,7 +235,7 @@ void Editor_rendering::setup_renderpasses()
     // Normal depth buffer update with depth test.
     m_rp_tool4_depth.pipeline.data = {
         .name           = "Tool pass 4: Set depth to proper tool depth",
-        .shader_stages  = programs.tool.get(),
+        .shader_stages  = g_programs->tool.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -198,14 +247,14 @@ void Editor_rendering::setup_renderpasses()
     // Normal depth test, stencil test require 2, color writes enabled, no blending
     m_rp_tool5_visible_color.pipeline.data = {
         .name                    = "Tool pass 5: Render visible tool parts",
-        .shader_stages           = programs.tool.get(),
+        .shader_stages           = g_programs->tool.get(),
         .vertex_input            = vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
         .rasterization           = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = m_configuration->depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = erhe::application::g_configuration->depth_function(gl::Depth_function::lequal),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -233,14 +282,14 @@ void Editor_rendering::setup_renderpasses()
     // Normal depth test, stencil test requires 1, color writes enabled, blending
     m_rp_tool6_hidden_color.pipeline.data = {
         .name                       = "Tool pass 6: Render hidden tool parts",
-        .shader_stages              = programs.tool.get(),
+        .shader_stages              = g_programs->tool.get(),
         .vertex_input               = vertex_input,
         .input_assembly             = Input_assembly_state::triangles,
         .rasterization              = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil = {
             .depth_test_enable      = true,
             .depth_write_enable     = true,
-            .depth_compare_op       = m_configuration->depth_function(gl::Depth_function::lequal),
+            .depth_compare_op       = erhe::application::g_configuration->depth_function(gl::Depth_function::lequal),
             .stencil_test_enable    = true,
             .stencil_front = {
                 .stencil_fail_op    = gl::Stencil_op::keep,
@@ -279,7 +328,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_edge_lines.pipeline.data = {
         .name           = "Edge Lines",
-        .shader_stages  = programs.wide_lines_draw_color.get(),
+        .shader_stages  = g_programs->wide_lines_draw_color.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::lines,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -287,7 +336,7 @@ void Editor_rendering::setup_renderpasses()
         .depth_stencil = {
             .depth_test_enable   = true,
             .depth_write_enable  = true,
-            .depth_compare_op    = m_configuration->depth_function(gl::Depth_function::lequal),
+            .depth_compare_op    = erhe::application::g_configuration->depth_function(gl::Depth_function::lequal),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -315,7 +364,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_corner_points.pipeline.data = {
         .name           = "Corner Points",
-        .shader_stages  = programs.points.get(),
+        .shader_stages  = g_programs->points.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::points,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -326,7 +375,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_polygon_centroids.pipeline.data = {
         .name           = "Polygon Centroids",
-        .shader_stages  = programs.points.get(),
+        .shader_stages  = g_programs->points.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::points,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -337,14 +386,14 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_line_hidden_blend.pipeline.data = {
         .name                       = "Hidden lines with blending",
-        .shader_stages              = programs.wide_lines_draw_color.get(),
+        .shader_stages              = g_programs->wide_lines_draw_color.get(),
         .vertex_input               = vertex_input,
         .input_assembly             = Input_assembly_state::lines,
         .rasterization              = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = {
             .depth_test_enable      = true,
             .depth_write_enable     = false,
-            .depth_compare_op       = m_configuration->depth_function(gl::Depth_function::greater),
+            .depth_compare_op       = erhe::application::g_configuration->depth_function(gl::Depth_function::greater),
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
@@ -385,7 +434,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_brush_back.pipeline.data = {
         .name           = "Brush back faces",
-        .shader_stages  = programs.brush.get(),
+        .shader_stages  = g_programs->brush.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_front_ccw(reverse_depth),
@@ -395,7 +444,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_brush_front.pipeline.data = {
         .name           = "Brush front faces",
-        .shader_stages  = programs.brush.get(),
+        .shader_stages  = g_programs->brush.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -405,7 +454,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_rendertarget_meshes.pipeline.data = {
         .name           = "Rendertarget Meshes",
-        .shader_stages  = programs.textured.get(),
+        .shader_stages  = g_programs->textured.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_none,
@@ -424,52 +473,15 @@ void Editor_rendering::setup_renderpasses()
     //m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 }
 
-void Editor_rendering::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION
-
-    const auto& commands = get<erhe::application::Commands>();
-
-    commands->register_command(&m_capture_frame_command);
-    commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
-}
-
-void Editor_rendering::post_initialize()
-{
-    ERHE_PROFILE_FUNCTION
-
-    m_imgui_windows          = get<erhe::application::Imgui_windows    >();
-    m_view                   = get<erhe::application::View             >();
-    m_time                   = get<erhe::application::Time             >();
-    m_log_window             = get<erhe::application::Log_window       >();
-    m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_text_renderer          = get<erhe::application::Text_renderer    >();
-
-    m_tools                  = get<Tools           >();
-    m_forward_renderer       = get<Forward_renderer>();
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_headset_view           = get<Headset_view>();
-#endif
-    m_id_renderer            = get<Id_renderer     >();
-    m_post_processing        = get<Post_processing >();
-    m_shadow_renderer        = get<Shadow_renderer >();
-    m_viewport_windows       = get<Viewport_windows>();
-
-    setup_renderpasses();
-
-    // Init here (in main thread) so no scoped GL context needed
-    m_content_timer = std::make_unique<erhe::graphics::Gpu_timer>("Content");
-}
-
 void Editor_rendering::update_once_per_frame(const erhe::components::Time_context&)
 {
-    if (m_forward_renderer ) m_forward_renderer ->next_frame();
-    if (m_id_renderer      ) m_id_renderer      ->next_frame();
-    if (m_line_renderer_set) m_line_renderer_set->next_frame();
-    if (m_post_processing  ) m_post_processing  ->next_frame();
-    if (m_shadow_renderer  ) m_shadow_renderer  ->next_frame();
-    if (m_text_renderer    ) m_text_renderer    ->next_frame();
+    if (erhe::application::g_line_renderer_set != nullptr) erhe::application::g_line_renderer_set->next_frame();
+    if (erhe::application::g_text_renderer     != nullptr) erhe::application::g_text_renderer    ->next_frame();
+
+    if (g_forward_renderer != nullptr) g_forward_renderer ->next_frame();
+    if (g_id_renderer      != nullptr) g_id_renderer      ->next_frame();
+    if (g_post_processing  != nullptr) g_post_processing  ->next_frame();
+    if (g_shadow_renderer  != nullptr) g_shadow_renderer  ->next_frame();
 }
 
 void Editor_rendering::trigger_capture()
@@ -479,12 +491,12 @@ void Editor_rendering::trigger_capture()
 
 auto Editor_rendering::width() const -> int
 {
-    return m_view->width();
+    return erhe::application::g_view->width();
 }
 
 auto Editor_rendering::height() const -> int
 {
-    return m_view->height();
+    return erhe::application::g_view->height();
 }
 
 void Editor_rendering::begin_frame()
@@ -493,31 +505,31 @@ void Editor_rendering::begin_frame()
 
     if (m_trigger_capture)
     {
-        get<erhe::application::Window>()->begin_renderdoc_capture();
+        erhe::application::g_window->begin_renderdoc_capture();
     }
 
-    erhe::application::Window_imgui_viewport* imgui_viewport = m_imgui_windows->get_window_viewport().get();
+    erhe::application::Window_imgui_viewport* imgui_viewport = erhe::application::g_imgui_windows->get_window_viewport().get();
 
-    m_viewport_windows->update_hover(imgui_viewport);
+    g_viewport_windows->update_hover(imgui_viewport);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_headset_view)
+    if (g_headset_view != nullptr)
     {
-        m_headset_view->begin_frame();
+        g_headset_view->begin_frame();
     }
 #endif
 }
 
 void Editor_rendering::end_frame()
 {
-    if (m_post_processing)
+    if (g_post_processing != nullptr)
     {
-        m_post_processing->next_frame();
+        g_post_processing->next_frame();
     }
 
     if (m_trigger_capture)
     {
-        get<erhe::application::Window>()->end_renderdoc_capture();
+        erhe::application::g_window->end_renderdoc_capture();
         m_trigger_capture = false;
     }
 }
@@ -526,7 +538,7 @@ void Editor_rendering::render()
 {
     ERHE_PROFILE_FUNCTION
 
-    Expects(m_view);
+    Expects(erhe::application::g_view != nullptr);
 
     begin_frame();
 }
@@ -542,8 +554,8 @@ void Editor_rendering::render_viewport_main(
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
 
-    m_pipeline_state_tracker->shader_stages.reset();
-    m_pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
+    erhe::graphics::g_opengl_state_tracker->shader_stages.reset();
+    erhe::graphics::g_opengl_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
 
     const auto& clear_color = context.viewport_config->clear_color;
     gl::clear_color(
@@ -553,14 +565,14 @@ void Editor_rendering::render_viewport_main(
         clear_color[3]
     );
     gl::clear_stencil(0);
-    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
+    gl::clear_depth_f(*erhe::application::g_configuration->depth_clear_value_pointer());
     gl::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
         gl::Clear_buffer_mask::depth_buffer_bit |
         gl::Clear_buffer_mask::stencil_buffer_bit
     );
 
-    if (m_forward_renderer)
+    if (g_forward_renderer)
     {
         static constexpr std::string_view c_id_main{"Main"};
         ERHE_PROFILE_GPU_SCOPE(c_id_main);
@@ -571,19 +583,18 @@ void Editor_rendering::render_viewport_main(
         render_selection(context, true);
         render_brush    (context);
 
-        auto& state_tracker = *m_pipeline_state_tracker.get();
-        state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
+        erhe::graphics::g_opengl_state_tracker->depth_stencil.reset(); // workaround issue in stencil state tracking
     }
 
-    if (m_line_renderer_set)
+    if (erhe::application::g_line_renderer_set != nullptr)
     {
-        m_line_renderer_set->begin();
-        m_tools->render_tools(context);
-        m_line_renderer_set->end();
-        m_line_renderer_set->render(context.viewport, *context.camera);
+        erhe::application::g_line_renderer_set->begin();
+        g_tools->render_tools(context);
+        erhe::application::g_line_renderer_set->end();
+        erhe::application::g_line_renderer_set->render(context.viewport, *context.camera);
     }
 
-    if (m_forward_renderer)
+    if (g_forward_renderer)
     {
         render_content            (context, false);
         render_selection          (context, false);
@@ -591,9 +602,9 @@ void Editor_rendering::render_viewport_main(
         render_rendertarget_meshes(context);
     }
 
-    if (m_text_renderer)
+    if (erhe::application::g_text_renderer != nullptr)
     {
-        m_text_renderer->render(context.viewport);
+        erhe::application::g_text_renderer->render(context.viewport);
     }
 
     gl::disable(gl::Enable_cap::scissor_test);
@@ -617,7 +628,7 @@ void Editor_rendering::render_id(const Render_context& context)
     ERHE_PROFILE_FUNCTION
 
     if (
-        (!m_id_renderer)                ||
+        (g_id_renderer      == nullptr) ||
         (context.scene_view == nullptr) ||
         (context.camera     == nullptr)
     )
@@ -639,7 +650,7 @@ void Editor_rendering::render_id(const Render_context& context)
     const auto position = position_opt.value();
 
     const auto& layers          = scene_root->layers();
-    const auto& tool_scene_root = m_tools->get_tool_scene_root();
+    const auto& tool_scene_root = g_tools->get_tool_scene_root();
     if (!tool_scene_root)
     {
         return;
@@ -648,13 +659,13 @@ void Editor_rendering::render_id(const Render_context& context)
     const auto& tool_layers = tool_scene_root->layers();
 
     // TODO listen to viewport changes in msg bus?
-    m_id_renderer->render(
+    g_id_renderer->render(
         {
             .viewport           = context.viewport,
             .camera             = context.camera,
             .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
             .tool_mesh_spans    = { tool_layers.tool()->meshes },
-            .time               = m_time->time(),
+            .time               = erhe::application::g_time->time(),
             .x                  = static_cast<int>(position.x),
             .y                  = static_cast<int>(position.y)
         }
@@ -666,7 +677,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
     ERHE_PROFILE_FUNCTION
 
     if (
-        (!m_forward_renderer) ||
+        (g_forward_renderer      == nullptr) ||
         (context.scene_view      == nullptr) ||
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
@@ -713,7 +724,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         {
             renderpass.pipeline.data.shader_stages = context.override_shader_stages;
         }
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
@@ -731,7 +742,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         return;
     }
 
-    auto& primitive_settings = m_forward_renderer->primitive_settings();
+    auto& primitive_settings = g_forward_renderer->primitive_settings();
 
     if (render_style.edge_lines)
     {
@@ -740,7 +751,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         primitive_settings.constant_color = render_style.line_color;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_size  = render_style.line_width;
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .camera     = context.camera,
                 .materials  = materials,
@@ -759,7 +770,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         primitive_settings.constant_color = render_style.centroid_color;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_size  = render_style.point_size;
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .camera     = context.camera,
                 .materials  = materials,
@@ -777,7 +788,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
         primitive_settings.constant_color = render_style.corner_color;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_size  = render_style.point_size;
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .camera     = context.camera,
                 .materials  = materials,
@@ -797,7 +808,7 @@ void Editor_rendering::render_rendertarget_meshes(
     ERHE_PROFILE_FUNCTION
 
     if (
-        (!m_forward_renderer) ||
+        (g_forward_renderer      == nullptr) ||
         (context.scene_view      == nullptr) ||
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
@@ -818,7 +829,7 @@ void Editor_rendering::render_rendertarget_meshes(
     const auto& material_library = scene_root->content_library()->materials;
     const auto& materials        = material_library.entries();
 
-    m_forward_renderer->render(
+    g_forward_renderer->render(
         Forward_renderer::Render_parameters{
             .camera     = context.camera,
             .materials  = { materials },
@@ -883,7 +894,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
             renderpass.pipeline.data.shader_stages = context.override_shader_stages;
         }
 
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .ambient_light     = layers.light()->ambient_light,
                 .camera            = context.camera,
@@ -901,7 +912,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         return;
     }
 
-    auto& primitive_settings = m_forward_renderer->primitive_settings();
+    auto& primitive_settings = g_forward_renderer->primitive_settings();
 
     if (render_style.edge_lines)
     {
@@ -912,7 +923,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         primitive_settings.constant_color = render_style.line_color;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_size  = render_style.line_width;
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .camera     = context.camera,
                 .materials  = materials,
@@ -934,7 +945,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_color = render_style.centroid_color;
         primitive_settings.constant_size  = render_style.point_size;
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .camera     = context.camera,
                 .materials  = materials,
@@ -953,7 +964,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
         primitive_settings.size_source    = Primitive_size_source::constant_size;
         primitive_settings.constant_color = render_style.corner_color;
         primitive_settings.constant_size  = render_style.point_size;
-        m_forward_renderer->render(
+        g_forward_renderer->render(
             {
                 .camera     = context.camera,
                 .materials  = materials,
@@ -979,7 +990,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         return;
     }
 
-    const auto& scene_root = m_tools->get_tool_scene_root();
+    const auto& scene_root = g_tools->get_tool_scene_root();
     if (!scene_root)
     {
         return;
@@ -994,7 +1005,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
         return;
     }
 
-    m_forward_renderer->render(
+    g_forward_renderer->render(
         {
             .camera     = context.camera,
             .lights     = {},
@@ -1047,7 +1058,7 @@ void Editor_rendering::render_brush(const Render_context& context)
         return;
     }
 
-    m_forward_renderer->render(
+    g_forward_renderer->render(
         {
             .ambient_light = layers.light()->ambient_light,
             .camera        = context.camera,

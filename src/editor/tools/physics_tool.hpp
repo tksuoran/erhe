@@ -16,8 +16,6 @@
 namespace erhe::raytrace
 {
     class IScene;
-    class Ray;
-    class Hit;
 }
 
 namespace erhe::scene
@@ -32,21 +30,12 @@ namespace erhe::physics
     class IWorld;
 }
 
-namespace erhe::application
-{
-    class Line_renderer_set;
-}
-
 namespace editor
 {
 
 class Editor_message;
-class Editor_scenes;
-class Fly_camera_tool;
 class Node_physics;
-class Physics_tool;
 class Scene_root;
-class Viewport_windows;
 
 enum class Physics_tool_mode : int
 {
@@ -59,13 +48,10 @@ class Physics_tool_drag_command
     : public erhe::application::Command
 {
 public:
-    explicit Physics_tool_drag_command(Physics_tool& physics_tool);
+    explicit Physics_tool_drag_command();
     auto try_call   (erhe::application::Command_context& context) -> bool override;
     void try_ready  (erhe::application::Command_context& context) override;
     void on_inactive(erhe::application::Command_context& context) override;
-
-private:
-    Physics_tool& m_physics_tool;
 };
 
 class Physics_tool
@@ -86,7 +72,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
@@ -124,11 +110,6 @@ private:
 
     // Commands
     Physics_tool_drag_command m_drag_command;
-
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Fly_camera_tool>                      m_fly_camera;
-    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
 
     Physics_tool_mode                           m_mode{Physics_tool_mode::Drag};
     erhe::physics::Motion_mode                  m_motion_mode{erhe::physics::Motion_mode::e_kinematic_physical};
@@ -177,5 +158,7 @@ private:
         .hit_size      = 0.5f
     };
 };
+
+extern Physics_tool* g_physics_tool;
 
 } // namespace editor

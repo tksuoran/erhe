@@ -48,8 +48,7 @@ Material_buffer::Material_buffer(const Material_interface& material_interface)
 }
 
 auto Material_buffer::update(
-    const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials,
-    const std::shared_ptr<Programs>&                                   programs
+    const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
 ) -> erhe::application::Buffer_range
 {
     ERHE_PROFILE_FUNCTION
@@ -86,7 +85,7 @@ auto Material_buffer::update(
                     *material->texture.get(),
                     material->sampler
                         ? *material->sampler.get()
-                        : *programs->linear_sampler.get()
+                        : *g_programs->linear_sampler.get()
                 )
             : 0;
 

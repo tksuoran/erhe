@@ -29,13 +29,6 @@ class Mouse_motion_binding;
 class Mouse_wheel_binding;
 class Update_binding;
 
-class Configuration;
-class Imgui_windows;
-class Rendergraph;
-class Time;
-class View;
-class Window;
-
 class Commands
     : public erhe::components::Component
 {
@@ -57,7 +50,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
     void register_command(Command* const command);
@@ -165,9 +158,6 @@ private:
     void update_active_trigger_command(Command* const command);
     void commands                     (State filter);
 
-    // Component dependencies
-    std::shared_ptr<Configuration> m_configuration;
-
     std::mutex m_command_mutex;
     Command*   m_active_mouse_command          {nullptr}; // does not tell if command(s) is/are ready
     Command*   m_active_trigger_command        {nullptr};
@@ -190,5 +180,7 @@ private:
     std::vector<Controller_trackpad_binding>                 m_controller_trackpad_bindings;
     std::vector<Update_binding>                              m_update_bindings;
 };
+
+extern Commands* g_commands;
 
 } // namespace erhe::application

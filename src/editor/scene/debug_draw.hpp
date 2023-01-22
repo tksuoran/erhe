@@ -3,12 +3,6 @@
 #include "erhe/components/components.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
-namespace erhe::application
-{
-    class Line_renderer_set;
-    class Text_renderer;
-}
-
 namespace editor
 {
 
@@ -26,7 +20,8 @@ public:
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
-    void post_initialize            () override;
+    void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Implemnents IDebug_draw
     auto get_colors          () const -> Colors                                                override;
@@ -47,12 +42,10 @@ public:
     float line_width{4.0f};
 
 private:
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
-
     int    m_debug_mode{0};
     Colors m_colors;
 };
+
+extern Debug_draw* g_debug_draw;
 
 } // namespace editor

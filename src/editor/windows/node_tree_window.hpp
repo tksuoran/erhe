@@ -21,11 +21,7 @@ namespace erhe::scene
 namespace editor
 {
 
-class Editor_scenes;
 class IOperation;
-class Icon_set;
-class Scene_commands;
-class Selection_tool;
 
 enum class Placement : unsigned int
 {
@@ -63,7 +59,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Imgui_window
     void imgui   () override;
@@ -116,12 +112,6 @@ private:
     void drag_and_drop_source(const std::shared_ptr<erhe::scene::Item>& node);
     auto drag_and_drop_target(const std::shared_ptr<erhe::scene::Item>& node) -> bool;
 
-    // Component dependencies
-    std::shared_ptr<Editor_scenes>  m_editor_scenes;
-    std::shared_ptr<Icon_set>       m_icon_set;
-    std::shared_ptr<Scene_commands> m_scene_commands;
-    std::shared_ptr<Selection_tool> m_selection_tool;
-
     robin_hood::unordered_map<
         erhe::toolkit::Unique_id<erhe::scene::Item>::id_type,
         std::shared_ptr<erhe::scene::Item>
@@ -144,7 +134,8 @@ private:
     unsigned int                       m_popup_id{0};
 
     erhe::scene::Item_filter           m_filter;
-
 };
+
+extern Node_tree_window* g_node_tree_window;
 
 } // namespace editor

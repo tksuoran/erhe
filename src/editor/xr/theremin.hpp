@@ -11,28 +11,8 @@
 #include <memory>
 #include <optional>
 
-namespace erhe::scene
-{
-    class Mesh;
-}
-
-namespace erhe::primitive
-{
-    class Material;
-}
-
-namespace erhe::application
-{
-    class Line_renderer_set;
-    class Text_renderer;
-}
 namespace editor
 {
-
-class Hand_tracker;
-class Headset_view;
-class Pointer_context;
-class Scene_root;
 
 class Theremin
     : public erhe::components::Component
@@ -57,7 +37,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -84,11 +63,6 @@ public:
 private:
     auto normalized_finger_distance() const -> float;
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Hand_tracker                        > m_hand_tracker;
-    std::shared_ptr<Headset_view                        > m_headset_view;
-
     bool                 m_enable_audio          {false};   // master on/off switch
     float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna
     float                m_antenna_distance_scale{100.0f}; // adjusts right hand antenna distance scaling
@@ -111,5 +85,7 @@ private:
     bool                 m_right_click{false};
 
 };
+
+extern Theremin* g_theremin;
 
 } // namespace editor

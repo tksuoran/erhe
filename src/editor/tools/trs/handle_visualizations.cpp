@@ -184,9 +184,7 @@ namespace {
     constexpr float arrow_tip = arrow_cylinder_length + arrow_cone_length;
 }
 
-auto Handle_visualizations::make_arrow_cylinder(
-    Mesh_memory& mesh_memory
-) -> Part
+auto Handle_visualizations::make_arrow_cylinder() -> Part
 {
     ERHE_PROFILE_FUNCTION
 
@@ -204,14 +202,12 @@ auto Handle_visualizations::make_arrow_cylinder(
 
     return Part{
         .geometry           = geometry_shared,
-        .primitive_geometry = erhe::primitive::make_primitive(*geometry_shared.get(), mesh_memory.build_info),
+        .primitive_geometry = erhe::primitive::make_primitive(*geometry_shared.get(), g_mesh_memory->build_info),
         .raytrace_primitive = std::make_shared<Raytrace_primitive>(geometry_shared)
     };
 }
 
-auto Handle_visualizations::make_arrow_cone(
-    Mesh_memory& mesh_memory
-) -> Part
+auto Handle_visualizations::make_arrow_cone() -> Part
 {
     ERHE_PROFILE_FUNCTION
 
@@ -228,14 +224,12 @@ auto Handle_visualizations::make_arrow_cone(
 
     return Part{
         .geometry           = geometry_shared,
-        .primitive_geometry = make_primitive(*geometry_shared.get(), mesh_memory.build_info),
+        .primitive_geometry = make_primitive(*geometry_shared.get(), g_mesh_memory->build_info),
         .raytrace_primitive = std::make_shared<Raytrace_primitive>(geometry_shared)
     };
 }
 
-auto Handle_visualizations::make_box(
-    Mesh_memory& mesh_memory
-) -> Part
+auto Handle_visualizations::make_box() -> Part
 {
     ERHE_PROFILE_FUNCTION
 
@@ -252,14 +246,12 @@ auto Handle_visualizations::make_box(
 
     return Part{
         .geometry           = geometry_shared,
-        .primitive_geometry = make_primitive(*geometry_shared.get(), mesh_memory.build_info),
+        .primitive_geometry = make_primitive(*geometry_shared.get(), g_mesh_memory->build_info),
         .raytrace_primitive = std::make_shared<Raytrace_primitive>(geometry_shared)
     };
 }
 
-auto Handle_visualizations::make_rotate_ring(
-    Mesh_memory& mesh_memory
-) -> Part
+auto Handle_visualizations::make_rotate_ring() -> Part
 {
     ERHE_PROFILE_FUNCTION
 
@@ -274,7 +266,7 @@ auto Handle_visualizations::make_rotate_ring(
 
     return Part{
         .geometry           = geometry_shared,
-        .primitive_geometry = erhe::primitive::make_primitive(*geometry_shared.get(), mesh_memory.build_info),
+        .primitive_geometry = erhe::primitive::make_primitive(*geometry_shared.get(), g_mesh_memory->build_info),
         .raytrace_primitive = std::make_shared<Raytrace_primitive>(geometry_shared)
     };
 }
@@ -331,10 +323,7 @@ auto Handle_visualizations::get_handle_material(
     }
 }
 
-void Handle_visualizations::initialize(
-    const erhe::application::Configuration& configuration,
-    Mesh_memory&                            mesh_memory
-)
+void Handle_visualizations::initialize()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -342,9 +331,9 @@ void Handle_visualizations::initialize(
     const auto scene_root = m_trs_tool.get_tool_scene_root();
     m_tool_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
 
-    m_scale          = configuration.trs_tool.scale;
-    m_show_translate = configuration.trs_tool.show_translate;
-    m_show_rotate    = configuration.trs_tool.show_rotate;
+    m_scale          = erhe::application::g_configuration->trs_tool.scale;
+    m_show_translate = erhe::application::g_configuration->trs_tool.show_translate;
+    m_show_rotate    = erhe::application::g_configuration->trs_tool.show_rotate;
 
     m_x_material        = make_material("x",        glm::vec3{1.00f, 0.00f, 0.0f}, Mode::Normal);
     m_y_material        = make_material("y",        glm::vec3{0.23f, 1.00f, 0.0f}, Mode::Normal);
@@ -362,10 +351,10 @@ void Handle_visualizations::initialize(
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 
-    const auto arrow_cylinder = make_arrow_cylinder(mesh_memory);
-    const auto arrow_cone     = make_arrow_cone    (mesh_memory);
-    const auto box            = make_box           (mesh_memory);
-    const auto rotate_ring    = make_rotate_ring   (mesh_memory);
+    const auto arrow_cylinder = make_arrow_cylinder();
+    const auto arrow_cone     = make_arrow_cone    ();
+    const auto box            = make_box           ();
+    const auto rotate_ring    = make_rotate_ring   ();
 
     m_x_arrow_cylinder_mesh  = make_mesh("X arrow cylinder", m_x_material, arrow_cylinder);
     m_x_arrow_neg_cone_mesh  = make_mesh("X arrow cone",     m_x_material, arrow_cone    );
@@ -553,9 +542,9 @@ void Handle_visualizations::imgui()
 #endif
 }
 
-void Handle_visualizations::viewport_toolbar(bool& hovered, const Icon_set& icon_set)
+void Handle_visualizations::viewport_toolbar(bool& hovered)
 {
-    const auto& icon_rasterication = icon_set.get_small_rasterization();
+    const auto& icon_rasterication = g_icon_set->get_small_rasterization();
 
     //ImGui::SameLine();
     const auto local_pressed = erhe::application::make_button(
@@ -599,7 +588,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered, const Icon_set& icon
 
         erhe::application::begin_button_style(mode);
         const bool translate_pressed = icon_rasterication.icon_button(
-            icon_set.icons.move,
+            g_icon_set->icons.move,
             -1,
             glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
             glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
@@ -629,7 +618,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered, const Icon_set& icon
             : erhe::application::Item_mode::normal;
         erhe::application::begin_button_style(mode);
         const bool rotate_pressed = icon_rasterication.icon_button(
-            icon_set.icons.rotate,
+            g_icon_set->icons.rotate,
             -1,
             glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
             glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},

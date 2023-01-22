@@ -62,6 +62,8 @@ erhe_target_sources_grouped(
     renderers/program_interface.hpp
     renderers/programs.cpp
     renderers/programs.hpp
+    renderers/renderpass.cpp
+    renderers/renderpass.hpp
     renderers/render_context.cpp
     renderers/render_context.hpp
     renderers/shadow_renderer.cpp
@@ -92,8 +94,8 @@ erhe_target_sources_grouped(
     scene/scene_builder.hpp
     scene/scene_commands.cpp
     scene/scene_commands.hpp
-    scene/scene_message_bus.cpp
-    scene/scene_message_bus.hpp
+    #scene/scene_message_bus.cpp
+    #scene/scene_message_bus.hpp
     scene/scene_root.cpp
     scene/scene_root.hpp
     scene/scene_view.cpp
@@ -171,12 +173,14 @@ erhe_target_sources_grouped(
     windows/viewport_config.cpp
     windows/viewport_config.hpp
 
+    editor_application.cpp
+    editor_application.hpp
+    editor_components.cpp
     editor_log.cpp
     editor_log.hpp
     editor_message.hpp
     editor_message_bus.cpp
     editor_message_bus.hpp
-    editor_on_load.cpp
     editor_rendering.cpp
     editor_rendering.hpp
     editor_scenes.cpp

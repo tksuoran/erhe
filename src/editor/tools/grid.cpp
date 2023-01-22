@@ -1,4 +1,5 @@
 #include "tools/grid.hpp"
+
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
@@ -98,10 +99,7 @@ auto Grid::grid_from_world() const -> glm::dmat4
     return m_grid_from_world;
 }
 
-void Grid::render(
-    const std::shared_ptr<erhe::application::Line_renderer_set>& line_renderer_set,
-    const Render_context&                                        context
-)
+void Grid::render(const Render_context& context)
 {
     if (!m_enable)
     {
@@ -117,11 +115,11 @@ void Grid::render(
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
     auto& major_renderer = m_see_hidden_major
-        ? *line_renderer_set->visible.at(1).get()
-        : *line_renderer_set->hidden .at(1).get();
+        ? *erhe::application::g_line_renderer_set->visible.at(1).get()
+        : *erhe::application::g_line_renderer_set->hidden .at(1).get();
     auto& minor_renderer = m_see_hidden_minor
-        ? *line_renderer_set->visible.at(0).get()
-        : *line_renderer_set->hidden .at(0).get();
+        ? *erhe::application::g_line_renderer_set->visible.at(0).get()
+        : *erhe::application::g_line_renderer_set->hidden .at(0).get();
     major_renderer.set_thickness(m_major_width);
     minor_renderer.set_thickness(m_minor_width);
     major_renderer.set_line_color(m_major_color);
@@ -178,9 +176,7 @@ void Grid::render(
     );
 }
 
-void Grid::imgui(
-    const std::shared_ptr<Selection_tool>& selection_tool
-)
+void Grid::imgui()
 {
     ImGui::InputText  ("Name",             &m_name);
     ImGui::Separator();
@@ -245,7 +241,7 @@ void Grid::imgui(
                 }
             }
         }
-        const auto& host_node = selection_tool->get_first_selected_node();
+        const auto& host_node = g_selection_tool->get_first_selected_node();
         if (host_node)
         {
             const std::string label = fmt::format("Attach to {}", host_node->get_name());

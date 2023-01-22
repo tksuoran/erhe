@@ -1,4 +1,5 @@
 ﻿#include "tools/tools.hpp"
+
 #include "editor_message_bus.hpp"
 #include "editor_scenes.hpp"
 #include "editor_log.hpp"
@@ -12,8 +13,11 @@
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace editor {
+
+Tools* g_tools{nullptr};
 
 Tools::Tools()
     : erhe::components::Component{c_type_name}
@@ -23,6 +27,17 @@ Tools::Tools()
 
 Tools::~Tools() noexcept
 {
+    ERHE_VERIFY(g_tools == nullptr);
+}
+
+void Tools::deinitialize_component()
+{
+    ERHE_VERIFY(g_tools == this);
+    m_priority_tool = nullptr;
+    m_tools.clear();
+    m_background_tools.clear();
+    m_scene_root.reset();
+    g_tools = nullptr;
 }
 
 void Tools::declare_required_components()
@@ -34,32 +49,23 @@ void Tools::declare_required_components()
 
 void Tools::initialize_component()
 {
-    const auto editor_message_bus = get<Editor_message_bus>();
-    const auto editor_scenes = get<Editor_scenes>();
+    ERHE_VERIFY(g_tools == nullptr);
+
     const auto tools_content_library = std::make_shared<Content_library>();
     tools_content_library->is_shown_in_ui = false;
     m_scene_root = std::make_shared<Scene_root>(
-        *m_components,
         tools_content_library,
         "Tool scene"
     );
 
     // TODO Maybe this is not needed/useful?
-    editor_scenes->register_scene_root(m_scene_root);
+    g_editor_scenes->register_scene_root(m_scene_root);
 
     m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-}
-
-void Tools::post_initialize()
-{
-    m_commands      = get<erhe::application::Commands     >();
-    m_configuration = get<erhe::application::Configuration>();
-    m_imgui_windows = get<erhe::application::Imgui_windows>();
-
-    m_editor_message_bus = get<Editor_message_bus>();
+    g_tools = this;
 }
 
 [[nodiscard]] auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
@@ -120,7 +126,7 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_configuration->headset.openxr)
+    if (erhe::application::g_configuration->headset.openxr)
     {
         using namespace erhe::toolkit;
         const bool allow_secondary =
@@ -143,8 +149,8 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 #endif
 
-    m_commands->sort_bindings();
-    m_editor_message_bus->send_message(
+    erhe::application::g_commands->sort_bindings();
+    g_editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_tool_select
         }

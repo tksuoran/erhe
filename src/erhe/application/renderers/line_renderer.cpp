@@ -20,6 +20,7 @@
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -111,6 +112,8 @@ Line_renderer_pipeline::Line_renderer_pipeline()
 {
 }
 
+Line_renderer_set* g_line_renderer_set{nullptr};
+
 Line_renderer_set::Line_renderer_set()
     : Component{c_type_name}
     , erhe::application::Imgui_window{c_title}
@@ -119,6 +122,21 @@ Line_renderer_set::Line_renderer_set()
 
 Line_renderer_set::~Line_renderer_set() noexcept
 {
+    ERHE_VERIFY(g_line_renderer_set == nullptr);
+}
+
+void Line_renderer_set::deinitialize_component()
+{
+    ERHE_VERIFY(g_line_renderer_set == this);
+    for (auto& i : visible)
+    {
+        i.reset();
+    }
+    for (auto& i : hidden)
+    {
+        i.reset();
+    }
+    g_line_renderer_set = nullptr;
 }
 
 void Line_renderer_set::declare_required_components()
@@ -134,30 +152,26 @@ static constexpr std::string_view c_line_renderer_initialize_component{"Line_ren
 void Line_renderer_set::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_line_renderer_set == nullptr);
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this);
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context;
 
     erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_initialize_component};
 
-    m_pipeline.initialize(get<Shader_monitor>().get());
-
-    const Configuration& configuration = *get<Configuration>().get();
+    m_pipeline.initialize();
 
     for (unsigned int stencil_reference = 0; stencil_reference <= s_max_stencil_reference; ++stencil_reference)
     {
-        visible.at(stencil_reference) = std::make_unique<Line_renderer>("visible", 8u + stencil_reference, &m_pipeline, configuration);
-        hidden .at(stencil_reference) = std::make_unique<Line_renderer>("hidden",  8u + stencil_reference, &m_pipeline, configuration);
+        visible.at(stencil_reference) = std::make_unique<Line_renderer>("visible", 8u + stencil_reference, &m_pipeline);
+        hidden .at(stencil_reference) = std::make_unique<Line_renderer>("hidden",  8u + stencil_reference, &m_pipeline);
     }
+
+    g_line_renderer_set = this;
 }
 
-void Line_renderer_set::post_initialize()
-{
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-}
-
-void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
+void Line_renderer_pipeline::initialize()
 {
     view_block = std::make_unique<erhe::graphics::Shader_resource>(
         "view",
@@ -199,9 +213,9 @@ void Line_renderer_pipeline::initialize(Shader_monitor* shader_monitor)
         {
             shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
 
-            if (shader_monitor != nullptr)
+            if (g_shader_monitor != nullptr)
             {
-                shader_monitor->add(create_info, shader_stages.get());
+                g_shader_monitor->add(create_info, shader_stages.get());
             }
         }
         else
@@ -244,10 +258,9 @@ void Line_renderer_set::render(
     const erhe::scene::Camera&  camera
 )
 {
-    auto& state_tracker = *m_pipeline_state_tracker.get();
-    for (auto& entry: hidden ) entry->render(state_tracker, viewport, camera, true, false);
-    for (auto& entry: visible) entry->render(state_tracker, viewport, camera, true, true);
-    state_tracker.depth_stencil.reset(); // workaround issue in stencil state tracking
+    for (auto& entry: hidden ) entry->render(viewport, camera, true, false);
+    for (auto& entry: visible) entry->render(viewport, camera, true, true);
+    erhe::graphics::g_opengl_state_tracker->depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
 [[nodiscard]] auto Line_renderer::Frame_resources::make_pipeline(
@@ -351,15 +364,14 @@ Line_renderer::Frame_resources::Frame_resources(
 Line_renderer::Line_renderer(
     const char* const       name,
     const unsigned int      stencil_reference,
-    Line_renderer_pipeline* pipeline,
-    const Configuration&    configuration
+    Line_renderer_pipeline* pipeline
 )
     : m_name    {name}
     , m_pipeline{pipeline}
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto            reverse_depth = configuration.graphics.reverse_depth;
+    const auto            reverse_depth = g_configuration->graphics.reverse_depth;
     constexpr std::size_t vertex_count  = 512 * 1024;
     constexpr std::size_t view_stride   = 256;
     constexpr std::size_t view_count    = 16;
@@ -1386,11 +1398,10 @@ void Line_renderer::add_torus(
 static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};
 
 void Line_renderer::render(
-    erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
-    const erhe::scene::Viewport           viewport,
-    const erhe::scene::Camera&            camera,
-    const bool                            show_visible_lines,
-    const bool                            show_hidden_lines
+    const erhe::scene::Viewport viewport,
+    const erhe::scene::Camera&  camera,
+    const bool                  show_visible_lines,
+    const bool                  show_hidden_lines
 )
 {
     if (m_line_count == 0)
@@ -1461,7 +1472,7 @@ void Line_renderer::render(
     if (show_hidden_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_hidden;
-        pipeline_state_tracker.execute(pipeline);
+        erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
         gl::draw_arrays(
             pipeline.data.input_assembly.primitive_topology,
@@ -1473,7 +1484,7 @@ void Line_renderer::render(
     if (show_visible_lines)
     {
         const auto& pipeline = current_frame_resources().pipeline_visible;
-        pipeline_state_tracker.execute(pipeline);
+        erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
         gl::draw_arrays(
             pipeline.data.input_assembly.primitive_topology,

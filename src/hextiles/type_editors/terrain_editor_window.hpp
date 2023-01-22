@@ -5,16 +5,15 @@
 
 namespace hextiles
 {
-class Type_editor;
 
 class Terrain_editor_window
     : public erhe::components::Component
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Terrain_editor_window"};
-    static constexpr std::string_view c_title{"Terrain Editor"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr const char* c_type_name{"Terrain_editor_window"};
+    static constexpr const char* c_title{"Terrain Editor"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
 
     Terrain_editor_window ();
     ~Terrain_editor_window() noexcept override;
@@ -27,5 +26,7 @@ public:
     // Implements Imgui_window
     void imgui() override;
 };
+
+extern Terrain_editor_window* g_terrain_editor_window;
 
 } // namespace hextiles

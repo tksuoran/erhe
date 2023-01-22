@@ -11,10 +11,6 @@
 namespace editor
 {
 
-class Editor_scenes;
-class Selection_tool;
-class Viewport_windows;
-
 class Physics_window
     : public erhe::components::Component
     , public Tool
@@ -32,7 +28,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -62,12 +57,9 @@ public:
     [[nodiscard]] auto get_debug_draw_parameters() -> Debug_draw_parameters;
 
 private:
-    // Component dependencies
-    std::shared_ptr<Editor_scenes>    m_editor_scenes;
-    std::shared_ptr<Selection_tool>   m_selection_tool;
-    std::shared_ptr<Viewport_windows> m_viewport_windows;
-
     Debug_draw_parameters m_debug_draw;
 };
+
+extern Physics_window* g_physics_window;
 
 } // namespace editor

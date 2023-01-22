@@ -11,30 +11,8 @@
 #include <memory>
 #include <optional>
 
-namespace erhe::scene
-{
-    class Mesh;
-}
-
-namespace erhe::primitive
-{
-    class Material;
-}
-
-namespace erhe::application
-{
-    class Line_renderer_set;
-    class Text_renderer;
-}
-
 namespace editor
 {
-
-class Editor_message;
-class Hover_tool;
-class Scene_view;
-class Viewport_window;
-class Viewport_windows;
 
 class Hover_tool
     : public erhe::application::Imgui_window
@@ -59,7 +37,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -68,12 +45,9 @@ public:
     void imgui() override;
 
 private:
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
-    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
-
-    bool        m_show_snapped_grid_position{false};
+    bool m_show_snapped_grid_position{false};
 };
+
+extern Hover_tool* g_hover_tool;
 
 } // namespace editor

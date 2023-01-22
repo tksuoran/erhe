@@ -15,9 +15,9 @@ Rendergraph_node::Rendergraph_node(const std::string_view name)
 
 Rendergraph_node::~Rendergraph_node()
 {
-    if (m_rendergraph)
+    if (erhe::application::g_rendergraph != nullptr)
     {
-        m_rendergraph->unregister_node(this);
+        erhe::application::g_rendergraph->unregister_node(this);
     }
 }
 
@@ -295,11 +295,6 @@ auto Rendergraph_node::get_producer_output_viewport(
 [[nodiscard]] auto Rendergraph_node::get_name() const -> const std::string&
 {
     return m_name;
-}
-
-void Rendergraph_node::connect(Rendergraph* rendergraph)
-{
-    m_rendergraph = rendergraph;
 }
 
 void Rendergraph_node::set_enabled(bool value)

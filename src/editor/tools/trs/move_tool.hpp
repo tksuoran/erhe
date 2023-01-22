@@ -9,8 +9,6 @@
 namespace editor
 {
 
-class Trs_tool;
-
 class Move_tool
     : public erhe::components::Component
     , public Tool
@@ -34,13 +32,11 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
-
-private:
-    std::shared_ptr<Trs_tool> m_trs_tool;
 };
+
+extern Move_tool* g_move_tool;
 
 } // namespace editor

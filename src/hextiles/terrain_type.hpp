@@ -2,10 +2,10 @@
 
 #include "types.hpp"
 
-#include <array>
 #include <cstdint>
-#include <string>
-#include <vector>
+
+#include "etl/string.h"
+#include "etl/vector.h"
 
 namespace hextiles
 {
@@ -14,7 +14,7 @@ class Terrain_flags
 {
 public:
     static auto c_char(uint32_t value) -> char;
-    static auto c_str(uint32_t value) -> const char*;
+    static auto c_str (uint32_t value) -> const char*;
     static constexpr int bit_can_place_coastal_city = 0;
     static constexpr int bit_can_place_land_city    = 1;
     static constexpr int bit_can_place_fortress     = 2;
@@ -28,26 +28,26 @@ public:
 
 struct Terrain_type
 {
-    std::string name;
-    int         tile                    {0};
-    uint32_t    move_type_allow_mask    {0};  // MAllow
-    int         move_cost               {0};  // MCost
-    int         threat                  {0};  // Threat
-    terrain_t   damaged_version         {0};  // ADamage
-    int         defence_bonus           {0};  // DBonus
-    int         city_size               {0};  // CSize
-    int         strength                {0};  // Strength
-    uint32_t    move_type_level_mask    {0};  // VChg
-    uint32_t    flags                   {0};  //
-    int         generate_elevation      {0};
-    int         generate_priority       {0};
-    terrain_t   generate_base           {0};
-    int         generate_min_temperature{0};
-    int         generate_max_temperature{0};
-    int         generate_min_humidity   {0};
-    int         generate_max_humidity   {0};
-    float       generate_ratio          {1.0f};
-    int         group = -1;
+    etl::string<max_name_length> name;
+    int       tile                    {0};
+    uint32_t  move_type_allow_mask    {0};  // MAllow
+    int       move_cost               {0};  // MCost
+    int       threat                  {0};  // Threat
+    terrain_t damaged_version         {0};  // ADamage
+    int       defence_bonus           {0};  // DBonus
+    int       city_size               {0};  // CSize
+    int       strength                {0};  // Strength
+    uint32_t  move_type_level_mask    {0};  // VChg
+    uint32_t  flags                   {0};  //
+    int       generate_elevation      {0};
+    int       generate_priority       {0};
+    terrain_t generate_base           {0};
+    int       generate_min_temperature{0};
+    int       generate_max_temperature{0};
+    int       generate_min_humidity   {0};
+    int       generate_max_humidity   {0};
+    float     generate_ratio          {1.0f};
+    int       group = -1;
 };
 
 constexpr terrain_t Terrain_field   = 39u; // For city gen
@@ -77,11 +77,13 @@ struct Terrain_group
 
 struct Terrain_replacement_rule
 {
-    bool                   enabled    {true};
-    bool                   equal      {false};
-    terrain_t              primary    {0u};
-    std::vector<terrain_t> secondary;
-    terrain_t              replacement{0u};
+    static constexpr int max_secondary_count = 8;
+
+    bool      enabled    {true};
+    bool      equal      {false};
+    terrain_t primary    {0u};
+    etl::vector<terrain_t, max_secondary_count> secondary;
+    terrain_t replacement{0u};
 };
 
 //constexpr std::array<Terrain_group, 7> terrain_groups { {

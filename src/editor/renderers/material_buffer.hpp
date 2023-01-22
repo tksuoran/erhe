@@ -49,8 +49,7 @@ public:
     explicit Material_buffer(const Material_interface& material_interface);
 
     auto update(
-        const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials,
-        const std::shared_ptr<Programs>&                                   programs
+        const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
     ) -> erhe::application::Buffer_range;
 
     [[nodiscard]] auto used_handles() const -> const std::set<uint64_t>&;

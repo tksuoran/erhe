@@ -99,6 +99,8 @@ auto Id_renderer::Id_frame_resources::operator=(Id_frame_resources&& other) noex
     return *this;
 }
 
+Id_renderer* g_id_renderer{nullptr};
+
 Id_renderer::Id_renderer()
     : erhe::components::Component{c_type_name}
 {
@@ -108,14 +110,30 @@ Id_renderer::~Id_renderer() noexcept
 {
 }
 
+void Id_renderer::deinitialize_component()
+{
+    ERHE_VERIFY(g_id_renderer == this);
+
+    m_pipeline.reset();
+    m_selective_depth_clear_pipeline.reset();
+    m_color_renderbuffer.reset();
+    m_depth_renderbuffer.reset();
+    m_color_texture.reset();
+    m_depth_texture.reset();
+    m_framebuffer.reset();
+    m_id_frame_resources.clear();
+    m_gpu_timer.reset();
+
+    g_id_renderer = nullptr;
+}
+
 void Id_renderer::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
+    require<Mesh_memory>();
     require<Program_interface>();
-
-    m_mesh_memory = require<Mesh_memory>();
-    m_programs    = require<Programs>();
+    require<Programs>();
 }
 
 static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
@@ -123,29 +141,29 @@ static constexpr std::string_view c_id_renderer_initialize_component{"Id_rendere
 void Id_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_id_renderer == nullptr);
+    g_id_renderer = this; // due to early exit
 
-    const auto& config = Component::get<erhe::application::Configuration>();
-    if (!config->id_renderer.enabled)
+    const auto& config = *erhe::application::g_configuration;
+    if (!config.id_renderer.enabled)
     {
         log_render->info("Id renderer disabled due to erhe.ini setting");
         return;
     }
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
-    const auto& shader_resources = *Component::get<Program_interface>()->shader_resources.get();
+    const auto& shader_resources = *g_program_interface->shader_resources.get();
     m_camera_buffers        = std::make_unique<Camera_buffer       >(shader_resources.camera_interface);
-    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(config->renderer.max_draw_count);
+    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(config.renderer.max_draw_count);
     m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
 
-    const auto reverse_depth = config->graphics.reverse_depth;
+    const auto reverse_depth = config.graphics.reverse_depth;
 
     m_pipeline.data = {
         .name           = "ID Renderer",
-        .shader_stages  = m_programs->id.get(),
-        .vertex_input   = m_mesh_memory->vertex_input.get(),
+        .shader_stages  = g_programs->id.get(),
+        .vertex_input   = g_mesh_memory->vertex_input.get(),
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -154,8 +172,8 @@ void Id_renderer::initialize_component()
 
     m_selective_depth_clear_pipeline.data = {
         .name           = "ID Renderer selective depth clear",
-        .shader_stages  = m_programs->id.get(),
-        .vertex_input   = m_mesh_memory->vertex_input.get(),
+        .shader_stages  = g_programs->id.get(),
+        .vertex_input   = g_mesh_memory->vertex_input.get(),
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
@@ -169,11 +187,6 @@ void Id_renderer::initialize_component()
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Id_renderer");
 }
 
-void Id_renderer::post_initialize()
-{
-    m_pipeline_state_tracker = erhe::components::Component::get<erhe::graphics::OpenGL_state_tracker>();
-}
-
 void Id_renderer::create_id_frame_resources()
 {
     ERHE_PROFILE_FUNCTION
@@ -184,7 +197,6 @@ void Id_renderer::create_id_frame_resources()
     }
 }
 
-
 auto Id_renderer::current_id_frame_resources() -> Id_frame_resources&
 {
     return m_id_frame_resources[m_current_id_frame_resource_slot];
@@ -192,8 +204,8 @@ auto Id_renderer::current_id_frame_resources() -> Id_frame_resources&
 
 void Id_renderer::next_frame()
 {
-    const auto& config = Component::get<erhe::application::Configuration>();
-    if (!config->id_renderer.enabled)
+    const auto& config = *erhe::application::g_configuration;
+    if (!config.id_renderer.enabled)
     {
         return;
     }
@@ -209,8 +221,8 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = Component::get<erhe::application::Configuration>();
-    if (!config->id_renderer.enabled)
+    const auto& config = *erhe::application::g_configuration;
+    if (!config.id_renderer.enabled)
     {
         return;
     }
@@ -327,7 +339,7 @@ void Id_renderer::render(
         ERHE_PROFILE_GPU_SCOPE(c_draw)
         gl::multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
-            m_mesh_memory->gl_index_type(),
+            g_mesh_memory->gl_index_type(),
             reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
             static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
@@ -344,8 +356,8 @@ void Id_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = Component::get<erhe::application::Configuration>();
-    if (!config->id_renderer.enabled)
+    const auto& config = *erhe::application::g_configuration;
+    if (!config.id_renderer.enabled)
     {
         return;
     }
@@ -396,8 +408,8 @@ void Id_renderer::render(const Render_parameters& parameters)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)
 
-        m_pipeline_state_tracker->shader_stages.reset();
-        m_pipeline_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
+        erhe::graphics::g_opengl_state_tracker->shader_stages.reset();
+        erhe::graphics::g_opengl_state_tracker->color_blend.execute(erhe::graphics::Color_blend_state::color_blend_disabled);
         {
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
 
@@ -435,7 +447,7 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     m_primitive_buffers->reset_id_ranges();
 
-    m_pipeline_state_tracker->execute(m_pipeline);
+    erhe::graphics::g_opengl_state_tracker->execute(m_pipeline);
     for (auto meshes : content_mesh_spans)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content)
@@ -445,7 +457,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     // Clear depth for tool pixels
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
-        m_pipeline_state_tracker->execute(m_selective_depth_clear_pipeline);
+        erhe::graphics::g_opengl_state_tracker->execute(m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
         for (auto mesh_spans : tool_mesh_spans)
         {
@@ -457,7 +469,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
 
-        m_pipeline_state_tracker->execute(m_pipeline);
+        erhe::graphics::g_opengl_state_tracker->execute(m_pipeline);
         gl::depth_range(0.0f, 1.0f);
 
         for (auto meshes : tool_mesh_spans)

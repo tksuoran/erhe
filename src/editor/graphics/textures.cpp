@@ -25,7 +25,7 @@ Textures::~Textures() noexcept
 
 void Textures::declare_required_components()
 {
-    m_image_transfer = require<Image_transfer>();
+    require<Image_transfer>();
     require<erhe::application::Gl_context_provider>();
 }
 
@@ -33,9 +33,7 @@ void Textures::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
     background = load(std::filesystem::path("res") / "images" / "background.png");
 }
@@ -75,7 +73,7 @@ auto Textures::load(
         return {};
     }
 
-    auto& slot = m_image_transfer->get_slot();
+    auto& slot = g_image_transfer->get_slot();
 
     erhe::graphics::Texture_create_info texture_create_info{
         .internal_format = to_gl(image_info.format),

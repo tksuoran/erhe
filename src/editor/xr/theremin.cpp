@@ -16,6 +16,7 @@
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -151,6 +152,8 @@ auto frequency_to_midi_note(const float f) -> int
 
 } // anonymous namespace
 
+Theremin* g_theremin{nullptr};
+
 Theremin::Theremin()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_description}
@@ -161,18 +164,21 @@ Theremin::Theremin()
 
 Theremin::~Theremin()
 {
+    ERHE_VERIFY(g_theremin == this);
+    g_theremin = nullptr;
     //// ma_device_uninit(&m_audio_device);
 }
 
 void Theremin::declare_required_components()
 {
-    m_hand_tracker = require<Hand_tracker>();
+    require<Hand_tracker>();
     require<Grid_tool>();
     require<Tools>();
 }
 
 void Theremin::initialize_component()
 {
+    ERHE_VERIFY(g_theremin == nullptr);
     //// m_audio_config = ma_device_config_init(ma_device_type_playback);
     //// m_audio_config.playback.format   = ma_format_f32;
     //// m_audio_config.playback.channels = 1;
@@ -190,20 +196,15 @@ void Theremin::initialize_component()
     ////     ma_device_start(&m_audio_device);
     //// }
 
-    m_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    m_hand_tracker->set_color(Hand_name::Left, Finger_name::index,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    m_hand_tracker->set_color(Hand_name::Left, Finger_name::middle, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    m_hand_tracker->set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    m_hand_tracker->set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    g_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    g_hand_tracker->set_color(Hand_name::Left, Finger_name::index,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    g_hand_tracker->set_color(Hand_name::Left, Finger_name::middle, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    g_hand_tracker->set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    g_hand_tracker->set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
 
     //// get<Tools>()->register_background_tool(this);
-}
 
-void Theremin::post_initialize()
-{
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_hand_tracker      = get<Hand_tracker>();
-    m_headset_view      = get<Headset_view>();
+    g_theremin = this;
 }
 
 void Theremin::set_antenna_distance(const float distance)
@@ -275,26 +276,26 @@ void Theremin::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 
-    if (!m_headset_view || !m_enable_audio)
+    if (!g_headset_view || !m_enable_audio)
     {
         return;
     }
 
-    auto&      line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    auto&      line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
     //const auto camera        = m_headset_view->get_camera();
     //if (!camera)
     //{
     //    return;
     //}
-    const auto& root_node = m_headset_view->get_root_node();
+    const auto& root_node = g_headset_view->get_root_node();
     if (!root_node)
     {
         return;
     }
 
     const auto  transform  = root_node->world_from_node();
-    const auto& left_hand  = m_hand_tracker->get_hand(Hand_name::Left);
-    const auto& right_hand = m_hand_tracker->get_hand(Hand_name::Right);
+    const auto& left_hand  = g_hand_tracker->get_hand(Hand_name::Left);
+    const auto& right_hand = g_hand_tracker->get_hand(Hand_name::Right);
 
     constexpr glm::vec4 green     {0.0f, 1.0f, 0.0f, 1.0f};
     constexpr glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
@@ -325,8 +326,8 @@ void Theremin::tool_render(const Render_context& context)
         finger_distance_color.z,
         1.0f
     };
-    m_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb, volume_color);
-    m_hand_tracker->set_color(Hand_name::Left, Finger_name::index, volume_color);
+    g_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb, volume_color);
+    g_hand_tracker->set_color(Hand_name::Left, Finger_name::index, volume_color);
 
     m_right_finger_distance = right_hand.distance(
         XR_HAND_JOINT_THUMB_TIP_EXT,
@@ -390,7 +391,7 @@ void Theremin::tool_render(const Render_context& context)
                 ++i
             )
             {
-                m_hand_tracker->set_color(
+                g_hand_tracker->set_color(
                     Hand_name::Right,
                     i,
                     (i == finger)

@@ -38,6 +38,7 @@ target_link_libraries(${_target}
     PRIVATE
         erhe::log
         fmt::fmt
+        MathGeoLib
         Microsoft.GSL::GSL
     PUBLIC
         glm::glm

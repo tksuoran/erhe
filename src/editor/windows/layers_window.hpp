@@ -7,24 +7,8 @@
 
 #include <memory>
 
-namespace erhe::graphics
-{
-    class Texture;
-}
-
-namespace erhe::scene
-{
-    class Node;
-    enum class Light_type : unsigned int;
-    class Item;
-}
-
 namespace editor
 {
-
-class Editor_scenes;
-class Icon_set;
-class Selection_tool;
 
 class Layers_window
     : public erhe::components::Component
@@ -42,18 +26,11 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui() override;
-
-private:
-    // Component dependencies
-    std::shared_ptr<Editor_scenes>  m_editor_scenes;
-    std::shared_ptr<Selection_tool> m_selection_tool;
-    std::shared_ptr<Icon_set>       m_icon_set;
-
-    std::shared_ptr<erhe::scene::Item> m_item_clicked;
 };
+
+extern Layers_window* g_layers_window;
 
 } // namespace editor

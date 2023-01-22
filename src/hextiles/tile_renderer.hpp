@@ -9,6 +9,7 @@
 #include "erhe/application/renderers/buffer_writer.hpp"
 
 #include "erhe/components/components.hpp"
+
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -33,7 +34,6 @@
 namespace erhe::graphics
 {
     class Buffer;
-    class OpenGL_state_tracker;
     class Sampler;
     class Shader_resource;
     class Shader_stages;
@@ -42,45 +42,30 @@ namespace erhe::graphics
 
 namespace erhe::scene
 {
-    class Camera;
     class Viewport;
-}
-
-namespace erhe::ui
-{
-    class Font;
 }
 
 namespace hextiles
 {
 
-class Tiles;
-
-//struct Player_unit
-//{
-//    int    player;
-//    unit_t unit;
-//};
-
 class Tile_renderer
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_type_name{"Tile_renderer"};
-    static constexpr uint32_t         c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr const char* c_type_name{"Tile_renderer"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
 
-    Tile_renderer  ();
-    ~Tile_renderer () noexcept override;
-    Tile_renderer  (const Tile_renderer&) = delete;
-    void operator=(const Tile_renderer&)  = delete;
-    Tile_renderer  (Tile_renderer&&)      = delete;
-    void operator=(Tile_renderer&&)       = delete;
+    Tile_renderer ();
+    ~Tile_renderer ();
+    Tile_renderer (const Tile_renderer&) = delete;
+    void operator=(const Tile_renderer&) = delete;
+    Tile_renderer (Tile_renderer&&)      = delete;
+    void operator=(Tile_renderer&&)      = delete;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Public API
     [[nodiscard]] auto tileset_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
@@ -164,10 +149,6 @@ private:
         int                                     y0
     );
 
-    // Component dependencies
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Tiles>                                m_tiles;
-
     erhe::graphics::Shader_resource                  m_default_uniform_block; // containing sampler uniforms for non bindless textures
     erhe::graphics::Fragment_outputs                 m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings        m_attribute_mappings;
@@ -224,7 +205,8 @@ private:
         1, // underwater
         0  // city
     };
-
 };
+
+extern Tile_renderer* g_tile_renderer;
 
 } // namespace hextiles

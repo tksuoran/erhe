@@ -34,4 +34,6 @@ public:
     void show_menu();
 };
 
+extern Menu_window* g_menu_window;
+
 } // namespace hextiles

@@ -43,7 +43,6 @@ public:
     {
     public:
         erhe::primitive::Build_info& build_info;
-        Selection_tool*              selection_tool;
     };
 
 protected:

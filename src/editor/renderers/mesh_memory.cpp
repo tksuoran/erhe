@@ -1,4 +1,5 @@
 #include "renderers/mesh_memory.hpp"
+
 #include "renderers/program_interface.hpp"
 
 #include "erhe/application/configuration.hpp"
@@ -13,6 +14,8 @@
 
 namespace editor {
 
+Mesh_memory* g_mesh_memory{nullptr};
+
 Mesh_memory::Mesh_memory()
     : Component{c_type_name}
 {
@@ -20,6 +23,17 @@ Mesh_memory::Mesh_memory()
 
 Mesh_memory::~Mesh_memory() noexcept
 {
+}
+
+void Mesh_memory::deinitialize_component()
+{
+    ERHE_VERIFY(g_mesh_memory == this);
+    gl_buffer_transfer_queue.reset();
+    gl_buffer_sink.reset();
+    vertex_input.reset();
+    gl_vertex_buffer.reset();
+    gl_index_buffer.reset();
+    g_mesh_memory = nullptr;
 }
 
 void Mesh_memory::declare_required_components()
@@ -32,17 +46,14 @@ void Mesh_memory::declare_required_components()
 void Mesh_memory::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_mesh_memory == nullptr);
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    const auto& config = Component::get<erhe::application::Configuration>()->mesh_memory;
-
-    const std::size_t vertex_byte_count = static_cast<std::size_t>(config.vertex_buffer_size) * 1024 * 1024;
-    const std::size_t index_byte_count  = static_cast<std::size_t>(config.index_buffer_size) * 1024 * 1024;
+    const std::size_t vertex_byte_count = static_cast<std::size_t>(erhe::application::g_configuration->mesh_memory.vertex_buffer_size) * 1024 * 1024;
+    const std::size_t index_byte_count  = static_cast<std::size_t>(erhe::application::g_configuration->mesh_memory.index_buffer_size) * 1024 * 1024;
 
     gl_buffer_transfer_queue = std::make_unique<erhe::graphics::Buffer_transfer_queue>();
 
@@ -96,11 +107,11 @@ void Mesh_memory::initialize_component()
         .id               = true
     };
     format_info.normal_style              = erhe::primitive::Normal_style::corner_normals;
-    format_info.vertex_attribute_mappings = &Component::get<Program_interface>()->shader_resources->attribute_mappings;
+    format_info.vertex_attribute_mappings = &g_program_interface->shader_resources->attribute_mappings;
 
     erhe::primitive::Primitive_builder::prepare_vertex_format(build_info);
 
-    const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
+    const auto& shader_resources = *g_program_interface->shader_resources.get();
     vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
         erhe::graphics::Vertex_input_state_data::make(
             shader_resources.attribute_mappings,
@@ -109,6 +120,8 @@ void Mesh_memory::initialize_component()
             gl_index_buffer.get()
         )
     );
+
+    g_mesh_memory = this;
 }
 
 auto Mesh_memory::gl_vertex_format() const -> erhe::graphics::Vertex_format&

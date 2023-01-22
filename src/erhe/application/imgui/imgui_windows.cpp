@@ -10,9 +10,12 @@
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::application
 {
+
+Imgui_windows* g_imgui_windows{nullptr};
 
 Imgui_windows::Imgui_windows()
     : erhe::components::Component{c_type_name}
@@ -21,40 +24,42 @@ Imgui_windows::Imgui_windows()
 
 Imgui_windows::~Imgui_windows() noexcept
 {
+    ERHE_VERIFY(g_imgui_windows == nullptr);
+}
+
+void Imgui_windows::deinitialize_component()
+{
+    ERHE_VERIFY(g_imgui_windows == this);
+    m_imgui_viewports.clear();
+    m_imgui_windows.clear();
+    m_current_viewport = nullptr;
+    m_window_imgui_viewport.reset();
+    g_imgui_windows = nullptr;
 }
 
 void Imgui_windows::declare_required_components()
 {
-    require<Configuration>();
-    m_imgui_renderer = require<Imgui_renderer>();
-    m_render_graph   = require<Rendergraph>();
+    require <Configuration >();
+    require <Imgui_renderer>();
+    optional<Rendergraph   >();
 }
 
 void Imgui_windows::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_imgui_windows == nullptr);
+    ERHE_VERIFY(g_configuration != nullptr); // assert it has been initialized
 
-    const auto& configuration = get<Configuration>();
-
-    if (configuration->imgui.window_viewport)
+    if (g_configuration->imgui.window_viewport)
     {
         m_window_imgui_viewport = std::make_shared<Window_imgui_viewport>(
-            "window_imgui_viewport",
-            *m_components
+            "window_imgui_viewport"
         );
 
         register_imgui_viewport(m_window_imgui_viewport);
     }
-}
 
-void Imgui_windows::post_initialize()
-{
-    m_commands = get<Commands>();
-
-    if (m_window_imgui_viewport)
-    {
-        m_window_imgui_viewport->post_initialize(*m_components);
-    }
+    g_imgui_windows = this;
 }
 
 [[nodiscard]] auto Imgui_windows::get_mutex() -> std::mutex&
@@ -79,7 +84,10 @@ void Imgui_windows::register_imgui_viewport(
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_imgui_viewports.emplace_back(viewport);
 
-    m_render_graph->register_node(viewport);
+    if (g_rendergraph != nullptr)
+    {
+        g_rendergraph->register_node(viewport);
+    }
 }
 
 void Imgui_windows::make_current(const Imgui_viewport* imgui_viewport)
@@ -99,7 +107,6 @@ void Imgui_windows::register_imgui_window(Imgui_window* window)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
 
-    window->initialize(*m_components);
     window->set_viewport(m_window_imgui_viewport.get());
 
 #ifndef NDEBUG
@@ -131,7 +138,7 @@ void Imgui_windows::imgui_windows()
 
     for (const auto& viewport : m_imgui_viewports)
     {
-        Scoped_imgui_context imgui_context{*this, *viewport.get()};
+        Scoped_imgui_context imgui_context{*viewport.get()};
 
         if (viewport->begin_imgui_frame())
         {
@@ -278,7 +285,7 @@ void Imgui_windows::on_focus(int focused)
         return;
     }
 
-    Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
+    Scoped_imgui_context scoped_imgui_context{*m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_focus(focused);
 }
@@ -290,7 +297,7 @@ void Imgui_windows::on_cursor_enter(int entered)
         return;
     }
 
-    Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
+    Scoped_imgui_context scoped_imgui_context{*m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_cursor_enter(entered);
 }
@@ -305,7 +312,7 @@ void Imgui_windows::on_mouse_move(
         return;
     }
 
-    Scoped_imgui_context scoped_imgui_context{*this, *m_window_imgui_viewport.get()};
+    Scoped_imgui_context scoped_imgui_context{*m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_mouse_move(x, y);
 }
@@ -317,7 +324,7 @@ void Imgui_windows::on_mouse_click(
 {
     for (const auto& viewport : m_imgui_viewports)
     {
-        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_mouse_click(button, count);
     }
 }
@@ -329,7 +336,7 @@ void Imgui_windows::on_mouse_wheel(
 {
     for (const auto& viewport : m_imgui_viewports)
     {
-        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_mouse_wheel(x, y);
     }
 }
@@ -342,7 +349,7 @@ void Imgui_windows::on_key(
 {
     for (const auto& viewport : m_imgui_viewports)
     {
-        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_key(keycode, modifier_mask, pressed);
     }
 }
@@ -353,7 +360,7 @@ void Imgui_windows::on_char(
 {
     for (const auto& viewport : m_imgui_viewports)
     {
-        Scoped_imgui_context scoped_imgui_context{*this, *viewport.get()};
+        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_char(codepoint);
     }
 }

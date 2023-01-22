@@ -5,11 +5,14 @@
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/physics/iworld.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 
 namespace editor
 {
+
+Debug_draw* g_debug_draw{nullptr};
 
 Debug_draw::Debug_draw()
     : erhe::components::Component{c_type_name}
@@ -20,6 +23,13 @@ Debug_draw::Debug_draw()
 
 Debug_draw::~Debug_draw() noexcept
 {
+    ERHE_VERIFY(g_debug_draw == nullptr);
+}
+
+void Debug_draw::deinitialize_component()
+{
+    ERHE_VERIFY(g_debug_draw == this);
+    g_debug_draw = nullptr;
 }
 
 void Debug_draw::declare_required_components()
@@ -47,10 +57,10 @@ void Debug_draw::declare_required_components()
         IDebug_draw::c_Draw_frames;
 }
 
-void Debug_draw::post_initialize()
+void Debug_draw::initialize_component()
 {
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_text_renderer     = get<erhe::application::Text_renderer>();
+    ERHE_VERIFY(g_debug_draw == nullptr);
+    g_debug_draw = this;
 }
 
 auto Debug_draw::get_colors() const -> Colors
@@ -65,7 +75,7 @@ void Debug_draw::set_colors(const Colors& colors)
 
 void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::vec3 color)
 {
-    auto& line_renderer = *m_line_renderer_set->visible.at(2).get();
+    auto& line_renderer = *erhe::application::g_line_renderer_set->visible.at(2).get();
     line_renderer.set_thickness(line_width);
     line_renderer.add_lines(glm::vec4{color, 1.0f}, { {from, to} });
 }
@@ -73,7 +83,7 @@ void Debug_draw::draw_line(const glm::vec3 from, const glm::vec3 to, const glm::
 void Debug_draw::draw_3d_text(const glm::vec3 location, const char* text)
 {
     uint32_t text_color = 0xffffffffu; // abgr
-    m_text_renderer->print(location, text_color, text);
+    erhe::application::g_text_renderer->print(location, text_color, text);
 }
 
 void Debug_draw::set_debug_mode(int debug_mode)

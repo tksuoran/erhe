@@ -27,9 +27,9 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    //void declare_required_components() override;
-    //void initialize_component       () override;
-    //void post_initialize            () override;
+    void initialize_component       () override;
 };
+
+extern Editor_message_bus* g_editor_message_bus;
 
 } // namespace editor

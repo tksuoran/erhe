@@ -12,11 +12,6 @@
 
 #include <memory>
 
-namespace erhe::application
-{
-    class Line_renderer_set;
-}
-
 namespace erhe::scene
 {
     class Node;
@@ -27,20 +22,13 @@ namespace editor
 
 class Brush;
 class Brush_data;
-class Editor_scenes;
-class Content_library_window;
-class Mesh_memory;
-class Operation_stack;
-class Scene_commands;
-class Selection_tool;
 
 class Brush_create
 {
 public:
     virtual void render_preview(
-        const Render_context&                 context,
-        erhe::application::Line_renderer_set& line_renderer_set,
-        const erhe::scene::Transform&         transform
+        const Render_context&         context,
+        const erhe::scene::Transform& transform
     ) = 0;
 
     virtual void imgui() = 0;
@@ -53,9 +41,8 @@ class Create_uv_sphere
 {
 public:
     void render_preview(
-        const Render_context&                 context,
-        erhe::application::Line_renderer_set& line_renderer_set,
-        const erhe::scene::Transform&         transform
+        const Render_context&         context,
+        const erhe::scene::Transform& transform
     ) override;
 
     void imgui() override;
@@ -73,9 +60,8 @@ class Create_cone
 {
 public:
     void render_preview(
-        const Render_context&                 context,
-        erhe::application::Line_renderer_set& line_renderer_set,
-        const erhe::scene::Transform&         transform
+        const Render_context&         context,
+        const erhe::scene::Transform& transform
     ) override;
 
     void imgui() override;
@@ -95,9 +81,8 @@ class Create_torus
 {
 public:
     void render_preview(
-        const Render_context&                 context,
-        erhe::application::Line_renderer_set& line_renderer_set,
-        const erhe::scene::Transform&         transform
+        const Render_context&         context,
+        const erhe::scene::Transform& transform
     ) override;
 
     void imgui() override;
@@ -122,9 +107,8 @@ class Create_box
 {
 public:
     void render_preview(
-        const Render_context&                 context,
-        erhe::application::Line_renderer_set& line_renderer_set,
-        const erhe::scene::Transform&         transform
+        const Render_context&         context,
+        const erhe::scene::Transform& transform
     ) override;
 
     void imgui() override;
@@ -139,8 +123,8 @@ private:
 
 class Create
     : public erhe::components::Component
-    , public Tool
     , public erhe::application::Imgui_window
+    , public Tool
 {
 public:
     static constexpr int              c_priority {4};
@@ -155,7 +139,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Tool
     void tool_render            (const Render_context& context) override;
@@ -168,26 +152,17 @@ public:
 private:
     void brush_create_button(const char* label, Brush_create* brush_create);
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Editor_scenes         > m_editor_scenes;
-    std::shared_ptr<Content_library_window> m_content_library_window;
-    std::shared_ptr<Mesh_memory           > m_mesh_memory;
-    std::shared_ptr<Operation_stack       > m_operation_stack;
-    std::shared_ptr<Scene_commands        > m_scene_commands;
-    std::shared_ptr<Selection_tool        > m_selection_tool;
-
     erhe::primitive::Normal_style m_normal_style{erhe::primitive::Normal_style::point_normals};
     float                         m_density     {1.0f};
-
-    Create_uv_sphere m_create_uv_sphere;
-    Create_cone      m_create_cone;
-    Create_torus     m_create_torus;
-    Create_box       m_create_box;
-    Brush_create*    m_brush_create{nullptr};
-
-    std::string            m_brush_name;
-    std::shared_ptr<Brush> m_brush;
+    Create_uv_sphere              m_create_uv_sphere;
+    Create_cone                   m_create_cone;
+    Create_torus                  m_create_torus;
+    Create_box                    m_create_box;
+    Brush_create*                 m_brush_create{nullptr};
+    std::string                   m_brush_name;
+    std::shared_ptr<Brush>        m_brush;
 };
+
+extern Create* g_create;
 
 } // namespace editor

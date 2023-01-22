@@ -1,8 +1,8 @@
 #include "windows/viewport_config.hpp"
+
 #include "renderers/primitive_buffer.hpp"
 #include "tools/hotbar.hpp"
 
-#include "erhe/application/application.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -15,6 +15,8 @@
 namespace editor
 {
 
+Viewport_config* g_viewport_config{nullptr};
+
 Viewport_config::Viewport_config()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
@@ -25,6 +27,12 @@ Viewport_config::Viewport_config()
     data.render_style_selected.edge_lines = false;
 }
 
+Viewport_config::~Viewport_config()
+{
+    ERHE_VERIFY(g_viewport_config == this);
+    g_viewport_config = nullptr;
+}
+
 void Viewport_config::declare_required_components()
 {
     require<erhe::application::Configuration>();
@@ -33,8 +41,9 @@ void Viewport_config::declare_required_components()
 
 void Viewport_config::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-    const auto& config = get<erhe::application::Configuration>()->viewport;
+    ERHE_VERIFY(g_viewport_config == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    const auto& config = erhe::application::g_configuration->viewport;
     data.render_style_not_selected.polygon_fill      = config.polygon_fill;
     data.render_style_not_selected.edge_lines        = config.edge_lines;
     data.render_style_not_selected.corner_points     = config.corner_points;
@@ -55,6 +64,7 @@ void Viewport_config::initialize_component()
     data.selection_bounding_box    = config.selection_bounding_box;
     data.selection_bounding_sphere = config.selection_bounding_sphere;
     data.clear_color               = config.clear_color;
+    g_viewport_config = this;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -176,29 +186,28 @@ void Viewport_config::imgui()
 
     ImGui::SliderFloat("LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
 
-    const auto& hotbar = get<Hotbar>();
-    if (hotbar)
+    if (g_hotbar != nullptr)
     {
         if (ImGui::TreeNodeEx("Hotbar", flags))
         {
-            auto& color_inactive = hotbar->get_color(0);
-            auto& color_hover    = hotbar->get_color(1);
-            auto& color_active   = hotbar->get_color(2);
+            auto& color_inactive = g_hotbar->get_color(0);
+            auto& color_hover    = g_hotbar->get_color(1);
+            auto& color_active   = g_hotbar->get_color(2);
             ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
 
-            auto position = hotbar->get_position();
+            auto position = g_hotbar->get_position();
             if (ImGui::DragFloat3("Position", &position.x, 0.1f))
             {
-                hotbar->set_position(position);
+                g_hotbar->set_position(position);
             }
             ImGui::TreePop();
 
-            bool locked = hotbar->get_locked();
+            bool locked = g_hotbar->get_locked();
             if (ImGui::Checkbox("Locked", &locked))
             {
-                hotbar->set_locked(locked);
+                g_hotbar->set_locked(locked);
             }
         }
     }

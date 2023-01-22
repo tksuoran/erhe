@@ -5,19 +5,11 @@
 
 #include <gsl/gsl>
 
-namespace erhe::application {
-    class Commands;
-    class Configuration;
-    class Imgui_windows;
-}
-
 namespace editor
 {
 
-class Editor_message_bus;
 class Render_context;
 class Scene_root;
-class Scene_view;
 class Tool;
 
 class Tools
@@ -42,7 +34,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -56,18 +48,13 @@ public:
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;
 
 private:
-    // Component dependencies
-    std::shared_ptr<erhe::application::Commands     > m_commands;
-    std::shared_ptr<erhe::application::Configuration> m_configuration;
-    std::shared_ptr<erhe::application::Imgui_windows> m_imgui_windows;
-    std::shared_ptr<Editor_message_bus>               m_editor_message_bus;
-
     Tool*                       m_priority_tool{nullptr};
-
     std::mutex                  m_mutex;
     std::vector<Tool*>          m_tools;
     std::vector<Tool*>          m_background_tools;
     std::shared_ptr<Scene_root> m_scene_root;
 };
+
+extern Tools* g_tools;
 
 } // namespace editor

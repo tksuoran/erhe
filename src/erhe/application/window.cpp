@@ -8,6 +8,7 @@
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"
 
 #include <fmt/format.h>
@@ -21,27 +22,43 @@
 namespace erhe::application {
 
 using std::shared_ptr;
-using View = erhe::toolkit::View;
+
+Window* g_window{nullptr};
 
 Window::Window()
     : erhe::components::Component{c_type_name}
 {
 }
 
+Window::~Window()
+{
+    ERHE_VERIFY(g_window == nullptr);
+}
+
+void Window::deinitialize_component()
+{
+    ERHE_VERIFY(g_window == this);
+    m_context_window.reset();
+    g_window = nullptr;
+}
+
 void Window::declare_required_components()
 {
-    m_configuration             = require<Configuration>();
+    require<Configuration>();
 
     // Required so that capture support is initialized before window is created
-    m_renderdoc_capture_support = require<Renderdoc_capture_support>();
+    require<Renderdoc_capture_support>();
+}
+
+void Window::initialize_component()
+{
+    ERHE_VERIFY(g_window == nullptr);
+    g_window = this;
 }
 
 auto Window::create_gl_window() -> bool
 {
     ERHE_PROFILE_FUNCTION
-
-    const auto& configuration = *m_components->get<Configuration>(); // by-passing get safety checks
-        //*get<Configuration>();
 
     const char* month_name[] = {
         "January",
@@ -69,16 +86,16 @@ auto Window::create_gl_window() -> bool
 
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(
         erhe::toolkit::Window_configuration{
-            .fullscreen        = configuration.window.fullscreen,
-            .use_finish        = configuration.window.use_finish,
-            .width             = configuration.window.width,
-            .height            = configuration.window.height,
-            .msaa_sample_count = (configuration.imgui.window_viewport || configuration.graphics.post_processing)
+            .fullscreen        = g_configuration->window.fullscreen,
+            .use_finish        = g_configuration->window.use_finish,
+            .width             = g_configuration->window.width,
+            .height            = g_configuration->window.height,
+            .msaa_sample_count = (g_configuration->imgui.window_viewport || g_configuration->graphics.post_processing)
                 ? 0
-                : configuration.graphics.msaa_sample_count,
-            .swap_interval     = configuration.window.swap_interval,
-            .sleep_time        = configuration.window.sleep_time,
-            .wait_time         = configuration.window.wait_time,
+                : g_configuration->graphics.msaa_sample_count,
+            .swap_interval     = g_configuration->window.swap_interval,
+            .sleep_time        = g_configuration->window.sleep_time,
+            .wait_time         = g_configuration->window.wait_time,
             .title             = title.c_str()
         }
     );
@@ -129,8 +146,8 @@ auto Window::create_gl_window() -> bool
     erhe::graphics::Instance::initialize();
 
     if (
-        configuration.graphics.force_no_bindless ||
-        configuration.renderdoc.capture_support
+        g_configuration->graphics.force_no_bindless ||
+        g_configuration->renderdoc.capture_support
     )
     {
         if (erhe::graphics::Instance::info.use_bindless_texture)
@@ -159,20 +176,20 @@ auto Window::get_context_window() const -> erhe::toolkit::Context_window*
 
 void Window::begin_renderdoc_capture()
 {
-    if (!m_renderdoc_capture_support)
+    if (g_renderdoc_capture_support == nullptr)
     {
         return;
     }
-    m_renderdoc_capture_support->start_frame_capture(m_context_window.get());
+    g_renderdoc_capture_support->start_frame_capture(m_context_window.get());
 }
 
 void Window::end_renderdoc_capture()
 {
-    if (!m_renderdoc_capture_support)
+    if (g_renderdoc_capture_support == nullptr)
     {
         return;
     }
-    m_renderdoc_capture_support->end_frame_capture(m_context_window.get());
+    g_renderdoc_capture_support->end_frame_capture(m_context_window.get());
 }
 
 }

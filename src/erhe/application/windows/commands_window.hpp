@@ -8,8 +8,6 @@
 namespace erhe::application
 {
 
-class Commands;
-
 class Commands_window
     : public erhe::components::Component
     , public erhe::application::Imgui_window
@@ -26,14 +24,9 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui() override;
-
-private:
-    // Component dependencies
-    std::shared_ptr<erhe::application::Commands> m_commands;
 };
 
 } // namespace erhe::application

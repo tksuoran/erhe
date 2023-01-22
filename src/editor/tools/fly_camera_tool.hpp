@@ -4,7 +4,7 @@
 #include "scene/frame_controller.hpp"
 
 #include "erhe/application/commands/command.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/application_view.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/toolkit/view.hpp" // keycode
@@ -23,20 +23,12 @@ namespace erhe::scene
 namespace editor
 {
 
-class Editor_scenes;
-class Fly_camera_tool;
-class Scene_root;
-class Tools;
-class Trs_tool;
-class Viewport_window;
-class Viewport_windows;
-
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
 class Fly_camera_space_mouse_listener
     : public erhe::toolkit::Space_mouse_listener
 {
 public:
-    explicit Fly_camera_space_mouse_listener(Fly_camera_tool& fly_camera_tool);
+    explicit Fly_camera_space_mouse_listener();
     ~Fly_camera_space_mouse_listener() noexcept;
 
     auto is_active     () -> bool                                 override;
@@ -46,8 +38,7 @@ public:
     void on_button     (const int id)                             override;
 
 private:
-    bool             m_is_active{false};
-    Fly_camera_tool& m_fly_camera_tool;
+    bool m_is_active{false};
 };
 #endif
 
@@ -55,13 +46,10 @@ class Fly_camera_turn_command
     : public erhe::application::Command
 {
 public:
-    explicit Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool);
+    explicit Fly_camera_turn_command();
 
     auto try_call (erhe::application::Command_context& context) -> bool override;
     void try_ready(erhe::application::Command_context& context) override;
-
-private:
-    Fly_camera_tool& m_fly_camera_tool;
 };
 
 class Fly_camera_move_command
@@ -69,7 +57,6 @@ class Fly_camera_move_command
 {
 public:
     Fly_camera_move_command(
-        Fly_camera_tool&                         fly_camera_tool,
         const Control                            control,
         const erhe::application::Controller_item item,
         const bool                               active
@@ -78,7 +65,6 @@ public:
     auto try_call(erhe::application::Command_context& context) -> bool override;
 
 private:
-    Fly_camera_tool&                   m_fly_camera_tool;
     Control                            m_control;
     erhe::application::Controller_item m_item;
     bool                               m_active;
@@ -104,7 +90,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Window
     void imgui() override;
@@ -151,11 +137,6 @@ private:
     float                             m_rotate_scale_x{1.0f};
     float                             m_rotate_scale_y{1.0f};
 
-    // Component dependencies
-    std::shared_ptr<Editor_scenes>     m_editor_scenes;
-    std::shared_ptr<Scene_root>        m_scene_root;
-    std::shared_ptr<Viewport_windows>  m_viewport_windows;
-
     std::mutex                         m_mutex;
     float                              m_sensitivity        {1.0f};
     bool                               m_use_viewport_camera{true};
@@ -165,5 +146,7 @@ private:
     erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
 #endif
 };
+
+extern Fly_camera_tool* g_fly_camera_tool;
 
 } // namespace editor

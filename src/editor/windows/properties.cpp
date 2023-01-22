@@ -29,6 +29,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -54,6 +55,8 @@ void Properties::Value_edit_state::combine(
     edit_ended    = edit_ended    || other.edit_ended;
 }
 
+Properties* g_properties{nullptr};
+
 Properties::Properties()
     : erhe::components::Component{c_type_name}
     , Imgui_window               {c_title}
@@ -62,6 +65,8 @@ Properties::Properties()
 
 Properties::~Properties() noexcept
 {
+    ERHE_VERIFY(g_properties == this);
+    g_properties = nullptr;
 }
 
 void Properties::declare_required_components()
@@ -71,15 +76,9 @@ void Properties::declare_required_components()
 
 void Properties::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-}
-
-void Properties::post_initialize()
-{
-    m_content_library_window = get<Content_library_window>();
-    m_editor_scenes          = get<Editor_scenes         >();
-    m_operation_stack        = get<Operation_stack       >();
-    m_selection_tool         = get<Selection_tool        >();
+    ERHE_VERIFY(g_properties == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    g_properties = this;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -717,7 +716,7 @@ void Properties::transform_properties(erhe::scene::Node& node)
 
     if (edit_state.edit_ended && node_state.touched)
     {
-        m_operation_stack->push(
+        g_operation_stack->push(
             std::make_shared<Node_transform_operation>(
                 Node_transform_operation::Parameters{
                     .node                    = std::static_pointer_cast<erhe::scene::Node>(node.shared_from_this()),
@@ -844,11 +843,11 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
             {
                 if (value)
                 {
-                    m_selection_tool->add_to_selection(item);
+                    g_selection_tool->add_to_selection(item);
                 }
                 else
                 {
-                    m_selection_tool->remove_from_selection(item);
+                    g_selection_tool->remove_from_selection(item);
                 }
             }
             else
@@ -968,7 +967,7 @@ void Properties::imgui()
     ERHE_PROFILE_FUNCTION
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto selected_material = m_content_library_window->selected_material();
+    const auto selected_material = g_content_library_window->selected_material();
     if (selected_material)
     {
         if (
@@ -995,12 +994,12 @@ void Properties::imgui()
     }
 #endif
 
-    if (!m_selection_tool)
+    if (g_selection_tool == nullptr)
     {
         return;
     }
 
-    const auto& selection = m_selection_tool->selection();
+    const auto& selection = g_selection_tool->selection();
     for (const auto& item : selection)
     {
         ERHE_VERIFY(item);

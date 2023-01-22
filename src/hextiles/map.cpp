@@ -1,4 +1,5 @@
 #include "map.hpp"
+
 #include "tiles.hpp"
 
 #include <gsl/assert>
@@ -30,7 +31,7 @@ void Map::reset(
     m_width  = std::min(std::numeric_limits<uint16_t>::max(), static_cast<uint16_t>(width));
     m_height = std::min(std::numeric_limits<uint16_t>::max(), static_cast<uint16_t>(height));
     m_map.resize(static_cast<size_t>(m_width) * static_cast<size_t>(m_height));
-    m_map.shrink_to_fit();
+    //m_map.shrink_to_fit();
     std::fill(
         std::begin(m_map),
         std::end(m_map),
@@ -45,7 +46,7 @@ void Map::read(File_read_stream& stream)
     Expects(m_width > 0);
     Expects(m_height > 0);
     m_map.resize(static_cast<size_t>(m_width) * static_cast<size_t>(m_height));
-    m_map.shrink_to_fit();
+    //m_map.shrink_to_fit();
     for (auto& cell : m_map)
     {
         stream.op(cell.terrain_tile);
@@ -258,11 +259,11 @@ auto Map::distance(
         : dy + dx / 2;
 }
 
-void Map::update_group_terrain(const Tiles&tiles, Tile_coordinate position)
+void Map::update_group_terrain(Tile_coordinate position)
 {
     const terrain_tile_t terrain_tile = get_terrain_tile(position);
-    const terrain_t      terrain      = tiles.get_terrain_from_tile(terrain_tile);
-    const auto&          terrain_type = tiles.get_terrain_type(terrain);
+    const terrain_t      terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
+    const auto&          terrain_type = g_tiles->get_terrain_type(terrain);
     int                  group        = terrain_type.group;
     if (group < 0)
     {
@@ -277,7 +278,7 @@ void Map::update_group_terrain(const Tiles&tiles, Tile_coordinate position)
     {
         promote = false;
         demote  = false;
-        const Terrain_group& terrain_group = tiles.get_terrain_group(group);
+        const Terrain_group& terrain_group = g_tiles->get_terrain_group(group);
 
         neighbor_mask = 0u;
         for (
@@ -288,8 +289,8 @@ void Map::update_group_terrain(const Tiles&tiles, Tile_coordinate position)
         {
             const Tile_coordinate neighbor_position     = neighbor(position, direction);
             const terrain_tile_t  neighbor_terrain_tile = get_terrain_tile(neighbor_position);
-            const terrain_t       neighbor_terrain      = tiles.get_terrain_from_tile(neighbor_terrain_tile);
-            const int neighbor_group = tiles.get_terrain_type(neighbor_terrain).group;
+            const terrain_t       neighbor_terrain      = g_tiles->get_terrain_from_tile(neighbor_terrain_tile);
+            const int neighbor_group = g_tiles->get_terrain_type(neighbor_terrain).group;
             if (
                 (neighbor_group == group) ||
                 (
@@ -340,7 +341,7 @@ void Map::update_group_terrain(const Tiles&tiles, Tile_coordinate position)
         (++counter < 2U)
     );
 
-    const terrain_tile_t updated_terrain_tile = tiles.get_terrain_group_tile(group, neighbor_mask);
+    const terrain_tile_t updated_terrain_tile = g_tiles->get_terrain_group_tile(group, neighbor_mask);
     set_terrain_tile(position, updated_terrain_tile);
 }
 

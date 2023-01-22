@@ -1,11 +1,15 @@
 #include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
+
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 
 namespace editor
 {
+
+Editor_scenes* g_editor_scenes{nullptr};
 
 Editor_scenes::Editor_scenes()
     : Component{c_type_name}
@@ -14,6 +18,21 @@ Editor_scenes::Editor_scenes()
 
 Editor_scenes::~Editor_scenes() noexcept
 {
+    ERHE_VERIFY(g_editor_scenes == nullptr);
+}
+
+void Editor_scenes::deinitialize_component()
+{
+    ERHE_VERIFY(g_editor_scenes == this);
+    m_scene_roots.clear();
+    m_current_scene_root.reset();
+    g_editor_scenes = nullptr;
+}
+
+void Editor_scenes::initialize_component()
+{
+    ERHE_VERIFY(g_editor_scenes == nullptr);
+    g_editor_scenes = this;
 }
 
 void Editor_scenes::register_scene_root(

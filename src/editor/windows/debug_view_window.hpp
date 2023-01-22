@@ -14,27 +14,11 @@
 
 #include <memory>
 
-
-namespace erhe::application
-{
-    class Rendergraph;
-}
-
-namespace erhe::graphics
-{
-    class Framebuffer;
-    class OpenGL_state_tracker;
-    class Texture;
-}
-
 namespace editor
 {
 
 class Debug_view_window;
 class Depth_to_color_rendergraph_node;
-class Forward_renderer;
-class Programs;
-class Shadow_renderer;
 class Shadow_render_node;
 
 /// <summary>
@@ -44,9 +28,7 @@ class Depth_to_color_rendergraph_node
     : public erhe::application::Texture_rendergraph_node
 {
 public:
-    explicit Depth_to_color_rendergraph_node(
-        erhe::components::Components& components
-    );
+    explicit Depth_to_color_rendergraph_node();
 
     // Implements erhe::application::Rendergraph_node
     void execute_rendergraph_node() override;
@@ -57,26 +39,39 @@ public:
 private:
     void initialize_pipeline();
 
-    std::shared_ptr<erhe::application::Gl_context_provider> m_gl_context_provider;
-    std::shared_ptr<Forward_renderer>                       m_forward_renderer;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker>   m_pipeline_state_tracker;
-    std::shared_ptr<Programs>                               m_programs;
-    std::shared_ptr<Shadow_renderer>                        m_shadow_renderer;
-
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
     Renderpass                                          m_renderpass;
     int                                                 m_light_index{};
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
 };
 
-/// <summary>
+class Debug_view_node
+    : public erhe::application::Rendergraph_node
+{
+public:
+    Debug_view_node();
+
+    // Implements Rendergraph_node
+    [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
+    [[nodiscard]] auto type_hash() const -> uint32_t         override { return c_type_hash; }
+    void execute_rendergraph_node() override;
+
+    [[nodiscard]] auto get_consumer_input_viewport(
+        erhe::application::Resource_routing resource_routing,
+        int                                 key,
+        int                                 depth = 0
+    ) const -> erhe::scene::Viewport override;
+
+    void set_area_size(int size);
+
+private:
+    int m_area_size    {0};
+};
+
 /// Rendergraph sink node for showing texture in ImGui window
-/// </summary>
 class Debug_view_window
     : public erhe::components::Component
-    , public erhe::application::Rendergraph_node
     , public erhe::application::Imgui_window
-    , public std::enable_shared_from_this<Debug_view_window>
 {
 public:
     static constexpr std::string_view c_type_name{"Viewport_window"};
@@ -90,18 +85,8 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
     void post_initialize            () override;
-
-    // Implements Rendergraph_node
-    [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
-    [[nodiscard]] auto type_hash() const -> uint32_t         override { return c_type_hash; }
-    void execute_rendergraph_node() override;
-
-    [[nodiscard]] auto get_consumer_input_viewport(
-        erhe::application::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::scene::Viewport override;
 
     // Overrides Framebuffer_window / Imgui_window
     void imgui () override;
@@ -113,14 +98,12 @@ public:
 private:
     void set_shadow_renderer_node(const std::shared_ptr<Shadow_render_node>& node);
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Rendergraph> m_rendergraph;
-    std::shared_ptr<Shadow_renderer> m_shadow_renderer;
-
     std::shared_ptr<Depth_to_color_rendergraph_node> m_depth_to_color_node;
     std::shared_ptr<Shadow_render_node>              m_shadow_renderer_node;
-    int m_area_size    {0};
+    std::shared_ptr<Debug_view_node>                 m_node;
     int m_selected_node{0};
 };
+
+extern Debug_view_window* g_debug_view_window;
 
 } // namespace editor

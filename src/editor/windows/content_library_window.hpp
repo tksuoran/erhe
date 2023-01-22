@@ -12,9 +12,6 @@
 namespace editor
 {
 
-class Editor_scenes;
-class Selection_tool;
-
 class Content_library_window
     : public erhe::components::Component
     , public erhe::application::Imgui_window
@@ -25,11 +22,13 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Content_library_window();
+    ~Content_library_window() override;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
     void post_initialize            () override;
 
     // Implements Imgui_window
@@ -40,9 +39,6 @@ public:
     [[nodiscard]] auto selected_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
 private:
-    // Component dependencies
-    std::shared_ptr<Editor_scenes> m_editor_scenes;
-
     template <typename T>
     class Item_list
     {
@@ -97,6 +93,11 @@ private:
             ImGui::TreePop();
         }
 
+        void reset()
+        {
+            m_selected_entry.reset();
+        }
+
         void set_selected_entry(const std::shared_ptr<T>& entry)
         {
             m_selected_entry = entry;
@@ -118,5 +119,7 @@ private:
     Item_list<erhe::primitive::Material> m_materials;
     //// Item_list<erhe::graphics::Texture>   m_textures;
 };
+
+extern Content_library_window* g_content_library_window;
 
 } // namespace editor

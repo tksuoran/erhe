@@ -24,7 +24,6 @@ class Controller_visualization
 {
 public:
     Controller_visualization(
-        Mesh_memory&       mesh_memory,
         Scene_root&        scene_root,
         erhe::scene::Node* view_root
     );

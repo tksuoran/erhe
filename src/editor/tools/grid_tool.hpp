@@ -8,15 +8,8 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::application
-{
-    class Line_renderer_set;
-}
-
 namespace editor
 {
-
-class Selection_tool;
 
 // TODO Negative half planes
 enum class Grid_plane_type : unsigned int
@@ -57,11 +50,8 @@ public:
         const glm::dvec3& ray_direction_in_world
     ) -> std::optional<glm::dvec3>;
 
-    void render(
-        const std::shared_ptr<erhe::application::Line_renderer_set>& line_renderer_set,
-        const Render_context&                                        context
-    );
-    void imgui(const std::shared_ptr<Selection_tool>& selection_tool);
+    void render(const Render_context& context);
+    void imgui ();
 
 private:
     std::string     m_name;
@@ -106,7 +96,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Tool
     void tool_render(const Render_context& context)  override;
@@ -123,13 +113,11 @@ public:
     ) const -> Grid_hover_position;
 
 private:
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Selection_tool>                       m_selection_tool;
-
     bool                               m_enable{true};
     std::vector<std::shared_ptr<Grid>> m_grids;
     int                                m_grid_index{0};
 };
+
+extern Grid_tool* g_grid_tool;
 
 } // namespace editor

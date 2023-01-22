@@ -12,7 +12,6 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/primitive/material.hpp"
@@ -95,15 +94,12 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 }
 
 Scene_root::Scene_root(
-    const erhe::components::Components&     components,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name
 )
-    : m_scene             {std::make_shared<Scene>(name, components.get<Scene_message_bus>().get(), this)}
-    , m_content_library   {content_library}
-    , m_editor_message_bus{components.get<Editor_message_bus>()}
-    , m_scene_message_bus {components.get<Scene_message_bus >()}
-    , m_layers            (*m_scene.get())
+    : m_scene          {std::make_shared<Scene>(name, this)}
+    , m_content_library{content_library}
+    , m_layers         (*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION
 
@@ -119,6 +115,7 @@ Scene_root::Scene_root(
 
 Scene_root::~Scene_root() noexcept
 {
+    m_scene->reset_scene_host();
 }
 
 [[nodiscard]] auto Scene_root::get_hosted_scene() -> Scene*
@@ -214,11 +211,6 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
 [[nodiscard]] auto Scene_root::get_shared_scene() -> std::shared_ptr<erhe::scene::Scene>
 {
     return m_scene;
-}
-
-[[nodiscard]] auto Scene_root::get_editor_message_bus() const -> std::shared_ptr<Editor_message_bus>
-{
-    return m_editor_message_bus;
 }
 
 [[nodiscard]] auto Scene_root::layers() -> Scene_layers&

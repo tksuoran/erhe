@@ -10,8 +10,6 @@
 namespace editor
 {
 
-class Buffer;
-
 class Image_transfer
     : public erhe::components::Component
 {
@@ -47,6 +45,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Public API
     [[nodiscard]] auto get_slot() -> Slot&;
@@ -55,5 +54,7 @@ private:
     std::size_t                          m_index{0};
     std::unique_ptr<std::array<Slot, 4>> m_slots;
 };
+
+extern Image_transfer* g_image_transfer;
 
 } // namespace editor

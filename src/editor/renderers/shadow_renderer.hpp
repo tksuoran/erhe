@@ -13,17 +13,10 @@
 
 #include <initializer_list>
 
-namespace erhe::application
-{
-    class Configuration;
-    class Rendergraph;
-}
-
 namespace erhe::graphics
 {
     class Framebuffer;
     class Gpu_timer;
-    class OpenGL_state_tracker;
     class Texture;
     class Vertex_input_state;
 }
@@ -33,19 +26,15 @@ namespace erhe::scene
     class Camera;
     class Light;
     class Mesh;
-    class Mesh_layer;
 }
 
 namespace editor
 {
 
 class Editor_message;
-class Mesh_memory;
 class Scene_root;
 class Scene_view;
 class Shadow_render_node;
-class Shadow_renderer;
-class Viewport_window;
 
 class Shadow_renderer
     : public erhe::components::Component
@@ -61,7 +50,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
     class Render_parameters
@@ -99,21 +88,15 @@ private:
     void on_message                      (Editor_message& message);
     void handle_graphics_settings_changed();
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Configuration>     m_configuration;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<erhe::application::Rendergraph>       m_render_graph;
-    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
-
-    erhe::graphics::Pipeline                              m_pipeline;
-    std::unique_ptr<erhe::graphics::Vertex_input_state>   m_vertex_input;
-    std::unique_ptr<erhe::graphics::Gpu_timer>            m_gpu_timer;
-
-    std::vector<std::shared_ptr<Shadow_render_node>> m_nodes;
-
-    std::unique_ptr<Light_buffer        > m_light_buffers;
-    std::unique_ptr<Draw_indirect_buffer> m_draw_indirect_buffers;
-    std::unique_ptr<Primitive_buffer    > m_primitive_buffers;
+    erhe::graphics::Pipeline                            m_pipeline;
+    std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
+    std::unique_ptr<erhe::graphics::Gpu_timer>          m_gpu_timer;
+    std::vector<std::shared_ptr<Shadow_render_node>>    m_nodes;
+    std::unique_ptr<Light_buffer        >               m_light_buffers;
+    std::unique_ptr<Draw_indirect_buffer>               m_draw_indirect_buffers;
+    std::unique_ptr<Primitive_buffer    >               m_primitive_buffers;
 };
+
+extern Shadow_renderer* g_shadow_renderer;
 
 } // namespace editor

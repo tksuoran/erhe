@@ -24,6 +24,7 @@ public:
     };
 
     Renderdoc_capture_support();
+    ~Renderdoc_capture_support();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
@@ -36,5 +37,7 @@ public:
 private:
     bool m_is_initialized{false};
 };
+
+extern Renderdoc_capture_support* g_renderdoc_capture_support;
 
 } // namespace erhe::application

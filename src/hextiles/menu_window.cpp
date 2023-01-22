@@ -1,4 +1,5 @@
 #include "menu_window.hpp"
+
 #include "hextiles_log.hpp"
 #include "map.hpp"
 #include "new_game_window.hpp"
@@ -16,13 +17,16 @@
 #include "type_editors/unit_editor_window.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/application_view.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace hextiles
 {
+
+Menu_window* g_menu_window{nullptr};
 
 Menu_window::Menu_window()
     : erhe::components::Component{c_type_name}
@@ -32,6 +36,8 @@ Menu_window::Menu_window()
 
 Menu_window::~Menu_window() noexcept
 {
+    ERHE_VERIFY(g_menu_window == this);
+    g_menu_window = nullptr;
 }
 
 void Menu_window::declare_required_components()
@@ -41,22 +47,23 @@ void Menu_window::declare_required_components()
 
 void Menu_window::initialize_component()
 {
-    Imgui_window::initialize(*m_components);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    ERHE_VERIFY(g_menu_window == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    g_menu_window = this;
 }
 
 void Menu_window::show_menu()
 {
-    get<Game_window                           >()->hide();
-    get<Map_generator                         >()->hide();
-    get<Map_tool_window                       >()->hide();
-    get<Map_window                            >()->hide();
-    get<New_game_window                       >()->hide();
-    get<Terrain_editor_window                 >()->hide();
-    get<Terrain_group_editor_window           >()->hide();
-    get<Terrain_palette_window                >()->hide();
-    get<Terrain_replacement_rule_editor_window>()->hide();
-    get<Unit_editor_window                    >()->hide();
+    g_game_window                           ->hide();
+    g_map_generator                         ->hide();
+    g_map_tool_window                       ->hide();
+    g_map_window                            ->hide();
+    g_new_game_window                       ->hide();
+    g_terrain_editor_window                 ->hide();
+    g_terrain_group_editor_window           ->hide();
+    g_terrain_palette_window                ->hide();
+    g_terrain_replacement_rule_editor_window->hide();
+    g_unit_editor_window                    ->hide();
     show();
 }
 
@@ -67,7 +74,7 @@ void Menu_window::imgui()
     if (ImGui::Button("New Game", button_size))
     {
         hide();
-        get<New_game_window>()->show();
+        g_new_game_window->show();
     }
     //if (ImGui::Button("Load Game"))
     //{
@@ -77,29 +84,27 @@ void Menu_window::imgui()
     if (ImGui::Button("Map Editor", button_size))
     {
         hide();
-        get<Map_window>()->set_map(
-            get<Map_editor>()->get_map()
-        );
+        g_map_window->set_map(g_map_editor->get_map());
         //get<Map_editor>()->get_map();
-        get<Map_window            >()->show();
-        get<Terrain_palette_window>()->show();
-        get<Map_tool_window       >()->show();
+        g_map_window            ->show();
+        g_terrain_palette_window->show();
+        g_map_tool_window       ->show();
     }
     if (ImGui::Button("Terrain Editor", button_size))
     {
         hide();
-        get<Terrain_editor_window                 >()->show();
-        get<Terrain_group_editor_window           >()->show();
-        get<Terrain_replacement_rule_editor_window>()->show();
+        g_terrain_editor_window                 ->show();
+        g_terrain_group_editor_window           ->show();
+        g_terrain_replacement_rule_editor_window->show();
     }
     if (ImGui::Button("Unit Editor", button_size))
     {
         hide();
-        get<Unit_editor_window>()->show();
+        g_unit_editor_window->show();
     }
     if (ImGui::Button("Quit", button_size))
     {
-        get<erhe::application::View>()->on_close();
+        erhe::application::g_view->on_close();
     }
 }
 

@@ -46,6 +46,7 @@ target_link_libraries(
         erhe::log
         fmt::fmt
         glm::glm
+        MathGeoLib
         Microsoft.GSL::GSL
 )
 

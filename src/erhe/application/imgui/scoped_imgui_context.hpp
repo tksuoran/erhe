@@ -14,15 +14,10 @@ class Imgui_windows;
 class Scoped_imgui_context
 {
 public:
-    Scoped_imgui_context(
-        Imgui_windows&  imgui_windows,
-        Imgui_viewport& imgui_viewport
-    );
-
+    Scoped_imgui_context(Imgui_viewport& imgui_viewport);
     ~Scoped_imgui_context();
 
 private:
-    Imgui_windows&              m_imgui_windows;
     std::lock_guard<std::mutex> m_lock;
 };
 

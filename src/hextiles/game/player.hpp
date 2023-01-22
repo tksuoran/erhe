@@ -2,46 +2,44 @@
 
 #include "coordinate.hpp"
 #include "types.hpp"
+#include "map.hpp"
 #include "game/game_context.hpp"
 #include "game/unit.hpp"
 
 #include <memory>
 #include <optional>
-#include <string>
-#include <vector>
+#include "etl/string.h"
+#include "etl/vector.h"
 
 namespace hextiles
 {
 
-class Map;
-
 class Player
 {
 public:
-    void city_imgui(Game_context& context);
-    void unit_imgui(Game_context& context);
-    void imgui     (Game_context& context);
+    void city_imgui();
+    void unit_imgui();
+    void imgui     ();
 
-    int                  id;
-    std::shared_ptr<Map> map;
-    std::string          name;
-    std::vector<Unit>    cities;
-    std::vector<Unit>    units;
+    int                               id;
+    Map                               map;
+    etl::string<max_name_length>      name;
+    etl::vector<Unit, max_city_count> cities;
+    etl::vector<Unit, max_unit_count> units;
 
-    void fog_of_war   (Game_context& context);
-    void update_units (Game_context& context);
-    void update_cities(Game_context& context);
+    void fog_of_war   ();
+    void update_units ();
+    void update_cities();
 
-    void update     (Game_context& context);
-    void move_unit  (Game_context& context, direction_t direction);
-    void select_unit(Game_context& context, int direction);
+    void update     ();
+    void move_unit  (direction_t direction);
+    void select_unit(int direction);
 
 private:
-    void animate_current_unit(Game_context& context);
+    void animate_current_unit();
 
-    std::shared_ptr<Tiles>         tiles;
-    size_t                         m_current_unit{0};
-    size_t                         m_city_counter{0};
+    size_t m_current_unit{0};
+    size_t m_city_counter{0};
 
     struct Move
     {

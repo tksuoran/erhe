@@ -46,7 +46,6 @@ public:
     {
     public:
         erhe::primitive::Build_info& build_info;
-        Selection_tool*              selection_tool{nullptr};
     };
 
     explicit Merge_operation(Parameters&& parameters);

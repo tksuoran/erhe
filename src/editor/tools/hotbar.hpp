@@ -8,12 +8,6 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::application
-{
-    class Imgui_renderer;
-    class Rendergraph;
-}
-
 namespace erhe::scene
 {
     class Camera;
@@ -23,14 +17,8 @@ namespace erhe::scene
 namespace editor
 {
 
-class Editor_message;
-class Icon_set;
 class Rendertarget_imgui_viewport;
 class Rendertarget_mesh;
-class Scene_root;
-class Tools;
-class Viewport_windows;
-
 class Hotbar;
 
 class Hotbar_trackpad_command
@@ -66,6 +54,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
     void post_initialize            () override;
 
     // Implements Tool
@@ -96,13 +85,6 @@ private:
     // Commands
     Hotbar_trackpad_command m_trackpad_command;
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<erhe::application::Rendergraph>    m_rendergraph;
-    std::shared_ptr<Icon_set>                          m_icon_set;
-    std::shared_ptr<Tools>                             m_tools;
-    std::shared_ptr<Viewport_windows>                  m_viewport_windows;
-
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
@@ -124,5 +106,7 @@ private:
     glm::vec4 m_color_hover   {0.4f, 0.4f, 0.4f, 0.8f};
     glm::vec4 m_color_inactive{0.1f, 0.1f, 0.4f, 0.8f};
 };
+
+extern Hotbar* g_hotbar;
 
 } // namespace editor

@@ -10,6 +10,8 @@
 namespace hextiles
 {
 
+Terrain_editor_window* g_terrain_editor_window{nullptr};
+
 Terrain_editor_window::Terrain_editor_window()
     : erhe::components::Component{c_type_name}
     , Imgui_window               {c_title}
@@ -18,6 +20,8 @@ Terrain_editor_window::Terrain_editor_window()
 
 Terrain_editor_window::~Terrain_editor_window() noexcept
 {
+    ERHE_VERIFY(g_terrain_editor_window == this);
+    g_terrain_editor_window = nullptr;
 }
 
 void Terrain_editor_window::declare_required_components()
@@ -27,8 +31,10 @@ void Terrain_editor_window::declare_required_components()
 
 void Terrain_editor_window::initialize_component()
 {
-    Imgui_window::initialize(*m_components);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    ERHE_VERIFY(g_terrain_editor_window == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    hide();
+    g_terrain_editor_window = this;
 }
 
 void Terrain_editor_window::imgui()
@@ -37,22 +43,22 @@ void Terrain_editor_window::imgui()
 
     if (ImGui::Button("Back to Menu", button_size))
     {
-        get<Menu_window>()->show_menu();
+        g_menu_window->show_menu();
     }
     ImGui::SameLine();
 
     if (ImGui::Button("Load", button_size))
     {
-        get<Tiles>()->load_terrain_defs();
+        g_tiles->load_terrain_defs();
     }
     ImGui::SameLine();
 
     if (ImGui::Button("Save", button_size))
     {
-        get<Tiles>()->save_terrain_defs();
+        g_tiles->save_terrain_defs();
     }
 
-    get<Type_editor>()->terrain_editor_imgui();
+    g_type_editor->terrain_editor_imgui();
 }
 
 } // namespace hextiles

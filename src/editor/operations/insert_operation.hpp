@@ -95,7 +95,6 @@ public:
     class Parameters
     {
     public:
-        Selection_tool*                    selection_tool{nullptr};
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Node> parent;
         Mode                               mode;

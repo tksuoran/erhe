@@ -1,4 +1,5 @@
 #include "tools/hud.hpp"
+
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "scene/node_raytrace.hpp"
@@ -20,6 +21,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace editor
 {
@@ -35,6 +37,8 @@ auto Toggle_hud_visibility_command::try_call(
     return true;
 }
 
+Hud* g_hud{nullptr};
+
 Hud::Hud()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
@@ -44,6 +48,16 @@ Hud::Hud()
 
 Hud::~Hud() noexcept
 {
+    ERHE_VERIFY(g_hud == nullptr);
+}
+
+void Hud::deinitialize_component()
+{
+    ERHE_VERIFY(g_hud == this);
+    m_rendertarget_node.reset();
+    m_rendertarget_mesh.reset();
+    m_rendertarget_imgui_viewport.reset();
+    g_hud = nullptr;
 }
 
 void Hud::declare_required_components()
@@ -62,9 +76,11 @@ void Hud::declare_required_components()
 void Hud::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_hud == nullptr);
+    g_hud = this; // due to early out
 
-    const auto& configuration = get<erhe::application::Configuration>();
-    const auto& config        = configuration->hud;
+    const auto& configuration = *erhe::application::g_configuration;
+    const auto& config        = configuration.hud;
 
     m_enabled    = config.enabled;
     m_is_visible = config.show;
@@ -77,30 +93,24 @@ void Hud::initialize_component()
         return;
     }
 
-    const auto& imgui_windows = get<erhe::application::Imgui_windows>();
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-    imgui_windows->register_imgui_window(this);
-
-    const erhe::application::Scoped_gl_context gl_context{
-        get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
     set_description(c_title);
     set_flags      (Tool_flags::background);
-    get<Tools>()->register_tool(this);
+    g_tools->register_tool(this);
 
-    const auto& commands = get<erhe::application::Commands>();
-    commands->register_command   (&m_toggle_visibility_command);
-    commands->bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true);
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command   (&m_toggle_visibility_command);
+    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true);
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
-        *m_components,
         config.width,
         config.height,
         config.ppm
     );
-    const auto& scene_builder = get<Scene_builder>();
-    const auto& scene_root    = scene_builder->get_scene_root();
+    const auto& scene_root = g_scene_builder->get_scene_root();
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
         erhe::scene::Item_flags::content |
@@ -126,16 +136,15 @@ void Hud::initialize_component()
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         m_rendertarget_mesh.get(),
-        "Hud Viewport",
-        *m_components
+        "Hud Viewport"
     );
 
     m_rendertarget_imgui_viewport->set_menu_visible(true);
-    imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
+    erhe::application::g_imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
 
     set_visibility(m_is_visible);
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
@@ -143,14 +152,9 @@ void Hud::initialize_component()
     );
 }
 
-[[nodiscard]] auto Hud::get_rendertarget_imgui_viewport() -> std::shared_ptr<Rendertarget_imgui_viewport>
+[[nodiscard]] auto Hud::get_rendertarget_imgui_viewport() const -> std::shared_ptr<Rendertarget_imgui_viewport>
 {
     return m_rendertarget_imgui_viewport;
-}
-
-void Hud::post_initialize()
-{
-    m_viewport_windows = get<Viewport_windows>();
 }
 
 void Hud::on_message(Editor_message& message)

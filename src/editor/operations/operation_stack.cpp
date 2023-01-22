@@ -50,6 +50,8 @@ auto Redo_command::try_call(
     }
 }
 
+Operation_stack* g_operation_stack{nullptr};
+
 Operation_stack::Operation_stack()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
@@ -62,6 +64,12 @@ Operation_stack::~Operation_stack() noexcept
 {
 }
 
+void Operation_stack::deinitialize_component()
+{
+    ERHE_VERIFY(g_operation_stack == this);
+    g_operation_stack = nullptr;
+}
+
 void Operation_stack::declare_required_components()
 {
     require<erhe::application::Commands     >();
@@ -71,14 +79,16 @@ void Operation_stack::declare_required_components()
 void Operation_stack::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_operation_stack == nullptr);
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_undo_command);
-    commands->register_command(&m_redo_command);
-    commands->bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
-    commands->bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
+    erhe::application::g_commands->register_command(&m_undo_command);
+    erhe::application::g_commands->register_command(&m_redo_command);
+    erhe::application::g_commands->bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
+    erhe::application::g_commands->bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
+
+    g_operation_stack = this;
 }
 
 void Operation_stack::push(const std::shared_ptr<IOperation>& operation)

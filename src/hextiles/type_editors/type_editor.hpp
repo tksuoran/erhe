@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fmt/format.h>
+
 #include "types.hpp"
 
 #include "erhe/components/components.hpp"
@@ -7,7 +9,9 @@
 
 #include <imgui.h>
 
-#include <fmt/format.h>
+#include "etl/string.h"
+#include "etl/vector.h"
+
 #include <cstdint>
 
 namespace erhe::application
@@ -17,11 +21,6 @@ namespace erhe::application
 
 namespace hextiles
 {
-
-class Tile_renderer;
-class Map_window;
-class Rendering;
-class Tiles;
 
 class Type_editor
     : public erhe::components::Component
@@ -35,7 +34,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void post_initialize() override;
+    void initialize_component() override;
 
     // Public API
     void terrain_editor_imgui();
@@ -67,13 +66,6 @@ private:
     );
     void table_headers_row();
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<Tile_renderer>                      m_tile_renderer;
-    std::shared_ptr<Map_window  >                      m_map_window;
-    std::shared_ptr<Rendering   >                      m_rendering;
-    std::shared_ptr<Tiles       >                      m_tiles;
-
     // Simulate
     unit_t      m_simulate_terrain_type{1};
     unit_t      m_simulate_unit_type   {1};
@@ -83,15 +75,19 @@ private:
     unit_t      m_simulate_unit_type_b {1};
 
     // Table
-    int         m_current_column;
-    int         m_current_row;
-    std::string m_current_element_name;
-    terrain_t   m_current_terrain_id;
-    unit_t      m_current_unit_id;
+    int                          m_current_column;
+    int                          m_current_row;
+    etl::string<max_name_length> m_current_element_name;
+    terrain_t                    m_current_terrain_id;
+    unit_t                       m_current_unit_id;
 
-    std::vector<ImVec4> m_header_colors;
-    std::vector<ImVec4> m_value_colors;
+    constexpr static int max_column_count = 40;
+
+    etl::vector<ImVec4, max_column_count> m_header_colors;
+    etl::vector<ImVec4, max_column_count> m_value_colors;
 };
+
+extern Type_editor* g_type_editor;
 
 } // namespace hextiles
 
@@ -104,8 +100,12 @@ void Type_editor::make_combo_def(const char* tooltip_text, uint32_t& value)
 {
     if (ImGui::TableNextColumn())
     {
+        //char label_buffer[200];
+        //char tooltip_buffer[200];
+        //snprintf(&label_buffer, sizeof(label_buffer), "##%d-%d", m_current_column, m_current_row);
+        //snprintf(&tooltip_buffer, sizeof(tooltip_buffer), "%s for %s: %d", tooltip_text, m_current_element_name.c_str(), value);
         const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
-        const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
+        const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name.c_str(), value);
         ImGui::SetNextItemWidth(-FLT_MIN);
         const char* combo_preview_value = T::c_str(value);//(value == 0)
             //? "None"
@@ -147,11 +147,13 @@ void Type_editor::make_combo_def(const char* tooltip_text, uint32_t& value)
 
             for (uint32_t bit_position = 0; bit_position < T::bit_count; ++bit_position)
             {
-                const auto     id = fmt::format("##{}-{}-{}", m_current_column, m_current_row, bit_position);
+                //char id_buffer[40];
+                //snprintf(&id_buffer, sizeof(id_buffer), "##%d-%d-%u", m_current_column, m_current_row, bit_position);
+                const auto id = fmt::format("##{}-{}-{}", m_current_column, m_current_row, bit_position);
                 ImGui::PushID(id.c_str());
 
                 //const uint32_t bit_value   = (1u << bit_position);
-                bool           is_selected = (value == bit_position);
+                bool is_selected = (value == bit_position);
                 if (ImGui::Selectable(T::c_str(bit_position), is_selected))
                 {
                     value = bit_position;
@@ -180,8 +182,12 @@ void Type_editor::make_bit_combo_def(const char* tooltip_text, uint32_t& value)
 {
     if (ImGui::TableNextColumn())
     {
+        //char label_buffer[200];
+        //char tooltip_buffer[200];
+        //snprintf(&label_buffer, sizeof(label_buffer), "##%d-%d", m_current_column, m_current_row);
+        //snprintf(&tooltip_buffer, sizeof(tooltip_buffer), "%s for %s: %d", tooltip_text, m_current_element_name.c_str(), value);
         const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
-        const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name, value);
+        const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name.c_str(), value);
         ImGui::SetNextItemWidth(-FLT_MIN);
         uint32_t preview_bit_position = 0;
         for (uint32_t bit_position = 0; bit_position < T::bit_count; bit_position++)
@@ -214,6 +220,9 @@ void Type_editor::make_bit_combo_def(const char* tooltip_text, uint32_t& value)
         if (combo_pressed)
         {
             {
+                //char id_buffer[40];
+                //snprintf(&id_buffer, sizeof(id_buffer), "##%d-%d-none", m_current_column, m_current_row);
+                //ImGui::PushID(id_buffer);
                 const auto id = fmt::format("##{}-{}-none", m_current_column, m_current_row);
                 ImGui::PushID(id.c_str());
 
@@ -303,7 +312,7 @@ void Type_editor::make_bit_mask_def(const char* tooltip_text, uint32_t& value)
         ImGui::PopFont();
         if (ImGui::BeginPopup(popup_label.c_str()))
         {
-            const auto title = fmt::format("{} for {}", tooltip_text, m_current_element_name);
+            const auto title = fmt::format("{} for {}", tooltip_text, m_current_element_name.c_str());
             ImGui::LabelText(title.c_str(), "%s", "");
             ImGui::Separator();
             for (uint32_t bit_position = 0; bit_position < T::bit_count; ++bit_position)

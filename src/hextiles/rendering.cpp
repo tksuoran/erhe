@@ -5,31 +5,38 @@
 
 #include "erhe/graphics/texture.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 
 namespace hextiles {
+
+Rendering* g_rendering{nullptr};
 
 Rendering::Rendering()
     : erhe::components::Component{c_type_name}
 {
 }
 
-Rendering::~Rendering() noexcept
+Rendering::~Rendering()
 {
+    ERHE_VERIFY(g_rendering == this);
+    g_rendering = nullptr;
 }
 
-void Rendering::post_initialize()
+void Rendering::initialize_component()
 {
-    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
-    m_tile_renderer  = get<Tile_renderer>();
-    m_tiles          = get<Tiles>();
+    ERHE_VERIFY(g_rendering == nullptr);
+    g_rendering = this;
 }
 
-auto Rendering::terrain_image(terrain_tile_t terrain_tile, const int scale) -> bool
+auto Rendering::terrain_image(
+    const terrain_tile_t terrain_tile,
+    const int            scale
+) -> bool
 {
-    const Pixel_coordinate& texel           = m_tile_renderer->get_terrain_shape(terrain_tile);
-    const auto&             tileset_texture = m_tile_renderer->tileset_texture();
+    const Pixel_coordinate& texel           = g_tile_renderer->get_terrain_shape(terrain_tile);
+    const auto&             tileset_texture = g_tile_renderer->tileset_texture();
     const glm::vec2         uv0{
         static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
         static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
@@ -39,7 +46,7 @@ auto Rendering::terrain_image(terrain_tile_t terrain_tile, const int scale) -> b
         static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
     };
 
-    return m_imgui_renderer->image(
+    return erhe::application::g_imgui_renderer->image(
         tileset_texture,
         Tile_shape::full_width * scale,
         Tile_shape::height * scale,
@@ -50,10 +57,13 @@ auto Rendering::terrain_image(terrain_tile_t terrain_tile, const int scale) -> b
     );
 }
 
-auto Rendering::unit_image(unit_tile_t unit_tile, const int scale) -> bool
+auto Rendering::unit_image(
+    const unit_tile_t unit_tile,
+    const int         scale
+) -> bool
 {
-    const auto&     texel           = m_tile_renderer->get_unit_shape(unit_tile);
-    const auto&     tileset_texture = m_tile_renderer->tileset_texture();
+    const auto&     texel           = g_tile_renderer->get_unit_shape(unit_tile);
+    const auto&     tileset_texture = g_tile_renderer->tileset_texture();
     const glm::vec2 uv0{
         static_cast<float>(texel.x) / static_cast<float>(tileset_texture->width()),
         static_cast<float>(texel.y) / static_cast<float>(tileset_texture->height()),
@@ -63,7 +73,7 @@ auto Rendering::unit_image(unit_tile_t unit_tile, const int scale) -> bool
         static_cast<float>(Tile_shape::height) / static_cast<float>(tileset_texture->height()),
     };
 
-    return m_imgui_renderer->image(
+    return erhe::application::g_imgui_renderer->image(
         tileset_texture,
         Tile_shape::full_width * scale,
         Tile_shape::height * scale,
@@ -76,11 +86,11 @@ auto Rendering::unit_image(unit_tile_t unit_tile, const int scale) -> bool
 
 void Rendering::show_texture()
 {
-    const auto&     tileset_texture = m_tile_renderer->tileset_texture();
+    const auto&     tileset_texture = g_tile_renderer->tileset_texture();
     const glm::vec2 uv0{0.0f, 0.0f};
     const glm::vec2 uv1{1.0f, 1.0f};
 
-    m_imgui_renderer->image(
+    erhe::application::g_imgui_renderer->image(
         tileset_texture,
         tileset_texture->width(),
         tileset_texture->height(),
@@ -93,17 +103,17 @@ void Rendering::show_texture()
 
 void Rendering::make_terrain_type_combo(const char* label, terrain_t& value)
 {
-    auto&       preview_terrain = m_tiles->get_terrain_type(value);
+    auto&       preview_terrain = g_tiles->get_terrain_type(value);
     const char* preview_value   = preview_terrain.name.c_str();
 
     ImGui::SetNextItemWidth(100.0f);
     if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
     {
-        const terrain_t end = static_cast<unit_t>(m_tiles->get_terrain_type_count());
+        const terrain_t end = static_cast<unit_t>(g_tiles->get_terrain_type_count());
         for (terrain_t i = 0; i < end; i++)
         {
-            terrain_tile_t terrain_tile = m_tiles->get_terrain_tile_from_terrain(i);
-            auto&          terrain_type = m_tiles->get_terrain_type(i);
+            terrain_tile_t terrain_tile = g_tiles->get_terrain_tile_from_terrain(i);
+            auto&          terrain_type = g_tiles->get_terrain_type(i);
             const auto     id           = fmt::format("##{}-{}", label, i);
             ImGui::PushID(id.c_str());
             bool is_selected = (value == i);
@@ -128,19 +138,23 @@ void Rendering::make_terrain_type_combo(const char* label, terrain_t& value)
     }
 }
 
-void Rendering::make_unit_type_combo(const char* label, unit_t& value, int player)
+void Rendering::make_unit_type_combo(
+    const char* label,
+    unit_t&     value,
+    const int   player
+)
 {
-    auto&       preview_unit  = m_tiles->get_unit_type(value);
+    auto&       preview_unit  = g_tiles->get_unit_type(value);
     const char* preview_value = preview_unit.name.c_str();
 
     ImGui::SetNextItemWidth(100.0f);
     if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
     {
-        const unit_t end = static_cast<unit_t>(m_tiles->get_unit_type_count());
+        const unit_t end = static_cast<unit_t>(g_tiles->get_unit_type_count());
         for (unit_t i = 0; i < end; i++)
         {
-            unit_tile_t unit_tile = m_tile_renderer->get_single_unit_tile(player, i);
-            Unit_type&  unit_type = m_tiles->get_unit_type(i);
+            unit_tile_t unit_tile = g_tile_renderer->get_single_unit_tile(player, i);
+            Unit_type&  unit_type = g_tiles->get_unit_type(i);
             const auto  id        = fmt::format("##{}-{}", label, i);
             ImGui::PushID(id.c_str());
             bool is_selected = (value == i);

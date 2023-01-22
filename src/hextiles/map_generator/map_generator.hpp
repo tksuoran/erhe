@@ -11,31 +11,28 @@
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
-#include <vector>
+#include "etl/vector.h"
 
 namespace hextiles
 {
 
 class Map;
-class Map_editor;
-class Tiles;
 
 class Map_generator
     : public erhe::components::Component
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Map_generator"};
-    static constexpr std::string_view c_title{"Map Tool"};
-    static constexpr uint32_t         c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr const char* c_title{"Map Generator"};
+    static constexpr const char* c_type_name{"Map_generator"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
 
-    Map_generator ();
-    ~Map_generator() noexcept override;
+    Map_generator();
+    ~Map_generator();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    void initialize_component();
 
     // Implements Imgui_window
     void imgui() override;
@@ -50,17 +47,15 @@ private:
     void generate_apply_rules_pass (Map& map);
     void generate_group_fix_pass   (Map& map);
 
-    // Component dependencies
-    std::shared_ptr<Tiles> m_tiles;
-
     Fbm_noise          m_noise;
-
     Variations         m_elevation_generator;
     Variations         m_temperature_generator;
     Variations         m_humidity_generator;
     Variations         m_variation_generator;
 
-    std::vector<Biome> m_biomes;
+    etl::vector<Biome, max_biome_count> m_biomes;
 };
+
+extern Map_generator* g_map_generator;
 
 } // namespace hextiles

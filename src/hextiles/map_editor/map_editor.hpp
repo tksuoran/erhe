@@ -2,6 +2,7 @@
 
 #include "coordinate.hpp"
 #include "terrain_type.hpp"
+#include "map.hpp"
 
 #include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
@@ -14,89 +15,68 @@
 namespace hextiles
 {
 
-class Map;
-class Map_editor;
-class Tile_renderer;
-class Map_window;
-class Tiles;
-
 class Map_hover_command final
     : public erhe::application::Command
 {
 public:
-    explicit Map_hover_command(Map_editor& map_editor)
-        : Command     {"Map_editor.hover"}
-        , m_map_editor{map_editor}
+    explicit Map_hover_command()
+        : Command{"Map_editor.hover"}
     {
     }
     ~Map_hover_command() noexcept final {}
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Map_editor& m_map_editor;
 };
 
 class Map_primary_brush_command final
     : public erhe::application::Command
 {
 public:
-    explicit Map_primary_brush_command(Map_editor& map_editor)
-        : Command     {"Map_editor.primary_brush"}
-        , m_map_editor{map_editor}
+    explicit Map_primary_brush_command()
+        : Command{"Map_editor.primary_brush"}
     {
     }
     ~Map_primary_brush_command() noexcept final {}
 
     auto try_call (erhe::application::Command_context& context) -> bool override;
     void try_ready(erhe::application::Command_context& context) override;
-
-private:
-    Map_editor& m_map_editor;
 };
 
 class Map_editor
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_type_name{"Map_editor"};
-    static constexpr std::string_view c_title{"Map Editor"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr const char* c_title{"Map Editor"};
+    static constexpr const char* c_type_name{"Map_editor"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
 
-    Map_editor ();
-    ~Map_editor() noexcept override;
+    Map_editor();
+    ~Map_editor();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void post_initialize            () override;
+    void initialize_component();
+    void terrain_palette     ();
 
     // Public API
-    [[nodiscard]] auto get_map() -> std::shared_ptr<Map>;
-    void terrain_palette();
-    void render         ();
+    void render();
+    [[nodiscard]] auto get_map() -> Map*;
 
     // Commands
     void hover        (glm::vec2 window_position);
     void primary_brush(glm::vec2 mouse_position);
 
 private:
-    // Component dependencies
-    std::shared_ptr<Map_window>     m_map_window;
-    std::shared_ptr<Tile_renderer>  m_tile_renderer;
-    std::shared_ptr<Tiles>          m_tiles;
-
     // Commands
-    Map_hover_command               m_map_hover_command;
-    Map_primary_brush_command       m_map_primary_brush_command;
-
-    std::shared_ptr<Map>            m_map;
-    int                             m_brush_size{1};
-    terrain_tile_t                  m_left_brush{Terrain_default};
-
-    std::optional<glm::vec2>        m_hover_window_position;
-    std::optional<Tile_coordinate>  m_hover_tile_position;
+    Map*                           m_map{nullptr};;
+    Map_hover_command              m_map_hover_command;
+    Map_primary_brush_command      m_map_primary_brush_command;
+    int                            m_brush_size{1};
+    terrain_tile_t                 m_left_brush{Terrain_default};
+    std::optional<glm::vec2>       m_hover_window_position;
+    std::optional<Tile_coordinate> m_hover_tile_position;
 };
+
+extern Map_editor* g_map_editor;
 
 } // namespace hextiles

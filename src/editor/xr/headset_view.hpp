@@ -11,16 +11,9 @@
 
 #include <array>
 
-namespace erhe::graphics
-{
-    class Framebuffer;
-    class OpenGL_state_tracker;
-    class Texture;
-}
 namespace erhe::scene
 {
     class Camera;
-    class Mesh;
     class Node;
 }
 
@@ -29,26 +22,11 @@ namespace erhe::xr
     class Headset;
 }
 
-namespace erhe::application
-{
-    class Commands;
-    class Configuration;
-    class Line_renderer_set;
-    class Text_renderer;
-}
-
 namespace editor
 {
 
 class Controller_visualization;
-class Editor_message_bus;
-class Editor_rendering;
-class Headset_view;
-class Hud;
-class Mesh_memory;
-class Scene_builder;
 class Scene_root;
-class Tools;
 
 class Controller_input
 {;
@@ -58,10 +36,19 @@ public:
     float     trigger_value{0.0f};
 };
 
+class Headset_view_node
+    : public erhe::application::Rendergraph_node
+{
+public:
+    Headset_view_node();
+
+    // Implements Rendergraph_node
+    void execute_rendergraph_node() override;
+};
+
 class Headset_view
     : public erhe::components::Component
     , public erhe::application::Imgui_window
-    , public erhe::application::Rendergraph_node
     , public Scene_view
     , public Tool
     , public std::enable_shared_from_this<Headset_view>
@@ -74,15 +61,12 @@ public:
     Headset_view ();
     ~Headset_view() noexcept override;
 
-    // Implements Rendergraph_node
-    void execute_rendergraph_node() override;
-
     // Implements Component
     [[nodiscard]] auto get_type_hash                  () const -> uint32_t override { return c_type_hash; }
     [[nodiscard]] auto processing_requires_main_thread() const -> bool override { return true; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -91,13 +75,14 @@ public:
     void tool_render(const Render_context& context) override;
 
     // Public API
+    void render_headset      ();
+
     void begin_frame         ();
     void connect             (const std::shared_ptr<Shadow_render_node>& shadow_render_node);
     void add_finger_input    (const Finger_point& finger_point);
     void add_controller_input(const Controller_input& controller_input);
 
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
-    [[nodiscard]] auto get_hand_tracker      () const -> Hand_tracker*;
     [[nodiscard]] auto get_headset           () const -> erhe::xr::Headset*;
 
     [[nodiscard]] auto get_root_node() const -> std::shared_ptr<erhe::scene::Node>;
@@ -117,18 +102,7 @@ private:
 
     void update_pointer_context_from_controller();
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Commands>          m_commands;
-    std::shared_ptr<erhe::application::Configuration>     m_configuration;
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Editor_message_bus>                   m_editor_message_bus;
-    std::shared_ptr<Editor_rendering>                     m_editor_rendering;
-    std::shared_ptr<Hand_tracker>                         m_hand_tracker;
-    std::shared_ptr<Hud>                                  m_hud;
-    std::shared_ptr<Tools>                                m_tools;
-
+    std::shared_ptr<Headset_view_node>                   m_rendergraph_node;
     std::shared_ptr<Shadow_render_node>                  m_shadow_render_node;
     std::shared_ptr<Scene_root>                          m_scene_root;
     std::unique_ptr<erhe::xr::Headset>                   m_headset;
@@ -143,5 +117,7 @@ private:
     bool                                                 m_mouse_down{false};
     bool                                                 m_menu_down {false};
 };
+
+extern Headset_view* g_headset_view;
 
 } // namespace editor

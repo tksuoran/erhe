@@ -1,6 +1,7 @@
 #include "windows/settings.hpp"
 
 #include "editor_message_bus.hpp"
+
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -8,6 +9,7 @@
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/instance.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include "mini/ini.h"
 
 #include <fmt/format.h>
@@ -20,10 +22,18 @@
 namespace editor
 {
 
+Settings_window* g_settings_window{nullptr};
+
 Settings_window::Settings_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
 {
+}
+
+Settings_window::~Settings_window()
+{
+    ERHE_VERIFY(g_settings_window == this);
+    g_settings_window = nullptr;
 }
 
 void Settings_window::declare_required_components()
@@ -35,11 +45,11 @@ void Settings_window::declare_required_components()
 
 void Settings_window::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    ERHE_VERIFY(g_settings_window == nullptr);
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+
+    const erhe::application::Scoped_gl_context gl_context;
 
     int num_sample_counts{0};
     gl::get_internalformat_iv(
@@ -106,20 +116,17 @@ void Settings_window::initialize_component()
         const auto& settings = m_settings.at(i);
         if (settings.name == m_used_settings)
         {
-            const auto configuration = get<erhe::application::Configuration>();
-            configuration->shadow_renderer.enabled                    = settings.shadow_enable;
-            configuration->shadow_renderer.shadow_map_resolution      = settings.shadow_resolution;
-            configuration->shadow_renderer.shadow_map_max_light_count = settings.shadow_light_count;
-            configuration->graphics.msaa_sample_count                 = settings.msaa_sample_count;
+            auto& configuration = *erhe::application::g_configuration;
+            configuration.shadow_renderer.enabled                    = settings.shadow_enable;
+            configuration.shadow_renderer.shadow_map_resolution      = settings.shadow_resolution;
+            configuration.shadow_renderer.shadow_map_max_light_count = settings.shadow_light_count;
+            configuration.graphics.msaa_sample_count                 = settings.msaa_sample_count;
             m_settings_index = static_cast<int>(i);
             break;
         }
     }
-}
 
-void Settings_window::post_initialize()
-{
-    m_editor_message_bus = get<Editor_message_bus>();
+    g_settings_window = this;
 }
 
 void Settings_window::show_settings(Settings& settings)
@@ -140,13 +147,13 @@ void Settings_window::use_settings(const Settings& settings)
 {
     m_used_settings = settings.name;
 
-    const auto configuration = get<erhe::application::Configuration>();
-    configuration->shadow_renderer.enabled                    = settings.shadow_enable;
-    configuration->shadow_renderer.shadow_map_resolution      = settings.shadow_resolution;
-    configuration->shadow_renderer.shadow_map_max_light_count = settings.shadow_light_count;
-    configuration->graphics.msaa_sample_count                 = settings.msaa_sample_count;
+    auto& configuration = *erhe::application::g_configuration;
+    configuration.shadow_renderer.enabled                    = settings.shadow_enable;
+    configuration.shadow_renderer.shadow_map_resolution      = settings.shadow_resolution;
+    configuration.shadow_renderer.shadow_map_max_light_count = settings.shadow_light_count;
+    configuration.graphics.msaa_sample_count                 = settings.msaa_sample_count;
 
-    m_editor_message_bus->send_message(
+    g_editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_graphics_settings
         }

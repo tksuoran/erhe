@@ -19,6 +19,7 @@ public:
     {
     }
 
+    void reset();
     void next_frame();
     void bind();
 

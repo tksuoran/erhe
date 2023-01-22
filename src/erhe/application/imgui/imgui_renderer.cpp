@@ -123,9 +123,33 @@ void main()
 
 } // anonymous namespace
 
+Imgui_renderer* g_imgui_renderer{nullptr};
+
 Imgui_renderer::Imgui_renderer()
     : erhe::components::Component{c_type_name}
 {
+}
+
+Imgui_renderer::~Imgui_renderer()
+{
+    ERHE_VERIFY(g_imgui_renderer == nullptr);
+}
+
+void Imgui_renderer::deinitialize_component()
+{
+    ERHE_VERIFY(g_imgui_renderer == this);
+    m_imgui_program_interface.reset();
+    m_dummy_texture.reset();
+    m_font_texture.reset();
+    m_shader_stages.reset();
+    m_nearest_sampler.reset();
+    m_linear_sampler.reset();
+    m_linear_mipmap_linear_sampler.reset();
+    m_used_textures.clear();
+    m_used_texture_handles.clear();
+    m_gpu_timer.reset();
+    m_at_end_of_frame.clear();
+    g_imgui_renderer = nullptr;
 }
 
 void Imgui_renderer::declare_required_components()
@@ -138,10 +162,9 @@ void Imgui_renderer::declare_required_components()
 void Imgui_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_imgui_renderer == nullptr);
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
-
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    const Scoped_gl_context gl_context{};
 
     m_imgui_program_interface = std::make_unique<Imgui_program_interface>(
         erhe::graphics::Instance::info.use_bindless_texture
@@ -151,6 +174,8 @@ void Imgui_renderer::initialize_component()
     create_font_texture();
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Imgui_renderer");
+
+    g_imgui_renderer = this;
 }
 
 Multi_pipeline::Multi_pipeline(const std::string_view name)
@@ -418,7 +443,7 @@ void Imgui_renderer::create_font_texture()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = get<erhe::application::Configuration>()->imgui;
+    const auto& config = erhe::application::g_configuration->imgui;
 
     m_primary_font    = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size);
     m_mono_font       = m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.font_size);
@@ -983,7 +1008,7 @@ void Imgui_renderer::render_draw_data()
 
         // This binds vertex input states (VAO) and shader stages (shader program)
         // and most other state
-        m_pipeline_state_tracker->execute(pipeline);
+        erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
         // TODO viewport states is not currently in pipeline
         gl::viewport(0, 0, static_cast<GLsizei>(fb_width), static_cast<GLsizei>(fb_height));

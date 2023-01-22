@@ -90,6 +90,8 @@ public:
 
     [[nodiscard]] auto get_name() const -> const std::string&;
 
+    void reset();
+
     std::size_t                               slot         {slot_count};
     uint32_t                                  mask         {0};
     bool                                      valid        {false};

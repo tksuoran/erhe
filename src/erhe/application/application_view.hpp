@@ -13,15 +13,6 @@
 
 namespace erhe::application {
 
-class Commands;
-class Configuration;
-class Imgui_renderer;
-class Imgui_windows;
-class Rendergraph;
-class Time;
-class View;
-class Window;
-
 class View_client
 {
 public:
@@ -63,7 +54,7 @@ public:
     // Implements erhe::components::Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
-    void post_initialize            () override;
+    void initialize_component       () override;
 
     void run();
     auto get_imgui_capture_keyboard() const -> bool;
@@ -88,18 +79,11 @@ public:
     [[nodiscard]] auto view_client() const -> View_client*;
 
 private:
-    // Component dependencies
-    std::shared_ptr<Commands>       m_commands;
-    std::shared_ptr<Configuration>  m_configuration;
-    std::shared_ptr<Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<Imgui_windows>  m_imgui_windows;
-    std::shared_ptr<Rendergraph>    m_render_graph;
-    std::shared_ptr<Time>           m_time;
-    std::shared_ptr<Window>         m_window;
-
     View_client* m_view_client    {nullptr};
     bool         m_ready          {false};
     bool         m_close_requested{false};
 };
+
+extern View* g_view;
 
 } // namespace erhe::application

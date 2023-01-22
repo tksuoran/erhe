@@ -21,7 +21,6 @@ Icon_rasterization::Icon_rasterization()
 }
 
 Icon_rasterization::Icon_rasterization(
-    Icon_set& icon_set,
     const int size,
     const int column_count,
     const int row_count
@@ -44,18 +43,21 @@ Icon_rasterization::Icon_rasterization(
 
     m_texture_handle = erhe::graphics::get_handle(
         *m_texture.get(),
-        *icon_set.get<Programs>()->linear_sampler.get()
+        *g_programs->linear_sampler.get()
     );
 }
 
-void Icon_rasterization::post_initialize(Icon_set& icon_set)
-{
-    m_imgui_renderer = icon_set.get<erhe::application::Imgui_renderer>();
-}
+Icon_set* g_icon_set{nullptr};
 
 Icon_set::Icon_set()
     : erhe::components::Component{c_type_name}
 {
+}
+
+Icon_set::~Icon_set()
+{
+    ERHE_VERIFY(g_icon_set == this);
+    g_icon_set = nullptr;
 }
 
 void Icon_set::declare_required_components()
@@ -68,20 +70,19 @@ void Icon_set::declare_required_components()
 void Icon_set::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_icon_set == nullptr);
 
-    const auto& config = get<erhe::application::Configuration>();
+    const auto& config = *erhe::application::g_configuration;
     m_row_count    = 16;
     m_column_count = 16;
     m_row          = 0;
     m_column       = 0;
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
-    m_small  = Icon_rasterization(*this, config->imgui.small_icon_size, m_column_count, m_row_count);
-    m_large  = Icon_rasterization(*this, config->imgui.large_icon_size, m_column_count, m_row_count);
-    m_hotbar = Icon_rasterization(*this, config->hotbar.icon_size,      m_column_count, m_row_count);
+    m_small  = Icon_rasterization(config.imgui.small_icon_size, m_column_count, m_row_count);
+    m_large  = Icon_rasterization(config.imgui.large_icon_size, m_column_count, m_row_count);
+    m_hotbar = Icon_rasterization(config.hotbar.icon_size,      m_column_count, m_row_count);
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
@@ -118,13 +119,8 @@ void Icon_set::initialize_component()
     icons.vive_menu         = load(icon_directory / "vive_menu.svg");
     icons.vive_trackpad     = load(icon_directory / "vive_trackpad.svg");
     icons.vive_trigger      = load(icon_directory / "vive_trigger.svg");
-}
 
-void Icon_set::post_initialize()
-{
-    m_small .post_initialize(*this);
-    m_large .post_initialize(*this);
-    m_hotbar.post_initialize(*this);
+    g_icon_set = this;
 }
 
 void Icon_rasterization::rasterize(
@@ -267,7 +263,7 @@ void Icon_rasterization::icon(
 #else
     ERHE_PROFILE_FUNCTION
 
-    m_imgui_renderer->image(
+    erhe::application::g_imgui_renderer->image(
         m_texture,
         m_icon_width,
         m_icon_height,
@@ -294,9 +290,9 @@ auto Icon_rasterization::icon_button(
     return false;
 #else
     ERHE_PROFILE_FUNCTION
-    ERHE_VERIFY(m_imgui_renderer);
+    ERHE_VERIFY(erhe::application::g_imgui_renderer != nullptr);
 
-    const bool result = m_imgui_renderer->image_button(
+    const bool result = erhe::application::g_imgui_renderer->image_button(
         m_texture,
         m_icon_width,
         m_icon_height,

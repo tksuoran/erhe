@@ -23,6 +23,8 @@ erhe_target_sources_grouped(
     scene_log.cpp
     scene_log.hpp
     scene_message.hpp
+    scene_message_bus.cpp
+    scene_message_bus.hpp
     transform.cpp
     transform.hpp
     viewport.cpp
@@ -34,6 +36,7 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(
     ${_target}
     PRIVATE
+        erhe::components
         erhe::gl
         erhe::log
         erhe::message_bus

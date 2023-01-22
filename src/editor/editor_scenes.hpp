@@ -25,6 +25,8 @@ public:
 
     // Implements erhe::components::Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void initialize_component  () override;
+    void deinitialize_component() override;
 
     // Implements erhe::components::IUpdate_once_per_frame
     void update_once_per_frame(const erhe::components::Time_context&) override;
@@ -46,6 +48,8 @@ private:
     std::vector<std::shared_ptr<Scene_root>> m_scene_roots;
     std::shared_ptr<Scene_root>              m_current_scene_root;
 };
+
+extern Editor_scenes* g_editor_scenes;
 
 } // namespace editor
 

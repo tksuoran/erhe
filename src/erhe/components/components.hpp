@@ -3,6 +3,8 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/xxhash.hpp"
 
+#include "etl/vector.h"
+
 #include <atomic>
 #include <condition_variable>
 #include <functional>
@@ -16,7 +18,15 @@
 namespace erhe::components
 {
 
+class Component;
 class Components;
+
+#if 1
+using Component_vector = std::vector<Component*>;
+#else
+constexpr int max_component_count = 100;
+using Component_vector = etl::vector<Component*, max_component_count>
+#endif
 
 class Time_context
 {
@@ -53,7 +63,6 @@ enum class Component_state : unsigned int
 
 auto c_str(const Component_state state) -> const char*;
 
-
 class Component
 {
 protected:
@@ -68,20 +77,24 @@ protected:
 public:
     // Will fail hard with ERHE_VERIFY() if component has not yet been initialized
     template<typename T>
-    [[nodiscard]] auto get() const -> std::shared_ptr<T>;
+    [[nodiscard]] auto get() const -> T*;
 
     // Will not trigger failure if component was not yet initialized
     template<typename T>
-    [[nodiscard]] auto try_get() const -> std::shared_ptr<T>;
+    [[nodiscard]] auto try_get() const -> T*;
 
     template<typename T>
-    auto require() -> std::shared_ptr<T>;
+    auto require() -> T*;
+
+    template<typename T>
+    auto optional() -> T*;
 
     // Public interface
     [[nodiscard]] virtual auto get_type_hash                  () const -> uint32_t = 0;
     [[nodiscard]] virtual auto processing_requires_main_thread() const -> bool;
     virtual void declare_required_components() {}
     virtual void initialize_component       () {}
+    virtual void deinitialize_component     () {}
     virtual void post_initialize            () {}
     virtual void on_thread_exit             () {}
     virtual void on_thread_enter            () {}
@@ -92,14 +105,15 @@ public:
     [[nodiscard]] auto is_registered           () const -> bool;
     [[nodiscard]] auto is_ready_to_initialize  (bool in_worker_thread, bool parallel) const -> bool;
     [[nodiscard]] auto is_ready_to_deinitialize() const -> bool;
-    [[nodiscard]] auto dependencies            () -> const std::vector<std::shared_ptr<Component>>&;
+    [[nodiscard]] auto dependencies            () -> const Component_vector&;
+
     void register_as_component(Components* components);
     void component_initialized(Component* component);
-    void depends_on           (const std::shared_ptr<Component>& dependency);
+    void depends_on           (Component* dependency);
     void is_depended_by       (Component* component); // WARNING - not multithreading safe
     void set_state            (Component_state state);
 
-    auto get_depended_by() const -> const std::vector<Component*>&;
+    auto get_depended_by() const -> const Component_vector&;
 
 protected:
     Components* m_components{nullptr};
@@ -107,11 +121,11 @@ protected:
 private:
     void unregister();
 
-    std::string_view                        m_name;
-    Component_state                         m_state{Component_state::Constructed};
-    std::vector<std::shared_ptr<Component>> m_dependencies;
-    std::vector<std::shared_ptr<Component>> m_initialized_dependencies;
-    std::vector<Component*>                 m_depended_by;
+    std::string_view m_name;
+    Component_state  m_state{Component_state::Constructed};
+    Component_vector m_dependencies;
+    Component_vector m_initialized_dependencies;
+    Component_vector m_depended_by;
 };
 
 /// Components is a collection of Components.
@@ -151,7 +165,7 @@ public:
     [[nodiscard]] auto is_component_initialization_complete() -> bool;
     [[nodiscard]] auto get_component_to_deinitialize       () -> Component*;
 
-    auto add                                   (const std::shared_ptr<Component>& component) -> Component&;
+    auto add                                   (Component* component) -> Component&;
     void show_dependencies                     () const;
     void cleanup_components                    ();
     void launch_component_initialization       (const bool parallel);
@@ -162,7 +176,7 @@ public:
     void update_once_per_frame                 (const Time_context& time_context);
 
     template<typename T>
-    [[nodiscard]] auto get() const -> std::shared_ptr<T>;
+    [[nodiscard]] auto get() const -> T*;
 
     void collect_uninitialized_depended_by(Component* component, std::set<Component*>& result);
 
@@ -170,11 +184,12 @@ private:
     [[nodiscard]] auto get_component_to_initialize(const bool in_worker_thread) -> Component*;
     void queue_all_components_to_be_processed();
     void initialize_component                (const bool in_worker_thread);
-    void deitialize_component                (Component* component);
+    void deinitialize_component              (Component* component);
     void post_initialize_components          ();
 
     std::mutex                              m_mutex;
-    std::vector<std::shared_ptr<Component>> m_components;
+    Component_vector                        m_components;
+    Component_vector                        m_initialization_order;
     std::set<IUpdate_fixed_step    *>       m_fixed_step_updates;
     std::set<IUpdate_once_per_frame*>       m_once_per_frame_updates;
     bool                                    m_parallel_initialization{false};
@@ -188,9 +203,9 @@ private:
 };
 
 template<typename T>
-[[nodiscard]] auto Component::get() const -> std::shared_ptr<T>
+[[nodiscard]] auto Component::get() const -> T*
 {
-    const std::shared_ptr<T> component = try_get<T>();
+    T* component = try_get<T>();
     if (!component)
     {
         auto get_result = m_components->get<T>();
@@ -208,7 +223,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] auto Component::try_get() const -> std::shared_ptr<T>
+[[nodiscard]] auto Component::try_get() const -> T*
 {
     switch (m_state)
     {
@@ -218,7 +233,7 @@ template<typename T>
             {
                 if (component->get_type_hash() == T::c_type_hash)
                 {
-                    return std::static_pointer_cast<T>(component);
+                    return static_cast<T*>(component);
                 }
             }
             return {};
@@ -245,12 +260,12 @@ template<typename T>
 }
 
 template<typename T>
-auto Component::require() -> std::shared_ptr<T>
+auto Component::require() -> T*
 {
     ERHE_VERIFY(get_state() == Component_state::Declaring_initialization_requirements);
 
-    const auto component = (m_components == nullptr)
-        ? std::shared_ptr<T>{}
+    T* const component = (m_components == nullptr)
+        ? nullptr
         : m_components->get<T>();
     if (component)
     {
@@ -260,13 +275,28 @@ auto Component::require() -> std::shared_ptr<T>
 }
 
 template<typename T>
-[[nodiscard]] auto Components::get() const -> std::shared_ptr<T>
+auto Component::optional() -> T*
 {
-    for (const auto& component : m_components)
+    ERHE_VERIFY(get_state() == Component_state::Declaring_initialization_requirements);
+
+    T* const component = (m_components == nullptr)
+        ? nullptr
+        : m_components->get<T>();
+    if (component)
+    {
+        depends_on(component);
+    }
+    return component;
+}
+
+template<typename T>
+[[nodiscard]] auto Components::get() const -> T*
+{
+    for (Component* component : m_components)
     {
         if (component->get_type_hash() == T::c_type_hash)
         {
-            return std::static_pointer_cast<T>(component);
+            return static_cast<T*>(component);
         }
     }
     return {};

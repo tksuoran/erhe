@@ -1,4 +1,5 @@
 #include "xr/controller_visualization.hpp"
+
 #include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -15,7 +16,6 @@ namespace editor
 {
 
 Controller_visualization::Controller_visualization(
-    Mesh_memory&       mesh_memory,
     Scene_root&        scene_root,
     erhe::scene::Node* view_root
 )
@@ -36,7 +36,7 @@ Controller_visualization::Controller_visualization(
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
     auto controller_pg = erhe::primitive::make_primitive(
         controller_geometry,
-        mesh_memory.build_info
+        g_mesh_memory->build_info
     );
 
     erhe::primitive::Primitive primitive{

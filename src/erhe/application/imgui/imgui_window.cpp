@@ -19,17 +19,6 @@ Imgui_window::~Imgui_window() noexcept
 {
 }
 
-void Imgui_window::initialize(
-    const erhe::components::Components& components
-)
-{
-#if !defined(ERHE_GUI_LIBRARY_IMGUI)
-    static_cast<void>(components);
-#else
-    m_imgui_renderer = components.get<Imgui_renderer>();
-#endif
-}
-
 void Imgui_window::image(
     const std::shared_ptr<erhe::graphics::Texture>& texture,
     const int                                       width,
@@ -41,7 +30,7 @@ void Imgui_window::image(
     static_cast<void>(width);
     static_cast<void>(height);
 #else
-    m_imgui_renderer->image(
+    g_imgui_renderer->image(
         texture,
         width,
         height,

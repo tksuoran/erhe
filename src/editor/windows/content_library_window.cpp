@@ -1,9 +1,9 @@
 #include "windows/content_library_window.hpp"
-#include "tools/brushes/brush.hpp"
-#include "editor_scenes.hpp"
 
+#include "editor_scenes.hpp"
 #include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/brushes/brush.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -12,6 +12,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -21,10 +22,28 @@
 namespace editor
 {
 
+Content_library_window* g_content_library_window{nullptr};
+
 Content_library_window::Content_library_window()
     : erhe::components::Component{c_type_name}
     , Imgui_window               {c_title}
 {
+}
+
+Content_library_window::~Content_library_window()
+{
+    ERHE_VERIFY(g_content_library_window == nullptr);
+}
+
+void Content_library_window::deinitialize_component()
+{
+    ERHE_VERIFY(g_content_library_window == this);
+    m_brushes.reset();
+    m_cameras.reset();
+    m_lights.reset();
+    m_meshes.reset();
+    m_materials.reset();
+    g_content_library_window = nullptr;
 }
 
 auto Content_library_window::selected_brush() const -> std::shared_ptr<Brush>
@@ -45,14 +64,14 @@ void Content_library_window::declare_required_components()
 
 void Content_library_window::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    ERHE_VERIFY(g_content_library_window == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    g_content_library_window = this;
 }
 
 void Content_library_window::post_initialize()
 {
-    m_editor_scenes = get<Editor_scenes>();
-
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    const auto& scene_roots = g_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {
         const auto& content_library = scene_root->content_library();
@@ -90,7 +109,7 @@ void Content_library_window::imgui()
 
     ERHE_PROFILE_FUNCTION
 
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    const auto& scene_roots = g_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {
         const auto& content_library = scene_root->content_library();

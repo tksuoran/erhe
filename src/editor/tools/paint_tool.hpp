@@ -18,32 +18,16 @@ namespace erhe::scene
     class Mesh;
 }
 
-namespace erhe::primitive
-{
-    class Material;
-}
-
 namespace editor
 {
-
-class Editor_message;
-class Editor_scenes;
-class Mesh_memory;
-class Paint_tool;
-class Scene_view;
-class Viewport_window;
-class Viewport_windows;
 
 class Paint_vertex_command
     : public erhe::application::Command
 {
 public:
-    explicit Paint_vertex_command(Paint_tool& paint_tool);
+    explicit Paint_vertex_command();
     auto try_call (erhe::application::Command_context& context) -> bool override;
     void try_ready(erhe::application::Command_context& context) override;
-
-private:
-    Paint_tool& m_paint_tool;
 };
 
 enum class Paint_mode
@@ -84,7 +68,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -106,10 +89,6 @@ private:
         const glm::vec4                           color
     );
 
-    // Component dependencies
-    std::shared_ptr<Viewport_windows> m_viewport_windows;
-    std::shared_ptr<Mesh_memory     > m_mesh_memory;
-
     Paint_vertex_command    m_paint_vertex_command;
 
     Paint_mode              m_paint_mode{Paint_mode::Point};
@@ -119,5 +98,7 @@ private:
     std::optional<uint32_t> m_corner_id;
     std::vector<glm::vec4>  m_ngon_colors;
 };
+
+extern Paint_tool* g_paint_tool;
 
 } // namespace editor

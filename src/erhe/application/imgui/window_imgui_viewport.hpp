@@ -49,12 +49,7 @@ class Window_imgui_viewport
     : public Imgui_viewport
 {
 public:
-    Window_imgui_viewport(
-        const std::string_view        name,
-        erhe::components::Components& components
-    );
-
-    void post_initialize(erhe::components::Components& components);
+    Window_imgui_viewport(const std::string_view name);
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;
@@ -67,11 +62,6 @@ public:
     // Implements Imgui_vewport
     [[nodiscard]] auto begin_imgui_frame() -> bool override;
     void end_imgui_frame     () override;
-
-private:
-    std::shared_ptr<Imgui_renderer>          m_imgui_renderer;
-    std::shared_ptr<erhe::application::View> m_view;
-    std::shared_ptr<Window>                  m_window;
 };
 
 } // namespace erhe::application

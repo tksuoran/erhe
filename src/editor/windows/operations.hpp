@@ -9,11 +9,6 @@
 namespace editor
 {
 
-class Mesh_memory;
-class Operation_stack;
-class Selection_tool;
-class Tool;
-
 struct Tool_slot
 {
     // OpenXR trigger (both left and right hand):
@@ -78,18 +73,14 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Window
     void imgui() override;
 
 private:
     [[nodiscard]]auto count_selected_meshes() const -> size_t;
-
-    // Component dependencies
-    std::shared_ptr<Mesh_memory>     m_mesh_memory;
-    std::shared_ptr<Operation_stack> m_operation_stack;
-    std::shared_ptr<Selection_tool>  m_selection_tool;
 };
+
+extern Operations* g_operations;
 
 } // namespace editor

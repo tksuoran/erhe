@@ -22,6 +22,14 @@ namespace editor
 
 static const std::string empty_string{};
 
+void Hover_entry::reset()
+{
+    raytrace_node = nullptr;
+    mesh.reset();
+    grid = nullptr;
+    geometry.reset();
+}
+
 [[nodiscard]] auto Hover_entry::get_name() const -> const std::string&
 {
     if (mesh)
@@ -47,7 +55,7 @@ void Scene_view::set_hover(
 
     if (mesh_changed || grid_changed)
     {
-        get_scene_root()->get_editor_message_bus()->send_message(
+        g_editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
             }

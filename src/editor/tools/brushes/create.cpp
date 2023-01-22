@@ -36,9 +36,8 @@ namespace editor
 {
 
 void Create_uv_sphere::render_preview(
-    const Render_context&                 render_context,
-    erhe::application::Line_renderer_set& line_renderer_set,
-    const erhe::scene::Transform&         transform
+    const Render_context&         render_context,
+    const erhe::scene::Transform& transform
 )
 {
     const auto* camera_node = render_context.get_camera_node();
@@ -47,7 +46,7 @@ void Create_uv_sphere::render_preview(
         return;
     }
 
-    auto& line_renderer = *line_renderer_set.hidden.at(2).get();
+    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
     const glm::vec4 edge_color            {1.0f, 1.0f, 1.0f, 1.0f};
     const glm::vec4 great_circle_color    {0.5f, 0.5f, 0.5f, 0.5f};
     const float     edge_thickness        {6.0f};
@@ -101,9 +100,8 @@ void Create_uv_sphere::imgui()
 ////
 
 void Create_cone::render_preview(
-    const Render_context&                 render_context,
-    erhe::application::Line_renderer_set& line_renderer_set,
-    const erhe::scene::Transform&         transform
+    const Render_context&         render_context,
+    const erhe::scene::Transform& transform
 )
 {
     const auto* camera_node = render_context.get_camera_node();
@@ -112,7 +110,7 @@ void Create_cone::render_preview(
         return;
     }
 
-    auto& line_renderer = *line_renderer_set.hidden.at(2).get();
+    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
     const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
     const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
     const float     major_thickness{6.0f};
@@ -175,9 +173,8 @@ void Create_cone::imgui()
 ////
 
 void Create_torus::render_preview(
-    const Render_context&                 render_context,
-    erhe::application::Line_renderer_set& line_renderer_set,
-    const erhe::scene::Transform&         transform
+    const Render_context&         render_context,
+    const erhe::scene::Transform& transform
 )
 {
     const auto* camera_node = render_context.get_camera_node();
@@ -186,7 +183,7 @@ void Create_torus::render_preview(
         return;
     }
 
-    auto& line_renderer = *line_renderer_set.hidden.at(2).get();
+    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
     const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
     const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
     const float     major_thickness{6.0f};
@@ -254,9 +251,8 @@ void Create_torus::imgui()
 ////
 
 void Create_box::render_preview(
-    const Render_context&                 render_context,
-    erhe::application::Line_renderer_set& line_renderer_set,
-    const erhe::scene::Transform&         transform
+    const Render_context&         render_context,
+    const erhe::scene::Transform& transform
 )
 {
     if (render_context.scene_view == nullptr)
@@ -267,7 +263,7 @@ void Create_box::render_preview(
     const auto& view_camera = render_context.scene_view->get_camera();
     if (view_camera)
     {
-        auto& line_renderer = *line_renderer_set.hidden.at(2).get();
+        auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
         const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
         line_renderer.add_cube(
             transform.matrix(),
@@ -314,6 +310,8 @@ void Create_box::imgui()
 ////
 ////
 
+Create* g_create{nullptr};
+
 Create::Create()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
@@ -322,6 +320,15 @@ Create::Create()
 
 Create::~Create() noexcept
 {
+    ERHE_VERIFY(g_create == nullptr);
+}
+
+void Create::deinitialize_component()
+{
+    ERHE_VERIFY(g_create == this);
+    m_brush_create = nullptr;
+    m_brush.reset();
+    g_create = nullptr;
 }
 
 void Create::declare_required_components()
@@ -333,24 +340,16 @@ void Create::declare_required_components()
 void Create::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_create == nullptr);
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
     set_base_priority(c_priority);
     set_description  (c_title);
     set_flags        (Tool_flags::background);
-    get<Tools>()->register_tool(this);
-}
+    g_tools->register_tool(this);
 
-void Create::post_initialize()
-{
-    m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
-    m_editor_scenes          = get<Editor_scenes         >();
-    m_content_library_window = get<Content_library_window>();
-    m_mesh_memory            = get<Mesh_memory           >();
-    m_operation_stack        = get<Operation_stack       >();
-    m_scene_commands         = get<Scene_commands        >();
-    m_selection_tool         = get<Selection_tool        >();
+    g_create = this;
 }
 
 namespace
@@ -367,7 +366,9 @@ void Create::brush_create_button(const char* label, Brush_create* brush_create)
         if (m_brush_create == brush_create)
         {
             m_brush_create = nullptr;
-        } else {
+        }
+        else
+        {
             m_brush_create = brush_create;
             m_brush_name = label;
         }
@@ -376,9 +377,9 @@ void Create::brush_create_button(const char* label, Brush_create* brush_create)
 
 auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 {
-    const auto selected_node   = m_selection_tool->get_first_selected_node();
-    const auto selected_scene  = m_selection_tool->get_first_selected_scene();
-    const auto viewport_window = get<Viewport_windows>()->last_window();
+    const auto selected_node   = g_selection_tool->get_first_selected_node();
+    const auto selected_scene  = g_selection_tool->get_first_selected_scene();
+    const auto viewport_window = g_viewport_windows->last_window();
 
     erhe::scene::Scene_host* scene_host = selected_node
         ? reinterpret_cast<Scene_root*>(selected_node->get_item_host())
@@ -423,15 +424,15 @@ void Create::imgui()
     ImGui::Text("Nodes");
     if (ImGui::Button("Empty Node", button_size))
     {
-        m_scene_commands->create_new_empty_node();
+        g_scene_commands->create_new_empty_node();
     }
     if (ImGui::Button("Camera", button_size))
     {
-        m_scene_commands->create_new_camera();
+        g_scene_commands->create_new_camera();
     }
     if (ImGui::Button("Light", button_size))
     {
-        m_scene_commands->create_new_light();
+        g_scene_commands->create_new_light();
     }
 
     ImGui::Separator();
@@ -457,10 +458,10 @@ void Create::imgui()
         {
             Brush_data brush_create_info{
                 .name            = m_brush_name,
-                .build_info      = m_mesh_memory->build_info,
+                .build_info      = g_mesh_memory->build_info,
                 .normal_style    = m_normal_style,
                 .density         = m_density,
-                .physics_enabled = get<erhe::application::Configuration>()->physics.static_enable
+                .physics_enabled = erhe::application::g_configuration->physics.static_enable
             };
 
             m_brush = m_brush_create->create(brush_create_info);
@@ -484,20 +485,19 @@ void Create::imgui()
                     .mesh_flags       = mesh_flags,
                     .scene_root       = scene_root,
                     .world_from_node  = world_from_node,
-                    .material         = m_content_library_window->selected_material(),
+                    .material         = g_content_library_window->selected_material(),
                     .scale            = 1.0
                 };
                 const auto instance_node = m_brush->make_instance(brush_instance_create_info);
 
                 auto op = std::make_shared<Node_insert_remove_operation>(
                     Node_insert_remove_operation::Parameters{
-                        .selection_tool = m_selection_tool.get(),
-                        .node           = instance_node,
-                        .parent         = parent,
-                        .mode           = Scene_item_operation::Mode::insert
+                        .node   = instance_node,
+                        .parent = parent,
+                        .mode   = Scene_item_operation::Mode::insert
                     }
                 );
-                m_operation_stack->push(op);
+                g_operation_stack->push(op);
             }
             m_brush_create = nullptr;
         }
@@ -509,7 +509,7 @@ void Create::imgui()
     }
 
     {
-        const auto& selection = m_selection_tool->selection();
+        const auto& selection = g_selection_tool->selection();
         if (!selection.empty())
         {
             std::shared_ptr<erhe::geometry::Geometry> source_geometry;
@@ -550,11 +550,11 @@ void Create::imgui()
                 {
                     Brush_data brush_create_info{
                         .name            = m_brush_name,
-                        .build_info      = m_mesh_memory->build_info,
+                        .build_info      = g_mesh_memory->build_info,
                         .normal_style    = m_normal_style,
                         .geometry        = source_geometry,
                         .density         = m_density,
-                        .physics_enabled = get<erhe::application::Configuration>()->physics.static_enable
+                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     };
                     //// source_geometry->build_edges();
                     //// source_geometry->compute_polygon_normals();
@@ -589,7 +589,7 @@ void Create::tool_render(const Render_context& context)
         : erhe::scene::Transform{};
     if (m_brush_create != nullptr)
     {
-        m_brush_create->render_preview(context, *m_line_renderer_set.get(), transform);
+        m_brush_create->render_preview(context, transform);
     }
 }
 

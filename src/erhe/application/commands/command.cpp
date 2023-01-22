@@ -80,7 +80,7 @@ void Command::set_inactive(Command_context& context)
     );
     on_inactive(context);
     m_state = State::Inactive;
-    context.commands().command_inactivated(this);
+    g_commands->command_inactivated(this);
 };
 
 void Command::disable(Command_context& context)

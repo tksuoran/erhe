@@ -15,7 +15,7 @@
 #include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/scoped_imgui_context.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/application_view.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 
@@ -28,25 +28,15 @@ namespace editor
 {
 
 Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
-    Rendertarget_mesh*                  rendertarget_mesh,
-    const std::string_view              name,
-    const erhe::components::Components& components,
-    const bool                          imgui_ini
+    Rendertarget_mesh*     rendertarget_mesh,
+    const std::string_view name,
+    const bool             imgui_ini
 )
     : erhe::application::Imgui_viewport{
         name,
-        components.get<erhe::application::Imgui_windows>().get(),
-        components.get<erhe::application::Imgui_renderer>()->get_font_atlas()
+        erhe::application::g_imgui_renderer->get_font_atlas()
     }
     , m_rendertarget_mesh{rendertarget_mesh}
-    , m_configuration    {components.get<erhe::application::Configuration >()}
-    , m_imgui_renderer   {components.get<erhe::application::Imgui_renderer>()}
-    , m_imgui_windows    {components.get<erhe::application::Imgui_windows >()}
-    , m_view             {components.get<erhe::application::View          >()}
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    , m_hand_tracker     {components.get<Hand_tracker>()}
-    , m_headset_view     {components.get<Headset_view>()}
-#endif
     , m_name             {name}
     , m_imgui_ini_path   {imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
 {
@@ -56,7 +46,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
         erhe::application::Rendergraph_node_key::rendertarget_texture
     );
 
-    m_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
+    erhe::application::g_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
     auto& style = ImGui::GetStyle();
     static_cast<void>(style);
@@ -64,7 +54,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     ImGuiIO& io = m_imgui_context->IO;
     io.MouseDrawCursor = true;
     io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
-    io.FontDefault = m_imgui_renderer->vr_primary_font();
+    io.FontDefault = erhe::application::g_imgui_renderer->vr_primary_font();
 
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");
 
@@ -86,10 +76,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     ImGui::SetCurrentContext(nullptr);
 }
 
-Rendertarget_imgui_viewport::~Rendertarget_imgui_viewport() noexcept
-{
-    ImGui::DestroyContext(m_imgui_context);
-}
+Rendertarget_imgui_viewport::~Rendertarget_imgui_viewport() noexcept = default;
 
 template <typename T>
 [[nodiscard]] inline auto as_span(const T& value) -> gsl::span<const T>
@@ -125,13 +112,13 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_rendertarget_mesh->update_headset(*m_headset_view.get());
+    m_rendertarget_mesh->update_headset();
 #endif
 
     const auto pointer = m_rendertarget_mesh->get_pointer();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (!m_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
+    if (!erhe::application::g_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
 #endif
     {
         if (pointer.has_value())
@@ -164,7 +151,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (m_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
+    if (erhe::application::g_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
     {
         const auto* node                   = m_rendertarget_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
@@ -267,14 +254,12 @@ void Rendertarget_imgui_viewport::execute_rendergraph_node()
         return;
     }
 
-    erhe::application::Imgui_windows&  imgui_windows  = *m_imgui_windows.get();
     erhe::application::Imgui_viewport& imgui_viewport = *this;
-
-    erhe::application::Scoped_imgui_context imgui_context(imgui_windows, imgui_viewport);
+    erhe::application::Scoped_imgui_context imgui_context{imgui_viewport};
 
     m_rendertarget_mesh->bind();
     m_rendertarget_mesh->clear(m_clear_color);
-    m_imgui_renderer->render_draw_data();
+    erhe::application::g_imgui_renderer->render_draw_data();
     m_rendertarget_mesh->render_done();
 }
 

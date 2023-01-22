@@ -11,13 +11,15 @@
 #include "map_editor/map_editor.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace hextiles
 {
+
+New_game_window* g_new_game_window{nullptr};
 
 New_game_window::New_game_window()
     : erhe::components::Component{c_type_name}
@@ -27,6 +29,8 @@ New_game_window::New_game_window()
 
 New_game_window::~New_game_window() noexcept
 {
+    ERHE_VERIFY(g_new_game_window == this);
+    g_new_game_window = nullptr;
 }
 
 void New_game_window::declare_required_components()
@@ -36,12 +40,15 @@ void New_game_window::declare_required_components()
 
 void New_game_window::initialize_component()
 {
-    Imgui_window::initialize(*m_components);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    ERHE_VERIFY(g_new_game_window == nullptr);
 
+    erhe::application::g_imgui_windows->register_imgui_window(this);
     m_player_names.clear();
     m_player_names.push_back("Player 1");
     m_player_names.push_back("Player 2");
+    hide();
+
+    g_new_game_window = this;
 }
 
 namespace
@@ -58,8 +65,7 @@ auto random_coordinate(coordinate_t w, coordinate_t h) -> Tile_coordinate
 
 auto New_game_window::is_too_close_to_city(Tile_coordinate location) const -> bool
 {
-    std::shared_ptr<Map_editor> map_editor = get<Map_editor>();
-    auto map = map_editor->get_map();
+    auto map = g_map_editor->get_map();
     for (auto& city : m_cities)
     {
         auto distance = map->distance(city, location);
@@ -73,16 +79,15 @@ auto New_game_window::is_too_close_to_city(Tile_coordinate location) const -> bo
 
 auto New_game_window::try_create_city(uint32_t flags_match) -> bool
 {
-    auto map   = get<Map_editor>()->get_map();
-    auto tiles = get<Tiles>();
+    auto map   = g_map_editor->get_map();
 
     const auto w = static_cast<coordinate_t>(map->width());
     const auto h = static_cast<coordinate_t>(map->height());
 
     const Tile_coordinate position     = random_coordinate(w, h);
     const terrain_tile_t  terrain_tile = map->get_terrain_tile(position);
-    const terrain_t       terrain      = tiles->get_terrain_from_tile(terrain_tile);
-    const Terrain_type    terrain_type = tiles->get_terrain_type(terrain);
+    const terrain_t       terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
+    const Terrain_type    terrain_type = g_tiles->get_terrain_type(terrain);
 
     //if (terrain.city_size == terrain_city_size_match)
     //{
@@ -111,10 +116,10 @@ void New_game_window::select_player_start_cities()
     }
 
     // TODO for now, map editor is used to select the map
-    auto map = get<Map_editor>()->get_map();
+    Map* map = g_map_editor->get_map();
 
-    std::vector<size_t> player_start_cities;
-    int                 minimum_distance = 99999999;
+    etl::vector<size_t, max_player_count> player_start_cities;
+    int minimum_distance = 99999999;
     for (size_t player = 0; player < m_player_names.size(); ++player)
     {
         size_t city_id = rand() % m_cities.size();
@@ -139,13 +144,11 @@ void New_game_window::select_player_start_cities()
 
 void New_game_window::create()
 {
-    auto game  = get<Game      >();
-    auto map   = get<Map_editor>()->get_map();
-    auto tiles = get<Tiles     >();
+    Map* map = g_map_editor->get_map();
 
     place_cities();
 
-    game->new_game(
+    g_game->new_game(
         Game_create_parameters
         {
             .map                    = map,
@@ -158,18 +161,17 @@ void New_game_window::create()
 
 void New_game_window::place_cities()
 {
-    auto map   = get<Map_editor>()->get_map();
-    auto tiles = get<Tiles>();
+    auto* map = g_map_editor->get_map();
 
     std::vector<terrain_tile_t> city_tiles;
 
-    const auto end = tiles->get_terrain_type_count();
+    const auto end = g_tiles->get_terrain_type_count();
     for (terrain_t i = 0; i < end; ++i)
     {
-        const auto& terrain = tiles->get_terrain_type(i);
+        const auto& terrain = g_tiles->get_terrain_type(i);
         if (terrain.city_size > 0)
         {
-            const terrain_tile_t city_terrain_tile = tiles->get_terrain_tile_from_terrain(i);
+            const terrain_tile_t city_terrain_tile = g_tiles->get_terrain_tile_from_terrain(i);
             city_tiles.push_back(city_terrain_tile);
         }
     }
@@ -182,15 +184,15 @@ void New_game_window::place_cities()
         map->set_terrain_tile(city_location, city_tiles.at(city_tile));
 
         const terrain_tile_t terrain_tile = map->get_terrain_tile(city_location);
-        const terrain_t      terrain      = tiles->get_terrain_from_tile(terrain_tile);
-        const Terrain_type&  terrain_type = tiles->get_terrain_type(terrain);
+        const terrain_t      terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
+        const Terrain_type&  terrain_type = g_tiles->get_terrain_type(terrain);
 
         int field_count = terrain_type.city_size;
         map->hex_circle(
             city_location,
             0,
             4,
-            [&map, &tiles, &field_count](const Tile_coordinate position)
+            [&map, &field_count](const Tile_coordinate position)
             {
                 if (field_count == 0)
                 {
@@ -198,11 +200,11 @@ void New_game_window::place_cities()
                 }
 
                 const terrain_tile_t terrain_tile = map->get_terrain_tile(position);
-                const terrain_t      terrain      = tiles->get_terrain_from_tile(terrain_tile);
-                const Terrain_type&  terrain_type = tiles->get_terrain_type(terrain);
+                const terrain_t      terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
+                const Terrain_type&  terrain_type = g_tiles->get_terrain_type(terrain);
                 if ((terrain_type.flags & Terrain_flags::bit_can_place_field) == Terrain_flags::bit_can_place_field)
                 {
-                    map->set_terrain_tile(position, tiles->get_terrain_tile_from_terrain(Terrain_field));
+                    map->set_terrain_tile(position, g_tiles->get_terrain_tile_from_terrain(Terrain_field));
                     --field_count;
                 }
             }
@@ -225,15 +227,13 @@ void New_game_window::imgui()
 
     int player_number    = 1;
     int player_to_remove = 0;
-    auto rendering     = get<Rendering    >();
-    auto tile_renderer = get<Tile_renderer>();
-    for (auto& player : m_player_names)
+    for (auto& player_name : m_player_names)
     {
-        rendering->unit_image(tile_renderer->get_single_unit_tile(player_number - 1, 2), 2);
+        g_rendering->unit_image(g_tile_renderer->get_single_unit_tile(player_number - 1, 2), 2);
         ImGui::SameLine();
 
         auto label = fmt::format("Name of player {}", player_number);
-        ImGui::InputText(label.c_str(), &player);
+        ImGui::InputText(label.c_str(), player_name.data(), player_name.max_size() - 1);
         if (m_player_names.size() > 2)
         {
             ImGui::SameLine();
@@ -340,13 +340,13 @@ void New_game_window::imgui()
     {
         create();
         hide();
-        get<Map_window >()->show();
-        get<Game_window>()->show();
+        g_map_window ->show();
+        g_game_window->show();
     }
 
     if (ImGui::Button("Back to Menu", button_size))
     {
-        get<Menu_window>()->show_menu();
+        g_menu_window->show_menu();
     }
 
     ImGui::PopItemWidth();

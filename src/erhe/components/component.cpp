@@ -60,12 +60,12 @@ void Component::unregister()
     m_components = nullptr;
 }
 
-auto Component::dependencies() -> const std::vector<std::shared_ptr<Component>>&
+auto Component::dependencies() -> const Component_vector&
 {
     return m_dependencies;
 }
 
-void Component::depends_on(const std::shared_ptr<Component>& dependency)
+void Component::depends_on(Component* dependency)
 {
     ERHE_VERIFY(dependency);
 
@@ -88,7 +88,7 @@ void Component::is_depended_by(Component* component)
     m_depended_by.push_back(component);
 }
 
-auto Component::get_depended_by() const -> const std::vector<Component*>&
+auto Component::get_depended_by() const -> const Component_vector&
 {
     return m_depended_by;
 }
@@ -226,16 +226,16 @@ auto Component::is_ready_to_deinitialize() const -> bool
 
 void Component::component_initialized(Component* component)
 {
-    std::shared_ptr<Component> shared_dependency;
-    for (const auto& dependency : m_dependencies)
+    Component* dependency = nullptr;
+    for (const auto& i : m_dependencies)
     {
-        if (dependency.get() == component)
+        if (i == component)
         {
-            shared_dependency = dependency;
+            dependency = i;
             break;
         }
     }
-    if (!shared_dependency)
+    if (dependency == nullptr)
     {
         return;
     }
@@ -245,12 +245,12 @@ void Component::component_initialized(Component* component)
         m_dependencies.end(),
         [component](auto entry)
         {
-            return entry.get() == component;
+            return entry == component;
         }
     );
 
     ERHE_VERIFY(remove_it != m_dependencies.end());
-    m_initialized_dependencies.push_back(shared_dependency);
+    m_initialized_dependencies.push_back(dependency);
     m_dependencies.erase(
         remove_it,
         m_dependencies.end()

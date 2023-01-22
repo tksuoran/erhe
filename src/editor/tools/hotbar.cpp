@@ -1,4 +1,5 @@
 #include "tools/hotbar.hpp"
+
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "graphics/icon_set.hpp"
@@ -30,6 +31,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -45,6 +47,8 @@ auto Hotbar_trackpad_command::try_call(erhe::application::Command_context& conte
     return m_hotbar.try_call(context);
 }
 
+Hotbar* g_hotbar{nullptr};
+
 Hotbar::Hotbar()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
@@ -54,6 +58,18 @@ Hotbar::Hotbar()
 
 Hotbar::~Hotbar() noexcept
 {
+    ERHE_VERIFY(g_hotbar == nullptr);
+}
+
+void Hotbar::deinitialize_component()
+{
+    ERHE_VERIFY(g_hotbar == this);
+    m_rendertarget_node.reset();
+    m_rendertarget_mesh.reset();
+    m_rendertarget_imgui_viewport.reset();
+    m_hover_scene_view = nullptr;
+    m_slots.clear();
+    g_hotbar = nullptr;
 }
 
 void Hotbar::declare_required_components()
@@ -66,16 +82,16 @@ void Hotbar::declare_required_components()
     require<Editor_message_bus>();
     require<Scene_builder     >();
     require<Viewport_windows  >();
-    m_icon_set = require<Icon_set>();
-    m_tools    = require<Tools   >();
+    require<Icon_set          >();
+    require<Tools             >();
 }
 
 void Hotbar::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_hotbar == nullptr);
 
-    const auto& configuration = get<erhe::application::Configuration>();
-    const auto& config        = configuration->hotbar;
+    const auto& config = erhe::application::g_configuration->hotbar;
     m_enabled = config.enabled;
     m_show    = config.show;
     m_x       = config.x;
@@ -87,29 +103,22 @@ void Hotbar::initialize_component()
         return;
     }
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_trackpad_command);
-    commands->bind_command_to_controller_trackpad(&m_trackpad_command, true);
+    erhe::application::g_commands->register_command(&m_trackpad_command);
+    erhe::application::g_commands->bind_command_to_controller_trackpad(&m_trackpad_command, true);
 
-    const erhe::application::Scoped_gl_context gl_context{
-        get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
     set_description(c_title);
     set_flags      (Tool_flags::background);
-    get<Tools>()->register_tool(this);
+    g_tools->register_tool(this);
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-    const auto& imgui_windows = get<erhe::application::Imgui_windows>();
-    const auto& scene_builder = get<Scene_builder>();
-    const auto& scene_root    = scene_builder->get_scene_root();
-
-    const auto& icon_rasterization = m_icon_set->get_hotbar_rasterization();
+    const auto& scene_root         = g_scene_builder->get_scene_root();
+    const auto& icon_rasterization = g_icon_set->get_hotbar_rasterization();
     const int   icon_size          = icon_rasterization.get_size();
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
-        *m_components,
         icon_size * 8,
         icon_size,
         4000.0
@@ -123,7 +132,6 @@ void Hotbar::initialize_component()
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         m_rendertarget_mesh.get(),
         "Hotbar Viewport",
-        *m_components,
         false
     );
 
@@ -139,29 +147,27 @@ void Hotbar::initialize_component()
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
     // Also registers rendertarget node
-    imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
+    erhe::application::g_imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
 
     this->set_viewport(m_rendertarget_imgui_viewport.get());
 
     set_visibility(m_show);
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
         }
     );
+
+    g_hotbar = this;
 }
 
 void Hotbar::post_initialize()
 {
-    m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
-    m_rendergraph      = get<erhe::application::Rendergraph   >();
-    m_viewport_windows = get<Viewport_windows>();
-
     m_slot_first = 0;
     m_slot_last  = 0;
-    const auto& tools = m_tools->get_tools();
+    const auto& tools = g_tools->get_tools();
     for (Tool* tool : tools)
     {
         const auto opt_icon = tool->get_icon();
@@ -199,7 +205,7 @@ void Hotbar::on_message(Editor_message& message)
             {
                 if (old_node)
                 {
-                    m_rendergraph->disconnect(
+                    erhe::application::g_rendergraph->disconnect(
                         erhe::application::Rendergraph_node_key::rendertarget_texture,
                         m_rendertarget_imgui_viewport,
                         old_node
@@ -209,7 +215,7 @@ void Hotbar::on_message(Editor_message& message)
                 set_visibility(static_cast<bool>(new_node));
                 if (new_node)
                 {
-                    m_rendergraph->connect(
+                    erhe::application::g_rendergraph->connect(
                         erhe::application::Rendergraph_node_key::rendertarget_texture,
                         m_rendertarget_imgui_viewport,
                         new_node
@@ -253,14 +259,14 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     {
-        const auto& headset_view = get<editor::Headset_view>();
+        const auto& headset_view = g_headset_view;
         if (headset_view)
         {
             return headset_view->get_camera();
         }
     }
 #endif
-    const auto viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = g_viewport_windows->hover_window();
     if (!viewport_window)
     {
         return {};
@@ -322,7 +328,7 @@ void Hotbar::handle_slot_update()
     if ((m_slot >= m_slot_first) && (m_slot <= m_slot_last))
     {
         Tool* new_tool = m_slots.at(m_slot);
-        m_tools->set_priority_tool(new_tool);
+        g_tools->set_priority_tool(new_tool);
     }
 }
 
@@ -399,7 +405,7 @@ void Hotbar::tool_button(Tool* tool)
     const glm::vec4 background_color  {0.0f, 0.0f, 0.0f, 0.0f};
     const glm::vec4 tint_color        {1.0f, 1.0f, 1.0f, 1.0f};
     const int       frame_padding     {0};
-    const auto&     icon_rasterization{m_icon_set->get_hotbar_rasterization()};
+    const auto&     icon_rasterization{g_icon_set->get_hotbar_rasterization()};
     const bool      linear            {false};
     const bool      is_boosted        {tool->get_priority_boost() > 0};
     const auto      opt_icon          {tool->get_icon()};
@@ -434,7 +440,7 @@ void Hotbar::tool_button(Tool* tool)
 
     if (is_pressed)
     {
-        m_tools->set_priority_tool(is_boosted ? nullptr : tool);
+        g_tools->set_priority_tool(is_boosted ? nullptr : tool);
     }
 
 }

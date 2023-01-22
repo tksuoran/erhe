@@ -6,8 +6,9 @@
 
 #include <gsl/span>
 
-#include <functional>
-#include <vector>
+//#include <functional>
+//#include <vector>
+#include "etl/vector.h"
 
 namespace hextiles
 {
@@ -49,12 +50,12 @@ public:
 
     auto distance(const Tile_coordinate& lhs, const Tile_coordinate& rhs) -> int;
 
-    void update_group_terrain(const Tiles& tiles, Tile_coordinate position);
+    void update_group_terrain(Tile_coordinate position);
 
 private:
-    uint16_t              m_width {0u};
-    uint16_t              m_height{0u};
-    std::vector<Map_cell> m_map;
+    uint16_t m_width {0u};
+    uint16_t m_height{0u};
+    etl::vector<Map_cell, 160 * 160> m_map; // 100 kB
 };
 
 } // namespace hextiles

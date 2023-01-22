@@ -84,4 +84,6 @@ private:
     std::vector<Unit_type>                m_unit_types;
 };
 
+extern Tiles* g_tiles;
+
 } // namespace hextiles

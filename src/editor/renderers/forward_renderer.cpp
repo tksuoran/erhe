@@ -1,10 +1,10 @@
 #include "renderers/forward_renderer.hpp"
 
+#include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/shadow_renderer.hpp"
-#include "editor_log.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -41,6 +41,8 @@ using erhe::graphics::Rasterization_state;
 using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
+Forward_renderer* g_forward_renderer{nullptr};
+
 Forward_renderer::Forward_renderer()
     : Component{c_type_name}
 {
@@ -50,46 +52,47 @@ Forward_renderer::~Forward_renderer() noexcept
 {
 }
 
+void Forward_renderer::deinitialize_component()
+{
+    ERHE_VERIFY(g_forward_renderer == this);
+    m_material_buffers     .reset();
+    m_light_buffers        .reset();
+    m_camera_buffers       .reset();
+    m_draw_indirect_buffers.reset();
+    m_primitive_buffers    .reset();
+    m_dummy_texture        .reset();
+    g_forward_renderer = nullptr;
+}
+
 void Forward_renderer::declare_required_components()
 {
+    require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
+    require<Mesh_memory      >();
     require<Program_interface>();
-
-    m_configuration = require<erhe::application::Configuration>();
-    m_mesh_memory   = require<Mesh_memory>();
-    m_programs      = require<Programs   >();
-    require<Program_interface>();
+    require<Programs         >();
 }
 
 static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
 void Forward_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_forward_renderer == nullptr);
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
-    const auto& shader_resources = *get<Program_interface>()->shader_resources.get();
+    const auto& shader_resources = *g_program_interface->shader_resources.get();
     m_material_buffers      = std::make_unique<Material_buffer     >(shader_resources.material_interface);
     m_light_buffers         = std::make_unique<Light_buffer        >(shader_resources.light_interface);
     m_camera_buffers        = std::make_unique<Camera_buffer       >(shader_resources.camera_interface);
-    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(m_configuration->renderer.max_draw_count);
+    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(erhe::application::g_configuration->renderer.max_draw_count);
     m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
 
     m_dummy_texture = erhe::graphics::create_dummy_texture();
-}
 
-void Forward_renderer::post_initialize()
-{
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-
-    if (m_configuration->shadow_renderer.enabled)
-    {
-        m_shadow_renderer = get<Shadow_renderer>();
-    }
+    g_forward_renderer = this;
 }
 
 static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::render()"};
@@ -120,7 +123,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto& passes         = parameters.passes;
     const auto& filter         = parameters.filter;
     const bool  enable_shadows =
-        m_shadow_renderer &&
+        (g_shadow_renderer != nullptr) &&
         (!lights.empty()) &&
         (parameters.shadow_texture != nullptr);
 
@@ -128,12 +131,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
         ?
             erhe::graphics::get_handle(
                 *parameters.shadow_texture,
-                *m_programs->nearest_sampler.get()
+                *g_programs->nearest_sampler.get()
             )
         : 0;
     const uint64_t fallback_texture_handle = erhe::graphics::get_handle(
         *m_dummy_texture.get(),
-        *m_programs->nearest_sampler.get()
+        *g_programs->nearest_sampler.get()
     );
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -150,10 +153,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     if (!erhe::graphics::Instance::info.use_bindless_texture)
     {
-        erhe::graphics::s_texture_unit_cache.reset(m_programs->base_texture_unit);
+        erhe::graphics::s_texture_unit_cache.reset(g_programs->base_texture_unit);
     }
 
-    m_material_buffers->update(materials, m_programs);
+    m_material_buffers->update(materials);
     m_material_buffers->bind();
 
     // This must be done even if lights is empty.
@@ -184,8 +187,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
         if (enable_shadows)
         {
-            gl::bind_texture_unit(m_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+            gl::bind_texture_unit(g_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (g_programs->shadow_texture_unit, g_programs->nearest_sampler->gl_name());
         }
 
         erhe::graphics::s_texture_unit_cache.bind(fallback_texture_handle);
@@ -209,7 +212,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
-        m_pipeline_state_tracker->execute(pipeline);
+        erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
         for (const auto& meshes : mesh_spans)
         {
@@ -229,7 +232,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 ERHE_PROFILE_SCOPE("mdi");
                 gl::multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
-                    m_mesh_memory->gl_index_type(),
+                    g_mesh_memory->gl_index_type(),
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
@@ -272,7 +275,7 @@ void Forward_renderer::render_fullscreen(
     const auto& lights         = parameters.lights;
     const auto& passes         = parameters.passes;
     const bool  enable_shadows =
-        m_shadow_renderer &&
+        (g_shadow_renderer != nullptr) &&
         (!lights.empty()) &&
         (parameters.shadow_texture != nullptr);
 
@@ -280,7 +283,7 @@ void Forward_renderer::render_fullscreen(
         ?
             erhe::graphics::get_handle(
                 *parameters.shadow_texture,
-                *m_programs->nearest_sampler.get()
+                *g_programs->nearest_sampler.get()
             )
         : 0;
 
@@ -325,8 +328,8 @@ void Forward_renderer::render_fullscreen(
         }
         else
         {
-            gl::bind_texture_unit(m_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (m_programs->shadow_texture_unit, m_programs->nearest_sampler->gl_name());
+            gl::bind_texture_unit(g_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (g_programs->shadow_texture_unit, g_programs->nearest_sampler->gl_name());
         }
     }
 
@@ -345,7 +348,7 @@ void Forward_renderer::render_fullscreen(
 
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
-        m_pipeline_state_tracker->execute(pipeline);
+        erhe::graphics::g_opengl_state_tracker->execute(pipeline);
         gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 3);
 
         if (pass->end)

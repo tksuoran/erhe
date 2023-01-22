@@ -12,11 +12,6 @@
 #include <thread>
 #include <vector>
 
-namespace erhe::graphics
-{
-    class OpenGL_state_tracker;
-}
-
 namespace erhe::toolkit
 {
     class Context_window;
@@ -47,18 +42,18 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void initialize_component  () override;
+    void deinitialize_component() override;
 
     // Public API
     [[nodiscard]] auto acquire_gl_context() -> Gl_worker_context;
     void release_gl_context     (Gl_worker_context context);
     void provide_worker_contexts(
-        const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
-        erhe::toolkit::Context_window*                               main_window,
-        std::function<bool()>                                        worker_contexts_still_needed_callback
+        erhe::toolkit::Context_window* main_window,
+        std::function<bool()>          worker_contexts_still_needed_callback
     );
 
 private:
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker>       m_opengl_state_tracker;
     erhe::toolkit::Context_window*                              m_main_window{nullptr};
     std::thread::id                                             m_main_thread_id;
     std::mutex                                                  m_mutex;
@@ -70,7 +65,7 @@ private:
 class Scoped_gl_context
 {
 public:
-    explicit Scoped_gl_context(const std::shared_ptr<Gl_context_provider>& context_provider);
+    explicit Scoped_gl_context();
     ~Scoped_gl_context        () noexcept;
     Scoped_gl_context         (const Scoped_gl_context&) = delete;
     auto operator=            (const Scoped_gl_context&) = delete;
@@ -78,8 +73,9 @@ public:
     auto operator=            (Scoped_gl_context&&)      = delete;
 
 private:
-    std::shared_ptr<Gl_context_provider> m_context_provider;
-    Gl_worker_context                    m_context;
+    Gl_worker_context m_context;
 };
+
+extern Gl_context_provider* g_gl_context_provider;
 
 } // namespace erhe::application

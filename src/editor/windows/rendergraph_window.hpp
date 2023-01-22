@@ -10,15 +10,8 @@ namespace ImNodes::Ez
     struct Context;
 }
 
-namespace erhe::application
-{
-    class Rendergraph;
-}
-
 namespace editor
 {
-
-class Editor_scenes;
 
 class Rendergraph_window
     : public erhe::components::Component
@@ -36,7 +29,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -45,15 +37,11 @@ public:
 private:
     void imnodes_demo();
 
-    // Component dependencies
-    std::shared_ptr<Editor_scenes>                     m_editor_scenes;
-    std::shared_ptr<erhe::application::Rendergraph>    m_render_graph;
-    std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-
     float                 m_image_size{100.0f};
     float                 m_curve_strength{10.0f};
     ImNodes::Ez::Context* m_imnodes_context{nullptr};
-
 };
+
+extern Rendergraph_window* g_rendergraph_window;
 
 } // namespace editor

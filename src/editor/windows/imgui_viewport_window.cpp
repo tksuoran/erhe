@@ -17,7 +17,6 @@
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_viewport.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/gl/enum_string_functions.hpp"

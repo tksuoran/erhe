@@ -6,16 +6,14 @@
 namespace hextiles
 {
 
-class Type_editor;
-
 class Unit_editor_window
     : public erhe::components::Component
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Unit_editor_window"};
-    static constexpr std::string_view c_title{"Unit Editor"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr const char* c_type_name = "Unit_editor_window";
+    static constexpr const char* c_title     = "Unit Editor";
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
 
     Unit_editor_window ();
     ~Unit_editor_window() noexcept override;
@@ -28,5 +26,7 @@ public:
     // Implements Imgui_window
     void imgui() override;
 };
+
+extern Unit_editor_window* g_unit_editor_window;
 
 } // namespace hextiles

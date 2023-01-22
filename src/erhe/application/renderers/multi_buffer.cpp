@@ -160,4 +160,11 @@ void Multi_buffer::bind()
     }
 }
 
+void Multi_buffer::reset()
+{
+    m_buffers.clear();
+    m_current_slot = 0;
+    m_writer.reset();
+}
+
 } // namespace erhe::application

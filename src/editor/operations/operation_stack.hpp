@@ -63,6 +63,7 @@ public:
     auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Implements Window
     void imgui() override;
@@ -86,5 +87,7 @@ private:
     std::vector<std::shared_ptr<IOperation>> m_executed;
     std::vector<std::shared_ptr<IOperation>> m_undone;
 };
+
+extern Operation_stack* g_operation_stack;
 
 } // namespace editor

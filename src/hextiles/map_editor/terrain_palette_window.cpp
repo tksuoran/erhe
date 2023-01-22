@@ -1,10 +1,14 @@
 #include "map_editor/terrain_palette_window.hpp"
+
 #include "map_editor/map_editor.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace hextiles
 {
+
+Terrain_palette_window* g_terrain_palette_window{nullptr};
 
 Terrain_palette_window::Terrain_palette_window()
     : erhe::components::Component{c_type_name}
@@ -14,6 +18,8 @@ Terrain_palette_window::Terrain_palette_window()
 
 Terrain_palette_window::~Terrain_palette_window() noexcept
 {
+    ERHE_VERIFY(g_terrain_palette_window == this);
+    g_terrain_palette_window = nullptr;
 }
 
 void Terrain_palette_window::declare_required_components()
@@ -23,17 +29,17 @@ void Terrain_palette_window::declare_required_components()
 
 void Terrain_palette_window::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-}
+    ERHE_VERIFY(g_terrain_palette_window == nullptr);
 
-void Terrain_palette_window::post_initialize()
-{
-    m_map_editor = get<Map_editor>();
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    hide();
+
+    g_terrain_palette_window = this;
 }
 
 void Terrain_palette_window::imgui()
 {
-    m_map_editor->terrain_palette();
+    g_map_editor->terrain_palette();
 }
 
 } // namespace hextiles

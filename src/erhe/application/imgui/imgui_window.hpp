@@ -44,7 +44,6 @@ public:
     void show             ();
     void hide             ();
     void toggle_visibility();
-    void initialize       (const erhe::components::Components& components);
     void image(
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         const int                                       width,
@@ -66,14 +65,8 @@ public:
     virtual auto want_mouse_events   () const -> bool;
 
 protected:
-    // Component dependencies
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    std::shared_ptr<Imgui_renderer> m_imgui_renderer;
-#endif
     Imgui_viewport*   m_imgui_viewport{nullptr};
-
-    bool              m_is_visible{true};
-
+    bool              m_is_visible    {true};
     const std::string m_title;
     float             m_min_size[2]{120.0f, 120.0f};
     float             m_max_size[2]{99999.0f, 99999.0f};

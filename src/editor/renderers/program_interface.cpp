@@ -8,10 +8,16 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
+namespace erhe::graphics
+{
+class Vertex_attribute;
+}
+
 namespace editor {
 
-using erhe::graphics::Shader_stages;
 using erhe::graphics::Vertex_attribute;
+
+Program_interface* g_program_interface{nullptr};
 
 Program_interface::Program_interface()
     : erhe::components::Component{c_type_name}
@@ -20,6 +26,13 @@ Program_interface::Program_interface()
 
 Program_interface::~Program_interface() noexcept
 {
+}
+
+void Program_interface::deinitialize_component()
+{
+    ERHE_VERIFY(g_program_interface == this);
+    shader_resources.reset();
+    g_program_interface = nullptr;
 }
 
 void Program_interface::declare_required_components()
@@ -148,14 +161,18 @@ void Program_interface::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = get<erhe::application::Configuration>();
+    ERHE_VERIFY(g_program_interface == nullptr);
+
+    const auto& config = *erhe::application::g_configuration;
 
     shader_resources = std::make_unique<Shader_resources>(
-        config->renderer.max_material_count,
-        config->renderer.max_light_count,
-        config->renderer.max_camera_count,
-        config->renderer.max_primitive_count
+        config.renderer.max_material_count,
+        config.renderer.max_light_count,
+        config.renderer.max_camera_count,
+        config.renderer.max_primitive_count
     );
+
+    g_program_interface = this;
 }
 
 } // namespace editor

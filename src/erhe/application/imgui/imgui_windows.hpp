@@ -5,12 +5,8 @@
 namespace erhe::application
 {
 
-class Commands;
-class Imgui_renderer;
-class Imgui_viewport;
 class Imgui_window;
-class Imgui_windows;
-class Rendergraph;
+class Imgui_viewport;
 class Window_imgui_viewport;
 
 class Imgui_builtin_windows
@@ -49,7 +45,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
     [[nodiscard]] auto get_mutex                () -> std::mutex&;
@@ -74,20 +70,14 @@ public:
     void on_mouse_wheel (double x, double y);
 
 private:
-    // Component dependencies
-    std::shared_ptr<Commands>                    m_commands;
-    std::shared_ptr<Imgui_renderer>              m_imgui_renderer;
-    std::shared_ptr<Rendergraph>                 m_render_graph;
-
     std::mutex                                   m_mutex;
     std::vector<std::shared_ptr<Imgui_viewport>> m_imgui_viewports;
     std::vector<Imgui_window*>                   m_imgui_windows;
     const Imgui_viewport*                        m_current_viewport{nullptr}; // current context
-
     std::shared_ptr<Window_imgui_viewport>       m_window_imgui_viewport;
-
     Imgui_builtin_windows                        m_imgui_builtin_windows;
-
 };
+
+extern Imgui_windows* g_imgui_windows;
 
 } // namespace erhe::application

@@ -8,6 +8,8 @@
 
 namespace erhe::application {
 
+Rendergraph* g_rendergraph{nullptr};
+
 Rendergraph::Rendergraph()
     : erhe::components::Component{c_type_name}
 {
@@ -15,6 +17,20 @@ Rendergraph::Rendergraph()
 
 Rendergraph::~Rendergraph()
 {
+    ERHE_VERIFY(g_rendergraph == nullptr);
+}
+
+void Rendergraph::deinitialize_component()
+{
+    ERHE_VERIFY(g_rendergraph == this);
+    g_rendergraph = nullptr;
+    m_nodes.clear();
+}
+
+void Rendergraph::initialize_component()
+{
+    ERHE_VERIFY(g_rendergraph == nullptr);
+    g_rendergraph = this;
 }
 
 [[nodiscard]] auto Rendergraph::get_nodes() const -> const std::vector<std::shared_ptr<Rendergraph_node>>&
@@ -198,7 +214,6 @@ void Rendergraph::register_node(const std::shared_ptr<Rendergraph_node>& node)
     }
 #endif
     m_nodes.push_back(node);
-    node->connect(this);
     float x = static_cast<float>(m_nodes.size()) * 250.0f;
     float y = 0.0f;
     node->set_position(glm::vec2{x, y});

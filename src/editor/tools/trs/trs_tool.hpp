@@ -21,65 +21,23 @@
 #include <optional>
 #include <string_view>
 
-namespace erhe::application
-{
-    class Configuration;
-}
-
-namespace erhe::geometry
-{
-    class Geometry;
-}
-
 namespace erhe::physics
 {
     enum class Motion_mode : unsigned int;
-    class Rigid_body;
-}
-
-namespace erhe::primitive
-{
-    class Geometry;
-    class Material;
-    class Primitive_geometry;
 }
 
 namespace erhe::scene
 {
-    class Camera;
     class Mesh;
-    class Message;
     class Node;
-    class Viewport;
-}
-
-namespace erhe::application
-{
-    class Log_window;
-    class Line_renderer_set;
-    class Text_renderer;
 }
 
 namespace editor
 {
 
-class Editor_scenes;
-class Icon_rasterization;
-class Icon_set;
-class Material_library;
-class Materials;
-class Mesh_memory;
-class Move_tool;
 class Node_physics;
-class Node_raytrace;
-class Operation_stack;
-class Raytrace_primitive;
-class Rotate_tool;
-class Scene_view;
-class Tools;
-class Trs_tool;
+class Scene_root;
 class Viewport_window;
-class Viewport_windows;
 
 class Trs_tool_drag_command
     : public erhe::application::Command
@@ -133,7 +91,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -238,35 +195,22 @@ private:
     void update_transforms          ();
     void update_visibility          (const erhe::scene::Scene* view_scene);
 
-    Trs_tool_drag_command                         m_drag_command;
+    Trs_tool_drag_command                     m_drag_command;
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<erhe::application::Text_renderer>     m_text_renderer;
-    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
-    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
-    std::shared_ptr<Move_tool>                            m_move_tool;
-    std::shared_ptr<Icon_set>                             m_icon_set;
-    std::shared_ptr<Operation_stack>                      m_operation_stack;
-    std::shared_ptr<Rotate_tool>                          m_rotate_tool;
-    std::shared_ptr<Selection_tool>                       m_selection_tool;
-    std::shared_ptr<Tools>                                m_tools;
-    std::shared_ptr<Viewport_windows>                     m_viewport_windows;
-
-    erhe::physics::Motion_mode                 m_motion_mode  {erhe::physics::Motion_mode::e_kinematic_physical};
-    bool                                       m_touched      {false};
-    Handle                                     m_hover_handle {Handle::e_handle_none};
-    Handle                                     m_active_handle{Handle::e_handle_none};
-    std::weak_ptr<erhe::scene::Node>           m_target_node;
-    std::shared_ptr<erhe::scene::Node>         m_tool_node;
-    std::optional<erhe::physics::Motion_mode>  m_original_motion_mode;
-    bool                                       m_translate_snap_enable{false};
-    bool                                       m_rotate_snap_enable   {false};
-    int                                        m_translate_snap_index {2};
-    float                                      m_translate_snap       {0.1f};
-    int                                        m_rotate_snap_index    {2};
-    float                                      m_rotate_snap          {15.0f};
-    erhe::scene::Transform                     m_parent_from_node_before;
+    erhe::physics::Motion_mode                m_motion_mode  {erhe::physics::Motion_mode::e_kinematic_physical};
+    bool                                      m_touched      {false};
+    Handle                                    m_hover_handle {Handle::e_handle_none};
+    Handle                                    m_active_handle{Handle::e_handle_none};
+    std::weak_ptr<erhe::scene::Node>          m_target_node;
+    std::shared_ptr<erhe::scene::Node>        m_tool_node;
+    std::optional<erhe::physics::Motion_mode> m_original_motion_mode;
+    bool                                      m_translate_snap_enable{false};
+    bool                                      m_rotate_snap_enable   {false};
+    int                                       m_translate_snap_index {2};
+    float                                     m_translate_snap       {0.1f};
+    int                                       m_rotate_snap_index    {2};
+    float                                     m_rotate_snap          {15.0f};
+    erhe::scene::Transform                    m_parent_from_node_before;
 
     bool                  m_cast_rays{false};
     Debug_rendering       m_debug_rendering;
@@ -274,5 +218,7 @@ private:
     Rotation_context      m_rotation;
     Handle_visualizations m_visualization;
 };
+
+extern Trs_tool* g_trs_tool;
 
 } // namespace editor

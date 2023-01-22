@@ -28,8 +28,6 @@
 namespace erhe::graphics
 {
     class Buffer;
-    class OpenGL_state_tracker;
-    class Sampler;
     class Shader_stages;
 }
 
@@ -40,16 +38,8 @@ namespace erhe::scene
     class Viewport;
 }
 
-namespace erhe::ui
-{
-    class Font;
-}
-
 namespace erhe::application
 {
-
-class Configuration;
-class Shader_monitor;
 
 class Line
 {
@@ -70,7 +60,7 @@ class Line_renderer_pipeline
 public:
     Line_renderer_pipeline();
 
-    void initialize(Shader_monitor* shader_monitor);
+    void initialize();
 
     bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
@@ -90,8 +80,7 @@ public:
     Line_renderer(
         const char*             name,
         unsigned int            stencil_reference,
-        Line_renderer_pipeline* pipeline,
-        const Configuration&    configuration
+        Line_renderer_pipeline* pipeline
     );
 
     Line_renderer (const Line_renderer&) = delete; // Due to std::deque<Frame_resources> m_frame_resources
@@ -104,11 +93,10 @@ public:
     void begin     ();
     void end       ();
     void render(
-        erhe::graphics::OpenGL_state_tracker& pipeline_state_tracker,
-        const erhe::scene::Viewport           camera_viewport,
-        const erhe::scene::Camera&            camera,
-        const bool                            show_visible_lines,
-        const bool                            show_hidden_lines
+        const erhe::scene::Viewport camera_viewport,
+        const erhe::scene::Camera&  camera,
+        const bool                  show_visible_lines,
+        const bool                  show_hidden_lines
     );
     void imgui();
 
@@ -311,7 +299,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -326,9 +314,6 @@ public:
     );
 
 private:
-    // Component dependencies
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-
     Line_renderer_pipeline m_pipeline;
 
 public:
@@ -336,5 +321,7 @@ public:
     std::array<std::unique_ptr<Line_renderer>, s_max_stencil_reference + 1> visible;
     std::array<std::unique_ptr<Line_renderer>, s_max_stencil_reference + 1> hidden;
 };
+
+extern Line_renderer_set* g_line_renderer_set;
 
 } // namespace erhe::application

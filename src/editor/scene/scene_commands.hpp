@@ -20,57 +20,42 @@ namespace erhe::scene
 namespace editor
 {
 
-class Editor_scenes;
-class Operation_stack;
-class Scene_commands;
 class Scene_root;
 
 class Create_new_camera_command
     : public erhe::application::Command
 {
 public:
-    explicit Create_new_camera_command(Scene_commands& scene_commands)
-        : Command         {"scene.create_new_camera"}
-        , m_scene_commands{scene_commands}
+    explicit Create_new_camera_command()
+        : Command{"scene.create_new_camera"}
     {
     }
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Scene_commands& m_scene_commands;
 };
 
 class Create_new_empty_node_command
     : public erhe::application::Command
 {
 public:
-    explicit Create_new_empty_node_command(Scene_commands& scene_commands)
-        : Command         {"scene.create_new_empty_node"}
-        , m_scene_commands{scene_commands}
+    explicit Create_new_empty_node_command()
+        : Command{"scene.create_new_empty_node"}
     {
     }
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Scene_commands& m_scene_commands;
 };
 
 class Create_new_light_command
     : public erhe::application::Command
 {
 public:
-    explicit Create_new_light_command(Scene_commands& scene_commands)
-        : Command         {"scene.create_new_light"}
-        , m_scene_commands{scene_commands}
+    explicit Create_new_light_command()
+        : Command{"scene.create_new_light"}
     {
     }
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Scene_commands& m_scene_commands;
 };
 
 class Scene_commands
@@ -87,7 +72,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Public API
     auto create_new_camera    (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
@@ -100,10 +84,8 @@ private:
     Create_new_camera_command     m_create_new_camera_command;
     Create_new_empty_node_command m_create_new_empty_node_command;
     Create_new_light_command      m_create_new_light_command;
-
-    // Component dependencies
-    std::shared_ptr<Editor_scenes>   m_editor_scenes;
-    std::shared_ptr<Operation_stack> m_operation_stack;
 };
+
+extern Scene_commands* g_scene_commands;
 
 } // namespace editor

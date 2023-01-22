@@ -4,8 +4,6 @@
 
 namespace erhe::application {
 
-class Application;
-
 class Time
     : public erhe::components::Component
 {
@@ -24,6 +22,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void initialize_component() override;
 
     // Public API
     [[nodiscard]] auto time() const -> double;
@@ -40,5 +39,7 @@ private:
     uint64_t                              m_frame_number{0};
     erhe::components::Time_context        m_last_update;
 };
+
+extern Time* g_time;
 
 } // namespace erhe::application

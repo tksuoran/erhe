@@ -14,7 +14,6 @@ namespace erhe::components
 {
 
 using std::set;
-using std::shared_ptr;
 
 
 Components::Components()
@@ -25,9 +24,7 @@ Components::~Components() noexcept
 {
 }
 
-auto Components::add(
-    const shared_ptr<Component>& component
-) -> Component&
+auto Components::add(Component* component) -> Component&
 {
     ERHE_VERIFY(component);
 
@@ -46,8 +43,8 @@ auto Components::add(
     component->register_as_component(this);
     m_components.push_back(component);
 
-    auto* fixed_step_update     = dynamic_cast<IUpdate_fixed_step    *>(component.get());
-    auto* once_per_frame_update = dynamic_cast<IUpdate_once_per_frame*>(component.get());
+    auto* fixed_step_update     = dynamic_cast<IUpdate_fixed_step    *>(component);
+    auto* once_per_frame_update = dynamic_cast<IUpdate_once_per_frame*>(component);
 
     if (fixed_step_update != nullptr)
     {
@@ -58,10 +55,10 @@ auto Components::add(
         m_once_per_frame_updates.insert(once_per_frame_update);
     }
 
-    return *component.get();
+    return *component;
 }
 
-void Components::deitialize_component(Component* component)
+void Components::deinitialize_component(Component* component)
 {
     ERHE_VERIFY(component != nullptr);
 
@@ -106,14 +103,16 @@ void Components::deitialize_component(Component* component)
         }
     }
 
+    component->deinitialize_component();
+
     // This must be last
     {
-        const auto erase_it = remove_if(
+        const auto erase_it = std::remove_if(
             m_components.begin(),
             m_components.end(),
-            [component](std::shared_ptr<Component> shared_component)
+            [component](Component* entry)
             {
-                return shared_component.get() == component;
+                return entry == component;
             }
         );
         const auto erase_count = std::distance(erase_it, m_components.end());
@@ -166,15 +165,12 @@ void Components::cleanup_components()
         m_components_to_process.size()
     );
 
-    for (;;)
+    for (auto i = m_initialization_order.rbegin(), end = m_initialization_order.rend(); i != end; ++i)
     {
-        auto* component = get_component_to_deinitialize();
-        if (component == nullptr)
-        {
-            break;
-        }
+        auto* component = *i; //get_component_to_deinitialize();
         log_components->info("Deinitializing {}", component->name());
-        deitialize_component(component);
+        component->set_state(Component_state::Deinitializing);
+        deinitialize_component(component);
         component->set_state(Component_state::Deinitialized);
     }
     if (m_components.size() > 0)
@@ -354,9 +350,9 @@ void Components::queue_all_components_to_be_processed()
         m_components.begin(),
         m_components.end(),
         std::inserter(m_components_to_process, m_components_to_process.begin()),
-        [](const std::shared_ptr<Component>& c) -> Component*
+        [](Component* c) -> Component*
         {
-            return c.get();
+            return c;
         }
     );
 }
@@ -482,6 +478,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
                         : "main thread"
                 );
                 selected_component->set_state(Component_state::Initializing);
+                m_initialization_order.push_back(selected_component);
                 return selected_component;
             }
         }
@@ -501,26 +498,26 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
     }
 }
 
-auto Components::get_component_to_deinitialize() -> Component*
-{
-    const auto i = std::find_if(
-        m_components_to_process.begin(),
-        m_components_to_process.end(),
-        [](auto& component)
-        {
-            const bool is_ready = component->is_ready_to_deinitialize();
-            return is_ready;
-        }
-    );
-    if (i == m_components_to_process.end())
-    {
-        log_components->error("Unable to find component to deinitialize");
-        return nullptr;
-    }
-    auto component = *i;
-    component->set_state(Component_state::Deinitializing);
-    return component;
-}
+//auto Components::get_component_to_deinitialize() -> Component*
+//{
+//    const auto i = std::find_if(
+//        m_components_to_process.begin(),
+//        m_components_to_process.end(),
+//        [](auto& component)
+//        {
+//            const bool is_ready = component->is_ready_to_deinitialize();
+//            return is_ready;
+//        }
+//    );
+//    if (i == m_components_to_process.end())
+//    {
+//        log_components->error("Unable to find component to deinitialize");
+//        return nullptr;
+//    }
+//    auto component = *i;
+//    component->set_state(Component_state::Deinitializing);
+//    return component;
+//}
 
 auto Components::is_component_initialization_complete() -> bool
 {

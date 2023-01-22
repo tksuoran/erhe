@@ -20,7 +20,6 @@ namespace erhe::graphics
 {
     class Framebuffer;
     class Gpu_timer;
-    class OpenGL_state_tracker;
     class Renderbuffer;
     class Texture;
 }
@@ -29,14 +28,10 @@ namespace erhe::scene
 {
     class Camera;
     class Mesh;
-    class Mesh_layer;
 }
 
 namespace editor
 {
-
-class Mesh_memory;
-class Programs;
 
 class Id_renderer
     : public erhe::components::Component
@@ -63,7 +58,7 @@ public:
     auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
     class Render_parameters
@@ -121,23 +116,18 @@ private:
     void create_id_frame_resources();
     void update_framebuffer       (const erhe::scene::Viewport viewport);
 
-    erhe::scene::Viewport                 m_viewport{0, 0, 0, 0, true};
+    erhe::scene::Viewport                         m_viewport{0, 0, 0, 0, true};
 
-    // Component dependencies
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Programs>                             m_programs;
-    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
-
-    erhe::graphics::Pipeline                              m_pipeline;
-    erhe::graphics::Pipeline                              m_selective_depth_clear_pipeline;
-    std::unique_ptr<erhe::graphics::Renderbuffer>         m_color_renderbuffer;
-    std::unique_ptr<erhe::graphics::Renderbuffer>         m_depth_renderbuffer;
-    std::unique_ptr<erhe::graphics::Texture>              m_color_texture;
-    std::unique_ptr<erhe::graphics::Texture>              m_depth_texture;
-    std::unique_ptr<erhe::graphics::Framebuffer>          m_framebuffer;
-    std::vector<Id_frame_resources>                       m_id_frame_resources;
-    std::size_t                                           m_current_id_frame_resource_slot{0};
-    std::unique_ptr<erhe::graphics::Gpu_timer>            m_gpu_timer;
+    erhe::graphics::Pipeline                      m_pipeline;
+    erhe::graphics::Pipeline                      m_selective_depth_clear_pipeline;
+    std::unique_ptr<erhe::graphics::Renderbuffer> m_color_renderbuffer;
+    std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
+    std::unique_ptr<erhe::graphics::Texture>      m_color_texture;
+    std::unique_ptr<erhe::graphics::Texture>      m_depth_texture;
+    std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
+    std::vector<Id_frame_resources>               m_id_frame_resources;
+    std::size_t                                   m_current_id_frame_resource_slot{0};
+    std::unique_ptr<erhe::graphics::Gpu_timer>    m_gpu_timer;
 
     class Range
     {
@@ -161,5 +151,7 @@ private:
     std::unique_ptr<Draw_indirect_buffer> m_draw_indirect_buffers;
     std::unique_ptr<Primitive_buffer    > m_primitive_buffers;
 };
+
+extern Id_renderer* g_id_renderer;
 
 }

@@ -8,10 +8,6 @@
 #include <map>
 #include <memory>
 
-namespace erhe::primitive
-{
-    class Primitive_eometry;
-}
 namespace erhe::scene
 {
     class Light;
@@ -19,8 +15,6 @@ namespace erhe::scene
 
 namespace editor
 {
-
-class Program_interface;
 
 class Light_mesh
     : public erhe::components::Component
@@ -43,9 +37,6 @@ public:
     [[nodiscard]] auto get_light_mesh     (const erhe::scene::Light& light) -> erhe::primitive::Primitive_geometry*;
 
 private:
-    // Component dependency
-    std::shared_ptr<Program_interface>  m_program_interface;
-
     erhe::primitive::Primitive_geometry m_quad_mesh;
     erhe::primitive::Primitive_geometry m_cone_mesh;
     int                                 m_light_cone_sides{0};

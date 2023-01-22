@@ -1,4 +1,5 @@
 #include "tools/material_paint_tool.hpp"
+
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
@@ -14,7 +15,6 @@
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -34,17 +34,16 @@ void Material_paint_command::try_ready(
         return;
     }
 
-    if (m_material_paint_tool.on_paint_ready())
+    if (g_material_paint_tool->on_paint_ready())
     {
         set_ready(context);
     }
 }
 
-Material_paint_command::Material_paint_command(Material_paint_tool& material_paint_tool)
-    : Command              {"Material_paint.paint"}
-    , m_material_paint_tool{material_paint_tool}
+Material_paint_command::Material_paint_command()
+    : Command{"Material_paint.paint"}
 {
-    set_host(&material_paint_tool);
+    set_host(g_material_paint_tool);
 }
 
 auto Material_paint_command::try_call(
@@ -57,7 +56,7 @@ auto Material_paint_command::try_call(
     }
 
     if (
-        m_material_paint_tool.on_paint() &&
+        g_material_paint_tool->on_paint() &&
         (get_command_state() == erhe::application::State::Ready)
     )
     {
@@ -78,17 +77,16 @@ void Material_pick_command::try_ready(
         return;
     }
 
-    if (m_material_paint_tool.on_pick_ready())
+    if (g_material_paint_tool->on_pick_ready())
     {
         set_ready(context);
     }
 }
 
-Material_pick_command::Material_pick_command(Material_paint_tool& material_paint_tool)
-    : Command              {"Material_paint.pick"}
-    , m_material_paint_tool{material_paint_tool}
+Material_pick_command::Material_pick_command()
+    : Command{"Material_paint.pick"}
 {
-    set_host(&material_paint_tool);
+    set_host(g_material_paint_tool);
 }
 
 auto Material_pick_command::try_call(
@@ -101,7 +99,7 @@ auto Material_pick_command::try_call(
     }
 
     if (
-        m_material_paint_tool.on_pick() &&
+        g_material_paint_tool->on_pick() &&
         (get_command_state() == erhe::application::State::Ready)
     )
     {
@@ -114,11 +112,23 @@ auto Material_pick_command::try_call(
 
 /////////
 
+Material_paint_tool* g_material_paint_tool{nullptr};
+
 Material_paint_tool::Material_paint_tool()
     : erhe::components::Component{c_type_name}
-    , m_paint_command            {*this}
-    , m_pick_command             {*this}
 {
+}
+
+Material_paint_tool::~Material_paint_tool()
+{
+    ERHE_VERIFY(g_material_paint_tool == nullptr);
+}
+
+void Material_paint_tool::deinitialize_component()
+{
+    ERHE_VERIFY(g_material_paint_tool == this);
+    m_material.reset();
+    g_material_paint_tool = nullptr;
 }
 
 void Material_paint_tool::declare_required_components()
@@ -132,35 +142,29 @@ void Material_paint_tool::declare_required_components()
 void Material_paint_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_material_paint_tool == nullptr);
 
     set_base_priority(c_priority);
     set_description  (c_title);
     set_flags        (Tool_flags::toolbox);
-    set_icon         (get<Icon_set>()->icons.material);
-    get<Tools>()->register_tool(this);
+    set_icon         (g_icon_set->icons.material);
+    g_tools->register_tool(this);
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_paint_command);
-    commands->register_command(&m_pick_command);
-    commands->bind_command_to_mouse_click(&m_paint_command, erhe::toolkit::Mouse_button_right);
-    commands->bind_command_to_mouse_click(&m_pick_command,  erhe::toolkit::Mouse_button_right);
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command(&m_paint_command);
+    commands.register_command(&m_pick_command);
+    commands.bind_command_to_mouse_click(&m_paint_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_click(&m_pick_command,  erhe::toolkit::Mouse_button_right);
 
-    erhe::application::Command_context context
-    {
-        *commands.get()
-    };
+    erhe::application::Command_context context;
     set_active_command(c_command_paint);
-}
 
-void Material_paint_tool::post_initialize()
-{
-    m_editor_scenes    = get<Editor_scenes   >();
-    m_viewport_windows = get<Viewport_windows>();
+    g_material_paint_tool = this;
 }
 
 auto Material_paint_tool::on_paint_ready() -> bool
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = g_viewport_windows->hover_window();
     if (!viewport_window)
     {
         return false;
@@ -171,7 +175,7 @@ auto Material_paint_tool::on_paint_ready() -> bool
 
 auto Material_paint_tool::on_pick_ready() -> bool
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = g_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return false;
@@ -187,7 +191,7 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
 
-    const auto viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = g_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return false;
@@ -207,7 +211,7 @@ auto Material_paint_tool::on_paint() -> bool
 
 auto Material_paint_tool::on_pick() -> bool
 {
-    const auto viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = g_viewport_windows->hover_window();
     if (viewport_window == nullptr)
     {
         return false;
@@ -228,10 +232,8 @@ auto Material_paint_tool::on_pick() -> bool
 void Material_paint_tool::set_active_command(const int command)
 {
     m_active_command = command;
-    erhe::application::Command_context context
-    {
-        *get<erhe::application::Commands>().get()
-    };
+
+    erhe::application::Command_context context;
 
     switch (command)
     {
@@ -257,7 +259,7 @@ void Material_paint_tool::set_active_command(const int command)
 void Material_paint_tool::tool_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto& scene_root = m_editor_scenes->get_current_scene_root();
+    const auto& scene_root = g_editor_scenes->get_current_scene_root();
     if (!scene_root)
     {
         return;

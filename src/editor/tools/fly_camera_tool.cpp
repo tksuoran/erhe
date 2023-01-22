@@ -14,7 +14,6 @@
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
@@ -29,16 +28,9 @@ namespace editor
 {
 
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
-Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener(
-    Fly_camera_tool& fly_camera_tool
-)
-    : m_fly_camera_tool{fly_camera_tool}
-{
-}
+Fly_camera_space_mouse_listener::Fly_camera_space_mouse_listener() = default;
 
-Fly_camera_space_mouse_listener::~Fly_camera_space_mouse_listener() noexcept
-{
-}
+Fly_camera_space_mouse_listener::~Fly_camera_space_mouse_listener() noexcept = default;
 
 auto Fly_camera_space_mouse_listener::is_active() -> bool
 {
@@ -52,12 +44,12 @@ void Fly_camera_space_mouse_listener::set_active(const bool value)
 
 void Fly_camera_space_mouse_listener::on_translation(const int tx, const int ty, const int tz)
 {
-    m_fly_camera_tool.translation(tx, -tz, ty);
+    g_fly_camera_tool->translation(tx, -tz, ty);
 }
 
 void Fly_camera_space_mouse_listener::on_rotation(const int rx, const int ry, const int rz)
 {
-    m_fly_camera_tool.rotation(rx, -rz, ry);
+    g_fly_camera_tool->rotation(rx, -rz, ry);
 }
 
 void Fly_camera_space_mouse_listener::on_button(const int)
@@ -69,7 +61,7 @@ void Fly_camera_turn_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (m_fly_camera_tool.try_ready())
+    if (g_fly_camera_tool->try_ready())
     {
         set_ready(context);
     }
@@ -118,11 +110,10 @@ auto Fly_camera_tool::try_ready() -> bool
     return true;
 }
 
-Fly_camera_turn_command::Fly_camera_turn_command(Fly_camera_tool& fly_camera_tool)
-    : Command          {"Fly_camera.turn_camera"}
-    , m_fly_camera_tool{fly_camera_tool}
+Fly_camera_turn_command::Fly_camera_turn_command()
+    : Command{"Fly_camera.turn_camera"}
 {
-    set_host(&fly_camera_tool);
+    set_host(g_fly_camera_tool);
 }
 
 auto Fly_camera_turn_command::try_call(
@@ -131,7 +122,7 @@ auto Fly_camera_turn_command::try_call(
 {
     if (get_command_state() == erhe::application::State::Ready)
     {
-        if (m_fly_camera_tool.get_hover_scene_view() == nullptr)
+        if (g_fly_camera_tool->get_hover_scene_view() == nullptr)
         {
             set_inactive(context);
             return false;
@@ -149,23 +140,21 @@ auto Fly_camera_turn_command::try_call(
     }
 
     const auto relative = context.get_vec2_relative_value();
-    m_fly_camera_tool.turn_relative(-relative.x, -relative.y);
+    g_fly_camera_tool->turn_relative(-relative.x, -relative.y);
     return true;
 }
 
 Fly_camera_move_command::Fly_camera_move_command(
-    Fly_camera_tool&                         fly_camera_tool,
     const Control                            control,
     const erhe::application::Controller_item item,
     const bool                               active
 )
-    : Command          {"Fly_camera.move"}
-    , m_fly_camera_tool{fly_camera_tool  }
-    , m_control        {control          }
-    , m_item           {item             }
-    , m_active         {active           }
+    : Command  {"Fly_camera.move"}
+    , m_control{control          }
+    , m_item   {item             }
+    , m_active {active           }
 {
-    set_host(&fly_camera_tool);
+    set_host(g_fly_camera_tool);
 }
 
 auto Fly_camera_move_command::try_call(
@@ -174,27 +163,28 @@ auto Fly_camera_move_command::try_call(
 {
     static_cast<void>(context);
 
-    return m_fly_camera_tool.try_move(m_control, m_item, m_active);
+    return g_fly_camera_tool->try_move(m_control, m_item, m_active);
 }
+
+Fly_camera_tool* g_fly_camera_tool{nullptr};
 
 Fly_camera_tool::Fly_camera_tool()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
-    , m_turn_command                  {*this}
-    , m_move_up_active_command        {*this, Control::translate_y, erhe::application::Controller_item::more, true }
-    , m_move_up_inactive_command      {*this, Control::translate_y, erhe::application::Controller_item::more, false}
-    , m_move_down_active_command      {*this, Control::translate_y, erhe::application::Controller_item::less, true }
-    , m_move_down_inactive_command    {*this, Control::translate_y, erhe::application::Controller_item::less, false}
-    , m_move_left_active_command      {*this, Control::translate_x, erhe::application::Controller_item::less, true }
-    , m_move_left_inactive_command    {*this, Control::translate_x, erhe::application::Controller_item::less, false}
-    , m_move_right_active_command     {*this, Control::translate_x, erhe::application::Controller_item::more, true }
-    , m_move_right_inactive_command   {*this, Control::translate_x, erhe::application::Controller_item::more, false}
-    , m_move_forward_active_command   {*this, Control::translate_z, erhe::application::Controller_item::less, true }
-    , m_move_forward_inactive_command {*this, Control::translate_z, erhe::application::Controller_item::less, false}
-    , m_move_backward_active_command  {*this, Control::translate_z, erhe::application::Controller_item::more, true }
-    , m_move_backward_inactive_command{*this, Control::translate_z, erhe::application::Controller_item::more, false}
+    , m_move_up_active_command        {Control::translate_y, erhe::application::Controller_item::more, true }
+    , m_move_up_inactive_command      {Control::translate_y, erhe::application::Controller_item::more, false}
+    , m_move_down_active_command      {Control::translate_y, erhe::application::Controller_item::less, true }
+    , m_move_down_inactive_command    {Control::translate_y, erhe::application::Controller_item::less, false}
+    , m_move_left_active_command      {Control::translate_x, erhe::application::Controller_item::less, true }
+    , m_move_left_inactive_command    {Control::translate_x, erhe::application::Controller_item::less, false}
+    , m_move_right_active_command     {Control::translate_x, erhe::application::Controller_item::more, true }
+    , m_move_right_inactive_command   {Control::translate_x, erhe::application::Controller_item::more, false}
+    , m_move_forward_active_command   {Control::translate_z, erhe::application::Controller_item::less, true }
+    , m_move_forward_inactive_command {Control::translate_z, erhe::application::Controller_item::less, false}
+    , m_move_backward_active_command  {Control::translate_z, erhe::application::Controller_item::more, true }
+    , m_move_backward_inactive_command{Control::translate_z, erhe::application::Controller_item::more, false}
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
-    , m_space_mouse_listener  {*this}
+    , m_space_mouse_listener  {}
     , m_space_mouse_controller{m_space_mouse_listener}
 #endif
 {
@@ -202,9 +192,17 @@ Fly_camera_tool::Fly_camera_tool()
 
 Fly_camera_tool::~Fly_camera_tool() noexcept
 {
+    ERHE_VERIFY(g_fly_camera_tool == nullptr);
+}
+
+void Fly_camera_tool::deinitialize_component()
+{
+    ERHE_VERIFY(g_fly_camera_tool == this);
+    m_camera_controller.reset();
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     m_space_mouse_listener.set_active(false);
 #endif
+    g_fly_camera_tool = nullptr;
 }
 
 void Fly_camera_tool::declare_required_components()
@@ -218,6 +216,8 @@ void Fly_camera_tool::declare_required_components()
 
 void Fly_camera_tool::initialize_component()
 {
+    ERHE_VERIFY(g_fly_camera_tool == nullptr);
+
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     m_space_mouse_listener.set_active(true);
 #endif
@@ -225,42 +225,42 @@ void Fly_camera_tool::initialize_component()
     set_base_priority(c_priority);
     set_description  (c_title);
     set_flags        (Tool_flags::background);
-    get<Tools>()->register_tool(this);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    g_tools->register_tool(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-    const auto& commands = get<erhe::application::Commands>();
-    const auto& config   = get<erhe::application::Configuration>()->camera_controls;
+    auto& commands = *erhe::application::g_commands;
 
-    commands->register_command(&m_move_up_active_command);
-    commands->register_command(&m_move_up_inactive_command);
-    commands->register_command(&m_move_down_active_command);
-    commands->register_command(&m_move_down_inactive_command);
-    commands->register_command(&m_move_left_active_command);
-    commands->register_command(&m_move_left_inactive_command);
-    commands->register_command(&m_move_right_active_command);
-    commands->register_command(&m_move_right_inactive_command);
-    commands->register_command(&m_move_forward_active_command);
-    commands->register_command(&m_move_forward_inactive_command);
-    commands->register_command(&m_move_backward_active_command);
-    commands->register_command(&m_move_backward_inactive_command);
-    commands->bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_r, true );
-    commands->bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_r, false);
-    commands->bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_f, true );
-    commands->bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_f, false);
-    commands->bind_command_to_key(&m_move_left_active_command,       erhe::toolkit::Key_a, true );
-    commands->bind_command_to_key(&m_move_left_inactive_command,     erhe::toolkit::Key_a, false);
-    commands->bind_command_to_key(&m_move_right_active_command,      erhe::toolkit::Key_d, true );
-    commands->bind_command_to_key(&m_move_right_inactive_command,    erhe::toolkit::Key_d, false);
-    commands->bind_command_to_key(&m_move_forward_active_command,    erhe::toolkit::Key_w, true );
-    commands->bind_command_to_key(&m_move_forward_inactive_command,  erhe::toolkit::Key_w, false);
-    commands->bind_command_to_key(&m_move_backward_active_command,   erhe::toolkit::Key_s, true );
-    commands->bind_command_to_key(&m_move_backward_inactive_command, erhe::toolkit::Key_s, false);
+    commands.register_command(&m_move_up_active_command);
+    commands.register_command(&m_move_up_inactive_command);
+    commands.register_command(&m_move_down_active_command);
+    commands.register_command(&m_move_down_inactive_command);
+    commands.register_command(&m_move_left_active_command);
+    commands.register_command(&m_move_left_inactive_command);
+    commands.register_command(&m_move_right_active_command);
+    commands.register_command(&m_move_right_inactive_command);
+    commands.register_command(&m_move_forward_active_command);
+    commands.register_command(&m_move_forward_inactive_command);
+    commands.register_command(&m_move_backward_active_command);
+    commands.register_command(&m_move_backward_inactive_command);
+    commands.bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_r, true );
+    commands.bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_r, false);
+    commands.bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_f, true );
+    commands.bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_f, false);
+    commands.bind_command_to_key(&m_move_left_active_command,       erhe::toolkit::Key_a, true );
+    commands.bind_command_to_key(&m_move_left_inactive_command,     erhe::toolkit::Key_a, false);
+    commands.bind_command_to_key(&m_move_right_active_command,      erhe::toolkit::Key_d, true );
+    commands.bind_command_to_key(&m_move_right_inactive_command,    erhe::toolkit::Key_d, false);
+    commands.bind_command_to_key(&m_move_forward_active_command,    erhe::toolkit::Key_w, true );
+    commands.bind_command_to_key(&m_move_forward_inactive_command,  erhe::toolkit::Key_w, false);
+    commands.bind_command_to_key(&m_move_backward_active_command,   erhe::toolkit::Key_s, true );
+    commands.bind_command_to_key(&m_move_backward_inactive_command, erhe::toolkit::Key_s, false);
 
-    commands->register_command(&m_turn_command);
-    commands->bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
+    commands.register_command(&m_turn_command);
+    commands.bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
 
     m_camera_controller = std::make_shared<Frame_controller>();
 
+    const auto& config = erhe::application::g_configuration->camera_controls;
     m_camera_controller->get_controller(Control::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_controller(Control::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_controller(Control::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
@@ -268,18 +268,14 @@ void Fly_camera_tool::initialize_component()
     m_rotate_scale_x = config.invert_x ? -1.0f / 1024.0f : 1.0f / 1024.f;
     m_rotate_scale_y = config.invert_y ? -1.0f / 1024.0f : 1.0f / 1024.f;
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             Tool::on_message(message);
         }
     );
-}
 
-void Fly_camera_tool::post_initialize()
-{
-    m_editor_scenes    = get<Editor_scenes   >();
-    m_viewport_windows = get<Viewport_windows>();
+    g_fly_camera_tool = this;
 }
 
 void Fly_camera_tool::update_camera()
@@ -289,7 +285,7 @@ void Fly_camera_tool::update_camera()
         return;
     }
 
-    const auto viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = g_viewport_windows->hover_window();
     const auto camera = (viewport_window)
         ? viewport_window->get_camera()
         : std::shared_ptr<erhe::scene::Camera>{};
@@ -390,7 +386,7 @@ auto Fly_camera_tool::try_move(
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     if (
-        (m_viewport_windows->hover_window() == nullptr) &&
+        (g_viewport_windows->hover_window() == nullptr) &&
         active
     )
     {
@@ -409,7 +405,7 @@ auto Fly_camera_tool::turn_relative(const double dx, const double dy) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
-    const auto viewport_window = m_viewport_windows->hover_window();
+    const auto viewport_window = g_viewport_windows->hover_window();
     if (!viewport_window)
     {
         return false;
@@ -466,7 +462,7 @@ void Fly_camera_tool::imgui()
     float speed = m_camera_controller->translate_z.max_delta();
 
     auto* camera = get_camera();
-    const auto& scene_root = m_editor_scenes->get_current_scene_root();
+    const auto& scene_root = g_editor_scenes->get_current_scene_root();
     if (!scene_root)
     {
         return;

@@ -14,6 +14,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
+#include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs/trs_tool.hpp"
 #include "windows/node_tree_window.hpp"
@@ -28,7 +29,6 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/time.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
@@ -36,6 +36,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace editor
 {
@@ -44,10 +45,7 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-Range_selection::Range_selection(Selection_tool& selection_tool)
-    : m_selection_tool{selection_tool}
-{
-}
+Range_selection::Range_selection() = default;
 
 void Range_selection::set_terminator(
     const std::shared_ptr<erhe::scene::Item>& item
@@ -174,7 +172,7 @@ void Range_selection::end(const bool attachments_expanded)
         return;
     }
 
-    m_selection_tool.set_selection(selection);
+    g_selection_tool->set_selection(selection);
     m_entries.clear();
 }
 
@@ -183,24 +181,23 @@ void Range_selection::reset()
     log_selection->trace("resetting range selection");
     if (m_primary_terminator && m_secondary_terminator)
     {
-        m_selection_tool.clear_selection();
+        g_selection_tool->clear_selection();
     }
     m_primary_terminator.reset();
     m_secondary_terminator.reset();
 }
 
-Selection_tool_select_command::Selection_tool_select_command(Selection_tool& selection_tool)
-    : Command         {"Selection_tool.select"}
-    , m_selection_tool{selection_tool}
+Selection_tool_select_command::Selection_tool_select_command()
+    : Command{"Selection_tool.select"}
 {
-    set_host(&selection_tool);
+    set_host(g_selection_tool);
 }
 
 void Selection_tool_select_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (m_selection_tool.on_select_try_ready())
+    if (g_selection_tool->on_select_try_ready())
     {
         set_ready(context);
     }
@@ -216,16 +213,15 @@ auto Selection_tool_select_command::try_call(
         return false;
     }
 
-    const bool consumed = m_selection_tool.on_select();
+    const bool consumed = g_selection_tool->on_select();
     set_inactive(context);
     return consumed;
 }
 
-Selection_tool_delete_command::Selection_tool_delete_command(Selection_tool& selection_tool)
-    : Command         {"Selection_tool.delete"}
-    , m_selection_tool{selection_tool}
+Selection_tool_delete_command::Selection_tool_delete_command()
+    : Command{"Selection_tool.delete"}
 {
-    set_host(&selection_tool);
+    set_host(g_selection_tool);
 }
 
 auto Selection_tool_delete_command::try_call(
@@ -234,7 +230,7 @@ auto Selection_tool_delete_command::try_call(
 {
     static_cast<void>(context);
 
-    return m_selection_tool.delete_selection();
+    return g_selection_tool->delete_selection();
 }
 
 auto Selection_tool::delete_selection() -> bool
@@ -257,7 +253,6 @@ auto Selection_tool::delete_selection() -> bool
         compound_parameters.operations.push_back(
             std::make_shared<Node_insert_remove_operation>(
                 Node_insert_remove_operation::Parameters{
-                    .selection_tool = this,
                     .node           = node,
                     .parent         = node->parent().lock(),
                     .mode           = Scene_item_operation::Mode::remove,
@@ -271,7 +266,7 @@ auto Selection_tool::delete_selection() -> bool
     }
 
     const auto op = std::make_shared<Compound_operation>(std::move(compound_parameters));
-    get<Operation_stack>()->push(op);
+    g_operation_stack->push(op);
     return true;
 }
 
@@ -304,17 +299,26 @@ auto Selection_tool::get_first_selected_scene() -> std::shared_ptr<erhe::scene::
     return {};
 }
 
+Selection_tool* g_selection_tool{nullptr};
+
 Selection_tool::Selection_tool()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
-    , m_select_command               {*this}
-    , m_delete_command               {*this}
-    , m_range_selection              {*this}
 {
 }
 
 Selection_tool::~Selection_tool() noexcept
 {
+    ERHE_VERIFY(g_selection_tool == nullptr);
+}
+
+void Selection_tool::deinitialize_component()
+{
+    ERHE_VERIFY(g_selection_tool == this);
+    m_selection.clear();
+    m_range_selection.reset();
+    m_hover_mesh.reset();
+    g_selection_tool = nullptr;
 }
 
 void Selection_tool::declare_required_components()
@@ -328,42 +332,32 @@ void Selection_tool::declare_required_components()
 
 void Selection_tool::initialize_component()
 {
+    ERHE_VERIFY(g_selection_tool == nullptr);
+
     set_base_priority(c_priority);
     set_description  (c_title);
     set_flags        (Tool_flags::toolbox | Tool_flags::secondary);
-    set_icon         (get<Icon_set>()->icons.select);
-    get<Tools>()->register_tool(this);
+    set_icon         (g_icon_set->icons.select);
+    g_tools->register_tool(this);
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
     hide();
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command                        (&m_select_command);
-    commands->register_command                        (&m_delete_command);
-    commands->bind_command_to_mouse_click             (&m_select_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_controller_trigger_click(&m_select_command);
-    commands->bind_command_to_key                     (&m_delete_command, erhe::toolkit::Key_delete, true);
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command                        (&m_select_command);
+    commands.register_command                        (&m_delete_command);
+    commands.bind_command_to_mouse_click             (&m_select_command, erhe::toolkit::Mouse_button_left);
+    commands.bind_command_to_controller_trigger_click(&m_select_command);
+    commands.bind_command_to_key                     (&m_delete_command, erhe::toolkit::Key_delete, true);
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             Tool::on_message(message);
         }
     );
-}
 
-void Selection_tool::post_initialize()
-{
-    m_line_renderer_set  = get<erhe::application::Line_renderer_set>();
-    m_editor_message_bus = get<Editor_message_bus>();
-    m_editor_scenes      = get<Editor_scenes   >();
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_headset_view       = get<Headset_view    >();
-#endif
-    m_icon_set           = get<Icon_set        >();
-    m_node_tree_window   = get<Node_tree_window>();
-    m_viewport_config    = get<Viewport_config >();
-    m_viewport_windows   = get<Viewport_windows>();
+    g_selection_tool = this;
 }
 
 void Selection_tool::handle_priority_update(int old_priority, int new_priority)
@@ -455,7 +449,7 @@ auto Selection_tool::on_select() -> bool
     log_selection->trace("on select");
 
     const bool was_selected = is_in_selection(m_hover_mesh);
-    if (m_viewport_windows->control_key_down())
+    if (g_viewport_windows->control_key_down())
     {
         if (m_hover_content)
         {
@@ -534,7 +528,7 @@ void Selection_tool::toggle_mesh_selection(
 
     if (add)
     {
-        if (m_node_tree_window->expand_attachments())
+        if (g_node_tree_window->expand_attachments())
         {
             add_to_selection(mesh);
             m_range_selection.set_terminator(mesh);
@@ -554,7 +548,7 @@ void Selection_tool::toggle_mesh_selection(
     }
     else if (remove)
     {
-        if (m_node_tree_window->expand_attachments())
+        if (g_node_tree_window->expand_attachments())
         {
             remove_from_selection(mesh);
         }
@@ -679,7 +673,7 @@ void Selection_tool::sanity_check()
 #if !defined(NDEBUG)
     std::size_t error_count{0};
 
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    const auto& scene_roots = g_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {
         const auto& scene = scene_root->scene();
@@ -715,7 +709,7 @@ void Selection_tool::sanity_check()
 
 void Selection_tool::send_selection_change_message() const
 {
-    m_editor_message_bus->send_message(
+    g_editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_selection
         }
@@ -746,7 +740,7 @@ void Selection_tool::imgui()
 
 void Selection_tool::viewport_toolbar(bool& hovered)
 {
-    const auto& icon_rasterication = m_icon_set->get_small_rasterization();
+    const auto& icon_rasterication = g_icon_set->get_small_rasterization();
 
     int boost = get_priority_boost();
     const auto mode = boost > 0
@@ -755,7 +749,7 @@ void Selection_tool::viewport_toolbar(bool& hovered)
 
     erhe::application::begin_button_style(mode);
     const bool button_pressed = icon_rasterication.icon_button(
-        m_icon_set->icons.select,
+        g_icon_set->icons.select,
         -1,
         glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},

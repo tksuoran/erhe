@@ -30,7 +30,6 @@
 #include <vector>
 
 namespace erhe::graphics {
-    class OpenGL_state_tracker;
     class Sampler;
     class Shader_stages;
     class Texture;
@@ -129,11 +128,13 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Imgui_renderer();
+    ~Imgui_renderer();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
     static constexpr std::size_t s_uvec2_size  = 2 * sizeof(uint32_t);
@@ -183,15 +184,14 @@ private:
     void create_samplers    ();
     void create_font_texture();
 
-    ImFont*                                               m_primary_font   {nullptr};
-    ImFont*                                               m_mono_font      {nullptr};
-    ImFont*                                               m_vr_primary_font{nullptr};
-    ImFont*                                               m_vr_mono_font   {nullptr};
-    ImFontAtlas                                           m_font_atlas;
+    ImFont*                                            m_primary_font   {nullptr};
+    ImFont*                                            m_mono_font      {nullptr};
+    ImFont*                                            m_vr_primary_font{nullptr};
+    ImFont*                                            m_vr_mono_font   {nullptr};
+    ImFontAtlas                                        m_font_atlas;
 
-    std::unique_ptr<Imgui_program_interface>              m_imgui_program_interface;
+    std::unique_ptr<Imgui_program_interface>           m_imgui_program_interface;
 
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
     std::shared_ptr<erhe::graphics::Texture>           m_dummy_texture;
     std::shared_ptr<erhe::graphics::Texture>           m_font_texture;
     std::unique_ptr<erhe::graphics::Shader_stages>     m_shader_stages;
@@ -206,6 +206,8 @@ private:
 
     std::vector<std::function<void()>> m_at_end_of_frame;
 };
+
+extern Imgui_renderer* g_imgui_renderer;
 
 } // namespace erhe::application
 

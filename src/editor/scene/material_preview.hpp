@@ -7,27 +7,20 @@
 
 #include <gsl/gsl>
 
-namespace erhe::application {
-    class Commands;
-    class Configuration;
-    class Imgui_windows;
-}
-
-namespace erhe::geometry {
-    class Geometry;
-}
-
-namespace erhe::graphics {
+namespace erhe::graphics
+{
     class Framebuffer;
     class Renderbuffer;
     class Texture;
 }
 
-namespace erhe::primitive {
+namespace erhe::primitive
+{
     class Material;
 }
 
-namespace erhe::scene {
+namespace erhe::scene
+{
     class Camera;
     class Light;
     class Mesh;
@@ -38,8 +31,6 @@ namespace editor
 {
 
 class Content_library;
-class Mesh_memory;
-class Render_context;
 class Scene_root;
 
 class Material_preview
@@ -64,7 +55,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -83,11 +74,6 @@ private:
     void make_preview_scene();
     //// void generate_torus_geometry();
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Configuration> m_configuration;
-    std::shared_ptr<erhe::application::Imgui_windows> m_imgui_windows;
-    std::shared_ptr<Mesh_memory>                      m_mesh_memory;
-
     int                                           m_width;
     int                                           m_height;
     gl::Internal_format                           m_color_format;
@@ -100,9 +86,7 @@ private:
     std::shared_ptr<erhe::scene::Node>   m_node;
     std::shared_ptr<erhe::scene::Mesh>   m_mesh;
     std::shared_ptr<erhe::scene::Node>   m_key_light_node;
-    //// std::shared_ptr<erhe::scene::Node>  m_fill_light_node;
     std::shared_ptr<erhe::scene::Light>  m_key_light;
-    //// std::shared_ptr<erhe::scene::Light> m_fill_light;
     std::shared_ptr<erhe::scene::Node>   m_camera_node;
     std::shared_ptr<erhe::scene::Camera> m_camera;
 
@@ -114,13 +98,8 @@ private:
     int   m_slice_count{40};
     int   m_stack_count{22};
     float m_radius{1.0f};
-    ////std::shared_ptr<erhe::geometry::Geometry> m_sphere_geometry;
-
-    ////int   m_major_steps{40};
-    ////int   m_minor_steps{22};
-    ////float m_major_radius{1.00f};
-    ////float m_minor_radius{0.25f};
-    ////std::shared_ptr<erhe::geometry::Geometry> m_torus_geometry;
 };
+
+extern Material_preview* g_material_preview;
 
 } // namespace editor

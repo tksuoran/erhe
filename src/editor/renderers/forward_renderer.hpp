@@ -21,33 +21,20 @@
 
 namespace erhe::graphics
 {
-    class OpenGL_state_tracker;
     class Texture;
-    class Vertex_input_state;
 }
 
 namespace erhe::scene
 {
     class Camera;
     class Light;
-    class Light_layer;
     class Mesh;
     class Mesh_layer;
-    class Node;
     class Item_filter;
-}
-
-namespace erhe::application
-{
-    class Configuration;
 }
 
 namespace editor
 {
-
-class Programs;
-class Mesh_memory;
-class Shadow_renderer;
 
 class Forward_renderer
     : public erhe::components::Component
@@ -65,7 +52,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
     class Render_parameters
@@ -97,13 +84,6 @@ public:
     auto primitive_settings() const -> Primitive_interface_settings&;
 
 private:
-    // Component dependencies
-    std::shared_ptr<erhe::application::Configuration>     m_configuration;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Mesh_memory>                          m_mesh_memory;
-    std::shared_ptr<Shadow_renderer>                      m_shadow_renderer;
-    std::shared_ptr<Programs>                             m_programs;
-
     std::unique_ptr<Material_buffer     >    m_material_buffers;
     std::unique_ptr<Light_buffer        >    m_light_buffers;
     std::unique_ptr<Camera_buffer       >    m_camera_buffers;
@@ -111,5 +91,7 @@ private:
     std::unique_ptr<Primitive_buffer    >    m_primitive_buffers;
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
 };
+
+extern Forward_renderer* g_forward_renderer;
 
 } // namespace editor

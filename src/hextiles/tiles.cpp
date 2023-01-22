@@ -15,6 +15,8 @@
 namespace hextiles
 {
 
+Tiles* g_tiles{nullptr};
+
 Tiles::Tiles()
     : Component{c_type_name}
 {
@@ -22,15 +24,21 @@ Tiles::Tiles()
 
 Tiles::~Tiles() noexcept
 {
+    ERHE_VERIFY(g_tiles == this);
+    g_tiles = nullptr;
 }
 
 void Tiles::initialize_component()
 {
+    ERHE_VERIFY(g_tiles == nullptr);
+
     // Multishape groups
     load_terrain_defs();
     load_terrain_group_defs();
     load_terrain_replacement_rule_defs();
     load_unit_defs();
+
+    g_tiles = this;
 }
 
 using json = nlohmann::json;
@@ -252,7 +260,9 @@ void Tiles::load_terrain_defs_v5()
         terrain_type.generate_max_humidity    = json_terrain_type["generate_max_humidity"   ];
         terrain_type.generate_ratio           = json_terrain_type["generate_ratio"          ];
         terrain_type.group                    = json_terrain_type["group"                   ];
-        terrain_type.name                     = json_terrain_type["name"                    ];
+        std::string name                      = json_terrain_type["name"                    ];;
+        terrain_type.name.clear();
+        std::copy(name.begin(), name.end(), terrain_type.name.begin());
         m_terrain_types.push_back(terrain_type);
     }
 }
@@ -625,7 +635,11 @@ void Tiles::load_terrain_replacement_rule_defs_v1()
         rule.enabled     = json_rule["enabled"   ];
         rule.equal       = json_rule["equal"     ];
         rule.primary     = json_rule["primary"   ];
-        rule.secondary   = json_rule["secondary" ].get<std::vector<terrain_t>>();
+
+        std::vector<terrain_t> secondary = json_rule["secondary" ].get<std::vector<terrain_t>>();
+        rule.secondary.clear();
+        std::copy(secondary.begin(), secondary.end(), rule.secondary.begin());
+
         rule.replacement = json_rule["replacement"];
         m_terrain_replacement_rules.push_back(rule);
     }
@@ -875,7 +889,9 @@ void Tiles::load_unit_defs_v2()
     for (const auto& json_unit_type : json_unit_types)
     {
         Unit_type unit_type;
-        unit_type.name                         = json_unit_type["name"                        ];
+        std::string name                       = json_unit_type["name"                        ];
+        unit_type.name.clear();
+        std::copy(name.begin(), name.end(), unit_type.name.begin());
         unit_type.tech_level                   = json_unit_type["tech_level"                  ];
         unit_type.production_time              = json_unit_type["production_time"             ];
         unit_type.city_size                    = json_unit_type["city_size"                   ];

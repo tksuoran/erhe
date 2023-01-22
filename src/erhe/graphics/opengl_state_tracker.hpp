@@ -36,6 +36,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void initialize_component() override;
 
     void on_thread_exit () override;
     void on_thread_enter() override;
@@ -53,5 +54,7 @@ public:
     Color_blend_state_tracker    color_blend;
     // RODO Dynamic state
 };
+
+extern OpenGL_state_tracker* g_opengl_state_tracker;
 
 } // namespace erhe::graphics

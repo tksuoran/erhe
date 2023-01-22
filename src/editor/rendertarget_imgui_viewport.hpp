@@ -21,22 +21,16 @@ namespace erhe::components
 namespace editor
 {
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-class Hand_tracker;
-class Headset_view;
-#endif
 class Rendertarget_mesh;
-class Viewport_window;
 
 class Rendertarget_imgui_viewport
     : public erhe::application::Imgui_viewport
 {
 public:
     Rendertarget_imgui_viewport(
-        Rendertarget_mesh*                  rendertarget_mesh,
-        const std::string_view              name,
-        const erhe::components::Components& components,
-        bool                                imgui_ini = true
+        Rendertarget_mesh*     rendertarget_mesh,
+        const std::string_view name,
+        bool                   imgui_ini = true
     );
     virtual ~Rendertarget_imgui_viewport() noexcept;
 
@@ -85,22 +79,14 @@ public:
     void set_menu_visible(bool visible);
 
 private:
-    Rendertarget_mesh*                                 m_rendertarget_mesh{nullptr};
-    std::shared_ptr<erhe::application::Configuration>  m_configuration;
-    std::shared_ptr<erhe::application::Imgui_renderer> m_imgui_renderer;
-    std::shared_ptr<erhe::application::Imgui_windows>  m_imgui_windows;
-    std::shared_ptr<erhe::application::View>           m_view;
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    std::shared_ptr<Hand_tracker>                      m_hand_tracker;
-    std::shared_ptr<Headset_view>                      m_headset_view;
-#endif
-    std::string m_name;
-    std::string m_imgui_ini_path;
-    glm::vec4   m_clear_color {0.0f, 0.0f, 0.0f, 0.2f};
-    bool        m_show_menu   {false};
-    double      m_time        {0.0};
-    double      m_last_mouse_x{0.0};
-    double      m_last_mouse_y{0.0};
+    Rendertarget_mesh* m_rendertarget_mesh{nullptr};
+    std::string        m_name;
+    std::string        m_imgui_ini_path;
+    glm::vec4          m_clear_color {0.0f, 0.0f, 0.0f, 0.2f};
+    bool               m_show_menu   {false};
+    double             m_time        {0.0};
+    double             m_last_mouse_x{0.0};
+    double             m_last_mouse_y{0.0};
 };
 
 } // namespace erhe::application

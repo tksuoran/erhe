@@ -19,16 +19,9 @@
 #include <string>
 #include <deque>
 
-namespace erhe::application
-{
-    class Configuration;
-    class Shader_monitor;
-}
-
 namespace erhe::graphics
 {
     class Gpu_timer;
-    class OpenGL_state_tracker;
     class Sampler;
     class Shader_resource;
     class Shader_stages;
@@ -38,7 +31,6 @@ namespace erhe::graphics
 namespace editor
 {
 
-class Downsample_node;
 class Post_processing_node;
 class Post_processing;
 
@@ -70,10 +62,7 @@ public:
     static constexpr std::string_view c_type_name{"Post_processing_node"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
-    Post_processing_node(
-        const std::string_view name,
-        Post_processing&       post_processing
-    );
+    Post_processing_node(const std::string_view name);
 
     // Implements Rendergraph_node
     [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
@@ -111,7 +100,6 @@ public:
 private:
     auto update_downsample_nodes() -> bool;
 
-    Post_processing&             m_post_processing;
     std::vector<Downsample_node> m_downsample_nodes;
     int                          m_width  {0};
     int                          m_height {0};
@@ -125,12 +113,13 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Post_processing();
+    ~Post_processing();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
     auto create_node (const std::string_view name) -> std::shared_ptr<Post_processing_node>;
@@ -146,10 +135,6 @@ private:
     );
     void compose               (Post_processing_node& node);
     void create_frame_resources();
-
-    // Component dependencies
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<erhe::application::Configuration>     m_configuration;
 
     std::vector<std::shared_ptr<Post_processing_node>>  m_nodes;
     erhe::graphics::Sampler*                            m_linear_sampler  {nullptr};
@@ -188,5 +173,7 @@ private:
     };
     Offsets m_offsets;
 };
+
+extern Post_processing* g_post_processing;
 
 } // namespace editor

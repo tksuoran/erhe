@@ -1,4 +1,5 @@
 #include "scene/scene_builder.hpp"
+
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
@@ -61,6 +62,7 @@
 #include "erhe/scene/transform.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/color_space.hpp>
@@ -95,6 +97,8 @@ using glm::vec4;
 
 constexpr bool global_instantiate = true;
 
+Scene_builder* g_scene_builder{nullptr};
+
 Scene_builder::Scene_builder()
     : Component{c_type_name}
 {
@@ -102,6 +106,19 @@ Scene_builder::Scene_builder()
 
 Scene_builder::~Scene_builder() noexcept
 {
+    ERHE_VERIFY(g_scene_builder == nullptr);
+}
+
+void Scene_builder::deinitialize_component()
+{
+    ERHE_VERIFY(g_scene_builder == this);
+    m_floor_brush.reset();
+    m_table_brush.reset();
+    m_scene_brushes.clear();
+    m_collision_shapes.clear();
+    m_primary_viewport_window.reset();
+    m_scene_root.reset();
+    g_scene_builder = nullptr;
 }
 
 void Scene_builder::declare_required_components()
@@ -114,47 +131,42 @@ void Scene_builder::declare_required_components()
     require<Editor_rendering >();
     require<Editor_scenes    >();
     require<Fly_camera_tool  >();
+    require<Mesh_memory      >();
     require<Shadow_renderer  >();
     require<Viewport_windows >();
-    m_mesh_memory = require<Mesh_memory>();
 }
 
 void Scene_builder::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_scene_builder == nullptr);
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
-
-    const auto& editor_scenes = get<Editor_scenes>();
+    const erhe::application::Scoped_gl_context gl_context;
 
     auto content_library = std::make_shared<Content_library>();
     add_default_materials(content_library->materials);
 
     m_scene_root = std::make_shared<Scene_root>(
-        *this->m_components,
         content_library,
         "Scene"
     );
 
     setup_scene();
 
-    editor_scenes->register_scene_root(m_scene_root);
+    g_editor_scenes->register_scene_root(m_scene_root);
+
+    g_scene_builder = this;
 }
 
 void Scene_builder::add_rendertarget_viewports(int count)
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto& rendergraph     = get<erhe::application::Rendergraph  >();
-    const auto& imgui_windows   = get<erhe::application::Imgui_windows>();
     const auto& test_scene_root = get_scene_root();
 
     if (count >= 1)
     {
         auto rendertarget_node_1 = std::make_shared<erhe::scene::Node>("RT Node 1");
         auto rendertarget_mesh_1 = std::make_shared<Rendertarget_mesh>(
-            *m_components,
             1920,  // width
             1080,  // height
             2000.0 // pixels per meter
@@ -173,21 +185,18 @@ void Scene_builder::add_rendertarget_viewports(int count)
 
         auto imgui_viewport_1 = std::make_shared<editor::Rendertarget_imgui_viewport>(
             rendertarget_mesh_1.get(),
-            "Rendertarget ImGui Viewport 1",
-            *m_components
+            "Rendertarget ImGui Viewport 1"
         );
 
-        imgui_windows->register_imgui_viewport(imgui_viewport_1);
+        erhe::application::g_imgui_windows->register_imgui_viewport(imgui_viewport_1);
 
-        const auto& grid_tool = get<editor::Grid_tool>();
-        grid_tool->set_viewport(imgui_viewport_1.get());
-        grid_tool->show();
+        g_grid_tool->set_viewport(imgui_viewport_1.get());
+        g_grid_tool->show();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        const auto& headset_view = get<editor::Headset_view>();
-        if (headset_view)
+        if (g_headset_view != nullptr)
         {
-            headset_view->set_viewport(imgui_viewport_1.get());
+            g_headset_view->set_viewport(imgui_viewport_1.get());
         }
 #endif
     }
@@ -202,20 +211,18 @@ void Scene_builder::add_rendertarget_viewports(int count)
         //auto* camera_node_b = camera_b->get_node();
         camera_b->set_wireframe_color(glm::vec4{ 0.3f, 0.6f, 1.00f, 1.0f });
 
-        const auto& viewport_windows = get<editor::Viewport_windows>();
-        auto secondary_viewport_window = viewport_windows->create_viewport_window(
+        auto secondary_viewport_window = g_viewport_windows->create_viewport_window(
             "Secondary Viewport",
             test_scene_root,
             camera_b,
             2 // low MSAA
         );
-        auto secondary_imgui_viewport_window = viewport_windows->create_imgui_viewport_window(
+        auto secondary_imgui_viewport_window = g_viewport_windows->create_imgui_viewport_window(
             secondary_viewport_window
         );
 
         auto rendertarget_node_2 = std::make_shared<erhe::scene::Node>("RT Node 2");
         auto rendertarget_mesh_2 = std::make_shared<Rendertarget_mesh>(
-            *m_components,
             1920,
             1080,
             2000.0
@@ -233,15 +240,14 @@ void Scene_builder::add_rendertarget_viewports(int count)
 
         auto imgui_viewport_2 = std::make_shared<editor::Rendertarget_imgui_viewport>(
             rendertarget_mesh_2.get(),
-            "Rendertarget ImGui Viewport 2",
-            *m_components
+            "Rendertarget ImGui Viewport 2"
         );
-        imgui_windows->register_imgui_viewport(imgui_viewport_2);
+        erhe::application::g_imgui_windows->register_imgui_viewport(imgui_viewport_2);
 
         secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
         secondary_imgui_viewport_window->show();
 
-        rendergraph->connect(
+        erhe::application::g_rendergraph->connect(
             erhe::application::Rendergraph_node_key::window,
             secondary_imgui_viewport_window,
             imgui_viewport_2
@@ -294,31 +300,32 @@ void Scene_builder::setup_cameras()
     //);
     //camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
-    const auto& configuration = get<erhe::application::Configuration>();
-    if (!configuration->window.show)
+    if (!erhe::application::g_configuration->window.show)
     {
         return;
     }
 
-    const auto& viewport_windows = get<Viewport_windows>();
-    m_primary_viewport_window = viewport_windows->create_viewport_window(
+    m_primary_viewport_window = g_viewport_windows->create_viewport_window(
         "Primary Viewport",
         m_scene_root,
         camera_a,
-        std::min(2, configuration->graphics.msaa_sample_count), //// TODO Fix rendergraph
-        configuration->graphics.post_processing
+        std::min(
+            2,
+            erhe::application::g_configuration->graphics.msaa_sample_count
+        ), //// TODO Fix rendergraph
+        erhe::application::g_configuration->graphics.post_processing
     );
 
-    if (configuration->imgui.window_viewport)
+    if (erhe::application::g_configuration->imgui.window_viewport)
     {
         //auto primary_imgui_viewport_window =
-        viewport_windows->create_imgui_viewport_window(
+        g_viewport_windows->create_imgui_viewport_window(
             m_primary_viewport_window
         );
     }
     else
     {
-        viewport_windows->create_basic_viewport_window(
+        g_viewport_windows->create_basic_viewport_window(
             m_primary_viewport_window
         );
     }
@@ -326,7 +333,7 @@ void Scene_builder::setup_cameras()
 
 auto Scene_builder::build_info() -> erhe::primitive::Build_info&
 {
-    return m_mesh_memory->build_info;
+    return g_mesh_memory->build_info;
 };
 
 auto Scene_builder::make_brush(
@@ -350,14 +357,14 @@ auto Scene_builder::make_brush(
     const bool                 instantiate_to_scene
 ) -> std::shared_ptr<Brush>
 {
-    const auto& configuration = get<erhe::application::Configuration>();
+    const auto& configuration = *erhe::application::g_configuration;
     return make_brush(
         Brush_data{
             .build_info      = build_info(),
             .normal_style    = Normal_style::polygon_normals,
             .geometry        = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
-            .density         = configuration->scene.mass_scale,
-            .physics_enabled = configuration->physics.static_enable
+            .density         = configuration.scene.mass_scale,
+            .physics_enabled = configuration.physics.static_enable
         },
         instantiate_to_scene
     );
@@ -369,14 +376,14 @@ auto Scene_builder::make_brush(
     const bool                                       instantiate_to_scene
 ) -> std::shared_ptr<Brush>
 {
-    const auto& configuration = get<erhe::application::Configuration>();
+    const auto& configuration = *erhe::application::g_configuration;
     return make_brush(
         Brush_data{
             .build_info      = build_info(),
             .normal_style    = Normal_style::polygon_normals,
             .geometry        = geometry,
-            .density         = configuration->scene.mass_scale,
-            .physics_enabled = configuration->physics.static_enable
+            .density         = configuration.scene.mass_scale,
+            .physics_enabled = configuration.physics.static_enable
         },
         instantiate_to_scene
     );
@@ -389,9 +396,9 @@ void Scene_builder::make_brushes()
 
     std::unique_ptr<ITask_queue> execution_queue;
 
-    const auto& configuration = get<erhe::application::Configuration>();
+    const auto& configuration = *erhe::application::g_configuration;
 
-    if (configuration->threading.parallel_initialization)
+    if (configuration.threading.parallel_initialization)
     {
         const std::size_t thread_count = std::min(
             8U,
@@ -404,7 +411,7 @@ void Scene_builder::make_brushes()
         execution_queue = std::make_unique<Serial_task_queue>();
     }
 
-    const auto& config = configuration->scene;
+    const auto& config = erhe::application::g_configuration->scene;
 
     // Floor
     if (config.floor)
@@ -435,7 +442,7 @@ void Scene_builder::make_brushes()
                         .density         = 0.0f,
                         .volume          = 0.0f,
                         .collision_shape = floor_box_shape,
-                        .physics_enabled = configuration->physics.static_enable
+                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     }
                 );
             }
@@ -507,7 +514,7 @@ void Scene_builder::make_brushes()
                                 .normal_style    = Normal_style::polygon_normals,
                                 .geometry        = geometry,
                                 .density         = config.mass_scale,
-                                .physics_enabled = configuration->physics.static_enable
+                                .physics_enabled = erhe::application::g_configuration->physics.static_enable
                             },
                             instantiate
                         );
@@ -541,7 +548,7 @@ void Scene_builder::make_brushes()
                         .collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
                             vec3{scale * 0.5f}
                         ),
-                        .physics_enabled = configuration->physics.static_enable
+                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     },
                     instantiate
                 );
@@ -572,7 +579,7 @@ void Scene_builder::make_brushes()
                         .collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(
                             config.object_scale
                         ),
-                        .physics_enabled = configuration->physics.static_enable
+                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     },
                     instantiate
                 );
@@ -658,7 +665,7 @@ void Scene_builder::make_brushes()
                         .density                     = config.mass_scale,
                         .collision_volume_calculator = torus_collision_volume_calculator,
                         .collision_shape_generator   = torus_collision_shape_generator,
-                        .physics_enabled = configuration->physics.static_enable
+                        .physics_enabled             = erhe::application::g_configuration->physics.static_enable
                     },
                     instantiate
                 );
@@ -699,7 +706,7 @@ void Scene_builder::make_brushes()
                             erhe::physics::Axis::Y,
                             vec3{scale, scale, scale}
                         ),
-                        .physics_enabled = configuration->physics.static_enable
+                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     },
                     instantiate
                 );
@@ -739,7 +746,7 @@ void Scene_builder::make_brushes()
                         //    object_scale,
                         //    2.0f * object_scale
                         //)
-                        .physics_enabled = configuration->physics.static_enable
+                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     },
                     instantiate
                 );
@@ -839,7 +846,7 @@ void Scene_builder::make_brushes()
                             .normal_style       = Normal_style::polygon_normals,
                             .geometry_generator = [shared_geometry](){ return shared_geometry; },
                             .density            = config.mass_scale,
-                            .physics_enabled    = configuration->physics.static_enable
+                            .physics_enabled    = erhe::application::g_configuration->physics.static_enable
                         },
                         false
                     );
@@ -855,9 +862,9 @@ void Scene_builder::make_brushes()
 
 auto Scene_builder::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
 {
-    Expects(m_mesh_memory->gl_buffer_transfer_queue);
+    Expects(g_mesh_memory->gl_buffer_transfer_queue);
 
-    return *m_mesh_memory->gl_buffer_transfer_queue.get();
+    return *g_mesh_memory->gl_buffer_transfer_queue.get();
 }
 
 void Scene_builder::add_room()
@@ -900,7 +907,7 @@ void Scene_builder::make_mesh_nodes()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = get<erhe::application::Configuration>()->scene;
+    const auto& config = erhe::application::g_configuration->scene;
 
     m_scene_root->scene().sanity_check();
 
@@ -1168,7 +1175,7 @@ auto Scene_builder::make_spot_light(
 
 void Scene_builder::setup_lights()
 {
-    const auto& config = get<erhe::application::Configuration>()->scene;
+    const auto& config =erhe::application::g_configuration->scene;
     const auto& layers = m_scene_root->layers();
     layers.light()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
 

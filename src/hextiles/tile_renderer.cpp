@@ -94,6 +94,8 @@ Tile_renderer::Frame_resources::Frame_resources(
     projection_buffer.set_debug_label(fmt::format("Map Renderer Projection {}", slot));
 }
 
+Tile_renderer* g_tile_renderer{nullptr};
+
 Tile_renderer::Tile_renderer()
     : Component{c_type_name}
     , m_fragment_outputs{
@@ -197,8 +199,10 @@ Tile_renderer::Tile_renderer()
 {
 }
 
-Tile_renderer::~Tile_renderer() noexcept
+Tile_renderer::~Tile_renderer()
 {
+    ERHE_VERIFY(g_tile_renderer == this);
+    g_tile_renderer = nullptr;
 }
 
 void Tile_renderer::declare_required_components()
@@ -211,7 +215,9 @@ static constexpr std::string_view c_text_renderer_initialize_component{"Tile_ren
 
 void Tile_renderer::initialize_component()
 {
-    const erhe::application::Scoped_gl_context gl_context{Component::get<erhe::application::Gl_context_provider>()};
+    ERHE_VERIFY(g_tile_renderer == nullptr);
+
+    const erhe::application::Scoped_gl_context gl_context;
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_initialize_component};
 
@@ -294,18 +300,23 @@ void Tile_renderer::initialize_component()
 
     Shader_stages::Prototype prototype{create_info};
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-    get<erhe::application::Shader_monitor>()->add(create_info, m_shader_stages.get());
+    if (erhe::application::g_shader_monitor != nullptr)
+    {
+        erhe::application::g_shader_monitor->add(create_info, m_shader_stages.get());
+    }
 
     create_frame_resources(max_quad_count * per_quad_vertex_count);
 
     compose_tileset_texture();
+
+    g_tile_renderer = this;
 }
 
-void Tile_renderer::post_initialize()
-{
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-    m_tiles                  = get<Tiles>();
-}
+//// void Tile_renderer::post_initialize()
+//// {
+////     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+////     m_tiles                  = get<Tiles>();
+//// }
 
 void Tile_renderer::compose_tileset_texture()
 {
@@ -908,7 +919,7 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
     //gl::invalidate_tex_image()
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_pipeline_state_tracker->execute(pipeline);
+    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
     gl::bind_buffer_range(
         projection_buffer->target(),

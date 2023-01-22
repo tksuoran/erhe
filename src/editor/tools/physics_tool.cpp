@@ -17,7 +17,6 @@
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/iconstraint.hpp"
@@ -29,6 +28,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -49,18 +49,17 @@ void Physics_tool_drag_command::try_ready(
         return;
     }
 
-    if (m_physics_tool.on_drag_ready())
+    if (g_physics_tool->on_drag_ready())
     {
         log_physics->trace("PT set ready");
         set_ready(context);
     }
 }
 
-Physics_tool_drag_command::Physics_tool_drag_command(Physics_tool& physics_tool)
-    : Command       {"Physics_tool.drag"}
-    , m_physics_tool{physics_tool}
+Physics_tool_drag_command::Physics_tool_drag_command()
+    : Command{"Physics_tool.drag"}
 {
-    set_host(&physics_tool);
+    set_host(g_physics_tool);
 }
 
 auto Physics_tool_drag_command::try_call(
@@ -73,7 +72,7 @@ auto Physics_tool_drag_command::try_call(
     }
 
     if (
-        m_physics_tool.on_drag() &&
+        g_physics_tool->on_drag() &&
         (get_command_state() == erhe::application::State::Ready)
     )
     {
@@ -95,18 +94,26 @@ void Physics_tool_drag_command::on_inactive(
         (get_command_state() == erhe::application::State::Active)
     )
     {
-        m_physics_tool.release_target();
+        g_physics_tool->release_target();
     }
 }
 
+Physics_tool* g_physics_tool{nullptr};
+
 Physics_tool::Physics_tool()
     : erhe::components::Component{c_type_name}
-    , m_drag_command             {*this}
 {
 }
 
 Physics_tool::~Physics_tool() noexcept
 {
+    ERHE_VERIFY(g_physics_tool == nullptr);
+}
+
+void Physics_tool::deinitialize_component()
+{
+    ERHE_VERIFY(g_physics_tool == this);
+
     if (m_target_constraint)
     {
         auto* world = get_physics_world();
@@ -116,16 +123,23 @@ Physics_tool::~Physics_tool() noexcept
         }
         m_target_constraint.reset();
     }
+
+    m_hover_mesh.reset();
+    m_target_mesh.reset();
+    m_last_target_mesh.reset();
+    m_target_node_physics.reset();
+    m_constraint_world_point_rigid_body.reset();
+
+    g_physics_tool = nullptr;
 }
 
 [[nodiscard]] auto Physics_tool::get_scene_root() const -> Scene_root*
 {
     if (!m_target_mesh)
     {
-        const auto scene_builder = get<Scene_builder>();
-        if (scene_builder)
+        if (g_scene_builder != nullptr)
         {
-            const auto scene_root = scene_builder->get_scene_root();
+            const auto scene_root = g_scene_builder->get_scene_root();
             if (scene_root)
             {
                 return scene_root.get();
@@ -171,16 +185,18 @@ void Physics_tool::declare_required_components()
 
 void Physics_tool::initialize_component()
 {
+    ERHE_VERIFY(g_physics_tool == nullptr);
+
     set_base_priority(c_priority);
     set_description  (c_title);
     set_flags        (Tool_flags::toolbox);
-    set_icon         (get<Icon_set>()->icons.drag);
-    get<Tools>()->register_tool(this);
+    set_icon         (g_icon_set->icons.drag);
+    g_tools->register_tool(this);
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_drag_command);
-    commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
-    commands->bind_command_to_controller_trigger_drag(&m_drag_command);
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command(&m_drag_command);
+    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_controller_trigger_drag(&m_drag_command);
 
     erhe::physics::IWorld* world = get_physics_world();
     if (world == nullptr)
@@ -210,19 +226,14 @@ void Physics_tool::initialize_component()
     );
     world->add_rigid_body(m_constraint_world_point_rigid_body.get());
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
         }
     );
-}
 
-void Physics_tool::post_initialize()
-{
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_fly_camera        = get<Fly_camera_tool>();
-    m_viewport_windows  = get<Viewport_windows>();
+    g_physics_tool = this;
 }
 
 void Physics_tool::on_message(Editor_message& message)
@@ -573,7 +584,7 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
 {
     ERHE_PROFILE_FUNCTION
 
-    erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    erhe::application::Line_renderer& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
 #if 0 // This is currently too slow, at least in debug build
     if (m_target_mesh)

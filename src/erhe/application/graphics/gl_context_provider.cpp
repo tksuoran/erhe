@@ -1,8 +1,8 @@
 #include <fmt/core.h>
 #include <fmt/ostream.h>
 
-#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/application_log.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/window.hpp"
 
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -14,6 +14,8 @@
 
 namespace erhe::application {
 
+Gl_context_provider* g_gl_context_provider{nullptr};
+
 Gl_context_provider::Gl_context_provider()
     : erhe::components::Component{c_type_name}
     , m_main_thread_id           {std::this_thread::get_id()}
@@ -22,12 +24,25 @@ Gl_context_provider::Gl_context_provider()
 
 Gl_context_provider::~Gl_context_provider() noexcept
 {
+    ERHE_VERIFY(g_gl_context_provider == nullptr);
+}
+
+void Gl_context_provider::deinitialize_component()
+{
+    ERHE_VERIFY(g_gl_context_provider == this);
+    m_contexts.clear();
+    g_gl_context_provider = nullptr;
+}
+
+void Gl_context_provider::initialize_component()
+{
+    ERHE_VERIFY(g_gl_context_provider == nullptr);
+    g_gl_context_provider = this;
 }
 
 void Gl_context_provider::provide_worker_contexts(
-    const std::shared_ptr<erhe::graphics::OpenGL_state_tracker>& opengl_state_tracker,
-    erhe::toolkit::Context_window*                               main_window,
-    std::function<bool()>                                        worker_contexts_still_needed_callback
+    erhe::toolkit::Context_window* main_window,
+    std::function<bool()>          worker_contexts_still_needed_callback
 )
 {
     ERHE_PROFILE_FUNCTION
@@ -35,7 +50,6 @@ void Gl_context_provider::provide_worker_contexts(
     log_startup->info("Starting to provide worked GL contexts");
 
     ERHE_VERIFY(m_main_thread_id == std::this_thread::get_id());
-    m_opengl_state_tracker = opengl_state_tracker;
     m_main_window = main_window;
 
     {
@@ -123,18 +137,15 @@ void Gl_context_provider::release_gl_context(Gl_worker_context context)
     //const std::string text = fmt::format("Releasing GL context {}", context.id);
     //ERHE_PROFILE_MESSAGE(text.c_str(), text.length());
     //ZoneValue(context.id);
-    m_opengl_state_tracker->on_thread_exit();
+    erhe::graphics::g_opengl_state_tracker->on_thread_exit();
     context.context->clear_current();
     m_worker_context_pool.enqueue(context);
     m_condition_variable.notify_one();
     log_startup->trace("Released GL context {}", context.id);
 }
 
-Scoped_gl_context::Scoped_gl_context(
-    const std::shared_ptr<Gl_context_provider>& context_provider
-)
-    : m_context_provider{context_provider}
-    , m_context         {context_provider->acquire_gl_context()}
+Scoped_gl_context::Scoped_gl_context()
+    : m_context{g_gl_context_provider->acquire_gl_context()}
 {
 }
 
@@ -142,7 +153,7 @@ Scoped_gl_context::~Scoped_gl_context() noexcept
 {
     ERHE_PROFILE_FUNCTION
 
-    m_context_provider->release_gl_context(m_context);
+    g_gl_context_provider->release_gl_context(m_context);
 }
 
 } // namespace erhe::application

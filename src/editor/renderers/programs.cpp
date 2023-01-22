@@ -1,4 +1,5 @@
 #include "renderers/programs.hpp"
+
 #include "editor_log.hpp"
 
 #include "renderers/program_interface.hpp"
@@ -19,6 +20,8 @@ namespace editor {
 
 using erhe::graphics::Shader_stages;
 
+Programs* g_programs{nullptr};
+
 Programs::Programs()
     : erhe::components::Component{c_type_name}
 {
@@ -28,24 +31,58 @@ Programs::~Programs() noexcept
 {
 }
 
+void Programs::deinitialize_component()
+{
+    ERHE_VERIFY(g_programs == this);
+    shadow_map_default_uniform_block.reset();
+    textured_default_uniform_block.reset();
+    nearest_sampler.reset();
+    linear_sampler.reset();
+    linear_mipmap_linear_sampler.reset();
+
+    brush.reset();
+    standard.reset();
+    anisotropic_slope.reset();
+    anisotropic_engine_ready.reset();
+    circular_brushed_metal.reset();
+    textured.reset();
+    wide_lines_draw_color.reset();
+    wide_lines_vertex_color.reset();
+    points.reset();
+    depth.reset();
+    id.reset();
+    tool.reset();
+    debug_depth.reset();
+    debug_normal.reset();
+    debug_tangent.reset();
+    debug_bitangent.reset();
+    debug_texcoord.reset();
+    debug_vertex_color_rgb.reset();
+    debug_vertex_color_alpha.reset();
+    debug_omega_o.reset();
+    debug_omega_i.reset();
+    debug_omega_g.reset();
+    debug_misc.reset();
+    g_programs = nullptr;
+}
+
 void Programs::declare_required_components()
 {
+    require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Configuration>();
-
-    m_program_interface = require<Program_interface>();
-    m_shader_monitor    = require<erhe::application::Shader_monitor>();
+    require<erhe::application::Shader_monitor     >();
+    require<Program_interface>();
 }
 
 void Programs::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
+    ERHE_VERIFY(g_programs == nullptr);
+
     //const erhe::log::Indenter indenter;
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
     nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
         gl::Texture_min_filter::nearest,
@@ -153,6 +190,8 @@ void Programs::initialize_component()
             }
         }
     }
+
+    g_programs = this;
 }
 
 auto Programs::make_prototype(
@@ -172,7 +211,7 @@ auto Programs::make_prototype(
     const bool gs_exists = std::filesystem::exists(gs_path);
     const bool fs_exists = std::filesystem::exists(fs_path);
 
-    const auto& shader_resources = *m_program_interface->shader_resources.get();
+    const auto& shader_resources = *g_program_interface->shader_resources.get();
 
     create_info.vertex_attribute_mappings = &shader_resources.attribute_mappings,
     create_info.fragment_outputs          = &shader_resources.fragment_outputs,
@@ -186,12 +225,12 @@ auto Programs::make_prototype(
     create_info.struct_types.push_back(&shader_resources.camera_interface.camera_struct);
     create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
 
-    const auto& config = Component::get<erhe::application::Configuration>();
+    const auto& config = *erhe::application::g_configuration;
     // TODO if (config->shadow_renderer.enabled)
     {
         create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
     }
-    if (config->graphics.simpler_shaders)
+    if (config.graphics.simpler_shaders)
     {
         create_info.defines.emplace_back("ERHE_SIMPLER_SHADERS", "1");
     }
@@ -238,9 +277,9 @@ auto Programs::make_program(
 
     auto p = std::make_unique<Shader_stages>(std::move(prototype));
 
-    if (m_shader_monitor)
+    if (erhe::application::g_shader_monitor != nullptr)
     {
-        m_shader_monitor->add(prototype.create_info(), p.get());
+        erhe::application::g_shader_monitor->add(prototype.create_info(), p.get());
     }
 
     return p;

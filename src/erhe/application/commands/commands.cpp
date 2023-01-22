@@ -1,8 +1,8 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/commands/controller_trigger_binding.hpp"
@@ -17,12 +17,15 @@
 #include "erhe/application/commands/mouse_wheel_binding.hpp"
 #include "erhe/application/commands/update_binding.hpp"
 #include "erhe/application/window.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
 #endif
 
 namespace erhe::application {
+
+Commands* g_commands{nullptr};
 
 Commands::Commands()
     : erhe::components::Component{c_type_name}
@@ -31,6 +34,20 @@ Commands::Commands()
 
 Commands::~Commands() noexcept
 {
+    ERHE_VERIFY(g_commands == nullptr);
+}
+
+void Commands::deinitialize_component()
+{
+    ERHE_VERIFY(g_commands == this);
+    m_commands.clear();
+    m_key_bindings.clear();
+    m_mouse_bindings.clear();
+    m_mouse_wheel_bindings.clear();
+    m_controller_trigger_bindings.clear();
+    m_controller_trackpad_bindings.clear();
+    m_update_bindings.clear();
+    g_commands = nullptr;
 }
 
 void Commands::declare_required_components()
@@ -40,15 +57,14 @@ void Commands::declare_required_components()
 
 void Commands::initialize_component()
 {
+    ERHE_VERIFY(g_commands == nullptr);
+
     double mouse_x{};
     double mouse_y{};
-    get<Window>()->get_context_window()->get_cursor_position(mouse_x, mouse_y);
+    g_window->get_context_window()->get_cursor_position(mouse_x, mouse_y);
     m_last_mouse_position = glm::dvec2{mouse_x, mouse_y};
-}
 
-void Commands::post_initialize()
-{
-    m_configuration = get<Configuration>();
+    g_commands = this;
 }
 
 void Commands::register_command(Command* const command)
@@ -314,7 +330,7 @@ void Commands::on_key(
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    Command_context context{*this};
+    Command_context context;
 
     for (auto& binding : m_key_bindings)
     {
@@ -342,7 +358,6 @@ void Commands::on_update()
     {
         // TODO OpenXR?
         Command_context context{
-            *this,
             m_last_mouse_button_bits,
             m_last_mouse_position,
             glm::vec2{0.0f, 0.0f}
@@ -362,7 +377,6 @@ void Commands::on_update()
     if (m_last_mouse_button_bits != 0)
     {
         Command_context context{
-            *this,
             m_last_mouse_button_bits,
             m_last_mouse_position,
             glm::vec2{0.0f, 0.0f}
@@ -396,7 +410,6 @@ void Commands::on_update()
     if (m_last_controller_trigger_click)
     {
         Command_context context{
-            *this,
             m_last_controller_trigger_click ? uint32_t{1} : uint32_t{0},
             glm::vec2{m_last_controller_trackpad_x, m_last_controller_trackpad_y},
             glm::vec2{0.0f, 0.0f}
@@ -486,7 +499,7 @@ void Commands::inactivate_ready_commands()
 {
     //std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    Command_context context{*this};
+    Command_context context;
     for (auto* command : m_commands)
     {
         if (command->get_command_state() == State::Ready)
@@ -597,7 +610,6 @@ void Commands::on_mouse_click(
     }
 
     Command_context context{
-        *this,
         m_last_mouse_button_bits,
         m_last_mouse_position
     };
@@ -628,7 +640,6 @@ void Commands::on_mouse_wheel(const double x, const double y)
     m_last_mouse_wheel_delta.y = y;
 
     Command_context context{
-        *this,
         m_last_mouse_button_bits,
         m_last_mouse_position,
         m_last_mouse_wheel_delta
@@ -655,7 +666,6 @@ void Commands::on_mouse_move(const double x, const double y)
 
     m_last_mouse_position = new_mouse_position;
     Command_context context{
-        *this,
         m_last_mouse_button_bits,
         m_last_mouse_position,
         m_last_mouse_position_delta
@@ -689,7 +699,6 @@ void Commands::on_controller_trigger_click(
     m_last_controller_trigger_click = click;
 
     Command_context context{
-        *this,
         (click ? uint32_t{1} : uint32_t{0}),
         glm::dvec2{0.0, 0.0}
     };
@@ -722,7 +731,6 @@ void Commands::on_controller_trigger_value(
     sort_trigger_bindings();
 
     Command_context context{
-        *this,
         0,
         glm::dvec2{trigger_value, 0.0}
     };
@@ -749,7 +757,6 @@ void Commands::on_controller_trackpad_touch(
     m_last_controller_trackpad_touch = touch;
 
     Command_context context{
-        *this,
         touch ? uint32_t{1} : uint32_t{0},
         glm::dvec2{x, y}
     };
@@ -783,7 +790,6 @@ void Commands::on_controller_trackpad_click(
     m_last_controller_trackpad_click = click;
 
     Command_context context{
-        *this,
         click ? uint32_t{1} : uint32_t{0},
         glm::dvec2{x, y}
     };

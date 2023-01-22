@@ -10,15 +10,8 @@
 
 #include <string_view>
 
-namespace erhe::application
-{
-    class Configuration;
-}
-
 namespace editor
 {
-
-class Editor_message_bus;
 
 class Settings
 {
@@ -41,12 +34,12 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Settings_window();
+    ~Settings_window();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -57,8 +50,6 @@ private:
     void apply_limits (Settings& settings);
     void show_settings(Settings& settings);
     void use_settings (const Settings& settings);
-
-    std::shared_ptr<Editor_message_bus> m_editor_message_bus;
 
     std::vector<const char*> m_msaa_sample_count_entry_s_strings;
     std::vector<int        > m_msaa_sample_count_entry_values;
@@ -72,5 +63,7 @@ private:
     int                      m_settings_index{0};
     std::string              m_used_settings;
 };
+
+extern Settings_window* g_settings_window;
 
 } // namespace editor

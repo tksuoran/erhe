@@ -1,7 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "erhe/application/view.hpp"
-
+#include "erhe/application/application_view.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
 #include "erhe/application/time.hpp"
@@ -21,12 +20,15 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <backends/imgui_impl_glfw.h>
 #endif
 
 namespace erhe::application {
+
+View* g_view{nullptr};
 
 View::View()
     : erhe::components::Component{c_type_name}
@@ -35,21 +37,20 @@ View::View()
 
 View::~View() noexcept
 {
+    ERHE_VERIFY(g_view == this);
+    g_view = nullptr;
 }
 
 void View::declare_required_components()
 {
-    m_render_graph = require<Rendergraph>();
-    m_window       = require<Window     >();
+    require<Rendergraph>();
+    require<Window     >();
 }
 
-void View::post_initialize()
+void View::initialize_component()
 {
-    m_commands       = get<Commands      >();
-    m_configuration  = get<Configuration >();
-    m_imgui_renderer = get<Imgui_renderer>();
-    m_imgui_windows  = get<Imgui_windows >();
-    m_time           = get<Time          >();
+    ERHE_VERIFY(g_view == nullptr);
+    g_view = this;
 }
 
 void View::set_client(View_client* view_client)
@@ -59,7 +60,7 @@ void View::set_client(View_client* view_client)
 
 void View::on_refresh()
 {
-    if (!m_configuration->window.show)
+    if (!g_configuration->window.show)
     {
         return;
     }
@@ -67,23 +68,23 @@ void View::on_refresh()
     {
         gl::clear_color(0.3f, 0.3f, 0.3f, 0.4f);
         gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-        m_window->get_context_window()->swap_buffers();
+        g_window->get_context_window()->swap_buffers();
         return;
     }
 
     if (
         (m_view_client != nullptr) &&
-        m_configuration->window.show
+        g_configuration->window.show
     )
     {
-        if (m_time)
+        if (g_time != nullptr)
         {
-            m_time->update(); // Does not do once per frame updates - moving to next slot in renderers
+            g_time->update(); // Does not do once per frame updates - moving to next slot in renderers
         }
         m_view_client->update(); // Should call once per frame updates
-        if (m_window)
+        if (g_window != nullptr)
         {
-            m_window->get_context_window()->swap_buffers();
+            g_window->get_context_window()->swap_buffers();
         }
     }
 }
@@ -105,7 +106,7 @@ void View::run()
 
         {
             SPDLOG_LOGGER_TRACE(log_frame, "> before poll events()");
-            get<Window>()->get_context_window()->poll_events();
+            g_window->get_context_window()->poll_events();
             SPDLOG_LOGGER_TRACE(log_frame, "> after poll events()");
         }
 
@@ -132,23 +133,27 @@ void View::update()
 
     SPDLOG_LOGGER_TRACE(log_frame, "update()");
 
-    m_time->update();
+    if (g_time != nullptr)
+    {
+        g_time->update();
+    }
+
     if (m_view_client != nullptr)
     {
         m_view_client->update();
     }
-    else
+    else if (g_time != nullptr)
     {
-        m_time->update_once_per_frame();
+        g_time->update_once_per_frame();
     }
 
-    if (m_configuration->window.show)
+    if (g_configuration->window.show)
     {
         ERHE_PROFILE_SCOPE(c_swap_buffers.data());
 
         erhe::graphics::Gpu_timer::end_frame();
-        m_window->get_context_window()->swap_buffers();
-        if (m_configuration->window.use_finish)
+        g_window->get_context_window()->swap_buffers();
+        if (g_configuration->window.use_finish)
         {
             gl::finish();
         }
@@ -164,25 +169,25 @@ void View::update()
 
 void View::on_enter()
 {
-    if (m_time)
+    if (g_time != nullptr)
     {
-        m_time->start_time();
+        g_time->start_time();
     }
 }
 
 void View::on_focus(int focused)
 {
-    if (m_imgui_windows)
+    if (g_imgui_windows != nullptr)
     {
-        m_imgui_windows->on_focus(focused);
+       g_imgui_windows->on_focus(focused);
     }
 }
 
 void View::on_cursor_enter(int entered)
 {
-    if (m_imgui_windows)
+    if (g_imgui_windows != nullptr)
     {
-        m_imgui_windows->on_cursor_enter(entered);
+        g_imgui_windows->on_cursor_enter(entered);
     }
 }
 
@@ -192,16 +197,16 @@ void View::on_key(
     const bool                   pressed
 )
 {
-    if (m_imgui_windows)
+    if (g_imgui_windows != nullptr)
     {
-        m_imgui_windows->on_key(
+        g_imgui_windows->on_key(
             static_cast<signed int>(code),
             modifier_mask,
             pressed
         );
     }
 
-    if (!m_commands)
+    if (g_commands == nullptr)
     {
         return;
     }
@@ -216,7 +221,7 @@ void View::on_key(
         m_view_client->update_keyboard(pressed, code, modifier_mask);
     }
 
-    m_commands->on_key(code, modifier_mask, pressed);
+    g_commands->on_key(code, modifier_mask, pressed);
 }
 
 void View::on_char(
@@ -224,50 +229,48 @@ void View::on_char(
 )
 {
     log_input_event->trace("char input codepoint = {}", codepoint);
-    if (m_imgui_windows)
+    if (g_imgui_windows != nullptr)
     {
-        m_imgui_windows->on_char(codepoint);
+        g_imgui_windows->on_char(codepoint);
     }
 }
 
 auto View::get_imgui_capture_keyboard() const -> bool
 {
     const bool viewports_hosted_in_imgui =
-        m_configuration->window.show &&
-        m_configuration->imgui.window_viewport;
+        g_configuration->window.show &&
+        g_configuration->imgui.window_viewport;
 
     if (!viewports_hosted_in_imgui)
     {
         return false;
     }
 
-    const auto& imgui_windows = get<Imgui_windows>();
-    if (!imgui_windows)
+    if (g_imgui_windows == nullptr)
     {
         return false;
     }
 
-    return imgui_windows->want_capture_keyboard();
+    return g_imgui_windows->want_capture_keyboard();
 }
 
 auto View::get_imgui_capture_mouse() const -> bool
 {
     const bool viewports_hosted_in_imgui =
-        m_configuration->window.show &&
-        m_configuration->imgui.window_viewport;
+        g_configuration->window.show &&
+        g_configuration->imgui.window_viewport;
 
     if (!viewports_hosted_in_imgui)
     {
         return false;
     }
 
-    const auto& imgui_windows = get<Imgui_windows>();
-    if (!imgui_windows)
+    if (g_imgui_windows == nullptr)
     {
         return false;
     }
 
-    return imgui_windows->want_capture_mouse();
+    return g_imgui_windows->want_capture_mouse();
 }
 
 void View::on_mouse_click(
@@ -275,12 +278,12 @@ void View::on_mouse_click(
     const int                         count
 )
 {
-    if (m_imgui_windows)
+    if (g_imgui_windows != nullptr)
     {
-        m_imgui_windows->on_mouse_click(static_cast<uint32_t>(button), count);
+        g_imgui_windows->on_mouse_click(static_cast<uint32_t>(button), count);
     }
 
-    if (!m_commands)
+    if (g_commands == nullptr)
     {
         return;
     }
@@ -301,17 +304,17 @@ void View::on_mouse_click(
         m_view_client->update_mouse(button, count);
     }
 
-    m_commands->on_mouse_click(button, count);
+    g_commands->on_mouse_click(button, count);
 }
 
 void View::on_mouse_wheel(const double x, const double y)
 {
-    if (m_imgui_windows)
+    if (g_imgui_windows != nullptr)
     {
-        m_imgui_windows->on_mouse_wheel(x, y);
+        g_imgui_windows->on_mouse_wheel(x, y);
     }
 
-    if (!m_commands)
+    if (g_commands == nullptr)
     {
         return;
     }
@@ -323,17 +326,17 @@ void View::on_mouse_wheel(const double x, const double y)
 
     log_input_event->trace("mouse wheel {}, {}", x, y);
 
-    m_commands->on_mouse_wheel(x, y);
+    g_commands->on_mouse_wheel(x, y);
 }
 
 void View::on_mouse_move(const double x, const double y)
 {
-    if (m_imgui_windows)
+    if (g_imgui_windows != nullptr)
     {
-        m_imgui_windows->on_mouse_move(x, y);
+        g_imgui_windows->on_mouse_move(x, y);
     }
 
-    if (!m_commands)
+    if (g_commands == nullptr)
     {
         return;
     }
@@ -348,7 +351,7 @@ void View::on_mouse_move(const double x, const double y)
         m_view_client->update_mouse(x, y);
     }
 
-    m_commands->on_mouse_move(x, y);
+    g_commands->on_mouse_move(x, y);
 }
 
 }  // namespace editor

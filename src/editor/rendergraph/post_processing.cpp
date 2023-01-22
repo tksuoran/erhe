@@ -1,4 +1,5 @@
 #include "rendergraph/post_processing.hpp"
+
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
 
@@ -14,6 +15,7 @@
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -110,11 +112,9 @@ void Downsample_node::bind_framebuffer() const
 /// //////////////////////////////////////////
 
 Post_processing_node::Post_processing_node(
-    const std::string_view name,
-    Post_processing&       post_processing
+    const std::string_view name
 )
     : erhe::application::Rendergraph_node{name}
-    , m_post_processing{post_processing}
 {
     register_input (
         erhe::application::Resource_routing::Resource_provided_by_consumer,
@@ -285,7 +285,7 @@ void Post_processing_node::execute_rendergraph_node()
         return;
     }
 
-    m_post_processing.post_process(*this);
+    g_post_processing->post_process(*this);
 }
 
 [[nodiscard]] auto Post_processing_node::get_downsample_nodes() -> const std::vector<Downsample_node>&
@@ -295,6 +295,8 @@ void Post_processing_node::execute_rendergraph_node()
 
 /// //////////////////////////////////////////
 /// //////////////////////////////////////////
+
+Post_processing* g_post_processing{nullptr};
 
 Post_processing::Post_processing()
     : Component{c_type_name}
@@ -314,6 +316,32 @@ Post_processing::Post_processing()
 {
 }
 
+Post_processing::~Post_processing()
+{
+    ERHE_VERIFY(g_post_processing == nullptr);
+}
+
+void Post_processing::deinitialize_component()
+{
+    ERHE_VERIFY(g_post_processing == this);
+    m_nodes.clear();
+    m_linear_sampler  = nullptr;
+    m_nearest_sampler = nullptr;
+    m_parameter_buffer.reset();
+    m_empty_vertex_input.reset();
+    m_downsample_x_shader_stages.reset();
+    m_downsample_y_shader_stages.reset();
+    m_compose_shader_stages.reset();
+    m_dummy_texture.reset();
+    m_downsample_source_texture = nullptr;
+    m_compose_source_textures   = nullptr;
+    m_downsample_x_pipeline.reset();
+    m_downsample_y_pipeline.reset();
+    m_compose_pipeline.reset();
+    m_gpu_timer.reset();
+    g_post_processing = nullptr;
+}
+
 void Post_processing::declare_required_components()
 {
     require<erhe::application::Configuration      >();
@@ -326,15 +354,14 @@ void Post_processing::declare_required_components()
 void Post_processing::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_post_processing == nullptr);
 
     using erhe::graphics::Shader_stages;
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
-    m_linear_sampler  = get<Programs>()->linear_sampler.get();
-    m_nearest_sampler = get<Programs>()->nearest_sampler.get();
+    m_linear_sampler  = g_programs->linear_sampler.get();
+    m_nearest_sampler = g_programs->nearest_sampler.get();
 
     m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
 
@@ -423,12 +450,11 @@ void Post_processing::initialize_component()
         m_downsample_x_shader_stages = std::make_unique<Shader_stages>(std::move(x_prototype));
         m_downsample_y_shader_stages = std::make_unique<Shader_stages>(std::move(y_prototype));
         m_compose_shader_stages      = std::make_unique<Shader_stages>(std::move(compose_prototype));
-        const auto shader_monitor = get<erhe::application::Shader_monitor>();
-        if (shader_monitor)
+        if (erhe::application::g_shader_monitor)
         {
-            shader_monitor->add(x_create_info,       m_downsample_x_shader_stages.get());
-            shader_monitor->add(y_create_info,       m_downsample_y_shader_stages.get());
-            shader_monitor->add(compose_create_info, m_compose_shader_stages.get());
+            erhe::application::g_shader_monitor->add(x_create_info,       m_downsample_x_shader_stages.get());
+            erhe::application::g_shader_monitor->add(y_create_info,       m_downsample_y_shader_stages.get());
+            erhe::application::g_shader_monitor->add(compose_create_info, m_compose_shader_stages.get());
         }
     }
 
@@ -466,12 +492,8 @@ void Post_processing::initialize_component()
     create_frame_resources();
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Post_processing");
-}
 
-void Post_processing::post_initialize()
-{
-    m_configuration          = get<erhe::application::Configuration>();
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    g_post_processing = this;
 }
 
 void Post_processing::create_frame_resources()
@@ -492,7 +514,7 @@ auto Post_processing::create_node(
     const std::string_view name
 ) -> std::shared_ptr<Post_processing_node>
 {
-    auto new_node = std::make_shared<Post_processing_node>(name, *this);
+    auto new_node = std::make_shared<Post_processing_node>(name);
     m_nodes.push_back(new_node);
     return new_node;
 }
@@ -607,7 +629,7 @@ void Post_processing::downsample(
 
     downsample_node.bind_framebuffer();
 
-    m_pipeline_state_tracker->execute(pipeline);
+    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
     {
         ERHE_PROFILE_SCOPE("bind parameter buffer");
@@ -756,7 +778,7 @@ void Post_processing::compose(Post_processing_node& node)
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 
     const auto& pipeline = m_compose_pipeline;
-    m_pipeline_state_tracker->execute(pipeline);
+    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
     {
         ERHE_PROFILE_SCOPE("bind parameter buffer");

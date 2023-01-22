@@ -1,4 +1,5 @@
 #include "scene/material_preview.hpp"
+
 #include "editor_scenes.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -26,10 +27,13 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 
 namespace editor {
+
+Material_preview* g_material_preview{nullptr};
 
 Material_preview::Material_preview()
     : erhe::components::Component{c_type_name}
@@ -39,19 +43,37 @@ Material_preview::Material_preview()
 
 Material_preview::~Material_preview() noexcept
 {
+    ERHE_VERIFY(g_material_preview == nullptr);
+}
+
+void Material_preview::deinitialize_component()
+{
+    ERHE_VERIFY(g_material_preview == this);
+    m_color_texture.reset();
+    m_depth_renderbuffer.reset();
+    m_framebuffer.reset();
+    m_scene_root.reset();
+    m_node.reset();
+    m_mesh.reset();
+    m_key_light_node.reset();
+    m_key_light.reset();
+    m_camera_node.reset();
+    m_camera.reset();
+    m_last_content_library.reset();
+    m_last_material.reset();
+    g_material_preview = nullptr;
 }
 
 void Material_preview::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
     require<Editor_scenes>();
-    m_mesh_memory = require<Mesh_memory>();
+    require<Mesh_memory>();
 }
 
 void Material_preview::initialize_component()
 {
-    const auto editor_scenes = get<Editor_scenes>();
-
+    ERHE_VERIFY(g_material_preview == nullptr);
     m_last_content_library = std::make_shared<Content_library>();
     m_last_content_library->is_shown_in_ui = true; //// TODO
 
@@ -59,18 +81,19 @@ void Material_preview::initialize_component()
     m_last_content_library->materials.add(m_last_material);
 
     m_scene_root = std::make_shared<Scene_root>(
-        *m_components,
         m_last_content_library,
         "Material preview scene"
     );
 
-    editor_scenes->register_scene_root(m_scene_root);
+    g_editor_scenes->register_scene_root(m_scene_root);
 
     m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
     make_preview_scene();
+
+    g_material_preview = this;
 }
 
 void Material_preview::make_rendertarget()
@@ -141,7 +164,7 @@ void Material_preview::make_preview_scene()
     );
     erhe::primitive::Primitive_geometry gl_primitive_geometry = erhe::primitive::make_primitive(
         sphere_geometry,
-        m_mesh_memory->build_info,
+        g_mesh_memory->build_info,
         erhe::primitive::Normal_style::corner_normals
     );
 
@@ -224,7 +247,7 @@ void Material_preview::render_preview(
         m_clear_color[3]
     );
     gl::clear_stencil(0);
-    gl::clear_depth_f(*m_configuration->depth_clear_value_pointer());
+    gl::clear_depth_f(*erhe::application::g_configuration->depth_clear_value_pointer());
     gl::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
         gl::Clear_buffer_mask::depth_buffer_bit |
@@ -256,12 +279,6 @@ void Material_preview::render_preview(
 ////        )
 ////    );
 ////}
-
-void Material_preview::post_initialize()
-{
-    m_configuration = get<erhe::application::Configuration>();
-    m_imgui_windows = get<erhe::application::Imgui_windows>();
-}
 
 [[nodiscard]] auto Material_preview::get_scene_root() -> std::shared_ptr<Scene_root>
 {

@@ -4,11 +4,14 @@
 #include "type_editors/type_editor.hpp"
 
 #include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 
 namespace hextiles
 {
+
+Unit_editor_window* g_unit_editor_window{nullptr};
 
 Unit_editor_window::Unit_editor_window()
     : erhe::components::Component{c_type_name}
@@ -18,6 +21,8 @@ Unit_editor_window::Unit_editor_window()
 
 Unit_editor_window::~Unit_editor_window() noexcept
 {
+    ERHE_VERIFY(g_unit_editor_window == this);
+    g_unit_editor_window = nullptr;
 }
 
 void Unit_editor_window::declare_required_components()
@@ -27,8 +32,10 @@ void Unit_editor_window::declare_required_components()
 
 void Unit_editor_window::initialize_component()
 {
-    Imgui_window::initialize(*m_components);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    ERHE_VERIFY(g_unit_editor_window == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    hide();
+    g_unit_editor_window = this;
 }
 
 void Unit_editor_window::imgui()
@@ -37,22 +44,22 @@ void Unit_editor_window::imgui()
 
     if (ImGui::Button("Back to Menu", button_size))
     {
-        get<Menu_window>()->show_menu();
+        g_menu_window->show_menu();
     }
     ImGui::SameLine();
 
     if (ImGui::Button("Load", button_size))
     {
-        get<Tiles>()->load_unit_defs();
+        g_tiles->load_unit_defs();
     }
     ImGui::SameLine();
 
     if (ImGui::Button("Save", button_size))
     {
-        get<Tiles>()->save_unit_defs();
+        g_tiles->save_unit_defs();
     }
 
-    get<Type_editor>()->unit_editor_imgui();
+    g_type_editor->unit_editor_imgui();
 }
 
 } // namespace hextiles

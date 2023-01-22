@@ -17,7 +17,6 @@
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
@@ -26,6 +25,7 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -45,7 +45,7 @@ void Paint_vertex_command::try_ready(
     erhe::application::Command_context& context
 )
 {
-    if (m_paint_tool.try_ready())
+    if (g_paint_tool->try_ready())
     {
         set_ready(context);
     }
@@ -70,11 +70,10 @@ auto Paint_tool::try_ready() -> bool
     return scene_view->get_hover(Hover_entry::content_slot).valid;
 }
 
-Paint_vertex_command::Paint_vertex_command(Paint_tool& paint_tool)
-    : Command     {"Paint_tool.paint_vertex"}
-    , m_paint_tool{paint_tool}
+Paint_vertex_command::Paint_vertex_command()
+    : Command{"Paint_tool.paint_vertex"}
 {
-    set_host(&paint_tool);
+    set_host(g_paint_tool);
 }
 
 auto Paint_vertex_command::try_call(
@@ -90,13 +89,13 @@ auto Paint_vertex_command::try_call(
     {
         return false;
     }
-    if (m_paint_tool.get_hover_scene_view() == nullptr)
+    if (g_paint_tool->get_hover_scene_view() == nullptr)
     {
         set_inactive(context);
         return false;
     }
 
-    m_paint_tool.paint();
+    g_paint_tool->paint();
     return true;
 }
 
@@ -142,7 +141,7 @@ void Paint_tool::paint_vertex(
     const glm::vec4                           color
 )
 {
-    const auto&       vertex_format = m_mesh_memory->gl_vertex_format();
+    const auto&       vertex_format = g_mesh_memory->gl_vertex_format();
     const auto        attribute     = vertex_format.find_attribute(erhe::graphics::Vertex_attribute::Usage_type::color, 0);
     const std::size_t vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
 
@@ -161,8 +160,8 @@ void Paint_tool::paint_vertex(
         if (primitive.source_geometry.get() == &geometry)
         {
             const std::size_t range_byte_offset = primitive.gl_primitive_geometry.vertex_buffer_range.byte_offset;
-            m_mesh_memory->gl_buffer_transfer_queue->enqueue(
-                *m_mesh_memory->gl_vertex_buffer.get(),
+            g_mesh_memory->gl_buffer_transfer_queue->enqueue(
+                *g_mesh_memory->gl_vertex_buffer.get(),
                 range_byte_offset + vertex_offset,
                 std::move(buffer)
             );
@@ -270,15 +269,18 @@ void Paint_tool::paint()
     }
 }
 
+Paint_tool* g_paint_tool{nullptr};
+
 Paint_tool::Paint_tool()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
-    , m_paint_vertex_command         {*this}
 {
 }
 
 Paint_tool::~Paint_tool() noexcept
 {
+    ERHE_VERIFY(g_paint_tool == this);
+    g_paint_tool = nullptr;
 }
 
 void Paint_tool::declare_required_components()
@@ -294,21 +296,21 @@ void Paint_tool::declare_required_components()
 void Paint_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_paint_tool == nullptr);
 
     set_base_priority(c_priority);
     set_description  (c_title);
     set_flags        (Tool_flags::toolbox);
-    set_icon         (get<Icon_set>()->icons.brush_small);
+    set_icon         (g_icon_set->icons.brush_small);
 
-    const auto& imgui_windows = get<erhe::application::Imgui_windows>();
-    imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_paint_vertex_command);
-    commands->bind_command_to_mouse_click            (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
-    commands->bind_command_to_mouse_drag             (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
-    commands->bind_command_to_controller_trigger_drag(&m_paint_vertex_command);
-    get<Tools>()->register_tool(this);
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command(&m_paint_vertex_command);
+    commands.bind_command_to_mouse_click            (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_drag             (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_controller_trigger_drag(&m_paint_vertex_command);
+    g_tools->register_tool(this);
 
 #if 0
     m_ngon_colors.emplace_back(240.0f / 255.0f, 163.0f / 255.0f, 255.0f / 255.0f, 1.0f);
@@ -362,20 +364,16 @@ void Paint_tool::initialize_component()
     m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 255.0f / 255.0f, 1.0f);
     m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             Tool::on_message(message);
         }
     );
 
+    g_paint_tool = this;
 }
 
-void Paint_tool::post_initialize()
-{
-    m_viewport_windows = get<Viewport_windows>();
-    m_mesh_memory      = get<Mesh_memory     >();
-}
 
 void Paint_tool::imgui()
 {
@@ -414,8 +412,7 @@ void Paint_tool::imgui()
     }
     if (ImGui::Button("Color Selection") && !m_ngon_colors.empty())
     {
-        const auto& selection_tool = get<Selection_tool>();
-        const auto& selection = selection_tool->selection();
+        const auto& selection = g_selection_tool->selection();
         for (const auto& node : selection)
         {
             const auto& mesh = as_mesh(node);

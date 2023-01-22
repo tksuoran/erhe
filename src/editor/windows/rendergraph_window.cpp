@@ -3,6 +3,7 @@
 #endif
 
 #include "windows/rendergraph_window.hpp"
+
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
@@ -15,6 +16,7 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/gl_helpers.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -30,6 +32,8 @@
 namespace editor
 {
 
+Rendergraph_window* g_rendergraph_window{nullptr};
+
 Rendergraph_window::Rendergraph_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
@@ -38,7 +42,9 @@ Rendergraph_window::Rendergraph_window()
 
 Rendergraph_window::~Rendergraph_window() noexcept
 {
+    ERHE_VERIFY(g_rendergraph_window == this);
     ImNodes::Ez::FreeContext(m_imnodes_context);
+    g_rendergraph_window = nullptr;
 }
 
 void Rendergraph_window::declare_required_components()
@@ -48,14 +54,9 @@ void Rendergraph_window::declare_required_components()
 
 void Rendergraph_window::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-}
-
-void Rendergraph_window::post_initialize()
-{
-    m_editor_scenes  = get<Editor_scenes>();
-    m_render_graph   = get<erhe::application::Rendergraph>();
-    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
+    ERHE_VERIFY(g_rendergraph_window == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    g_rendergraph_window = this;
 }
 
 auto Rendergraph_window::flags() -> ImGuiWindowFlags
@@ -157,12 +158,12 @@ void Rendergraph_window::imgui()
     ImGui::SetNextItemWidth(200.0f);
     ImGui::SliderFloat("Curve Strength", &m_curve_strength, 0.0f, 100.0f);
     ImGui::SetNextItemWidth(400.0f);
-    const bool x_gap_changed = ImGui::SliderFloat("X Gap", &m_render_graph->x_gap, 0.0f, 200.0f);
+    const bool x_gap_changed = ImGui::SliderFloat("X Gap", &erhe::application::g_rendergraph->x_gap, 0.0f, 200.0f);
     ImGui::SetNextItemWidth(400.0f);
-    const bool y_gap_changed = ImGui::SliderFloat("Y Gap", &m_render_graph->y_gap, 0.0f, 200.0f);
+    const bool y_gap_changed = ImGui::SliderFloat("Y Gap", &erhe::application::g_rendergraph->y_gap, 0.0f, 200.0f);
     if (ImGui::Button("Automatic Layout") || x_gap_changed || y_gap_changed)
     {
-        m_render_graph->automatic_layout(m_image_size);
+        erhe::application::g_rendergraph->automatic_layout(m_image_size);
     }
 
     if (m_imnodes_context == nullptr)
@@ -177,7 +178,7 @@ void Rendergraph_window::imgui()
 
     const float zoom = canvas_state->Zoom;
 
-    const auto& render_graph_nodes = m_render_graph->get_nodes();
+    const auto& render_graph_nodes = erhe::application::g_rendergraph->get_nodes();
 
     for (const auto& node : render_graph_nodes)
     {
@@ -242,7 +243,7 @@ void Rendergraph_window::imgui()
                 {
                     const float aspect = static_cast<float>(texture->width()) / static_cast<float>(texture->height());
                     ImGui::Text("%s:", output.label.c_str());
-                    m_imgui_renderer->image(
+                    erhe::application::g_imgui_renderer->image(
                         texture,
                         static_cast<int>(zoom * aspect * m_image_size),
                         static_cast<int>(zoom * m_image_size),

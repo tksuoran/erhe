@@ -33,9 +33,7 @@ public:
         const std::string_view label
     );
 
-    void initialize(
-        erhe::components::Components& components
-    );
+    void initialize();
 
     // Implements Imgui_window
     void imgui() override;

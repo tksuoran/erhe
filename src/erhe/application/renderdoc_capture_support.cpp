@@ -1,6 +1,6 @@
 #include "erhe/application/renderdoc_capture_support.hpp"
-#include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
+#include "erhe/application/configuration.hpp"
 #include "erhe/toolkit/renderdoc_app.h"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"
@@ -30,11 +30,18 @@ namespace erhe::application {
 
 RENDERDOC_API_1_5_0* renderdoc_api{nullptr};
 
+Renderdoc_capture_support* g_renderdoc_capture_support{nullptr};
+
 Renderdoc_capture_support::Renderdoc_capture_support()
     : erhe::components::Component{c_type_name}
 {
 }
 
+Renderdoc_capture_support::~Renderdoc_capture_support()
+{
+    ERHE_VERIFY(g_renderdoc_capture_support == this);
+    g_renderdoc_capture_support = nullptr;
+}
 
 void Renderdoc_capture_support::declare_required_components()
 {
@@ -43,13 +50,13 @@ void Renderdoc_capture_support::declare_required_components()
 
 void Renderdoc_capture_support::initialize_component()
 {
+    ERHE_VERIFY((g_renderdoc_capture_support == nullptr) || (g_renderdoc_capture_support == this));
+    g_renderdoc_capture_support = this; // due to early exit
     if (m_is_initialized)
     {
         return;
     }
-    const auto& config = m_components->get<Configuration>();
-        //get<Configuration>();
-    if (!config->renderdoc.capture_support)
+    if (!g_configuration->renderdoc.capture_support)
     {
         return;
     }

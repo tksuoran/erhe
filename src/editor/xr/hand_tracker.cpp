@@ -1,4 +1,5 @@
 #include "xr/hand_tracker.hpp"
+
 #include "xr/headset_view.hpp"
 #include "tools/tools.hpp"
 
@@ -6,6 +7,7 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include "erhe/xr/headset.hpp"
 
 namespace editor
@@ -433,11 +435,19 @@ void Hand::draw_joint_line_strip(
     }
 }
 
+Hand_tracker* g_hand_tracker{nullptr};
+
 Hand_tracker::Hand_tracker()
     : erhe::components::Component{c_type_name}
     , m_left_hand                {XR_HAND_LEFT_EXT}
     , m_right_hand               {XR_HAND_RIGHT_EXT}
 {
+}
+
+Hand_tracker::~Hand_tracker()
+{
+    ERHE_VERIFY(g_hand_tracker == this);
+    g_hand_tracker = nullptr;
 }
 
 void Hand_tracker::declare_required_components()
@@ -447,15 +457,11 @@ void Hand_tracker::declare_required_components()
 
 void Hand_tracker::initialize_component()
 {
+    ERHE_VERIFY(g_hand_tracker == nullptr);
     set_flags      (Tool_flags::background);
     set_description(c_description);
-    get<Tools>()->register_tool(this);
-}
-
-void Hand_tracker::post_initialize()
-{
-    m_headset_view      = get<Headset_view>();
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
+    g_tools->register_tool(this);
+    g_hand_tracker = this;
 }
 
 void Hand_tracker::update_hands(erhe::xr::Headset& headset)
@@ -502,14 +508,19 @@ void Hand_tracker::tool_render(const Render_context& context)
         return;
     }
 
-    const auto root_node = m_headset_view->get_root_node();
+    if (g_headset_view == nullptr)
+    {
+        return;
+    }
+
+    const auto root_node = g_headset_view->get_root_node();
     if (!root_node)
     {
         return;
     }
 
     const auto transform     = root_node->world_from_node();
-    auto&      line_renderer = *m_line_renderer_set->hidden.at(3).get();
+    auto&      line_renderer = *erhe::application::g_line_renderer_set->hidden.at(3).get();
 
     m_left_hand .draw(line_renderer, transform);
     m_right_hand.draw(line_renderer, transform);

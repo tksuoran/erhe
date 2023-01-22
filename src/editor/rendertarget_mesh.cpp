@@ -1,6 +1,7 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "rendertarget_mesh.hpp"
+
 #include "editor_log.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -18,7 +19,7 @@
 #endif
 
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/application_view.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
@@ -45,19 +46,17 @@ namespace editor
 {
 
 Rendertarget_mesh::Rendertarget_mesh(
-    const erhe::components::Components& components,
-    const int                           width,
-    const int                           height,
-    const double                        pixels_per_meter
+    const int    width,
+    const int    height,
+    const double pixels_per_meter
 )
     : erhe::scene::Mesh {"Rendertarget Node"}
-    , m_viewport_config {components.get<Viewport_config>()}
     , m_pixels_per_meter{pixels_per_meter}
 {
     enable_flag_bits(erhe::scene::Item_flags::rendertarget);
 
     init_rendertarget(width, height);
-    add_primitive(components);
+    add_primitive();
 }
 
 auto Rendertarget_mesh::static_type() -> uint64_t
@@ -123,12 +122,8 @@ void Rendertarget_mesh::init_rendertarget(
     m_framebuffer->set_debug_label("Rendertarget Node");
 }
 
-void Rendertarget_mesh::add_primitive(
-    const erhe::components::Components& components
-)
+void Rendertarget_mesh::add_primitive()
 {
-    auto& mesh_memory = *components.get<Mesh_memory>().get();
-
     m_material = std::make_shared<erhe::primitive::Material>(
         "Rendertarget Node",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
@@ -152,7 +147,7 @@ void Rendertarget_mesh::add_primitive(
 
     auto primitive = erhe::primitive::make_primitive(
         *shared_geometry.get(),
-        mesh_memory.build_info
+        g_mesh_memory->build_info
     );
 
     mesh_data.primitives.emplace_back(
@@ -162,7 +157,7 @@ void Rendertarget_mesh::add_primitive(
         }
     );
 
-    mesh_memory.gl_buffer_transfer_queue->flush();
+    g_mesh_memory->gl_buffer_transfer_queue->flush();
 
     enable_flag_bits(
         erhe::scene::Item_flags::visible |
@@ -205,9 +200,9 @@ void Rendertarget_mesh::handle_node_scene_host_update(
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-void Rendertarget_mesh::update_headset(Headset_view& headset_view)
+void Rendertarget_mesh::update_headset()
 {
-    const auto* headset = headset_view.get_headset();
+    const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)
     {
         m_controller_pose = headset->controller_pose();
@@ -217,6 +212,7 @@ void Rendertarget_mesh::update_headset(Headset_view& headset_view)
         m_controller_trigger_value_changed = headset->trigger_value()->changedSinceLastSync;
     }
 
+#if 0
     auto* hand_tracker = headset_view.get_hand_tracker();
     if (hand_tracker == nullptr)
     {
@@ -267,6 +263,7 @@ void Rendertarget_mesh::update_headset(Headset_view& headset_view)
             .point        = world_position
         };
     }
+#endif
 }
 #endif
 
@@ -417,12 +414,12 @@ void Rendertarget_mesh::render_done()
 {
     gl::generate_texture_mipmap(m_texture->gl_name());
 
-    if (m_viewport_config->rendertarget_mesh_lod_bias != m_sampler->lod_bias)
+    if (g_viewport_config->rendertarget_mesh_lod_bias != m_sampler->lod_bias)
     {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
             gl::Texture_min_filter::linear_mipmap_linear,
             gl::Texture_mag_filter::nearest,
-            m_viewport_config->rendertarget_mesh_lod_bias
+            g_viewport_config->rendertarget_mesh_lod_bias
         );
         m_material->sampler = m_sampler;
     }

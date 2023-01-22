@@ -20,6 +20,7 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/ext/matrix_common.hpp>
 
@@ -30,6 +31,8 @@
 namespace editor
 {
 
+Physics_window* g_physics_window{nullptr};
+
 Physics_window::Physics_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
@@ -38,18 +41,20 @@ Physics_window::Physics_window()
 
 Physics_window::~Physics_window() noexcept
 {
+    ERHE_VERIFY(g_physics_window == this);
+    g_physics_window = nullptr;
 }
 
 void Physics_window::declare_required_components()
 {
-    m_editor_scenes = require<Editor_scenes>();
-
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows>();
+    require<Editor_scenes>();
 }
 
 void Physics_window::initialize_component()
 {
+    ERHE_VERIFY(g_physics_window == nullptr);
     //const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
     //
     //auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
@@ -66,20 +71,15 @@ void Physics_window::initialize_component()
     //rendertarget->mesh_node()->set_parent_from_node(placement);
     //
     //rendertarget->register_imgui_window(this);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
     m_min_size[0] = 120.0f;
     m_min_size[1] = 120.0f;
-}
-
-void Physics_window::post_initialize()
-{
-    m_selection_tool   = get<Selection_tool  >();
-    m_viewport_windows = get<Viewport_windows>();
+    g_physics_window = this;
 }
 
 void Physics_window::viewport_toolbar(bool& hovered)
 {
-    const auto viewport_window = m_viewport_windows->last_window();
+    const auto viewport_window = g_viewport_windows->last_window();
     if (!viewport_window)
     {
         return;
@@ -129,12 +129,12 @@ void Physics_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    if (m_selection_tool == nullptr)
+    if (g_selection_tool == nullptr)
     {
         return;
     }
 
-    const auto viewport_window = m_viewport_windows->last_window();
+    const auto viewport_window = g_viewport_windows->last_window();
     if (!viewport_window)
     {
         return;
@@ -163,8 +163,7 @@ void Physics_window::imgui()
         }
     }
 
-    const auto& debug_drawer = get<Debug_draw>();
-    if (debug_drawer)
+    if (g_debug_draw != nullptr)
     {
         if (ImGui::CollapsingHeader("Visualizations"))
         {
@@ -182,7 +181,7 @@ void Physics_window::imgui()
             }
 
             //const ImVec2 color_button_size{32.0f, 32.0f};
-            ImGui::SliderFloat("Line Width", &debug_drawer->line_width, 0.0f, 10.0f);
+            ImGui::SliderFloat("Line Width", &g_debug_draw->line_width, 0.0f, 10.0f);
             ImGui::ColorEdit3("Active",                &m_debug_draw.colors.active_object               .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
             ImGui::ColorEdit3("Deactivated",           &m_debug_draw.colors.deactivated_object          .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
             ImGui::ColorEdit3("Wants Deactivation",    &m_debug_draw.colors.wants_deactivation_object   .x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
@@ -222,9 +221,8 @@ void Physics_window::tool_render(
         return;
     }
     const auto& scene_root   = context.scene_view->get_scene_root();
-    const auto& debug_drawer = get<Debug_draw>();
     if (
-        !debug_drawer ||
+        (g_debug_draw == nullptr) ||
         !m_debug_draw.enable ||
         !scene_root
     )
@@ -241,9 +239,9 @@ void Physics_window::tool_render(
     if (m_debug_draw.constraint_limits) flags |= erhe::physics::IDebug_draw::c_Draw_constraint_limits;
     if (m_debug_draw.normals          ) flags |= erhe::physics::IDebug_draw::c_Draw_normals;
     if (m_debug_draw.frames           ) flags |= erhe::physics::IDebug_draw::c_Draw_frames;
-    debug_drawer->set_debug_mode(flags);
+    g_debug_draw->set_debug_mode(flags);
 
-    debug_drawer->set_colors(m_debug_draw.colors);
+    g_debug_draw->set_colors(m_debug_draw.colors);
 
     scene_root->physics_world().debug_draw();
 }

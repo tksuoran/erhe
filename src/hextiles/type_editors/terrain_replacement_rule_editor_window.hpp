@@ -11,9 +11,9 @@ class Terrain_replacement_rule_editor_window
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Terrain_replacement_rule_editor_window"};
-    static constexpr std::string_view c_title{"Terrain Replacement Rule Editor"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr const char* c_type_name{"Terrain_replacement_rule_editor_window"};
+    static constexpr const char* c_title{"Terrain Replacement Rule Editor"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
 
     Terrain_replacement_rule_editor_window ();
     ~Terrain_replacement_rule_editor_window() noexcept override;
@@ -26,5 +26,7 @@ public:
     // Implements Imgui_window
     void imgui() override;
 };
+
+extern Terrain_replacement_rule_editor_window* g_terrain_replacement_rule_editor_window;
 
 } // namespace hextiles

@@ -39,12 +39,9 @@ void Commands_window::declare_required_components()
 
 void Commands_window::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-}
+    ERHE_VERIFY(g_imgui_windows != nullptr);
 
-void Commands_window::post_initialize()
-{
-    m_commands = get<erhe::application::Commands>();
+    g_imgui_windows->register_imgui_window(this);
 }
 
 void Commands_window::imgui()
@@ -61,7 +58,7 @@ void Commands_window::imgui()
         ImGui::TextUnformatted("ImGui Want Capture Mouse");
     }
 
-    m_commands->imgui();
+    g_commands->imgui();
 #endif
 }
 

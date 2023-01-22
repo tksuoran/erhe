@@ -81,12 +81,12 @@ void Mesh_operation::make_entries(
     > operation
 )
 {
-    const auto& selection = m_parameters.selection_tool->selection();
+    const auto& selection = g_selection_tool->selection();
     if (selection.empty())
     {
         return;
     }
-    const auto first_node = m_parameters.selection_tool->get_first_selected_node();
+    const auto first_node = g_selection_tool->get_first_selected_node();
     if (!first_node)
     {
         return;
@@ -96,8 +96,7 @@ void Mesh_operation::make_entries(
     const auto& scene = scene_root->scene();
     scene.sanity_check();
 
-    m_selection_tool = m_parameters.selection_tool;
-    for (auto& item : m_parameters.selection_tool->selection())
+    for (auto& item : g_selection_tool->selection())
     {
         const auto& mesh = as_mesh(item);
         if (!mesh)

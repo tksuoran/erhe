@@ -51,10 +51,9 @@ class Rendertarget_mesh
 {
 public:
     Rendertarget_mesh(
-        const erhe::components::Components& components,
-        int                                 width,
-        int                                 height,
-        double                              pixels_per_meter
+        int    width,
+        int    height,
+        double pixels_per_meter
     );
 
     // Implements Item
@@ -81,7 +80,7 @@ public:
     [[nodiscard]] auto get_node_raytrace() -> std::shared_ptr<Node_raytrace>;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    void update_headset(Headset_view& headset_view);
+    void update_headset();
     [[nodiscard]] auto get_pointer_finger                  () const -> std::optional<Finger_point>;
     [[nodiscard]] auto get_finger_trigger                  () const -> bool;
     [[nodiscard]] auto get_controller_pose                 () const -> const erhe::xr::Pose&;
@@ -98,9 +97,8 @@ public:
 
 private:
     void init_rendertarget(int width, int height);
-    void add_primitive    (const erhe::components::Components& components);
+    void add_primitive    ();
 
-    std::shared_ptr<Viewport_config>             m_viewport_config;
     double                                       m_pixels_per_meter{0.0};
     double                                       m_local_width     {0.0};
     double                                       m_local_height    {0.0};

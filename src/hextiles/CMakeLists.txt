@@ -6,13 +6,14 @@ add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe.ini
+    hextiles_application.cpp
+    hextiles_application.hpp
     coordinate.cpp
     coordinate.hpp
     file_util.cpp
     file_util.hpp
     hextiles_log.cpp
     hextiles_log.hpp
-    hextiles_on_load.cpp
     hextiles_view_client.cpp
     hextiles_view_client.hpp
     game/game.cpp
@@ -93,6 +94,7 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PRIVATE
+    etl::etl
     erhe::application
     erhe::components
     erhe::concurrency

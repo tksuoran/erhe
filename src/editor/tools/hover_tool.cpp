@@ -17,7 +17,6 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/material.hpp"
@@ -25,6 +24,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -34,6 +34,8 @@
 namespace editor
 {
 
+Hover_tool* g_hover_tool{nullptr};
+
 Hover_tool::Hover_tool()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component{c_type_name}
@@ -42,6 +44,8 @@ Hover_tool::Hover_tool()
 
 Hover_tool::~Hover_tool() noexcept
 {
+    ERHE_VERIFY(g_hover_tool == this);
+    g_hover_tool = nullptr;
 }
 
 void Hover_tool::declare_required_components()
@@ -54,29 +58,24 @@ void Hover_tool::declare_required_components()
 void Hover_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_hover_tool == nullptr);
 
     set_flags(Tool_flags::background);
 
-    const auto& imgui_windows = get<erhe::application::Imgui_windows>();
-    imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
     set_description(c_title);
     set_flags      (Tool_flags::toolbox);
-    get<Tools>()->register_tool(this);
+    g_tools->register_tool(this);
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             Tool::on_message(message);
         }
     );
-}
 
-void Hover_tool::post_initialize()
-{
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_text_renderer     = get<erhe::application::Text_renderer    >();
-    m_viewport_windows  = get<Viewport_windows                    >();
+    g_hover_tool = this;
 }
 
 void Hover_tool::imgui()
@@ -205,7 +204,7 @@ void Hover_tool::tool_render(
         return;
     }
 
-    auto& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
     //constexpr uint32_t red   = 0xff0000ffu;
     //constexpr uint32_t blue  = 0xffff0000u;
@@ -222,7 +221,7 @@ void Hover_tool::tool_render(
 
     const std::string text = entry.get_name();
 
-    m_text_renderer->print(
+    erhe::application::g_text_renderer->print(
         position_at_fixed_depth,
         text_color,
         text
@@ -237,7 +236,7 @@ void Hover_tool::tool_render(
         "Position in world: {}",
         entry.position.value()
     );
-    m_text_renderer->print(
+    erhe::application::g_text_renderer->print(
         position_at_fixed_depth_line_2,
         text_color,
         text_line_2
@@ -263,7 +262,7 @@ void Hover_tool::tool_render(
                     entry.mesh->get_name(),
                     local_position
                 );
-                m_text_renderer->print(
+                erhe::application::g_text_renderer->print(
                     position_at_fixed_depth_line_3,
                     text_color,
                     text_line_3.c_str()
@@ -279,7 +278,7 @@ void Hover_tool::tool_render(
             entry.grid->get_name(),
             local_position
         );
-        m_text_renderer->print(
+        erhe::application::g_text_renderer->print(
             position_at_fixed_depth_line_3,
             text_color,
             text_line_3.c_str() // erhe::physics::c_motion_mode_strings[motion_mode_index]

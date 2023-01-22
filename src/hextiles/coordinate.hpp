@@ -2,8 +2,6 @@
 
 #include "types.hpp"
 
-#include <gsl/assert>
-
 #include <cassert>
 
 namespace hextiles
@@ -99,8 +97,8 @@ public:
 
     auto neighbor(const direction_t direction) const -> Tile_coordinate
     {
-        Expects(direction >= direction_first);
-        Expects(direction <= direction_last);
+        assert(direction >= direction_first);
+        assert(direction <= direction_last);
 
         Tile_coordinate res{
             static_cast<coordinate_t>(this->x + hex_neighbors[direction].x),

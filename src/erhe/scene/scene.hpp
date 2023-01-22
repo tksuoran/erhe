@@ -77,9 +77,8 @@ class Scene
 {
 public:
     explicit Scene(
-        const std::string_view                         name,
-        erhe::message_bus::Message_bus<Scene_message>* message_bus,
-        Scene_host*                                    host = nullptr
+        const std::string_view name,
+        Scene_host*            host = nullptr
     );
 
     ~Scene();
@@ -92,6 +91,7 @@ public:
     void sanity_check          () const;
     void sort_transform_nodes  ();
     void update_node_transforms();
+    void reset_scene_host      ();
 
     //[[nodiscard]] auto get_node_by_id         (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Node>;
     [[nodiscard]] auto get_mesh_by_id       (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
@@ -122,14 +122,13 @@ public:
     void unregister_light (const std::shared_ptr<Light>& light);
 
 private:
-    Scene_host*                                    m_host       {nullptr};
-    erhe::message_bus::Message_bus<Scene_message>* m_message_bus{nullptr};
-    std::shared_ptr<erhe::scene::Node>             m_root_node;
-    std::vector<std::shared_ptr<Node>>             m_flat_node_vector;
-    std::vector<std::shared_ptr<Mesh_layer>>       m_mesh_layers;
-    std::vector<std::shared_ptr<Light_layer>>      m_light_layers;
-    std::vector<std::shared_ptr<Camera>>           m_cameras;
-    bool                                           m_nodes_sorted{false};
+    Scene_host*                               m_host       {nullptr};
+    std::shared_ptr<erhe::scene::Node>        m_root_node;
+    std::vector<std::shared_ptr<Node>>        m_flat_node_vector;
+    std::vector<std::shared_ptr<Mesh_layer>>  m_mesh_layers;
+    std::vector<std::shared_ptr<Light_layer>> m_light_layers;
+    std::vector<std::shared_ptr<Camera>>      m_cameras;
+    bool                                      m_nodes_sorted{false};
 };
 
 [[nodiscard]] auto is_scene(const Item* const scene_item) -> bool;

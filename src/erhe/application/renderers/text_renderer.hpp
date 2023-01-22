@@ -26,14 +26,12 @@
 
 namespace erhe::graphics
 {
-    class OpenGL_state_tracker;
     class Sampler;
     class Shader_stages;
 }
 
 namespace erhe::scene
 {
-    class Camera;
     class Viewport;
 }
 
@@ -69,7 +67,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Public API
     void print(
@@ -113,9 +111,6 @@ private:
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;
     void create_frame_resources();
 
-    // Component dependencies
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-
     erhe::graphics::Fragment_outputs                 m_fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings        m_attribute_mappings;
     erhe::graphics::Vertex_format                    m_vertex_format;
@@ -140,5 +135,7 @@ private:
     std::size_t   m_index_range_first{0};
     std::size_t   m_index_count      {0};
 };
+
+extern Text_renderer* g_text_renderer;
 
 } // namespace erhe::application

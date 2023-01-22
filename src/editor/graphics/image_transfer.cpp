@@ -10,6 +10,8 @@
 namespace editor
 {
 
+Image_transfer* g_image_transfer{nullptr};
+
 Image_transfer::Image_transfer()
     : erhe::components::Component{c_type_name}
 {
@@ -17,6 +19,13 @@ Image_transfer::Image_transfer()
 
 Image_transfer::~Image_transfer() noexcept
 {
+}
+
+void Image_transfer::deinitialize_component()
+{
+    ERHE_VERIFY(g_image_transfer == this);
+    m_slots.reset();
+    g_image_transfer = nullptr;
 }
 
 void Image_transfer::declare_required_components()
@@ -27,12 +36,13 @@ void Image_transfer::declare_required_components()
 void Image_transfer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_image_transfer == nullptr);
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
     m_slots = std::make_unique<std::array<Slot, 4>>();
+
+    g_image_transfer = this;
 }
 
 auto Image_transfer::get_slot() -> Slot&

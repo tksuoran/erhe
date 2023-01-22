@@ -1,4 +1,5 @@
 #include "erhe/application/windows/pipelines.hpp"
+
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -35,7 +36,7 @@ void Pipelines::declare_required_components()
 
 void Pipelines::initialize_component()
 {
-    get<Imgui_windows>()->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this);
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -193,7 +194,7 @@ void Pipelines::rasterization(
     );
     ImGui::Text(
         "Reverse Depth: %s",
-        get<Configuration>()->graphics.reverse_depth
+        g_configuration->graphics.reverse_depth
             ? "Yes"
             : "No"
     );

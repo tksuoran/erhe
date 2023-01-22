@@ -1,10 +1,11 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "windows/node_tree_window.hpp"
-#include "graphics/icon_set.hpp"
+
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
-
+#include "windows/node_tree_window.hpp"
+#include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
@@ -24,6 +25,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <gsl/gsl>
 
@@ -36,6 +38,8 @@ namespace editor
 {
 
 using Light_type = erhe::scene::Light_type;
+
+Node_tree_window* g_node_tree_window{nullptr};
 
 Node_tree_window::Node_tree_window()
     : erhe::components::Component    {c_type_name}
@@ -51,37 +55,46 @@ Node_tree_window::Node_tree_window()
 
 Node_tree_window::~Node_tree_window() noexcept
 {
+    ERHE_VERIFY(g_node_tree_window == nullptr);
+}
+
+void Node_tree_window::deinitialize_component()
+{
+    ERHE_VERIFY(g_node_tree_window == this);
+    m_tree_items.clear();
+    m_tree_items_last_frame.clear();
+    m_operation.reset();
+    m_operations.clear();
+    m_last_focus_item.reset();
+    m_popup_item.reset();
+    g_node_tree_window = nullptr;
 }
 
 void Node_tree_window::declare_required_components()
 {
-    m_selection_tool = require<Selection_tool>();
+    require<Selection_tool>();
     require<erhe::application::Imgui_windows>();
 }
 
 void Node_tree_window::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-}
-
-void Node_tree_window::post_initialize()
-{
-    m_editor_scenes = get<Editor_scenes>();
-    m_icon_set      = get<Icon_set     >();
+    ERHE_VERIFY(g_node_tree_window == nullptr);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    g_node_tree_window = this;
 }
 
 void Node_tree_window::clear_selection()
 {
     SPDLOG_LOGGER_TRACE(log_node_properties, "clear_selection()");
 
-    m_selection_tool->clear_selection();
+    g_selection_tool->clear_selection();
 }
 
 void Node_tree_window::recursive_add_to_selection(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
-    m_selection_tool->add_to_selection(node);
+    g_selection_tool->add_to_selection(node);
     for (const auto& child_node : node->children())
     {
         recursive_add_to_selection(child_node);
@@ -92,8 +105,8 @@ void Node_tree_window::select_all()
 {
     SPDLOG_LOGGER_TRACE(log_node_properties, "select_all()");
 
-    m_selection_tool->clear_selection();
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    g_selection_tool->clear_selection();
+    const auto& scene_roots = g_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {
         const auto& scene = scene_root->scene();
@@ -147,7 +160,7 @@ void Node_tree_window::move_selection(
     const auto parent = target_node->parent().lock();
 
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = m_selection_tool->selection();
+    const auto& selection = g_selection_tool->selection();
     const auto& drag_item = get_item_by_id(payload_id);
 
     std::shared_ptr<erhe::scene::Node> anchor = target_node;
@@ -265,7 +278,7 @@ void Node_tree_window::reposition(
 
     if (selection_usage == Selection_usage::Selection_used)
     {
-        const auto& selection = m_selection_tool->selection();
+        const auto& selection = g_selection_tool->selection();
 
         // Ignore nodes if their ancestors is in selection
         const auto ancestor_in_selection = get_ancestor_in(node, selection);
@@ -345,7 +358,7 @@ void Node_tree_window::try_add_to_attach(
 
     if (selection_usage == Selection_usage::Selection_used)
     {
-        const auto& selection = m_selection_tool->selection();
+        const auto& selection = g_selection_tool->selection();
 
         // Ignore nodes if their ancestors is in selection
         const auto ancestor_in_selection = get_ancestor_in(node, selection);
@@ -387,7 +400,7 @@ void Node_tree_window::attach_selection_to(
     ////     payload_id
     //// );
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = m_selection_tool->selection();
+    const auto& selection = g_selection_tool->selection();
     auto drag_item = get_item_by_id(payload_id);
 
     if (is_in(drag_item, selection))
@@ -429,7 +442,7 @@ void Node_tree_window::drag_and_drop_source(
     {
         ImGui::SetDragDropPayload(item->type_name(), &id, sizeof(id));
 
-        const auto& selection = m_selection_tool->selection();
+        const auto& selection = g_selection_tool->selection();
         if (is_in(item, selection))
         {
             for (const auto& selection_item : selection)
@@ -591,7 +604,7 @@ void Node_tree_window::set_item_selection_terminator(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
-    auto& range_selection = m_selection_tool->range_selection();
+    auto& range_selection = g_selection_tool->range_selection();
     range_selection.set_terminator(item);
 }
 
@@ -604,23 +617,23 @@ void Node_tree_window::set_item_selection(
 
     if (selected)
     {
-        m_selection_tool->add_to_selection(item);
+        g_selection_tool->add_to_selection(item);
         if (node && !m_expand_attachments)
         {
             for (const auto& node_attachment : node->attachments())
             {
-                m_selection_tool->add_to_selection(node_attachment);
+                g_selection_tool->add_to_selection(node_attachment);
             }
         }
     }
     else
     {
-        m_selection_tool->remove_from_selection(item);
+        g_selection_tool->remove_from_selection(item);
         if (node && !m_expand_attachments)
         {
             for (const auto& node_attachment : node->attachments())
             {
-                m_selection_tool->remove_from_selection(node_attachment);
+                g_selection_tool->remove_from_selection(node_attachment);
             }
         }
     }
@@ -632,7 +645,7 @@ void Node_tree_window::item_update_selection(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_selection_tool)
+    if (!g_selection_tool)
     {
         SPDLOG_LOGGER_TRACE(
             log_node_properties,
@@ -641,7 +654,7 @@ void Node_tree_window::item_update_selection(
         return;
     }
 
-    auto& range_selection = m_selection_tool->range_selection();
+    auto& range_selection = g_selection_tool->range_selection();
 
     drag_and_drop_source(item);
 
@@ -680,7 +693,7 @@ void Node_tree_window::item_update_selection(
         {
             const bool was_selected = item->is_selected();
             range_selection.reset();
-            m_selection_tool->clear_selection();
+            g_selection_tool->clear_selection();
             SPDLOG_LOGGER_TRACE(
                 log_node_properties,
                 "mouse button release without modifier keys on {} {} - {} selecting it",
@@ -780,7 +793,7 @@ void Node_tree_window::item_popup_menu(
                     [this, scene_root, parent_node]
                     ()
                     {
-                        m_scene_commands->create_new_empty_node(parent_node.get());
+                        g_scene_commands->create_new_empty_node(parent_node.get());
                     }
                 );
                 close = true;
@@ -791,7 +804,7 @@ void Node_tree_window::item_popup_menu(
                     [this, scene_root, parent_node]
                     ()
                     {
-                        m_scene_commands->create_new_camera(parent_node.get());
+                        g_scene_commands->create_new_camera(parent_node.get());
                     }
                 );
                 close = true;
@@ -802,7 +815,7 @@ void Node_tree_window::item_popup_menu(
                     [this, scene_root, parent_node]
                     ()
                     {
-                        m_scene_commands->create_new_light(parent_node.get());
+                        g_scene_commands->create_new_light(parent_node.get());
                     }
                 );
                 close = true;
@@ -823,7 +836,9 @@ void Node_tree_window::item_popup_menu(
     }
 }
 
-void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Item>& item)
+void Node_tree_window::item_icon(
+    const std::shared_ptr<erhe::scene::Item>& item
+)
 {
     std::optional<glm::vec2> icon;
 
@@ -831,12 +846,12 @@ void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Item>& item)
     const auto& node = as_node(item);
     if (node)
     {
-        icon = m_icon_set->icons.node;
+        icon = g_icon_set->icons.node;
     }
     const auto& mesh = as_mesh(item);
     if (mesh)
     {
-        icon = m_icon_set->icons.mesh;
+        icon = g_icon_set->icons.mesh;
     }
     const auto& light = as_light(item);
     if (light)
@@ -845,28 +860,28 @@ void Node_tree_window::item_icon(const std::shared_ptr<erhe::scene::Item>& item)
         switch (light->type)
         {
             //using enum erhe::scene::Light_type;
-            case erhe::scene::Light_type::spot:        icon = m_icon_set->icons.spot_light; break;
-            case erhe::scene::Light_type::directional: icon = m_icon_set->icons.directional_light; break;
-            case erhe::scene::Light_type::point:       icon = m_icon_set->icons.point_light; break;
+            case erhe::scene::Light_type::spot:        icon = g_icon_set->icons.spot_light; break;
+            case erhe::scene::Light_type::directional: icon = g_icon_set->icons.directional_light; break;
+            case erhe::scene::Light_type::point:       icon = g_icon_set->icons.point_light; break;
             default: break;
         }
     }
     const auto& camera = as_camera(item);
     if (camera)
     {
-        icon = m_icon_set->icons.camera;
+        icon = g_icon_set->icons.camera;
     }
     const auto& scene = as_scene(item);
     if (scene)
     {
-        icon = m_icon_set->icons.scene;
+        icon = g_icon_set->icons.scene;
     }
 
     if (icon.has_value())
     {
         const auto& icon_rasterization = get_scale_value() < 1.5f
-            ? m_icon_set->get_small_rasterization()
-            : m_icon_set->get_large_rasterization();
+            ? g_icon_set->get_small_rasterization()
+            : g_icon_set->get_large_rasterization();
         icon_rasterization.icon(icon.value(), color);
     }
 }
@@ -978,9 +993,9 @@ void Node_tree_window::imgui_item_node(
         return;
     }
 
-    if (m_selection_tool)
+    if (g_selection_tool != nullptr)
     {
-        m_selection_tool->range_selection().entry(item, m_expand_attachments);
+        g_selection_tool->range_selection().entry(item, m_expand_attachments);
     }
 
     const auto tree_node_state = item_icon_and_text(item, true);
@@ -1075,9 +1090,9 @@ void Node_tree_window::imgui()
     m_tree_items_last_frame = m_tree_items;
     m_tree_items.clear();
 
-    if (m_selection_tool)
+    if (g_selection_tool)
     {
-        m_selection_tool->range_selection().begin();
+        g_selection_tool->range_selection().begin();
     }
 
     // TODO Handle cross scene drags and drops
@@ -1087,7 +1102,6 @@ void Node_tree_window::imgui()
         auto content_library = std::make_shared<Content_library>();
         content_library->materials.make("Default");
         auto scene_root = std::make_shared<Scene_root>(
-            *m_components,
             content_library,
             "new scene"
         );
@@ -1123,10 +1137,10 @@ void Node_tree_window::imgui()
             )
         );
 
-        m_editor_scenes->register_scene_root(scene_root);
+        g_editor_scenes->register_scene_root(scene_root);
     }
 #endif
-    const auto& scene_roots = m_editor_scenes->get_scene_roots();
+    const auto& scene_roots = g_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots)
     {
         const auto& scene = scene_root->get_shared_scene();
@@ -1141,13 +1155,13 @@ void Node_tree_window::imgui()
 
     if (m_operation)
     {
-        get<Operation_stack>()->push(m_operation);
+        g_operation_stack->push(m_operation);
         m_operation.reset();
     }
 
-    if (m_selection_tool)
+    if (g_selection_tool)
     {
-        m_selection_tool->range_selection().end(m_expand_attachments);
+        g_selection_tool->range_selection().end(m_expand_attachments);
     }
 
     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -1155,7 +1169,7 @@ void Node_tree_window::imgui()
         m_toggled_open = false;
     }
 
-    get<Editor_scenes>()->sanity_check();
+    g_editor_scenes->sanity_check();
 #endif
 }
 

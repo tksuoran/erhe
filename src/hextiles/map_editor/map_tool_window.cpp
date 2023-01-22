@@ -1,4 +1,5 @@
 #include "map_editor/map_tool_window.hpp"
+
 #include "map_editor/map_editor.hpp"
 #include "map_editor/terrain_palette_window.hpp"
 #include "map_generator/map_generator.hpp"
@@ -10,11 +11,14 @@
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
 
 namespace hextiles
 {
+
+Map_tool_window* g_map_tool_window{nullptr};
 
 Map_tool_window::Map_tool_window()
     : erhe::components::Component{c_type_name}
@@ -24,6 +28,8 @@ Map_tool_window::Map_tool_window()
 
 Map_tool_window::~Map_tool_window() noexcept
 {
+    ERHE_VERIFY(g_map_tool_window == this);
+    g_map_tool_window = nullptr;
 }
 
 void Map_tool_window::declare_required_components()
@@ -33,17 +39,12 @@ void Map_tool_window::declare_required_components()
 
 void Map_tool_window::initialize_component()
 {
-    Expects(m_components != nullptr);
-    Imgui_window::initialize(*m_components);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
-}
+    ERHE_VERIFY(g_map_tool_window == nullptr);
 
-void Map_tool_window::post_initialize()
-{
-    m_imgui_renderer = get<erhe::application::Imgui_renderer>();
-    m_map_editor     = get<Map_editor>();
-    m_map_window     = get<Map_window>();
-    m_tile_renderer  = get<Tile_renderer>();
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+    hide();
+
+    g_map_tool_window = this;
 }
 
 void Map_tool_window::imgui()
@@ -52,11 +53,11 @@ void Map_tool_window::imgui()
 
     if (ImGui::Button("Back to Menu", button_size))
     {
-        get<Menu_window>()->show_menu();
+        g_menu_window->show_menu();
     }
     if (ImGui::Button("Generator", button_size))
     {
-        get<Map_generator>()->show();
+        g_map_generator->show();
     }
 
 #if 0
@@ -86,30 +87,30 @@ void Map_tool_window::imgui()
 
 void Map_tool_window::tile_info(const Tile_coordinate tile_position)
 {
-    const auto&          map            = m_map_editor->get_map();
+    const auto&          map            = g_map_editor->get_map();
     const terrain_tile_t terrain_tile   = map->get_terrain_tile(tile_position);
-    const auto&          terrain_shapes = m_tile_renderer->get_terrain_shapes();
+    const auto&          terrain_shapes = g_tile_renderer->get_terrain_shapes();
     if (terrain_tile >= terrain_shapes.size())
     {
         return;
     }
-    const auto terrain = m_tiles->get_terrain_from_tile(terrain_tile);
+    const auto terrain = g_tiles->get_terrain_from_tile(terrain_tile);
     if (terrain >= terrain_shapes.size())
     {
         return;
     }
 
-    const auto& terrain_type = m_tiles->get_terrain_type(terrain);
+    const auto& terrain_type = g_tiles->get_terrain_type(terrain);
 
     ImGui::Text("Tile @ %d, %d %s", tile_position.x, tile_position.y, terrain_type.name.c_str());
     ImGui::Text("Terrain: %d, base: %d", terrain, terrain);
     ImGui::Text("City Size: %d", terrain_type.city_size);
 
-    m_map_window->tile_image(terrain_tile, 3);
+    g_map_window->tile_image(terrain_tile, 3);
     ImGui::SameLine();
 
-    const terrain_tile_t base_terrain_tile = m_tiles->get_terrain_tile_from_terrain(terrain);
-    m_map_window->tile_image(base_terrain_tile, 3);
+    const terrain_tile_t base_terrain_tile = g_tiles->get_terrain_tile_from_terrain(terrain);
+    g_map_window->tile_image(base_terrain_tile, 3);
 
     const int distance = map->distance(tile_position, Tile_coordinate{0, 0});
     ImGui::Text("Distance to 0,0: %d", distance);

@@ -1,6 +1,7 @@
 #include "erhe/application/graphics/shader_monitor.hpp"
-#include "erhe/application/configuration.hpp"
+
 #include "erhe/application/application_log.hpp"
+#include "erhe/application/configuration.hpp"
 
 #include "erhe/toolkit/profile.hpp"
 
@@ -12,6 +13,8 @@ namespace erhe::application
 
 using std::string;
 
+Shader_monitor* g_shader_monitor{nullptr};
+
 Shader_monitor::Shader_monitor()
     : erhe::components::Component{c_type_name}
     , m_run                      {false}
@@ -20,13 +23,25 @@ Shader_monitor::Shader_monitor()
 
 Shader_monitor::~Shader_monitor() noexcept
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_shader_monitor == nullptr);
+}
+
+void Shader_monitor::deinitialize_component()
+{
+    ERHE_VERIFY(g_shader_monitor == this);
 
     log_shader_monitor->info("Shader_monitor shutting down");
     set_run(false);
     log_shader_monitor->info("Joining shader monitor poll thread");
-    m_poll_filesystem_thread.join();
+    if (m_poll_filesystem_thread.joinable())
+    {
+        m_poll_filesystem_thread.join();
+    }
     log_shader_monitor->info("Shader_monitor shut down complete");
+    m_files.clear();
+    m_reload_list.clear();
+
+    g_shader_monitor = nullptr;
 }
 
 void Shader_monitor::declare_required_components()
@@ -37,8 +52,10 @@ void Shader_monitor::declare_required_components()
 void Shader_monitor::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_shader_monitor == nullptr);
+    g_shader_monitor = this; // here due to early exit
 
-    if (!get<Configuration>()->shader_monitor.enabled)
+    if (!erhe::application::g_configuration->shader_monitor.enabled)
     {
         log_startup->info("Shader monitor disabled due to erhe.ini setting");
         return;

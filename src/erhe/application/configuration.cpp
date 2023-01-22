@@ -2,6 +2,7 @@
 #include "erhe/application/application_log.hpp"
 
 #include "erhe/graphics/state/depth_stencil_state.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <cxxopts.hpp>
 
@@ -163,10 +164,28 @@ void Configuration::get_window(mINI::INIStructure& ini, const char* key, Window_
     }
 }
 
-Configuration::Configuration(int argc, char** argv)
+Configuration* g_configuration{nullptr};
+
+Configuration::Configuration()
     : erhe::components::Component{c_type_name}
 {
-    mINI::INIFile file("erhe.ini");
+}
+
+Configuration::~Configuration()
+{
+    ERHE_VERIFY(g_configuration == this);
+    g_configuration = nullptr;
+}
+
+void Configuration::initialize_component()
+{
+    ERHE_VERIFY((g_configuration == nullptr) || (g_configuration == this));
+    g_configuration = this;
+}
+
+void Configuration::parse_args(int argc, char** argv)
+{
+    mINI::INIFile file{"erhe.ini"};
     mINI::INIStructure ini;
     if (file.read(ini))
     {

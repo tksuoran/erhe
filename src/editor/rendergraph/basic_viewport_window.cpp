@@ -56,9 +56,9 @@ Basic_viewport_window::Basic_viewport_window(
 
 Basic_viewport_window::~Basic_viewport_window()
 {
-    if (m_viewport_windows)
+    if (g_viewport_windows != nullptr)
     {
-        m_viewport_windows->erase(this);
+        g_viewport_windows->erase(this);
     }
 }
 
@@ -165,11 +165,5 @@ void Basic_viewport_window::set_is_hovered(const bool is_hovered)
         viewport_window->set_is_hovered(is_hovered);
     }
 }
-
-void Basic_viewport_window::connect(Viewport_windows* viewport_windows)
-{
-    m_viewport_windows = viewport_windows;
-}
-
 
 } // namespace editor

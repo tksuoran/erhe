@@ -3,9 +3,10 @@
 #include "types.hpp"
 
 #include <cstdint>
-#include <string>
+//#include <string>
+#include "etl/string.h"
 
-#include <gsl/assert>
+//#include <gsl/assert>
 
 namespace hextiles
 {
@@ -95,7 +96,7 @@ public:
 
 struct Unit_type
 {
-    std::string name;
+    etl::string<max_name_length> name;
     int         tile           {0};
     int         tech_level     {0};
     int         production_time{0};

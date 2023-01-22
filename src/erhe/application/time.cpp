@@ -1,12 +1,14 @@
 #include "erhe/application/time.hpp"
-#include "erhe/application/application.hpp"
 #include "erhe/application/application_log.hpp"
 #include "erhe/application/window.hpp"
 
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::application {
+
+Time* g_time{nullptr};
 
 Time::Time()
     : erhe::components::Component{c_type_name}
@@ -15,6 +17,14 @@ Time::Time()
 
 Time::~Time() noexcept
 {
+    ERHE_VERIFY(g_time == this);
+    g_time = nullptr;
+}
+
+void Time::initialize_component()
+{
+    ERHE_VERIFY(g_time == nullptr);
+    g_time = this;
 }
 
 void Time::start_time()

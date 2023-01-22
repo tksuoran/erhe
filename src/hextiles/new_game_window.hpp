@@ -7,6 +7,9 @@
 
 #include "erhe/components/components.hpp"
 
+#include "etl/string.h"
+#include "etl/vector.h"
+
 namespace hextiles
 {
 
@@ -37,8 +40,8 @@ private:
     void select_player_start_cities();
     void create                    ();
 
-    std::vector<std::string> m_player_names;
-    std::vector<size_t>      m_start_cities;
+    etl::vector<etl::string<max_name_length>, max_player_count> m_player_names;
+    etl::vector<size_t, max_city_count>       m_start_cities;
 
     struct Create_parameters
     {
@@ -51,13 +54,15 @@ private:
         bool reveal_map{false};
     };
 
-    Create_parameters            m_create_parameters;
-    std::vector<Tile_coordinate> m_cities;
-    int                          m_number_of_coastal_cities{0};
-    int                          m_number_of_land_cities   {0};
+    Create_parameters                            m_create_parameters;
+    etl::vector<Tile_coordinate, max_city_count> m_cities;
+    int                                          m_number_of_coastal_cities{0};
+    int                                          m_number_of_land_cities   {0};
 
-    std::vector<size_t>          m_player_start_cities;
-    int                          m_minimum_player_start_city_distance{10};
+    etl::vector<size_t, max_player_count> m_player_start_cities;
+    int                                   m_minimum_player_start_city_distance{10};
 };
+
+extern New_game_window* g_new_game_window;
 
 } // namespace hextiles

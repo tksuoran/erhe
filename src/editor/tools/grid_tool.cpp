@@ -1,4 +1,5 @@
 #include "tools/grid_tool.hpp"
+
 #include "editor_rendering.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
@@ -12,6 +13,7 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -26,6 +28,8 @@ namespace editor
 using glm::vec3;
 
 
+Grid_tool* g_grid_tool{nullptr};
+
 Grid_tool::Grid_tool()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
@@ -34,6 +38,14 @@ Grid_tool::Grid_tool()
 
 Grid_tool::~Grid_tool() noexcept
 {
+    ERHE_VERIFY(g_grid_tool == nullptr);
+}
+
+void Grid_tool::deinitialize_component()
+{
+    ERHE_VERIFY(g_grid_tool == this);
+    m_grids.clear();
+    g_grid_tool = nullptr;
 }
 
 void Grid_tool::declare_required_components()
@@ -46,11 +58,13 @@ void Grid_tool::declare_required_components()
 
 void Grid_tool::initialize_component()
 {
+    ERHE_VERIFY(g_grid_tool == nullptr);
+
     set_description(c_title);
     set_flags      (Tool_flags::background);
-    set_icon       (get<Icon_set>()->icons.grid);
-    get<Tools>()->register_tool(this);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    set_icon       (g_icon_set->icons.grid);
+    g_tools->register_tool(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
     //const auto& config = get<erhe::application::Configuration>()->grid;
 
@@ -69,12 +83,8 @@ void Grid_tool::initialize_component()
     // grid->minor_color = config.minor_color;
 
     m_grids.push_back(grid);
-}
 
-void Grid_tool::post_initialize()
-{
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_selection_tool    = get<Selection_tool>();
+    g_grid_tool = this;
 }
 
 void Grid_tool::tool_render(
@@ -83,7 +93,7 @@ void Grid_tool::tool_render(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_line_renderer_set == nullptr)
+    if (erhe::application::g_line_renderer_set == nullptr)
     {
         return;
     }
@@ -100,7 +110,7 @@ void Grid_tool::tool_render(
 
     for (const auto& grid : m_grids)
     {
-        grid->render(m_line_renderer_set, context);
+        grid->render(context);
     }
 }
 
@@ -190,7 +200,7 @@ void Grid_tool::imgui()
     if (!m_grids.empty())
     {
         m_grid_index = std::min(m_grid_index, static_cast<int>(grid_names.size() - 1));
-        m_grids[m_grid_index]->imgui(m_selection_tool);
+        m_grids[m_grid_index]->imgui();
     }
 
     ImGui::NewLine();

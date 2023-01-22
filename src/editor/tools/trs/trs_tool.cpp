@@ -26,7 +26,6 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
@@ -110,6 +109,8 @@ void Trs_tool_drag_command::on_inactive(
     }
 }
 
+Trs_tool* g_trs_tool{nullptr};
+
 Trs_tool::Trs_tool()
     : Imgui_window               {c_title}
     , erhe::components::Component{c_type_name}
@@ -120,6 +121,8 @@ Trs_tool::Trs_tool()
 
 Trs_tool::~Trs_tool() noexcept
 {
+    ERHE_VERIFY(g_trs_tool == this);
+    g_trs_tool = nullptr;
 }
 
 void Trs_tool::declare_required_components()
@@ -129,51 +132,44 @@ void Trs_tool::declare_required_components()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
     require<Editor_message_bus>();
-    m_editor_scenes  = require<Editor_scenes >();
-    m_mesh_memory    = require<Mesh_memory   >();
-    m_selection_tool = require<Selection_tool>();
-    m_tools          = require<Tools         >();
+    require<Editor_scenes >();
+    require<Mesh_memory   >();
+    require<Selection_tool>();
+    require<Tools         >();
 }
 
 void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_trs_tool == nullptr);
 
-    const erhe::application::Scoped_gl_context gl_context{
-        Component::get<erhe::application::Gl_context_provider>()
-    };
+    const erhe::application::Scoped_gl_context gl_context;
 
-    ERHE_VERIFY(m_mesh_memory);
-    ERHE_VERIFY(m_tools);
-
-    const auto& tool_scene_root = m_tools->get_tool_scene_root();
+    const auto& tool_scene_root = g_tools->get_tool_scene_root();
     if (!tool_scene_root)
     {
         return;
     }
-    m_visualization.initialize(
-        *Component::get<erhe::application::Configuration>(),
-        *m_mesh_memory
-    );
+    m_visualization.initialize();
 
     set_base_priority(c_priority);
     set_description  (c_title);
 
-    const auto& tools = get<Tools>();
-    tools->register_tool(this);
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    g_tools->register_tool(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_drag_command);
-    commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
-    commands->bind_command_to_controller_trigger_drag(&m_drag_command);
+    erhe::application::g_commands->register_command(&m_drag_command);
+    erhe::application::g_commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
+    erhe::application::g_commands->bind_command_to_controller_trigger_drag(&m_drag_command);
 
-    get<Editor_message_bus>()->add_receiver(
+    g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
         }
     );
+
+    g_trs_tool = this;
 }
 
 void Trs_tool::on_message(Editor_message& message)
@@ -183,7 +179,7 @@ void Trs_tool::on_message(Editor_message& message)
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection))
     {
-        set_node(m_selection_tool->get_first_selected_node());
+        set_node(g_selection_tool->get_first_selected_node());
     }
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh))
     {
@@ -193,15 +189,6 @@ void Trs_tool::on_message(Editor_message& message)
     {
         update_for_view(message.scene_view);
     }
-}
-
-void Trs_tool::post_initialize()
-{
-    m_line_renderer_set = get<erhe::application::Line_renderer_set>();
-    m_text_renderer     = get<erhe::application::Text_renderer    >();
-    m_icon_set          = get<Icon_set        >();
-    m_operation_stack   = get<Operation_stack >();
-    m_viewport_windows  = get<Viewport_windows>();
 }
 
 [[nodiscard]] auto Trs_tool::is_trs_active() const -> bool
@@ -307,9 +294,9 @@ void Trs_tool::set_local(const bool local)
 
 void Trs_tool::viewport_toolbar(bool& hovered)
 {
-    if (m_icon_set)
+    if (g_icon_set != nullptr)
     {
-        m_visualization.viewport_toolbar(hovered, *m_icon_set.get());
+        m_visualization.viewport_toolbar(hovered);
     }
 }
 
@@ -550,7 +537,7 @@ void Trs_tool::end_drag(erhe::application::Command_context& context)
     {
         log_trs_tool->trace("m_touched && m_target_node -> creating transform operation");
 
-        m_operation_stack->push(
+        g_operation_stack->push(
             std::make_shared<Node_transform_operation>(
                 Node_transform_operation::Parameters{
                     .node                    = target_node,
@@ -1118,7 +1105,7 @@ void Trs_tool::tool_render(
     {
         return;
     }
-    erhe::application::Line_renderer& line_renderer = *m_line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
     if (m_cast_rays)
     {
@@ -1176,7 +1163,7 @@ void Trs_tool::tool_render(
 
     const auto target_node = m_target_node.lock();
     if (
-        (m_line_renderer_set == nullptr) ||
+        (erhe::application::g_line_renderer_set == nullptr) ||
         (get_handle_type(m_active_handle) != Handle_type::e_handle_type_rotate) ||
         (context.camera == nullptr) ||
         (!target_node)
@@ -1367,7 +1354,7 @@ void Trs_tool::update_visibility(const erhe::scene::Scene* view_scene)
 
 auto Trs_tool::get_tool_scene_root() -> std::shared_ptr<Scene_root>
 {
-    return m_tools->get_tool_scene_root();
+    return g_tools->get_tool_scene_root();
 }
 
 auto Trs_tool::get_target_scene_root() -> Scene_root*

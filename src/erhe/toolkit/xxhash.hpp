@@ -71,13 +71,15 @@ namespace compiletime_xxhash::detail::xxh32 {
 
     constexpr uint32_t xxh32_finalize(const char* input, int inputLen, int pos, uint32_t h32) {
         // XXH_PROCESS4
-        while((inputLen - pos) >= 4) {
+        while ((inputLen - pos) >= 4)
+        {
             h32 += read_u32le(input, pos) * prime32_3;
             h32 = rotl(h32, 17) * prime32_4;
             pos += 4;
         }
         // XXH_PROCESS1
-        while((inputLen - pos) > 0) {
+        while ((inputLen - pos) > 0)
+        {
             h32 += read_u8(input, pos) * prime32_5;
             h32 = rotl(h32, 11) * prime32_1;
             pos += 1;
@@ -86,13 +88,22 @@ namespace compiletime_xxhash::detail::xxh32 {
     }
 
     constexpr uint32_t xxh32_digest(
-        const char* input, int inputLen, int pos,
-        uint32_t v1, uint32_t v2, uint32_t v3, uint32_t v4
-    ) {
+        const char* input,
+        int         inputLen,
+        int         pos,
+        uint32_t    v1,
+        uint32_t    v2,
+        uint32_t    v3,
+        uint32_t    v4
+    )
+    {
         uint32_t h32 = 0;
-        if(inputLen >= 16) {
+        if (inputLen >= 16)
+        {
             h32 = rotl(v1, 1) + rotl(v2, 7) + rotl(v3, 12) + rotl(v4, 18);
-        } else {
+        }
+        else
+        {
             h32 = v3 + prime32_5;
         }
         h32 += inputLen;
@@ -100,14 +111,16 @@ namespace compiletime_xxhash::detail::xxh32 {
         return xxh32_avalanche(h32);
     }
 
-    constexpr uint32_t xxh32_round(uint32_t acc, const char* input, int pos) {
+    constexpr uint32_t xxh32_round(uint32_t acc, const char* input, const int pos)
+    {
         const uint32_t d = read_u32le(input, pos);
         acc += d * prime32_2;
         acc = rotl(acc, 13) * prime32_1;
         return acc;
     }
 
-    constexpr uint32_t xxh32(const char* input, int inputLen, uint32_t seed) {
+    constexpr uint32_t xxh32(const char* input, int inputLen, const uint32_t seed)
+    {
         uint32_t v1 = seed + prime32_1 + prime32_2;
         uint32_t v2 = seed + prime32_2;
         uint32_t v3 = seed;
@@ -126,13 +139,18 @@ namespace compiletime_xxhash::detail::xxh32 {
 
 // "public" function
 namespace compiletime_xxhash {
-    constexpr uint32_t xxh32(const char* input, std::size_t inputLen, uint32_t seed) {
+    constexpr uint32_t xxh32(const char* input, const std::size_t inputLen, const uint32_t seed)
+    {
         return detail::xxh32::xxh32(input, static_cast<int>(inputLen), seed);
     }
 }
 
-constexpr int compiletime_strlen(const char* input) {
+constexpr int compiletime_strlen(const char* input)
+{
     int i = 0;
-    while(input[i] != 0) { ++i; }
+    while (input[i] != 0)
+    {
+        ++i;
+    }
     return i;
 }

@@ -20,7 +20,6 @@
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
 
-#include "erhe/application/application.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
@@ -43,6 +42,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include "erhe/xr/headset.hpp"
 #include "erhe/xr/xr_instance.hpp"
 
@@ -53,10 +53,8 @@ namespace editor
 
 using erhe::graphics::Color_blend_state;
 
-Headset_view::Headset_view()
-    : erhe::components::Component        {c_name}
-    , erhe::application::Imgui_window    {c_description}
-    , erhe::application::Rendergraph_node{c_description}
+Headset_view_node::Headset_view_node()
+    : erhe::application::Rendergraph_node{"Headset"}
 {
     register_input(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -65,13 +63,38 @@ Headset_view::Headset_view()
     );
 }
 
+Headset_view* g_headset_view{nullptr};
+
+Headset_view::Headset_view()
+    : erhe::components::Component    {c_name}
+    , erhe::application::Imgui_window{c_description}
+{
+}
+
 Headset_view::~Headset_view()
 {
+    ERHE_VERIFY(g_headset_view == nullptr);
+}
+
+void Headset_view::deinitialize_component()
+{
+    ERHE_VERIFY(g_headset_view == this);
+    m_rendergraph_node.reset();
+    m_shadow_render_node.reset();
+    m_scene_root.reset();
+    m_headset.reset();
+    m_root_node.reset();
+    m_root_camera.reset();
+    m_view_resources.clear();
+    m_controller_visualization.reset();
+    m_finger_inputs.clear();
+    m_controller_inputs.clear();
+    g_headset_view = nullptr;
 }
 
 void Headset_view::declare_required_components()
 {
-    m_configuration = require<erhe::application::Configuration>();
+    require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
     require<erhe::application::Window>();
     require<Mesh_memory    >();
@@ -83,15 +106,16 @@ void Headset_view::declare_required_components()
 void Headset_view::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_headset_view == nullptr);
+    g_headset_view = this; // we have early out
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this);
 
-    const auto scene_builder = get<Scene_builder>();
-    m_scene_root = scene_builder->get_scene_root();
+    m_scene_root = g_scene_builder->get_scene_root();
 
     setup_root_camera();
 
-    const auto config = get<erhe::application::Configuration>()->headset;
+    const auto config = erhe::application::g_configuration->headset;
     if (!config.openxr)
     {
         return;
@@ -110,7 +134,7 @@ void Headset_view::initialize_component()
         ERHE_PROFILE_SCOPE("make xr::Headset");
 
         m_headset = std::make_unique<erhe::xr::Headset>(
-            get<erhe::application::Window>()->get_context_window(),
+            erhe::application::g_window->get_context_window(),
             configuration
         );
     }
@@ -118,33 +142,19 @@ void Headset_view::initialize_component()
     {
         ERHE_PROFILE_SCOPE("make Controller_visualization");
 
-        const auto mesh_memory = get<Mesh_memory>();
         m_controller_visualization = std::make_unique<Controller_visualization>(
-            *mesh_memory,
             *m_scene_root,
             m_root_node.get()
         );
     }
 
+    m_rendergraph_node = std::make_shared<Headset_view_node>();
+
     set_flags      (Tool_flags::background);
     set_description(c_description);
-    get<Tools>()->register_tool(this);
+    g_tools->register_tool(this);
 
     //hide();
-}
-
-void Headset_view::post_initialize()
-{
-    m_commands               = get<erhe::application::Commands         >();
-    m_line_renderer_set      = get<erhe::application::Line_renderer_set>();
-    m_text_renderer          = get<erhe::application::Text_renderer    >();
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-
-    m_editor_message_bus = get<Editor_message_bus>();
-    m_editor_rendering   = get<Editor_rendering>();
-    m_hand_tracker       = get<Hand_tracker    >();
-    m_hud                = get<Hud             >();
-    m_tools              = get<Tools           >();
 }
 
 void Headset_view::tool_render(const Render_context& context)
@@ -153,7 +163,7 @@ void Headset_view::tool_render(const Render_context& context)
 
     static_cast<void>(context);
 
-    auto& line_renderer = *m_line_renderer_set->visible.at(2).get();
+    auto& line_renderer = *erhe::application::g_line_renderer_set->visible.at(2).get();
 
     constexpr glm::vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
     constexpr glm::vec4 green {0.0f, 1.0f, 0.0f, 1.0f};
@@ -228,11 +238,10 @@ auto Headset_view::get_headset_view_resources(
         );
         resource->viewport_window = std::make_shared<Viewport_window>(
             label,
-            *m_components,
             m_scene_root,
             resource->camera
         );
-        m_rendergraph->connect(
+        erhe::application::g_rendergraph->connect(
             erhe::application::Rendergraph_node_key::shadow_maps,
             m_shadow_render_node,
             resource->viewport_window
@@ -261,15 +270,20 @@ void Headset_view::update_pointer_context_from_controller()
     raytrace_update(
         ray_origin,
         ray_direction,
-        m_tools->get_tool_scene_root().get()
+        g_tools->get_tool_scene_root().get()
     );
 }
 
-void Headset_view::execute_rendergraph_node()
+void Headset_view_node::execute_rendergraph_node()
+{
+    g_headset_view->render_headset();
+}
+
+void Headset_view::render_headset()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_headset)
+    if (m_headset == nullptr)
     {
         return;
     }
@@ -277,22 +291,7 @@ void Headset_view::execute_rendergraph_node()
     auto frame_timing = m_headset->begin_frame();
     if (frame_timing.should_render)
     {
-        struct Context
-        {
-            erhe::graphics::OpenGL_state_tracker* pipeline_state_tracker;
-            erhe::application::Configuration*     configuration;
-            erhe::application::Line_renderer_set* line_renderer_set;
-            erhe::application::Text_renderer*     text_renderer;
-        };
-        Context context
-        {
-            .pipeline_state_tracker = m_pipeline_state_tracker.get(),
-            .configuration          = m_configuration.get(),
-            .line_renderer_set      = m_line_renderer_set.get(),
-            .text_renderer          = m_text_renderer.get()
-        };
-
-        auto callback = [this, &context](erhe::xr::Render_view& render_view) -> bool
+        auto callback = [this](erhe::xr::Render_view& render_view) -> bool
         {
             const auto& view_resources = get_headset_view_resources(render_view);
             if (!view_resources->is_valid)
@@ -320,12 +319,12 @@ void Headset_view::execute_rendergraph_node()
                 .y             = 0,
                 .width         = static_cast<int>(render_view.width),
                 .height        = static_cast<int>(render_view.height),
-                .reverse_depth = m_configuration->graphics.reverse_depth
+                .reverse_depth = erhe::application::g_configuration->graphics.reverse_depth
             };
             gl::viewport(0, 0, render_view.width, render_view.height);
 
-            context.pipeline_state_tracker->shader_stages.reset();
-            context.pipeline_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
+            erhe::graphics::g_opengl_state_tracker->shader_stages.reset();
+            erhe::graphics::g_opengl_state_tracker->color_blend.execute(Color_blend_state::color_blend_disabled);
             gl::viewport(
                 viewport.x,
                 viewport.y,
@@ -343,8 +342,7 @@ void Headset_view::execute_rendergraph_node()
             }
             else
             {
-                const auto& global_viewport_config = get<Viewport_config>();
-                const auto& clear_color = global_viewport_config->data.clear_color;
+                const auto& clear_color = g_viewport_config->data.clear_color;
 
                 gl::clear_color(
                     clear_color[0],
@@ -352,7 +350,7 @@ void Headset_view::execute_rendergraph_node()
                     clear_color[2],
                     clear_color[3]
                 );
-                gl::clear_depth_f(*context.configuration->depth_clear_value_pointer());
+                gl::clear_depth_f(*erhe::application::g_configuration->depth_clear_value_pointer());
                 gl::clear(
                     gl::Clear_buffer_mask::color_buffer_bit |
                     gl::Clear_buffer_mask::depth_buffer_bit
@@ -367,21 +365,21 @@ void Headset_view::execute_rendergraph_node()
                     .viewport        = viewport
                 };
 
-                m_editor_rendering->render_content(render_context, true);
-                m_editor_rendering->render_selection(render_context, true);
+                g_editor_rendering->render_content(render_context, true);
+                g_editor_rendering->render_selection(render_context, true);
 
-                if (m_line_renderer_set) // && m_headset->trigger_value() > 0.0f)
+                if (erhe::application::g_line_renderer_set != nullptr) // && m_headset->trigger_value() > 0.0f)
                 {
                     ERHE_PROFILE_GPU_SCOPE(c_id_headset_render_content)
-                    m_line_renderer_set->begin();
-                    m_tools->render_tools(render_context);
-                    m_line_renderer_set->render(viewport, *render_context.camera);
-                    m_line_renderer_set->end();
+                    erhe::application::g_line_renderer_set->begin();
+                    g_tools->render_tools(render_context);
+                    erhe::application::g_line_renderer_set->render(viewport, *render_context.camera);
+                    erhe::application::g_line_renderer_set->end();
                 }
-                m_editor_rendering->render_content            (render_context, false);
-                m_editor_rendering->render_selection          (render_context, false);
-                m_editor_rendering->render_tool_meshes        (render_context);
-                m_editor_rendering->render_rendertarget_meshes(render_context);
+                g_editor_rendering->render_content            (render_context, false);
+                g_editor_rendering->render_selection          (render_context, false);
+                g_editor_rendering->render_tool_meshes        (render_context);
+                g_editor_rendering->render_rendertarget_meshes(render_context);
             }
 
             return true;
@@ -438,7 +436,7 @@ auto Headset_view::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 
 auto Headset_view::get_rendergraph_node() -> std::shared_ptr<erhe::application::Rendergraph_node>
 {
-    return shared_from_this();
+    return m_rendergraph_node;
 }
 
 auto Headset_view::get_shadow_render_node() const -> Shadow_render_node*
@@ -463,11 +461,6 @@ void Headset_view::add_controller_input(const Controller_input& controller_input
     return m_finger_to_viewport_distance_threshold;
 }
 
-[[nodiscard]] auto Headset_view::get_hand_tracker() const -> Hand_tracker*
-{
-    return m_hand_tracker.get();
-}
-
 [[nodiscard]] auto Headset_view::get_headset() const -> erhe::xr::Headset*
 {
     return m_headset.get();
@@ -484,7 +477,7 @@ void Headset_view::begin_frame()
 
     // TODO Consider multiple scene view being able to be (hover) active
     //      (viewport window and headset view).
-    m_editor_message_bus->send_message(
+    g_editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_hover_scene_view | Message_flag_bit::c_flag_bit_render_scene_view,
             .scene_view   = this
@@ -497,12 +490,12 @@ void Headset_view::begin_frame()
     const auto* trigger_value = m_headset->trigger_value();
     if (trigger_value->changedSinceLastSync)
     {
-        m_commands->on_controller_trigger_value(trigger_value->currentState);
+        erhe::application::g_commands->on_controller_trigger_value(trigger_value->currentState);
     }
     const auto* trigger_click = m_headset->trigger_click();
     if (trigger_click->changedSinceLastSync)
     {
-        m_commands->on_controller_trigger_click(trigger_click->currentState);
+        erhe::application::g_commands->on_controller_trigger_click(trigger_click->currentState);
     }
 
     {
@@ -525,33 +518,33 @@ void Headset_view::begin_frame()
     {
         const float x = trackpad->currentState.x;
         const float y = trackpad->currentState.y;
-        m_commands->on_controller_trackpad_click(x, y, trackpad_click->currentState == XR_TRUE);
+        erhe::application::g_commands->on_controller_trackpad_click(x, y, trackpad_click->currentState == XR_TRUE);
     }
     else if (trackpad_touch->changedSinceLastSync)
     {
         const float x = trackpad->currentState.x;
         const float y = trackpad->currentState.y;
-        m_commands->on_controller_trackpad_touch(x, y, trackpad_touch->currentState == XR_TRUE);
+        erhe::application::g_commands->on_controller_trackpad_touch(x, y, trackpad_touch->currentState == XR_TRUE);
     }
 
     const auto* menu_click = m_headset->menu_click();
     if (
         menu_click->changedSinceLastSync &&
         !menu_click->currentState &&
-        m_hud
+        (g_hud != nullptr)
     )
     {
-        m_hud->toggle_visibility();
+        g_hud->toggle_visibility();
     }
 
     if (m_controller_visualization)
     {
         m_controller_visualization->update(m_headset->controller_pose());
     }
-    if (m_hand_tracker)
-    {
-        m_hand_tracker->update_hands(*m_headset.get());
-    }
+    //if (m_hand_tracker)
+    //{
+    //    m_hand_tracker->update_hands(*m_headset.get());
+    //}
 
     const glm::mat4 world_from_view = m_headset->get_view_in_world();
     get_camera()->get_node()->set_world_from_node(world_from_view);

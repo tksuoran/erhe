@@ -1,4 +1,5 @@
 #include "erhe/application/windows/performance_window.hpp"
+
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/application_log.hpp"
@@ -32,7 +33,7 @@ void Performance_window::declare_required_components()
 
 void Performance_window::initialize_component()
 {
-    get<Imgui_windows>()->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this);
 }
 
 void Plot::clear()

@@ -20,52 +20,31 @@ namespace erhe::scene
     class Scene;
 }
 
-namespace erhe::application
-{
-    class Line_renderer_set;
-}
-
 namespace editor
 {
-
-class Editor_message_bus;
-class Editor_scenes;
-class Headset_view;
-class Icon_set;
-class Node_tree_window;
-class Scene_root;
-class Selection_tool;
-class Viewport_config;
-class Viewport_windows;
 
 class Selection_tool_delete_command
     : public erhe::application::Command
 {
 public:
-    explicit Selection_tool_delete_command(Selection_tool& selection_tool);
+    explicit Selection_tool_delete_command();
 
     auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Selection_tool& m_selection_tool;
 };
 
 class Selection_tool_select_command
     : public erhe::application::Command
 {
 public:
-    explicit Selection_tool_select_command(Selection_tool& selection_tool);
+    explicit Selection_tool_select_command();
     void try_ready(erhe::application::Command_context& context) override;
     auto try_call (erhe::application::Command_context& context) -> bool override;
-
-private:
-    Selection_tool& m_selection_tool;
 };
 
 class Range_selection
 {
 public:
-    explicit Range_selection(Selection_tool& selection_tool);
+    explicit Range_selection();
 
     void set_terminator(const std::shared_ptr<erhe::scene::Item>& item);
     void entry         (const std::shared_ptr<erhe::scene::Item>& item, bool attachments_expanded);
@@ -74,7 +53,6 @@ public:
     void reset         ();
 
 private:
-    Selection_tool&                                 m_selection_tool;
     std::shared_ptr<erhe::scene::Item>              m_primary_terminator;
     std::shared_ptr<erhe::scene::Item>              m_secondary_terminator;
     bool                                            m_edited{false};
@@ -99,7 +77,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
+    void deinitialize_component     () override;
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
@@ -138,22 +116,13 @@ private:
     Selection_tool_select_command m_select_command;
     Selection_tool_delete_command m_delete_command;
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Editor_message_bus> m_editor_message_bus;
-    std::shared_ptr<Editor_scenes>      m_editor_scenes;
-    std::shared_ptr<Headset_view>       m_headset_view;
-    std::shared_ptr<Icon_set>           m_icon_set;
-    std::shared_ptr<Node_tree_window>   m_node_tree_window;
-    std::shared_ptr<Viewport_windows>   m_viewport_windows;
-    std::shared_ptr<Viewport_config>    m_viewport_config;
-
     std::vector<std::shared_ptr<erhe::scene::Item>> m_selection;
     Range_selection                                 m_range_selection;
-
-    std::shared_ptr<erhe::scene::Mesh> m_hover_mesh;
-    bool                               m_hover_content{false};
-    bool                               m_hover_tool   {false};
+    std::shared_ptr<erhe::scene::Mesh>              m_hover_mesh;
+    bool                                            m_hover_content{false};
+    bool                                            m_hover_tool   {false};
 };
+
+extern Selection_tool* g_selection_tool;
 
 } // namespace editor

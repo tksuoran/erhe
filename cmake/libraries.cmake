@@ -53,6 +53,14 @@ FetchContent_Declare(
 
 
 FetchContent_Declare(
+    etl
+    GIT_REPOSITORY https://github.com/ETLCPP/etl.git
+    GIT_TAG        20.35.10
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
     flecs
     GIT_REPOSITORY https://github.com/SanderMertens/flecs.git
     GIT_TAG        origin/master
@@ -171,13 +179,21 @@ FetchContent_Declare(
     GIT_PROGRESS    TRUE
 )
 
-
 FetchContent_Declare(
     lunasvg
     GIT_REPOSITORY  https://github.com/sammycage/lunasvg.git
     GIT_TAG         origin/master
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
+)
+
+FetchContent_Declare(
+    MathGeoLib
+    #GIT_REPOSITORY https://github.com/juj/MathGeoLib.git
+    GIT_REPOSITORY  https://github.com/tksuoran/MathGeoLib.git
+    GIT_TAG        origin/fetchcontent
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
 )
 
 FetchContent_Declare(

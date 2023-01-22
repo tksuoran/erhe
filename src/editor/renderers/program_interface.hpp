@@ -12,14 +12,6 @@
 
 #include <memory>
 
-namespace erhe::graphics
-{
-
-class Sampler;
-class Shader_stages;
-
-} // namespace erhe::graphics
-
 namespace editor {
 
 class Program_interface
@@ -40,6 +32,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     class Shader_resources
     {
@@ -62,5 +55,7 @@ public:
 
     std::unique_ptr<Shader_resources> shader_resources;
 };
+
+extern Program_interface* g_program_interface;
 
 }

@@ -44,7 +44,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
     // TODO count meshes in selection
-    if (parameters.selection_tool->selection().size() < 2)
+    if (g_selection_tool->selection().size() < 2)
     {
         return;
     }
@@ -60,11 +60,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     mat4        reference_node_from_world = mat4{1};
     auto        normal_style              = Normal_style::none;
 
-    ERHE_VERIFY(parameters.selection_tool);
+    ERHE_VERIFY(g_selection_tool != nullptr);
 
-    m_selection_before = parameters.selection_tool->selection();
+    m_selection_before = g_selection_tool->selection();
 
-    for (const auto& item : parameters.selection_tool->selection())
+    for (const auto& item : g_selection_tool->selection())
     {
         const auto& mesh = as_mesh(item);
         if (!mesh)
@@ -263,7 +263,7 @@ void Merge_operation::execute(const Operation_context&)
             entry.node->set_parent({});
         }
     }
-    m_parameters.selection_tool->set_selection(m_selection_after);
+    g_selection_tool->set_selection(m_selection_after);
 
     scene.sanity_check();
     log_operations->trace("end Op Execute {}", describe());
@@ -335,7 +335,7 @@ void Merge_operation::undo(const Operation_context&)
             node->set_parent(entry.before_parent);
         }
     }
-    m_parameters.selection_tool->set_selection(m_selection_before);
+    g_selection_tool->set_selection(m_selection_before);
 
     scene.sanity_check();
 }

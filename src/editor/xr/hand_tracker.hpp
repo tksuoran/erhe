@@ -19,13 +19,10 @@ namespace erhe::xr
 namespace erhe::application
 {
     class Line_renderer;
-    class Line_renderer_set;
 }
 
 namespace editor
 {
-
-class Headset_view;
 
 enum class Hand_name : unsigned int
 {
@@ -114,12 +111,12 @@ public:
     };
 
     Hand_tracker();
+    ~Hand_tracker();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -135,14 +132,12 @@ public:
     );
 
 private:
-    // Component dependencies
-    std::shared_ptr<erhe::application::Line_renderer_set> m_line_renderer_set;
-    std::shared_ptr<Headset_view>                         m_headset_view;
-
     Hand m_left_hand;
     Hand m_right_hand;
 
     bool m_show_hands{true};
 };
+
+extern Hand_tracker* g_hand_tracker;
 
 } // namespace editor

@@ -29,7 +29,6 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/multisample_resolve.hpp"
-#include "erhe/application/view.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -67,27 +66,15 @@ int Viewport_window::s_serial = 0;
 
 Viewport_window::Viewport_window(
     const std::string_view                      name,
-    const erhe::components::Components&         components,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
     : erhe::application::Rendergraph_node{name}
-    , m_configuration                    {components.get<erhe::application::Configuration    >()}
-    , m_pipeline_state_tracker           {components.get<erhe::graphics::OpenGL_state_tracker>()}
-    , m_editor_scenes                    {components.get<Editor_scenes   >()}
-    , m_editor_rendering                 {components.get<Editor_rendering>()}
-    , m_grid_tool                        {components.get<Grid_tool       >()}
-    , m_physics_window                   {components.get<Physics_window  >()}
-    , m_post_processing                  {components.get<Post_processing >()}
-    , m_programs                         {components.get<Programs        >()}
-    , m_selection_tool                   {components.get<Selection_tool>()}
-    , m_trs_tool                         {components.get<Trs_tool        >()}
-    , m_viewport_config                  {components.get<Viewport_config >()->data}
+    , m_viewport_config                  {g_viewport_config->data}
     , m_name                             {name}
     , m_scene_root                       {scene_root}
-    , m_tool_scene_root                  {components.get<Tools>()->get_tool_scene_root()}
+    , m_tool_scene_root                  {g_tools->get_tool_scene_root()}
     , m_camera                           {camera}
-    , m_viewport_windows                 {components.get<Viewport_windows>().get()}
 {
     register_input(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -108,9 +95,9 @@ Viewport_window::Viewport_window(
 
 Viewport_window::~Viewport_window()
 {
-    if (m_viewport_windows)
+    if (g_viewport_windows != nullptr)
     {
-        m_viewport_windows->erase(this);
+        g_viewport_windows->erase(this);
     }
 }
 
@@ -118,22 +105,22 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
 {
     switch (m_shader_stages_variant)
     {
-        case Shader_stages_variant::standard:                 return m_programs->standard.get();
-        case Shader_stages_variant::anisotropic_slope:        return m_programs->anisotropic_slope.get();
-        case Shader_stages_variant::anisotropic_engine_ready: return m_programs->anisotropic_engine_ready.get();
-        case Shader_stages_variant::circular_brushed_metal:   return m_programs->circular_brushed_metal.get();
-        case Shader_stages_variant::debug_depth:              return m_programs->debug_depth.get();
-        case Shader_stages_variant::debug_normal:             return m_programs->debug_normal.get();
-        case Shader_stages_variant::debug_tangent:            return m_programs->debug_tangent.get();
-        case Shader_stages_variant::debug_bitangent:          return m_programs->debug_bitangent.get();
-        case Shader_stages_variant::debug_texcoord:           return m_programs->debug_texcoord.get();
-        case Shader_stages_variant::debug_vertex_color_rgb:   return m_programs->debug_vertex_color_rgb.get();
-        case Shader_stages_variant::debug_vertex_color_alpha: return m_programs->debug_vertex_color_alpha.get();
-        case Shader_stages_variant::debug_omega_o:            return m_programs->debug_omega_o.get();
-        case Shader_stages_variant::debug_omega_i:            return m_programs->debug_omega_i.get();
-        case Shader_stages_variant::debug_omega_g:            return m_programs->debug_omega_g.get();
-        case Shader_stages_variant::debug_misc:               return m_programs->debug_misc.get();
-        default:                                              return m_programs->standard.get();
+        case Shader_stages_variant::standard:                 return g_programs->standard.get();
+        case Shader_stages_variant::anisotropic_slope:        return g_programs->anisotropic_slope.get();
+        case Shader_stages_variant::anisotropic_engine_ready: return g_programs->anisotropic_engine_ready.get();
+        case Shader_stages_variant::circular_brushed_metal:   return g_programs->circular_brushed_metal.get();
+        case Shader_stages_variant::debug_depth:              return g_programs->debug_depth.get();
+        case Shader_stages_variant::debug_normal:             return g_programs->debug_normal.get();
+        case Shader_stages_variant::debug_tangent:            return g_programs->debug_tangent.get();
+        case Shader_stages_variant::debug_bitangent:          return g_programs->debug_bitangent.get();
+        case Shader_stages_variant::debug_texcoord:           return g_programs->debug_texcoord.get();
+        case Shader_stages_variant::debug_vertex_color_rgb:   return g_programs->debug_vertex_color_rgb.get();
+        case Shader_stages_variant::debug_vertex_color_alpha: return g_programs->debug_vertex_color_alpha.get();
+        case Shader_stages_variant::debug_omega_o:            return g_programs->debug_omega_o.get();
+        case Shader_stages_variant::debug_omega_i:            return g_programs->debug_omega_i.get();
+        case Shader_stages_variant::debug_omega_g:            return g_programs->debug_omega_g.get();
+        case Shader_stages_variant::debug_misc:               return g_programs->debug_misc.get();
+        default:                                              return g_programs->standard.get();
     }
 }
 
@@ -168,7 +155,7 @@ void Viewport_window::execute_rendergraph_node()
         return;
     }
 
-    scene_root->get_editor_message_bus()->send_message(
+    g_editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,
             .scene_view   = this
@@ -185,9 +172,9 @@ void Viewport_window::execute_rendergraph_node()
         .override_shader_stages = get_override_shader_stages()
     };
 
-    if (m_is_hovered && m_configuration->id_renderer.enabled)
+    if (m_is_hovered && erhe::application::g_configuration->id_renderer.enabled)
     {
-        m_editor_rendering->render_id(context);
+        g_editor_rendering->render_id(context);
     }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, output_framebuffer_name);
@@ -199,7 +186,7 @@ void Viewport_window::execute_rendergraph_node()
         }
     }
 
-    m_editor_rendering->render_viewport_main(context, m_is_hovered);
+    g_editor_rendering->render_viewport_main(context, m_is_hovered);
 }
 
 void Viewport_window::reconfigure(const int sample_count)
@@ -372,7 +359,7 @@ void Viewport_window::update_grid_hover()
     const glm::dvec3 ray_origin   {pointer_near.value()};
     const glm::dvec3 ray_direction{glm::normalize(pointer_far.value() - pointer_near.value())};
 
-    const Grid_hover_position hover_position = m_grid_tool->update_hover(ray_origin, ray_direction);
+    const Grid_hover_position hover_position = g_grid_tool->update_hover(ray_origin, ray_direction);
     Hover_entry entry;
     entry.valid = (hover_position.grid != nullptr);
     if (entry.valid)
@@ -388,7 +375,6 @@ void Viewport_window::update_grid_hover()
 }
 
 void Viewport_window::update_pointer_context(
-    Id_renderer&    id_renderer,
     const glm::vec2 position_in_viewport,
     Scene_root*     tool_scene_root
 )
@@ -424,9 +410,9 @@ void Viewport_window::update_pointer_context(
         return;
     }
 
-    if (m_configuration->id_renderer.enabled)
+    if (erhe::application::g_configuration->id_renderer.enabled)
     {
-        const auto id_query = id_renderer.get(
+        const auto id_query = g_id_renderer->get(
             static_cast<int>(position_in_viewport.x),
             static_cast<int>(position_in_viewport.y)
         );
@@ -572,28 +558,28 @@ auto Viewport_window::get_config() -> Viewport_config_data*
 auto Viewport_window::imgui_toolbar() -> bool
 {
     bool hovered = false;
-    if (m_viewport_windows != nullptr)
+    if (g_viewport_windows != nullptr)
     {
-        m_viewport_windows->viewport_toolbar(*this, hovered);
+        g_viewport_windows->viewport_toolbar(*this, hovered);
     }
     //// TODO Tool_flags::viewport_toolbar
-    if (m_selection_tool)
+    if (g_selection_tool != nullptr)
     {
-        m_selection_tool->viewport_toolbar(hovered);
+        g_selection_tool->viewport_toolbar(hovered);
     }
-    if (m_trs_tool)
+    if (g_trs_tool != nullptr)
     {
-        m_trs_tool->viewport_toolbar(hovered);
-    }
-
-    if (m_grid_tool)
-    {
-        m_grid_tool->viewport_toolbar(hovered);
+        g_trs_tool->viewport_toolbar(hovered);
     }
 
-    if (m_physics_window)
+    if (g_grid_tool != nullptr)
     {
-        m_physics_window->viewport_toolbar(hovered);
+        g_grid_tool->viewport_toolbar(hovered);
+    }
+
+    if (g_physics_window != nullptr)
+    {
+        g_physics_window->viewport_toolbar(hovered);
     }
 
     const float  rounding        {3.0f};
@@ -610,7 +596,7 @@ auto Viewport_window::imgui_toolbar() -> bool
     auto       old_scene_root = m_scene_root;
     auto       scene_root     = get_scene_root();
     ImGui::SetNextItemWidth(110.0f);
-    const bool combo_used     = m_editor_scenes->scene_combo("##Scene", scene_root, false);
+    const bool combo_used     = g_editor_scenes->scene_combo("##Scene", scene_root, false);
     if (ImGui::IsItemHovered())
     {
         hovered = true;

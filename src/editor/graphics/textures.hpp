@@ -10,8 +10,6 @@ namespace erhe::graphics {
 
 namespace editor {
 
-class Image_transfer;
-
 class Textures
     : public erhe::components::Component
 {
@@ -37,9 +35,6 @@ public:
     [[nodiscard]] auto load(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
 
     std::shared_ptr<erhe::graphics::Texture> background;
-
-private:
-    std::shared_ptr<Image_transfer> m_image_transfer;
 };
 
 } // namespace editor

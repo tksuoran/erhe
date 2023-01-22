@@ -10,11 +10,6 @@
 
 #include <string_view>
 
-namespace erhe::application
-{
-    class Configuration;
-}
-
 namespace editor
 {
 
@@ -86,6 +81,7 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Viewport_config();
+    ~Viewport_config();
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
@@ -102,5 +98,7 @@ public:
     float                 rendertarget_mesh_lod_bias{-0.666f};
     Viewport_config_data* edit_data{nullptr};
 };
+
+extern Viewport_config* g_viewport_config;
 
 } // namespace editor

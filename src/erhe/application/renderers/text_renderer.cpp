@@ -1,8 +1,8 @@
 #include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
-#include "erhe/application/application_log.hpp"
 
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -19,6 +19,7 @@
 #include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 #include "erhe/ui/font.hpp"
 
 #include <glm/glm.hpp>
@@ -96,6 +97,8 @@ Text_renderer::Frame_resources::Frame_resources(
     vertex_buffer    .set_debug_label(fmt::format("Text Renderer Vertex {}", slot));
     projection_buffer.set_debug_label(fmt::format("Text Renderer Projection {}", slot));
 }
+
+Text_renderer* g_text_renderer{nullptr};
 
 Text_renderer::Text_renderer()
     : Component{c_type_name}
@@ -179,6 +182,20 @@ Text_renderer::Text_renderer()
 
 Text_renderer::~Text_renderer() noexcept
 {
+    ERHE_VERIFY(g_text_renderer == nullptr);
+}
+
+void Text_renderer::deinitialize_component()
+{
+    ERHE_VERIFY(g_text_renderer == this);
+    m_index_buffer.reset();
+    m_projection_block.reset();
+    m_shader_stages.reset();
+    m_font.reset();
+    m_nearest_sampler.reset();
+    m_frame_resources.clear();
+
+    g_text_renderer = nullptr;
 }
 
 void Text_renderer::declare_required_components()
@@ -193,16 +210,17 @@ static constexpr std::string_view c_text_renderer_initialize_component{"Text_ren
 void Text_renderer::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_text_renderer == nullptr);
 
-    const auto& config = get<erhe::application::Configuration>();
+    const auto& config = *erhe::application::g_configuration;
 
-    if (!config->text_renderer.enabled)
+    if (!config.text_renderer.enabled)
     {
         log_startup->info("Text renderer disabled due to erhe.ini setting");
         return;
     }
 
-    const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
+    const Scoped_gl_context gl_context;
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_initialize_component};
 
@@ -257,7 +275,7 @@ void Text_renderer::initialize_component()
 
     m_font = std::make_unique<erhe::ui::Font>(
         "res/fonts/SourceSansPro-Regular.otf",
-        config->text_renderer.font_size,
+        config.text_renderer.font_size,
         1.0f
     );
 
@@ -305,19 +323,15 @@ void Text_renderer::initialize_component()
         }
 
         m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-        const auto shader_monitor = get<Shader_monitor>();
-        if (shader_monitor)
+        if (g_shader_monitor)
         {
-            shader_monitor->add(create_info, m_shader_stages.get());
+            g_shader_monitor->add(create_info, m_shader_stages.get());
         }
     }
 
     create_frame_resources();
-}
 
-void Text_renderer::post_initialize()
-{
-    m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
+    g_text_renderer = this;
 }
 
 void Text_renderer::create_frame_resources()
@@ -325,7 +339,7 @@ void Text_renderer::create_frame_resources()
     ERHE_PROFILE_FUNCTION
 
     constexpr std::size_t vertex_count{65536 * 8};
-    const bool reverse_depth = get<erhe::application::Configuration>()->graphics.reverse_depth;
+    const bool reverse_depth = g_configuration->graphics.reverse_depth;
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
     {
         m_frame_resources.emplace_back(
@@ -398,7 +412,7 @@ void Text_renderer::print(
 
 auto Text_renderer::font_size() -> float
 {
-    return static_cast<float>(get<erhe::application::Configuration>()->text_renderer.font_size);
+    return static_cast<float>(g_configuration->text_renderer.font_size);
 }
 
 auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rectangle
@@ -463,7 +477,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
     const auto& pipeline = current_frame_resources().pipeline;
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    m_pipeline_state_tracker->execute(pipeline);
+    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
     gl::bind_buffer_range(
         projection_buffer->target(),

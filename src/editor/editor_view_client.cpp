@@ -14,7 +14,7 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/time.hpp"
-#include "erhe/application/view.hpp"
+#include "erhe/application/application_view.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/physics/iworld.hpp"
@@ -24,6 +24,8 @@
 namespace editor
 {
 
+Editor_view_client* g_editor_view_client{nullptr};
+
 Editor_view_client::Editor_view_client()
     : Component{c_type_name}
 {
@@ -31,6 +33,8 @@ Editor_view_client::Editor_view_client()
 
 Editor_view_client::~Editor_view_client() noexcept
 {
+    ERHE_VERIFY(g_editor_view_client == this);
+    g_editor_view_client = nullptr;
 }
 
 void Editor_view_client::declare_required_components()
@@ -41,29 +45,18 @@ void Editor_view_client::declare_required_components()
 void Editor_view_client::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_editor_view_client == nullptr);
 
-    get<erhe::application::View>()->set_client(this);
-}
-
-void Editor_view_client::post_initialize()
-{
-    m_commands         = get<erhe::application::Commands      >();
-    m_configuration    = get<erhe::application::Configuration >();
-    m_imgui_windows    = get<erhe::application::Imgui_windows >();
-    m_imgui_renderer   = get<erhe::application::Imgui_renderer>();
-    m_render_graph     = get<erhe::application::Rendergraph   >();
-    m_editor_rendering = get<Editor_rendering>();
-    m_tools            = get<Tools           >();
-    m_viewport_windows = get<Viewport_windows>();
+    erhe::application::g_view->set_client(this);
+    g_editor_view_client = this;
 }
 
 // TODO Something nicer
 void Editor_view_client::update_fixed_step(const erhe::components::Time_context& time_context)
 {
-    const auto& scene_builder   = get<Scene_builder>();
-    const auto& test_scene_root = scene_builder->get_scene_root();
+    const auto& test_scene_root = g_scene_builder->get_scene_root();
 
-    if (m_configuration->physics.static_enable)
+    if (erhe::application::g_configuration->physics.static_enable)
     {
         test_scene_root->physics_world().update_fixed_step(time_context.dt);
     }
@@ -73,19 +66,18 @@ void Editor_view_client::update()
 {
     {
         // TODO something nicer
-        const auto& scene_builder = get<Scene_builder>();
-        scene_builder->buffer_transfer_queue().flush();
+        g_scene_builder->buffer_transfer_queue().flush();
         // animate_lights(time_context.time);
     }
 
-    get<erhe::application::Time>()->update_once_per_frame();
+    erhe::application::g_time->update_once_per_frame();
 
-    m_editor_rendering->begin_frame  ();
-    m_imgui_windows   ->imgui_windows();
-    m_render_graph    ->execute      ();
-    m_imgui_renderer  ->next_frame   ();
-    m_editor_rendering->end_frame    ();
-    m_commands        ->on_update();
+    g_editor_rendering->begin_frame ();
+    erhe::application::g_imgui_windows ->imgui_windows();
+    erhe::application::g_rendergraph   ->execute      ();
+    erhe::application::g_imgui_renderer->next_frame   ();
+    g_editor_rendering->end_frame   ();
+    erhe::application::g_commands->on_update();
  }
 
 void Editor_view_client::update_keyboard(
@@ -94,7 +86,7 @@ void Editor_view_client::update_keyboard(
     const uint32_t               modifier_mask
 )
 {
-    m_viewport_windows->update_keyboard(pressed, code, modifier_mask);
+    g_viewport_windows->update_keyboard(pressed, code, modifier_mask);
 }
 
 void Editor_view_client::update_mouse(
@@ -102,12 +94,12 @@ void Editor_view_client::update_mouse(
     const int                         count
 )
 {
-    m_viewport_windows->update_mouse(button, count);
+    g_viewport_windows->update_mouse(button, count);
 }
 
 void Editor_view_client::update_mouse(const double x, const double y)
 {
-    m_viewport_windows->update_mouse(x, y);
+    g_viewport_windows->update_mouse(x, y);
 }
 
 } // namespace hextiles

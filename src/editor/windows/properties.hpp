@@ -20,12 +20,8 @@ namespace erhe::scene
 namespace editor
 {
 
-class Content_library_window;
-class Editor_scenes;
 class Node_physics;
-class Operation_stack;
 class Rendertarget_mesh;
-class Selection_tool;
 
 class Properties
     : public erhe::components::Component
@@ -43,7 +39,6 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
-    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui   () override;
@@ -97,13 +92,9 @@ private:
     [[nodiscard]] auto get_node_state(erhe::scene::Node& node) -> Node_state&;
     auto drop_node_state(erhe::scene::Node& node);
 
-    // Component dependencies
-    std::shared_ptr<Content_library_window> m_content_library_window;
-    std::shared_ptr<Editor_scenes         > m_editor_scenes;
-    std::shared_ptr<Operation_stack       > m_operation_stack;
-    std::shared_ptr<Selection_tool        > m_selection_tool;
-
     std::vector<Node_state> m_node_states;
 };
+
+extern Properties* g_properties;
 
 } // namespace editor

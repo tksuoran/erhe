@@ -38,6 +38,8 @@ public:
     Pipeline(Pipeline&&)       = delete; // TODO
     auto operator=(Pipeline&&) = delete; // TODO
 
+    void reset();
+
     Pipeline_data data;
 
     static auto get_pipelines() -> std::vector<Pipeline*>;

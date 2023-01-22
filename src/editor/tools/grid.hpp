@@ -56,11 +56,8 @@ public:
         const glm::dvec3& ray_direction_in_world
     ) -> std::optional<glm::dvec3>;
 
-    void render(
-        const std::shared_ptr<erhe::application::Line_renderer_set>& line_renderer_set,
-        const Render_context&                                        context
-    );
-    void imgui(const std::shared_ptr<Selection_tool>& selection_tool);
+    void render(const Render_context& context);
+    void imgui ();
 
 private:
     std::string     m_name;

@@ -6,6 +6,7 @@
 
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_context.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 
@@ -26,7 +27,7 @@ auto Map_primary_brush_command::try_call(erhe::application::Command_context& con
         return false;
     }
 
-    m_map_editor.primary_brush(context.get_vec2_absolute_value());
+    g_map_editor->primary_brush(context.get_vec2_absolute_value());
     return true;
 }
 
@@ -39,63 +40,56 @@ void Map_primary_brush_command::try_ready(erhe::application::Command_context& co
 
     // TODO only set ready when hovering over map
     set_ready(context);
-    m_map_editor.primary_brush(context.get_vec2_absolute_value());
+    g_map_editor->primary_brush(context.get_vec2_absolute_value());
 }
 
 auto Map_hover_command::try_call(erhe::application::Command_context& context) -> bool
 {
-    m_map_editor.hover(context.get_vec2_absolute_value());
+    g_map_editor->hover(context.get_vec2_absolute_value());
     return false;
 }
 
+Map_editor* g_map_editor{nullptr};
+
 Map_editor::Map_editor()
-    : erhe::components::Component{c_type_name}
-    , m_map_hover_command        {*this}
-    , m_map_primary_brush_command{*this}
+    : Component{c_type_name}
 {
 }
 
 Map_editor::~Map_editor() noexcept
 {
+    ERHE_VERIFY(g_map_editor == this);
+    g_map_editor = nullptr;
 }
 
-void Map_editor::declare_required_components()
-{
-    require<erhe::application::Commands>();
-    m_map_window = require<Map_window>();
-}
+//void Map_editor::declare_required_components()
+//{
+//    require<erhe::application::Commands>();
+//    m_map_window = require<Map_window>();
+//}
 
 void Map_editor::initialize_component()
 {
+    ERHE_VERIFY(g_map_editor == nullptr);
+
     //m_pixel_lookup = std::make_unique<Pixel_lookup>();
 
-    m_map = std::make_shared<Map>();
-
     File_read_stream file{"res/hextiles/map_new"};
+    m_map = new Map; // TODO
     m_map->read(file);
 
-    const auto commands = get<erhe::application::Commands>();
-    commands->register_command(&m_map_hover_command);
-    commands->register_command(&m_map_primary_brush_command);
+    erhe::application::g_commands->register_command(&m_map_hover_command);
+    erhe::application::g_commands->register_command(&m_map_primary_brush_command);
 
-    commands->bind_command_to_mouse_motion(&m_map_hover_command);
-    commands->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
-}
+    erhe::application::g_commands->bind_command_to_mouse_motion(&m_map_hover_command);
+    erhe::application::g_commands->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
 
-void Map_editor::post_initialize()
-{
-    m_tile_renderer = get<Tile_renderer>();
-    m_tiles         = get<Tiles        >();
-}
-
-auto Map_editor::get_map() -> std::shared_ptr<Map>
-{
-    return m_map;
+    g_map_editor = this;
 }
 
 void Map_editor::hover(glm::vec2 position_in_root)
 {
-    const glm::vec2 window_position = m_map_window->to_content(position_in_root);
+    const glm::vec2 window_position = g_map_window->to_content(position_in_root);
 
     m_hover_window_position = window_position;
 
@@ -104,17 +98,17 @@ void Map_editor::hover(glm::vec2 position_in_root)
         static_cast<pixel_t>(window_position.y)
     };
 
-    m_hover_tile_position = m_map_window->pixel_to_tile(hover_pixel_position);
+    m_hover_tile_position = g_map_window->pixel_to_tile(hover_pixel_position);
 }
 
 void Map_editor::primary_brush(glm::vec2 position_in_root)
 {
-    const glm::vec2 mouse_position = m_map_window->to_content(position_in_root);
+    const glm::vec2 mouse_position = g_map_window->to_content(position_in_root);
     const auto pixel_position = Pixel_coordinate{
         static_cast<pixel_t>(mouse_position.x),
         static_cast<pixel_t>(mouse_position.y)
     };
-    const auto tile_position = m_map_window->pixel_to_tile(pixel_position);
+    const auto tile_position = g_map_window->pixel_to_tile(pixel_position);
 
     std::function<void(Tile_coordinate)> set_terrain_op =
     [this] (Tile_coordinate position) -> void
@@ -125,7 +119,7 @@ void Map_editor::primary_brush(glm::vec2 position_in_root)
     std::function<void(Tile_coordinate)> update_op =
     [this] (Tile_coordinate position) -> void
     {
-        m_map->update_group_terrain(*m_tiles.get(), position);
+        m_map->update_group_terrain(position);
     };
 
     m_map->hex_circle(tile_position, 0, m_brush_size - 1, set_terrain_op);
@@ -134,8 +128,8 @@ void Map_editor::primary_brush(glm::vec2 position_in_root)
 
 void Map_editor::terrain_palette()
 {
-    auto& terrain_type = m_tiles->get_terrain_type(m_left_brush);
-    m_map_window->tile_image(m_left_brush, 3);
+    auto& terrain_type = g_tiles->get_terrain_type(m_left_brush);
+    g_map_window->tile_image(m_left_brush, 3);
     ImGui::SameLine();
     ImGui::Text("%s", terrain_type.name.c_str());
 
@@ -144,7 +138,7 @@ void Map_editor::terrain_palette()
     {
         for (int tx = 0; tx < Base_tiles::width; ++tx)
         {
-            const bool pressed = m_map_window->tile_image(terrain, 2);
+            const bool pressed = g_map_window->tile_image(terrain, 2);
             if (pressed)
             {
                 m_left_brush = terrain;
@@ -160,7 +154,7 @@ void Map_editor::terrain_palette()
 
 void Map_editor::render()
 {
-    const auto& terrain_shapes = m_tile_renderer->get_terrain_shapes();
+    const auto& terrain_shapes = g_tile_renderer->get_terrain_shapes();
 
     if (
         !m_hover_tile_position.has_value() ||
@@ -174,8 +168,13 @@ void Map_editor::render()
     const Pixel_coordinate& shape    = terrain_shapes[m_left_brush];
     //const tile_t      tile     = m_tile_renderer->get_terrain_tile(m_left_brush);
     const std::string text  = fmt::format("{}, {}", location.x, location.y);
-    m_map_window->blit (shape, location, 0x88888888u);
-    m_map_window->print(text, location);
+    g_map_window->blit (shape, location, 0x88888888u);
+    g_map_window->print(text, location);
+}
+
+[[nodiscard]] auto Map_editor::get_map() -> Map*
+{
+    return m_map;
 }
 
 } // namespace hextiles

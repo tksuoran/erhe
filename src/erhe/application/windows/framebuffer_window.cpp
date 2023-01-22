@@ -1,4 +1,5 @@
 #include "erhe/application/windows/framebuffer_window.hpp"
+
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 
@@ -30,19 +31,15 @@ Framebuffer_window::Framebuffer_window(
 {
 }
 
-void Framebuffer_window::initialize(
-    erhe::components::Components& components
-)
+void Framebuffer_window::initialize()
 {
     using erhe::graphics::Input_assembly_state;
     using erhe::graphics::Rasterization_state;
     using erhe::graphics::Depth_stencil_state;
     using erhe::graphics::Color_blend_state;
-    const Scoped_gl_context gl_context{
-        components.get<Gl_context_provider>()
-    };
+    const Scoped_gl_context gl_context;
 
-    components.get<Imgui_windows>()->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this);
 
     m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
         erhe::graphics::Vertex_input_state_data{}

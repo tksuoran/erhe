@@ -72,7 +72,6 @@ public:
     [[nodiscard]] auto get_size   () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto is_enabled () const -> bool;
 
-    void connect          (Rendergraph* rendergraph);
     void set_enabled      (bool value);
     auto register_input   (Resource_routing resource_routing, const std::string_view label, int key) -> bool;
     auto register_output  (Resource_routing resource_routing, const std::string_view label, int key) -> bool;
@@ -157,15 +156,14 @@ protected:
 
     std::mutex                                  m_mutex;
     std::string                                 m_name;
-    Rendergraph*                                m_rendergraph{nullptr};
-    bool                                        m_enabled    {true};
+    bool                                        m_enabled {true};
     std::vector<Rendergraph_consumer_connector> m_inputs;
     std::vector<Rendergraph_producer_connector> m_outputs;
-    int                                         m_depth      {0};
+    int                                         m_depth   {0};
 
     // For GUI
-    glm::vec2                                   m_position   {};
-    bool                                        m_selected   {false};
+    glm::vec2                                   m_position{};
+    bool                                        m_selected{false};
 };
 
 } // namespace erhe::application

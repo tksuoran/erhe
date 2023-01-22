@@ -84,7 +84,6 @@ public:
 
     Viewport_window(
         const std::string_view                      name,
-        const erhe::components::Components&         components,
         const std::shared_ptr<Scene_root>&          scene_root,
         const std::shared_ptr<erhe::scene::Camera>& camera
     );
@@ -122,9 +121,8 @@ public:
 
     // call with const glm::vec2 position_in_window = m_window.to_scene_content(position);
     void update_pointer_context(
-        Id_renderer& id_renderer,
-        glm::vec2    position_in_viewport,
-        Scene_root*  tool_scene_root
+        glm::vec2   position_in_viewport,
+        Scene_root* tool_scene_root
     );
 
     [[nodiscard]] auto position_in_world_viewport_depth(double viewport_depth) const -> std::optional<glm::dvec3>;
@@ -146,19 +144,6 @@ private:
 
     static int s_serial;
 
-    // Component dependencies
-    std::shared_ptr<erhe::application::Configuration>     m_configuration;
-    std::shared_ptr<erhe::application::Rendergraph>       m_render_graph;
-    std::shared_ptr<erhe::graphics::OpenGL_state_tracker> m_pipeline_state_tracker;
-    std::shared_ptr<Editor_scenes>                        m_editor_scenes;
-    std::shared_ptr<Editor_rendering>                     m_editor_rendering;
-    std::shared_ptr<Grid_tool>                            m_grid_tool;
-    std::shared_ptr<Physics_window>                       m_physics_window;
-    std::shared_ptr<Post_processing>                      m_post_processing;
-    std::shared_ptr<Programs>                             m_programs;
-    std::shared_ptr<Selection_tool>                       m_selection_tool;
-    std::shared_ptr<Trs_tool>                             m_trs_tool;
-
     Viewport_config_data               m_viewport_config;
 
     // TODO Consider if these links are a good thing, or if they should
@@ -170,12 +155,11 @@ private:
     std::string                        m_name;
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<Scene_root>          m_tool_scene_root;
-    std::weak_ptr<erhe::scene::Camera> m_camera                {};
-    Viewport_windows*                  m_viewport_windows      {nullptr};
-    erhe::scene::Viewport              m_window_viewport       {0, 0, 0, 0, true};
-    erhe::scene::Viewport              m_projection_viewport   {0, 0, 0, 0, true};
-    Shader_stages_variant              m_shader_stages_variant {Shader_stages_variant::standard};
-    bool                               m_is_hovered            {false};
+    std::weak_ptr<erhe::scene::Camera> m_camera               {};
+    erhe::scene::Viewport              m_window_viewport      {0, 0, 0, 0, true};
+    erhe::scene::Viewport              m_projection_viewport  {0, 0, 0, 0, true};
+    Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
+    bool                               m_is_hovered           {false};
 };
 
 } // namespace editor

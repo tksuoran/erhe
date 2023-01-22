@@ -67,14 +67,12 @@ Node_insert_remove_operation::Node_insert_remove_operation(
 )
     : m_mode{parameters.mode}
 {
-    ERHE_VERIFY(parameters.selection_tool != nullptr);
-
     m_node             = parameters.node,
-    m_selection_before = parameters.selection_tool->selection();
+    m_selection_before = g_selection_tool->selection();
 
     if (parameters.mode == Mode::insert)
     {
-        m_selection_after = parameters.selection_tool->selection();
+        m_selection_after = g_selection_tool->selection();
         m_after_parent    = parameters.parent;
     }
 
@@ -151,10 +149,9 @@ void Node_insert_remove_operation::execute(const Operation_context& context)
         }
     }
 
-    auto selection_tool = context.components->get<Selection_tool>();
-    if (selection_tool)
+    if (g_selection_tool != nullptr)
     {
-        selection_tool->set_selection(m_selection_after);
+        g_selection_tool->set_selection(m_selection_after);
     }
 }
 
@@ -195,10 +192,9 @@ void Node_insert_remove_operation::undo(const Operation_context& context)
         child_parent_change->undo(context);
     }
 
-    auto selection_tool = context.components->get<Selection_tool>();
-    if (selection_tool)
+    if (g_selection_tool != nullptr)
     {
-        selection_tool->set_selection(m_selection_before);
+        g_selection_tool->set_selection(m_selection_before);
     }
 }
 

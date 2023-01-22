@@ -15,14 +15,7 @@ namespace erhe::graphics
     class Shader_stages;
 }
 
-namespace erhe::application
-{
-    class Shader_monitor;
-}
-
 namespace editor {
-
-class Program_interface;
 
 enum class Shader_stages_variant : int
 {
@@ -80,6 +73,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     static constexpr std::size_t s_texture_unit_count = 15; // for non bindless textures
 
@@ -117,7 +111,7 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> debug_misc;
 
 private:
-   class Program_prototype
+    class Program_prototype
     {
     public:
         Program_prototype();
@@ -141,10 +135,9 @@ private:
         erhe::graphics::Shader_stages::Prototype& prototype
     ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
 
-    // Component dependencies
-    std::shared_ptr<Program_interface>                 m_program_interface;
-    std::shared_ptr<erhe::application::Shader_monitor> m_shader_monitor;
-    std::filesystem::path                              m_shader_path;
+    std::filesystem::path m_shader_path;
 };
+
+extern Programs* g_programs;
 
 }

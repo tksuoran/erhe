@@ -1,9 +1,10 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene_log.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene_log.hpp"
+#include "erhe/scene/scene_message_bus.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -316,15 +317,21 @@ void Scene::update_node_transforms()
     }
 }
 
+void Scene::reset_scene_host()
+{
+    for (auto& node : m_flat_node_vector)
+    {
+        node->node_data.host = nullptr;
+    }
+}
+
 Scene::Scene(
-    const std::string_view                               name,
-    erhe::message_bus::Message_bus<Scene_message>* const message_bus,
-    Scene_host* const                                    host
+    const std::string_view name,
+    Scene_host* const      host
 )
-    : Item         {name}
-    , m_host       {host}
-    , m_message_bus{message_bus}
-    , m_root_node  {std::make_shared<erhe::scene::Node>("root")}
+    : Item       {name}
+    , m_host     {host}
+    , m_root_node{std::make_shared<erhe::scene::Node>("root")}
 {
     enable_flag_bits(Item_flags::content);
     // The implicit root node has a valid (identity) transform
@@ -332,7 +339,10 @@ Scene::Scene(
     m_root_node->node_data.transforms.update_serial = 1;
 }
 
-Scene::~Scene() = default;
+Scene::~Scene()
+{
+    reset_scene_host();
+}
 
 auto Scene::get_type() const -> uint64_t
 {
@@ -379,9 +389,9 @@ void Scene::register_node(
 
     if ((node->get_flag_bits() & Item_flags::no_message) == 0)
     {
-        if (m_message_bus != nullptr)
+        if (erhe::scene::g_scene_message_bus != nullptr)
         {
-            m_message_bus->send_message(
+            g_scene_message_bus->send_message(
                 Scene_message{
                     .event_type = Scene_event_type::node_added_to_scene,
                     .scene      = this,
@@ -411,9 +421,9 @@ void Scene::unregister_node(
 
     if ((node->get_flag_bits() & Item_flags::no_message) == 0)
     {
-        if (m_message_bus != nullptr)
+        if (erhe::scene::g_scene_message_bus != nullptr)
         {
-            m_message_bus->send_message(
+            g_scene_message_bus->send_message(
                 Scene_message{
                     .event_type = Scene_event_type::node_removed_from_scene,
                     .scene      = this,
