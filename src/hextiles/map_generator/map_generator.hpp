@@ -32,7 +32,7 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void initialize_component();
+    void initialize_component() override;
 
     // Implements Imgui_window
     void imgui() override;

@@ -51,15 +51,15 @@ public:
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
 
     Map_editor();
-    ~Map_editor();
+    ~Map_editor() noexcept;
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void initialize_component();
-    void terrain_palette     ();
+    void initialize_component() override;
 
     // Public API
-    void render();
+    void render         ();
+    void terrain_palette();
     [[nodiscard]] auto get_map() -> Map*;
 
     // Commands

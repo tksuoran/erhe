@@ -24,6 +24,13 @@
             "program": "${command:cmake.launchTargetPath}",
         },
         {
+            "name":    "hextiles LLDB",
+            "type":    "lldb",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/hextiles",
+            "program": "${command:cmake.launchTargetPath}",
+        },
+        {
             "name":    "editor VS",
             "windows": {
                 "type": "cppvsdbg",

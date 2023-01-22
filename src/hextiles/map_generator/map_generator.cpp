@@ -16,8 +16,8 @@ namespace hextiles
 Map_generator* g_map_generator{nullptr};
 
 Map_generator::Map_generator()
-    : Imgui_window{c_title}
-    , Component{c_type_name}
+    : Component{c_type_name}
+    , Imgui_window{c_title}
 {
 }
 
