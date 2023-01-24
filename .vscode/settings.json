@@ -1,4 +1,5 @@
 {
+    "cmake.useCMakePresets": "always",
     "files.associations": {
         "*.log": "log",
         "typeinfo": "cpp",

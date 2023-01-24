@@ -3,8 +3,6 @@
 
 #include <array>
 
-#pragma comment(lib, "Setupapi.lib")
-
 namespace erhe::toolkit
 {
 

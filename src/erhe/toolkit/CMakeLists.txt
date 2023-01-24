@@ -56,6 +56,10 @@ target_link_libraries(
     hidapi
 )
 
+if (ERHE_TARGET_OS_WINDOWS)
+    target_link_libraries(${_target} PUBLIC Setupapi.lib)
+endif ()
+
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")
     target_link_libraries(${_target} PUBLIC glfw)
 endif ()
