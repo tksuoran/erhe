@@ -13,7 +13,7 @@
 namespace editor
 {
 
-Primitive_interface::Primitive_interface(std::size_t max_primitive_count)
+Primitive_interface::Primitive_interface(const std::size_t max_primitive_count)
     : primitive_block {"primitive", 3, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{"Primitive"}
     , offsets{
@@ -29,14 +29,14 @@ Primitive_interface::Primitive_interface(std::size_t max_primitive_count)
     primitive_block.add_struct("primitives", &primitive_struct, erhe::graphics::Shader_resource::unsized_array);
 }
 
-Primitive_buffer::Primitive_buffer(const Primitive_interface& primitive_interface)
+Primitive_buffer::Primitive_buffer(Primitive_interface* primitive_interface)
     : Multi_buffer         {"primitive"}
     , m_primitive_interface{primitive_interface}
 {
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
-        m_primitive_interface.primitive_block.binding_point(),
-        m_primitive_interface.primitive_struct.size_bytes() * m_primitive_interface.max_primitive_count
+        m_primitive_interface->primitive_block.binding_point(),
+        m_primitive_interface->primitive_struct.size_bytes() * m_primitive_interface->max_primitive_count
     );
 }
 
@@ -72,8 +72,8 @@ auto Primitive_buffer::update(
     );
 
     auto&       buffer             = current_buffer();
-    const auto  entry_size         = m_primitive_interface.primitive_struct.size_bytes();
-    const auto& offsets            = m_primitive_interface.offsets;
+    const auto  entry_size         = m_primitive_interface->primitive_struct.size_bytes();
+    const auto& offsets            = m_primitive_interface->offsets;
     const auto  primitive_gpu_data = buffer.map();
     m_writer.begin(buffer.target());
     for (const auto& mesh : meshes)

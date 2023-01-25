@@ -21,11 +21,11 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
 Shadow_render_node::Shadow_render_node(
-    Shadow_renderer&                   shadow_renderer,
-    const std::shared_ptr<Scene_view>& scene_view,
-    const int                          resolution,
-    const int                          light_count,
-    const bool                         reverse_depth
+    Shadow_renderer& shadow_renderer,
+    Scene_view&      scene_view,
+    const int        resolution,
+    const int        light_count,
+    const bool       reverse_depth
 )
     : erhe::application::Rendergraph_node{
         "shadow_maps" // TODO fmt::format("Shadow render {}", viewport_window->name())
@@ -101,8 +101,8 @@ void Shadow_render_node::reconfigure(
 void Shadow_render_node::execute_rendergraph_node()
 {
     // Render shadow maps
-    const auto& scene_root = m_scene_view->get_scene_root();
-    const auto& camera     = m_scene_view->get_camera();
+    const auto& scene_root = m_scene_view.get_scene_root();
+    const auto& camera     = m_scene_view.get_camera();
     if (!scene_root || !camera)
     {
         return;
@@ -160,7 +160,12 @@ void Shadow_render_node::execute_rendergraph_node()
     return m_viewport;
 }
 
-[[nodiscard]] auto Shadow_render_node::get_scene_view() const -> std::shared_ptr<Scene_view>
+[[nodiscard]] auto Shadow_render_node::get_scene_view() -> Scene_view&
+{
+    return m_scene_view;
+}
+
+[[nodiscard]] auto Shadow_render_node::get_scene_view() const -> const Scene_view&
 {
     return m_scene_view;
 }

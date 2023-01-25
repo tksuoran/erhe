@@ -29,6 +29,10 @@ Viewport_config::Viewport_config()
 
 Viewport_config::~Viewport_config()
 {
+}
+
+void Viewport_config::deinitialize_component()
+{
     ERHE_VERIFY(g_viewport_config == this);
     g_viewport_config = nullptr;
 }

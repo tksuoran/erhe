@@ -28,6 +28,7 @@ class Frame_timing
 public:
     uint64_t predicted_display_time  {0};
     uint64_t predicted_display_pediod{0};
+    bool     begin_ok                {false};
     bool     should_render           {false};
 };
 
@@ -37,9 +38,10 @@ public:
     explicit Headset(erhe::toolkit::Context_window* window, const Xr_configuration& configuration);
     ~Headset        () noexcept;
 
+    auto is_valid       () const -> bool;
     auto begin_frame    () -> Frame_timing;
     auto render         (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame      () -> bool;
+    auto end_frame      (bool rendered) -> bool;
     auto trigger_value  () const -> const XrActionStateFloat*;
     auto trigger_click  () const -> const XrActionStateBoolean*;
     auto menu_click     () const -> const XrActionStateBoolean*;

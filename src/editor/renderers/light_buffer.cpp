@@ -13,7 +13,7 @@
 namespace editor
 {
 
-Light_interface::Light_interface(std::size_t max_light_count)
+Light_interface::Light_interface(const std::size_t max_light_count)
     : light_block{
         "light_block",
         1,
@@ -50,21 +50,21 @@ Light_interface::Light_interface(std::size_t max_light_count)
 {
 }
 
-Light_buffer::Light_buffer(const Light_interface& light_interface)
+Light_buffer::Light_buffer(Light_interface* light_interface)
     : m_light_interface{light_interface}
     , m_light_buffer   {"light"}
     , m_control_buffer {"light_control"}
 {
     m_light_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
-        m_light_interface.light_block.binding_point(),
-        m_light_interface.light_block.size_bytes()
+        m_light_interface->light_block.binding_point(),
+        m_light_interface->light_block.size_bytes()
     );
 
     m_control_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
-        m_light_interface.light_control_block.binding_point(),
-        m_light_interface.light_control_block.size_bytes() * 40
+        m_light_interface->light_control_block.binding_point(),
+        m_light_interface->light_control_block.size_bytes() * 40
     );
 }
 
@@ -75,14 +75,12 @@ Light_projections::Light_projections()
 Light_projections::Light_projections(
     const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const erhe::scene::Camera*                                  view_camera,
-    ////const erhe::scene::Viewport&                                view_camera_viewport,
     const erhe::scene::Viewport&                                light_texture_viewport,
     uint64_t                                                    shadow_map_texture_handle
 )
     : parameters
         {
             .view_camera          = view_camera,
-            //.view_camera_viewport = view_camera_viewport,
             .shadow_map_viewport  = light_texture_viewport
         }
     , shadow_map_texture_handle{shadow_map_texture_handle}
@@ -150,8 +148,8 @@ auto Light_buffer::update(
 
     auto&          buffer            = m_light_buffer.current_buffer();
     auto&          writer            = m_light_buffer.writer();
-    const auto     light_struct_size = m_light_interface.light_struct.size_bytes();
-    const auto&    offsets           = m_light_interface.offsets;
+    const auto     light_struct_size = m_light_interface->light_struct.size_bytes();
+    const auto&    offsets           = m_light_interface->offsets;
     const auto     light_gpu_data    = buffer.map();
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
@@ -253,7 +251,7 @@ auto Light_buffer::update_control(std::size_t light_index) -> erhe::application:
 
     auto&      buffer     = m_control_buffer.current_buffer();
     auto&      writer     = m_control_buffer.writer();
-    const auto entry_size = m_light_interface.light_control_block.size_bytes();
+    const auto entry_size = m_light_interface->light_control_block.size_bytes();
     const auto gpu_data   = buffer.map();
 
     writer.begin(buffer.target());

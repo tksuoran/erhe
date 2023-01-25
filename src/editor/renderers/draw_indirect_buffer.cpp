@@ -20,7 +20,7 @@
 namespace editor
 {
 
-Draw_indirect_buffer::Draw_indirect_buffer(std::size_t max_draw_count)
+Draw_indirect_buffer::Draw_indirect_buffer(const std::size_t max_draw_count)
     : Multi_buffer{"draw indirect"}
 {
     Multi_buffer::allocate(

@@ -141,7 +141,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     }
 
     const auto& scene_view = shadow_render_node->get_scene_view();
-    const auto& scene_root = scene_view->get_scene_root();
+    const auto& scene_root = scene_view.get_scene_root();
     if (!scene_root)
     {
         SPDLOG_LOGGER_TRACE(

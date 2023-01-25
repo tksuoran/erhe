@@ -139,14 +139,20 @@ void update_key_modifiers(ImGuiIO& io, uint32_t modifier_mask)
 
 Imgui_viewport::Imgui_viewport(
     const std::string_view name,
+    const bool             imgui_ini,
     ImFontAtlas*           font_atlas
 )
     : Rendergraph_node{fmt::format("Viewport {}", name)}
     , m_name          {name}
+    , m_imgui_ini_path   {imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
+
 {
     log_imgui->info("creating imgui viewport {}", name);
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext(font_atlas);
+
+    ImGuiIO& io = m_imgui_context->IO;
+    io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
     // to make Imgui_viewport_window a dependency for Imgui_viewport, forcing

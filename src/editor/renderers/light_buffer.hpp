@@ -83,7 +83,7 @@ public:
 class Light_buffer
 {
 public:
-    explicit Light_buffer(const Light_interface& light_interface);
+    explicit Light_buffer(Light_interface* light_interface);
 
     auto update(
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
@@ -100,7 +100,7 @@ public:
     void bind_control_buffer();
 
 private:
-    const Light_interface& m_light_interface;
+    Light_interface* m_light_interface{nullptr};
 
     erhe::application::Multi_buffer m_light_buffer;
     erhe::application::Multi_buffer m_control_buffer;

@@ -46,7 +46,7 @@ class Material_buffer
     : public erhe::application::Multi_buffer
 {
 public:
-    explicit Material_buffer(const Material_interface& material_interface);
+    explicit Material_buffer(Material_interface* material_interface);
 
     auto update(
         const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
@@ -55,8 +55,8 @@ public:
     [[nodiscard]] auto used_handles() const -> const std::set<uint64_t>&;
 
 private:
-    const Material_interface& m_material_interface;
-    std::set<uint64_t>        m_used_handles;
+    Material_interface* m_material_interface{nullptr};
+    std::set<uint64_t>  m_used_handles;
 };
 
 } // namespace editor

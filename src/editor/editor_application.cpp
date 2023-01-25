@@ -436,19 +436,6 @@ auto Application_impl::initialize_components(
         test_scene_root->physics_world().enable_physics_updates();
     }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR) && 0 //// XXX TODO MUSTFIX
-    if (configuration.headset.openxr)
-    {
-        rendergraph.register_node(headset_view.get_rendergraph_node());
-        const auto shadow_render_node = shadow_renderer.create_node_for_viewport(headset_view);
-        rendergraph.register_node(shadow_render_node);
-        headset_view.connect(shadow_render_node);
-
-        //const auto& scene_builder = m_components.get<editor::Scene_builder>();
-        //scene_builder->add_rendertarget_viewports(1);
-    }
-#endif
-
     tools.set_priority_tool(&physics_tool);
 
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);

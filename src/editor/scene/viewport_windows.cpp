@@ -192,8 +192,8 @@ auto Viewport_windows::create_viewport_window(
     if (erhe::application::g_configuration->shadow_renderer.enabled)
     {
         //// TODO: Share Shadow_render_node for each unique (scene, camera) pair
-        const auto shadow_render_node = g_shadow_renderer->create_node_for_viewport(
-            new_viewport_window
+        const auto shadow_render_node = g_shadow_renderer->create_node_for_scene_view(
+            *new_viewport_window.get()
         );
         erhe::application::g_rendergraph->register_node(shadow_render_node);
         erhe::application::g_rendergraph->connect(

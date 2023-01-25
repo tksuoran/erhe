@@ -17,6 +17,7 @@
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace erhe::graphics
@@ -81,14 +82,15 @@ public:
 
     void next_frame();
 
-    auto primitive_settings() const -> Primitive_interface_settings&;
+    auto primitive_settings() -> Primitive_interface_settings&;
+    auto primitive_settings() const -> const Primitive_interface_settings&;
 
 private:
-    std::unique_ptr<Material_buffer     >    m_material_buffers;
-    std::unique_ptr<Light_buffer        >    m_light_buffers;
-    std::unique_ptr<Camera_buffer       >    m_camera_buffers;
-    std::unique_ptr<Draw_indirect_buffer>    m_draw_indirect_buffers;
-    std::unique_ptr<Primitive_buffer    >    m_primitive_buffers;
+    std::optional<Material_buffer     >      m_material_buffers;
+    std::optional<Light_buffer        >      m_light_buffers;
+    std::optional<Camera_buffer       >      m_camera_buffers;
+    std::optional<Draw_indirect_buffer>      m_draw_indirect_buffers;
+    std::optional<Primitive_buffer    >      m_primitive_buffers;
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
 };
 

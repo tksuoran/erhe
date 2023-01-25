@@ -78,7 +78,6 @@ public:
     void render_headset      ();
 
     void begin_frame         ();
-    void connect             (const std::shared_ptr<Shadow_render_node>& shadow_render_node);
     void add_finger_input    (const Finger_point& finger_point);
     void add_controller_input(const Controller_input& controller_input);
 

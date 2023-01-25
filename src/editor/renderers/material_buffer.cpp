@@ -36,14 +36,14 @@ Material_interface::Material_interface(std::size_t max_material_count)
     );
 }
 
-Material_buffer::Material_buffer(const Material_interface& material_interface)
+Material_buffer::Material_buffer(Material_interface* material_interface)
     : Multi_buffer        {"material"}
     , m_material_interface{material_interface}
 {
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
-        m_material_interface.material_block.binding_point(),
-        m_material_interface.material_struct.size_bytes() * m_material_interface.max_material_count
+        m_material_interface->material_block.binding_point(),
+        m_material_interface->material_struct.size_bytes() * m_material_interface->max_material_count
     );
 }
 
@@ -61,8 +61,8 @@ auto Material_buffer::update(
     );
 
     auto&       buffer         = current_buffer();
-    const auto  entry_size     = m_material_interface.material_struct.size_bytes();
-    const auto& offsets        = m_material_interface.offsets;
+    const auto  entry_size     = m_material_interface->material_struct.size_bytes();
+    const auto& offsets        = m_material_interface->offsets;
     const auto  gpu_data       = buffer.map();
     m_writer.begin(buffer.target());
     m_used_handles.clear();

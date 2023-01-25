@@ -34,11 +34,10 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
 )
     : erhe::application::Imgui_viewport{
         name,
+        imgui_ini,
         erhe::application::g_imgui_renderer->get_font_atlas()
     }
     , m_rendertarget_mesh{rendertarget_mesh}
-    , m_name             {name}
-    , m_imgui_ini_path   {imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
 {
     register_output(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -48,12 +47,8 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
 
     erhe::application::g_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
-    auto& style = ImGui::GetStyle();
-    static_cast<void>(style);
-
     ImGuiIO& io = m_imgui_context->IO;
     io.MouseDrawCursor = true;
-    io.IniFilename = imgui_ini ? m_imgui_ini_path.c_str() : nullptr;
     io.FontDefault = erhe::application::g_imgui_renderer->vr_primary_font();
 
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");

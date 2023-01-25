@@ -116,10 +116,10 @@ void Shadow_renderer::initialize_component()
 
     erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_initialize_component};
 
-    const auto& shader_resources = *g_program_interface->shader_resources.get();
-    m_light_buffers         = std::make_unique<Light_buffer        >(shader_resources.light_interface);
+    auto& shader_resources  = *g_program_interface->shader_resources.get();
+    m_light_buffers         = std::make_unique<Light_buffer        >(&shader_resources.light_interface);
     m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(erhe::application::g_configuration->renderer.max_draw_count);
-    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
+    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(&shader_resources.primitive_interface);
 
     ERHE_VERIFY(
         erhe::application::g_configuration->shadow_renderer.shadow_map_max_light_count <=
@@ -168,8 +168,8 @@ void Shadow_renderer::on_message(Editor_message& message)
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
 
-auto Shadow_renderer::create_node_for_viewport(
-    const std::shared_ptr<Scene_view>& scene_view
+auto Shadow_renderer::create_node_for_scene_view(
+    Scene_view& scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& config        = erhe::application::g_configuration->shadow_renderer;
@@ -215,7 +215,7 @@ auto Shadow_renderer::get_node_for_view(
         m_nodes.end(),
         [scene_view](const auto& entry)
         {
-            return entry->get_scene_view().get() == scene_view;
+            return &entry->get_scene_view() == scene_view;
         }
     );
     if (i == m_nodes.end())

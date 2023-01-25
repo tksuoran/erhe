@@ -534,7 +534,12 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     for (const auto view_configuration_type : view_configuration_types)
     {
         uint32_t dummy{0};
-        XrViewConfigurationView views[4];
+        XrViewConfigurationView views[4] = {};
+        for (auto& view : views)
+        {
+            view.type = XR_TYPE_VIEW_CONFIGURATION_VIEW;
+            view.next = 0;
+        }
         auto result = xrEnumerateViewConfigurationViews(
             m_xr_instance,
             m_xr_system_id,
@@ -883,10 +888,13 @@ auto Xr_instance::enumerate_view_configurations() -> bool
 //      .../input/aim/pose
 //      .../output/haptic
 //constexpr const char* c_interaction_profile_simple_controller = "/interaction_profiles/khr/simple_controller";
-constexpr const char* c_interaction_profile_vive_controller   = "/interaction_profiles/htc/vive_controller";
+constexpr const char* c_interaction_profile_vive_controller         = "/interaction_profiles/htc/vive_controller";
+constexpr const char* c_interaction_profile_oculus_go_controller    = "/interaction_profiles/oculus/go_controller";
+constexpr const char* c_interaction_profile_oculus_touch_controller = "/interaction_profiles/oculus/touch_controller";
 //constexpr const char* c_interaction_profile_index_controller  = "/interaction_profiles/valve/index_controller";
 //constexpr const char* c_interaction_profile_vive_pro          = "/interaction_profiles/htc/vive_pro";
 
+constexpr const char* c_user_head       = "/user/head";
 constexpr const char* c_user_hand_left  = "/user/hand/left";
 constexpr const char* c_user_hand_right = "/user/hand/right";
 
@@ -898,6 +906,9 @@ constexpr const char* c_aim_pose        = "/user/hand/right/input/aim/pose";
 constexpr const char* c_trackpad        = "/user/hand/right/input/trackpad";
 constexpr const char* c_trackpad_click  = "/user/hand/right/input/trackpad/click";
 constexpr const char* c_trackpad_touch  = "/user/hand/right/input/trackpad/touch";
+
+constexpr const char* c_a_click   = "/user/hand/right/input/a/click";
+constexpr const char* c_a_touch   = "/user/hand/right/input/a/touch";
 
 Xr_path::Xr_path() = default;
 
@@ -938,7 +949,6 @@ auto Xr_instance::initialize_actions() -> bool
             )
         );
     }
-
     {
         const XrActionCreateInfo trigger_value_action_create_info{
             .type                = XR_TYPE_ACTION_CREATE_INFO,
@@ -957,7 +967,6 @@ auto Xr_instance::initialize_actions() -> bool
             )
         );
     }
-
     {
         const XrActionCreateInfo trigger_click_action_create_info{
             .type                = XR_TYPE_ACTION_CREATE_INFO,
@@ -995,7 +1004,6 @@ auto Xr_instance::initialize_actions() -> bool
             )
         );
     }
-
     {
         const XrActionCreateInfo squeeze_click_action_create_info{
             .type                = XR_TYPE_ACTION_CREATE_INFO,
@@ -1014,7 +1022,6 @@ auto Xr_instance::initialize_actions() -> bool
             )
         );
     }
-
     {
         const XrActionCreateInfo aim_pose_action_create_info{
             .type                = XR_TYPE_ACTION_CREATE_INFO,
@@ -1033,7 +1040,6 @@ auto Xr_instance::initialize_actions() -> bool
             )
         );
     }
-
     {
         const XrActionCreateInfo trackpad_click_action_create_info{
             .type                = XR_TYPE_ACTION_CREATE_INFO,
@@ -1089,17 +1095,23 @@ auto Xr_instance::initialize_actions() -> bool
         );
     }
 
-    paths.user_hand_left                      = path(c_user_hand_left);
-    paths.user_hand_right                     = path(c_user_hand_right);
-    paths.trigger_value                       = path(c_trigger_value);
-    paths.trigger_click                       = path(c_trigger_click);
-    paths.menu_click                          = path(c_menu_click);
-    paths.squeeze_click                       = path(c_squeeze_click);
-    paths.aim_pose                            = path(c_aim_pose);
-    paths.interaction_profile_vive_controller = path(c_interaction_profile_vive_controller);
-    paths.trackpad_click                      = path(c_trackpad_click);
-    paths.trackpad_touch                      = path(c_trackpad_touch);
-    paths.trackpad                            = path(c_trackpad);
+    paths.user_head       = path(c_user_head);
+    paths.user_hand_left  = path(c_user_hand_left);
+    paths.user_hand_right = path(c_user_hand_right);
+    paths.trigger_value   = path(c_trigger_value);
+    paths.trigger_click   = path(c_trigger_click);
+    paths.menu_click      = path(c_menu_click);
+    paths.squeeze_click   = path(c_squeeze_click);
+    paths.aim_pose        = path(c_aim_pose);
+    paths.trackpad_click  = path(c_trackpad_click);
+    paths.trackpad_touch  = path(c_trackpad_touch);
+    paths.trackpad        = path(c_trackpad);
+    paths.a_click         = path(c_a_click);
+    paths.a_touch         = path(c_a_touch);
+
+    paths.interaction_profile_vive_controller         = path(c_interaction_profile_vive_controller);
+    paths.interaction_profile_oculus_go_controller    = path(c_interaction_profile_oculus_go_controller);
+    paths.interaction_profile_oculus_touch_controller = path(c_interaction_profile_oculus_touch_controller);
 
     const std::array<XrActionSuggestedBinding, 8> vive_controller_suggested_bindings{
         {
@@ -1138,7 +1150,20 @@ auto Xr_instance::initialize_actions() -> bool
         }
     };
 
-    const XrInteractionProfileSuggestedBinding interaction_profile_suggested_binding
+    const std::array<XrActionSuggestedBinding, 2> oculus_touch_controller_suggested_bindings{
+        {
+            {
+                .action  = actions.trigger_click,
+                .binding = paths.a_click.xr_path
+            },
+            {
+                .action  = actions.aim_pose,
+                .binding = paths.aim_pose.xr_path
+            }
+        }
+    };
+
+    const XrInteractionProfileSuggestedBinding vive_interaction_profile_suggested_binding
     {
         .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
         .next                   = nullptr,
@@ -1147,10 +1172,25 @@ auto Xr_instance::initialize_actions() -> bool
         .suggestedBindings      = vive_controller_suggested_bindings.data()
     };
 
+    const XrInteractionProfileSuggestedBinding oculus_touch_interaction_profile_suggested_binding
+    {
+        .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+        .next                   = nullptr,
+        .interactionProfile     = paths.interaction_profile_oculus_touch_controller.xr_path,
+        .countSuggestedBindings = static_cast<uint32_t>(oculus_touch_controller_suggested_bindings.size()),
+        .suggestedBindings      = oculus_touch_controller_suggested_bindings.data()
+    };
+
     ERHE_XR_CHECK(
         xrSuggestInteractionProfileBindings(
             m_xr_instance,
-            &interaction_profile_suggested_binding
+            &vive_interaction_profile_suggested_binding
+        )
+    );
+    ERHE_XR_CHECK(
+        xrSuggestInteractionProfileBindings(
+            m_xr_instance,
+            &oculus_touch_interaction_profile_suggested_binding
         )
     );
 
@@ -1244,6 +1284,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
     };
 
     {
+        log_xr->trace("xrSyncActions()");
         const auto result = xrSyncActions(
             session.get_xr_session(),
             &actions_sync_info
@@ -1322,7 +1363,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             )
         );
     }
-
     {
         const XrActionStateGetInfo action_state_get_info{
             .type          = XR_TYPE_ACTION_STATE_GET_INFO,
@@ -1338,7 +1378,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             )
         );
     }
-
     {
         const XrActionStateGetInfo action_state_get_info{
             .type          = XR_TYPE_ACTION_STATE_GET_INFO,
@@ -1354,7 +1393,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             )
         );
     }
-
     {
         const XrActionStateGetInfo action_state_get_info{
             .type          = XR_TYPE_ACTION_STATE_GET_INFO,
@@ -1370,7 +1408,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             )
         );
     }
-
     {
         const XrActionStateGetInfo action_state_get_info{
             .type          = XR_TYPE_ACTION_STATE_GET_INFO,
@@ -1386,7 +1423,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             )
         );
     }
-
     {
         const XrActionStateGetInfo action_state_get_info{
             .type          = XR_TYPE_ACTION_STATE_GET_INFO,
@@ -1402,7 +1438,6 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             )
         );
     }
-
     const XrTime time = session.get_xr_frame_state().predictedDisplayTime;
     XrSpaceLocation location{
         .type          = XR_TYPE_SPACE_LOCATION,
@@ -1456,6 +1491,28 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 
     if (interation_profile_state.interactionProfile == XR_NULL_PATH)
     {
+        ERHE_XR_CHECK(
+            xrGetCurrentInteractionProfile(
+                session.get_xr_session(),
+                paths.user_hand_right.xr_path,
+                &interation_profile_state
+            )
+        );
+    }
+
+    if (interation_profile_state.interactionProfile == XR_NULL_PATH)
+    {
+        ERHE_XR_CHECK(
+            xrGetCurrentInteractionProfile(
+                session.get_xr_session(),
+                paths.user_head.xr_path,
+                &interation_profile_state
+            )
+        );
+    }
+
+    if (interation_profile_state.interactionProfile == XR_NULL_PATH)
+    {
         log_xr->info("Current interaction profile: <nothing>");
         return true;
     }
@@ -1483,14 +1540,52 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
     for (;;)
     {
         XrEventDataBuffer buffer{};
+        buffer.type = XR_TYPE_EVENT_DATA_BUFFER;
+        buffer.next = nullptr;
+        log_xr->trace("xrPollEvent()");
         const auto result = xrPollEvent(m_xr_instance, &buffer);
         if (result == XR_SUCCESS)
         {
-            log_xr->trace("XR event {}", c_str(buffer.type));
+            XrEventDataBaseHeader* base_header = reinterpret_cast<XrEventDataBaseHeader*>(&buffer);
+            log_xr->info("XR event {}", c_str(base_header->type));
 
-            if (buffer.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED)
+            if (base_header->type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED)
             {
                 get_current_interaction_profile(session);
+            }
+
+            if (base_header->type == XR_TYPE_EVENT_DATA_EVENTS_LOST)
+            {
+                auto data_events_lost = *reinterpret_cast<const XrEventDataEventsLost*>(base_header);
+                log_xr->warn("XrEventDataEventsLost::lostEventCount = {}", data_events_lost.lostEventCount);
+                continue;
+            }
+
+            if (buffer.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED)
+            {
+                auto session_state_changed_event = *reinterpret_cast<const XrEventDataSessionStateChanged*>(base_header);
+                log_xr->info("XrEventDataSessionStateChanged::state = {}", c_str(session_state_changed_event.state));
+                switch (session_state_changed_event.state)
+                {
+                    case XR_SESSION_STATE_UNKNOWN:
+                    case XR_SESSION_STATE_IDLE:
+                        break;
+                    case XR_SESSION_STATE_READY:
+                        session.begin_session();
+                        get_current_interaction_profile(session);
+                        break;
+                    case XR_SESSION_STATE_SYNCHRONIZED:
+                    case XR_SESSION_STATE_VISIBLE:
+                    case XR_SESSION_STATE_FOCUSED:
+                        break;
+                    case XR_SESSION_STATE_STOPPING:
+                        session.end_session();
+                        break;
+                    case XR_SESSION_STATE_LOSS_PENDING:
+                    case XR_SESSION_STATE_EXITING:
+                    default:
+                        break;
+                }
             }
 
             // if (buffer.type == XR_TYPE_EVENT_DATA_VISIBILITY_MASK_CHANGED_KHR)

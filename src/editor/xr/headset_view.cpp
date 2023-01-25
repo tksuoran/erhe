@@ -63,6 +63,11 @@ Headset_view_node::Headset_view_node()
     );
 }
 
+void Headset_view_node::execute_rendergraph_node()
+{
+    g_headset_view->render_headset();
+}
+
 Headset_view* g_headset_view{nullptr};
 
 Headset_view::Headset_view()
@@ -137,6 +142,12 @@ void Headset_view::initialize_component()
             erhe::application::g_window->get_context_window(),
             configuration
         );
+        if (!m_headset->is_valid())
+        {
+            log_headset->info("Headset not initialized");
+            m_headset.reset();
+            return;
+        }
     }
 
     {
@@ -149,12 +160,19 @@ void Headset_view::initialize_component()
     }
 
     m_rendergraph_node = std::make_shared<Headset_view_node>();
+    erhe::application::g_rendergraph->register_node(m_rendergraph_node);
 
     set_flags      (Tool_flags::background);
     set_description(c_description);
     g_tools->register_tool(this);
 
-    //hide();
+    m_shadow_render_node = g_shadow_renderer->create_node_for_scene_view(*this);
+    erhe::application::g_rendergraph->register_node(m_shadow_render_node);
+    erhe::application::g_rendergraph->connect(
+        erhe::application::Rendergraph_node_key::shadow_maps,
+        m_shadow_render_node,
+        m_rendergraph_node
+    );
 }
 
 void Headset_view::tool_render(const Render_context& context)
@@ -241,12 +259,6 @@ auto Headset_view::get_headset_view_resources(
             m_scene_root,
             resource->camera
         );
-        erhe::application::g_rendergraph->connect(
-            erhe::application::Rendergraph_node_key::shadow_maps,
-            m_shadow_render_node,
-            resource->viewport_window
-        );
-
         m_view_resources.push_back(resource);
         return resource;
     }
@@ -274,11 +286,6 @@ void Headset_view::update_pointer_context_from_controller()
     );
 }
 
-void Headset_view_node::execute_rendergraph_node()
-{
-    g_headset_view->render_headset();
-}
-
 void Headset_view::render_headset()
 {
     ERHE_PROFILE_FUNCTION
@@ -289,6 +296,11 @@ void Headset_view::render_headset()
     }
 
     auto frame_timing = m_headset->begin_frame();
+    if (!frame_timing.begin_ok)
+    {
+        return;
+    }
+
     if (frame_timing.should_render)
     {
         auto callback = [this](erhe::xr::Render_view& render_view) -> bool
@@ -386,7 +398,8 @@ void Headset_view::render_headset()
         };
         m_headset->render(callback);
     }
-    m_headset->end_frame();
+
+    m_headset->end_frame(frame_timing.should_render);
 }
 
 void Headset_view::setup_root_camera()
@@ -553,11 +566,6 @@ void Headset_view::begin_frame()
     {
         return;
     }
-}
-
-void Headset_view::connect(const std::shared_ptr<Shadow_render_node>& shadow_render_node)
-{
-    m_shadow_render_node = shadow_render_node;
 }
 
 void Headset_view::imgui()

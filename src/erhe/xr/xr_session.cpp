@@ -75,6 +75,32 @@ Xr_session::Xr_session(
     }
 
     m_xr_views.resize(instance.get_xr_view_configuration_views().size());
+    for (auto& view : m_xr_views)
+    {
+        view = XrView{
+            .type = XR_TYPE_VIEW,
+            .next = nullptr,
+            .pose = {
+                . orientation = {
+                    .x = 0.0f,
+                    .y = 0.0f,
+                    .z = 0.0f,
+                    .w = 1.0f
+                },
+                .position = {
+                    .x = 0.0f,
+                    .y = 0.0f,
+                    .z = 0.0f
+                },
+            },
+            .fov = {
+                .angleLeft  = 0.0f,
+                .angleRight = 0.0f,
+                .angleUp    = 0.0f,
+                .angleDown  = 0.0f
+            }
+        };
+    }
 
     if (!create_session())
     {
@@ -93,10 +119,6 @@ Xr_session::Xr_session(
         return;
     }
     if (!create_reference_space())
-    {
-        return;
-    }
-    if (!begin_session())
     {
         return;
     }
@@ -195,6 +217,7 @@ Xr_session::~Xr_session()
         return;
     }
 
+    log_xr->info("xrEndSession()");
     check(xrEndSession    (m_xr_session));
 
     check_gl_context_in_current_in_this_thread();
@@ -467,11 +490,33 @@ auto Xr_session::begin_session() -> bool
         .primaryViewConfigurationType = m_instance.get_xr_view_configuration_type()
     };
 
+    log_xr->info("xrBeginSession()");
     ERHE_XR_CHECK(xrBeginSession(m_xr_session, &session_begin_info));
 
     // m_instance.set_environment_depth_estimation(m_session, true);
 
+    m_session_running = true;
     return true;
+}
+
+auto Xr_session::end_session() -> bool
+{
+    ERHE_PROFILE_FUNCTION
+
+    if (m_xr_session == XR_NULL_HANDLE)
+    {
+        return false;
+    }
+
+    log_xr->info("xrEndSession()");
+    ERHE_XR_CHECK(xrEndSession(m_xr_session));
+    m_session_running = false;
+    return true;
+}
+
+auto Xr_session::is_session_running() const -> bool
+{
+    return m_session_running;
 }
 
 auto Xr_session::attach_actions() -> bool
@@ -489,7 +534,12 @@ auto Xr_session::attach_actions() -> bool
         .countActionSets = 1,
         .actionSets      = &m_instance.actions.action_set
     };
-    ERHE_XR_CHECK(xrAttachSessionActionSets(m_xr_session, &session_action_sets_attach_info));
+    ERHE_XR_CHECK(
+        xrAttachSessionActionSets(
+            m_xr_session,
+            &session_action_sets_attach_info
+        )
+    );
 
     const XrActionSpaceCreateInfo action_space_create_info
     {
@@ -608,6 +658,10 @@ void Xr_session::update_view_pose()
     if (result == XR_SUCCESS)
     {
         m_view_location = location;
+    }
+    else
+    {
+        log_xr->warn("xrLocateSpace() failed");
     }
 }
 
@@ -736,6 +790,7 @@ auto Xr_session::begin_frame() -> bool
 
     {
         check_gl_context_in_current_in_this_thread();
+        log_xr->trace("xrBeginFrame()");
         const auto result = xrBeginFrame(m_xr_session, &frame_begin_info);
         if (result == XR_SUCCESS)
         {
@@ -745,11 +800,6 @@ auto Xr_session::begin_frame() -> bool
         {
             log_xr->error("TODO Handle XR_SESSION_LOSS_PENDING");
             return false;
-        }
-        if (result == XR_FRAME_DISCARDED)
-        {
-            log_xr->warn("TODO Handle XR_FRAME_DISCARDED");
-            return true;
         }
         log_xr->error("xrBeginFrame() returned error {}", c_str(result));
         return false;
@@ -778,6 +828,7 @@ auto Xr_session::wait_frame() -> XrFrameState*
         .shouldRender           = XR_FALSE
     };
     {
+        log_xr->trace("xrWaitFrame()");
         const auto result = xrWaitFrame(m_xr_session, &frame_wait_info, &m_xr_frame_state);
         if (result == XR_SUCCESS)
         {
@@ -817,10 +868,11 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         uint32_t view_capacity_input{static_cast<uint32_t>(m_xr_views.size())};
 
         const XrViewLocateInfo view_locate_info{
-            .type        = XR_TYPE_VIEW_LOCATE_INFO,
-            .next        = nullptr,
-            .displayTime = m_xr_frame_state.predictedDisplayTime,
-            .space       = m_xr_reference_space_local
+            .type                  = XR_TYPE_VIEW_LOCATE_INFO,
+            .next                  = nullptr,
+            .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
+            .displayTime           = m_xr_frame_state.predictedDisplayTime,
+            .space                 = m_xr_reference_space_local
         };
 
         ERHE_XR_CHECK(
@@ -857,6 +909,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             !swapchain.color_swapchain.wait()
         )
         {
+            log_xr->warn("no swapchain color image for view {}", i);
             return false;
         }
 
@@ -866,6 +919,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             !swapchain.depth_swapchain.wait()
         )
         {
+            log_xr->warn("no swapchain depth image for view {}", i);
             return false;
         }
 
@@ -879,6 +933,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             (depth_texture == 0)
         )
         {
+            log_xr->warn("invalid color / depth image for view {}", i);
             return false;
         }
 
@@ -903,6 +958,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             const auto result = render_view_callback(render_view);
             if (result == false)
             {
+                log_xr->warn("render callback returned false for view {}", i);
                 return false;
             }
         }
@@ -947,13 +1003,18 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
     return true;
 }
 
-auto Xr_session::end_frame() -> bool
+auto Xr_session::end_frame(const bool rendered) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
+    }
+
+    if (m_xr_composition_layer_projection_views.empty())
+    {
+        log_xr->warn("no layer views");
     }
 
     //XrCompositionLayerDepthTestVARJO layer_depth;
@@ -965,7 +1026,7 @@ auto Xr_session::end_frame() -> bool
     XrCompositionLayerProjection layer{
         .type       = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
         .next       = nullptr,
-        .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
+        .layerFlags = 0, //XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
         .space      = m_xr_reference_space_local,
         .viewCount  = static_cast<uint32_t>(m_xr_views.size()),
         .views      = m_xr_composition_layer_projection_views.data()
@@ -980,11 +1041,15 @@ auto Xr_session::end_frame() -> bool
         .next                 = nullptr,
         .displayTime          = m_xr_frame_state.predictedDisplayTime,
         .environmentBlendMode = m_instance.get_xr_environment_blend_mode(),
-        .layerCount           = 1,
-        .layers               = layers
+        .layerCount           = rendered ? uint32_t{1} : uint32_t{0},
+        .layers               = rendered ? layers : nullptr
     };
 
-    check_gl_context_in_current_in_this_thread();
+    if (rendered)
+    {
+        check_gl_context_in_current_in_this_thread();
+    }
+    log_xr->trace("xrEndFrame");
     const XrResult result = xrEndFrame(m_xr_session, &frame_end_info);
     ERHE_XR_CHECK(result);
 

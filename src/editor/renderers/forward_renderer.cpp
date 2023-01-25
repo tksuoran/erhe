@@ -83,12 +83,14 @@ void Forward_renderer::initialize_component()
 
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
-    const auto& shader_resources = *g_program_interface->shader_resources.get();
-    m_material_buffers      = std::make_unique<Material_buffer     >(shader_resources.material_interface);
-    m_light_buffers         = std::make_unique<Light_buffer        >(shader_resources.light_interface);
-    m_camera_buffers        = std::make_unique<Camera_buffer       >(shader_resources.camera_interface);
-    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(erhe::application::g_configuration->renderer.max_draw_count);
-    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
+    auto& shader_resources  = *g_program_interface->shader_resources.get();
+    m_material_buffers      = Material_buffer     {&shader_resources.material_interface};
+    m_light_buffers         = Light_buffer        {&shader_resources.light_interface};
+    m_camera_buffers        = Camera_buffer       {&shader_resources.camera_interface};
+    m_draw_indirect_buffers = Draw_indirect_buffer{
+        static_cast<size_t>(erhe::application::g_configuration->renderer.max_draw_count)
+    };
+    m_primitive_buffers     = Primitive_buffer    {&shader_resources.primitive_interface};
 
     m_dummy_texture = erhe::graphics::create_dummy_texture();
 
@@ -106,7 +108,12 @@ void Forward_renderer::next_frame()
     m_primitive_buffers    ->next_frame();
 }
 
-auto Forward_renderer::primitive_settings() const -> Primitive_interface_settings&
+auto Forward_renderer::primitive_settings() -> Primitive_interface_settings&
+{
+    return m_primitive_buffers->settings;
+}
+
+auto Forward_renderer::primitive_settings() const -> const Primitive_interface_settings&
 {
     return m_primitive_buffers->settings;
 }

@@ -42,6 +42,7 @@ Window_imgui_viewport::Window_imgui_viewport(
 )
     : Imgui_viewport{
         name,
+        true,
         g_imgui_renderer->get_font_atlas()
     }
 {

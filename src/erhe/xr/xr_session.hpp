@@ -30,10 +30,12 @@ public:
 
     // TODO [[nodiscard]]
     auto begin_session               () -> bool;
+    auto end_session                 () -> bool;
+    auto is_session_running          () const -> bool;
     auto begin_frame                 () -> bool;
     auto wait_frame                  () -> XrFrameState*;
     auto render_frame                (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame                   () -> bool;
+    auto end_frame                   (const bool rendered) -> bool;
     auto get_xr_session              () const -> XrSession;
     auto get_xr_reference_space_local() const -> XrSpace;
     auto get_xr_reference_space_stage() const -> XrSpace;
@@ -96,6 +98,7 @@ private:
     XrFrameState                                  m_xr_frame_state;
     Hand_tracker                                  m_hand_tracker_left;
     Hand_tracker                                  m_hand_tracker_right;
+    bool                                          m_session_running{false};
 };
 
 }

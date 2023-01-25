@@ -80,11 +80,7 @@ public:
 
 private:
     Rendertarget_mesh* m_rendertarget_mesh{nullptr};
-    std::string        m_name;
-    std::string        m_imgui_ini_path;
     glm::vec4          m_clear_color {0.0f, 0.0f, 0.0f, 0.2f};
-    bool               m_show_menu   {false};
-    double             m_time        {0.0};
     double             m_last_mouse_x{0.0};
     double             m_last_mouse_y{0.0};
 };

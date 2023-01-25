@@ -20,8 +20,6 @@ Headset::Headset(erhe::toolkit::Context_window* context_window, const Xr_configu
     }
 
     m_xr_session = std::make_unique<Xr_session>(*m_xr_instance.get(), *context_window);
-
-    m_xr_instance->get_current_interaction_profile(*m_xr_session.get());
 }
 
 Headset::~Headset()
@@ -81,49 +79,71 @@ auto Headset::get_hand_tracking_active(const XrHandEXT hand) const -> bool
 
 auto Headset::trigger_value() const -> const XrActionStateFloat*
 {
+    ERHE_VERIFY(m_xr_instance);
     return &m_xr_instance->actions.trigger_value_state;
 }
 
 auto Headset::trigger_click() const -> const XrActionStateBoolean*
 {
+    ERHE_VERIFY(m_xr_instance);
     return &m_xr_instance->actions.trigger_click_state;
 }
 
 auto Headset::menu_click() const -> const XrActionStateBoolean*
 {
+    ERHE_VERIFY(m_xr_instance);
     return &m_xr_instance->actions.menu_click_state;
 }
 
 auto Headset::squeeze_click() const -> const XrActionStateBoolean*
 {
+    ERHE_VERIFY(m_xr_instance);
     return &m_xr_instance->actions.squeeze_click_state;
 }
 
 auto Headset::trackpad_click() const -> const XrActionStateBoolean*
 {
+    ERHE_VERIFY(m_xr_instance);
     return &m_xr_instance->actions.trackpad_click_state;
 }
 
 auto Headset::trackpad_touch() const -> const XrActionStateBoolean*
 {
+    ERHE_VERIFY(m_xr_instance);
     return &m_xr_instance->actions.trackpad_touch_state;
 }
 
 auto Headset::trackpad() const -> const XrActionStateVector2f*
 {
+    ERHE_VERIFY(m_xr_instance);
     return &m_xr_instance->actions.trackpad_state;
+}
+
+auto Headset::is_valid() const -> bool
+{
+    return static_cast<bool>(m_xr_instance) && static_cast<bool>(m_xr_session);
 }
 
 auto Headset::begin_frame() -> Frame_timing
 {
     ERHE_PROFILE_FUNCTION
 
-    Frame_timing result{0, 0, false};
-    if (!m_xr_instance)
+    Frame_timing result{
+        .predicted_display_time   = 0,
+        .predicted_display_pediod = 0,
+        .begin_ok                 = false,
+        .should_render            = true
+    };
+
+    if (!m_xr_instance || !m_xr_session)
     {
         return result;
     }
     if (!m_xr_instance->poll_xr_events(*m_xr_session.get()))
+    {
+        return result;
+    }
+    if (!m_xr_session->is_session_running())
     {
         return result;
     }
@@ -159,6 +179,7 @@ auto Headset::begin_frame() -> Frame_timing
 
     result.predicted_display_time   = xr_frame_state->predictedDisplayTime;
     result.predicted_display_pediod = xr_frame_state->predictedDisplayPeriod;
+    result.begin_ok                 = true;
     result.should_render            = xr_frame_state->shouldRender;
 
     return result;
@@ -179,7 +200,7 @@ auto Headset::render(std::function<bool(Render_view&)> render_view_callback) -> 
     return true;
 }
 
-auto Headset::end_frame() -> bool
+auto Headset::end_frame(const bool rendered) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
@@ -188,7 +209,7 @@ auto Headset::end_frame() -> bool
         return false;
     }
 
-    return m_xr_session->end_frame();
+    return m_xr_session->end_frame(rendered);
 }
 
 }

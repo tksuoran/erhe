@@ -82,7 +82,7 @@ class Primitive_buffer
     : public erhe::application::Multi_buffer
 {
 public:
-    explicit Primitive_buffer(const Primitive_interface& primitive_interface);
+    explicit Primitive_buffer(Primitive_interface* primitive_interface);
 
     using Mesh_layer_collection = std::vector<const erhe::scene::Mesh_layer*>;
 
@@ -108,9 +108,9 @@ public:
     Primitive_interface_settings settings;
 
 private:
-    const Primitive_interface& m_primitive_interface;
-    uint32_t                   m_id_offset{0};
-    std::vector<Id_range>      m_id_ranges;
+    Primitive_interface*  m_primitive_interface{nullptr};
+    uint32_t              m_id_offset{0};
+    std::vector<Id_range> m_id_ranges;
 };
 
 } // namespace editor

@@ -74,9 +74,9 @@ public:
     class Paths
     {
     public:
+        Xr_path user_head;
         Xr_path user_hand_left;
         Xr_path user_hand_right;
-        Xr_path interaction_profile_vive_controller;
         Xr_path trigger_click;
         Xr_path trigger_value;
         Xr_path menu_click;
@@ -87,6 +87,11 @@ public:
         Xr_path grip_pose;
         Xr_path aim_pose;
         Xr_path haptic;
+        Xr_path a_touch;
+        Xr_path a_click;
+        Xr_path interaction_profile_vive_controller;
+        Xr_path interaction_profile_oculus_go_controller;
+        Xr_path interaction_profile_oculus_touch_controller;
     };
 
     class Actions
@@ -94,23 +99,23 @@ public:
     public:
         XrActionSet           action_set             {};
         XrAction              trigger_value          {};
-        XrActionStateFloat    trigger_value_state    {.currentState = 0.0f, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrActionStateFloat    trigger_value_state    {.type = XR_TYPE_ACTION_STATE_FLOAT, .next = nullptr, .currentState = 0.0f, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction              trigger_click          {};
-        XrActionStateBoolean  trigger_click_state    {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrActionStateBoolean  trigger_click_state    {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction              menu_click             {};
-        XrActionStateBoolean  menu_click_state       {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrActionStateBoolean  menu_click_state       {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction              squeeze_click          {};
-        XrActionStateBoolean  squeeze_click_state    {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrActionStateBoolean  squeeze_click_state    {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction              aim_pose               {};
-        XrActionStatePose     aim_pose_state         {.isActive = XR_FALSE};
+        XrActionStatePose     aim_pose_state         {.type = XR_TYPE_ACTION_STATE_POSE, .next = nullptr, .isActive = XR_FALSE};
         XrSpace               aim_pose_space         {};
-        XrSpaceLocation       aim_pose_space_location{.locationFlags = 0};
+        XrSpaceLocation       aim_pose_space_location{.type = XR_TYPE_SPACE_LOCATION, .next = nullptr, .locationFlags = 0};
         XrAction              trackpad_click         {};
-        XrActionStateBoolean  trackpad_click_state   {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrActionStateBoolean  trackpad_click_state   {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction              trackpad_touch         {};
-        XrActionStateBoolean  trackpad_touch_state   {.currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrActionStateBoolean  trackpad_touch_state   {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
         XrAction              trackpad               {};
-        XrActionStateVector2f trackpad_state         {.currentState = { .x = 0.0f, .y = 0.f }, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
+        XrActionStateVector2f trackpad_state         {.type = XR_TYPE_ACTION_STATE_VECTOR2F, .next = nullptr, .currentState = { .x = 0.0f, .y = 0.f }, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
     };
 
     Paths   paths;

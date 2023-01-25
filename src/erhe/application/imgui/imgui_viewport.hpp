@@ -32,6 +32,7 @@ class Imgui_viewport
 public:
     Imgui_viewport(
         const std::string_view name,
+        bool                   imgui_ini,
         ImFontAtlas*           font_atlas
     );
     virtual ~Imgui_viewport();
@@ -61,6 +62,8 @@ public:
 
 protected:
     std::string m_name;
+    std::string m_imgui_ini_path;
+    bool        m_show_menu       {false};
     double      m_time            {0.0};
     bool        m_has_cursor      {false};
     bool        m_request_keyboard{false}; // hovered window requests keyboard events

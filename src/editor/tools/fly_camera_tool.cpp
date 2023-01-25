@@ -44,11 +44,19 @@ void Fly_camera_space_mouse_listener::set_active(const bool value)
 
 void Fly_camera_space_mouse_listener::on_translation(const int tx, const int ty, const int tz)
 {
+    if (g_fly_camera_tool == nullptr)
+    {
+        return;
+    }
     g_fly_camera_tool->translation(tx, -tz, ty);
 }
 
 void Fly_camera_space_mouse_listener::on_rotation(const int rx, const int ry, const int rz)
 {
+    if (g_fly_camera_tool == nullptr)
+    {
+        return;
+    }
     g_fly_camera_tool->rotation(rx, -rz, ry);
 }
 
@@ -61,6 +69,11 @@ void Fly_camera_turn_command::try_ready(
     erhe::application::Command_context& context
 )
 {
+    if (g_fly_camera_tool == nullptr)
+    {
+        return;
+    }
+
     if (g_fly_camera_tool->try_ready())
     {
         set_ready(context);
@@ -120,6 +133,11 @@ auto Fly_camera_turn_command::try_call(
     erhe::application::Command_context& context
 ) -> bool
 {
+    if (g_fly_camera_tool == nullptr)
+    {
+        return false;
+    }
+
     if (get_command_state() == erhe::application::State::Ready)
     {
         if (g_fly_camera_tool->get_hover_scene_view() == nullptr)
@@ -162,6 +180,10 @@ auto Fly_camera_move_command::try_call(
 ) -> bool
 {
     static_cast<void>(context);
+    if (g_fly_camera_tool == nullptr)
+    {
+        return false;
+    }
 
     return g_fly_camera_tool->try_move(m_control, m_item, m_active);
 }

@@ -45,7 +45,7 @@ class Camera_buffer
     : public erhe::application::Multi_buffer
 {
 public:
-    explicit Camera_buffer(const Camera_interface& camera_interface);
+    explicit Camera_buffer(Camera_interface* camera_interface);
 
     auto update(
         const erhe::scene::Projection& camera_projection,
@@ -55,7 +55,7 @@ public:
     ) -> erhe::application::Buffer_range;
 
 private:
-    const Camera_interface& m_camera_interface;
+    Camera_interface* m_camera_interface{nullptr};
 };
 
 } // namespace editor

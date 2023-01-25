@@ -73,13 +73,9 @@ public:
         Light_projections&                                         light_projections;
     };
 
-    auto create_node_for_viewport(
-        const std::shared_ptr<Scene_view>& scene_view
-    ) -> std::shared_ptr<Shadow_render_node>;
-    auto get_node_for_view(
-        const Scene_view* scene_view
-    ) -> std::shared_ptr<Shadow_render_node>;
-    auto get_nodes() const -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
+    auto create_node_for_scene_view(Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>;
+    auto get_node_for_view         (const Scene_view* scene_view) -> std::shared_ptr<Shadow_render_node>;
+    auto get_nodes                 () const -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
 
     auto render    (const Render_parameters& parameters) -> bool;
     void next_frame();

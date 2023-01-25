@@ -17,7 +17,7 @@ namespace editor
 {
 
 
-Camera_interface::Camera_interface(std::size_t max_camera_count)
+Camera_interface::Camera_interface(const std::size_t max_camera_count)
     : camera_block {
         "camera",
         4,
@@ -40,14 +40,14 @@ Camera_interface::Camera_interface(std::size_t max_camera_count)
     camera_block.add_struct("cameras", &camera_struct, max_camera_count);
 }
 
-Camera_buffer::Camera_buffer(const Camera_interface& camera_interface)
+Camera_buffer::Camera_buffer(Camera_interface* camera_interface)
     : Multi_buffer      {"camera"}
     , m_camera_interface{camera_interface}
 {
     Multi_buffer::allocate(
         gl::Buffer_target::uniform_buffer,
-        m_camera_interface.camera_block.binding_point(),
-        m_camera_interface.camera_block.size_bytes()
+        m_camera_interface->camera_block.binding_point(),
+        m_camera_interface->camera_block.size_bytes()
     );
 }
 
@@ -67,8 +67,8 @@ auto Camera_buffer::update(
     );
 
     auto&           buffer           = current_buffer();
-    const auto      entry_size       = m_camera_interface.camera_struct.size_bytes();
-    const auto&     offsets          = m_camera_interface.offsets;
+    const auto      entry_size       = m_camera_interface->camera_struct.size_bytes();
+    const auto&     offsets          = m_camera_interface->offsets;
     const auto      clip_from_camera = camera_projection.clip_from_node_transform(viewport);
     const auto      gpu_data         = buffer.map();
     const glm::mat4 world_from_node  = camera_node.world_from_node();

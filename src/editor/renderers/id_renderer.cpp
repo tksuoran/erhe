@@ -153,10 +153,10 @@ void Id_renderer::initialize_component()
 
     const erhe::application::Scoped_gl_context gl_context;
 
-    const auto& shader_resources = *g_program_interface->shader_resources.get();
-    m_camera_buffers        = std::make_unique<Camera_buffer       >(shader_resources.camera_interface);
+    auto& shader_resources  = *g_program_interface->shader_resources.get();
+    m_camera_buffers        = std::make_unique<Camera_buffer       >(&shader_resources.camera_interface);
     m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(config.renderer.max_draw_count);
-    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(shader_resources.primitive_interface);
+    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(&shader_resources.primitive_interface);
 
     const auto reverse_depth = config.graphics.reverse_depth;
 
