@@ -46,9 +46,11 @@ auto make_static_compound_shape_settings(
 Jolt_compound_shape::Jolt_compound_shape(
     const Compound_shape_create_info& create_info
 )
-    : m_shape_settings{make_static_compound_shape_settings(create_info)}
 {
-    const auto result = m_shape_settings.Create();
+    m_shape_settings = new JPH::StaticCompoundShapeSettings(
+        make_static_compound_shape_settings(create_info)
+    );
+    const auto result = m_shape_settings->Create();
     ERHE_VERIFY(result.IsValid());
     m_jolt_shape = result.Get();
 }

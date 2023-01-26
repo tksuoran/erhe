@@ -8,7 +8,6 @@
 #include <memory>
 
 struct XrCompositionLayerProjectionView;
-//struct XrFrameState;
 
 namespace erhe::toolkit {
 
@@ -19,6 +18,7 @@ class Context_window;
 namespace erhe::xr {
 
 class Render_view;
+class Xr_actions;
 class Xr_instance;
 class Xr_session;
 class Xr_configuration;
@@ -35,29 +35,26 @@ public:
 class Headset final
 {
 public:
-    explicit Headset(erhe::toolkit::Context_window* window, const Xr_configuration& configuration);
-    ~Headset        () noexcept;
+    Headset(erhe::toolkit::Context_window* window, const Xr_configuration& configuration);
+    ~Headset() noexcept;
 
-    auto is_valid       () const -> bool;
-    auto begin_frame    () -> Frame_timing;
-    auto render         (std::function<bool(Render_view&)> render_view_callback) -> bool;
-    auto end_frame      (bool rendered) -> bool;
-    auto trigger_value  () const -> const XrActionStateFloat*;
-    auto trigger_click  () const -> const XrActionStateBoolean*;
-    auto menu_click     () const -> const XrActionStateBoolean*;
-    auto squeeze_click  () const -> const XrActionStateBoolean*;
-    auto controller_pose() const -> Pose; // TODO const XrActionStatePose*;
-    auto trackpad_touch () const -> const XrActionStateBoolean*;
-    auto trackpad_click () const -> const XrActionStateBoolean*;
-    auto trackpad       () const -> const XrActionStateVector2f*;
+    auto is_valid   () const -> bool;
+    auto begin_frame() -> Frame_timing;
+    auto render     (std::function<bool(Render_view&)> render_view_callback) -> bool;
+    auto end_frame  (bool rendered) -> bool;
+    [[nodiscard]] auto get_actions_left        ()       ->       Xr_actions&;
+    [[nodiscard]] auto get_actions_left        () const -> const Xr_actions&;
+    [[nodiscard]] auto get_actions_right       ()       ->       Xr_actions&;
+    [[nodiscard]] auto get_actions_right       () const -> const Xr_actions&;
     [[nodiscard]] auto get_hand_tracking_joint (const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint;
     [[nodiscard]] auto get_hand_tracking_active(const XrHandEXT hand) const -> bool;
     [[nodiscard]] auto get_view_in_world       () const -> glm::mat4;
+    [[nodiscard]] auto get_xr_instance         () -> Xr_instance&;
+    [[nodiscard]] auto get_xr_session          () -> Xr_session&;
 
 private:
     std::unique_ptr<Xr_instance> m_xr_instance;
     std::unique_ptr<Xr_session > m_xr_session;
-    Pose                         m_controller_pose;
 };
 
 }

@@ -15,11 +15,11 @@
 namespace hextiles
 {
 
-auto Map_primary_brush_command::try_call(erhe::application::Command_context& context) -> bool
+auto Map_primary_brush_command::try_call(erhe::application::Input_arguments& input) -> bool
 {
     if (get_command_state() == erhe::application::State::Ready)
     {
-        set_active(context);
+        set_active();
     }
 
     if (get_command_state() != erhe::application::State::Active)
@@ -27,11 +27,11 @@ auto Map_primary_brush_command::try_call(erhe::application::Command_context& con
         return false;
     }
 
-    g_map_editor->primary_brush(context.get_vec2_absolute_value());
+    g_map_editor->primary_brush(input.vec2_absolute_value);
     return true;
 }
 
-void Map_primary_brush_command::try_ready(erhe::application::Command_context& context)
+void Map_primary_brush_command::try_ready(erhe::application::Input_arguments& input)
 {
     if (get_command_state() != erhe::application::State::Inactive)
     {
@@ -39,13 +39,13 @@ void Map_primary_brush_command::try_ready(erhe::application::Command_context& co
     }
 
     // TODO only set ready when hovering over map
-    set_ready(context);
-    g_map_editor->primary_brush(context.get_vec2_absolute_value());
+    set_ready();
+    g_map_editor->primary_brush(input.vec2_absolute_value);
 }
 
-auto Map_hover_command::try_call(erhe::application::Command_context& context) -> bool
+auto Map_hover_command::try_call(erhe::application::Input_arguments& input) -> bool
 {
-    g_map_editor->hover(context.get_vec2_absolute_value());
+    g_map_editor->hover(input.vec2_absolute_value);
     return false;
 }
 

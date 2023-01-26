@@ -827,13 +827,13 @@ private:
         std::set<glm::vec3::length_type> used_axis;
 
         const vec3 bounding_box_size0 = max_corner - min_corner;
-        const auto axis0 = erhe::toolkit::max_axis_index(bounding_box_size0);
+        const auto axis0 = erhe::toolkit::max_axis_index<float>(bounding_box_size0);
         available_axis.erase(axis0);
         used_axis.insert(axis0);
         vec3 bounding_box_size1 = bounding_box_size0;
         bounding_box_size1[axis0] = 0.0f;
 
-        auto axis1 = erhe::toolkit::max_axis_index(bounding_box_size1);
+        auto axis1 = erhe::toolkit::max_axis_index<float>(bounding_box_size1);
         if (used_axis.count(axis1) > 0)
         {
             axis1 = *available_axis.begin();
@@ -843,7 +843,7 @@ private:
 
         vec3 bounding_box_size2 = bounding_box_size1;
         bounding_box_size2[axis1] = 0.0f;
-        auto axis2 = erhe::toolkit::max_axis_index(bounding_box_size2);
+        auto axis2 = erhe::toolkit::max_axis_index<float>(bounding_box_size2);
         if (used_axis.count(axis2) > 0)
         {
             axis2 = * available_axis.begin();

@@ -129,10 +129,10 @@ auto from_erhe(const erhe::toolkit::Keycode keycode) -> ImGuiKey
 
 void update_key_modifiers(ImGuiIO& io, uint32_t modifier_mask)
 {
-    io.AddKeyEvent(ImGuiKey_ModCtrl,  (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) != 0);
-    io.AddKeyEvent(ImGuiKey_ModShift, (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) != 0);
-    io.AddKeyEvent(ImGuiKey_ModAlt,   (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) != 0);
-    io.AddKeyEvent(ImGuiKey_ModSuper, (modifier_mask & erhe::toolkit::Key_modifier_bit_super) != 0);
+    io.AddKeyEvent(ImGuiMod_Ctrl,  (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) != 0);
+    io.AddKeyEvent(ImGuiMod_Shift, (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) != 0);
+    io.AddKeyEvent(ImGuiMod_Alt,   (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) != 0);
+    io.AddKeyEvent(ImGuiMod_Super, (modifier_mask & erhe::toolkit::Key_modifier_bit_super) != 0);
 }
 
 }
@@ -144,7 +144,7 @@ Imgui_viewport::Imgui_viewport(
 )
     : Rendergraph_node{fmt::format("Viewport {}", name)}
     , m_name          {name}
-    , m_imgui_ini_path   {imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
+    , m_imgui_ini_path{imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
 
 {
     log_imgui->info("creating imgui viewport {}", name);
@@ -161,7 +161,7 @@ Imgui_viewport::Imgui_viewport(
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_input(
-        erhe::application::Resource_routing::None,
+        Resource_routing::None,
         "window",
         Rendergraph_node_key::window
     );
@@ -237,42 +237,40 @@ void Imgui_viewport::on_cursor_enter(int entered)
 }
 
 void Imgui_viewport::on_mouse_move(
-    const double x,
-    const double y
+    const float x,
+    const float y
 )
 {
-    // SPDLOG_LOGGER_TRACE(
-    //     log_imgui,
-    //     "imgui viewport {} on_mouse_move({}, {})",
-    //     m_name,
-    //     x,
-    //     y
-    // );
-
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMousePosEvent(static_cast<float>(x), static_cast<float>(y));
+    io.AddMousePosEvent(x, y);
 }
 
-void Imgui_viewport::on_mouse_click(
+auto Imgui_viewport::get_mouse_position() const -> glm::vec2
+{
+    ImGuiIO& io = m_imgui_context->IO;
+    return glm::vec2{io.MousePos.x, io.MousePos.y};
+}
+
+void Imgui_viewport::on_mouse_button(
     const uint32_t button,
-    const int      count
+    const bool     pressed
 )
 {
     SPDLOG_LOGGER_TRACE(
         log_imgui,
-        "imgui viewport {} on_mouse_click(button = {}, count = {})",
+        "imgui viewport {} on_mouse_button(button = {}, action = {})",
         m_name,
         button,
-        count
+        pressed ? "pressed" : "released"
     );
 
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMouseButtonEvent(button, count > 0);
+    io.AddMouseButtonEvent(button, pressed);
 }
 
 void Imgui_viewport::on_mouse_wheel(
-    const double x,
-    const double y
+    const float x,
+    const float y
 )
 {
     SPDLOG_LOGGER_TRACE(
@@ -284,10 +282,7 @@ void Imgui_viewport::on_mouse_wheel(
     );
 
     ImGuiIO& io = m_imgui_context->IO;
-    io.AddMouseWheelEvent(
-        static_cast<float>(x),
-        static_cast<float>(y)
-    );
+    io.AddMouseWheelEvent(x, y);
 }
 
 void Imgui_viewport::on_key(
@@ -377,18 +372,18 @@ void Imgui_viewport::on_cursor_enter(int entered)
     static_cast<void>(entered);
 }
 
-void Imgui_viewport::on_mouse_click(
+void Imgui_viewport::on_mouse_button(
     const uint32_t button,
-    const int      count
+    const bool     pressed
 )
 {
     static_cast<void>(button);
-    static_cast<void>(count);
+    static_cast<void>(pressed);
 }
 
 void Imgui_viewport::on_mouse_wheel(
-    const double x,
-    const double y
+    const float x,
+    const float y
 )
 {
     static_cast<void>(x);

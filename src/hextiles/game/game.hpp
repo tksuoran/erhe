@@ -39,7 +39,7 @@ public:
     }
     ~Move_unit_command() noexcept final {}
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 
 private:
     direction_t m_direction;
@@ -56,7 +56,7 @@ public:
     }
     ~Select_unit_command() noexcept final {}
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 
 private:
     int m_direction;

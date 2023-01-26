@@ -28,7 +28,7 @@ class Imgui_windows
     : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_type_name{"erhe::application::Imgui_windows"};
+    static constexpr std::string_view c_type_name{"Imgui_windows"};
     static constexpr std::string_view c_title{"ImGui Windows"};
     static constexpr uint32_t         c_type_hash{
         compiletime_xxhash::xxh32(
@@ -61,13 +61,14 @@ public:
     [[nodiscard]] auto want_capture_mouse   () const -> bool;
 
     // NOTE: Same interface as Imgui_viewport
+    // Forwards events to each window
     void on_key         (signed int keycode, uint32_t modifier_mask, bool pressed);
     void on_char        (unsigned int codepoint);
     void on_focus       (int focused);
     void on_cursor_enter(int entered);
-    void on_mouse_move  (double x, double y);
-    void on_mouse_click (uint32_t button, int count);
-    void on_mouse_wheel (double x, double y);
+    void on_mouse_move  (float x, float y);
+    void on_mouse_button(uint32_t button, bool pressed);
+    void on_mouse_wheel (float x, float y);
 
 private:
     std::mutex                                   m_mutex;

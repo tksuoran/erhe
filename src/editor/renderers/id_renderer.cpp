@@ -74,30 +74,9 @@ Id_renderer::Id_frame_resources::Id_frame_resources(const std::size_t slot)
     pixel_pack_buffer.set_debug_label(fmt::format("ID Pixel Pack {}", slot));
 }
 
-Id_renderer::Id_frame_resources::Id_frame_resources(Id_frame_resources&& other) noexcept
-    : pixel_pack_buffer{std::move(other.pixel_pack_buffer)}
-    , data             {std::move(other.data)}
-    , time             {other.time}
-    , sync             {other.sync}
-    , clip_from_world  {other.clip_from_world}
-    , x_offset         {other.x_offset}
-    , y_offset         {other.y_offset}
-    , state            {other.state}
-{
-}
+Id_renderer::Id_frame_resources::Id_frame_resources(Id_frame_resources&& other) noexcept = default;
 
-auto Id_renderer::Id_frame_resources::operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources&
-{
-    pixel_pack_buffer = std::move(other.pixel_pack_buffer);
-    data              = std::move(other.data);
-    time              = other.time;
-    sync              = other.sync;
-    clip_from_world   = other.clip_from_world;
-    x_offset          = other.x_offset;
-    y_offset          = other.y_offset;
-    state             = other.state;
-    return *this;
-}
+auto Id_renderer::Id_frame_resources::operator=(Id_frame_resources&& other) noexcept -> Id_frame_resources& = default;
 
 Id_renderer* g_id_renderer{nullptr};
 
@@ -366,7 +345,6 @@ void Id_renderer::render(const Render_parameters& parameters)
     const auto* camera             = parameters.camera;
     const auto& content_mesh_spans = parameters.content_mesh_spans;
     const auto& tool_mesh_spans    = parameters.tool_mesh_spans;
-    const auto  time               = parameters.time;
     const auto  x                  = parameters.x;
     const auto  y                  = parameters.y;
 
@@ -390,7 +368,6 @@ void Id_renderer::render(const Render_parameters& parameters)
     const mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
 
     auto& idr = current_id_frame_resources();
-    idr.time            = time;
     idr.x_offset        = std::max(x - (static_cast<int>(s_extent / 2)), 0);
     idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     idr.clip_from_world = clip_from_world;

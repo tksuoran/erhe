@@ -27,11 +27,11 @@ public:
 
     auto get_shape_settings() -> JPH::ShapeSettings& override
     {
-        return m_shape_settings;
+        return *m_shape_settings.GetPtr();
     }
 
 private:
-    JPH::StaticCompoundShapeSettings m_shape_settings;
+    JPH::Ref<JPH::StaticCompoundShapeSettings> m_shape_settings;
 };
 
 } // namespace erhe::physics

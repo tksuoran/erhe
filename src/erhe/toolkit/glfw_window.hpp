@@ -63,7 +63,7 @@ public:
     void break_event_loop   ();
     void enter_event_loop   ();
     void poll_events        ();
-    void get_cursor_position(double& xpos, double& ypos);
+    void get_cursor_position(float& xpos, float& ypos);
     void set_visible        (const bool visible);
     void set_cursor         (const Mouse_cursor cursor);
     void capture_mouse      (const bool capture);

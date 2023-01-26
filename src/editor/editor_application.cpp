@@ -248,7 +248,10 @@ void Application_impl::init_window(
     const erhe::application::Configuration::Window_entry& config
 ) const
 {
-    if (config.hud_window)
+    if (
+        (erhe::application::g_configuration->headset.openxr && config.window) ||
+        config.hud_window
+    )
     {
         const auto viewport = hud.get_rendertarget_imgui_viewport();
         if (viewport)

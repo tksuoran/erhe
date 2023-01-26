@@ -6,6 +6,8 @@
 #   include <imgui.h>
 #endif
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 #include <string_view>
 
@@ -56,9 +58,11 @@ public:
     void on_char        (unsigned int codepoint);
     void on_focus       (int focused);
     void on_cursor_enter(int entered);
-    void on_mouse_move  (double x, double y);
-    void on_mouse_click (uint32_t button, int count);
-    void on_mouse_wheel (double x, double y);
+    void on_mouse_move  (float x, float y);
+    void on_mouse_button(uint32_t button, bool pressed);
+    void on_mouse_wheel (float x, float y);
+
+    auto get_mouse_position() const -> glm::vec2;
 
 protected:
     std::string m_name;

@@ -30,6 +30,8 @@ class Tool
     : public erhe::application::Command_host
 {
 public:
+    ~Tool() noexcept override;
+
     // Implements Command_host
     [[nodiscard]] auto get_priority() const -> int override;
 
@@ -56,9 +58,9 @@ protected:
     void set_icon         (glm::vec2 icon);
 
 private:
-    int                      m_base_priority   {0};
-    int                      m_priority_boost  {0};
-    uint64_t                 m_flags           {0};
+    int                      m_base_priority     {0};
+    int                      m_priority_boost    {0};
+    uint64_t                 m_flags             {0};
     std::optional<glm::vec2> m_icon;
     Scene_view*              m_hover_scene_view{nullptr};
 };

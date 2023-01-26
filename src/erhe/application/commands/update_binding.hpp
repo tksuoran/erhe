@@ -7,7 +7,7 @@
 namespace erhe::application {
 
 class Command;
-class Command_context;
+class Input_arguments;
 
 class Update_binding
     : public Command_binding
@@ -24,7 +24,7 @@ public:
 
     [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Update; }
 
-    virtual auto on_update(Command_context& context) -> bool;
+    virtual auto on_update(Input_arguments& input) -> bool;
 };
 
 

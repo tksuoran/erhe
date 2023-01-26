@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe/xr/xr_action.hpp"
+
 //#include <openxr/openxr.h>
 
 #ifdef _WIN32
@@ -16,6 +18,12 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
+#include "etl/vector.h"
+
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace erhe::xr {
@@ -34,11 +42,12 @@ public:
 class Xr_configuration
 {
 public:
-    bool debug          {false};
-    bool quad_view      {false};
-    bool depth          {false};
-    bool visibility_mask{false};
-    bool hand_tracking  {false};
+    bool debug            {false};
+    bool quad_view        {false};
+    bool depth            {false};
+    bool visibility_mask  {false};
+    bool hand_tracking    {false};
+    bool composition_alpha{false};
 };
 
 class Xr_instance
@@ -60,10 +69,12 @@ public:
     auto get_xr_environment_blend_mode  () const -> XrEnvironmentBlendMode;
     auto update_actions                 (Xr_session& session) -> bool;
     auto get_current_interaction_profile(Xr_session& session) -> bool;
+    auto get_configuration              () const -> const Xr_configuration&;
 
     //void set_environment_depth_estimation(XrSession xr_session, bool enabled);
 
     auto initialize_actions             () -> bool;
+    void update_action_bindings         ();
 
     auto debug_utils_messenger_callback(
         XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
@@ -71,55 +82,52 @@ public:
         const XrDebugUtilsMessengerCallbackDataEXT* callbackData
     ) const -> XrBool32;
 
+    auto get_path_string(XrPath path) -> std::string;
+
     class Paths
     {
     public:
-        Xr_path user_head;
-        Xr_path user_hand_left;
-        Xr_path user_hand_right;
-        Xr_path trigger_click;
-        Xr_path trigger_value;
-        Xr_path menu_click;
-        Xr_path squeeze_click;
-        Xr_path trackpad;
-        Xr_path trackpad_click;
-        Xr_path trackpad_touch;
-        Xr_path grip_pose;
-        Xr_path aim_pose;
-        Xr_path haptic;
-        Xr_path a_touch;
-        Xr_path a_click;
-        Xr_path interaction_profile_vive_controller;
-        Xr_path interaction_profile_oculus_go_controller;
-        Xr_path interaction_profile_oculus_touch_controller;
+        XrPath user_head                                  {XR_NULL_PATH};
+        XrPath user_hand_left                             {XR_NULL_PATH};
+        XrPath user_hand_right                            {XR_NULL_PATH};
+        XrPath interaction_profile_khr_simple_controller  {XR_NULL_PATH};
+        XrPath interaction_profile_htc_vive_controller    {XR_NULL_PATH};
+        XrPath interaction_profile_oculus_touch_controller{XR_NULL_PATH};
+        XrPath interaction_profile_valve_index_controller {XR_NULL_PATH};
     };
 
-    class Actions
-    {
-    public:
-        XrActionSet           action_set             {};
-        XrAction              trigger_value          {};
-        XrActionStateFloat    trigger_value_state    {.type = XR_TYPE_ACTION_STATE_FLOAT, .next = nullptr, .currentState = 0.0f, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction              trigger_click          {};
-        XrActionStateBoolean  trigger_click_state    {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction              menu_click             {};
-        XrActionStateBoolean  menu_click_state       {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction              squeeze_click          {};
-        XrActionStateBoolean  squeeze_click_state    {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction              aim_pose               {};
-        XrActionStatePose     aim_pose_state         {.type = XR_TYPE_ACTION_STATE_POSE, .next = nullptr, .isActive = XR_FALSE};
-        XrSpace               aim_pose_space         {};
-        XrSpaceLocation       aim_pose_space_location{.type = XR_TYPE_SPACE_LOCATION, .next = nullptr, .locationFlags = 0};
-        XrAction              trackpad_click         {};
-        XrActionStateBoolean  trackpad_click_state   {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction              trackpad_touch         {};
-        XrActionStateBoolean  trackpad_touch_state   {.type = XR_TYPE_ACTION_STATE_BOOLEAN, .next = nullptr, .currentState = XR_FALSE, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-        XrAction              trackpad               {};
-        XrActionStateVector2f trackpad_state         {.type = XR_TYPE_ACTION_STATE_VECTOR2F, .next = nullptr, .currentState = { .x = 0.0f, .y = 0.f }, .changedSinceLastSync = XR_FALSE, .isActive = XR_FALSE };
-    };
+    Xr_actions actions_left;
+    Xr_actions actions_right;
 
-    Paths   paths;
-    Actions actions;
+    [[nodiscard]] auto create_boolean_action(
+        unsigned int           profile_mask,
+        const std::string_view path_name
+    ) -> Xr_action_boolean*;
+
+    [[nodiscard]] auto create_float_action(
+        unsigned int           profile_mask,
+        const std::string_view path_name
+    ) -> Xr_action_float*;
+
+    [[nodiscard]] auto create_vector2f_action(
+        unsigned int           profile_mask,
+        const std::string_view path_name
+    ) -> Xr_action_vector2f*;
+
+    [[nodiscard]] auto create_pose_action(
+        unsigned int           profile_mask,
+        const std::string_view path_name
+    ) -> Xr_action_pose*;
+
+    static constexpr unsigned int max_action_count = 50;
+    [[nodiscard]] auto get_boolean_actions () -> etl::vector<Xr_action_boolean,  max_action_count>&;
+    [[nodiscard]] auto get_float_actions   () -> etl::vector<Xr_action_float,    max_action_count>&;
+    [[nodiscard]] auto get_vector2f_actions() -> etl::vector<Xr_action_vector2f, max_action_count>&;
+    [[nodiscard]] auto get_pose_actions    () -> etl::vector<Xr_action_pose,     max_action_count>&;
+
+    auto attach_actions(const XrSession session) -> bool;
+
+    Paths                                  paths;
 
     PFN_xrCreateDebugUtilsMessengerEXT     xrCreateDebugUtilsMessengerEXT    {nullptr};
     PFN_xrGetVisibilityMaskKHR             xrGetVisibilityMaskKHR            {nullptr};
@@ -144,11 +152,14 @@ private:
     auto get_system_info                () -> bool;
     auto enumerate_blend_modes          () -> bool;
     auto enumerate_view_configurations  () -> bool;
-    auto path                           (const char* path) -> Xr_path;
+
+    void get_paths();
+    void get_path(const char* path, XrPath& xr_path);
+
+    void collect_bindings(const Xr_action& action);
 
     Xr_configuration                     m_configuration;
 
-    //Xr_session*                          m_session                   {nullptr};
     XrInstance                           m_xr_instance               {XR_NULL_HANDLE};
     XrSystemGetInfo                      m_xr_system_info;
     XrSystemId                           m_xr_system_id{0};
@@ -159,6 +170,17 @@ private:
     std::vector<XrApiLayerProperties>    m_xr_api_layer_properties;
     std::vector<XrEnvironmentBlendMode>  m_xr_environment_blend_modes;
     XrDebugUtilsMessengerEXT             m_debug_utils_messenger;
+
+    XrActionSet                                       m_action_set{};
+    etl::vector<Xr_action_boolean,  max_action_count> m_boolean_actions;
+    etl::vector<Xr_action_float,    max_action_count> m_float_actions;
+    etl::vector<Xr_action_vector2f, max_action_count> m_vector2f_actions;
+    etl::vector<Xr_action_pose,     max_action_count> m_pose_actions;
+    std::vector<XrActionSuggestedBinding> m_khr_simple_bindings;
+    std::vector<XrActionSuggestedBinding> m_oculus_touch_bindings;
+    std::vector<XrActionSuggestedBinding> m_valve_index_bindings;
+    std::vector<XrActionSuggestedBinding> m_htc_vive_bindings;
+
     //PFN_xrSetEnvironmentDepthEstimationVARJO m_xrSetEnvironmentDepthEstimationVARJO{nullptr};
 };
 

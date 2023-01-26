@@ -56,13 +56,13 @@ Jolt_convex_hull_collision_shape::Jolt_convex_hull_collision_shape(
     const int    point_count,
     const int    stride
 )
-    : m_shape_settings{
+{
+    m_shape_settings = new JPH::ConvexHullShapeSettings(
         make_convex_hull_shape_settings(
             point_data, point_count, stride
         )
-    }
-{
-    auto result = m_shape_settings.Create();
+    );
+    auto result = m_shape_settings->Create();
     ERHE_VERIFY(result.IsValid());
     m_jolt_shape = result.Get();
 }

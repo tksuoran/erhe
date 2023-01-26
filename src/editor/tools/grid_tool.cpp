@@ -3,6 +3,7 @@
 #include "editor_rendering.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
+#include "tools/grid.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
@@ -141,35 +142,35 @@ void Grid_tool::viewport_toolbar(bool& hovered)
     }
 }
 
-auto get_plane_transform(Grid_plane_type plane_type) -> glm::dmat4
+auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4
 {
     switch (plane_type)
     {
         case Grid_plane_type::XY:
         {
-            return glm::dmat4{
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0,-1.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0
+            return glm::mat4{
+                1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f,-1.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f
             };
         }
         case Grid_plane_type::XZ:
         {
-            return glm::dmat4{1.0};
+            return glm::mat4{1.0f};
         }
         case Grid_plane_type::YZ:
         {
-            return glm::dmat4{
-                0.0, 1.0, 0.0, 0.0,
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0
+            return glm::mat4{
+                0.0f, 1.0f, 0.0f, 0.0f,
+                1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f
             };
         }
         default:
         {
-            return glm::dmat4{1.0};
+            return glm::mat4{1.0f};
         }
     }
 }
@@ -223,15 +224,15 @@ void Grid_tool::imgui()
 }
 
 auto Grid_tool::update_hover(
-    const glm::dvec3 ray_origin_in_world,
-    const glm::dvec3 ray_direction_in_world
+    const glm::vec3 ray_origin_in_world,
+    const glm::vec3 ray_direction_in_world
 ) const -> Grid_hover_position
 {
     Grid_hover_position result
     {
         .grid = nullptr
     };
-    double min_distance = std::numeric_limits<double>::max();
+    float min_distance = std::numeric_limits<float>::max();
 
     if (m_enable)
     {
@@ -242,8 +243,8 @@ auto Grid_tool::update_hover(
             {
                 continue;
             }
-            const glm::dvec3 position_in_world = position_in_world_opt.value();
-            const double     distance          = glm::distance(ray_origin_in_world, position_in_world);
+            const glm::vec3 position_in_world = position_in_world_opt.value();
+            const float     distance          = glm::distance(ray_origin_in_world, position_in_world);
             if (distance < min_distance)
             {
                 min_distance    = distance;

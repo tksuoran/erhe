@@ -66,9 +66,10 @@ void Fly_camera_space_mouse_listener::on_button(const int)
 #endif
 
 void Fly_camera_turn_command::try_ready(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 )
 {
+    static_cast<void>(input);
     if (g_fly_camera_tool == nullptr)
     {
         return;
@@ -76,7 +77,7 @@ void Fly_camera_turn_command::try_ready(
 
     if (g_fly_camera_tool->try_ready())
     {
-        set_ready(context);
+        set_ready();
     }
 }
 
@@ -101,7 +102,7 @@ auto Fly_camera_tool::try_ready() -> bool
     {
         // Exclude safe border near viewport edges from mouse interaction
         // to filter out viewport window resizing for example.
-        const auto position_opt = scene_view->get_position_in_viewport();
+        const auto position_opt = viewport_window->get_position_in_viewport();
         if (!position_opt.has_value())
         {
             return false;
@@ -126,11 +127,10 @@ auto Fly_camera_tool::try_ready() -> bool
 Fly_camera_turn_command::Fly_camera_turn_command()
     : Command{"Fly_camera.turn_camera"}
 {
-    set_host(g_fly_camera_tool);
 }
 
 auto Fly_camera_turn_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
     if (g_fly_camera_tool == nullptr)
@@ -138,17 +138,17 @@ auto Fly_camera_turn_command::try_call(
         return false;
     }
 
+    const auto value = input.vec2_relative_value;
     if (get_command_state() == erhe::application::State::Ready)
     {
         if (g_fly_camera_tool->get_hover_scene_view() == nullptr)
         {
-            set_inactive(context);
+            set_inactive();
             return false;
         }
-        const auto value = context.get_vec2_relative_value();
         if ((value.x != 0.0f) || (value.y != 0.0f))
         {
-            set_active(context);
+            set_active();
         }
     }
 
@@ -157,8 +157,7 @@ auto Fly_camera_turn_command::try_call(
         return false;
     }
 
-    const auto relative = context.get_vec2_relative_value();
-    g_fly_camera_tool->turn_relative(-relative.x, -relative.y);
+    g_fly_camera_tool->turn_relative(-value.x, -value.y);
     return true;
 }
 
@@ -172,14 +171,13 @@ Fly_camera_move_command::Fly_camera_move_command(
     , m_item   {item             }
     , m_active {active           }
 {
-    set_host(g_fly_camera_tool);
 }
 
 auto Fly_camera_move_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
     if (g_fly_camera_tool == nullptr)
     {
         return false;
@@ -220,6 +218,19 @@ Fly_camera_tool::~Fly_camera_tool() noexcept
 void Fly_camera_tool::deinitialize_component()
 {
     ERHE_VERIFY(g_fly_camera_tool == this);
+    m_turn_command                  .set_host(nullptr);
+    m_move_up_active_command        .set_host(nullptr);
+    m_move_up_inactive_command      .set_host(nullptr);
+    m_move_down_active_command      .set_host(nullptr);
+    m_move_down_inactive_command    .set_host(nullptr);
+    m_move_left_active_command      .set_host(nullptr);
+    m_move_left_inactive_command    .set_host(nullptr);
+    m_move_right_active_command     .set_host(nullptr);
+    m_move_right_inactive_command   .set_host(nullptr);
+    m_move_forward_active_command   .set_host(nullptr);
+    m_move_forward_inactive_command .set_host(nullptr);
+    m_move_backward_active_command  .set_host(nullptr);
+    m_move_backward_inactive_command.set_host(nullptr);
     m_camera_controller.reset();
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
     m_space_mouse_listener.set_active(false);
@@ -296,6 +307,20 @@ void Fly_camera_tool::initialize_component()
             Tool::on_message(message);
         }
     );
+
+    m_turn_command                  .set_host(this);
+    m_move_up_active_command        .set_host(this);
+    m_move_up_inactive_command      .set_host(this);
+    m_move_down_active_command      .set_host(this);
+    m_move_down_inactive_command    .set_host(this);
+    m_move_left_active_command      .set_host(this);
+    m_move_left_inactive_command    .set_host(this);
+    m_move_right_active_command     .set_host(this);
+    m_move_right_inactive_command   .set_host(this);
+    m_move_forward_active_command   .set_host(this);
+    m_move_forward_inactive_command .set_host(this);
+    m_move_backward_active_command  .set_host(this);
+    m_move_backward_inactive_command.set_host(this);
 
     g_fly_camera_tool = this;
 }
@@ -423,7 +448,7 @@ auto Fly_camera_tool::try_move(
     return true;
 }
 
-auto Fly_camera_tool::turn_relative(const double dx, const double dy) -> bool
+auto Fly_camera_tool::turn_relative(const float dx, const float dy) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
@@ -435,13 +460,13 @@ auto Fly_camera_tool::turn_relative(const double dx, const double dy) -> bool
 
     if (dx != 0.0f)
     {
-        const float value = static_cast<float>(m_sensitivity * dx * m_rotate_scale_x);
+        const float value = m_sensitivity * dx * m_rotate_scale_x;
         m_camera_controller->rotate_y.adjust(value);
     }
 
     if (dy != 0.0f)
     {
-        const float value = static_cast<float>(m_sensitivity * dy * m_rotate_scale_y);
+        const float value = m_sensitivity * dy * m_rotate_scale_y;
         m_camera_controller->rotate_x.adjust(value);
     }
 

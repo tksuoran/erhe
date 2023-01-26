@@ -87,7 +87,7 @@ void Null_world::remove_constraint(IConstraint* constraint)
     );
 }
 
-void Null_world::set_gravity(const glm::vec3 gravity)
+void Null_world::set_gravity(const glm::vec3& gravity)
 {
     m_gravity = gravity;
 }

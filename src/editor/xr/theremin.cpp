@@ -122,17 +122,16 @@ auto c_str(const Note note) -> const char*
 
 auto midi_note_to_frequency(const int p) -> float
 {
-    const double f = std::pow(
-        2.0,
-        static_cast<double>(p - 69) / 12.0
-    ) * 440.0;
-    return static_cast<float>(f);
+    return std::pow(
+        2.0f,
+        static_cast<float>(p - 69) / 12.0f
+    ) * 440.0f;
 }
 
 auto frequency_to_midi_note(const float f) -> int
 {
-    const double p = 69 + 12 * std::log2(static_cast<double>(f) / 440.0);
-    const double rp = std::round(p);
+    const float p = 69.0f + 12.0f * std::log2(static_cast<float>(f) / 440.0f);
+    const float rp = std::round(p);
     return static_cast<int>(rp);
 }
 

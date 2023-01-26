@@ -69,8 +69,8 @@ public:
         const erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
         const erhe::graphics::Vertex_format&             vertex_format,
         erhe::graphics::Shader_stages*                   shader_stages,
-        erhe::application::Multi_buffer&                 vertex_buffer,
-        erhe::application::Multi_buffer&                 index_buffer
+        Multi_buffer&                                    vertex_buffer,
+        Multi_buffer&                                    index_buffer
     );
 
     [[nodiscard]] auto current_pipeline() -> erhe::graphics::Pipeline&;
@@ -113,11 +113,11 @@ public:
     erhe::graphics::Shader_resource                default_uniform_block; // containing sampler uniforms for non bindless textures
     std::unique_ptr<erhe::graphics::Shader_stages> shader_stages;
 
-    erhe::application::Multi_buffer vertex_buffer;
-    erhe::application::Multi_buffer index_buffer;
-    erhe::application::Multi_buffer draw_parameter_buffer;
-    erhe::application::Multi_buffer draw_indirect_buffer;
-    Multi_pipeline                  pipeline;
+    Multi_buffer   vertex_buffer;
+    Multi_buffer   index_buffer;
+    Multi_buffer   draw_parameter_buffer;
+    Multi_buffer   draw_indirect_buffer;
+    Multi_pipeline pipeline;
 };
 
 class Imgui_renderer
@@ -155,12 +155,12 @@ public:
     ) -> bool;
 
     auto image_button(
+        uint32_t                                        id,
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         int                                             width,
         int                                             height,
         glm::vec2                                       uv0              = {0.0f, 1.0f},
         glm::vec2                                       uv1              = {1.0f, 0.0f},
-        int                                             frame_padding    = -1,
         glm::vec4                                       background_color = {0.0f, 0.0f, 0.0f, 0.0f},
         glm::vec4                                       tint_color       = {1.0f, 1.0f, 1.0f, 1.0f},
         bool                                            linear           = true

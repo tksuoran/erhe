@@ -217,6 +217,10 @@ void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
     {
         for (const auto& window : m_imgui_windows)
         {
+            if (!window->show_in_menu())
+            {
+                continue;
+            }
             bool enabled = window->is_visible();
             if (ImGui::MenuItem(window->title().data(), "", &enabled))
             {
@@ -303,8 +307,8 @@ void Imgui_windows::on_cursor_enter(int entered)
 }
 
 void Imgui_windows::on_mouse_move(
-    const double x,
-    const double y
+    const float x,
+    const float y
 )
 {
     if (!m_window_imgui_viewport)
@@ -312,26 +316,33 @@ void Imgui_windows::on_mouse_move(
         return;
     }
 
+    // for (auto& imgui_window : m_imgui_windows)
+    // {
+    //     if (imgui_window->is_hovered())
+    //     {
+    //     }
+    // }
+
     Scoped_imgui_context scoped_imgui_context{*m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_mouse_move(x, y);
 }
 
-void Imgui_windows::on_mouse_click(
+void Imgui_windows::on_mouse_button(
     const uint32_t button,
-    const int      count
+    const bool     pressed
 )
 {
     for (const auto& viewport : m_imgui_viewports)
     {
         Scoped_imgui_context scoped_imgui_context{*viewport.get()};
-        viewport->on_mouse_click(button, count);
+        viewport->on_mouse_button(button, pressed);
     }
 }
 
 void Imgui_windows::on_mouse_wheel(
-    const double x,
-    const double y
+    const float x,
+    const float y
 )
 {
     for (const auto& viewport : m_imgui_viewports)

@@ -1,11 +1,12 @@
-#include "erhe/application/commands/mouse_click_binding.hpp"
+#include "erhe/application/commands/mouse_button_binding.hpp"
 #include "erhe/application/commands/command.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/application_log.hpp"
 
 namespace erhe::application {
 
-Mouse_click_binding::Mouse_click_binding(
+Mouse_button_binding::Mouse_button_binding(
     Command* const                    command,
     const erhe::toolkit::Mouse_button button
 )
@@ -14,36 +15,36 @@ Mouse_click_binding::Mouse_click_binding(
 {
 }
 
-Mouse_click_binding::Mouse_click_binding()
+Mouse_button_binding::Mouse_button_binding()
 {
 }
 
-Mouse_click_binding::~Mouse_click_binding() noexcept
+Mouse_button_binding::~Mouse_button_binding() noexcept
 {
 }
 
-Mouse_click_binding::Mouse_click_binding(Mouse_click_binding&& other) noexcept
+Mouse_button_binding::Mouse_button_binding(Mouse_button_binding&& other) noexcept
     : Mouse_binding{std::move(other)}
     , m_button     {other.m_button}
 {
 }
 
-auto Mouse_click_binding::operator=(Mouse_click_binding&& other) noexcept -> Mouse_click_binding&
+auto Mouse_button_binding::operator=(Mouse_button_binding&& other) noexcept -> Mouse_button_binding&
 {
     Mouse_binding::operator=(std::move(other));
     this->m_button = other.m_button;
     return *this;
 }
 
-[[nodiscard]] auto Mouse_click_binding::get_button() const -> erhe::toolkit::Mouse_button
+[[nodiscard]] auto Mouse_button_binding::get_button() const -> erhe::toolkit::Mouse_button
 {
     return m_button;
 }
 
-auto Mouse_click_binding::on_button(
-    Command_context&                  context,
+auto Mouse_button_binding::on_button(
+    Input_arguments&                  input,
     const erhe::toolkit::Mouse_button button,
-    const int                         count
+    const bool                        pressed
 ) -> bool
 {
     if (m_button != button)
@@ -58,44 +59,45 @@ auto Mouse_click_binding::on_button(
         return false;
     }
 
-    if (!context.accept_mouse_command(command))
+    if (!g_commands->accept_mouse_command(command))
     {
         // Paranoid check
         if (command->get_command_state() != State::Inactive)
         {
-            command->set_inactive(context);
+            command->set_inactive();
         }
         return false;
     }
 
-    // Mouse button down
-    if (count > 0)
+    if (pressed)
     {
         if (command->get_command_state() == State::Inactive)
         {
-            command->try_ready(context);
+            command->try_ready(input);
         }
         return false;
     }
-    else // count == 0
+    else
     {
         bool consumed{false};
         if (command->get_command_state() == State::Ready)
         {
-            consumed = command->try_call(context);
+            consumed = command->try_call(input);
             log_input_event_consumed->trace(
                 "{} consumed mouse button {} click",
                 command->get_name(),
                 erhe::toolkit::c_str(button)
             );
         }
-        command->set_inactive(context);
+        command->set_inactive();
         return consumed;
     }
 }
 
-auto Mouse_click_binding::on_motion(Command_context& context) -> bool
+auto Mouse_button_binding::on_motion(Input_arguments& input) -> bool
 {
+    static_cast<void>(input);
+
     auto* const command = get_command();
 
     if (command->get_command_state() == State::Disabled)
@@ -106,7 +108,7 @@ auto Mouse_click_binding::on_motion(Command_context& context) -> bool
     // Motion when not in Inactive state -> transition to inactive state
     if (command->get_command_state() != State::Inactive)
     {
-        command->set_inactive(context);
+        command->set_inactive();
     }
 
     return false;

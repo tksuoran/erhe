@@ -56,6 +56,11 @@ Icon_set::Icon_set()
 
 Icon_set::~Icon_set()
 {
+    ERHE_VERIFY(g_icon_set == nullptr);
+}
+
+void Icon_set::deinitialize_component()
+{
     ERHE_VERIFY(g_icon_set == this);
     g_icon_set = nullptr;
 }
@@ -277,8 +282,8 @@ void Icon_rasterization::icon(
 }
 
 auto Icon_rasterization::icon_button(
+    const uint32_t  id,
     const glm::vec2 uv0,
-    const int       frame_padding,
     const glm::vec4 background_color,
     const glm::vec4 tint_color,
     const bool      linear
@@ -293,12 +298,12 @@ auto Icon_rasterization::icon_button(
     ERHE_VERIFY(erhe::application::g_imgui_renderer != nullptr);
 
     const bool result = erhe::application::g_imgui_renderer->image_button(
+        id,
         m_texture,
         m_icon_width,
         m_icon_height,
         uv0,
         uv1(uv0),
-        frame_padding,
         background_color,
         tint_color,
         linear

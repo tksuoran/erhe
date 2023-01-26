@@ -17,13 +17,6 @@ class View_client
 {
 public:
     virtual void update() = 0;
-    virtual void update_keyboard(
-        const bool                   pressed,
-        const erhe::toolkit::Keycode code,
-        const uint32_t               modifier_mask
-    ) = 0;
-    virtual void update_mouse(const erhe::toolkit::Mouse_button button, const int count) = 0;
-    virtual void update_mouse(const double x, const double y) = 0;
 };
 
 class Render_task
@@ -67,14 +60,21 @@ public:
     void on_cursor_enter(int entered) override;
     void on_refresh     () override;
     void on_enter       () override;
-    void on_mouse_move  (const double x, const double y) override;
-    void on_mouse_click (const erhe::toolkit::Mouse_button button, const int count) override;
-    void on_mouse_wheel (const double x, const double y) override;
-    void on_key         (const erhe::toolkit::Keycode code, const uint32_t modifier_mask, const bool pressed) override;
-    void on_char        (const unsigned int codepoint) override;
+    void on_mouse_move  (float x, float y) override;
+    void on_mouse_button(erhe::toolkit::Mouse_button button, bool pressed) override;
+    void on_mouse_wheel (float x, float y) override;
+    void on_key         (erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed) override;
+    void on_char        (unsigned int codepoint) override;
 
     // Public API
     void set_client(View_client* view_client);
+
+    [[nodiscard]] auto shift_key_down       () const -> bool;
+    [[nodiscard]] auto control_key_down     () const -> bool;
+    [[nodiscard]] auto alt_key_down         () const -> bool;
+    [[nodiscard]] auto mouse_button_pressed (erhe::toolkit::Mouse_button button) const -> bool;
+    [[nodiscard]] auto mouse_button_released(erhe::toolkit::Mouse_button button) const -> bool;
+    [[nodiscard]] auto mouse_position       () const -> glm::vec2;
 
     [[nodiscard]] auto view_client() const -> View_client*;
 
@@ -82,6 +82,19 @@ private:
     View_client* m_view_client    {nullptr};
     bool         m_ready          {false};
     bool         m_close_requested{false};
+
+    class Mouse_button
+    {
+    public:
+        bool pressed {false};
+        bool released{false};
+    };
+
+    bool      m_mouse_button[static_cast<int>(erhe::toolkit::Mouse_button_count)]{};
+    glm::vec2 m_mouse_position{0.0f, 0.0f};
+    bool      m_shift  {false};
+    bool      m_control{false};
+    bool      m_alt    {false};
 };
 
 extern View* g_view;

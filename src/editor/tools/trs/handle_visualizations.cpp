@@ -544,6 +544,7 @@ void Handle_visualizations::imgui()
 
 void Handle_visualizations::viewport_toolbar(bool& hovered)
 {
+    ImGui::PushID("Handle_visualizations::viewport_toolbar");
     const auto& icon_rasterication = g_icon_set->get_small_rasterization();
 
     //ImGui::SameLine();
@@ -588,11 +589,10 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
 
         erhe::application::begin_button_style(mode);
         const bool translate_pressed = icon_rasterication.icon_button(
+            ERHE_HASH("move"),
             g_icon_set->icons.move,
-            -1,
             glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-            false
+            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
         );
         erhe::application::end_button_style(mode);
         if (ImGui::IsItemHovered())
@@ -618,11 +618,10 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
             : erhe::application::Item_mode::normal;
         erhe::application::begin_button_style(mode);
         const bool rotate_pressed = icon_rasterication.icon_button(
+            ERHE_HASH("rotate"),
             g_icon_set->icons.rotate,
-            -1,
             glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
-            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
-            false
+            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
         );
         erhe::application::end_button_style(mode);
         if (ImGui::IsItemHovered())
@@ -640,6 +639,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
             update_visibility(!m_root.expired());
         }
     }
+    ImGui::PopID();
 }
 
 } // namespace editor

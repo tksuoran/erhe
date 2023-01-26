@@ -75,11 +75,11 @@ public:
     void tool_render(const Render_context& context) override;
 
     // Public API
-    void render_headset      ();
+    void render_headset  ();
 
-    void begin_frame         ();
-    void add_finger_input    (const Finger_point& finger_point);
-    void add_controller_input(const Controller_input& controller_input);
+    void begin_frame     ();
+    void add_finger_input(const Finger_point& finger_point);
+    void end_frame       ();
 
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
     [[nodiscard]] auto get_headset           () const -> erhe::xr::Headset*;
@@ -110,7 +110,6 @@ private:
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
     std::vector<Finger_point>                            m_finger_inputs;
-    std::vector<Controller_input>                        m_controller_inputs;
     float                                                m_finger_to_viewport_distance_threshold{0.1f};
     bool                                                 m_head_tracking_enabled{true};
     bool                                                 m_mouse_down{false};

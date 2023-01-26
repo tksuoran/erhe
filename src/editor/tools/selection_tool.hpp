@@ -29,7 +29,7 @@ class Selection_tool_delete_command
 public:
     explicit Selection_tool_delete_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Selection_tool_select_command
@@ -37,8 +37,8 @@ class Selection_tool_select_command
 {
 public:
     explicit Selection_tool_select_command();
-    void try_ready(erhe::application::Command_context& context) override;
-    auto try_call (erhe::application::Command_context& context) -> bool override;
+    void try_ready(erhe::application::Input_arguments& input) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Range_selection
@@ -59,6 +59,7 @@ private:
     std::vector<std::shared_ptr<erhe::scene::Item>> m_entries;
 };
 
+
 class Selection_tool
     : public erhe::application::Imgui_window
     , public erhe::components::Component
@@ -74,7 +75,7 @@ public:
     ~Selection_tool() noexcept override;
 
     // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
     void deinitialize_component     () override;

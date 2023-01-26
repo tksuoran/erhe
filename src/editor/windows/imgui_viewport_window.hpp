@@ -56,6 +56,7 @@ public:
     void set_viewport        (erhe::application::Imgui_viewport* imgui_viewport) override;
     auto want_mouse_events   () const -> bool override;
     auto want_keyboard_events() const -> bool override;
+    void on_mouse_move       (glm::vec2 mouse_position_in_window);
 
     // Implements Rendergraph_node
     auto get_consumer_input_viewport(

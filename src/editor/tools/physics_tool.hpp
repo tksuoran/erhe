@@ -48,10 +48,11 @@ class Physics_tool_drag_command
     : public erhe::application::Command
 {
 public:
-    explicit Physics_tool_drag_command();
-    auto try_call   (erhe::application::Command_context& context) -> bool override;
-    void try_ready  (erhe::application::Command_context& context) override;
-    void on_inactive(erhe::application::Command_context& context) override;
+    Physics_tool_drag_command();
+
+    auto try_call   (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready  (erhe::application::Input_arguments& input) override;
+    void on_inactive() override;
 };
 
 class Physics_tool
@@ -60,9 +61,9 @@ class Physics_tool
     , public Tool
 {
 public:
-    static constexpr int              c_priority{2};
-    static constexpr std::string_view c_type_name   {"Physics_tool"};
-    static constexpr std::string_view c_title   {"Physics Tool"};
+    static constexpr int              c_priority {2};
+    static constexpr std::string_view c_type_name{"Physics_tool"};
+    static constexpr std::string_view c_title    {"Physics Tool"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Physics_tool ();
@@ -109,7 +110,11 @@ private:
     [[nodiscard]] auto get_physics_world () const -> erhe::physics::IWorld*;
 
     // Commands
-    Physics_tool_drag_command m_drag_command;
+    Physics_tool_drag_command                    m_drag_command;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::application::Redirect_command          m_drag_redirect_update_command;
+    erhe::application::Drag_enable_float_command m_drag_enable_command;
+#endif
 
     Physics_tool_mode                           m_mode{Physics_tool_mode::Drag};
     erhe::physics::Motion_mode                  m_motion_mode{erhe::physics::Motion_mode::e_kinematic_physical};
@@ -118,10 +123,10 @@ private:
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
     std::shared_ptr<erhe::scene::Mesh>          m_last_target_mesh;
     std::shared_ptr<Node_physics>               m_target_node_physics;
-    double                                      m_target_distance        {1.0};
-    glm::dvec3                                  m_target_position_in_mesh{0.0, 0.0, 0.0};
-    glm::dvec3                                  m_target_position_start  {0.0, 0.0, 0.0};
-    glm::dvec3                                  m_target_position_end    {0.0, 0.0, 0.0};
+    float                                       m_target_distance        {1.0f};
+    glm::vec3                                   m_target_position_in_mesh{0.0f, 0.0f, 0.0f};
+    glm::vec3                                   m_target_position_start  {0.0f, 0.0f, 0.0f};
+    glm::vec3                                   m_target_position_end    {0.0f, 0.0f, 0.0f};
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
     std::shared_ptr<erhe::physics::IRigid_body> m_constraint_world_point_rigid_body;
 
@@ -142,9 +147,9 @@ private:
     float m_original_friction       {0.00f};
     float m_original_gravity        {1.00f};
 
-    glm::dvec3 m_to_end_direction  {0.0};
-    glm::dvec3 m_to_start_direction{0.0};
-    double     m_target_mesh_size  {0.0};
+    glm::vec3 m_to_end_direction  {0.0f};
+    glm::vec3 m_to_start_direction{0.0f};
+    float     m_target_mesh_size  {0.0f};
 
     bool       m_show_drag_body{false};
 

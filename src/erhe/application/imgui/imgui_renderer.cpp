@@ -154,7 +154,7 @@ void Imgui_renderer::deinitialize_component()
 
 void Imgui_renderer::declare_required_components()
 {
-    require<erhe::application::Configuration>();
+    require<Configuration>();
     require<erhe::graphics::OpenGL_state_tracker>();
     require<Gl_context_provider>();
 }
@@ -199,8 +199,8 @@ void Multi_pipeline::allocate(
     const erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
     const erhe::graphics::Vertex_format&             vertex_format,
     erhe::graphics::Shader_stages*                   shader_stages,
-    erhe::application::Multi_buffer&                 vertex_buffer,
-    erhe::application::Multi_buffer&                 index_buffer
+    Multi_buffer&                 vertex_buffer,
+    Multi_buffer&                 index_buffer
 )
 {
     std::vector<erhe::graphics::Buffer>& vertex_buffers = vertex_buffer.buffers();
@@ -443,7 +443,7 @@ void Imgui_renderer::create_font_texture()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = erhe::application::g_configuration->imgui;
+    const auto& config = g_configuration->imgui;
 
     m_primary_font    = m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size);
     m_mono_font       = m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.font_size);
@@ -693,12 +693,12 @@ namespace {
 }
 
 auto Imgui_renderer::image_button(
+    const uint32_t                                  id,
     const std::shared_ptr<erhe::graphics::Texture>& texture,
     const int                                       width,
     const int                                       height,
     const glm::vec2                                 uv0,
     const glm::vec2                                 uv1,
-    const int                                       frame_padding,
     const glm::vec4                                 background_color,
     const glm::vec4                                 tint_color,
     const bool                                      linear
@@ -709,7 +709,8 @@ auto Imgui_renderer::image_button(
         *texture.get(),
         *sampler.get()
     );
-    ImGui::ImageButton(
+    ImGui::ImageButtonEx(
+        id,
         handle,
         ImVec2{
             static_cast<float>(width),
@@ -717,7 +718,6 @@ auto Imgui_renderer::image_button(
         },
         uv0,
         uv1,
-        frame_padding,
         from_glm(background_color),
         from_glm(tint_color)
     );

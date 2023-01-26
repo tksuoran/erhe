@@ -12,18 +12,30 @@
 #include <functional>
 #include <mutex>
 
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+namespace erhe::xr {
+
+class Xr_action_boolean;
+class Xr_action_float;
+class Xr_action_vector2f;
+class Xr_action_pose;
+
+}
+#endif
+
 namespace erhe::application {
 
 class Command;
 class Command_binding;
-class Controller_trigger_binding;
-class Controller_trigger_click_binding;
-class Controller_trigger_drag_binding;
-class Controller_trigger_value_binding;
-class Controller_trackpad_binding;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+class Xr_boolean_binding;
+class Xr_float_binding;
+class Xr_vector2f_binding;
+#endif
 class Key_binding;
 class Mouse_binding;
-class Mouse_click_binding;
+class Mouse_button_binding;
 class Mouse_drag_binding;
 class Mouse_motion_binding;
 class Mouse_wheel_binding;
@@ -57,13 +69,16 @@ public:
     void imgui           ();
     void sort_bindings   ();
 
-    [[nodiscard]] auto get_commands                    () const -> const std::vector<Command*>&;
-    [[nodiscard]] auto get_key_bindings                () const -> const std::vector<Key_binding>&;
-    [[nodiscard]] auto get_mouse_bindings              () const -> const std::vector<std::unique_ptr<Mouse_binding>>&;
-    [[nodiscard]] auto get_mouse_wheel_bindings        () const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&;
-    [[nodiscard]] auto get_controller_trigger_bindings () const -> const std::vector<std::unique_ptr<Controller_trigger_binding>>&;
-    [[nodiscard]] auto get_controller_trackpad_bindings() const -> const std::vector<Controller_trackpad_binding>&;
-    [[nodiscard]] auto get_update_bindings             () const -> const std::vector<Update_binding>&;
+    [[nodiscard]] auto get_commands            () const -> const std::vector<Command*>&;
+    [[nodiscard]] auto get_key_bindings        () const -> const std::vector<Key_binding>&;
+    [[nodiscard]] auto get_mouse_bindings      () const -> const std::vector<std::unique_ptr<Mouse_binding>>&;
+    [[nodiscard]] auto get_mouse_wheel_bindings() const -> const std::vector<std::unique_ptr<Mouse_wheel_binding>>&;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    [[nodiscard]] auto get_xr_boolean_bindings () const -> const std::vector<Xr_boolean_binding>&;
+    [[nodiscard]] auto get_xr_float_bindings   () const -> const std::vector<Xr_float_binding>&;
+    [[nodiscard]] auto get_xr_vector2f_bindings() const -> const std::vector<Xr_vector2f_binding>&;
+#endif
+    [[nodiscard]] auto get_update_bindings     () const -> const std::vector<Update_binding>&;
 
     auto bind_command_to_key(
         Command*                command,
@@ -72,10 +87,10 @@ public:
         std::optional<uint32_t> modifier_mask = {}
     ) -> erhe::toolkit::Unique_id<Key_binding>::id_type;
 
-    auto bind_command_to_mouse_click(
+    auto bind_command_to_mouse_button(
         Command*                    command,
         erhe::toolkit::Mouse_button button
-    ) -> erhe::toolkit::Unique_id<Mouse_click_binding>::id_type;
+    ) -> erhe::toolkit::Unique_id<Mouse_button_binding>::id_type;
 
     auto bind_command_to_mouse_wheel(
         Command* command
@@ -90,22 +105,22 @@ public:
         erhe::toolkit::Mouse_button button
     ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
 
-    auto bind_command_to_controller_trigger_click(
-        Command* command
-    ) -> erhe::toolkit::Unique_id<Controller_trigger_click_binding>::id_type;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    auto bind_command_to_xr_boolean_action(
+        Command*                     command,
+        erhe::xr::Xr_action_boolean* xr_action
+    ) -> erhe::toolkit::Unique_id<Xr_boolean_binding>::id_type;
 
-    auto bind_command_to_controller_trigger_drag(
-        Command* command
-    ) -> erhe::toolkit::Unique_id<Controller_trigger_drag_binding>::id_type;
+    auto bind_command_to_xr_float_action(
+        Command*                   command,
+        erhe::xr::Xr_action_float* xr_action
+    ) -> erhe::toolkit::Unique_id<Xr_float_binding>::id_type;
 
-    auto bind_command_to_controller_trigger_value(
-        Command* command
-    ) -> erhe::toolkit::Unique_id<Controller_trigger_value_binding>::id_type;
-
-    auto bind_command_to_controller_trackpad(
-        Command* command,
-        bool     click
-    ) -> erhe::toolkit::Unique_id<Controller_trackpad_binding>::id_type;
+    auto bind_command_to_xr_vector2f_action(
+        Command*                      command,
+        erhe::xr::Xr_action_vector2f* xr_action
+    ) -> erhe::toolkit::Unique_id<Xr_vector2f_binding>::id_type;
+#endif
 
     auto bind_command_to_update(
         Command* command
@@ -120,65 +135,51 @@ public:
             (m_active_mouse_command == command);
     }
 
-    [[nodiscard]] auto accept_controller_trigger_command(Command* command) const -> bool
-    {
-        return
-            (m_active_trigger_command == nullptr) ||
-            (m_active_trigger_command == command);
-    }
-
     void command_inactivated(Command* const command);
 
-    [[nodiscard]] auto last_mouse_button_bits       () const -> uint32_t;
-    [[nodiscard]] auto last_mouse_position          () const -> glm::dvec2;
-    [[nodiscard]] auto last_mouse_position_delta    () const -> glm::dvec2;
-    [[nodiscard]] auto last_mouse_wheel_delta       () const -> glm::dvec2;
-    [[nodiscard]] auto last_controller_trigger_value() const -> float;
-    [[nodiscard]] auto last_controller_trackpad_x   () const -> float;
-    [[nodiscard]] auto last_controller_trackpad_y   () const -> float;
+    [[nodiscard]] auto last_mouse_button_bits   () const -> uint32_t;
+    [[nodiscard]] auto last_mouse_position      () const -> glm::vec2;
+    [[nodiscard]] auto last_mouse_position_delta() const -> glm::vec2;
+    [[nodiscard]] auto last_mouse_wheel_delta   () const -> glm::vec2;
 
     // Subset of erhe::toolkit::View
-    void on_key                      (erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed);
-    void on_mouse_move               (double x, const double y);
-    void on_mouse_click              (erhe::toolkit::Mouse_button button, int count);
-    void on_mouse_wheel              (double x, double y);
-    void on_update                   ();
-    void on_controller_trigger_value (float trigger_value);
-    void on_controller_trigger_click (bool click);
-    void on_controller_trackpad_touch(float x, float y, bool touch);
-    void on_controller_trackpad_click(float x, float y, bool click);
+    void on_key         (erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed);
+    void on_mouse_move  (float x, float y);
+    void on_mouse_button(erhe::toolkit::Mouse_button button, bool pressed);
+    void on_mouse_wheel (float x, float y);
+    void on_update      ();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    void on_xr_action   (erhe::xr::Xr_action_boolean&  xr_action);
+    void on_xr_action   (erhe::xr::Xr_action_float&    xr_action);
+    void on_xr_action   (erhe::xr::Xr_action_vector2f& xr_action);
+#endif
 
 private:
     [[nodiscard]] auto get_command_priority(Command* const command) const -> int;
 
-    void sort_mouse_bindings          ();
-    void sort_trigger_bindings        ();
-    void inactivate_ready_commands    ();
-    void update_active_mouse_command  (Command* const command);
-    void update_active_trigger_command(Command* const command);
-    void commands                     (State filter);
+    void sort_mouse_bindings        ();
+    void sort_xr_bindings           ();
+    void inactivate_ready_commands  ();
+    void update_active_mouse_command(Command* const command);
+    void commands                   (State filter);
 
     std::mutex m_command_mutex;
-    Command*   m_active_mouse_command          {nullptr}; // does not tell if command(s) is/are ready
-    Command*   m_active_trigger_command        {nullptr};
-    uint32_t   m_last_mouse_button_bits        {0u};
-    glm::dvec2 m_last_mouse_position           {0.0, 0.0};
-    glm::dvec2 m_last_mouse_position_delta     {0.0, 0.0};
-    glm::dvec2 m_last_mouse_wheel_delta        {0.0, 0.0};
-    float      m_last_controller_trigger_value {0.0f};
-    bool       m_last_controller_trigger_click {false};
-    float      m_last_controller_trackpad_x    {0.0f};
-    float      m_last_controller_trackpad_y    {0.0f};
-    bool       m_last_controller_trackpad_touch{false};
-    bool       m_last_controller_trackpad_click{false};
+    Command*   m_active_mouse_command     {nullptr}; // does not tell if command(s) is/are ready
+    uint32_t   m_last_mouse_button_bits   {0u};
+    glm::vec2  m_last_mouse_position      {0.0f, 0.0f};
+    glm::vec2  m_last_mouse_position_delta{0.0f, 0.0f};
+    glm::vec2  m_last_mouse_wheel_delta   {0.0f, 0.0f};
 
-    std::vector<Command*>                                    m_commands;
-    std::vector<Key_binding>                                 m_key_bindings;
-    std::vector<std::unique_ptr<Mouse_binding>>              m_mouse_bindings;
-    std::vector<std::unique_ptr<Mouse_wheel_binding>>        m_mouse_wheel_bindings;
-    std::vector<std::unique_ptr<Controller_trigger_binding>> m_controller_trigger_bindings;
-    std::vector<Controller_trackpad_binding>                 m_controller_trackpad_bindings;
-    std::vector<Update_binding>                              m_update_bindings;
+    std::vector<Command*>                             m_commands;
+    std::vector<Key_binding>                          m_key_bindings;
+    std::vector<std::unique_ptr<Mouse_binding>>       m_mouse_bindings;
+    std::vector<std::unique_ptr<Mouse_wheel_binding>> m_mouse_wheel_bindings;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    std::vector<Xr_boolean_binding>                   m_xr_boolean_bindings;
+    std::vector<Xr_float_binding>                     m_xr_float_bindings;
+    std::vector<Xr_vector2f_binding>                  m_xr_vector2f_bindings;
+#endif
+    std::vector<Update_binding>                       m_update_bindings;
 };
 
 extern Commands* g_commands;

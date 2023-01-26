@@ -200,19 +200,19 @@ public:
         static_cast<void>(c);
     }
 
-    virtual void on_mouse_move(const double x, const double y)
+    virtual void on_mouse_move(const float x, const float y)
     {
         static_cast<void>(x);
         static_cast<void>(y);
     }
 
-    virtual void on_mouse_click(const Mouse_button button, const int count)
+    virtual void on_mouse_button(const Mouse_button button, const bool pressed)
     {
         static_cast<void>(button);
-        static_cast<void>(count);
+        static_cast<void>(pressed);
     }
 
-    virtual void on_mouse_wheel(const double x, const double y)
+    virtual void on_mouse_wheel(const float x, const float y)
     {
         static_cast<void>(x);
         static_cast<void>(y);
@@ -267,17 +267,17 @@ public:
 
     void set_view       (View* view);
     void reset_view     (View* view);
-    void on_focus       (const int focused) override;
-    void on_cursor_enter(const int entered) override;
+    void on_focus       (int focused) override;
+    void on_cursor_enter(int entered) override;
     void on_refresh     () override;
     void on_idle        () override;
     void on_close       () override;
-    void on_resize      (const int width, const int height) override;
-    void on_key         (const Keycode code, const Key_modifier_mask mask, const bool pressed) override;
-    void on_char        (const unsigned int codepoint) override;
-    void on_mouse_move  (const double x, const double y) override;
-    void on_mouse_click (const Mouse_button button, const int count) override;
-    void on_mouse_wheel (const double x, const double y) override;
+    void on_resize      (int width, int height) override;
+    void on_key         (Keycode code, Key_modifier_mask mask, bool pressed) override;
+    void on_char        (unsigned int codepoint) override;
+    void on_mouse_move  (float x, float y) override;
+    void on_mouse_button(Mouse_button button, bool pressed) override;
+    void on_mouse_wheel (float x, float y) override;
 
 private:
     Context_window* m_window   {nullptr};

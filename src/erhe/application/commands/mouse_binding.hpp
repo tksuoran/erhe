@@ -7,7 +7,7 @@
 namespace erhe::application {
 
 class Command;
-class Command_context;
+class Input_arguments;
 
 class Mouse_binding
     : public Command_binding
@@ -25,12 +25,12 @@ public:
     [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse; }
 
     virtual auto on_button(
-        Command_context&                  context,
-        const erhe::toolkit::Mouse_button button,
-        const int                         count
+        Input_arguments&            input,
+        erhe::toolkit::Mouse_button button,
+        bool                        pressed
     ) -> bool;
 
-    virtual auto on_motion(Command_context& context) -> bool;
+    virtual auto on_motion(Input_arguments& input) -> bool;
 };
 
 

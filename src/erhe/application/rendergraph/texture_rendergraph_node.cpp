@@ -24,7 +24,7 @@ namespace erhe::application
 Texture_rendergraph_node::Texture_rendergraph_node(
     const Texture_rendergraph_node_create_info& create_info
 )
-    : erhe::application::Rendergraph_node{create_info.name}
+    : Rendergraph_node      {create_info.name}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
     , m_color_format        {create_info.color_format}
@@ -35,7 +35,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
 Texture_rendergraph_node::Texture_rendergraph_node(
     const Texture_rendergraph_node_create_info&& create_info
 )
-    : erhe::application::Rendergraph_node{create_info.name}
+    : Rendergraph_node      {create_info.name}
     , m_input_key           {create_info.input_key}
     , m_output_key          {create_info.output_key}
     , m_color_format        {create_info.color_format}
@@ -54,7 +54,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
     {
         log_rendergraph->error(
             "Texture_rendergraph_node::get_consumer_input_texture({}, key = '{}', depth = {}) key mismatch (expected '{}')",
-            erhe::application::c_str(resource_routing),
+            c_str(resource_routing),
             key,
             depth,
             m_input_key
@@ -81,7 +81,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
     {
         log_rendergraph->error(
             "Texture_rendergraph_node::get_consumer_input_texture({}, key = '{}', depth = {}) key mismatch (expected '{}')",
-            erhe::application::c_str(resource_routing),
+            c_str(resource_routing),
             key,
             depth,
             m_input_key
@@ -128,7 +128,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
 
     // TODO Figure out exactly what to do here.
     const auto& output_viewport = get_producer_output_viewport(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
+        Resource_routing::Resource_provided_by_consumer,
         m_output_key
     );
 

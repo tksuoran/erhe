@@ -54,7 +54,7 @@ auto Key_binding::operator=(Key_binding&& other) noexcept -> Key_binding&
 }
 
 auto Key_binding::on_key(
-    Command_context&             context,
+    Input_arguments&             input,
     const bool                   pressed,
     const erhe::toolkit::Keycode code,
     const uint32_t               modifier_mask
@@ -89,7 +89,7 @@ auto Key_binding::on_key(
         return false;
     }
 
-    const bool consumed = command->try_call(context);
+    const bool consumed = command->try_call(input);
     if (consumed)
     {
         log_input_event_consumed->trace(

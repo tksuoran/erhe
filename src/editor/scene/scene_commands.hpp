@@ -31,7 +31,7 @@ public:
     {
     }
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Create_new_empty_node_command
@@ -43,7 +43,7 @@ public:
     {
     }
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Create_new_light_command
@@ -55,7 +55,7 @@ public:
     {
     }
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Scene_commands

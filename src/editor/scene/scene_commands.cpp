@@ -19,32 +19,35 @@ namespace editor
 
 using erhe::scene::Item_flags;
 
+#pragma region Command
+
 auto Create_new_camera_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
 
     return g_scene_commands->create_new_camera().operator bool();
 }
 
 auto Create_new_empty_node_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
 
     return g_scene_commands->create_new_empty_node().operator bool();
 }
 
 auto Create_new_light_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
 
     return g_scene_commands->create_new_light().operator bool();
 }
+#pragma endregion Command
 
 Scene_commands* g_scene_commands{nullptr};
 

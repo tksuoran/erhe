@@ -1,5 +1,6 @@
 #include "erhe/application/commands/mouse_drag_binding.hpp"
 #include "erhe/application/commands/command.hpp"
+#include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/application_log.hpp"
 
@@ -43,9 +44,9 @@ auto Mouse_drag_binding::operator=(Mouse_drag_binding&& other) noexcept -> Mouse
 }
 
 auto Mouse_drag_binding::on_button(
-    Command_context&                  context,
+    Input_arguments&                  input,
     const erhe::toolkit::Mouse_button button,
-    const int                         count
+    const bool                        pressed
 ) -> bool
 {
     if (m_button != button)
@@ -59,7 +60,7 @@ auto Mouse_drag_binding::on_button(
         return false;
     }
 
-    if (!context.accept_mouse_command(command))
+    if (!g_commands->accept_mouse_command(command))
     {
         ERHE_VERIFY(command->get_command_state() == State::Inactive);
         log_input_event_filtered->trace(
@@ -70,11 +71,11 @@ auto Mouse_drag_binding::on_button(
     }
 
     // Mouse button down when in Inactive state -> transition to Ready state
-    if (count > 0)
+    if (pressed)
     {
         if (command->get_command_state() == State::Inactive)
         {
-            command->try_ready(context);
+            command->try_ready(input);
         }
         return command->get_command_state() == State::Active; // Consumes event if command transitioned directly to active
     }
@@ -86,7 +87,7 @@ auto Mouse_drag_binding::on_button(
             // Drag binding consumes button release event only
             // if command was ini active state.
             consumed = command->get_command_state() == State::Active;
-            command->set_inactive(context);
+            command->set_inactive();
             log_input_event_consumed->trace(
                 "{} consumed mouse drag release {}",
                 command->get_name(),
@@ -97,7 +98,7 @@ auto Mouse_drag_binding::on_button(
     }
 }
 
-auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
+auto Mouse_drag_binding::on_motion(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
     if (command->get_command_state() == State::Disabled)
@@ -107,10 +108,10 @@ auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
 
     if (command->get_command_state() == State::Ready)
     {
-        const auto value = context.get_vec2_relative_value();
+        const auto value = input.vec2_relative_value;
         if ((value.x != 0.0f) || (value.y != 0.0f))
         {
-            command->set_active(context);
+            command->set_active();
         }
     }
 
@@ -119,7 +120,7 @@ auto Mouse_drag_binding::on_motion(Command_context& context) -> bool
         return false;
     }
 
-    const bool consumed = command->try_call(context);
+    const bool consumed = command->try_call(input);
     if (consumed)
     {
         log_input_event_consumed->trace(

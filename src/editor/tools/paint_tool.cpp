@@ -27,6 +27,12 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_view.hpp"
+#   include "erhe/xr/xr_action.hpp"
+#   include "erhe/xr/headset.hpp"
+#endif
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
 #endif
@@ -41,48 +47,43 @@
 namespace editor
 {
 
-void Paint_vertex_command::try_ready(
-    erhe::application::Command_context& context
-)
-{
-    if (g_paint_tool->try_ready())
-    {
-        set_ready(context);
-    }
-}
-
-auto Paint_tool::try_ready() -> bool
-{
-    auto* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
-        return false;
-    }
-
-    if (
-        scene_view->get_hover(Hover_entry::tool_slot        ).valid ||
-        scene_view->get_hover(Hover_entry::rendertarget_slot).valid
-    )
-    {
-        return false;
-    }
-
-    return scene_view->get_hover(Hover_entry::content_slot).valid;
-}
-
+#pragma region Commands
 Paint_vertex_command::Paint_vertex_command()
     : Command{"Paint_tool.paint_vertex"}
 {
-    set_host(g_paint_tool);
+}
+
+void Paint_vertex_command::try_ready(
+    erhe::application::Input_arguments& input
+)
+{
+    static_cast<void>(input);
+
+    if (!g_paint_tool->is_enabled())
+    {
+        return;
+    }
+
+    if (g_paint_tool->try_ready())
+    {
+        set_ready();
+    }
 }
 
 auto Paint_vertex_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
+    static_cast<void>(input);
+
+    if (!g_paint_tool->is_enabled())
+    {
+        return false;
+    }
+
     if (get_command_state() == erhe::application::State::Ready)
     {
-        set_active(context);
+        set_active();
     }
 
     if (get_command_state() != erhe::application::State::Active)
@@ -91,13 +92,15 @@ auto Paint_vertex_command::try_call(
     }
     if (g_paint_tool->get_hover_scene_view() == nullptr)
     {
-        set_inactive(context);
+        set_inactive();
         return false;
     }
 
     g_paint_tool->paint();
     return true;
 }
+
+#pragma endregion Commands
 
 namespace {
 
@@ -117,6 +120,157 @@ auto vertex_id_from_corner_id(
     return std::nullopt;
 }
 
+}
+
+Paint_tool* g_paint_tool{nullptr};
+
+Paint_tool::Paint_tool()
+    : erhe::application::Imgui_window{c_title}
+    , erhe::components::Component    {c_type_name}
+    , m_drag_redirect_update_command {m_paint_vertex_command}
+    , m_drag_enable_command          {m_drag_redirect_update_command}
+{
+}
+
+Paint_tool::~Paint_tool() noexcept
+{
+    ERHE_VERIFY(g_paint_tool == nullptr);
+}
+
+void Paint_tool::deinitialize_component()
+{
+    ERHE_VERIFY(g_paint_tool == this);
+    m_paint_vertex_command.set_host(nullptr);
+    g_paint_tool = nullptr;
+}
+
+void Paint_tool::declare_required_components()
+{
+    require<erhe::application::Commands     >();
+    require<erhe::application::Imgui_windows>();
+    require<Editor_message_bus>();
+    require<Icon_set          >();
+    require<Operations        >();
+    require<Tools             >();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    require<Headset_view      >();
+#endif
+}
+
+void Paint_tool::initialize_component()
+{
+    ERHE_PROFILE_FUNCTION
+    ERHE_VERIFY(g_paint_tool == nullptr);
+
+    set_base_priority(c_priority);
+    set_description  (c_title);
+    set_flags        (Tool_flags::toolbox);
+    set_icon         (g_icon_set->icons.brush_small);
+
+    erhe::application::g_imgui_windows->register_imgui_window(this);
+
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command(&m_paint_vertex_command);
+    commands.bind_command_to_mouse_button(&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_drag (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    const auto* headset = g_headset_view->get_headset();
+    if (headset != nullptr)
+    {
+        auto& xr_right = headset->get_actions_right();
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click);
+        commands.bind_command_to_update           (&m_drag_redirect_update_command);
+    }
+#endif
+    g_tools->register_tool(this);
+
+#if 0
+    m_ngon_colors.emplace_back(240.0f / 255.0f, 163.0f / 255.0f, 255.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f, 117.0f / 255.0f, 220.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(153.0f / 255.0f,  63.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back( 76.0f / 255.0f,   0.0f / 255.0f,  92.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back( 25.0f / 255.0f,  25.0f / 255.0f,  25.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f,  92.0f / 255.0f,  49.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back( 43.0f / 255.0f, 206.0f / 255.0f,  72.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 204.0f / 255.0f, 153.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(148.0f / 255.0f, 255.0f / 255.0f, 181.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(143.0f / 255.0f, 124.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(157.0f / 255.0f, 204.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(194.0f / 255.0f,   0.0f / 255.0f, 136.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f,  51.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 164.0f / 255.0f,   5.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 168.0f / 255.0f, 187.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back( 66.0f / 255.0f, 102.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f,   0.0f / 255.0f,  16.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back( 94.0f / 255.0f, 241.0f / 255.0f, 242.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f, 153.0f / 255.0f, 143.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(224.0f / 255.0f, 255.0f / 255.0f, 102.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(116.0f / 255.0f,  10.0f / 255.0f, 255.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(153.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f,  80.0f / 255.0f,   5.0f / 255.0f, 1.0f);
+#endif
+
+    m_ngon_colors.emplace_back(230.0f / 255.0f,  25.0f / 255.0f,  75.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back( 60.0f / 255.0f, 180.0f / 255.0f,  75.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 225.0f / 255.0f,  25.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f, 130.0f / 255.0f, 200.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(245.0f / 255.0f, 130.0f / 255.0f,  48.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(145.0f / 255.0f,  30.0f / 255.0f, 180.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back( 70.0f / 255.0f, 240.0f / 255.0f, 240.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(240.0f / 255.0f,  50.0f / 255.0f, 230.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(210.0f / 255.0f, 245.0f / 255.0f,  60.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(250.0f / 255.0f, 190.0f / 255.0f, 212.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(220.0f / 255.0f, 190.0f / 255.0f, 255.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(170.0f / 255.0f, 110.0f / 255.0f,  40.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 250.0f / 255.0f, 200.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(128.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(170.0f / 255.0f, 255.0f / 255.0f, 195.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(128.0f / 255.0f, 128.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 215.0f / 255.0f, 180.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 255.0f / 255.0f, 1.0f);
+    m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
+
+    g_editor_message_bus->add_receiver(
+        [&](Editor_message& message)
+        {
+            Tool::on_message(message);
+        }
+    );
+
+    m_paint_vertex_command.set_host(this);
+
+    g_paint_tool = this;
+}
+
+auto Paint_tool::try_ready() -> bool
+{
+    if (!Command_host::is_enabled())
+    {
+        return false;
+    }
+
+    auto* scene_view = get_hover_scene_view();
+
+    if (scene_view == nullptr)
+    {
+        return false;
+    }
+
+    if (
+        scene_view->get_hover(Hover_entry::tool_slot        ).valid ||
+        scene_view->get_hover(Hover_entry::rendertarget_slot).valid
+    )
+    {
+        return false;
+    }
+
+    return scene_view->get_hover(Hover_entry::content_slot).valid;
 }
 
 void Paint_tool::paint_corner(
@@ -268,112 +422,6 @@ void Paint_tool::paint()
         }
     }
 }
-
-Paint_tool* g_paint_tool{nullptr};
-
-Paint_tool::Paint_tool()
-    : erhe::application::Imgui_window{c_title}
-    , erhe::components::Component    {c_type_name}
-{
-}
-
-Paint_tool::~Paint_tool() noexcept
-{
-    ERHE_VERIFY(g_paint_tool == this);
-    g_paint_tool = nullptr;
-}
-
-void Paint_tool::declare_required_components()
-{
-    require<erhe::application::Commands     >();
-    require<erhe::application::Imgui_windows>();
-    require<Editor_message_bus>();
-    require<Icon_set          >();
-    require<Operations        >();
-    require<Tools             >();
-}
-
-void Paint_tool::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION
-    ERHE_VERIFY(g_paint_tool == nullptr);
-
-    set_base_priority(c_priority);
-    set_description  (c_title);
-    set_flags        (Tool_flags::toolbox);
-    set_icon         (g_icon_set->icons.brush_small);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this);
-
-    auto& commands = *erhe::application::g_commands;
-    commands.register_command(&m_paint_vertex_command);
-    commands.bind_command_to_mouse_click            (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
-    commands.bind_command_to_mouse_drag             (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
-    commands.bind_command_to_controller_trigger_drag(&m_paint_vertex_command);
-    g_tools->register_tool(this);
-
-#if 0
-    m_ngon_colors.emplace_back(240.0f / 255.0f, 163.0f / 255.0f, 255.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f, 117.0f / 255.0f, 220.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(153.0f / 255.0f,  63.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back( 76.0f / 255.0f,   0.0f / 255.0f,  92.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back( 25.0f / 255.0f,  25.0f / 255.0f,  25.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f,  92.0f / 255.0f,  49.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back( 43.0f / 255.0f, 206.0f / 255.0f,  72.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 204.0f / 255.0f, 153.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(148.0f / 255.0f, 255.0f / 255.0f, 181.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(143.0f / 255.0f, 124.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(157.0f / 255.0f, 204.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(194.0f / 255.0f,   0.0f / 255.0f, 136.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f,  51.0f / 255.0f, 128.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 164.0f / 255.0f,   5.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 168.0f / 255.0f, 187.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back( 66.0f / 255.0f, 102.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f,   0.0f / 255.0f,  16.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back( 94.0f / 255.0f, 241.0f / 255.0f, 242.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f, 153.0f / 255.0f, 143.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(224.0f / 255.0f, 255.0f / 255.0f, 102.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(116.0f / 255.0f,  10.0f / 255.0f, 255.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(153.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 128.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f,  80.0f / 255.0f,   5.0f / 255.0f, 1.0f);
-#endif
-
-    m_ngon_colors.emplace_back(230.0f / 255.0f,  25.0f / 255.0f,  75.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back( 60.0f / 255.0f, 180.0f / 255.0f,  75.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 225.0f / 255.0f,  25.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f, 130.0f / 255.0f, 200.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(245.0f / 255.0f, 130.0f / 255.0f,  48.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(145.0f / 255.0f,  30.0f / 255.0f, 180.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back( 70.0f / 255.0f, 240.0f / 255.0f, 240.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(240.0f / 255.0f,  50.0f / 255.0f, 230.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(210.0f / 255.0f, 245.0f / 255.0f,  60.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(250.0f / 255.0f, 190.0f / 255.0f, 212.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(220.0f / 255.0f, 190.0f / 255.0f, 255.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(170.0f / 255.0f, 110.0f / 255.0f,  40.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 250.0f / 255.0f, 200.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(128.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(170.0f / 255.0f, 255.0f / 255.0f, 195.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(128.0f / 255.0f, 128.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 215.0f / 255.0f, 180.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f, 128.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(255.0f / 255.0f, 255.0f / 255.0f, 255.0f / 255.0f, 1.0f);
-    m_ngon_colors.emplace_back(  0.0f / 255.0f,   0.0f / 255.0f,   0.0f / 255.0f, 1.0f);
-
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
-            Tool::on_message(message);
-        }
-    );
-
-    g_paint_tool = this;
-}
-
 
 void Paint_tool::imgui()
 {

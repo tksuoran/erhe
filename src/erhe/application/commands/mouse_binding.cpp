@@ -28,20 +28,20 @@ auto Mouse_binding::operator=(Mouse_binding&& other) noexcept -> Mouse_binding&
 }
 
 auto Mouse_binding::on_button(
-    Command_context&                  context,
+    Input_arguments&                  input,
     const erhe::toolkit::Mouse_button button,
-    const int                         count
+    const bool                        pressed
 ) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
     static_cast<void>(button);
-    static_cast<void>(count);
+    static_cast<void>(pressed);
     return false;
 }
 
-auto Mouse_binding::on_motion(Command_context& context) -> bool
+auto Mouse_binding::on_motion(Input_arguments& input) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
     return false;
 }
 

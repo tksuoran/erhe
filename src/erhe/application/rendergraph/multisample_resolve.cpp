@@ -27,10 +27,10 @@ Multisample_resolve_node::Multisample_resolve_node(
     const int              key
 
 )
-    : erhe::application::Rendergraph_node{name}
-    , m_sample_count                     {sample_count}
-    , m_label                            {label}
-    , m_key                              {key}
+    : Rendergraph_node{name}
+    , m_sample_count  {sample_count}
+    , m_label         {label}
+    , m_key           {key}
 {
     register_input (Resource_routing::Resource_provided_by_consumer, label, key);
     register_output(Resource_routing::Resource_provided_by_consumer, label, key);
@@ -104,7 +104,7 @@ void Multisample_resolve_node::execute_rendergraph_node()
     using erhe::graphics::Texture;
 
     const auto& output_viewport = get_producer_output_viewport(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
+        Resource_routing::Resource_provided_by_consumer,
         m_key
     );
 
@@ -221,8 +221,8 @@ void Multisample_resolve_node::execute_rendergraph_node()
         ERHE_PROFILE_SCOPE("blitframebuffer");
 
         const auto& output_framebuffer = get_producer_output_framebuffer(
-            erhe::application::Resource_routing::Resource_provided_by_consumer,
-            erhe::application::Rendergraph_node_key::viewport
+            Resource_routing::Resource_provided_by_consumer,
+            Rendergraph_node_key::viewport
         );
         const GLint output_framebuffer_name = output_framebuffer
             ? output_framebuffer->gl_name()

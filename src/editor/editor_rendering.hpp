@@ -21,16 +21,9 @@ class Capture_frame_command
     : public erhe::application::Command
 {
 public:
-    explicit Capture_frame_command(Editor_rendering& editor_rendering)
-        : Command           {"editor.capture_frame"}
-        , m_editor_rendering{editor_rendering}
-    {
-    }
+    Capture_frame_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Editor_rendering& m_editor_rendering;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Editor_rendering

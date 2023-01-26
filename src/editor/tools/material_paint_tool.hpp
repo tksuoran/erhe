@@ -25,8 +25,8 @@ class Material_paint_command
 public:
     explicit Material_paint_command();
 
-    auto try_call (erhe::application::Command_context& context) -> bool override;
-    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Material_pick_command
@@ -35,8 +35,8 @@ class Material_pick_command
 public:
     explicit Material_pick_command();
 
-    auto try_call (erhe::application::Command_context& context) -> bool override;
-    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Material_paint_tool

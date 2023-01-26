@@ -33,19 +33,19 @@ public:
     auto get_restitution             () const -> float                             override;
     auto get_world_transform         () const -> Transform                         override;
 
-    void begin_move                  ()                                                        override; // Disables deactivation
-    void end_move                    ()                                                        override; // Sets active, clears disable deactivation
-    void move_world_transform        (const Transform transform, float delta_time)             override;
-    void set_angular_velocity        (const glm::vec3 velocity)                                override;
-    void set_center_of_mass_transform(const Transform transform)                               override;
-    void set_damping                 (const float linear_damping, const float angular_damping) override;
-    void set_friction                (const float friction)                                    override;
-    void set_gravity_factor          (float gravity_factor)                                    override;
-    void set_linear_velocity         (const glm::vec3 velocity)                                override;
-    void set_mass_properties         (const float mass, const glm::mat4 local_inertia)         override;
-    void set_motion_mode             (const Motion_mode motion_mode)                           override;
-    void set_restitution             (const float restitution)                                 override;
-    void set_world_transform         (const Transform transform)                               override;
+    void begin_move                  ()                                             override; // Disables deactivation
+    void end_move                    ()                                             override; // Sets active, clears disable deactivation
+    void move_world_transform        (const Transform& transform, float delta_time) override;
+    void set_angular_velocity        (const glm::vec3& velocity)                    override;
+    void set_center_of_mass_transform(const Transform& transform)                   override;
+    void set_damping                 (float linear_damping, float angular_damping)  override;
+    void set_friction                (float friction)                               override;
+    void set_gravity_factor          (float gravity_factor)                         override;
+    void set_linear_velocity         (const glm::vec3& velocity)                    override;
+    void set_mass_properties         (float mass, const glm::mat4& local_inertia)   override;
+    void set_motion_mode             (Motion_mode motion_mode)                      override;
+    void set_restitution             (float restitution)                            override;
+    void set_world_transform         (const Transform& transform)                   override;
 
 private:
     std::shared_ptr<ICollision_shape> m_collision_shape;

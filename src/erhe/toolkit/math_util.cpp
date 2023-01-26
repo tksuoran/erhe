@@ -263,7 +263,7 @@ auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
     // TODO Verify that up0 has some reasonable length (that it is not (0,0,0)
 
     const vec3 back  = glm::normalize(eye - center);
-    const vec3 up1   = (up0 == back) ? min_axis(back) : up0;
+    const vec3 up1   = (up0 == back) ? erhe::toolkit::min_axis<float>(back) : up0;
     const vec3 right = glm::normalize(glm::cross(up1, back));
     const vec3 up    = glm::cross(back, right);
 

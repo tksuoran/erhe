@@ -106,29 +106,29 @@ void Null_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     m_motion_mode = motion_mode;
 }
 
-void Null_rigid_body::set_center_of_mass_transform(const Transform transform)
+void Null_rigid_body::set_center_of_mass_transform(const Transform& transform)
 {
     // TODO
     static_cast<void>(transform);
 }
 
-void Null_rigid_body::set_world_transform(const Transform transform)
+void Null_rigid_body::set_world_transform(const Transform& transform)
 {
     m_transform = transform;
 }
 
-void Null_rigid_body::move_world_transform(const Transform transform, float delta_time)
+void Null_rigid_body::move_world_transform(const Transform& transform, const float delta_time)
 {
     static_cast<void>(delta_time);
     m_transform = transform;
 }
 
-void Null_rigid_body::set_linear_velocity(const glm::vec3 velocity)
+void Null_rigid_body::set_linear_velocity(const glm::vec3& velocity)
 {
     m_linear_velocity = velocity;
 }
 
-void Null_rigid_body::set_angular_velocity(const glm::vec3 velocity)
+void Null_rigid_body::set_angular_velocity(const glm::vec3& velocity)
 {
     m_angular_velocity = velocity;
 }
@@ -179,7 +179,7 @@ auto Null_rigid_body::get_mass() const -> float
     return m_mass.has_value() ? m_mass.value() : 0.0f;
 }
 
-void Null_rigid_body::set_mass_properties(const float mass, const glm::mat4 local_inertia)
+void Null_rigid_body::set_mass_properties(const float mass, const glm::mat4& local_inertia)
 {
     m_mass = mass;
     m_local_inertia = local_inertia;

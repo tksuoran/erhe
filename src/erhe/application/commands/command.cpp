@@ -4,7 +4,15 @@
 #include "erhe/application/application_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "erhe/xr/xr_action.hpp"
+#endif
+
+#include <fmt/format.h>
+
 namespace erhe::application {
+
+Command_host::~Command_host() = default;
 
 void Command_host::set_description(const std::string_view description)
 {
@@ -14,6 +22,11 @@ void Command_host::set_description(const std::string_view description)
 auto Command_host::get_description() const -> const char*
 {
     return m_description.c_str();
+}
+
+auto Command_host::get_priority() const -> int
+{
+    return 0;
 }
 
 auto Command_host::is_enabled() const -> bool
@@ -37,7 +50,7 @@ void Command_host::disable()
 }
 
 
-Command::Command(const char* name)
+Command::Command(const std::string_view name)
     : m_name{name}
 {
 }
@@ -46,20 +59,20 @@ Command::~Command() noexcept
 {
 }
 
-auto Command::try_call(Command_context& context) -> bool
+auto Command::try_call(Input_arguments& input) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
     return false;
 }
 
-void Command::try_ready(Command_context& context)
+void Command::try_ready(Input_arguments& input)
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
+    set_ready();
 }
 
-void Command::on_inactive(Command_context& context)
+void Command::on_inactive()
 {
-    static_cast<void>(context);
 }
 
 auto Command::get_command_state() const -> State
@@ -72,54 +85,81 @@ auto Command::get_host() const -> Command_host*
     return m_host;
 }
 
-void Command::set_inactive(Command_context& context)
+auto Command::is_enabled() const -> bool
 {
-    log_command_state_transition->trace(
+    return m_state != State::Disabled;
+}
+
+auto Command::get_target_command() -> Command&
+{
+    return *this;
+}
+
+void Command::set_inactive()
+{
+    if (m_state == State::Inactive)
+    {
+        return;
+    }
+    log_command_state_transition->info(
         "{} -> inactive",
         get_name()
     );
-    on_inactive(context);
+    on_inactive();
     m_state = State::Inactive;
     g_commands->command_inactivated(this);
 };
 
-void Command::disable(Command_context& context)
+void Command::disable()
 {
-    log_command_state_transition->trace("{} -> disabled", get_name());
+    if (m_state == State::Disabled)
+    {
+        return;
+    }
+
+    log_command_state_transition->info("{} -> disabled", get_name());
     if (m_state == State::Active)
     {
-        set_inactive(context);
+        set_inactive();
     }
     m_state = State::Disabled;
 };
 
-void Command::enable(Command_context& context)
+void Command::enable()
 {
     if (m_state != State::Disabled)
     {
         return;
     }
+
     log_command_state_transition->trace("{} -> enabled", get_name());
-    set_inactive(context);
+    set_active();
 };
 
-void Command::set_ready(Command_context& context)
+void Command::set_ready()
 {
-    static_cast<void>(context);
+    if (m_state == State::Ready)
+    {
+        return;
+    }
+
     log_command_state_transition->trace("{} -> ready", get_name());
     m_state = State::Ready;
 }
 
-void Command::set_active(Command_context& context)
+void Command::set_active()
 {
-    static_cast<void>(context);
+    if (m_state == State::Active)
+    {
+        return;
+    }
     log_command_state_transition->trace("{} -> active", get_name());
     m_state = State::Active;
 }
 
 auto Command::get_name() const -> const char*
 {
-    return m_name;
+    return m_name.c_str();
 }
 
 void Command::set_host(Command_host* host)
@@ -151,5 +191,319 @@ auto Command::get_priority() const -> int
 {
     return get_base_priority() * 20 + get_host_priority();
 }
+
+//
+
+Helper_command::Helper_command(Command& target_command, std::string name)
+    : Command         {name}
+    , m_target_command{target_command}
+{
+}
+
+auto Helper_command::get_priority() const -> int
+{
+    // Helper commands have tiny priority over target command
+    return m_target_command.get_priority() + 1;
+}
+
+auto Helper_command::is_enabled() const -> bool
+{
+    return m_target_command.is_enabled();
+}
+
+auto Helper_command::get_command_state() const -> State
+{
+    return m_target_command.get_command_state();
+}
+
+auto Helper_command::get_target_command() -> Command&
+{
+    return m_target_command.get_target_command();
+}
+
+//
+
+Drag_enable_command::Drag_enable_command(Command& update_command)
+    : Command{
+        fmt::format("Drag_enable_command({})", update_command.get_name())
+    }
+    , m_update_command{update_command}
+{
+    update_command.set_host(this);
+    set_enabled(false);
+    set_description(Command::get_name());
+}
+
+void Drag_enable_command::try_ready(Input_arguments& input)
+{
+    static_cast<void>(input);
+    set_active();
+}
+
+auto Drag_enable_command::try_call(Input_arguments& input) -> bool
+{
+    const bool enable = input.button_bits != 0;
+    this->Command_host::set_enabled(enable);
+    if (enable) // TODO This assymetry does not look great
+    {
+        m_update_command.try_ready(input);
+    }
+    else
+    {
+        m_update_command.get_target_command().set_inactive();
+    }
+    set_inactive(); // TODO Is this needed?
+
+    const auto target_state    = m_update_command.get_target_command().get_command_state();
+    const bool is_target_ready = (target_state == State::Ready) || (target_state == State::Active);
+    return is_target_ready;
+}
+
+//
+
+Drag_enable_float_command::Drag_enable_float_command(
+    Command&    update_command,
+    const float min_to_enable,
+    const float max_to_disable
+)
+    : Command{
+        fmt::format("Drag_enable_float_command({})", update_command.get_name())
+    }
+    , m_update_command{update_command}
+    , m_min_to_enable {min_to_enable}
+    , m_max_to_disable{max_to_disable}
+{
+    ERHE_VERIFY(min_to_enable > max_to_disable);
+    update_command.set_host(this);
+    set_enabled(false);
+    set_description(Command::get_name());
+}
+
+void Drag_enable_float_command::try_ready(Input_arguments& input)
+{
+    static_cast<void>(input);
+    set_active();
+}
+
+auto Drag_enable_float_command::try_call(Input_arguments& input) -> bool
+{
+    static_cast<void>(input);
+
+    const bool enable =
+        !Command_host::is_enabled() &&
+        (input.vec2_absolute_value.x >= m_min_to_enable);
+    const bool disable =
+        Command_host::is_enabled() &&
+        (input.vec2_absolute_value.x <= m_max_to_disable);
+
+    if (!enable && !disable)
+    {
+        return true; // consumed but didn't make a difference (yet)
+    }
+
+    ERHE_VERIFY(enable != disable);
+
+    this->Command_host::set_enabled(enable);
+    if (enable) // TODO This assymetry does not look great
+    {
+        m_update_command.try_ready(input);
+    }
+    else
+    {
+        m_update_command.get_target_command().set_inactive();
+    }
+    set_inactive(); // TODO Is this needed?
+
+    const auto target_state    = m_update_command.get_target_command().get_command_state();
+    const bool is_target_ready = (target_state == State::Ready) || (target_state == State::Active);
+    return is_target_ready;
+}
+
+//
+
+Redirect_command::Redirect_command(Command& target_command)
+    : Helper_command{
+        target_command,
+        fmt::format("Redirect_command({})", target_command.get_name())
+    }
+{
+}
+
+void Redirect_command::try_ready(Input_arguments& input)
+{
+    m_target_command.try_ready(input);
+}
+
+auto Redirect_command::try_call(Input_arguments& input) -> bool
+{
+    return m_target_command.try_call(input);
+}
+
+//
+
+Drag_float_command::Drag_float_command(Command& target_command)
+    : Helper_command{
+        target_command,
+        fmt::format("Drag_float_command({})", target_command.get_name())
+    }
+{
+}
+
+void Drag_float_command::try_ready(Input_arguments& input)
+{
+    static_cast<void>(input);
+}
+
+auto Drag_float_command::try_call(Input_arguments& input) -> bool
+{
+    if (!is_enabled())
+    {
+        return false;
+    }
+    return m_target_command.try_call(input);
+}
+
+//
+
+Drag_vector2f_command::Drag_vector2f_command(Command& target_command)
+    : Helper_command{
+        target_command,
+        fmt::format("Drag_vector2f_command({})", target_command.get_name())
+    }
+{
+}
+
+void Drag_vector2f_command::try_ready(Input_arguments& input)
+{
+    static_cast<void>(input);
+}
+
+auto Drag_vector2f_command::try_call(Input_arguments& input) -> bool
+{
+    if (!is_enabled())
+    {
+        return false;
+    }
+    return m_target_command.try_call(input);
+}
+
+//
+
+Drag_pose_command::Drag_pose_command(Command& target_command
+)
+    : Helper_command{
+        target_command,
+        fmt::format("Drag_pose_command({})", target_command.get_name())
+    }
+{
+}
+
+void Drag_pose_command::try_ready(Input_arguments& input)
+{
+    static_cast<void>(input);
+}
+
+auto Drag_pose_command::try_call(Input_arguments& input) -> bool
+{
+    if (!is_enabled())
+    {
+        return false;
+    }
+    return m_target_command.try_call(input);
+}
+
+//
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+Xr_float_click_command::Xr_float_click_command(Command& target_command)
+    : Helper_command{
+        target_command,
+        fmt::format("Xr_float_click_command({})", target_command.get_name())
+    }
+{
+}
+
+void Xr_float_click_command::bind(erhe::xr::Xr_action_float* xr_action_for_value)
+{
+    m_xr_action_for_value = xr_action_for_value;
+}
+
+void Xr_float_click_command::try_ready(Input_arguments& input)
+{
+    Input_arguments patched_input = input;
+    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState;
+    m_target_command.try_ready(patched_input);
+}
+
+auto Xr_float_click_command::try_call(Input_arguments& input) -> bool
+{
+    Input_arguments patched_input = input;
+    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState;
+    return m_target_command.try_call(patched_input);
+}
+
+//
+
+Xr_vector2f_click_command::Xr_vector2f_click_command(Command& target_command)
+    : Helper_command{
+        target_command,
+        fmt::format("Xr_vector2f_click_command({})", target_command.get_name())
+    }
+{
+}
+
+void Xr_vector2f_click_command::bind(erhe::xr::Xr_action_vector2f* xr_action_for_value)
+{
+    m_xr_action_for_value = xr_action_for_value;
+}
+
+void Xr_vector2f_click_command::try_ready(Input_arguments& input)
+{
+    Input_arguments patched_input = input;
+    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState.x;
+    patched_input.vec2_absolute_value.y = m_xr_action_for_value->state.currentState.y;
+    m_target_command.try_ready(patched_input);
+}
+
+auto Xr_vector2f_click_command::try_call(Input_arguments& input) -> bool
+{
+    Input_arguments patched_input = input;
+    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState.x;
+    patched_input.vec2_absolute_value.y = m_xr_action_for_value->state.currentState.y;
+    return m_target_command.try_call(patched_input);
+}
+
+//
+
+Xr_pose_click_command::Xr_pose_click_command(Command& target_command)
+    : Helper_command{
+        target_command,
+        fmt::format("Xr_pose_click_command({})", target_command.get_name())
+    }
+{
+}
+
+void Xr_pose_click_command::bind(erhe::xr::Xr_action_pose* xr_action_for_value)
+{
+    m_xr_action_for_value = xr_action_for_value;
+}
+
+void Xr_pose_click_command::try_ready(Input_arguments& input)
+{
+    Input_arguments patched_input = input;
+    patched_input.pose_orientation = m_xr_action_for_value->orientation;
+    patched_input.pose_position    = m_xr_action_for_value->position;
+    m_target_command.try_ready(patched_input);
+}
+
+
+auto Xr_pose_click_command::try_call(Input_arguments& input) -> bool
+{
+    Input_arguments patched_input = input;
+    patched_input.pose_orientation = m_xr_action_for_value->orientation;
+    patched_input.pose_position    = m_xr_action_for_value->position;
+    return m_target_command.try_call(patched_input);
+}
+#endif
 
 }  // namespace erhe::application

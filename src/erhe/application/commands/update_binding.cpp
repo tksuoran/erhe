@@ -27,15 +27,22 @@ auto Update_binding::operator=(Update_binding&& other) noexcept -> Update_bindin
     return *this;
 }
 
-auto Update_binding::on_update(Command_context& context) -> bool
+auto Update_binding::on_update(Input_arguments& input) -> bool
 {
-    static_cast<void>(context);
     auto* const command = get_command();
     if (command->get_command_state() == State::Disabled)
     {
         return false;
     }
-    const bool consumed = command->try_call(context);
+    auto* host = command->get_host();
+    if (
+        (host != nullptr) &&
+        !host->is_enabled()
+    )
+    {
+        return false;
+    }
+    const bool consumed = command->try_call(input);
     static_cast<void>(consumed);
     return false;
 }

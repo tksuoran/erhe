@@ -8,7 +8,7 @@
 
 namespace erhe::application {
 
-class Command_context;
+class Input_arguments;
 
 // Key pressesed or released
 class Key_binding
@@ -30,7 +30,7 @@ public:
     auto operator=(Key_binding&& other) noexcept -> Key_binding&;
 
     auto on_key(
-        Command_context&             context,
+        Input_arguments&             input,
         const bool                   pressed,
         const erhe::toolkit::Keycode code,
         const uint32_t               modifier_mask

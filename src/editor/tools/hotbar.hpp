@@ -25,16 +25,9 @@ class Hotbar_trackpad_command
     : public erhe::application::Command
 {
 public:
-    explicit Hotbar_trackpad_command(Hotbar& hotbar)
-        : Command {"Hotbar.trackpad"}
-        , m_hotbar{hotbar}
-    {
-    }
+    Hotbar_trackpad_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Hotbar& m_hotbar;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Hotbar
@@ -66,7 +59,7 @@ public:
     void imgui   () override;
 
     // Public API
-    auto try_call      (erhe::application::Command_context& context) -> bool;
+    auto try_call      (erhe::application::Input_arguments& input) -> bool;
     auto get_color     (int color) -> glm::vec4&;
     void set_visibility(bool value);
     auto get_position  () const -> glm::vec3;
@@ -77,13 +70,16 @@ public:
 private:
     void on_message           (Editor_message& message);
     void update_node_transform(const glm::mat4& world_from_camera);
-    void tool_button          (Tool* tool);
+    void tool_button          (uint32_t id, Tool* tool);
     void handle_slot_update   ();
 
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 
     // Commands
-    Hotbar_trackpad_command m_trackpad_command;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    Hotbar_trackpad_command                      m_trackpad_command;
+    erhe::application::Xr_vector2f_click_command m_trackpad_click_command;
+#endif
 
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;

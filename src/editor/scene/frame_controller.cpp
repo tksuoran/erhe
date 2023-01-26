@@ -74,7 +74,10 @@ void Frame_controller::set_elevation(const float value)
 void Frame_controller::set_heading(const float value)
 {
     m_heading = value;
-    m_heading_matrix = erhe::toolkit::create_rotation(m_heading, erhe::toolkit::vec3_unit_y);
+    m_heading_matrix = erhe::toolkit::create_rotation(
+        m_heading,
+        erhe::toolkit::vector_types<float>::vec3_unit_y()
+    );
     update();
 }
 
@@ -135,7 +138,10 @@ void Frame_controller::handle_node_transform_update()
     m_elevation = elevation;
     m_heading   = heading;
 
-    m_heading_matrix = erhe::toolkit::create_rotation(m_heading, erhe::toolkit::vec3_unit_y);
+    m_heading_matrix = erhe::toolkit::create_rotation(
+        m_heading,
+        erhe::toolkit::vector_types<float>::vec3_unit_y()
+    );
 
     update();
 }
@@ -158,7 +164,10 @@ void Frame_controller::update()
         return;
     }
 
-    const mat4 elevation_matrix = erhe::toolkit::create_rotation(m_elevation, erhe::toolkit::vec3_unit_x);
+    const mat4 elevation_matrix = erhe::toolkit::create_rotation(
+        m_elevation,
+        erhe::toolkit::vector_types<float>::vec3_unit_x()
+    );
     m_rotation_matrix = m_heading_matrix * elevation_matrix;
 
     mat4 parent_from_local = m_rotation_matrix;
@@ -244,8 +253,14 @@ void Frame_controller::update_fixed_step()
     {
         m_heading += rotate_y.current_value();
         m_elevation += rotate_x.current_value();
-        const mat4 elevation_matrix = erhe::toolkit::create_rotation(m_elevation, erhe::toolkit::vec3_unit_x);
-        m_heading_matrix = erhe::toolkit::create_rotation(m_heading, erhe::toolkit::vec3_unit_y);
+        const mat4 elevation_matrix = erhe::toolkit::create_rotation(
+            m_elevation,
+            erhe::toolkit::vector_types<float>::vec3_unit_x()
+        );
+        m_heading_matrix = erhe::toolkit::create_rotation(
+            m_heading,
+            erhe::toolkit::vector_types<float>::vec3_unit_y()
+        );
         m_rotation_matrix = m_heading_matrix * elevation_matrix;
     }
 

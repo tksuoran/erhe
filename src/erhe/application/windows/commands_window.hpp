@@ -10,7 +10,7 @@ namespace erhe::application
 
 class Commands_window
     : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_type_name{"Commands_window"};

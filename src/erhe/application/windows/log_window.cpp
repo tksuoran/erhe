@@ -17,23 +17,37 @@
 namespace erhe::application
 {
 
-auto Log_window_toggle_pause_command::try_call(Command_context& context) -> bool
+Log_window_toggle_pause_command::Log_window_toggle_pause_command()
+    : Command{"Log_window.toggle_pause"}
 {
-    static_cast<void>(context);
+}
 
-    m_log_window.toggle_pause();
+auto Log_window_toggle_pause_command::try_call(Input_arguments& input) -> bool
+{
+    static_cast<void>(input);
+
+    g_log_window->toggle_pause();
     return true;
 }
+
+Log_window* g_log_window{nullptr};
 
 Log_window::Log_window()
     : erhe::components::Component{c_type_name}
     , Imgui_window               {c_title}
-    , m_toggle_pause_command     {*this}
 {
 }
 
 Log_window::~Log_window() noexcept
 {
+    ERHE_VERIFY(g_log_window == nullptr);
+}
+
+void Log_window::deinitialize_component()
+{
+    ERHE_VERIFY(g_log_window == this);
+    m_toggle_pause_command.set_host(nullptr);
+    g_log_window = nullptr;
 }
 
 void Log_window::declare_required_components()
@@ -44,12 +58,18 @@ void Log_window::declare_required_components()
 
 void Log_window::initialize_component()
 {
+    ERHE_VERIFY(g_log_window == nullptr);
     g_imgui_windows->register_imgui_window(this);
     m_min_size[0] = 220.0f;
     m_min_size[1] = 120.0f;
 
     g_commands->register_command   (&m_toggle_pause_command);
     g_commands->bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
+
+    Command_host::set_description("Log_window");
+    m_toggle_pause_command.set_host(this);
+
+    g_log_window = this;
 }
 
 void Log_window::toggle_pause()

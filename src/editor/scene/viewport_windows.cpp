@@ -20,6 +20,7 @@
 #include "tools/tools.hpp"
 #include "windows/imgui_viewport_window.hpp"
 
+#include "erhe/application/application_view.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_viewport.hpp"
@@ -60,20 +61,26 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
+#pragma region Commands
+Open_new_viewport_window_command::Open_new_viewport_window_command()
+    : Command{"Viewport_windows.open_new_viewport_window"}
+{
+}
+
 auto Open_new_viewport_window_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
-    static_cast<void>(context);
-    m_viewport_windows.open_new_imgui_viewport_window();
+    static_cast<void>(input);
+    g_viewport_windows->open_new_imgui_viewport_window();
     return true;
 }
+#pragma endregion Commands
 
 Viewport_windows* g_viewport_windows{nullptr};
 
 Viewport_windows::Viewport_windows()
-    : erhe::components::Component       {c_type_name}
-    , m_open_new_viewport_window_command{*this}
+    : erhe::components::Component{c_type_name}
 {
 }
 
@@ -85,6 +92,7 @@ Viewport_windows::~Viewport_windows() noexcept
 void Viewport_windows::deinitialize_component()
 {
     ERHE_VERIFY(g_viewport_windows == this);
+    m_open_new_viewport_window_command.set_host(nullptr);
     m_basic_viewport_windows.clear();
     m_imgui_viewport_windows.clear();
     m_viewport_windows.clear();
@@ -110,9 +118,11 @@ void Viewport_windows::initialize_component()
 {
     ERHE_VERIFY(g_viewport_windows == nullptr);
 
+    Command_host::set_description("Viewport_windows");
+
     auto& commands = *erhe::application::g_commands;
-    commands.register_command   (&m_open_new_viewport_window_command);
-    commands.bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+    commands.register_command            (&m_open_new_viewport_window_command);
+    commands.bind_command_to_key         (&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
 
     g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
@@ -120,6 +130,8 @@ void Viewport_windows::initialize_component()
             on_message(message);
         }
     );
+
+    m_open_new_viewport_window_command.set_host(this);
 
     g_viewport_windows = this;
 }
@@ -427,6 +439,18 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
     std::shared_ptr<Viewport_window> old_window = m_hover_window;
     m_hover_stack.clear();
 
+    // Pull mouse position
+    {
+        const auto mouse_position = erhe::application::g_view->mouse_position();
+        for (auto& imgui_viewport_window : m_imgui_viewport_windows)
+        {
+            if (imgui_viewport_window->is_hovered())
+            {
+                imgui_viewport_window->on_mouse_move(mouse_position);
+            }
+        }
+    }
+
     if (imgui_viewport != nullptr)
     {
         update_hover_from_imgui_viewport_windows(imgui_viewport);
@@ -471,39 +495,20 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
 
         if (imgui_viewport_window->is_hovered())
         {
-            const glm::vec2 viewport_position = viewport_window->to_scene_content(
-                glm::vec2{
-                    static_cast<float>(m_mouse_x),
-                    static_cast<float>(m_mouse_y)
-                }
-            );
-            SPDLOG_LOGGER_TRACE(
-                log_pointer,
-                "mouse {}, {} hovers viewport {} @ {}",
-                m_mouse_x,
-                m_mouse_y,
-                viewport_window->get_name(),
-                viewport_position
-            );
-            viewport_window->update_pointer_context(
-                viewport_position,
-                viewport_window->is_hovered()
-                    ? g_tools->get_tool_scene_root().get()
-                    : nullptr
-            );
-            //// ERHE_VERIFY(m_hover_stack.empty());
             m_last_window = viewport_window;
             m_hover_stack.push_back(m_last_window);
-        }
-        else
-        {
-            viewport_window->reset_control_ray();
         }
     }
 }
 
 void Viewport_windows::update_hover_from_basic_viewport_windows()
 {
+    glm::vec2 pointer_window_position{0.0f, 0.0f};
+    erhe::application::g_window->get_context_window()->get_cursor_position(
+        pointer_window_position.x,
+        pointer_window_position.y
+    );
+
     m_hover_stack.clear();
     for (const auto& basic_viewport_window : m_basic_viewport_windows)
     {
@@ -515,19 +520,16 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
 
         const erhe::scene::Viewport& viewport = basic_viewport_window->get_viewport();
         const bool is_hoverered = viewport.hit_test(
-            static_cast<int>(m_mouse_x),
-            static_cast<int>(m_mouse_y)
+            static_cast<int>(std::round(pointer_window_position.x)),
+            static_cast<int>(std::round(pointer_window_position.y))
         );
 
         viewport_window->set_is_hovered(is_hoverered);
 
         if (is_hoverered)
         {
-            const glm::vec2 viewport_position = viewport_window->to_scene_content(
-                glm::vec2{
-                    static_cast<float>(m_mouse_x),
-                    static_cast<float>(m_mouse_y)
-                }
+            const glm::vec2 viewport_position = viewport_window->viewport_from_window(
+                pointer_window_position
             );
             SPDLOG_LOGGER_TRACE(
                 log_pointer,
@@ -538,17 +540,15 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
                 viewport_position
             );
 
-            viewport_window->update_pointer_context(
-                viewport_position,
-                g_tools->get_tool_scene_root().get()
-            );
+            viewport_window->update_pointer_2d_position(viewport_position);
             ERHE_VERIFY(m_hover_stack.empty());
             m_last_window = viewport_window;
             m_hover_stack.push_back(m_last_window);
         }
         else
         {
-            viewport_window->reset_control_ray();
+            viewport_window->reset_control_transform();
+            viewport_window->reset_hover_slots();
         }
     }
 }
@@ -567,84 +567,23 @@ auto Viewport_windows::last_window() -> std::shared_ptr<Viewport_window>
     return m_last_window.lock();
 }
 
-void Viewport_windows::update_keyboard(
-    const bool                   pressed,
-    const erhe::toolkit::Keycode code,
-    const uint32_t               modifier_mask
-)
-{
-    static_cast<void>(pressed);
-    static_cast<void>(code);
-
-    m_shift   = (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) == erhe::toolkit::Key_modifier_bit_shift;
-    m_alt     = (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) == erhe::toolkit::Key_modifier_bit_menu;
-    m_control = (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) == erhe::toolkit::Key_modifier_bit_ctrl;
-}
-
-void Viewport_windows::update_mouse(
-    const erhe::toolkit::Mouse_button button,
-    const int                         count
-)
-{
-    SPDLOG_LOGGER_TRACE(log_pointer, "mouse {} count = {}", static_cast<int>(button), count);
-    m_mouse_button[button].pressed  = (count > 0);
-    m_mouse_button[button].released = (count == 0);
-}
-
-void Viewport_windows::update_mouse(
-    const double x,
-    const double y
-)
-{
-    SPDLOG_LOGGER_TRACE(log_pointer, "mouse x = {} y = {}", x, y);
-    m_mouse_x = x;
-    m_mouse_y = y;
-}
-
-auto Viewport_windows::shift_key_down() const -> bool
-{
-    return m_shift;
-}
-
-auto Viewport_windows::control_key_down() const -> bool
-{
-    return m_control;
-}
-
-auto Viewport_windows::alt_key_down() const -> bool
-{
-    return m_alt;
-}
-
-auto Viewport_windows::mouse_button_pressed(const erhe::toolkit::Mouse_button button) const -> bool
-{
-    Expects(button < erhe::toolkit::Mouse_button_count);
-    return m_mouse_button[static_cast<int>(button)].pressed;
-}
-
-auto Viewport_windows::mouse_button_released(const erhe::toolkit::Mouse_button button) const -> bool
-{
-    Expects(button < erhe::toolkit::Mouse_button_count);
-    return m_mouse_button[static_cast<int>(button)].released;
-}
-
-auto Viewport_windows::mouse_x() const -> double
-{
-    return m_mouse_x;
-}
-
-auto Viewport_windows::mouse_y() const -> double
-{
-    return m_mouse_y;
-}
-
 void Viewport_windows::viewport_toolbar(
     Viewport_window& viewport_window,
     bool&            hovered
 )
 {
+    ImGui::PushID("Viewport_windows::viewport_toolbar");
     const auto& rasterization = g_icon_set->get_small_rasterization();
-    const bool button_pressed = rasterization.icon_button(g_icon_set->icons.three_dots, 0);
+
+    static constexpr std::string_view open_config{"open_config"};
+    static constexpr uint32_t viewport_open_config_id{
+        compiletime_xxhash::xxh32(open_config.data(), open_config.size(), {})
+    };
+
+    const bool button_pressed = rasterization.icon_button(
+        ERHE_HASH("open_config"),
+        g_icon_set->icons.three_dots
+    );
     if (ImGui::IsItemHovered())
     {
         hovered = true;
@@ -654,6 +593,7 @@ void Viewport_windows::viewport_toolbar(
         g_viewport_config->show();
         g_viewport_config->edit_data = viewport_window.get_config();
     }
+    ImGui::PopID();
 }
 
 } // namespace editor

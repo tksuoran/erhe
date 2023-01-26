@@ -46,54 +46,54 @@ auto Grid::get_name() const -> const std::string&
     return m_name;
 }
 
-auto Grid::snap_world_position(const glm::dvec3& position_in_world) const -> glm::dvec3
+auto Grid::snap_world_position(const glm::vec3& position_in_world) const -> glm::vec3
 {
-    const double snap_size = static_cast<double>(m_cell_size) / static_cast<double>(m_cell_div);
-    const glm::dvec3 position_in_grid = glm::dvec3{grid_from_world() * glm::dvec4{position_in_world, 1.0}};
-    const glm::dvec3 snapped_position_in_grid{
+    const float     snap_size        = m_cell_size / m_cell_div;
+    const glm::vec3 position_in_grid = glm::vec3{grid_from_world() * glm::vec4{position_in_world, 1.0}};
+    const glm::vec3 snapped_position_in_grid{
         std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
         std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
         std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
     };
 
-    return glm::dvec3{
-        world_from_grid() * glm::dvec4{snapped_position_in_grid, 1.0}
+    return glm::vec3{
+        world_from_grid() * glm::vec4{snapped_position_in_grid, 1.0}
     };
 }
 
-auto Grid::snap_grid_position(const glm::dvec3& position_in_grid) const -> glm::dvec3
+auto Grid::snap_grid_position(const glm::vec3& position_in_grid) const -> glm::vec3
 {
-    const double snap_size = static_cast<double>(m_cell_size) / static_cast<double>(m_cell_div);
-    const glm::dvec3 snapped_position_in_grid{
-        std::floor((position_in_grid.x + snap_size * 0.5) / snap_size) * snap_size,
-        std::floor((position_in_grid.y + snap_size * 0.5) / snap_size) * snap_size,
-        std::floor((position_in_grid.z + snap_size * 0.5) / snap_size) * snap_size
+    const float     snap_size        = m_cell_size / m_cell_div;
+    const glm::vec3 snapped_position_in_grid{
+        std::floor((position_in_grid.x + snap_size * 0.5f) / snap_size) * snap_size,
+        std::floor((position_in_grid.y + snap_size * 0.5f) / snap_size) * snap_size,
+        std::floor((position_in_grid.z + snap_size * 0.5f) / snap_size) * snap_size
     };
 
     return snapped_position_in_grid;
 }
 
-auto Grid::world_from_grid() const -> glm::dmat4
+auto Grid::world_from_grid() const -> glm::mat4
 {
     if (m_plane_type == Grid_plane_type::Node)
     {
         const erhe::scene::Node* node = get_node();
         if (node != nullptr)
         {
-            return glm::dmat4{node->world_from_node()};
+            return node->world_from_node();
         }
     }
     return m_world_from_grid;
 }
 
-auto Grid::grid_from_world() const -> glm::dmat4
+auto Grid::grid_from_world() const -> glm::mat4
 {
     if (m_plane_type == Grid_plane_type::Node)
     {
         const erhe::scene::Node* node = get_node();
         if (node != nullptr)
         {
-            return glm::dmat4{node->node_from_world()};
+            return node->node_from_world();
         }
     }
     return m_grid_from_world;
@@ -201,16 +201,16 @@ void Grid::imgui()
     {
         ImGui::DragScalarN(
             "Offset",
-            ImGuiDataType_Double,
+            ImGuiDataType_Float,
             &m_center.x,
             3,
             0.01f
         );
-        const double min_rotation = -180.0;
-        const double max_rotation =  180.0;
+        const float min_rotation = -180.0;
+        const float max_rotation =  180.0;
         ImGui::DragScalarN(
             "Rotation",
-            ImGuiDataType_Double,
+            ImGuiDataType_Float,
             &m_rotation,
             1,
             0.05f,
@@ -218,11 +218,11 @@ void Grid::imgui()
             &max_rotation
         );
 
-        const double radians = glm::radians(m_rotation);
-        const glm::dmat4 orientation  = get_plane_transform(m_plane_type);
-        const glm::dvec3 plane_normal = glm::dvec3{0.0, 1.0, 0.0};
-        const glm::dmat4 offset       = erhe::toolkit::create_translation<double>(m_center);
-        const glm::dmat4 rotation     = erhe::toolkit::create_rotation<double>( radians, plane_normal);
+        const float     radians      = glm::radians(m_rotation);
+        const glm::mat4 orientation  = get_plane_transform(m_plane_type);
+        const glm::vec3 plane_normal = glm::vec3{0.0, 1.0, 0.0};
+        const glm::mat4 offset       = erhe::toolkit::create_translation<float>(m_center);
+        const glm::mat4 rotation     = erhe::toolkit::create_rotation<float>( radians, plane_normal);
         m_world_from_grid = orientation * rotation * offset;
         m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
     }
@@ -256,20 +256,20 @@ void Grid::imgui()
 }
 
 auto Grid::intersect_ray(
-    const glm::dvec3& ray_origin_in_world,
-    const glm::dvec3& ray_direction_in_world
-) -> std::optional<glm::dvec3>
+    const glm::vec3& ray_origin_in_world,
+    const glm::vec3& ray_direction_in_world
+) -> std::optional<glm::vec3>
 {
     if (!m_enable)
     {
         return {};
     }
 
-    const glm::dvec3 ray_origin_in_grid    = glm::dvec3{grid_from_world() * glm::dvec4{ray_origin_in_world, 1.0}};
-    const glm::dvec3 ray_direction_in_grid = glm::dvec3{grid_from_world() * glm::dvec4{ray_direction_in_world, 0.0}};
-    const auto intersection = erhe::toolkit::intersect_plane<double>(
-        glm::dvec3{0.0, 1.0, 0.0},
-        glm::dvec3{0.0, 0.0, 0.0},
+    const glm::vec3 ray_origin_in_grid    = glm::vec3{grid_from_world() * glm::vec4{ray_origin_in_world,    1.0f}};
+    const glm::vec3 ray_direction_in_grid = glm::vec3{grid_from_world() * glm::vec4{ray_direction_in_world, 0.0f}};
+    const auto intersection = erhe::toolkit::intersect_plane<float>(
+        glm::vec3{0.0f, 1.0f, 0.0f},
+        glm::vec3{0.0f, 0.0f, 0.0f},
         ray_origin_in_grid,
         ray_direction_in_grid
     );
@@ -277,19 +277,21 @@ auto Grid::intersect_ray(
     {
         return {};
     }
-    const glm::dvec3 position_in_grid = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
+    const glm::vec3 position_in_grid = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
 
     if (
-        (position_in_grid.x < -static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count)) ||
-        (position_in_grid.x >  static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count)) ||
-        (position_in_grid.z < -static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count)) ||
-        (position_in_grid.z >  static_cast<double>(m_cell_size) * static_cast<double>(m_cell_count))
+        (position_in_grid.x < -m_cell_size * static_cast<float>(m_cell_count)) ||
+        (position_in_grid.x >  m_cell_size * static_cast<float>(m_cell_count)) ||
+        (position_in_grid.z < -m_cell_size * static_cast<float>(m_cell_count)) ||
+        (position_in_grid.z >  m_cell_size * static_cast<float>(m_cell_count))
     )
     {
         return {};
     }
 
-    return glm::dvec3{world_from_grid() * glm::dvec4{position_in_grid, 1.0}};
+    return glm::vec3{
+        world_from_grid() * glm::vec4{position_in_grid, 1.0}
+    };
 }
 
 

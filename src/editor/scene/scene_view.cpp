@@ -6,7 +6,9 @@
 #include "editor_message_bus.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/grid.hpp"
 #include "tools/grid_tool.hpp"
+#include "tools/tools.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "erhe/geometry/geometry.hpp"
@@ -14,6 +16,7 @@
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -84,36 +87,46 @@ auto Scene_view::get_shadow_texture() const -> erhe::graphics::Texture*
     return shadow_render_node->get_texture().get();
 }
 
-auto Scene_view::get_control_ray_origin_in_world() const -> std::optional<glm::dvec3>
+auto Scene_view::get_world_from_control() const -> std::optional<glm::mat4>
 {
-    return m_control_ray_origin_in_world;
+    return m_world_from_control;
 }
 
-auto Scene_view::get_control_ray_direction_in_world() const -> std::optional<glm::dvec3>
+auto Scene_view::get_control_from_world() const -> std::optional<glm::mat4>
 {
-    return m_control_ray_direction_in_world;
+    return m_control_from_world;
+}
+
+auto Scene_view::get_control_ray_origin_in_world() const -> std::optional<glm::vec3>
+{
+    if (!m_world_from_control.has_value())
+    {
+        return {};
+    }
+    return glm::vec3{m_world_from_control.value() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+}
+
+auto Scene_view::get_control_ray_direction_in_world() const -> std::optional<glm::vec3>
+{
+    if (!m_world_from_control.has_value())
+    {
+        return {};
+    }
+    return glm::vec3{m_world_from_control.value() * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 }
 
 auto Scene_view::get_control_position_in_world_at_distance(
-    const double distance
-) const -> std::optional<glm::dvec3>
+    const float distance
+) const -> std::optional<glm::vec3>
 {
-    if (
-        !m_control_ray_origin_in_world.has_value() ||
-        !m_control_ray_direction_in_world.has_value()
-    )
+    if (!m_world_from_control.has_value())
     {
         return {};
     }
 
-    const glm::dvec3 origin    = m_control_ray_origin_in_world.value();
-    const glm::dvec3 direction = m_control_ray_direction_in_world.value();
+    const glm::vec3 origin    = get_control_ray_origin_in_world().value();
+    const glm::vec3 direction = get_control_ray_direction_in_world().value();
     return origin + distance * direction;
-}
-
-auto Scene_view::get_position_in_viewport() const -> std::optional<glm::dvec2>
-{
-    return m_position_in_viewport;
 }
 
 auto Scene_view::get_hover(size_t slot) const -> const Hover_entry&
@@ -124,28 +137,31 @@ auto Scene_view::get_hover(size_t slot) const -> const Hover_entry&
 auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entry&
 {
     std::size_t nearest_slot = 0;
-    double nearest_distance = std::numeric_limits<double>::max();
-    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
+    if (m_world_from_control.has_value())
     {
-        const uint32_t slot_bit = (1 << slot);
-        if ((slot_mask & slot_bit) == 0)
+        float nearest_distance = std::numeric_limits<float>::max();
+        for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
         {
-            continue;
-        }
+            const uint32_t slot_bit = (1 << slot);
+            if ((slot_mask & slot_bit) == 0)
+            {
+                continue;
+            }
 
-        const Hover_entry& entry = m_hover_entries[slot];
-        if (!entry.valid || !entry.position.has_value())
-        {
-            continue;
-        }
-        const double distance = glm::distance(
-            m_control_ray_origin_in_world.value(),
-            entry.position.value()
-        );
-        if (distance < nearest_distance)
-        {
-            nearest_distance = distance;
-            nearest_slot = slot;
+            const Hover_entry& entry = m_hover_entries[slot];
+            if (!entry.valid || !entry.position.has_value())
+            {
+                continue;
+            }
+            const float distance = glm::distance(
+                get_control_ray_origin_in_world().value(),
+                entry.position.value()
+            );
+            if (distance < nearest_distance)
+            {
+                nearest_distance = distance;
+                nearest_slot = slot;
+            }
         }
     }
     return m_hover_entries.at(nearest_slot);
@@ -161,31 +177,89 @@ auto Scene_view::as_viewport_window() const -> const Viewport_window*
     return nullptr;
 }
 
-void Scene_view::reset_control_ray()
+void Scene_view::set_world_from_control(
+    glm::vec3 near_position_in_world,
+    glm::vec3 far_position_in_world
+)
+{
+    const auto direction = glm::normalize(far_position_in_world - near_position_in_world);
+    const auto side      = erhe::toolkit::min_axis<float>(direction);
+    const auto camera = get_camera();
+    if (!camera)
+    {
+        return;
+    }
+    const auto* camera_node = camera->get_node();
+    if (camera_node == nullptr)
+    {
+        return;
+    }
+    const glm::mat4 camera_world_from_node = camera_node->world_from_node();
+    const glm::vec3 camera_up_in_world = glm::vec3{camera_world_from_node * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const glm::mat4 transform = erhe::toolkit::create_look_at(
+        near_position_in_world,
+        far_position_in_world,
+        camera_up_in_world
+    );
+    set_world_from_control(transform);
+}
+
+void Scene_view::set_world_from_control(const glm::mat4& world_from_control)
+{
+    m_world_from_control = world_from_control;
+    m_control_from_world = glm::inverse(world_from_control);
+}
+
+void Scene_view::reset_control_transform()
 {
     for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
     {
         set_hover(slot, Hover_entry{});
     }
 
-    m_control_ray_origin_in_world   .reset();
-    m_control_ray_direction_in_world.reset();
-    m_position_in_viewport          .reset();
+    m_world_from_control.reset();
 }
 
-void Scene_view::raytrace_update(
-    const glm::vec3 ray_origin,
-    const glm::vec3 ray_direction,
-    Scene_root*     tool_scene_root
-)
+void Scene_view::reset_hover_slots()
 {
-    m_control_ray_origin_in_world    = ray_origin;
-    m_control_ray_direction_in_world = ray_direction;
+    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
+    {
+        set_hover(slot, Hover_entry{});
+    }
+}
 
+void Scene_view::update_grid_hover()
+{
+    const auto origin_opt    = get_control_ray_origin_in_world();
+    const auto direction_opt = get_control_ray_direction_in_world();
+    if (!origin_opt.has_value() || !direction_opt.has_value())
+    {
+        return;
+    }
+    const glm::vec3 ray_origin    = origin_opt.value();
+    const glm::vec3 ray_direction = direction_opt.value();
+
+    const Grid_hover_position hover_position = g_grid_tool->update_hover(ray_origin, ray_direction);
+    Hover_entry entry;
+    entry.valid = (hover_position.grid != nullptr);
+    if (entry.valid)
+    {
+        entry.position = hover_position.position;
+        entry.normal   = glm::vec3{
+            hover_position.grid->world_from_grid() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}
+        };
+        entry.grid     = hover_position.grid;
+    }
+
+    set_hover(Hover_entry::grid_slot, entry);
+}
+
+void Scene_view::update_hover_with_raytrace()
+{
     const auto& scene_root = get_scene_root();
     if (!scene_root)
     {
-        reset_control_ray();
+        reset_hover_slots();
         return;
     }
 
@@ -196,6 +270,10 @@ void Scene_view::raytrace_update(
 
     ERHE_PROFILE_SCOPE("raytrace inner");
 
+    const glm::vec3 ray_origin    = get_control_ray_origin_in_world   ().value();
+    const glm::vec3 ray_direction = get_control_ray_direction_in_world().value();
+
+    Scene_root* tool_scene_root = g_tools->get_tool_scene_root().get();
     for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
     {
         const uint32_t slot_mask = Hover_entry::raytrace_slot_masks[slot];
@@ -216,7 +294,7 @@ void Scene_view::raytrace_update(
         erhe::raytrace::Hit hit;
         if (slot == Hover_entry::tool_slot)
         {
-            if (tool_scene_root)
+            if (tool_scene_root != nullptr)
             {
                 tool_scene_root->raytrace_scene().intersect(ray, hit);
             }

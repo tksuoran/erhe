@@ -35,7 +35,7 @@ public:
     }
     ~Map_scroll_command() noexcept final {}
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 
 private:
     glm::vec2 m_offset;
@@ -51,7 +51,7 @@ public:
     }
     ~Map_free_zoom_command() noexcept final {}
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Map_mouse_scroll_command final
@@ -64,8 +64,8 @@ public:
     }
     ~Map_mouse_scroll_command() noexcept final {}
 
-    auto try_call (erhe::application::Command_context& context) -> bool override;
-    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Map_zoom_command
@@ -78,7 +78,7 @@ public:
     {
     }
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 
 private:
     float m_scale{1.0f};
@@ -93,7 +93,7 @@ public:
     {
     }
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Map_window

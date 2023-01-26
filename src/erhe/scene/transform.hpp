@@ -24,8 +24,8 @@ public:
     Transform         (const Transform& t);
     auto operator=    (const Transform& t) -> Transform&;
 
-    [[nodiscard]] auto matrix         () const -> glm::mat4 { return m_matrix; }
-    [[nodiscard]] auto inverse_matrix () const -> glm::mat4 { return m_inverse_matrix; }
+    [[nodiscard]] auto matrix         () const -> const glm::mat4& { return m_matrix; }
+    [[nodiscard]] auto inverse_matrix () const -> const glm::mat4& { return m_inverse_matrix; }
 
     void set_translation(const glm::vec3 v);
     void fix_inverse    ();

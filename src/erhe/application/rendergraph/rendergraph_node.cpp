@@ -15,9 +15,9 @@ Rendergraph_node::Rendergraph_node(const std::string_view name)
 
 Rendergraph_node::~Rendergraph_node()
 {
-    if (erhe::application::g_rendergraph != nullptr)
+    if (g_rendergraph != nullptr)
     {
-        erhe::application::g_rendergraph->unregister_node(this);
+        g_rendergraph->unregister_node(this);
     }
 }
 
@@ -257,7 +257,7 @@ auto Rendergraph_node::get_producer_output_viewport(
 
     for (const auto& output : m_outputs)
     {
-        if (output.resource_routing == erhe::application::Resource_routing::None)
+        if (output.resource_routing == Resource_routing::None)
         {
             continue;
         }

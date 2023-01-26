@@ -116,7 +116,7 @@ Line_renderer_set* g_line_renderer_set{nullptr};
 
 Line_renderer_set::Line_renderer_set()
     : Component{c_type_name}
-    , erhe::application::Imgui_window{c_title}
+    , Imgui_window{c_title}
 {
 }
 
@@ -141,7 +141,7 @@ void Line_renderer_set::deinitialize_component()
 
 void Line_renderer_set::declare_required_components()
 {
-    require<erhe::application::Imgui_windows>();
+    require<Imgui_windows>();
     require<Gl_context_provider>();
     require<Configuration      >();
     require<Shader_monitor     >();
@@ -619,28 +619,6 @@ void Line_renderer::add_cube(
     }
 }
 
-namespace {
-
-auto safe_normalize_cross(const vec3& lhs, const vec3& rhs)
-{
-    const vec3 lhs_normalized = glm::normalize(lhs);
-    const vec3 rhs_normalized = glm::normalize(rhs);
-    const float d = glm::dot(lhs_normalized, rhs_normalized);
-    if (std::abs(d) > 0.999f)
-    {
-        return erhe::toolkit::min_axis(lhs);
-    }
-
-    const vec3 c0 = glm::cross(lhs, rhs);
-    if (glm::length(c0) < glm::epsilon<float>())
-    {
-        return erhe::toolkit::min_axis(lhs);
-    }
-    return glm::normalize(c0);
-}
-
-}
-
 void Line_renderer::imgui()
 {
     for (const auto& fun : m_imgui)
@@ -752,8 +730,8 @@ void Line_renderer::add_sphere(
 
     const vec3 P              = center + p * from_sphere_to_camera_direction;
     const vec3 up0_direction  = vec3{camera_world_from_node->matrix() * vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const vec3 side_direction = safe_normalize_cross(from_camera_to_sphere_direction, up0_direction);
-    const vec3 up_direction   = safe_normalize_cross(side_direction, from_camera_to_sphere_direction);
+    const vec3 side_direction = erhe::toolkit::safe_normalize_cross<float>(from_camera_to_sphere_direction, up0_direction);
+    const vec3 up_direction   = erhe::toolkit::safe_normalize_cross<float>(side_direction, from_camera_to_sphere_direction);
     const vec3 axis_a         = h * side_direction;
     const vec3 axis_b         = h * up_direction;
 
@@ -860,7 +838,7 @@ void Line_renderer::add_cone(
             0.0f,
             static_cast<float>(std::sin(phi + glm::half_pi<float>()))
         };
-        const vec3  N       = safe_normalize_cross(B, T);
+        const vec3  N       = erhe::toolkit::safe_normalize_cross<float>(B, T);
         const vec3  v       = glm::normalize(camera_position_in_node - mid_point);
         const float n_dot_v = dot(N, v);
 
@@ -877,9 +855,9 @@ void Line_renderer::add_cone(
 
     std::vector<Cone_edge> sign_flip_edges;
 
-    const vec3  bottom_v        = glm::normalize(camera_position_in_node -bottom_center);
-    const float bottom_n_dot_v  = glm::dot(bottom_normal, bottom_v);
-    const bool  bottom_visible  = bottom_n_dot_v >= 0.0f;
+    const vec3  bottom_v       = glm::normalize(camera_position_in_node -bottom_center);
+    const float bottom_n_dot_v = glm::dot(bottom_normal, bottom_v);
+    const bool  bottom_visible = bottom_n_dot_v >= 0.0f;
 
     const vec3  top_v        = glm::normalize(camera_position_in_node - top_center);
     const float top_n_dot_v  = glm::dot(top_normal, top_v);

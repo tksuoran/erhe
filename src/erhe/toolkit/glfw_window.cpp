@@ -200,13 +200,13 @@ auto glfw_mouse_button_to_erhe(const int glfw_mouse_button) -> Mouse_button
 //  0     = release
 //  1     = press
 //  wheel = signed int with direction and amount
-auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> int
+auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> bool
 {
     switch (glfw_mouse_button_action)
     {
-        case GLFW_PRESS:   return 1;
-        case GLFW_RELEASE: return 0;
-        default: return 0; // TODO
+        case GLFW_PRESS:   return true;
+        case GLFW_RELEASE: return false;
+        default: return false; // TODO
     }
 }
 
@@ -300,7 +300,7 @@ void mouse_position_event_callback(GLFWwindow* glfw_window, double x, double y)
     auto* const event_handler = get_event_handler(glfw_window);
     if (event_handler)
     {
-        event_handler->on_mouse_move(x, y);
+        event_handler->on_mouse_move(static_cast<float>(x), static_cast<float>(y));
     }
 }
 
@@ -311,7 +311,7 @@ void mouse_button_event_callback(GLFWwindow* glfw_window, const int button, cons
     auto* const event_handler = get_event_handler(glfw_window);
     if (event_handler)
     {
-        event_handler->on_mouse_click(
+        event_handler->on_mouse_button(
             glfw_mouse_button_to_erhe(button),
             glfw_mouse_button_action_to_erhe(action)
         );
@@ -323,7 +323,7 @@ void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const d
     auto* const event_handler = get_event_handler(glfw_window);
     if (event_handler)
     {
-        event_handler->on_mouse_wheel(x, y);
+        event_handler->on_mouse_wheel(static_cast<float>(x), static_cast<float>(y));
     }
 }
 
@@ -636,12 +636,16 @@ void Context_window::enter_event_loop()
     }
 }
 
-void Context_window::get_cursor_position(double& xpos, double& ypos)
+void Context_window::get_cursor_position(float& xpos, float& ypos)
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
     if (window != nullptr)
     {
-        glfwGetCursorPos(window, &xpos, &ypos);
+        double xpos_double{0.0};
+        double ypos_double{0.0};
+        glfwGetCursorPos(window, &xpos_double, &ypos_double);
+        xpos = static_cast<float>(xpos_double);
+        ypos = static_cast<float>(ypos_double);
     }
 }
 

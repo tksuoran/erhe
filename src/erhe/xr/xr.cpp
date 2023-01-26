@@ -113,6 +113,11 @@ auto to_string_message_type(XrDebugUtilsMessageTypeFlagsEXT type_flags) -> std::
 
 auto check(XrResult result, const spdlog::level::level_enum log_level) -> bool
 {
+    if (result == XR_ERROR_RUNTIME_FAILURE)
+    {
+        log_xr->error("OpenXR runtime failure");
+        return false;
+    }
     if (result != XR_SUCCESS)
     {
         log_xr->log(

@@ -27,7 +27,7 @@ auto Mouse_motion_binding::operator=(Mouse_motion_binding&& other) noexcept -> M
     return *this;
 }
 
-auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
+auto Mouse_motion_binding::on_motion(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
 
@@ -38,7 +38,7 @@ auto Mouse_motion_binding::on_motion(Command_context& context) -> bool
 
     // Motion binding never consumes the event, so that all
     // motion bindings can process the motion.
-    static_cast<void>(command->try_call(context));
+    static_cast<void>(command->try_call(input));
     return false;
 }
 

@@ -26,8 +26,8 @@ class Paint_vertex_command
 {
 public:
     explicit Paint_vertex_command();
-    auto try_call (erhe::application::Command_context& context) -> bool override;
-    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 enum class Paint_mode
@@ -68,6 +68,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -89,7 +90,9 @@ private:
         const glm::vec4                           color
     );
 
-    Paint_vertex_command    m_paint_vertex_command;
+    Paint_vertex_command                   m_paint_vertex_command;
+    erhe::application::Redirect_command    m_drag_redirect_update_command;
+    erhe::application::Drag_enable_command m_drag_enable_command;
 
     Paint_mode              m_paint_mode{Paint_mode::Point};
     glm::vec4               m_color     {1.0f, 1.0f, 1.0f, 1.0f};

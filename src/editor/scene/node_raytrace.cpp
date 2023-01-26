@@ -440,22 +440,6 @@ auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrac
     return {};
 }
 
-auto safe_normalize_cross(const glm::vec3& lhs, const glm::vec3& rhs)
-{
-    const float d = glm::dot(lhs, rhs);
-    if (std::abs(d) > 0.999f)
-    {
-        return erhe::toolkit::min_axis(lhs);
-    }
-
-    const glm::vec3 c0 = glm::cross(lhs, rhs);
-    if (glm::length(c0) < glm::epsilon<float>())
-    {
-        return erhe::toolkit::min_axis(lhs);
-    }
-    return glm::normalize(c0);
-}
-
 void draw_ray_hit(
     erhe::application::Line_renderer& line_renderer,
     const erhe::raytrace::Ray&        ray,
@@ -480,8 +464,8 @@ void draw_ray_hit(
     const glm::vec3 local_normal    = local_normal_opt.value();
     const glm::mat4 world_from_node = raytrace_node->get_node()->world_from_node();
     const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
-    const glm::vec3 T = safe_normalize_cross(N, ray.direction);
-    const glm::vec3 B = safe_normalize_cross(T, N);
+    const glm::vec3 T = erhe::toolkit::safe_normalize_cross<float>(N, ray.direction);
+    const glm::vec3 B = erhe::toolkit::safe_normalize_cross<float>(T, N);
 
     line_renderer.set_thickness(style.hit_thickness);
     line_renderer.add_lines(

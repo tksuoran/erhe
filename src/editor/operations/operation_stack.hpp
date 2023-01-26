@@ -19,31 +19,18 @@ class Undo_command
     : public erhe::application::Command
 {
 public:
-    explicit Undo_command(Operation_stack& operation_stack)
-        : Command          {"undo"}
-        , m_operation_stack{operation_stack}
-    {
-    }
-    //~Undo_command() noexcept final {}
+    Undo_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Operation_stack& m_operation_stack;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Redo_command
     : public erhe::application::Command
 {
 public:
-    explicit Redo_command(Operation_stack& operation_stack)
-        : Command{"redo"}
-        , m_operation_stack{operation_stack} {}
+    Redo_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Operation_stack& m_operation_stack;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Operation_stack

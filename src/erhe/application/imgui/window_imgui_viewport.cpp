@@ -112,8 +112,8 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
     io.MousePos = ImVec2{-FLT_MAX, -FLT_MAX};
     if (m_has_cursor)
     {
-        double mouse_x;
-        double mouse_y;
+        double mouse_x{0.0};
+        double mouse_y{0.0};
         glfwGetCursorPos(glfw_window, &mouse_x, &mouse_y);
         io.MousePos = ImVec2{
             static_cast<float>(mouse_x),

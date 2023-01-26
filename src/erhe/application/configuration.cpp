@@ -205,12 +205,13 @@ void Configuration::parse_args(int argc, char** argv)
         if (ini.has("headset"))
         {
             const auto& section = ini["headset"];
-            ini_get(section, "openxr",           headset.openxr);
-            ini_get(section, "quad_view",        headset.quad_view);
-            ini_get(section, "debug",            headset.debug);
-            ini_get(section, "depth",            headset.depth);
-            ini_get(section, "visibility_mask",  headset.visibility_mask);
-            ini_get(section, "hand_tracking",    headset.hand_tracking);
+            ini_get(section, "openxr",            headset.openxr);
+            ini_get(section, "quad_view",         headset.quad_view);
+            ini_get(section, "debug",             headset.debug);
+            ini_get(section, "depth",             headset.depth);
+            ini_get(section, "visibility_mask",   headset.visibility_mask);
+            ini_get(section, "hand_tracking",     headset.hand_tracking);
+            ini_get(section, "composition_alpha", headset.composition_alpha);
         }
         if (ini.has("threading"))
         {

@@ -26,12 +26,12 @@ public:
     [[nodiscard]] auto get_button() const -> erhe::toolkit::Mouse_button;
 
     auto on_button(
-        Command_context&                  context,
-        const erhe::toolkit::Mouse_button button,
-        const int                         count
+        Input_arguments&            input,
+        erhe::toolkit::Mouse_button button,
+        bool                        pressed
     ) -> bool override;
 
-    auto on_motion(Command_context& context) -> bool override;
+    auto on_motion(Input_arguments& input) -> bool override;
 
 private:
     erhe::toolkit::Mouse_button m_button;

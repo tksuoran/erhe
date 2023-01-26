@@ -4,15 +4,16 @@
 
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
-#include "editor_scenes.hpp"
 #include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
 #include "renderers/id_renderer.hpp"
-#include "rendergraph/post_processing.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
+#include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_windows.hpp"
+#include "tools/grid.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -266,12 +267,12 @@ auto Viewport_window::as_viewport_window() const -> const Viewport_window*
     return this;
 }
 
-auto Viewport_window::to_scene_content(
-    const glm::vec2 position_in_root
+auto Viewport_window::viewport_from_window(
+    const glm::vec2 window_position
 ) const -> glm::vec2
 {
-    const float content_x      = static_cast<float>(position_in_root.x) - m_window_viewport.x;
-    const float content_y      = static_cast<float>(position_in_root.y) - m_window_viewport.y;
+    const float content_x      = static_cast<float>(window_position.x) - m_window_viewport.x;
+    const float content_y      = static_cast<float>(window_position.y) - m_window_viewport.y;
     const float content_flip_y = m_window_viewport.height - content_y;
     return {
         content_x,
@@ -280,8 +281,8 @@ auto Viewport_window::to_scene_content(
 }
 
 auto Viewport_window::project_to_viewport(
-    const glm::dvec3 position_in_world
-) const -> std::optional<glm::dvec3>
+    const glm::vec3 position_in_world
+) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (!camera)
@@ -289,23 +290,23 @@ auto Viewport_window::project_to_viewport(
         return {};
     }
     const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
-    constexpr double depth_range_near = 0.0;
-    constexpr double depth_range_far  = 1.0;
-    return erhe::toolkit::project_to_screen_space<double>(
+    constexpr float depth_range_near = 0.0f;
+    constexpr float depth_range_far  = 1.0f;
+    return erhe::toolkit::project_to_screen_space<float>(
         camera_projection_transforms.clip_from_world.matrix(),
         position_in_world,
         depth_range_near,
         depth_range_far,
-        static_cast<double>(m_projection_viewport.x),
-        static_cast<double>(m_projection_viewport.y),
-        static_cast<double>(m_projection_viewport.width),
-        static_cast<double>(m_projection_viewport.height)
+        static_cast<float>(m_projection_viewport.x),
+        static_cast<float>(m_projection_viewport.y),
+        static_cast<float>(m_projection_viewport.width),
+        static_cast<float>(m_projection_viewport.height)
     );
 }
 
 auto Viewport_window::unproject_to_world(
-    const glm::dvec3 position_in_window
-) const -> std::optional<glm::dvec3>
+    const glm::vec3 position_in_window
+) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (!camera)
@@ -313,198 +314,165 @@ auto Viewport_window::unproject_to_world(
         return {};
     }
     const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
-    constexpr double depth_range_near = 0.0;
-    constexpr double depth_range_far  = 1.0;
-    return erhe::toolkit::unproject<double>(
+    constexpr float depth_range_near = 0.0f;
+    constexpr float depth_range_far  = 1.0f;
+    return erhe::toolkit::unproject<float>(
         camera_projection_transforms.clip_from_world.inverse_matrix(),
         position_in_window,
         depth_range_near,
         depth_range_far,
-        static_cast<double>(m_projection_viewport.x),
-        static_cast<double>(m_projection_viewport.y),
-        static_cast<double>(m_projection_viewport.width),
-        static_cast<double>(m_projection_viewport.height)
+        static_cast<float>(m_projection_viewport.x),
+        static_cast<float>(m_projection_viewport.y),
+        static_cast<float>(m_projection_viewport.width),
+        static_cast<float>(m_projection_viewport.height)
     );
 }
 
-void Viewport_window::raytrace(Scene_root* tool_scene_root)
-{
-    ERHE_PROFILE_FUNCTION
-
-    const auto pointer_near = position_in_world_viewport_depth(1.0);
-    const auto pointer_far  = position_in_world_viewport_depth(0.0);
-
-    if (!pointer_near.has_value() || !pointer_far.has_value())
-    {
-        reset_control_ray();
-        return;
-    }
-
-    const glm::dvec3 ray_origin   {pointer_near.value()};
-    const glm::dvec3 ray_direction{glm::normalize(pointer_far.value() - pointer_near.value())};
-
-    raytrace_update(ray_origin, ray_direction, tool_scene_root);
-}
-
-void Viewport_window::update_grid_hover()
-{
-    const auto pointer_near = position_in_world_viewport_depth(1.0);
-    const auto pointer_far  = position_in_world_viewport_depth(0.0);
-
-    if (!pointer_near.has_value() || !pointer_far.has_value())
-    {
-        return;
-    }
-
-    const glm::dvec3 ray_origin   {pointer_near.value()};
-    const glm::dvec3 ray_direction{glm::normalize(pointer_far.value() - pointer_near.value())};
-
-    const Grid_hover_position hover_position = g_grid_tool->update_hover(ray_origin, ray_direction);
-    Hover_entry entry;
-    entry.valid = (hover_position.grid != nullptr);
-    if (entry.valid)
-    {
-        entry.position = hover_position.position;
-        entry.normal   = glm::vec3{
-            hover_position.grid->world_from_grid() * glm::dvec4{0.0, 1.0, 0.0, 0.0}
-        };
-        entry.grid     = hover_position.grid;
-    }
-
-    set_hover(Hover_entry::grid_slot, entry);
-}
-
-void Viewport_window::update_pointer_context(
-    const glm::vec2 position_in_viewport,
-    Scene_root*     tool_scene_root
+void Viewport_window::update_pointer_2d_position(
+    const glm::vec2 position_in_viewport
 )
 {
     ERHE_PROFILE_FUNCTION
 
-    const bool reverse_depth = projection_viewport().reverse_depth;
-    m_position_in_viewport   = position_in_viewport;
+    m_position_in_viewport = position_in_viewport;
+}
+
+void Viewport_window::update_hover()
+{
+    const bool reverse_depth          = projection_viewport().reverse_depth;
     const auto near_position_in_world = position_in_world_viewport_depth(reverse_depth ? 1.0f : 0.0f);
     const auto far_position_in_world  = position_in_world_viewport_depth(reverse_depth ? 0.0f : 1.0f);
-    if (near_position_in_world.has_value() && far_position_in_world.has_value())
-    {
-        m_control_ray_origin_in_world = near_position_in_world;
-        const auto direction = glm::normalize(far_position_in_world.value() - near_position_in_world.value());
-        m_control_ray_direction_in_world = direction;
-    }
-    else
-    {
-        m_control_ray_origin_in_world.reset();
-        m_control_ray_direction_in_world.reset();
-    }
 
     const auto camera = m_camera.lock();
-    if (!camera)
+    if (
+        !near_position_in_world.has_value() ||
+        !far_position_in_world.has_value() ||
+        !camera ||
+        !m_is_hovered
+    )
     {
-        reset_control_ray();
+        reset_control_transform();
+        reset_hover_slots();
         return;
     }
 
-    if (!m_is_hovered)
-    {
-        reset_control_ray();
-        return;
-    }
-
-    if (erhe::application::g_configuration->id_renderer.enabled)
-    {
-        const auto id_query = g_id_renderer->get(
-            static_cast<int>(position_in_viewport.x),
-            static_cast<int>(position_in_viewport.y)
-        );
-        if (!id_query.valid)
-        {
-            SPDLOG_LOGGER_TRACE(log_controller_ray, "pointer context hover not valid");
-            return;
-        }
-
-        Hover_entry entry
-        {
-            .valid       = id_query.valid,
-            .mesh        = id_query.mesh,
-            .position    = position_in_world_viewport_depth(id_query.depth),
-            .primitive   = id_query.mesh_primitive_index,
-            .local_index = id_query.local_index
-        };
-
-        SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
-
-        if (entry.mesh)
-        {
-            const erhe::scene::Node* node = entry.mesh->get_node();
-            if (node != nullptr)
-            {
-                const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
-                entry.geometry = primitive.source_geometry;
-                if (entry.geometry != nullptr)
-                {
-                    const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(entry.local_index);
-                    if (polygon_id < entry.geometry->get_polygon_count())
-                    {
-                        SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
-                        auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(
-                            erhe::geometry::c_polygon_normals
-                        );
-                        if (
-                            (polygon_normals != nullptr) &&
-                            polygon_normals->has(polygon_id)
-                        )
-                        {
-                            const auto local_normal    = polygon_normals->get(polygon_id);
-                            const auto world_from_node = node->world_from_node();
-                            entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                            SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
-                        }
-                    }
-                }
-            }
-        }
-
-        using erhe::toolkit::test_all_rhs_bits_set;
-
-        const uint64_t flags = id_query.mesh ? entry.mesh->get_flag_bits() : 0;
-
-        const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::content     );
-        const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::tool        );
-        const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::brush       );
-        const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::rendertarget);
-        SPDLOG_LOGGER_TRACE(
-            log_frame,
-            "hover mesh = {} primitive = {} local index {} {}{}{}{}",
-            entry.mesh ? entry.mesh->get_name() : "()",
-            entry.primitive,
-            entry.local_index,
-            hover_content      ? "content "      : "",
-            hover_tool         ? "tool "         : "",
-            hover_brush        ? "brush "        : "",
-            hover_rendertarget ? "rendertarget " : ""
-        );
-        set_hover(Hover_entry::content_slot     , hover_content      ? entry : Hover_entry{});
-        set_hover(Hover_entry::tool_slot        , hover_tool         ? entry : Hover_entry{});
-        set_hover(Hover_entry::brush_slot       , hover_brush        ? entry : Hover_entry{});
-        set_hover(Hover_entry::rendertarget_slot, hover_rendertarget ? entry : Hover_entry{});
-    }
-    else
-    {
-        raytrace(tool_scene_root);
-    }
-
-    update_grid_hover();
+    set_world_from_control(
+        near_position_in_world.value(),
+        far_position_in_world.value()
+    );
 
     const auto scene_root = m_scene_root.lock();
     if (scene_root)
     {
         scene_root->update_pointer_for_rendertarget_meshes(this);
     }
+
+    if (erhe::application::g_configuration->id_renderer.enabled)
+    {
+        update_hover_with_id_render();
+    }
+    else
+    {
+        update_hover_with_raytrace();
+    }
+
+    update_grid_hover();
+
+}
+
+void Viewport_window::update_hover_with_id_render()
+{
+    if (!m_position_in_viewport.has_value())
+    {
+        reset_hover_slots();
+        return;
+    }
+    const auto position_in_viewport = m_position_in_viewport.value();
+    const auto id_query = g_id_renderer->get(
+        static_cast<int>(position_in_viewport.x),
+        static_cast<int>(position_in_viewport.y)
+    );
+    if (!id_query.valid)
+    {
+        SPDLOG_LOGGER_TRACE(log_controller_ray, "pointer context hover not valid");
+        return;
+    }
+
+    Hover_entry entry
+    {
+        .valid       = id_query.valid,
+        .mesh        = id_query.mesh,
+        .position    = position_in_world_viewport_depth(id_query.depth),
+        .primitive   = id_query.mesh_primitive_index,
+        .local_index = id_query.local_index
+    };
+
+    SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
+
+    if (entry.mesh)
+    {
+        const erhe::scene::Node* node = entry.mesh->get_node();
+        if (node != nullptr)
+        {
+            const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
+            entry.geometry = primitive.source_geometry;
+            if (entry.geometry != nullptr)
+            {
+                const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(entry.local_index);
+                if (polygon_id < entry.geometry->get_polygon_count())
+                {
+                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
+                    auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(
+                        erhe::geometry::c_polygon_normals
+                    );
+                    if (
+                        (polygon_normals != nullptr) &&
+                        polygon_normals->has(polygon_id)
+                    )
+                    {
+                        const auto local_normal    = polygon_normals->get(polygon_id);
+                        const auto world_from_node = node->world_from_node();
+                        entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
+                        SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
+                    }
+                }
+            }
+        }
+    }
+
+    using erhe::toolkit::test_all_rhs_bits_set;
+
+    const uint64_t flags = id_query.mesh ? entry.mesh->get_flag_bits() : 0;
+
+    const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::content     );
+    const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::tool        );
+    const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::brush       );
+    const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::rendertarget);
+    SPDLOG_LOGGER_TRACE(
+        log_frame,
+        "hover mesh = {} primitive = {} local index {} {}{}{}{}",
+        entry.mesh ? entry.mesh->get_name() : "()",
+        entry.primitive,
+        entry.local_index,
+        hover_content      ? "content "      : "",
+        hover_tool         ? "tool "         : "",
+        hover_brush        ? "brush "        : "",
+        hover_rendertarget ? "rendertarget " : ""
+    );
+    set_hover(Hover_entry::content_slot     , hover_content      ? entry : Hover_entry{});
+    set_hover(Hover_entry::tool_slot        , hover_tool         ? entry : Hover_entry{});
+    set_hover(Hover_entry::brush_slot       , hover_brush        ? entry : Hover_entry{});
+    set_hover(Hover_entry::rendertarget_slot, hover_rendertarget ? entry : Hover_entry{});
+}
+
+auto Viewport_window::get_position_in_viewport() const -> std::optional<glm::vec2>
+{
+    return m_position_in_viewport;
 }
 
 auto Viewport_window::position_in_world_viewport_depth(
-    const double viewport_depth
-) const -> std::optional<glm::dvec3>
+    const float viewport_depth
+) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
     if (
@@ -515,9 +483,9 @@ auto Viewport_window::position_in_world_viewport_depth(
         return {};
     }
 
-    const double depth_range_near     = 0.0;
-    const double depth_range_far      = 1.0;
-    const auto   position_in_viewport = glm::dvec3{
+    const float depth_range_near     = 0.0f;
+    const float depth_range_far      = 1.0f;
+    const auto  position_in_viewport = glm::vec3{
         m_position_in_viewport.value().x,
         m_position_in_viewport.value().y,
         viewport_depth
@@ -526,15 +494,15 @@ auto Viewport_window::position_in_world_viewport_depth(
     const auto      projection_transforms = camera->projection_transforms(vp);
     const glm::mat4 world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
 
-    return erhe::toolkit::unproject(
-        glm::dmat4{world_from_clip},
+    return erhe::toolkit::unproject<float>(
+        glm::mat4{world_from_clip},
         position_in_viewport,
         depth_range_near,
         depth_range_far,
-        static_cast<double>(vp.x),
-        static_cast<double>(vp.y),
-        static_cast<double>(vp.width),
-        static_cast<double>(vp.height)
+        static_cast<float>(vp.x),
+        static_cast<float>(vp.y),
+        static_cast<float>(vp.width),
+        static_cast<float>(vp.height)
     );
 }
 

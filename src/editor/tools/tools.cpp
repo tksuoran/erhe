@@ -132,17 +132,21 @@ void Tools::set_priority_tool(Tool* priority_tool)
         const bool allow_secondary =
             (m_priority_tool != nullptr) &&
             test_all_rhs_bits_set(m_priority_tool->get_flags(), Tool_flags::allow_secondary);
+        log_tools->info("Update tools: allow_secondary = {}", allow_secondary);
         for (auto* tool : m_tools)
         {
             const auto flags = tool->get_flags();
             if (test_all_rhs_bits_set(flags, Tool_flags::toolbox))
             {
-                tool->set_enabled(
-                    (tool == m_priority_tool) ||
-                    (
-                        allow_secondary &&
-                        (test_all_rhs_bits_set(flags, Tool_flags::secondary))
-                    )
+                const bool is_priority_tool = (tool == m_priority_tool);
+                const bool is_secondary     = test_all_rhs_bits_set(flags, Tool_flags::secondary);
+                const bool enable           = is_priority_tool || (allow_secondary && is_secondary);
+                tool->set_enabled(enable);
+                log_tools->info(
+                    "{} {}{}{}", tool->get_description(),
+                    is_priority_tool ? "priority " : "",
+                    is_secondary     ? "secondary " : "",
+                    enable           ? "-> enabled" : "-> disabled"
                 );
             }
         }

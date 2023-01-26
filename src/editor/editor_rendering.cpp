@@ -47,18 +47,24 @@ namespace editor {
 using erhe::graphics::Color_blend_state;
 
 
-auto Capture_frame_command::try_call(erhe::application::Command_context& context) -> bool
+#pragma region Commands
+Capture_frame_command::Capture_frame_command()
+    : Command{"editor.capture_frame"}
 {
-    static_cast<void>(context);
-    m_editor_rendering.trigger_capture();
+}
+
+auto Capture_frame_command::try_call(erhe::application::Input_arguments& input) -> bool
+{
+    static_cast<void>(input);
+    g_editor_rendering->trigger_capture();
     return true;
 }
+#pragma endregion Commands
 
 Editor_rendering* g_editor_rendering{nullptr};
 
 Editor_rendering::Editor_rendering()
     : erhe::components::Component{c_type_name}
-    , m_capture_frame_command    {*this}
 {
 }
 
@@ -139,7 +145,7 @@ void Editor_rendering::setup_renderpasses()
 
     m_rp_polygon_fill_standard.pipeline.data = {
         .name           = "Polygon Fill",
-        .shader_stages  = g_programs->standard.get(),
+        .shader_stages  = g_programs->circular_brushed_metal.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
@@ -522,6 +528,13 @@ void Editor_rendering::begin_frame()
 
 void Editor_rendering::end_frame()
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (g_headset_view != nullptr)
+    {
+        g_headset_view->end_frame();
+    }
+#endif
+
     if (g_post_processing != nullptr)
     {
         g_post_processing->next_frame();
@@ -660,12 +673,11 @@ void Editor_rendering::render_id(const Render_context& context)
 
     // TODO listen to viewport changes in msg bus?
     g_id_renderer->render(
-        {
+        Id_renderer::Render_parameters{
             .viewport           = context.viewport,
             .camera             = context.camera,
             .content_mesh_spans = { layers.content()->meshes, layers.rendertarget()->meshes },
             .tool_mesh_spans    = { tool_layers.tool()->meshes },
-            .time               = erhe::application::g_time->time(),
             .x                  = static_cast<int>(position.x),
             .y                  = static_cast<int>(position.y)
         }

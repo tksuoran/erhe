@@ -154,3 +154,9 @@ constexpr int compiletime_strlen(const char* input)
     }
     return i;
 }
+
+template<int N>
+constexpr uint32_t ERHE_HASH(const char(&s)[N])
+{
+    return compiletime_xxhash::detail::xxh32::xxh32(s, static_cast<int>(N - 1), {});
+}

@@ -49,6 +49,7 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_message;
 class Grid;
 class Light_projections;
 class Node_raytrace;
@@ -99,8 +100,8 @@ public:
     std::shared_ptr<erhe::scene::Mesh>        mesh         {};
     const Grid*                               grid         {nullptr};
     std::shared_ptr<erhe::geometry::Geometry> geometry     {};
-    std::optional<glm::dvec3>                 position     {};
-    std::optional<glm::dvec3>                 normal       {};
+    std::optional<glm::vec3>                  position     {};
+    std::optional<glm::vec3>                  normal       {};
     std::optional<glm::vec2>                  uv           {};
     std::size_t                               primitive    {std::numeric_limits<std::size_t>::max()};
     std::size_t                               local_index  {std::numeric_limits<std::size_t>::max()};
@@ -124,16 +125,23 @@ public:
     [[nodiscard]] virtual auto as_viewport_window    () const -> const Viewport_window*;
 
     // "Pointing"
-    void reset_control_ray();
-    void raytrace_update(
-        const glm::vec3 ray_origim,
-        const glm::vec3 ray_direction,
-        Scene_root*     tool_scene_root = nullptr
+    void set_world_from_control(
+        glm::vec3 near_position_in_world,
+        glm::vec3 far_position_in_world
     );
-    [[nodiscard]] auto get_position_in_viewport                 () const -> std::optional<glm::dvec2>;
-    [[nodiscard]] auto get_control_ray_origin_in_world          () const -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto get_control_ray_direction_in_world       () const -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto get_control_position_in_world_at_distance(double distance) const -> std::optional<glm::dvec3>;
+
+    void set_world_from_control     (const glm::mat4& world_from_control);
+    void reset_control_transform    ();
+    void reset_hover_slots          ();
+    void update_hover_with_id_render();
+    void update_hover_with_raytrace ();
+    void update_grid_hover          ();
+
+    [[nodiscard]] auto get_world_from_control                   () const -> std::optional<glm::mat4>;
+    [[nodiscard]] auto get_control_from_world                   () const -> std::optional<glm::mat4>;
+    [[nodiscard]] auto get_control_ray_origin_in_world          () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto get_control_ray_direction_in_world       () const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto get_control_position_in_world_at_distance(float distance) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_hover                                (std::size_t slot) const -> const Hover_entry&;
     [[nodiscard]] auto get_nearest_hover                        (uint32_t slot_mask) const -> const Hover_entry&;
     [[nodiscard]] auto get_light_projections                    () const -> Light_projections*;
@@ -142,9 +150,8 @@ public:
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);
 
-    std::optional<glm::dvec2> m_position_in_viewport;
-    std::optional<glm::dvec3> m_control_ray_origin_in_world;
-    std::optional<glm::dvec3> m_control_ray_direction_in_world;
+    std::optional<glm::mat4> m_world_from_control;
+    std::optional<glm::mat4> m_control_from_world;
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;

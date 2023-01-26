@@ -53,5 +53,19 @@ auto Command_binding::is_command_host_enabled() const -> bool
     return host->is_enabled();
 }
 
+auto Command_binding::get_command_host_description() const -> const char*
+{
+    if (m_command == nullptr)
+    {
+        return "(no command)";
+    }
+    auto* const host = m_command->get_host();
+    if (host == nullptr)
+    {
+        return "(no host)";
+    }
+    return host->get_description();
+}
+
 } // namespace erhe::application
 

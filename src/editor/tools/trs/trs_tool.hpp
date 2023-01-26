@@ -43,14 +43,11 @@ class Trs_tool_drag_command
     : public erhe::application::Command
 {
 public:
-    explicit Trs_tool_drag_command(Trs_tool& trs_tool);
+    Trs_tool_drag_command();
 
-    auto try_call   (erhe::application::Command_context& context) -> bool override;
-    void try_ready  (erhe::application::Command_context& context) override;
-    void on_inactive(erhe::application::Command_context& context) override;
-
-private:
-    Trs_tool& m_trs_tool;
+    auto try_call   (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready  (erhe::application::Input_arguments& input) override;
+    void on_inactive() override;
 };
 
 class Trs_tool
@@ -91,6 +88,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -105,9 +103,9 @@ public:
     [[nodiscard]] auto is_trs_active() const -> bool;
 
     // Commands
-    auto on_drag_ready(erhe::application::Command_context& context) -> bool;
-    auto on_drag      (erhe::application::Command_context& context) -> bool;
-    void end_drag     (erhe::application::Command_context& context);
+    auto on_drag_ready(erhe::application::Input_arguments& input) -> bool;
+    auto on_drag      () -> bool;
+    void end_drag     ();
 
     // For Handle_visualizations
     [[nodiscard]] auto is_x_translate_active() const -> bool;
@@ -149,33 +147,33 @@ private:
     class Drag
     {
     public:
-        glm::dmat4             initial_world_from_local {1.0};
-        glm::dmat4             initial_local_from_world {1.0};
-        glm::dvec3             initial_position_in_world{0.0, 0.0, 0.0};
-        double                 initial_distance         {0.0};
+        glm::mat4              initial_world_from_local {1.0f};
+        glm::mat4              initial_local_from_world {1.0f};
+        glm::vec3              initial_position_in_world{0.0f, 0.0f, 0.0f};
+        float                  initial_distance         {0.0f};
         erhe::scene::Transform initial_parent_from_node_transform;
     };
 
     class Rotation_context
     {
     public:
-        glm::dvec3                normal              {0.0}; // also rotation axis
-        glm::dvec3                reference_direction {0.0};
-        glm::dvec3                center_of_rotation  {0.0};
-        std::optional<glm::dvec3> intersection        {};
-        double                    start_rotation_angle{0.0};
-        double                    current_angle       {0.0};
-        erhe::scene::Transform    world_from_node;
+        glm::vec3                normal              {0.0f}; // also rotation axis
+        glm::vec3                reference_direction {0.0f};
+        glm::vec3                center_of_rotation  {0.0f};
+        std::optional<glm::vec3> intersection        {};
+        float                    start_rotation_angle{0.0f};
+        float                    current_angle       {0.0f};
+        erhe::scene::Transform   world_from_node;
     };
 
-    [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, const glm::dvec3 n, const glm::dvec3 p) -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto snap_translate          (const glm::dvec3 translation) const -> glm::dvec3;
-    [[nodiscard]] auto snap_rotate             (const double angle_radians) const -> double;
-    [[nodiscard]] auto offset_plane_origo      (const Handle handle, const glm::dvec3 p) const -> glm::dvec3;
-    [[nodiscard]] auto project_to_offset_plane (const Handle handle, const glm::dvec3 p, const glm::dvec3 q) const -> glm::dvec3;
-    [[nodiscard]] auto get_axis_direction      () const -> glm::dvec3;
-    [[nodiscard]] auto get_plane_normal        (const bool world) const -> glm::dvec3;
-    [[nodiscard]] auto get_plane_side          (const bool world) const -> glm::dvec3;
+    [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, const glm::vec3 n, const glm::vec3 p) -> std::optional<glm::vec3>;
+    [[nodiscard]] auto snap_translate          (const glm::vec3 translation) const -> glm::vec3;
+    [[nodiscard]] auto snap_rotate             (const float angle_radians) const -> float;
+    [[nodiscard]] auto offset_plane_origo      (const Handle handle, const glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto project_to_offset_plane (const Handle handle, const glm::vec3 p, const glm::vec3 q) const -> glm::vec3;
+    [[nodiscard]] auto get_axis_direction      () const -> glm::vec3;
+    [[nodiscard]] auto get_plane_normal        (const bool world) const -> glm::vec3;
+    [[nodiscard]] auto get_plane_side          (const bool world) const -> glm::vec3;
     [[nodiscard]] auto get_axis_color          (Handle handle) const -> glm::vec4;
     [[nodiscard]] auto get_target_node         () const -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_target_node_physics () const -> std::shared_ptr<Node_physics>;
@@ -184,18 +182,20 @@ private:
     void set_node                   (const std::shared_ptr<erhe::scene::Node>& node);
     void update_axis_translate_2d   (Viewport_window* viewport_window);
     void update_axis_translate_3d   (Scene_view* scene_view);
-    void update_axis_translate_final(const glm::dvec3 drag_position);
+    void update_axis_translate_final(const glm::vec3 drag_position);
     void update_plane_translate_2d  (Viewport_window* viewport_window);
     void update_plane_translate_3d  (Scene_view* scene_view);
     void update_rotate              (Scene_view* scene_view);
     auto update_rotate_circle_around(Scene_view* scene_view) -> bool;
     auto update_rotate_parallel     (Scene_view* scene_view) -> bool;
     void update_rotate_final        ();
-    void set_node_world_transform   (const glm::dmat4 world_from_node);
+    void set_node_world_transform   (const glm::mat4 world_from_node);
     void update_transforms          ();
     void update_visibility          (const erhe::scene::Scene* view_scene);
 
     Trs_tool_drag_command                     m_drag_command;
+    erhe::application::Redirect_command       m_drag_redirect_update_command;
+    erhe::application::Drag_enable_command    m_drag_enable_command;
 
     erhe::physics::Motion_mode                m_motion_mode  {erhe::physics::Motion_mode::e_kinematic_physical};
     bool                                      m_touched      {false};

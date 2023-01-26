@@ -1,33 +1,18 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 namespace erhe::application {
 
-class Command;
-class Imgui_window;
-class Scene_view;
-class View;
-
-class Command_context
+class Input_arguments
 {
 public:
-    explicit Command_context(
-        uint32_t   button_bits         = 0u,
-        glm::dvec2 vec2_absolute_value = glm::dvec2{0.0, 0.0},
-        glm::dvec2 vec2_relative_value = glm::dvec2{0.0, 0.0}
-    );
-
-    [[nodiscard]] auto get_button_bits                  () const -> uint32_t;
-    [[nodiscard]] auto get_vec2_absolute_value          () const -> glm::dvec2;
-    [[nodiscard]] auto get_vec2_relative_value          () const -> glm::dvec2;
-    [[nodiscard]] auto accept_mouse_command             (Command* const command) -> bool;
-    [[nodiscard]] auto accept_controller_trigger_command(Command* const command) -> bool;
-
-private:
-    uint32_t   m_button_bits        {0u};
-    glm::dvec2 m_vec2_absolute_value{0.0, 0.0};
-    glm::dvec2 m_vec2_relative_value{0.0, 0.0};
+    uint32_t  button_bits        {0u};
+    glm::vec2 vec2_absolute_value{0.0f, 0.0f};
+    glm::vec2 vec2_relative_value{0.0f, 0.0f};
+    glm::quat pose_orientation   {1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 pose_position      {0.0f, 0.0f, 0.0f};
 };
 
 } // namespace erhe::application

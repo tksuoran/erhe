@@ -197,6 +197,10 @@ void View::on_key(
     const bool                   pressed
 )
 {
+    m_shift   = (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) == erhe::toolkit::Key_modifier_bit_shift;
+    m_alt     = (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) == erhe::toolkit::Key_modifier_bit_menu;
+    m_control = (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) == erhe::toolkit::Key_modifier_bit_ctrl;
+
     if (g_imgui_windows != nullptr)
     {
         g_imgui_windows->on_key(
@@ -214,11 +218,6 @@ void View::on_key(
     if (get_imgui_capture_keyboard())
     {
         return;
-    }
-
-    if (m_view_client != nullptr)
-    {
-        m_view_client->update_keyboard(pressed, code, modifier_mask);
     }
 
     g_commands->on_key(code, modifier_mask, pressed);
@@ -273,14 +272,16 @@ auto View::get_imgui_capture_mouse() const -> bool
     return g_imgui_windows->want_capture_mouse();
 }
 
-void View::on_mouse_click(
+void View::on_mouse_button(
     const erhe::toolkit::Mouse_button button,
-    const int                         count
+    const bool                        pressed
 )
 {
+    ERHE_VERIFY(button < erhe::toolkit::Mouse_button_count);
+    m_mouse_button[button] = pressed;
     if (g_imgui_windows != nullptr)
     {
-        g_imgui_windows->on_mouse_click(static_cast<uint32_t>(button), count);
+        g_imgui_windows->on_mouse_button(static_cast<uint32_t>(button), pressed);
     }
 
     if (g_commands == nullptr)
@@ -296,18 +297,13 @@ void View::on_mouse_click(
     log_input_event->trace(
         "mouse button {} {}",
         erhe::toolkit::c_str(button),
-        count
+        pressed ? "pressed" : "released"
     );
 
-    if (m_view_client != nullptr)
-    {
-        m_view_client->update_mouse(button, count);
-    }
-
-    g_commands->on_mouse_click(button, count);
+    g_commands->on_mouse_button(button, pressed);
 }
 
-void View::on_mouse_wheel(const double x, const double y)
+void View::on_mouse_wheel(const float x, const float y)
 {
     if (g_imgui_windows != nullptr)
     {
@@ -329,8 +325,9 @@ void View::on_mouse_wheel(const double x, const double y)
     g_commands->on_mouse_wheel(x, y);
 }
 
-void View::on_mouse_move(const double x, const double y)
+void View::on_mouse_move(const float x, const float y)
 {
+    m_mouse_position = glm::vec2{x, y};
     if (g_imgui_windows != nullptr)
     {
         g_imgui_windows->on_mouse_move(x, y);
@@ -346,12 +343,39 @@ void View::on_mouse_move(const double x, const double y)
         return;
     }
 
-    if (m_view_client != nullptr)
-    {
-        m_view_client->update_mouse(x, y);
-    }
-
     g_commands->on_mouse_move(x, y);
+}
+
+auto View::shift_key_down() const -> bool
+{
+    return m_shift;
+}
+
+auto View::control_key_down() const -> bool
+{
+    return m_control;
+}
+
+auto View::alt_key_down() const -> bool
+{
+    return m_alt;
+}
+
+auto View::mouse_button_pressed(const erhe::toolkit::Mouse_button button) const -> bool
+{
+    Expects(button < erhe::toolkit::Mouse_button_count);
+    return m_mouse_button[static_cast<int>(button)];
+}
+
+auto View::mouse_button_released(const erhe::toolkit::Mouse_button button) const -> bool
+{
+    Expects(button < erhe::toolkit::Mouse_button_count);
+    return m_mouse_button[static_cast<int>(button)];
+}
+
+auto View::mouse_position() const -> glm::vec2
+{
+    return m_mouse_position;
 }
 
 }  // namespace editor

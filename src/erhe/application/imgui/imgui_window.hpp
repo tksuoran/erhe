@@ -36,8 +36,10 @@ public:
     virtual ~Imgui_window() noexcept;
 
     [[nodiscard]] auto is_visible     () const -> bool;
+    [[nodiscard]] auto is_hovered     () const -> bool;
     [[nodiscard]] auto title          () const -> const std::string_view;
     [[nodiscard]] auto get_scale_value() const -> float;
+    [[nodiscard]] auto show_in_menu   () const -> bool;
     auto begin            () -> bool;
     void end              ();
     void set_visibility   (bool visible);
@@ -67,6 +69,8 @@ public:
 protected:
     Imgui_viewport*   m_imgui_viewport{nullptr};
     bool              m_is_visible    {true};
+    bool              m_is_hovered    {false};
+    bool              m_show_in_menu  {true};
     const std::string m_title;
     float             m_min_size[2]{120.0f, 120.0f};
     float             m_max_size[2]{99999.0f, 99999.0f};

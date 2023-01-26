@@ -12,22 +12,12 @@ erhe_target_sources_grouped(
     commands/command_binding.hpp
     commands/command_context.cpp
     commands/command_context.hpp
-    commands/controller_trigger_binding.cpp
-    commands/controller_trigger_binding.hpp
-    commands/controller_trigger_click_binding.cpp
-    commands/controller_trigger_click_binding.hpp
-    commands/controller_trigger_drag_binding.cpp
-    commands/controller_trigger_drag_binding.hpp
-    commands/controller_trigger_value_binding.cpp
-    commands/controller_trigger_value_binding.hpp
-    commands/controller_trackpad_binding.cpp
-    commands/controller_trackpad_binding.hpp
     commands/key_binding.cpp
     commands/key_binding.hpp
     commands/mouse_binding.cpp
     commands/mouse_binding.hpp
-    commands/mouse_click_binding.cpp
-    commands/mouse_click_binding.hpp
+    commands/mouse_button_binding.cpp
+    commands/mouse_button_binding.hpp
     commands/mouse_motion_binding.cpp
     commands/mouse_motion_binding.hpp
     commands/mouse_drag_binding.cpp
@@ -115,12 +105,22 @@ if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
         imgui/ImNodesEz.cpp
         imgui/ImNodesEz.h
     )
-    target_link_libraries(${_target}
-    PUBLIC
-        imgui
-)
-
+    target_link_libraries(${_target} PUBLIC imgui)
 endif ()
+
+if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        commands/xr_boolean_binding.cpp
+        commands/xr_boolean_binding.hpp
+        commands/xr_float_binding.cpp
+        commands/xr_float_binding.hpp
+        commands/xr_vector2f_binding.cpp
+        commands/xr_vector2f_binding.hpp
+    )
+    target_link_libraries(${_target} PUBLIC erhe::xr)
+endif ()
+
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
@@ -145,6 +145,10 @@ endif ()
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
     target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+endif ()
+
+if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
+    target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
 
 erhe_target_settings(${_target})

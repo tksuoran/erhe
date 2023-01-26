@@ -33,25 +33,19 @@ class Brush_tool_preview_command
     : public erhe::application::Command
 {
 public:
-    explicit Brush_tool_preview_command(Brush_tool& brush_tool);
+    Brush_tool_preview_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Brush_tool& m_brush_tool;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Brush_tool_insert_command
     : public erhe::application::Command
 {
 public:
-    explicit Brush_tool_insert_command(Brush_tool& brush_tool);
+    Brush_tool_insert_command();
 
-    void try_ready(erhe::application::Command_context& context) override;
-    auto try_call (erhe::application::Command_context& context) -> bool override;
-
-private:
-    Brush_tool& m_brush_tool;
+    void try_ready(erhe::application::Input_arguments& input) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Editor_message;
@@ -106,12 +100,11 @@ private:
     Hover_entry                         m_hover;
     std::shared_ptr<erhe::scene::Mesh>  m_brush_mesh;
     std::shared_ptr<erhe::scene::Node>  m_brush_node;
-    bool                                m_with_physics     {true};
-    float                               m_scale            {1.0f};
-    float                               m_transform_scale  {1.0f};
-    int                                 m_polygon_offset   {0};
-    int                                 m_corner_offset    {0};
-    Scene_view*                         m_scene_view       {nullptr};
+    bool                                m_with_physics   {true};
+    float                               m_scale          {1.0f};
+    float                               m_transform_scale{1.0f};
+    int                                 m_polygon_offset {0};
+    int                                 m_corner_offset  {0};
 };
 
 extern Brush_tool* g_brush_tool;

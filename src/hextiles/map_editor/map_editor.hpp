@@ -25,7 +25,7 @@ public:
     }
     ~Map_hover_command() noexcept final {}
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Map_primary_brush_command final
@@ -38,8 +38,8 @@ public:
     }
     ~Map_primary_brush_command() noexcept final {}
 
-    auto try_call (erhe::application::Command_context& context) -> bool override;
-    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Map_editor

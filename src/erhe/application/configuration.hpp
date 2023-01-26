@@ -66,12 +66,13 @@ public:
     class Headset
     {
     public:
-        bool openxr         {false};
-        bool quad_view      {false};
-        bool debug          {false};
-        bool depth          {false};
-        bool visibility_mask{false};
-        bool hand_tracking  {false};
+        bool openxr           {false};
+        bool quad_view        {false};
+        bool debug            {false};
+        bool depth            {false};
+        bool visibility_mask  {false};
+        bool hand_tracking    {false};
+        bool composition_alpha{false};
     };
     Headset headset;
 

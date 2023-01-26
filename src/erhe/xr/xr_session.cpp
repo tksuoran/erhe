@@ -265,8 +265,6 @@ int color_format_score(const gl::Internal_format image_format)
 
 auto Xr_session::enumerate_swapchain_formats() -> bool
 {
-    ERHE_PROFILE_FUNCTION
-
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -308,8 +306,6 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
 auto Xr_session::enumerate_reference_spaces() -> bool
 {
-    ERHE_PROFILE_FUNCTION
-
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -345,8 +341,6 @@ auto Xr_session::enumerate_reference_spaces() -> bool
 
 auto Xr_session::create_swapchains() -> bool
 {
-    ERHE_PROFILE_FUNCTION
-
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -404,8 +398,6 @@ auto Xr_session::create_swapchains() -> bool
 
 auto Xr_session::create_reference_space() -> bool
 {
-    ERHE_PROFILE_FUNCTION
-
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -477,8 +469,6 @@ auto Xr_session::create_reference_space() -> bool
 
 auto Xr_session::begin_session() -> bool
 {
-    ERHE_PROFILE_FUNCTION
-
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -501,8 +491,6 @@ auto Xr_session::begin_session() -> bool
 
 auto Xr_session::end_session() -> bool
 {
-    ERHE_PROFILE_FUNCTION
-
     if (m_xr_session == XR_NULL_HANDLE)
     {
         return false;
@@ -521,49 +509,13 @@ auto Xr_session::is_session_running() const -> bool
 
 auto Xr_session::attach_actions() -> bool
 {
-    ERHE_PROFILE_FUNCTION
-
     if (m_xr_session == XR_NULL_HANDLE)
     {
+        log_xr->warn("Session has no instance");
         return false;
     }
 
-    const XrSessionActionSetsAttachInfo session_action_sets_attach_info{
-        .type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO,
-        .next            = nullptr,
-        .countActionSets = 1,
-        .actionSets      = &m_instance.actions.action_set
-    };
-    ERHE_XR_CHECK(
-        xrAttachSessionActionSets(
-            m_xr_session,
-            &session_action_sets_attach_info
-        )
-    );
-
-    const XrActionSpaceCreateInfo action_space_create_info
-    {
-        .type              = XR_TYPE_ACTION_SPACE_CREATE_INFO,
-        .next              = nullptr,
-        .action            = m_instance.actions.aim_pose,
-        .subactionPath     = XR_NULL_PATH,
-        .poseInActionSpace = {
-            .orientation = {
-                .x = 0.0f,
-                .y = 0.0f,
-                .z = 0.0f,
-                .w = 1.0f
-            },
-            .position = {
-                .x    = 0.0f,
-                .y    = 0.0f,
-                .z    = 0.0f,
-            }
-        }
-    };
-    ERHE_XR_CHECK(xrCreateActionSpace(m_xr_session, &action_space_create_info, &m_instance.actions.aim_pose_space));
-
-    return true;
+    return m_instance.attach_actions(m_xr_session);
 }
 
 auto Xr_session::create_hand_tracking() -> bool
@@ -651,7 +603,8 @@ void Xr_session::update_view_pose()
 
     const XrResult result = xrLocateSpace(
         m_xr_reference_space_view,
-        m_xr_reference_space_local,
+        //m_xr_reference_space_local,
+        m_xr_reference_space_stage,
         m_xr_frame_state.predictedDisplayTime,
         &location
     );
@@ -727,7 +680,8 @@ void Xr_session::update_hand_tracking()
     const XrHandJointsLocateInfoEXT hand_joints_locate_info{
         .type      = XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT,
         .next      = nullptr,
-        .baseSpace = m_xr_reference_space_local,
+        //.baseSpace = m_xr_reference_space_local,
+        .baseSpace = m_xr_reference_space_stage,
         .time      = m_xr_frame_state.predictedDisplayTime
     };
 
@@ -872,7 +826,8 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
             .next                  = nullptr,
             .viewConfigurationType = m_instance.get_xr_view_configuration_type(),
             .displayTime           = m_xr_frame_state.predictedDisplayTime,
-            .space                 = m_xr_reference_space_local
+            //.space                 = m_xr_reference_space_local
+            .space                 = m_xr_reference_space_stage
         };
 
         ERHE_XR_CHECK(
@@ -943,16 +898,17 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
                 .orientation = to_glm(m_xr_views[i].pose.orientation),
                 .position    = to_glm(m_xr_views[i].pose.position),
             },
-            .fov_left      = m_xr_views[i].fov.angleLeft,
-            .fov_right     = m_xr_views[i].fov.angleRight,
-            .fov_up        = m_xr_views[i].fov.angleUp,
-            .fov_down      = m_xr_views[i].fov.angleDown,
-            .color_texture = color_texture,
-            .depth_texture = depth_texture,
-            .color_format  = m_swapchain_color_format,
-            .depth_format  = m_swapchain_depth_format,
-            .width         = view_configuration_views[i].recommendedImageRectWidth,
-            .height        = view_configuration_views[i].recommendedImageRectHeight
+            .fov_left          = m_xr_views[i].fov.angleLeft,
+            .fov_right         = m_xr_views[i].fov.angleRight,
+            .fov_up            = m_xr_views[i].fov.angleUp,
+            .fov_down          = m_xr_views[i].fov.angleDown,
+            .color_texture     = color_texture,
+            .depth_texture     = depth_texture,
+            .color_format      = m_swapchain_color_format,
+            .depth_format      = m_swapchain_depth_format,
+            .width             = view_configuration_views[i].recommendedImageRectWidth,
+            .height            = view_configuration_views[i].recommendedImageRectHeight,
+            .composition_alpha = m_instance.get_configuration().composition_alpha
         };
         {
             const auto result = render_view_callback(render_view);
@@ -1026,8 +982,9 @@ auto Xr_session::end_frame(const bool rendered) -> bool
     XrCompositionLayerProjection layer{
         .type       = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
         .next       = nullptr,
-        .layerFlags = 0, //XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-        .space      = m_xr_reference_space_local,
+        .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
+        //.space      = m_xr_reference_space_local,
+        .space      = m_xr_reference_space_stage,
         .viewCount  = static_cast<uint32_t>(m_xr_views.size()),
         .views      = m_xr_composition_layer_projection_views.data()
     };

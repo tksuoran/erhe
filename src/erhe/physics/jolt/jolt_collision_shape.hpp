@@ -48,20 +48,20 @@ public:
     ~Jolt_box_shape() noexcept override = default;
 
     explicit Jolt_box_shape(const glm::vec3 half_extents)
-        : m_shape_settings{to_jolt(half_extents)}
     {
-        auto result = m_shape_settings.Create();
+        m_shape_settings = new JPH::BoxShapeSettings(to_jolt(half_extents));
+        auto result = m_shape_settings->Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
 
     auto get_shape_settings() -> JPH::ShapeSettings& override
     {
-        return m_shape_settings;
+        return *m_shape_settings.GetPtr();
     }
 
 private:
-    JPH::BoxShapeSettings m_shape_settings;
+    JPH::Ref<JPH::BoxShapeSettings> m_shape_settings;
 };
 
 class Jolt_capsule_shape
@@ -170,9 +170,9 @@ class Jolt_sphere_shape
 {
 public:
     explicit Jolt_sphere_shape(const float radius)
-        : m_shape_settings{radius}
     {
-        auto result = m_shape_settings.Create();
+        m_shape_settings = new JPH::SphereShapeSettings(radius);
+        auto result = m_shape_settings->Create();
         ERHE_VERIFY(result.IsValid());
         m_jolt_shape = result.Get();
     }
@@ -181,11 +181,11 @@ public:
 
     auto get_shape_settings() -> JPH::ShapeSettings& override
     {
-        return m_shape_settings;
+        return *m_shape_settings.GetPtr();
     }
 
 private:
-    JPH::SphereShapeSettings m_shape_settings;
+    JPH::Ref<JPH::SphereShapeSettings> m_shape_settings;
 };
 
 } // namespace erhe::physics

@@ -11,6 +11,7 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/xr/headset.hpp"
+#include "erhe/xr/xr_action.hpp"
 
 namespace editor
 {
@@ -53,10 +54,10 @@ Controller_visualization::Controller_visualization(
     m_controller_node->set_parent(view_root);
 }
 
-void Controller_visualization::update(const erhe::xr::Pose& pose)
+void Controller_visualization::update(const erhe::xr::Xr_action_pose* pose)
 {
-    const glm::mat4 orientation = glm::mat4_cast(pose.orientation);
-    const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, pose.position);
+    const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
+    const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position);
     const glm::mat4 m           = translation * orientation;
     m_controller_node->set_parent_from_node(m);
 }

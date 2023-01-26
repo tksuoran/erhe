@@ -8,6 +8,8 @@
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
 #   include "xr/headset_view.hpp"
+#   include "erhe/xr/headset.hpp"
+#   include "erhe/xr/xr_action.hpp"
 #endif
 
 #include "erhe/application/configuration.hpp"
@@ -148,60 +150,80 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (erhe::application::g_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
     {
+        const auto* headset = g_headset_view->get_headset();
+        ERHE_VERIFY(headset != nullptr);
+
         const auto* node                   = m_rendertarget_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        const auto& pose                   = m_rendertarget_mesh->get_controller_pose();
-        const bool  trigger_click          = m_rendertarget_mesh->get_controller_trigger_click();
-        const bool  trigger_click_changed  = m_rendertarget_mesh->get_controller_trigger_click_changed();
+        //const auto& pose                   = m_rendertarget_mesh->get_controller_pose();
+        //const bool  trigger_click          = m_rendertarget_mesh->get_controller_trigger_click();
+        //const bool  trigger_click_changed  = m_rendertarget_mesh->get_controller_trigger_click_changed();
         ////const float trigger_value          = m_rendertarget_mesh->get_controller_trigger_value();
-        const auto  controller_orientation = glm::mat4_cast(pose.orientation);
-        const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
-
-        const auto intersection = erhe::toolkit::intersect_plane<float>(
-            glm::vec3{node->direction_in_world()},
-            glm::vec3{node->position_in_world()},
-            pose.position,
-            controller_direction
+        auto* left_aim_pose  = headset->get_actions_left().aim_pose;
+        auto* right_aim_pose = headset->get_actions_right().aim_pose;
+        const bool use_right = (
+            (right_aim_pose != nullptr) &&
+            (right_aim_pose->location.locationFlags != 0)
         );
-        bool mouse_has_position{false};
-        if (intersection.has_value())
-        {
-            const auto world_position      = pose.position + intersection.value() * controller_direction;
-            const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
-            if (window_position_opt.has_value())
-            {
-                if (!has_cursor())
-                {
-                    on_cursor_enter(1);
-                }
-                mouse_has_position = true;
-                const auto position = window_position_opt.value();
-                if (
-                    (m_last_mouse_x != position.x) ||
-                    (m_last_mouse_y != position.y)
-                )
-                {
-                    m_last_mouse_x = position.x;
-                    m_last_mouse_y = position.y;
-                    on_mouse_move(position.x, position.y);
-                }
-            }
-        }
-        if (!mouse_has_position)
-        {
-            if (has_cursor())
-            {
-                on_cursor_enter(0);
-                m_last_mouse_x = -FLT_MAX;
-                m_last_mouse_y = -FLT_MAX;
-                on_mouse_move(-FLT_MAX, -FLT_MAX);
-            }
-        }
 
-        if (trigger_click_changed)
+        auto* pose = use_right ? right_aim_pose : left_aim_pose;
+        if (pose != nullptr)
         {
+            const auto controller_orientation = glm::mat4_cast(pose->orientation);
+            const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+
+            const auto intersection = erhe::toolkit::intersect_plane<float>(
+                glm::vec3{node->direction_in_world()},
+                glm::vec3{node->position_in_world()},
+                pose->position,
+                controller_direction
+            );
+            bool mouse_has_position{false};
+            if (intersection.has_value())
+            {
+                const auto world_position      = pose->position + intersection.value() * controller_direction;
+                const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
+                if (window_position_opt.has_value())
+                {
+                    if (!has_cursor())
+                    {
+                        on_cursor_enter(1);
+                    }
+                    mouse_has_position = true;
+                    const auto position = window_position_opt.value();
+                    if (
+                        (m_last_mouse_x != position.x) ||
+                        (m_last_mouse_y != position.y)
+                    )
+                    {
+                        m_last_mouse_x = position.x;
+                        m_last_mouse_y = position.y;
+                        on_mouse_move(position.x, position.y);
+                    }
+                }
+            }
+            if (!mouse_has_position)
+            {
+                if (has_cursor())
+                {
+                    on_cursor_enter(0);
+                    m_last_mouse_x = -FLT_MAX;
+                    m_last_mouse_y = -FLT_MAX;
+                    on_mouse_move(-FLT_MAX, -FLT_MAX);
+                }
+            }
+
             ImGuiIO& io = m_imgui_context->IO;
-            io.AddMouseButtonEvent(0, trigger_click);
+            auto* trigger_click = headset->get_actions_right().trigger_click;
+            auto* a_click = headset->get_actions_right().a_click;
+            if ((trigger_click != nullptr) && (trigger_click->state.changedSinceLastSync == XR_TRUE))
+            {
+                io.AddMouseButtonEvent(0, trigger_click->state.currentState == XR_TRUE);
+            }
+            if ((a_click != nullptr) && (a_click->state.changedSinceLastSync == XR_TRUE))
+            {
+                io.AddMouseButtonEvent(0, a_click->state.currentState == XR_TRUE);
+            }
         }
     }
 #endif

@@ -144,12 +144,14 @@ public:
     void update_transform      (uint64_t serial) const;
     void sanity_check          () const;
     void sanity_check_root_path(const Node* node) const;
-    void set_parent_from_node  (const glm::mat4 matrix);
-    void set_parent_from_node  (const Transform& transform);
-    void set_node_from_parent  (const glm::mat4 matrix);
-    void set_node_from_parent  (const Transform& transform);
-    void set_world_from_node   (const glm::mat4 matrix);
-    void set_world_from_node   (const Transform& transform);
+    void set_parent_from_node  (const glm::mat4 parent_from_node);
+    void set_parent_from_node  (const Transform& parent_from_node);
+    void set_node_from_parent  (const glm::mat4 node_from_parent);
+    void set_node_from_parent  (const Transform& node_from_parent);
+    void set_world_from_node   (const glm::mat4 world_from_node);
+    void set_world_from_node   (const Transform& world_from_node);
+    void set_node_from_world   (const glm::mat4 node_from_world);
+    void set_node_from_world   (const Transform& node_from_world);
     void attach                (const std::shared_ptr<Node_attachment>& attachment);
     auto detach                (Node_attachment* attachment) -> bool;
 

@@ -3,6 +3,7 @@
 #include "erhe/xr/xr.hpp"
 #include "erhe/xr/xr_log.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #ifdef _WIN32
 #   include <unknwn.h>
@@ -321,14 +322,6 @@ auto Xr_instance::enumerate_extensions() -> bool
     log_xr->trace("{}", __func__);
 
     uint32_t instance_extension_count{0};
-    //const auto res = xrEnumerateInstanceExtensionProperties(nullptr,
-    //                                                        0,
-    //                                                        &instance_extension_count,
-    //                                                        nullptr);
-    //if (res == XR_ERROR_RUNTIME_UNAVAILABLE)
-    //{
-    //    return false;
-    //}
     ERHE_XR_CHECK(
         xrEnumerateInstanceExtensionProperties(
             nullptr,
@@ -648,292 +641,144 @@ auto Xr_instance::enumerate_view_configurations() -> bool
     return true;
 }
 
-// /user/hand/left  represents the user�s left hand. It might be tracked using a controller
-//                  or other device in the user�s left hand, or tracked without the user
-//                  holding anything, e.g. using computer vision.
-// /user/hand/right represents the user�s right hand in analog to the left hand.
-// /user/head       represents inputs on the user�s head, often from a device such as a
-//                  head-mounted display. To reason about the user�s head, see the
-//                  XR_REFERENCE_SPACE_TYPE_VIEW reference space.
-// /user/gamepad    is a two-handed gamepad device held by the user.
-// /user/treadmill  is a treadmill or other locomotion-targeted input device.
+void Xr_instance::get_paths()
+{
+    get_path("/user/head"                                   , paths.user_head                                  );
+    get_path("/user/hand/left"                              , paths.user_hand_left                             );
+    get_path("/user/hand/right"                             , paths.user_hand_right                            );
+    get_path("/interaction_profiles/khr/simple_controller"  , paths.interaction_profile_khr_simple_controller  );
+    get_path("/interaction_profiles/htc/vive_controller"    , paths.interaction_profile_htc_vive_controller    );
+    get_path("/interaction_profiles/oculus/touch_controller", paths.interaction_profile_oculus_touch_controller);
+    get_path("/interaction_profiles/valve/index_controller" , paths.interaction_profile_valve_index_controller );
+}
 
-
-// Standard identifiers
-
-// trackpad         A 2D input source that usually includes click and touch component.
-//
-// thumbstick       A small 2D joystick that is meant to be used with the user�s thumb.
-//                  These sometimes include click and/or touch components.
-//
-// joystick         A 2D joystick that is meant to be used with the user�s entire hand,
-//                  such as a flight stick. These generally do not have click component,
-//                  but might have touch components.
-//
-// trigger          A 1D analog input component that returns to a rest state when the user stops
-//                  interacting with it. These sometimes include touch and/or click components.
-//
-// throttle         A 1D analog input component that remains in position when the user stops
-//                  interacting with it.
-//
-// trackball        A 2D relative input source. These sometimes include click components.
-//
-// pedal            A 1D analog input component that is similar to a trigger but meant to be
-//                  operated by a foot
-//
-// system           A button with the specialised meaning that it enables the user to access
-//                  system-level functions and UI. Input data from system buttons is generally
-//                  used internally by runtimes and may not be available to applications.
-//
-// dpad_up          A set of buttons arranged in a plus shape.
-// dpad_down
-// dpad_left
-// dpad_right
-//
-// diamond_up       Gamepads often have a set of four buttons arranged in a diamond shape.
-// diamond_down     The labels on those buttons vary from gamepad to gamepad, but their
-// diamond_left     arrangement is consistent. These names are used for the A/B/X/Y buttons
-// diamond_right    on a Xbox controller, and the square/cross/circle/triangle button on
-//                  a PlayStation controller.
-//
-// a                Standalone buttons are named for their physical labels. These are the
-// b                standard identifiers for such buttons. Extensions may add new identifiers
-// x                as detailed in the next section. Groups of four buttons in a diamond shape
-// y                should use the diamond-prefix names above instead of using the labels on
-// start            the buttons themselves.
-//
-// home             Some other standard controls are often identified by icons.
-// end              These are their standard names.
-// select
-// volume_up
-// volume_down
-// mute_mic
-// play_pause
-// menu
-// view
-//
-// thumbrest        Some controllers have a place for the user to rest their thumb.
-//
-// shoulder         A button that is usually pressed with the index finger and is often
-//                  positioned above a trigger.
-//
-// squeeze          An input source that indicates that the user is squeezing their fist
-//                  closed. This could be a simple button or act more like a trigger.
-//                  Sources with this identifier should either follow button or trigger
-//                  conventions for their components.
-//
-// wheel            A steering wheel.
-
-// Input sources whose orientation and/or position are tracked also expose pose identifiers.
-
-// Standard pose identifiers for tracked hands or motion controllers as
-// represented by /user/hand/left and /user/hand/right are:
-//
-// grip
-//      A pose that allows applications to reliably render a virtual object
-//      held in the user�s hand, whether it is tracked directly or by a motion
-//      controller. The grip pose is defined as follows:
-//
-//          The grip position:
-//
-//              For tracked hands:
-//                  The user�s palm centroid when closing the fist,
-//                  at the surface of the palm.
-//
-//              For handheld motion controllers:
-//                  A fixed position within the controller that generally lines up
-//                  with the palm centroid when held by a hand in a neutral position.
-//                  This position should be adjusted left or right to center the
-//                  position within the controller�s grip.
-//
-//          The grip orientation�s +X axis:
-//                  When you completely open your hand to form a flat 5-finger pose,
-//                  the ray that is normal to the user�s palm (away from the palm
-//                  in the left hand, into the palm in the right hand).
-//
-//          The grip orientation�s -Z axis:
-//                  When you close your hand partially (as if holding the controller),
-//                  the ray that goes through the center of the tube formed by your
-//                  non-thumb fingers, in the direction of little finger to thumb.
-//
-//          The grip orientation�s +Y axis:
-//                  orthogonal to +Z and +X using the right-hand rule.
-//
-// aim
-//      A pose that allows applications to point in the world using the input source,
-//      according to the platform�s conventions for aiming with that kind of source.
-//      The aim pose is defined as follows:
-//
-//          For tracked hands:
-//              The ray that follows platform conventions for how the user aims at
-//              objects in the world with their entire hand, with +Y up, +X to the
-//              right, and -Z forward. The ray chosen will be runtime-dependent,
-//              for example, a ray emerging from the palm parallel to the forearm.
-//
-//          For handheld motion controllers:
-//              The ray that follows platform conventions for how the user targets
-//              objects in the world with the motion controller, with +Y up, +X to
-//              the right, and -Z forward. This is usually for applications that
-//              are rendering a model matching the physical controller, as an
-//              application rendering a virtual object in the user�s hand likel
-//              prefers to point based on the geometry of that virtual object.
-//              The ray chosen will be runtime-dependent, although this will often
-//              emerge from the frontmost tip of a motion controller.
-
-
-// Standard locations
-
-// When a single device contains multiple input sources that use the same identifier,
-// a location suffix is added to create a unique identifier for that input source.
-//
-// Standard locations are:
-//
-// left
-// right
-// left_upper
-// left_lower
-// right_upper
-// right_lower
-// upper
-// lower
-
-// Standard components
-
-// Components are named for the specific boolean, scalar, or other value of the
-// input source. Standard components are:
-//
-//  click
-//      A physical switch has been pressed by the user.
-//      This is valid for all buttons, and is common for trackpads,
-//      thumbsticks, triggers, and dpads. "click" components are always boolean.
-//
-//  touch
-//      The user has touched the input source. This is valid for all trackpads,
-//      and may be present for any other kind of input source if the device
-//      includes the necessary sensor. "touch" components are always boolean.
-//
-//  force
-//      A 1D scalar value that represents the user applying force to the input.
-//      It varies from 0 to 1, with 0 being the rest state. This is present
-//          for any input source with a force sensor.
-//
-//  value
-//      A 1D scalar value that varies from 0 to 1, with 0 being the rest state.
-//      This is present for triggers, throttles, and pedals. It may also be
-//      present for squeeze or other components.
-//
-//  x, y
-//      scalar components of 2D values. These vary in value from -1 to 1.
-//      These represent the 2D position of the input source with 0 being
-//      the rest state on each axis. -1 means all the way left for x axis
-//      or all the way down for y axis. +1 means all the way right for x
-//      axis or all the way up for y axis. x and y components are present
-//      for trackpads, thumbsticks, and joysticks.
-//
-// twist
-//      Some sources, such as flight sticks, have a sensor that allows the
-//      user to twist the input left or right. For this component -1 means
-//      all the way left and 1 means all the way right.
-//
-// pose
-//      The orientation and/or position of this input source. This component
-//      may exist for dedicated pose identifiers like grip and aim, or may
-//      be defined on other identifiers such as trackpad to let applications
-//      reason about the surface of that part.
-//
-
-// 6.4.1. Khronos Simple Controller Profile
-
-// Path:
-//      /interaction_profiles/khr/simple_controller
-//
-// Valid for user paths:
-//      /user/hand/left
-//      /user/hand/right
-//
-// This interaction profile provides basic pose, button, and haptic support
-// for applications with simple input needs. There is no hardware associated
-// with the profile, and runtimes which support this profile should map the
-// input paths provided to whatever the appropriate paths are on the actual hardware.
-//
-// Supported component paths:
-//      .../input/select/click
-//      .../input/menu/click
-//      .../input/grip/pose
-//      .../input/aim/pose
-//      .../output/haptic
-
-// 6.4.3. HTC Vive Controller Profile
-
-// Path:
-//      /interaction_profiles/htc/vive_controller
-//
-// Valid for user paths:
-//      /user/hand/left
-//      /user/hand/right
-//
-// This interaction profile represents the input sources and haptics on the Vive Controller.
-//
-// Supported component paths:
-//      .../input/system/click (may not be available for application use)
-//      .../input/squeeze/click
-//      .../input/menu/click
-//      .../input/trigger/click
-//      .../input/trigger/value
-//      .../input/trackpad/x
-//      .../input/trackpad/y
-//      .../input/trackpad/click
-//      .../input/trackpad/touch
-//      .../input/grip/pose
-//      .../input/aim/pose
-//      .../output/haptic
-//constexpr const char* c_interaction_profile_simple_controller = "/interaction_profiles/khr/simple_controller";
-constexpr const char* c_interaction_profile_vive_controller         = "/interaction_profiles/htc/vive_controller";
-constexpr const char* c_interaction_profile_oculus_go_controller    = "/interaction_profiles/oculus/go_controller";
-constexpr const char* c_interaction_profile_oculus_touch_controller = "/interaction_profiles/oculus/touch_controller";
-//constexpr const char* c_interaction_profile_index_controller  = "/interaction_profiles/valve/index_controller";
-//constexpr const char* c_interaction_profile_vive_pro          = "/interaction_profiles/htc/vive_pro";
-
-constexpr const char* c_user_head       = "/user/head";
-constexpr const char* c_user_hand_left  = "/user/hand/left";
-constexpr const char* c_user_hand_right = "/user/hand/right";
-
-constexpr const char* c_trigger_value   = "/user/hand/right/input/trigger/value";
-constexpr const char* c_trigger_click   = "/user/hand/right/input/trigger/click";
-constexpr const char* c_menu_click      = "/user/hand/right/input/menu/click";
-constexpr const char* c_squeeze_click   = "/user/hand/right/input/squeeze/click";
-constexpr const char* c_aim_pose        = "/user/hand/right/input/aim/pose";
-constexpr const char* c_trackpad        = "/user/hand/right/input/trackpad";
-constexpr const char* c_trackpad_click  = "/user/hand/right/input/trackpad/click";
-constexpr const char* c_trackpad_touch  = "/user/hand/right/input/trackpad/touch";
-
-constexpr const char* c_a_click   = "/user/hand/right/input/a/click";
-constexpr const char* c_a_touch   = "/user/hand/right/input/a/touch";
-
-Xr_path::Xr_path() = default;
-
-Xr_path::Xr_path(XrInstance instance, const char* path)
+void Xr_instance::get_path(const char* path, XrPath& xr_path)
 {
     check(
         xrStringToPath(
-            instance,
+            m_xr_instance,
             path,
             &xr_path
         )
     );
 }
 
-auto Xr_instance::path(const char* path) -> Xr_path
+void Xr_instance::collect_bindings(
+    const Xr_action& action
+)
 {
-    return Xr_path(m_xr_instance, path);
+    if ((action.profile_mask & Profile_mask::khr_simple) != 0)
+    {
+        ERHE_VERIFY(action.action != XR_NULL_HANDLE);
+        m_khr_simple_bindings.push_back(
+            XrActionSuggestedBinding{
+                .action  = action.action,
+                .binding = action.path
+            }
+        );
+    }
+    if ((action.profile_mask & Profile_mask::oculus_touch) != 0)
+    {
+        ERHE_VERIFY(action.action != XR_NULL_HANDLE);
+        m_oculus_touch_bindings.push_back(
+            XrActionSuggestedBinding{
+                .action  = action.action,
+                .binding = action.path
+            }
+        );
+    }
+    if ((action.profile_mask & Profile_mask::valve_index) != 0)
+    {
+        ERHE_VERIFY(action.action != XR_NULL_HANDLE);
+        m_valve_index_bindings.push_back(
+            XrActionSuggestedBinding{
+                .action  = action.action,
+                .binding = action.path
+            }
+        );
+    }
+    if ((action.profile_mask & Profile_mask::htc_vive) != 0)
+    {
+        ERHE_VERIFY(action.action != XR_NULL_HANDLE);
+        m_htc_vive_bindings.push_back(
+            XrActionSuggestedBinding{
+                .action  = action.action,
+                .binding = action.path
+            }
+        );
+    }
+}
+
+auto Xr_instance::create_boolean_action(
+    const unsigned int     profile_mask,
+    const std::string_view path_name
+) -> Xr_action_boolean*
+{
+    m_boolean_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
+    auto& action = m_boolean_actions.back();
+    if (action.action == XR_NULL_HANDLE)
+    {
+        m_boolean_actions.pop_back();
+        return nullptr;
+    }
+    collect_bindings(action);
+    return &action;
+}
+
+auto Xr_instance::create_float_action(
+    const unsigned int     profile_mask,
+    const std::string_view path_name
+) -> Xr_action_float*
+{
+    m_float_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
+    auto& action = m_float_actions.back();
+    if (action.action == XR_NULL_HANDLE)
+    {
+        m_float_actions.pop_back();
+        return nullptr;
+    }
+    collect_bindings(action);
+    return &action;
+}
+
+auto Xr_instance::create_vector2f_action(
+    const unsigned int     profile_mask,
+    const std::string_view path_name
+) -> Xr_action_vector2f*
+{
+    m_vector2f_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
+    auto& action = m_vector2f_actions.back();
+    if (action.action == XR_NULL_HANDLE)
+    {
+        m_vector2f_actions.pop_back();
+        return nullptr;
+    }
+    collect_bindings(action);
+    return &action;
+}
+
+auto Xr_instance::create_pose_action(
+    const unsigned int     profile_mask,
+    const std::string_view path_name
+) -> Xr_action_pose*
+{
+    m_pose_actions.emplace_back(m_xr_instance, m_action_set, path_name, profile_mask);
+    auto& action = m_pose_actions.back();
+    if (action.action == XR_NULL_HANDLE)
+    {
+        m_pose_actions.pop_back();
+        return nullptr;
+    }
+    collect_bindings(action);
+    return &action;
 }
 
 auto Xr_instance::initialize_actions() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    get_paths();
 
     {
-        const XrActionSetCreateInfo action_set_info
+        const XrActionSetCreateInfo create_info
         {
             .type                   = XR_TYPE_ACTION_SET_CREATE_INFO,
             .next                   = nullptr,
@@ -941,328 +786,215 @@ auto Xr_instance::initialize_actions() -> bool
             .localizedActionSetName = { 'e', 'r', 'h', 'e', '\0' },
             .priority               = 0,
         };
-        ERHE_XR_CHECK(
-            xrCreateActionSet(
-                m_xr_instance,
-                &action_set_info,
-                &actions.action_set
-            )
-        );
-    }
-    {
-        const XrActionCreateInfo trigger_value_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'v', 'a', 'l', 'u', 'e', '\0' },
-            .actionType          = XR_ACTION_TYPE_FLOAT_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'v', 'a', 'l', 'u', 'e', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &trigger_value_action_create_info,
-                &actions.trigger_value
-            )
-        );
-    }
-    {
-        const XrActionCreateInfo trigger_click_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'c', 'l', 'i', 'c', 'k', '\0' },
-            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 't', 'r', 'i', 'g', 'g', 'e', 'r', '_', 'c', 'l', 'i', 'c', 'k', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &trigger_click_action_create_info,
-                &actions.trigger_click
-            )
-        );
-    }
-
-    {
-        const XrActionCreateInfo menu_click_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 'm', 'e', 'n', 'u', '\0' },
-            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 'm', 'e', 'n', 'u', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &menu_click_action_create_info,
-                &actions.menu_click
-            )
-        );
-    }
-    {
-        const XrActionCreateInfo squeeze_click_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' },
-            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 's', 'q', 'u', 'e', 'e', 'z', 'e', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &squeeze_click_action_create_info,
-                &actions.squeeze_click
-            )
-        );
-    }
-    {
-        const XrActionCreateInfo aim_pose_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 'a', 'i', 'm', '\0' },
-            .actionType          = XR_ACTION_TYPE_POSE_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 'a', 'i', 'm', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &aim_pose_action_create_info,
-                &actions.aim_pose
-            )
-        );
-    }
-    {
-        const XrActionCreateInfo trackpad_click_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 'c', 'l', 'i', 'c', 'k', '\0' },
-            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 'c', 'l', 'i', 'c', 'k', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &trackpad_click_action_create_info,
-                &actions.trackpad_click
-            )
-        );
-    }
-    {
-        const XrActionCreateInfo trackpad_touch_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 't', 'o', 'u', 'c', 'k', '\0' },
-            .actionType          = XR_ACTION_TYPE_BOOLEAN_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '_', 't', 'o', 'u', 'c', 'k', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &trackpad_touch_action_create_info,
-                &actions.trackpad_touch
-            )
-        );
-    }
-    {
-        const XrActionCreateInfo trackpad_action_create_info{
-            .type                = XR_TYPE_ACTION_CREATE_INFO,
-            .next                = nullptr,
-            .actionName          = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '\0' },
-            .actionType          = XR_ACTION_TYPE_VECTOR2F_INPUT,
-            .countSubactionPaths = 0,
-            .subactionPaths      = nullptr,
-            .localizedActionName = { 't', 'r', 'a', 'c', 'p', 'a', 'd', '\0' }
-        };
-        ERHE_XR_CHECK(
-            xrCreateAction(
-                actions.action_set,
-                &trackpad_action_create_info,
-                &actions.trackpad
-            )
-        );
-    }
-
-    paths.user_head       = path(c_user_head);
-    paths.user_hand_left  = path(c_user_hand_left);
-    paths.user_hand_right = path(c_user_hand_right);
-    paths.trigger_value   = path(c_trigger_value);
-    paths.trigger_click   = path(c_trigger_click);
-    paths.menu_click      = path(c_menu_click);
-    paths.squeeze_click   = path(c_squeeze_click);
-    paths.aim_pose        = path(c_aim_pose);
-    paths.trackpad_click  = path(c_trackpad_click);
-    paths.trackpad_touch  = path(c_trackpad_touch);
-    paths.trackpad        = path(c_trackpad);
-    paths.a_click         = path(c_a_click);
-    paths.a_touch         = path(c_a_touch);
-
-    paths.interaction_profile_vive_controller         = path(c_interaction_profile_vive_controller);
-    paths.interaction_profile_oculus_go_controller    = path(c_interaction_profile_oculus_go_controller);
-    paths.interaction_profile_oculus_touch_controller = path(c_interaction_profile_oculus_touch_controller);
-
-    const std::array<XrActionSuggestedBinding, 8> vive_controller_suggested_bindings{
-        {
-            {
-                .action  = actions.trigger_value,
-                .binding = paths.trigger_value.xr_path
-            },
-            {
-                .action  = actions.trigger_click,
-                .binding = paths.trigger_click.xr_path
-            },
-            {
-                .action  = actions.menu_click,
-                .binding = paths.menu_click.xr_path
-            },
-            {
-                .action  = actions.squeeze_click,
-                .binding = paths.squeeze_click.xr_path
-            },
-            {
-                .action  = actions.aim_pose,
-                .binding = paths.aim_pose.xr_path
-            },
-            {
-                .action  = actions.trackpad_click,
-                .binding = paths.trackpad_click.xr_path
-            },
-            {
-                .action  = actions.trackpad_touch,
-                .binding = paths.trackpad_touch.xr_path
-            },
-            {
-                .action  = actions.trackpad,
-                .binding = paths.trackpad.xr_path
-            },
-        }
-    };
-
-    const std::array<XrActionSuggestedBinding, 2> oculus_touch_controller_suggested_bindings{
-        {
-            {
-                .action  = actions.trigger_click,
-                .binding = paths.a_click.xr_path
-            },
-            {
-                .action  = actions.aim_pose,
-                .binding = paths.aim_pose.xr_path
-            }
-        }
-    };
-
-    const XrInteractionProfileSuggestedBinding vive_interaction_profile_suggested_binding
-    {
-        .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
-        .next                   = nullptr,
-        .interactionProfile     = paths.interaction_profile_vive_controller.xr_path,
-        .countSuggestedBindings = static_cast<uint32_t>(vive_controller_suggested_bindings.size()),
-        .suggestedBindings      = vive_controller_suggested_bindings.data()
-    };
-
-    const XrInteractionProfileSuggestedBinding oculus_touch_interaction_profile_suggested_binding
-    {
-        .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
-        .next                   = nullptr,
-        .interactionProfile     = paths.interaction_profile_oculus_touch_controller.xr_path,
-        .countSuggestedBindings = static_cast<uint32_t>(oculus_touch_controller_suggested_bindings.size()),
-        .suggestedBindings      = oculus_touch_controller_suggested_bindings.data()
-    };
-
-    ERHE_XR_CHECK(
-        xrSuggestInteractionProfileBindings(
+        const XrResult result = xrCreateActionSet(
             m_xr_instance,
-            &vive_interaction_profile_suggested_binding
-        )
-    );
-    ERHE_XR_CHECK(
-        xrSuggestInteractionProfileBindings(
-            m_xr_instance,
-            &oculus_touch_interaction_profile_suggested_binding
-        )
-    );
+            &create_info,
+            &m_action_set
+        );
+        log_xr->info(
+            "xrCreateActionSet(.actionSetName = '{}', .localizedActionSetName = '{}', .priority = {}) result = {}, actionSet = {}",
+            create_info.actionSetName,
+            create_info.localizedActionSetName,
+            create_info.priority,
+            c_str(result),
+            fmt::ptr(m_action_set)
+        );
+        if (result != XR_SUCCESS)
+        {
+            return false;
+        }
+    }
 
-    const XrSessionActionSetsAttachInfo session_action_sets_attach_info{
-        .type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO,
-        .next            = nullptr,
-        .countActionSets = 1,
-        .actionSets      = &actions.action_set
-    };
+    //const unsigned int ____ = 0;
+    const unsigned int K___ = Profile_mask::khr_simple;
+    const unsigned int _V__ = Profile_mask::htc_vive;
+    //const unsigned int __O_ = Profile_mask::oculus_touch;
+    const unsigned int ___I = Profile_mask::valve_index;
+    const unsigned int _V_I = Profile_mask::htc_vive    | Profile_mask::valve_index;
+    const unsigned int __OI = Profile_mask::valve_index | Profile_mask::oculus_touch;
+    const unsigned int _VOI = Profile_mask::htc_vive    | Profile_mask::valve_index | Profile_mask::oculus_touch;
+    const unsigned int KV__ = Profile_mask::khr_simple  | Profile_mask::htc_vive;
+    //const unsigned int KVO_ = Profile_mask::khr_simple  | Profile_mask::htc_vive | Profile_mask::oculus_touch;
+    const unsigned int KVOI = Profile_mask::khr_simple  | Profile_mask::htc_vive | Profile_mask::oculus_touch | Profile_mask::valve_index;
+    //Xr_actions& l = actions_left;
+    Xr_actions& r = actions_right;
+    //l.select_click     = create_boolean_action (K___, "/user/hand/left/input/select/click"    );
+    //l.system_click     = create_boolean_action (_V_I, "/user/hand/left/input/system/click"    );
+    //l.menu_click       = create_boolean_action (KVO_, "/user/hand/left/input/menu/click"      );
+    //l.squeeze_click    = create_boolean_action (_V__, "/user/hand/left/input/squeeze/click"   );
+    //l.x_click          = create_boolean_action (__O_, "/user/hand/left/input/x/click"         );
+    //l.x_touch          = create_boolean_action (__O_, "/user/hand/left/input/x/touch"         );
+    //l.y_click          = create_boolean_action (__O_, "/user/hand/left/input/y/click"         );
+    //l.y_touch          = create_boolean_action (__O_, "/user/hand/left/input/y/touch"         );
+    //l.a_click          = create_boolean_action (___I, "/user/hand/left/input/a/click"         );
+    //l.a_touch          = create_boolean_action (___I, "/user/hand/left/input/a/touch"         );
+    //l.b_click          = create_boolean_action (__OI, "/user/hand/left/input/b/click"         );
+    //l.b_touch          = create_boolean_action (__OI, "/user/hand/left/input/b/touch"         );
+    //l.trigger_click    = create_boolean_action (_V_I, "/user/hand/left/input/trigger/click"   );
+    //l.trigger_touch    = create_boolean_action (__OI, "/user/hand/left/input/trigger/touch"   );
+    //l.trackpad_click   = create_boolean_action (_V__, "/user/hand/left/input/trackpad/click"  );
+    //l.trackpad_touch   = create_boolean_action (_V_I, "/user/hand/left/input/trackpad/touch"  );
+    //l.thumbstick_click = create_boolean_action (__OI, "/user/hand/left/input/thumbstick/click");
+    //l.thumbstick_touch = create_boolean_action (__OI, "/user/hand/left/input/thumbstick/touch");
+    //l.thumbrest_touch  = create_boolean_action (__O_, "/user/hand/left/input/thumbrest/touch" );
+    //l.squeeze_value    = create_float_action   (__OI, "/user/hand/left/input/squeeze/value"   );
+    //l.squeeze_force    = create_float_action   (___I, "/user/hand/left/input/squeeze/force"   );
+    //l.trigger_value    = create_float_action   (_VOI, "/user/hand/left/input/trigger/value"   );
+    //l.trackpad_force   = create_float_action   (___I, "/user/hand/left/input/trackpad/force"  );
+    //l.trackpad         = create_vector2f_action(_V_I, "/user/hand/left/input/trackpad"        );
+    //l.thumbstick       = create_vector2f_action(__OI, "/user/hand/left/input/thumbstick"      );
+    //l.grip_pose        = create_pose_action    (KVOI, "/user/hand/left/input/grip_pose"       );
+    //l.aim_pose         = create_pose_action    (KVOI, "/user/hand/left/input/aim_pose"        );
 
-    actions.trigger_value_state = {
-        .type                 = XR_TYPE_ACTION_STATE_FLOAT,
-        .next                 = nullptr,
-        .currentState         = 0.0f,
-        .changedSinceLastSync = false,
-        .lastChangeTime       = {},
-        .isActive             = XR_FALSE
-    };
+    r.select_click     = create_boolean_action (K___, "/user/hand/right/input/select/click"    );
+    r.system_click     = create_boolean_action (_VOI, "/user/hand/right/input/system/click"    );
+    r.menu_click       = create_boolean_action (KV__, "/user/hand/right/input/menu/click"      );
+    r.squeeze_click    = create_boolean_action (_V__, "/user/hand/right/input/squeeze/click"   );
+    //r.x_click          = create_boolean_action (____, "/user/hand/right/input/x/click"         );
+    //r.x_touch          = create_boolean_action (____, "/user/hand/right/input/x/touch"         );
+    //r.y_click          = create_boolean_action (____, "/user/hand/right/input/y/click"         );
+    //r.y_touch          = create_boolean_action (____, "/user/hand/right/input/y/touch"         );
+    r.a_click          = create_boolean_action (__OI, "/user/hand/right/input/a/click"         );
+    //r.a_touch          = create_boolean_action (__OI, "/user/hand/right/input/a/touch"         );
+    r.b_click          = create_boolean_action (__OI, "/user/hand/right/input/b/click"         );
+    //r.b_touch          = create_boolean_action (__OI, "/user/hand/right/input/b/touch"         );
+    r.trigger_click    = create_boolean_action (_V_I, "/user/hand/right/input/trigger/click"   );
+    //r.trigger_touch    = create_boolean_action (__OI, "/user/hand/right/input/trigger/touch"   );
+    r.trackpad_click   = create_boolean_action (_V__, "/user/hand/right/input/trackpad/click"  );
+    //r.trackpad_touch   = create_boolean_action (_V_I, "/user/hand/right/input/trackpad/touch"  );
+    r.thumbstick_click = create_boolean_action (__OI, "/user/hand/right/input/thumbstick/click");
+    //r.thumbstick_touch = create_boolean_action (__OI, "/user/hand/right/input/thumbstick/touch");
+    //r.thumbrest_touch  = create_boolean_action (__O_, "/user/hand/right/input/thumbrest/touch" );
+    r.squeeze_value    = create_float_action   (__OI, "/user/hand/right/input/squeeze/value"   );
+    r.squeeze_force    = create_float_action   (___I, "/user/hand/right/input/squeeze/force"   );
+    r.trigger_value    = create_float_action   (_VOI, "/user/hand/right/input/trigger/value"   );
+    r.trackpad_force   = create_float_action   (___I, "/user/hand/right/input/trackpad/force"  );
+    r.trackpad         = create_vector2f_action(_V_I, "/user/hand/right/input/trackpad"        );
+    r.thumbstick       = create_vector2f_action(__OI, "/user/hand/right/input/thumbstick"      );
+    r.grip_pose        = create_pose_action    (KVOI, "/user/hand/right/input/grip/pose"       );
+    r.aim_pose         = create_pose_action    (KVOI, "/user/hand/right/input/aim/pose"        );
 
-    actions.trigger_click_state = {
-        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
-        .next                 = nullptr,
-        .currentState         = XR_FALSE,
-        .changedSinceLastSync = false,
-        .lastChangeTime       = {},
-        .isActive             = XR_FALSE
-    };
-
-    actions.menu_click_state = {
-        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
-        .next                 = nullptr,
-        .currentState         = XR_FALSE,
-        .changedSinceLastSync = false,
-        .lastChangeTime       = {},
-        .isActive             = XR_FALSE
-    };
-
-    actions.squeeze_click_state = {
-        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
-        .next                 = nullptr,
-        .currentState         = XR_FALSE,
-        .changedSinceLastSync = false,
-        .lastChangeTime       = {},
-        .isActive             = XR_FALSE
-    };
-
-    actions.trackpad_state = {
-        .type                 = XR_TYPE_ACTION_STATE_VECTOR2F,
-        .next                 = nullptr,
-        .currentState         = { .x = 0.0f, .y = 0.0f },
-        .changedSinceLastSync = false,
-        .lastChangeTime       = {},
-        .isActive             = XR_FALSE
-    };
-    actions.trackpad_click_state = {
-        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
-        .next                 = nullptr,
-        .currentState         = XR_FALSE,
-        .changedSinceLastSync = false,
-        .lastChangeTime       = {},
-        .isActive             = XR_FALSE
-    };
-    actions.trackpad_touch_state = {
-        .type                 = XR_TYPE_ACTION_STATE_BOOLEAN,
-        .next                 = nullptr,
-        .currentState         = XR_FALSE,
-        .changedSinceLastSync = false,
-        .lastChangeTime       = {},
-        .isActive             = XR_FALSE
-    };
-
+    update_action_bindings();
     return true;
+}
+
+auto Xr_instance::get_path_string(XrPath path) -> std::string
+{
+    if (path == XR_NULL_PATH)
+    {
+        return std::string{"XR_NULL_PATH"};
+    }
+    uint32_t length = 0;
+    const XrResult length_query_result = xrPathToString(m_xr_instance, path, 0, &length, nullptr);
+    if (length_query_result != XR_SUCCESS)
+    {
+        return std::string{"INVALID-PATH"};
+    }
+    if (length == 0)
+    {
+        return {};
+    }
+    std::vector<char> buffer;
+    buffer.resize(length);
+    uint32_t required_capacity = 0;
+    const XrResult result = xrPathToString(
+        m_xr_instance,
+        path,
+        length,
+        &required_capacity,
+        buffer.data()
+    );
+    if (result == XR_SUCCESS)
+    {
+        return std::string{buffer.data(), length - 1};
+    }
+    else
+    {
+        return std::string{"INVALID-PATH"};
+    }
+}
+
+void Xr_instance::update_action_bindings()
+{
+    if (!m_khr_simple_bindings.empty())
+    {
+        const XrInteractionProfileSuggestedBinding bindings
+        {
+            .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+            .next                   = nullptr,
+            .interactionProfile     = paths.interaction_profile_khr_simple_controller,
+            .countSuggestedBindings = static_cast<uint32_t>(m_khr_simple_bindings.size()),
+            .suggestedBindings      = m_khr_simple_bindings.data()
+        };
+        const auto result = xrSuggestInteractionProfileBindings(m_xr_instance, &bindings);
+        if (result == XR_SUCCESS)
+        {
+            log_xr->warn("Installed suggested bindings ({}) for KHR simple controller", m_khr_simple_bindings.size());
+        }
+        else if (result != XR_ERROR_PATH_UNSUPPORTED)
+        {
+            log_xr->warn("xrSuggestInteractionProfileBindings() for KHR simple interaction profile returned error {}", c_str(result));
+        }
+    }
+
+    if (!m_oculus_touch_bindings.empty())
+    {
+        const XrInteractionProfileSuggestedBinding bindings
+        {
+            .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+            .next                   = nullptr,
+            .interactionProfile     = paths.interaction_profile_oculus_touch_controller,
+            .countSuggestedBindings = static_cast<uint32_t>(m_oculus_touch_bindings.size()),
+            .suggestedBindings      = m_oculus_touch_bindings.data()
+        };
+
+        for (const auto& binding : m_oculus_touch_bindings)
+        {
+            log_xr->info(
+                "Binding action = {}, path = '{}'",
+                fmt::ptr(binding.action),
+                get_path_string(binding.binding)
+            );
+        }
+        const auto result = xrSuggestInteractionProfileBindings(m_xr_instance, &bindings);
+        log_xr->info(
+            "xrSuggestInteractionProfileBindings(.interactionProfile = '{}', .countSuggestedBindings = {}) result = {}",
+            get_path_string(bindings.interactionProfile),
+            bindings.countSuggestedBindings,
+            c_str(result)
+        );
+        if (result == XR_SUCCESS)
+        {
+            log_xr->warn("Installed suggested bindings ({}) for Oculus Touch controller", m_oculus_touch_bindings.size());
+        }
+        else if (result != XR_ERROR_PATH_UNSUPPORTED)
+        {
+            log_xr->warn("xrSuggestInteractionProfileBindings() for Oculus touch interaction profile returned error {}", c_str(result));
+        }
+    }
+
+    if (!m_htc_vive_bindings.empty())
+    {
+        const XrInteractionProfileSuggestedBinding bindings
+        {
+            .type                   = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+            .next                   = nullptr,
+            .interactionProfile     = paths.interaction_profile_htc_vive_controller,
+            .countSuggestedBindings = static_cast<uint32_t>(m_htc_vive_bindings.size()),
+            .suggestedBindings      = m_htc_vive_bindings.data()
+        };
+        const auto result = xrSuggestInteractionProfileBindings(m_xr_instance, &bindings);
+        if (result == XR_SUCCESS)
+        {
+            log_xr->warn("Installed suggested bindings ({}) for HTV Vive controller", m_htc_vive_bindings.size());
+        }
+        else if (result != XR_ERROR_PATH_UNSUPPORTED)
+        {
+            log_xr->warn("xrSuggestInteractionProfileBindings() for HTC Vive interaction profile returned error {}", c_str(result));
+        }
+    }
+
+    // TODO Valve index
 }
 
 auto Xr_instance::update_actions(Xr_session& session) -> bool
@@ -1271,7 +1003,7 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
 
     const XrActiveActionSet active_action_set
     {
-        .actionSet     = actions.action_set,
+        .actionSet     = m_action_set,
         .subactionPath = XR_NULL_PATH
     };
 
@@ -1298,14 +1030,20 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
             case XR_SESSION_NOT_FOCUSED:
             {
                 // TODO
-                actions.trigger_value_state .isActive = XR_FALSE;
-                actions.trigger_click_state .isActive = XR_FALSE;
-                actions.menu_click_state    .isActive = XR_FALSE;
-                actions.squeeze_click_state .isActive = XR_FALSE;
-                actions.trackpad_touch_state.isActive = XR_FALSE;
-                actions.trackpad_click_state.isActive = XR_FALSE;
-                actions.trackpad_state      .isActive = XR_FALSE;
+                //actions.trigger_value.state .isActive = XR_FALSE;
+                //actions.trigger_click.state .isActive = XR_FALSE;
+                //actions.menu_click.state    .isActive = XR_FALSE;
+                //actions.squeeze_click.state .isActive = XR_FALSE;
+                //actions.trackpad_touch.state.isActive = XR_FALSE;
+                //actions.trackpad_click.state.isActive = XR_FALSE;
+                //actions.trackpad.state      .isActive = XR_FALSE;
                 return true;
+            }
+
+            case XR_ERROR_RUNTIME_FAILURE:
+            {
+                log_xr->error("xrSyncActions() triggered OpenXR runtime failure");
+                return false;
             }
 
             default:
@@ -1316,220 +1054,118 @@ auto Xr_instance::update_actions(Xr_session& session) -> bool
         }
     }
 
-    {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.trigger_value,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStateFloat(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.trigger_value_state
-            )
-        );
-    }
+    const auto   xr_session = session.get_xr_session();
+    const XrTime time       = session.get_xr_frame_state().predictedDisplayTime;
+    const auto   base_space = session.get_xr_reference_space_stage();
 
+    for (auto& action : m_boolean_actions)
     {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.trigger_click,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStateBoolean(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.trigger_click_state
-            )
-        );
+        action.get(xr_session);
     }
-
+    for (auto& action : m_float_actions)
     {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.menu_click,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStateBoolean(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.menu_click_state
-            )
-        );
+        action.get(xr_session);
     }
+    for (auto& action : m_vector2f_actions)
     {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.squeeze_click,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStateBoolean(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.squeeze_click_state
-            )
-        );
+        action.get(xr_session);
     }
+    for (auto& action : m_pose_actions)
     {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.trackpad_touch,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStateBoolean(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.trackpad_touch_state
-            )
-        );
+        action.get(xr_session, time, base_space);
     }
-    {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.trackpad_click,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStateBoolean(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.trackpad_click_state
-            )
-        );
-    }
-    {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.trackpad,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStateVector2f(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.trackpad_state
-            )
-        );
-    }
-    {
-        const XrActionStateGetInfo action_state_get_info{
-            .type          = XR_TYPE_ACTION_STATE_GET_INFO,
-            .next          = nullptr,
-            .action        = actions.aim_pose,
-            .subactionPath = XR_NULL_PATH
-        };
-        ERHE_XR_CHECK(
-            xrGetActionStatePose(
-                session.get_xr_session(),
-                &action_state_get_info,
-                &actions.aim_pose_state
-            )
-        );
-    }
-    const XrTime time = session.get_xr_frame_state().predictedDisplayTime;
-    XrSpaceLocation location{
-        .type          = XR_TYPE_SPACE_LOCATION,
-        .next          = nullptr,
-        .locationFlags = 0,
-        .pose = {
-            .orientation = {
-                .x = 0.0f,
-                .y = 0.0f,
-                .z = 0.0f,
-                .w = 1.0f
-            },
-            .position = {
-                .x = 0.0f,
-                .y = 0.0f,
-                .z = 0.0f
-            }
-        }
-    };
-    ERHE_XR_CHECK(
-        xrLocateSpace(
-            actions.aim_pose_space,
-            session.get_xr_reference_space_local(),
-            time,
-            &location
-        )
-    );
-
-    actions.aim_pose_space_location = location;
-
     return true;
+}
+
+auto Xr_instance::get_boolean_actions() -> etl::vector<Xr_action_boolean, max_action_count>&
+{
+    return m_boolean_actions;
+}
+
+auto Xr_instance::get_float_actions() -> etl::vector<Xr_action_float, max_action_count>&
+{
+    return m_float_actions;
+}
+
+auto Xr_instance::get_vector2f_actions() -> etl::vector<Xr_action_vector2f, max_action_count>&
+{
+    return m_vector2f_actions;
+}
+
+auto Xr_instance::get_pose_actions() -> etl::vector<Xr_action_pose, max_action_count>&
+{
+    return m_pose_actions;
+}
+
+auto Xr_instance::attach_actions(const XrSession session) -> bool
+{
+    std::vector<XrActionSet> sets;
+    sets.push_back(m_action_set);
+    const XrSessionActionSetsAttachInfo attach_info
+    {
+        .type            = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO,
+        .next            = nullptr,
+        .countActionSets = static_cast<uint32_t>(sets.size()),
+        .actionSets      = sets.data()
+    };
+    const XrResult result = xrAttachSessionActionSets(session, &attach_info);
+    log_xr->info(
+        "xrAttachSessionActionSets(.countActionSets = {}, .actionSets = {}) result = {}",
+        attach_info.countActionSets,
+        fmt::ptr(*attach_info.actionSets),
+        c_str(result)
+    );
+    if (result != XR_SUCCESS)
+    {
+        return false;
+    }
+
+    for (auto& action : m_pose_actions)
+    {
+        action.attach(session);
+    }
+    return true;
+}
+
+auto Xr_instance::get_configuration() const -> const Xr_configuration&
+{
+    return m_configuration;
 }
 
 auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    XrInteractionProfileState interation_profile_state{
+    XrInteractionProfileState left{
+        .type               = XR_TYPE_INTERACTION_PROFILE_STATE,
+        .next               = nullptr,
+        .interactionProfile = XR_NULL_PATH
+    };
+    XrInteractionProfileState right{
         .type               = XR_TYPE_INTERACTION_PROFILE_STATE,
         .next               = nullptr,
         .interactionProfile = XR_NULL_PATH
     };
 
-    ERHE_XR_CHECK(
-        xrGetCurrentInteractionProfile(
-            session.get_xr_session(),
-            paths.user_hand_left.xr_path,
-            &interation_profile_state
-        )
+    const XrResult left_result = xrGetCurrentInteractionProfile(
+        session.get_xr_session(),
+        paths.user_hand_left,
+        &left
     );
-
-    if (interation_profile_state.interactionProfile == XR_NULL_PATH)
-    {
-        ERHE_XR_CHECK(
-            xrGetCurrentInteractionProfile(
-                session.get_xr_session(),
-                paths.user_hand_right.xr_path,
-                &interation_profile_state
-            )
-        );
-    }
-
-    if (interation_profile_state.interactionProfile == XR_NULL_PATH)
-    {
-        ERHE_XR_CHECK(
-            xrGetCurrentInteractionProfile(
-                session.get_xr_session(),
-                paths.user_head.xr_path,
-                &interation_profile_state
-            )
-        );
-    }
-
-    if (interation_profile_state.interactionProfile == XR_NULL_PATH)
-    {
-        log_xr->info("Current interaction profile: <nothing>");
-        return true;
-    }
-
-    std::array<char, 256> profile_name{};
-    uint32_t profile_name_length = 0;
-    ERHE_XR_CHECK(
-        xrPathToString(
-            m_xr_instance,
-            interation_profile_state.interactionProfile,
-            static_cast<uint32_t>(profile_name.size()),
-            &profile_name_length,
-            profile_name.data()
-        )
+    const XrResult right_result = xrGetCurrentInteractionProfile(
+        session.get_xr_session(),
+        paths.user_hand_right,
+        &right
     );
+    const std::string left_profile_name  = (left_result  == XR_SUCCESS) ? get_path_string(left .interactionProfile) : "failure";
+    const std::string right_profile_name = (right_result == XR_SUCCESS) ? get_path_string(right.interactionProfile) : "failure";
+    log_xr->info("Current interaction profile for left hand:  {}", left_profile_name);
+    log_xr->info("Current interaction profile for right hand: {}", right_profile_name);
+    if ((left_result != XR_SUCCESS) && (right_result != XR_SUCCESS))
+    {
+        log_xr->warn("Expected interaction profile query to work");
+    }
 
-    log_xr->info("Current interaction profile: {}", profile_name.data());
     return true;
 }
 
@@ -1571,16 +1207,23 @@ auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
                     case XR_SESSION_STATE_IDLE:
                         break;
                     case XR_SESSION_STATE_READY:
+                    {
                         session.begin_session();
-                        get_current_interaction_profile(session);
                         break;
+                    }
                     case XR_SESSION_STATE_SYNCHRONIZED:
                     case XR_SESSION_STATE_VISIBLE:
-                    case XR_SESSION_STATE_FOCUSED:
                         break;
+                    case XR_SESSION_STATE_FOCUSED:
+                    {
+                        get_current_interaction_profile(session);
+                        break;
+                    }
                     case XR_SESSION_STATE_STOPPING:
+                    {
                         session.end_session();
                         break;
+                    }
                     case XR_SESSION_STATE_LOSS_PENDING:
                     case XR_SESSION_STATE_EXITING:
                     default:

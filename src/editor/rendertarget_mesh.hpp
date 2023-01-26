@@ -51,9 +51,9 @@ class Rendertarget_mesh
 {
 public:
     Rendertarget_mesh(
-        int    width,
-        int    height,
-        double pixels_per_meter
+        int   width,
+        int   height,
+        float pixels_per_meter
     );
 
     // Implements Item
@@ -73,7 +73,7 @@ public:
     [[nodiscard]] auto framebuffer     () const -> std::shared_ptr<erhe::graphics::Framebuffer>;
     [[nodiscard]] auto width           () const -> float;
     [[nodiscard]] auto height          () const -> float;
-    [[nodiscard]] auto pixels_per_meter() const -> double;
+    [[nodiscard]] auto pixels_per_meter() const -> float;
     [[nodiscard]] auto get_pointer     () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto world_to_window (glm::vec3 world_position) const -> std::optional<glm::vec2>;
 
@@ -81,13 +81,6 @@ public:
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void update_headset();
-    [[nodiscard]] auto get_pointer_finger                  () const -> std::optional<Finger_point>;
-    [[nodiscard]] auto get_finger_trigger                  () const -> bool;
-    [[nodiscard]] auto get_controller_pose                 () const -> const erhe::xr::Pose&;
-    [[nodiscard]] auto get_controller_trigger_click        () const -> bool;
-    [[nodiscard]] auto get_controller_trigger_click_changed() const -> bool;
-    [[nodiscard]] auto get_controller_trigger_value        () const -> float;
-    [[nodiscard]] auto get_controller_trigger_value_changed() const -> bool;
 #endif
 
     auto update_pointer(Scene_view* scene_view) -> bool;
@@ -99,9 +92,9 @@ private:
     void init_rendertarget(int width, int height);
     void add_primitive    ();
 
-    double                                       m_pixels_per_meter{0.0};
-    double                                       m_local_width     {0.0};
-    double                                       m_local_height    {0.0};
+    float                                        m_pixels_per_meter{0.0f};
+    float                                        m_local_width     {0.0f};
+    float                                        m_local_height    {0.0f};
 
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;
@@ -112,12 +105,7 @@ private:
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     std::optional<Finger_point> m_pointer_finger;
-    bool                        m_finger_trigger                  {false};
-    erhe::xr::Pose              m_controller_pose                 {};
-    bool                        m_controller_trigger_click        {false};
-    bool                        m_controller_trigger_click_changed{false};
-    float                       m_controller_trigger_value_float  {0.0f};
-    bool                        m_controller_trigger_value_changed{false};
+    bool                        m_finger_trigger{false};
 #endif
 };
 

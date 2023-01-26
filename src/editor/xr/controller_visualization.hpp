@@ -4,7 +4,7 @@
 
 namespace erhe::xr
 {
-    class Pose;
+    class Xr_action_pose;
 }
 
 namespace erhe::scene
@@ -30,7 +30,7 @@ public:
 
     [[nodiscard]] auto get_node() const -> erhe::scene::Node*;
 
-    void update(const erhe::xr::Pose& pose);
+    void update(const erhe::xr::Xr_action_pose* pose);
 
 private:
     std::shared_ptr<erhe::scene::Node> m_controller_node;

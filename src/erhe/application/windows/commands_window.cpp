@@ -6,7 +6,7 @@
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/commands/key_binding.hpp"
-#include "erhe/application/commands/mouse_click_binding.hpp"
+#include "erhe/application/commands/mouse_button_binding.hpp"
 #include "erhe/application/commands/mouse_drag_binding.hpp"
 #include "erhe/application/commands/mouse_motion_binding.hpp"
 #include "erhe/application/commands/mouse_wheel_binding.hpp"
@@ -34,7 +34,7 @@ Commands_window::~Commands_window() noexcept
 
 void Commands_window::declare_required_components()
 {
-    require<erhe::application::Imgui_windows>();
+    require<Imgui_windows>();
 }
 
 void Commands_window::initialize_component()

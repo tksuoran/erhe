@@ -24,22 +24,15 @@ class Log_window_toggle_pause_command
     : public Command
 {
 public:
-    explicit Log_window_toggle_pause_command(Log_window& log_window)
-        : Command     {"Log_window.toggle_pause"}
-        , m_log_window{log_window}
-    {
-    }
+    Log_window_toggle_pause_command();
 
-    auto try_call(Command_context& context) -> bool override;
-
-private:
-    Log_window& m_log_window;
+    auto try_call(Input_arguments& input) -> bool override;
 };
 
 class Log_window
     : public erhe::components::Component
     , public Imgui_window
-
+    , public erhe::application::Command_host
 {
 public:
     static constexpr std::string_view c_type_name{"Log_window"};
@@ -53,6 +46,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -81,5 +75,7 @@ private:
     bool                            m_paused     {false};
     bool                            m_last_on_top{true};
 };
+
+extern Log_window* g_log_window;
 
 } // namespace erhe::application

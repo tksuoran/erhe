@@ -18,6 +18,11 @@ Rotate_tool::Rotate_tool()
 
 Rotate_tool::~Rotate_tool() noexcept
 {
+    ERHE_VERIFY(g_rotate_tool == nullptr);
+}
+
+void Rotate_tool::deinitialize_component()
+{
     ERHE_VERIFY(g_rotate_tool == this);
     g_rotate_tool = nullptr;
 }

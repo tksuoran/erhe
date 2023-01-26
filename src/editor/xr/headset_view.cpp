@@ -45,6 +45,7 @@
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/xr/headset.hpp"
 #include "erhe/xr/xr_instance.hpp"
+#include "erhe/xr/xr_session.hpp"
 
 #include <imgui.h>
 
@@ -93,7 +94,6 @@ void Headset_view::deinitialize_component()
     m_view_resources.clear();
     m_controller_visualization.reset();
     m_finger_inputs.clear();
-    m_controller_inputs.clear();
     g_headset_view = nullptr;
 }
 
@@ -128,11 +128,12 @@ void Headset_view::initialize_component()
 
     const erhe::xr::Xr_configuration configuration
     {
-        .debug           = config.debug,
-        .quad_view       = config.quad_view,
-        .depth           = config.depth,
-        .visibility_mask = config.visibility_mask,
-        .hand_tracking   = config.hand_tracking
+        .debug             = config.debug,
+        .quad_view         = config.quad_view,
+        .depth             = config.depth,
+        .visibility_mask   = config.visibility_mask,
+        .hand_tracking     = config.hand_tracking,
+        .composition_alpha = config.composition_alpha
     };
 
     {
@@ -199,28 +200,45 @@ void Headset_view::tool_render(const Render_context& context)
         line_renderer.add_lines({{finger_input.finger_point, finger_input.point}});
     }
 
-    for (const auto& controller_input : m_controller_inputs)
     {
-        line_renderer.add_lines(
-            m_mouse_down ? cyan : blue,
-            {
-                {
-                    controller_input.position,
-                    controller_input.position + controller_input.trigger_value * controller_input.direction
-                }
-            }
-        );
-        if (controller_input.trigger_value < 1.0f)
+        const bool use_right = (m_headset->get_actions_right().aim_pose->location.locationFlags != 0);
+        const auto* pose = use_right
+                ? m_headset->get_actions_right().aim_pose
+                : m_headset->get_actions_left().aim_pose;
+
+        if (pose != nullptr)
         {
+            const auto* trigger_value_action = use_right
+                    ? m_headset->get_actions_right().trigger_value
+                    : m_headset->get_actions_left().trigger_value;
+            const float trigger_value = (trigger_value_action != nullptr)
+                ? trigger_value_action->state.currentState
+                : 0.0f;
+            const auto position    = pose->position;
+            const auto orientation = glm::mat4_cast(pose->orientation);
+            const auto direction   = glm::vec3{orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+
             line_renderer.add_lines(
-                orange,
+                m_mouse_down ? cyan : blue,
                 {
                     {
-                        controller_input.position + controller_input.trigger_value * controller_input.direction,
-                        controller_input.position + 100.0f * controller_input.direction
+                        position,
+                        position + trigger_value * direction
                     }
                 }
             );
+            if (trigger_value < 1.0f)
+            {
+                line_renderer.add_lines(
+                    orange,
+                    {
+                        {
+                            position + trigger_value * direction,
+                            position + 100.0f * direction
+                        }
+                    }
+                );
+            }
         }
     }
 }
@@ -272,18 +290,28 @@ void Headset_view::update_pointer_context_from_controller()
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& pose                   = m_headset->controller_pose();
-    const auto  controller_orientation = glm::mat4_cast(pose.orientation);
-    const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
+    auto* left_aim_pose  = m_headset->get_actions_left().aim_pose;
+    auto* right_aim_pose = m_headset->get_actions_right().aim_pose;
+    auto* pose =
+        (
+            (right_aim_pose != nullptr) &&
+            (right_aim_pose->location.locationFlags != 0)
+        )
+            ? right_aim_pose
+            : left_aim_pose;
 
-    const glm::vec3 ray_origin    = pose.position;
-    const glm::vec3 ray_direction = controller_direction;
+    if (pose == nullptr)
+    {
+        return;
+    }
 
-    raytrace_update(
-        ray_origin,
-        ray_direction,
-        g_tools->get_tool_scene_root().get()
-    );
+    // TODO optimize this transform computation
+    const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
+    const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, pose->position);
+    const glm::mat4 m           = translation * orientation;
+
+    this->Scene_view::set_world_from_control(m);
+    this->Scene_view::update_hover_with_raytrace();
 }
 
 void Headset_view::render_headset()
@@ -345,14 +373,15 @@ void Headset_view::render_headset()
             );
             gl::enable(gl::Enable_cap::framebuffer_srgb);
 
-            if (m_headset->squeeze_click()->currentState == XR_TRUE)
-            {
-                ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
-
-                gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
-                gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-            }
-            else
+            //// auto* squeeze_click = m_headset->get_actions_right().squeeze_click;
+            //// if ((squeeze_click != nullptr) && (squeeze_click->state.currentState == XR_TRUE))
+            //// {
+            ////     ERHE_PROFILE_GPU_SCOPE(c_id_headset_clear)
+            //// 
+            ////     gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
+            ////     gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+            //// }
+            //// else
             {
                 const auto& clear_color = g_viewport_config->data.clear_color;
 
@@ -464,11 +493,6 @@ void Headset_view::add_finger_input(
     m_finger_inputs.push_back(finger_input);
 }
 
-void Headset_view::add_controller_input(const Controller_input& controller_input)
-{
-    m_controller_inputs.push_back(controller_input);
-}
-
 [[nodiscard]] auto Headset_view::finger_to_viewport_distance_threshold() const -> float
 {
     return m_finger_to_viewport_distance_threshold;
@@ -498,61 +522,51 @@ void Headset_view::begin_frame()
     );
 
     m_finger_inputs.clear();
-    m_controller_inputs.clear();
     update_pointer_context_from_controller();
-    const auto* trigger_value = m_headset->trigger_value();
-    if (trigger_value->changedSinceLastSync)
+    auto& commands = *erhe::application::g_commands;
+    auto& instance = m_headset->get_xr_instance();
+    const XrSession xr_session = m_headset->get_xr_session().get_xr_session();
+    for (auto& action : instance.get_boolean_actions())
     {
-        erhe::application::g_commands->on_controller_trigger_value(trigger_value->currentState);
+        action.get(xr_session);
+        if (action.state.changedSinceLastSync == XR_TRUE)
+        {
+            commands.on_xr_action(action);
+        }
     }
-    const auto* trigger_click = m_headset->trigger_click();
-    if (trigger_click->changedSinceLastSync)
+    for (auto& action : instance.get_float_actions())
     {
-        erhe::application::g_commands->on_controller_trigger_click(trigger_click->currentState);
+        action.get(xr_session);
+        if (action.state.changedSinceLastSync == XR_TRUE)
+        {
+            commands.on_xr_action(action);
+        }
     }
-
+    for (auto& action : instance.get_vector2f_actions())
     {
-        const auto& pose = m_headset->controller_pose();
-        const auto  controller_orientation = glm::mat4_cast(pose.orientation);
-        const auto  controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
-        add_controller_input(
-            Controller_input{
-                .position      = pose.position,
-                .direction     = controller_direction,
-                .trigger_value = trigger_value->currentState
-            }
-        );
-    }
-
-    const auto* trackpad = m_headset->trackpad();
-    const auto* trackpad_touch = m_headset->trackpad_touch();
-    const auto* trackpad_click = m_headset->trackpad_click();
-    if (trackpad_click->changedSinceLastSync)
-    {
-        const float x = trackpad->currentState.x;
-        const float y = trackpad->currentState.y;
-        erhe::application::g_commands->on_controller_trackpad_click(x, y, trackpad_click->currentState == XR_TRUE);
-    }
-    else if (trackpad_touch->changedSinceLastSync)
-    {
-        const float x = trackpad->currentState.x;
-        const float y = trackpad->currentState.y;
-        erhe::application::g_commands->on_controller_trackpad_touch(x, y, trackpad_touch->currentState == XR_TRUE);
-    }
-
-    const auto* menu_click = m_headset->menu_click();
-    if (
-        menu_click->changedSinceLastSync &&
-        !menu_click->currentState &&
-        (g_hud != nullptr)
-    )
-    {
-        g_hud->toggle_visibility();
+        action.get(xr_session);
+        if (action.state.changedSinceLastSync == XR_TRUE)
+        {
+            commands.on_xr_action(action);
+        }
     }
 
     if (m_controller_visualization)
     {
-        m_controller_visualization->update(m_headset->controller_pose());
+        // TODO both controllers
+        auto* left_aim_pose  = m_headset->get_actions_left().aim_pose;
+        auto* right_aim_pose = m_headset->get_actions_right().aim_pose;
+        auto* pose =
+            (
+                (right_aim_pose != nullptr) &&
+                (right_aim_pose->location.locationFlags != 0)
+            )
+                ? right_aim_pose
+                : left_aim_pose;
+        if (pose != nullptr)
+        {
+            m_controller_visualization->update(pose);
+        }
     }
     //if (m_hand_tracker)
     //{
@@ -568,35 +582,36 @@ void Headset_view::begin_frame()
     }
 }
 
+void Headset_view::end_frame()
+{
+    if (!m_headset)
+    {
+        return;
+    }
+
+    m_finger_inputs.clear();
+
+    // TODO These should be done when session state changes so that polling no longer happens
+    auto& instance = m_headset->get_xr_instance();
+    for (auto& action : instance.get_boolean_actions())
+    {
+        action.state.changedSinceLastSync = XR_FALSE;
+    }
+    for (auto& action : instance.get_float_actions())
+    {
+        action.state.changedSinceLastSync = XR_FALSE;
+    }
+    for (auto& action : instance.get_vector2f_actions())
+    {
+        action.state.changedSinceLastSync = XR_FALSE;
+    }
+}
+
 void Headset_view::imgui()
 {
     m_mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
 
     ImGui::Checkbox("Head Tracking Enabled", &m_head_tracking_enabled);
-
-    //// ImGui::SliderFloat("Finger Distance Threshold", &m_finger_to_viewport_distance_threshold, 0.01f, 0.50f);
-    ////
-    //// constexpr ImVec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
-    //// constexpr ImVec4 green{0.0f, 1.0f, 0.0f, 1.0f};
-    //// for (const auto& finger_input : m_finger_inputs)
-    //// {
-    ////     const float  distance = glm::distance(finger_input.finger_point, finger_input.point);
-    ////     const ImVec4 color    = ImGui::IsMouseDown(ImGuiMouseButton_Left)
-    ////         ? green
-    ////         : red;
-    ////     const std::string text = fmt::format(
-    ////         "{} : {} - {}",
-    ////         distance,
-    ////         finger_input.finger_point,
-    ////         finger_input.point
-    ////     );
-    ////     ImGui::TextColored(color, "%s", text.c_str());
-    //// }
-
-    for (const auto& controller_input : m_controller_inputs)
-    {
-        ImGui::Text("Controller Trigger Value: %f", controller_input.trigger_value);
-    }
 }
 
 }

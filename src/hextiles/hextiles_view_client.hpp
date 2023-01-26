@@ -24,13 +24,6 @@ public:
 
     // Implements erhe::application::View_client
     void update() override;
-    void update_keyboard(
-        const bool                   pressed,
-        const erhe::toolkit::Keycode code,
-        const uint32_t               modifier_mask
-    ) override;
-    void update_mouse(const erhe::toolkit::Mouse_button button, const int count) override;
-    void update_mouse(const double x, const double y) override;
 };
 
 } // namespace hextiles

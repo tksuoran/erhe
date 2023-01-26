@@ -5,7 +5,7 @@
 namespace erhe::application {
 
 class Command;
-class Command_context;
+class Input_arguments;
 
 // Mouse wheel event
 class Mouse_wheel_binding
@@ -23,7 +23,7 @@ public:
 
     [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Mouse_wheel; }
 
-    virtual auto on_wheel(Command_context& context) -> bool;
+    virtual auto on_wheel(Input_arguments& input) -> bool;
 };
 
 } // namespace erhe/application

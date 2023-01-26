@@ -1,8 +1,10 @@
 #include "tools/trs/move_tool.hpp"
 
-#include "graphics//icon_set.hpp"
+#include "graphics/icon_set.hpp"
 #include "tools/tools.hpp"
+#include "tools/selection_tool.hpp"
 #include "tools/trs/trs_tool.hpp"
+#include "tools/trs/rotate_tool.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor
@@ -16,6 +18,11 @@ Move_tool::Move_tool()
 }
 
 Move_tool::~Move_tool() noexcept
+{
+    ERHE_VERIFY(g_move_tool == nullptr);
+}
+
+void Move_tool::deinitialize_component()
 {
     ERHE_VERIFY(g_move_tool == this);
     g_move_tool = nullptr;

@@ -375,7 +375,7 @@ void EndCanvas()
     {
         if (!ImGui::IsMouseDown(0))
         {
-            erhe::application::log_imnodes->info("State_Drag -> State_None because !ImGui::IsMouseDown(0)");
+            //log_imnodes->info("State_Drag -> State_None because !ImGui::IsMouseDown(0)");
             impl->State = State_None;
             impl->DragNode = nullptr;
         }
@@ -541,7 +541,7 @@ void EndNode()
         }
         else if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0))
         {
-            erhe::application::log_imnodes->info("-> State_Drag");
+            //log_imnodes->info("-> State_Drag");
             impl->State = State_Drag;
             if (impl->DragNode == nullptr)
             {
@@ -571,9 +571,9 @@ void EndNode()
                 float zoom = canvas->Zoom;
                 ImVec2 delta = MouseDelta / zoom;
                 node_pos += delta;
-                erhe::application::log_imnodes->info(
-                    "State_Drag: mouse = ({}, {}), zoom = {}, delta = ({}, {}) node_pos = ({}, {})",
-                    MouseDelta.x, MouseDelta.y, zoom, delta.x, delta.y, node_pos.x, node_pos.y);
+                //log_imnodes->info(
+                //    "State_Drag: mouse = ({}, {}), zoom = {}, delta = ({}, {}) node_pos = ({}, {})",
+                //    MouseDelta.x, MouseDelta.y, zoom, delta.x, delta.y, node_pos.x, node_pos.y);
                 //node_pos += ImGui::GetIO().MouseDelta / canvas->Zoom;
             }
         }

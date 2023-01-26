@@ -36,13 +36,14 @@ public:
     gl::Internal_format depth_format;
     uint32_t            width;
     uint32_t            height;
+    bool                composition_alpha;
     float               near_depth;
     float               far_depth;
 };
 
 inline auto to_glm(const XrQuaternionf& q) -> glm::quat
 {
-    return glm::quat(q.w, q.x, q.y, q.z);
+    return glm::quat{q.w, q.x, q.y, q.z};
     //return glm::make_quat(&q.x);
 }
 
@@ -54,7 +55,7 @@ inline auto to_glm(const XrVector3f& v) -> glm::vec3
 inline auto to_glm(const XrPosef& p) -> glm::mat4
 {
     glm::mat4 orientation = glm::mat4_cast(to_glm(p.orientation));
-    glm::mat4 translation = glm::translate(glm::mat4{ 1 }, to_glm(p.position));
+    glm::mat4 translation = glm::translate(glm::mat4{1}, to_glm(p.position));
     return translation * orientation;
 }
 

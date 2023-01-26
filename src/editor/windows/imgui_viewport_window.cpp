@@ -119,6 +119,18 @@ Imgui_viewport_window::Imgui_viewport_window(
     return m_is_hovered;
 }
 
+void Imgui_viewport_window::on_mouse_move(glm::vec2 mouse_position_in_window)
+{
+    auto viewport_window = m_viewport_window.lock();
+    if (!viewport_window)
+    {
+        return;
+    }
+    const auto mouse_position_in_viewport = viewport_window->viewport_from_window(mouse_position_in_window);
+    viewport_window->update_pointer_2d_position(mouse_position_in_viewport);
+    viewport_window->update_hover();
+}
+
 void Imgui_viewport_window::on_begin()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)

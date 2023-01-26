@@ -61,18 +61,50 @@ template <typename T>
     };
 }
 
-constexpr glm::vec3 vec3_unit_x{1.0f, 0.0f, 0.0f};
-constexpr glm::vec3 vec3_unit_y{0.0f, 1.0f, 0.0f};
-constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
+template <typename T> struct vector_types { };
+template <> struct vector_types<float>
+{
+    using vec2 = glm::vec2;
+    using vec3 = glm::vec3;
+    using vec4 = glm::vec4;
+    using mat2 = glm::mat2;
+    using mat3 = glm::mat3;
+    using mat4 = glm::mat4;
+    static constexpr auto vec3_unit_x () -> glm::vec3              { return glm::vec3{1.0f, 0.0f, 0.0f}; }
+    static constexpr auto vec3_unit_y () -> glm::vec3              { return glm::vec3{0.0f, 1.0f, 0.0f}; }
+    static constexpr auto vec3_unit_z () -> glm::vec3              { return glm::vec3{0.0f, 0.0f, 1.0f}; }
+    static constexpr auto vec3_index_x() -> glm::vec3::length_type { return glm::vec3::length_type{0}; }
+    static constexpr auto vec3_index_y() -> glm::vec3::length_type { return glm::vec3::length_type{1}; }
+    static constexpr auto vec3_index_z() -> glm::vec3::length_type { return glm::vec3::length_type{2}; }
+};
 
-[[nodiscard]] inline auto max_axis(const glm::vec3 v) -> glm::vec3
+template <> struct vector_types<double>
+{
+    using vec2 = glm::dvec2;
+    using vec3 = glm::dvec3;
+    using vec4 = glm::dvec4;
+    using mat2 = glm::dmat2;
+    using mat3 = glm::dmat3;
+    using mat4 = glm::dmat4;
+    static constexpr auto vec3_unit_x () -> glm::dvec3              { return glm::dvec3{1.0, 0.0, 0.0}; }
+    static constexpr auto vec3_unit_y () -> glm::dvec3              { return glm::dvec3{0.0, 1.0, 0.0}; }
+    static constexpr auto vec3_unit_z () -> glm::dvec3              { return glm::dvec3{0.0, 0.0, 1.0}; }
+    static constexpr auto vec3_index_x() -> glm::dvec3::length_type { return glm::dvec3::length_type{0}; }
+    static constexpr auto vec3_index_y() -> glm::dvec3::length_type { return glm::dvec3::length_type{1}; }
+    static constexpr auto vec3_index_z() -> glm::dvec3::length_type { return glm::dvec3::length_type{2}; }
+};
+
+template <typename T>
+[[nodiscard]] inline auto max_axis(
+    const typename vector_types<T>::vec3 v
+) -> typename vector_types<T>::vec3
 {
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
         (std::abs(v.x) >= std::abs(v.z))
     )
     {
-        return vec3_unit_x;
+        return vector_types<T>::vec3_unit_x();
     }
 
     if (
@@ -80,19 +112,22 @@ constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
         (std::abs(v.y) >= std::abs(v.z))
     )
     {
-        return vec3_unit_y;
+        return vector_types<T>::vec3_unit_y();
     }
-    return vec3_unit_z;
+    return vector_types<T>::vec3_unit_z();
 }
 
-[[nodiscard]] inline auto min_axis(const glm::vec3 v) -> glm::vec3
+template <typename T>
+[[nodiscard]] auto min_axis(
+    const typename vector_types<T>::vec3 v
+) -> typename vector_types<T>::vec3
 {
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
         (std::abs(v.x) <= std::abs(v.z))
     )
     {
-        return vec3_unit_x;
+        return vector_types<T>::vec3_unit_x();
     }
 
     if (
@@ -100,20 +135,23 @@ constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
         (std::abs(v.y) <= std::abs(v.z))
     )
     {
-        return vec3_unit_y;
+        return vector_types<T>::vec3_unit_y();
     }
 
-    return vec3_unit_z;
+    return vector_types<T>::vec3_unit_z();
 }
 
-[[nodiscard]] inline auto max_axis_index(const glm::vec3 v) -> glm::vec3::length_type
+template <typename T>
+[[nodiscard]] inline auto max_axis_index(
+    const typename vector_types<T>::vec3 v
+) -> typename vector_types<T>::vec3::length_type
 {
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
         (std::abs(v.x) >= std::abs(v.z))
     )
     {
-        return glm::vec3::length_type{0};
+        return vector_types<T>::vec3_index_x();
     }
 
     if (
@@ -121,19 +159,22 @@ constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
         (std::abs(v.y) >= std::abs(v.z))
     )
     {
-        return glm::vec3::length_type{1};
+        return vector_types<T>::vec3_index_y();
     }
-    return glm::vec3::length_type{2};
+    return vector_types<T>::vec3_index_z();
 }
 
-[[nodiscard]] inline auto min_axis_index(const glm::vec3 v) -> glm::vec3::length_type
+template <typename T>
+[[nodiscard]] inline auto min_axis_index(
+    const typename vector_types<T>::vec3 v
+) -> typename vector_types<T>::vec3::length_type
 {
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
         (std::abs(v.x) <= std::abs(v.z))
     )
     {
-        return glm::vec3::length_type{0};
+        return vector_types<T>::vec3_index_x();
     }
 
     if (
@@ -141,9 +182,9 @@ constexpr glm::vec3 vec3_unit_z{0.0f, 0.0f, 1.0f};
         (std::abs(v.y) <= std::abs(v.z))
     )
     {
-        return glm::vec3::length_type{1};
+        return vector_types<T>::vec3_index_y();
     }
-    return glm::vec3::length_type{2};
+    return vector_types<T>::vec3_index_z();
 }
 
 constexpr glm::mat4 mat4_swap_xy{
@@ -179,27 +220,6 @@ constexpr glm::mat4 mat4_rotate_xz_cw{
     0.0f, 1.0f,  0.0f, 0.0f,
     1.0f, 0.0f,  0.0f, 0.0f,
     0.0f, 0.0f,  0.0f, 1.0f
-};
-
-template <typename T> struct vector_types { };
-template <> struct vector_types<float>
-{
-    using vec2 = glm::vec2;
-    using vec3 = glm::vec3;
-    using vec4 = glm::vec4;
-    using mat2 = glm::mat2;
-    using mat3 = glm::mat3;
-    using mat4 = glm::mat4;
-};
-
-template <> struct vector_types<double>
-{
-    using vec2 = glm::dvec2;
-    using vec3 = glm::dvec3;
-    using vec4 = glm::dvec4;
-    using mat2 = glm::dmat2;
-    using mat3 = glm::dmat3;
-    using mat4 = glm::dmat4;
 };
 
 template <typename T>
@@ -709,6 +729,26 @@ template <typename T>
     const T    q_dot_r = glm::clamp(dot(q_, r_), T{-1.0}, T{1.0});
     const T    angle   = (n_dot_m < 0) ? std::acos(q_dot_r) : -std::acos(q_dot_r);
     return angle;
+}
+
+template <typename T>
+auto safe_normalize_cross(
+    const typename vector_types<T>::vec3& lhs,
+    const typename vector_types<T>::vec3& rhs
+) -> vector_types<T>::vec3
+{
+    const T d = glm::dot(lhs, rhs);
+    if (std::abs(d) > T{0.999})
+    {
+        return min_axis<T>(lhs);
+    }
+
+    const auto c0 = glm::cross(lhs, rhs);
+    if (glm::length(c0) < glm::epsilon<T>())
+    {
+        return min_axis<T>(lhs);
+    }
+    return glm::normalize(c0);
 }
 
 class Bounding_box

@@ -27,7 +27,7 @@ auto Mouse_wheel_binding::operator=(Mouse_wheel_binding&& other) noexcept -> Mou
     return *this;
 }
 
-auto Mouse_wheel_binding::on_wheel(Command_context& context) -> bool
+auto Mouse_wheel_binding::on_wheel(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
 
@@ -36,7 +36,7 @@ auto Mouse_wheel_binding::on_wheel(Command_context& context) -> bool
         return false;
     }
 
-    return command->try_call(context);
+    return command->try_call(input);
 }
 
 } // namespace erhe::application

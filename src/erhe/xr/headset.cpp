@@ -6,7 +6,10 @@
 
 namespace erhe::xr {
 
-Headset::Headset(erhe::toolkit::Context_window* context_window, const Xr_configuration& configuration)
+Headset::Headset(
+    erhe::toolkit::Context_window* context_window,
+    const Xr_configuration&        configuration
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -26,9 +29,24 @@ Headset::~Headset()
 {
 }
 
-auto Headset::controller_pose() const -> Pose
+[[nodiscard]] auto Headset::get_actions_left() -> Xr_actions&
 {
-    return m_controller_pose;
+    return m_xr_instance->actions_left;
+}
+
+[[nodiscard]] auto Headset::get_actions_left() const -> const Xr_actions&
+{
+    return m_xr_instance->actions_left;
+}
+
+[[nodiscard]] auto Headset::get_actions_right() -> Xr_actions&
+{
+    return m_xr_instance->actions_right;
+}
+
+[[nodiscard]] auto Headset::get_actions_right() const -> const Xr_actions&
+{
+    return m_xr_instance->actions_right;
 }
 
 auto Headset::get_hand_tracking_joint(const XrHandEXT hand, const XrHandJointEXT joint) const -> Hand_tracking_joint
@@ -77,46 +95,14 @@ auto Headset::get_hand_tracking_active(const XrHandEXT hand) const -> bool
     return m;
 }
 
-auto Headset::trigger_value() const -> const XrActionStateFloat*
+auto Headset::get_xr_instance() -> Xr_instance&
 {
-    ERHE_VERIFY(m_xr_instance);
-    return &m_xr_instance->actions.trigger_value_state;
+    return *m_xr_instance.get();
 }
 
-auto Headset::trigger_click() const -> const XrActionStateBoolean*
+auto Headset::get_xr_session() -> Xr_session&
 {
-    ERHE_VERIFY(m_xr_instance);
-    return &m_xr_instance->actions.trigger_click_state;
-}
-
-auto Headset::menu_click() const -> const XrActionStateBoolean*
-{
-    ERHE_VERIFY(m_xr_instance);
-    return &m_xr_instance->actions.menu_click_state;
-}
-
-auto Headset::squeeze_click() const -> const XrActionStateBoolean*
-{
-    ERHE_VERIFY(m_xr_instance);
-    return &m_xr_instance->actions.squeeze_click_state;
-}
-
-auto Headset::trackpad_click() const -> const XrActionStateBoolean*
-{
-    ERHE_VERIFY(m_xr_instance);
-    return &m_xr_instance->actions.trackpad_click_state;
-}
-
-auto Headset::trackpad_touch() const -> const XrActionStateBoolean*
-{
-    ERHE_VERIFY(m_xr_instance);
-    return &m_xr_instance->actions.trackpad_touch_state;
-}
-
-auto Headset::trackpad() const -> const XrActionStateVector2f*
-{
-    ERHE_VERIFY(m_xr_instance);
-    return &m_xr_instance->actions.trackpad_state;
+    return *m_xr_session.get();
 }
 
 auto Headset::is_valid() const -> bool
@@ -156,15 +142,6 @@ auto Headset::begin_frame() -> Frame_timing
     m_xr_session->update_hand_tracking();
 
     m_xr_session->update_view_pose();
-
-    if ((m_xr_instance->actions.aim_pose_space_location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT)
-    {
-        m_controller_pose.position    = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.position);
-    }
-    if ((m_xr_instance->actions.aim_pose_space_location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) == XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
-    {
-        m_controller_pose.orientation = to_glm(m_xr_instance->actions.aim_pose_space_location.pose.orientation);
-    }
 
     auto* xr_frame_state = m_xr_session->wait_frame();
     if (xr_frame_state == nullptr)

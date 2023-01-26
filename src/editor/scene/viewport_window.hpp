@@ -108,24 +108,22 @@ public:
     void set_camera         (const std::shared_ptr<erhe::scene::Camera>& camera);
     auto get_config         () -> Viewport_config_data*;
 
-    [[nodiscard]] auto to_scene_content   (const glm::vec2 position_in_root) const -> glm::vec2;
-    [[nodiscard]] auto project_to_viewport(const glm::dvec3 position_in_world) const -> std::optional<glm::dvec3>;
-    [[nodiscard]] auto unproject_to_world (const glm::dvec3 position_in_window) const -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto viewport_from_window(const glm::vec2 position_in_window) const -> glm::vec2;
+    [[nodiscard]] auto project_to_viewport (const glm::vec3 position_in_world) const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto unproject_to_world  (const glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto is_hovered         () const -> bool;
     [[nodiscard]] auto window_viewport    () const -> const erhe::scene::Viewport&;
     [[nodiscard]] auto projection_viewport() const -> const erhe::scene::Viewport&;
 
-    // Pointer context API
-    void raytrace         (Scene_root* tool_scene_root);
-    void update_grid_hover();
+    // call with const glm::vec2 position_in_viewport = m_window.viewport_from_window(position_in_window);
+    // Also updates hover slots
+    void update_pointer_2d_position(glm::vec2 position_in_viewport);
 
-    // call with const glm::vec2 position_in_window = m_window.to_scene_content(position);
-    void update_pointer_context(
-        glm::vec2   position_in_viewport,
-        Scene_root* tool_scene_root
-    );
+    void update_hover();
 
-    [[nodiscard]] auto position_in_world_viewport_depth(double viewport_depth) const -> std::optional<glm::dvec3>;
+    [[nodiscard]] auto get_position_in_viewport() const -> std::optional<glm::vec2>;
+
+    [[nodiscard]] auto position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
 
     auto get_shadow_render_node() const -> Shadow_render_node* override;
 
@@ -140,6 +138,8 @@ public:
     auto get_final_output        () -> std::weak_ptr<Rendergraph_node>;
 
 private:
+    void update_hover_with_id_render();
+
     [[nodiscard]] auto get_override_shader_stages() const -> erhe::graphics::Shader_stages*;
 
     static int s_serial;
@@ -152,13 +152,15 @@ private:
     std::weak_ptr<Post_processing_node>                        m_post_processing_node;
     std::weak_ptr<Rendergraph_node>                            m_final_output;
 
+    std::optional<glm::vec2>           m_position_in_viewport;
+
     std::string                        m_name;
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<Scene_root>          m_tool_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_camera               {};
     erhe::scene::Viewport              m_window_viewport      {0, 0, 0, 0, true};
     erhe::scene::Viewport              m_projection_viewport  {0, 0, 0, 0, true};
-    Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
+    Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
     bool                               m_is_hovered           {false};
 };
 

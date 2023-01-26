@@ -250,7 +250,7 @@ void Root_view::on_char(const unsigned int codepoint)
     }
 }
 
-void Root_view::on_mouse_move(const double x, const double y)
+void Root_view::on_mouse_move(const float x, const float y)
 {
     if (m_view != nullptr)
     {
@@ -258,15 +258,15 @@ void Root_view::on_mouse_move(const double x, const double y)
     }
 }
 
-void Root_view::on_mouse_click(const Mouse_button button, const int count)
+void Root_view::on_mouse_button(const Mouse_button button, const bool pressed)
 {
     if (m_view != nullptr)
     {
-        m_view->on_mouse_click(button, count);
+        m_view->on_mouse_button(button, pressed);
     }
 }
 
-void Root_view::on_mouse_wheel(const double x, const double y)
+void Root_view::on_mouse_wheel(const float x, const float y)
 {
     if (m_view != nullptr)
     {

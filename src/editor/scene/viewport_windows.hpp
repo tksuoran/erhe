@@ -37,16 +37,9 @@ class Open_new_viewport_window_command
     : public erhe::application::Command
 {
 public:
-    explicit Open_new_viewport_window_command(Viewport_windows& viewport_windows)
-        : Command           {"Viewport_windows.open_new_viewport_window"}
-        , m_viewport_windows{viewport_windows}
-    {
-    }
+    Open_new_viewport_window_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
-
-private:
-    Viewport_windows& m_viewport_windows;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
 /// <summary>
@@ -57,6 +50,7 @@ private:
 /// (mouse cursor).
 class Viewport_windows
     : public erhe::components::Component
+    , erhe::application::Command_host
 {
 public:
     static constexpr std::string_view c_type_name{"Viewport_windows"};
@@ -132,22 +126,6 @@ public:
     auto hover_window() -> std::shared_ptr<Viewport_window>;
     auto last_window () -> std::shared_ptr<Viewport_window>;
 
-    void update_keyboard(
-        bool                   pressed,
-        erhe::toolkit::Keycode code,
-        uint32_t               modifier_mask
-    );
-    void update_mouse(erhe::toolkit::Mouse_button button, int count);
-    void update_mouse(double x, double y);
-
-    [[nodiscard]] auto shift_key_down       () const -> bool;
-    [[nodiscard]] auto control_key_down     () const -> bool;
-    [[nodiscard]] auto alt_key_down         () const -> bool;
-    [[nodiscard]] auto mouse_button_pressed (erhe::toolkit::Mouse_button button) const -> bool;
-    [[nodiscard]] auto mouse_button_released(erhe::toolkit::Mouse_button button) const -> bool;
-    [[nodiscard]] auto mouse_x              () const -> double;
-    [[nodiscard]] auto mouse_y              () const -> double;
-
     void viewport_toolbar(Viewport_window& viewport_window, bool& hovered);
 
 private:
@@ -168,20 +146,6 @@ private:
     std::vector<std::weak_ptr<Viewport_window>>         m_hover_stack;
     std::shared_ptr<Viewport_window>                    m_hover_window;
     std::weak_ptr<Viewport_window>                      m_last_window;
-
-    class Mouse_button
-    {
-    public:
-        bool pressed {false};
-        bool released{false};
-    };
-
-    Mouse_button m_mouse_button[static_cast<int>(erhe::toolkit::Mouse_button_count)];
-    double       m_mouse_x{0.0f};
-    double       m_mouse_y{0.0f};
-    bool         m_shift  {false};
-    bool         m_control{false};
-    bool         m_alt    {false};
 };
 
 extern Viewport_windows* g_viewport_windows;

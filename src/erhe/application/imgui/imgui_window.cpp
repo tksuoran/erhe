@@ -72,9 +72,19 @@ void Imgui_window::toggle_visibility()
     m_is_visible = !m_is_visible;
 }
 
+auto Imgui_window::show_in_menu() const -> bool
+{
+    return m_show_in_menu;
+}
+
 auto Imgui_window::is_visible() const -> bool
 {
     return m_is_visible;
+}
+
+auto Imgui_window::is_hovered() const -> bool
+{
+    return m_is_hovered;
 }
 
 auto Imgui_window::title() const -> const std::string_view
@@ -114,6 +124,7 @@ auto Imgui_window::begin() -> bool
 void Imgui_window::end()
 {
     on_end();
+    m_is_hovered = ImGui::IsWindowHovered();
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::End();
 #endif

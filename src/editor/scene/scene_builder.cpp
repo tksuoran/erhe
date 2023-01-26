@@ -169,7 +169,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
         auto rendertarget_mesh_1 = std::make_shared<Rendertarget_mesh>(
             1920,  // width
             1080,  // height
-            2000.0 // pixels per meter
+            2000.0f // pixels per meter
         );
         rendertarget_mesh_1->mesh_data.layer_id = Mesh_layer_id::rendertarget;
         rendertarget_node_1->attach(rendertarget_mesh_1);
@@ -225,7 +225,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
         auto rendertarget_mesh_2 = std::make_shared<Rendertarget_mesh>(
             1920,
             1080,
-            2000.0
+            2000.0f
         );
         rendertarget_node_2->attach(rendertarget_mesh_2);
         rendertarget_node_2->set_parent(test_scene_root->scene().get_root_node());

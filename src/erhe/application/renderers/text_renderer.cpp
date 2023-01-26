@@ -200,7 +200,7 @@ void Text_renderer::deinitialize_component()
 
 void Text_renderer::declare_required_components()
 {
-    require<erhe::application::Configuration>();
+    require<Configuration>();
     require<Gl_context_provider>();
     require<Shader_monitor     >();
 }
@@ -212,7 +212,7 @@ void Text_renderer::initialize_component()
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_text_renderer == nullptr);
 
-    const auto& config = *erhe::application::g_configuration;
+    const auto& config = *g_configuration;
 
     if (!config.text_renderer.enabled)
     {

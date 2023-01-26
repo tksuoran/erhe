@@ -33,6 +33,12 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_view.hpp"
+#   include "erhe/xr/xr_action.hpp"
+#   include "erhe/xr/headset.hpp"
+#endif
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
 #endif
@@ -42,9 +48,14 @@ namespace editor
 
 using glm::vec3;
 
-auto Hotbar_trackpad_command::try_call(erhe::application::Command_context& context) -> bool
+Hotbar_trackpad_command::Hotbar_trackpad_command()
+    : Command{"Hotbar.trackpad"}
 {
-    return m_hotbar.try_call(context);
+}
+
+auto Hotbar_trackpad_command::try_call(erhe::application::Input_arguments& input) -> bool
+{
+    return g_hotbar->try_call(input);
 }
 
 Hotbar* g_hotbar{nullptr};
@@ -52,7 +63,10 @@ Hotbar* g_hotbar{nullptr};
 Hotbar::Hotbar()
     : erhe::application::Imgui_window{c_title}
     , erhe::components::Component    {c_type_name}
-    , m_trackpad_command             {*this}
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    , m_trackpad_command             {}
+    , m_trackpad_click_command       {m_trackpad_command}
+#endif
 {
 }
 
@@ -64,6 +78,10 @@ Hotbar::~Hotbar() noexcept
 void Hotbar::deinitialize_component()
 {
     ERHE_VERIFY(g_hotbar == this);
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    m_trackpad_click_command.set_host(nullptr);
+    m_trackpad_command.set_host(nullptr);
+#endif
     m_rendertarget_node.reset();
     m_rendertarget_mesh.reset();
     m_rendertarget_imgui_viewport.reset();
@@ -84,6 +102,9 @@ void Hotbar::declare_required_components()
     require<Viewport_windows  >();
     require<Icon_set          >();
     require<Tools             >();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    require<Headset_view      >();
+#endif
 }
 
 void Hotbar::initialize_component()
@@ -103,8 +124,19 @@ void Hotbar::initialize_component()
         return;
     }
 
-    erhe::application::g_commands->register_command(&m_trackpad_command);
-    erhe::application::g_commands->bind_command_to_controller_trackpad(&m_trackpad_command, true);
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    auto& commands = *erhe::application::g_commands;
+    commands.register_command(&m_trackpad_command);
+    const auto* headset = g_headset_view->get_headset();
+    if (headset != nullptr)
+    {
+        auto& xr_right = headset->get_actions_right();
+        m_trackpad_click_command.bind(xr_right.trackpad);
+        commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click);
+        m_trackpad_click_command.set_host(this);
+        m_trackpad_command.set_host(this);
+    }
+#endif
 
     const erhe::application::Scoped_gl_context gl_context;
 
@@ -113,6 +145,7 @@ void Hotbar::initialize_component()
     g_tools->register_tool(this);
 
     erhe::application::g_imgui_windows->register_imgui_window(this);
+    this->Imgui_window::m_show_in_menu = false;
 
     const auto& scene_root         = g_scene_builder->get_scene_root();
     const auto& icon_rasterization = g_icon_set->get_hotbar_rasterization();
@@ -121,7 +154,7 @@ void Hotbar::initialize_component()
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
         icon_size * 8,
         icon_size,
-        4000.0
+        4000.0f
     );
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
 
@@ -332,18 +365,18 @@ void Hotbar::handle_slot_update()
     }
 }
 
-auto Hotbar::try_call(erhe::application::Command_context& context) -> bool
+auto Hotbar::try_call(erhe::application::Input_arguments& input) -> bool
 {
     if (!m_enabled)
     {
         return false;
     }
-    if (context.get_button_bits() == 0)
+    if (input.button_bits == 0)
     {
         return false;
     }
 
-    const auto position = context.get_vec2_absolute_value();
+    const auto position = input.vec2_absolute_value;
 
     const auto old_slot = m_slot;
     if (position.x < -0.2f)
@@ -400,13 +433,11 @@ void Hotbar::set_locked(bool value)
     m_locked = value;
 }
 
-void Hotbar::tool_button(Tool* tool)
+void Hotbar::tool_button(const uint32_t id, Tool* tool)
 {
     const glm::vec4 background_color  {0.0f, 0.0f, 0.0f, 0.0f};
     const glm::vec4 tint_color        {1.0f, 1.0f, 1.0f, 1.0f};
-    const int       frame_padding     {0};
     const auto&     icon_rasterization{g_icon_set->get_hotbar_rasterization()};
-    const bool      linear            {false};
     const bool      is_boosted        {tool->get_priority_boost() > 0};
     const auto      opt_icon          {tool->get_icon()};
 
@@ -421,11 +452,10 @@ void Hotbar::tool_button(Tool* tool)
     }
 
     const bool is_pressed = icon_rasterization.icon_button(
+        id,
         opt_icon.value(),
-        frame_padding,
         background_color,
-        tint_color,
-        linear
+        tint_color
     );
 
     if (ImGui::IsItemHovered())
@@ -442,12 +472,12 @@ void Hotbar::tool_button(Tool* tool)
     {
         g_tools->set_priority_tool(is_boosted ? nullptr : tool);
     }
-
 }
 
 void Hotbar::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ImGui::PushID("Hotbar::imgui");
     //const ImVec2 button_size{64.0f, 64.0f};
     //ImGui::SliderFloat("X", &m_x, -2.0f, 2.0f);
     //ImGui::SliderFloat("Y", &m_y, -0.3f, 0.0f);
@@ -457,12 +487,13 @@ void Hotbar::imgui()
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_color_hover);
     ImGui::PushStyleColor(ImGuiCol_Button,        m_color_inactive);
 
+    uint32_t id = 0;
     for (auto* tool : m_slots)
     {
-        tool_button(tool);
+        tool_button(++id, tool);
     }
     ImGui::PopStyleColor(3);
-
+    ImGui::PopID();
 #endif
 }
 

@@ -761,60 +761,97 @@ auto Node::transform_direction_from_world_to_local(const glm::vec3 direction) co
     return glm::vec3{node_from_world() * glm::vec4{direction, 0.0f}};
 }
 
-void Node::set_parent_from_node(const glm::mat4 m)
+void Node::set_parent_from_node(const glm::mat4 parent_from_node)
 {
-    node_data.transforms.parent_from_node.set(m);
+    node_data.transforms.parent_from_node.set(parent_from_node);
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_parent_from_node(const Transform& transform)
+void Node::set_parent_from_node(const Transform& parent_from_node)
 {
     ERHE_PROFILE_FUNCTION
 
-    node_data.transforms.parent_from_node = transform;
+    node_data.transforms.parent_from_node = parent_from_node;
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_node_from_parent(const glm::mat4 matrix)
+void Node::set_node_from_parent(const glm::mat4 node_from_parent)
 {
-    node_data.transforms.parent_from_node.set(glm::inverse(matrix), matrix);
+    node_data.transforms.parent_from_node.set(glm::inverse(node_from_parent), node_from_parent);
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_node_from_parent(const Transform& transform)
+void Node::set_node_from_parent(const Transform& node_from_parent)
 {
-    node_data.transforms.parent_from_node = Transform::inverse(transform);
+    node_data.transforms.parent_from_node = Transform::inverse(node_from_parent);
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_world_from_node(const glm::mat4 matrix)
+void Node::set_world_from_node(const glm::mat4 world_from_node)
 {
     const auto& current_parent = parent().lock();
     if (current_parent)
     {
-        set_parent_from_node(current_parent->node_from_world() * matrix);
+        set_parent_from_node(current_parent->node_from_world() * world_from_node);
     }
     else
     {
-        set_parent_from_node(matrix);
+        set_parent_from_node(world_from_node);
     }
 }
 
-void Node::set_world_from_node(const Transform& transform)
+void Node::set_world_from_node(const Transform& world_from_node)
 {
     const auto& current_parent = parent().lock();
     if (current_parent)
     {
-        set_parent_from_node(current_parent->node_from_world_transform() * transform);
+        set_parent_from_node(current_parent->node_from_world_transform() * world_from_node);
     }
     else
     {
-        set_parent_from_node(transform);
+        set_parent_from_node(world_from_node);
     }
+}
+
+void Node::set_node_from_world(const glm::mat4 node_from_world)
+{
+    node_data.transforms.world_from_node.set(glm::inverse(node_from_world), node_from_world);
+    const auto& world_from_node = node_data.transforms.world_from_node.matrix();
+    const auto& current_parent = parent().lock();
+    if (current_parent)
+    {
+        node_data.transforms.parent_from_node.set(
+            current_parent->node_from_world() * world_from_node,
+            node_from_world * current_parent->world_from_node()
+        );
+    }
+    else
+    {
+        node_data.transforms.parent_from_node = node_data.transforms.world_from_node;
+    }
+    handle_transform_update(Node_transforms::get_next_serial());
+}
+
+void Node::set_node_from_world(const Transform& node_from_world)
+{
+    node_data.transforms.world_from_node = Transform::inverse(node_from_world);
+    const auto& current_parent = parent().lock();
+    if (current_parent)
+    {
+        node_data.transforms.parent_from_node.set(
+            current_parent->node_from_world() * node_data.transforms.world_from_node.matrix(),
+            node_from_world.matrix() * current_parent->world_from_node()
+        );
+    }
+    else
+    {
+        node_data.transforms.parent_from_node = node_data.transforms.world_from_node;
+    }
+    handle_transform_update(Node_transforms::get_next_serial());
 }
 
 auto Node_data::diff_mask(

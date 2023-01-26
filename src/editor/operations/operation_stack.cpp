@@ -16,32 +16,43 @@ IOperation::~IOperation() noexcept
 {
 }
 
+#pragma region Commands
+Undo_command::Undo_command()
+    : Command{"undo"}
+{
+}
+
 auto Undo_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
 
-    if (m_operation_stack.can_undo())
+    if (g_operation_stack->can_undo())
     {
-        m_operation_stack.undo();
+        g_operation_stack->undo();
         return true;
     }
     else
     {
         return false;
     }
+}
+
+Redo_command::Redo_command()
+    : Command{"redo"}
+{
 }
 
 auto Redo_command::try_call(
-    erhe::application::Command_context& context
+    erhe::application::Input_arguments& input
 ) -> bool
 {
-    static_cast<void>(context);
+    static_cast<void>(input);
 
-    if (m_operation_stack.can_redo())
+    if (g_operation_stack->can_redo())
     {
-        m_operation_stack.redo();
+        g_operation_stack->redo();
         return true;
     }
     else
@@ -49,24 +60,28 @@ auto Redo_command::try_call(
         return false;
     }
 }
+#pragma endregion Commands
 
 Operation_stack* g_operation_stack{nullptr};
 
 Operation_stack::Operation_stack()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
-    , m_undo_command                 {*this}
-    , m_redo_command                 {*this}
 {
 }
 
 Operation_stack::~Operation_stack() noexcept
 {
+    ERHE_VERIFY(g_operation_stack == nullptr);
 }
 
 void Operation_stack::deinitialize_component()
 {
     ERHE_VERIFY(g_operation_stack == this);
+    m_undo_command.set_host(nullptr);
+    m_redo_command.set_host(nullptr);
+    m_executed.clear();
+    m_undone.clear();
     g_operation_stack = nullptr;
 }
 
@@ -87,6 +102,9 @@ void Operation_stack::initialize_component()
     erhe::application::g_commands->register_command(&m_redo_command);
     erhe::application::g_commands->bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
     erhe::application::g_commands->bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
+
+    m_undo_command.set_host(this);
+    m_redo_command.set_host(this);
 
     g_operation_stack = this;
 }

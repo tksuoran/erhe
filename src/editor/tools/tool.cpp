@@ -6,6 +6,11 @@
 namespace editor
 {
 
+Tool::~Tool()
+{
+    m_hover_scene_view = nullptr;
+}
+
 void Tool::on_message(Editor_message& message)
 {
     using namespace erhe::toolkit;

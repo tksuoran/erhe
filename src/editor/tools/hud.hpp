@@ -26,16 +26,19 @@ class Toggle_hud_visibility_command
     : public erhe::application::Command
 {
 public:
-    explicit Toggle_hud_visibility_command(Hud& hud)
-        : Command{"Hud.toggle_visibility"}
-        , m_hud  {hud}
-    {
-    }
+    Toggle_hud_visibility_command();
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+};
 
-private:
-    Hud& m_hud;
+class Hud_drag_command
+    : public erhe::application::Command
+{
+public:
+    Hud_drag_command();
+    auto try_call   (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready  (erhe::application::Input_arguments& input) override;
+    void on_inactive() override;
 };
 
 class Hud
@@ -68,11 +71,30 @@ public:
     auto toggle_visibility    () -> bool;
     void set_visibility       (bool value);
 
+    auto try_begin_drag() -> bool;
+    void on_drag       ();
+    void end_drag      ();
+
+    [[nodiscard]] auto world_from_node() const -> glm::mat4;
+    [[nodiscard]] auto node_from_world() const -> glm::mat4;
+    [[nodiscard]] auto intersect_ray(
+        const glm::vec3& ray_origin_in_world,
+        const glm::vec3& ray_direction_in_world
+    ) -> std::optional<glm::vec3>;
+
 private:
     void on_message           (Editor_message& message);
     void update_node_transform(const glm::mat4& world_from_camera);
 
     Toggle_hud_visibility_command m_toggle_visibility_command;
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    Hud_drag_command                             m_drag_command;
+    erhe::application::Redirect_command          m_drag_float_redirect_update_command;
+    erhe::application::Drag_enable_float_command m_drag_float_enable_command;
+    erhe::application::Redirect_command          m_drag_bool_redirect_update_command;
+    erhe::application::Drag_enable_command       m_drag_bool_enable_command;
+#endif
 
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
@@ -86,6 +108,8 @@ private:
     bool  m_enabled       {true};
     bool  m_is_visible    {false};
     bool  m_locked_to_head{false};
+
+    std::optional<glm::mat4> m_node_from_control;
 };
 
 extern Hud* g_hud;

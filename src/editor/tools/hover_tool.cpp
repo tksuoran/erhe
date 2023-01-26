@@ -11,6 +11,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
+#include "tools/grid.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/tools.hpp"
 
@@ -272,7 +273,9 @@ void Hover_tool::tool_render(
     }
     else if (entry.grid)
     {
-        const glm::vec3 local_position = glm::vec3{entry.grid->grid_from_world() * glm::dvec4{entry.position.value(), 1.0}};
+        const glm::vec3 local_position = glm::vec3{
+            entry.grid->grid_from_world() * glm::vec4{entry.position.value(), 1.0f}
+        };
         const std::string text_line_3 = fmt::format(
             "Position in {}: {}",
             entry.grid->get_name(),

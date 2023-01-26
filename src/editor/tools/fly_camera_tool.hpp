@@ -48,8 +48,8 @@ class Fly_camera_turn_command
 public:
     explicit Fly_camera_turn_command();
 
-    auto try_call (erhe::application::Command_context& context) -> bool override;
-    void try_ready(erhe::application::Command_context& context) override;
+    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Fly_camera_move_command
@@ -62,7 +62,7 @@ public:
         const bool                               active
     );
 
-    auto try_call(erhe::application::Command_context& context) -> bool override;
+    auto try_call(erhe::application::Input_arguments& input) -> bool override;
 
 private:
     Control                            m_control;
@@ -115,7 +115,7 @@ public:
         erhe::application::Controller_item item,
         bool                               active
     ) -> bool;
-    auto turn_relative (double dx, double dy) -> bool;
+    auto turn_relative (float dx, float dy) -> bool;
 
 private:
     void update_camera();

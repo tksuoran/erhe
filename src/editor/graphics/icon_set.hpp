@@ -47,11 +47,11 @@ public:
     ) const;
 
     auto icon_button(
+        uint32_t  id,
         glm::vec2 uv0,
-        int       frame_padding,
         glm::vec4 backround_color = glm::vec4{0.0f},
-        glm::vec4 tint_color = glm::vec4{1.0f},
-        bool      linear = false
+        glm::vec4 tint_color      = glm::vec4{1.0f},
+        bool      linear          = false
     ) const -> bool;
 
 private:
@@ -117,6 +117,7 @@ public:
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
     void declare_required_components() override;
     void initialize_component       () override;
+    void deinitialize_component     () override;
 
     [[nodiscard]] auto load    (const std::filesystem::path& path) -> glm::vec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;

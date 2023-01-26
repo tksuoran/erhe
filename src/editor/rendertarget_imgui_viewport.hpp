@@ -81,8 +81,8 @@ public:
 private:
     Rendertarget_mesh* m_rendertarget_mesh{nullptr};
     glm::vec4          m_clear_color {0.0f, 0.0f, 0.0f, 0.2f};
-    double             m_last_mouse_x{0.0};
-    double             m_last_mouse_y{0.0};
+    float              m_last_mouse_x{0.0f};
+    float              m_last_mouse_y{0.0f};
 };
 
 } // namespace erhe::application

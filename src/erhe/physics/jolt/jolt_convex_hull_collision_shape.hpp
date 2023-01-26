@@ -18,17 +18,17 @@ class Jolt_convex_hull_collision_shape
 public:
     Jolt_convex_hull_collision_shape(
         const float* points,
-        const int    point_count,
-        const int    stride
+        int          point_count,
+        int          stride
     );
 
     auto get_shape_settings() -> JPH::ShapeSettings& override
     {
-        return m_shape_settings;
+        return *m_shape_settings.GetPtr();
     }
 
 private:
-    JPH::ConvexHullShapeSettings m_shape_settings;
+    JPH::Ref<JPH::ConvexHullShapeSettings> m_shape_settings;
 };
 
 } // namespace erhe::physics

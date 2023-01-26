@@ -68,7 +68,6 @@ public:
         const erhe::scene::Camera*   camera;
         const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
         const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
-        const double                 time;
         const int                    x;
         const int                    y;
     };
@@ -104,7 +103,6 @@ private:
 
         erhe::graphics::Buffer                pixel_pack_buffer;
         std::array<uint8_t, s_id_buffer_size> data;
-        double                                time           {0.0};
         GLsync                                sync           {0};
         glm::mat4                             clip_from_world{1.0f};
         int                                   x_offset       {0};

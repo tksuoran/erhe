@@ -46,9 +46,9 @@ namespace editor
 {
 
 Rendertarget_mesh::Rendertarget_mesh(
-    const int    width,
-    const int    height,
-    const double pixels_per_meter
+    const int   width,
+    const int   height,
+    const float pixels_per_meter
 )
     : erhe::scene::Mesh {"Rendertarget Node"}
     , m_pixels_per_meter{pixels_per_meter}
@@ -131,8 +131,8 @@ void Rendertarget_mesh::add_primitive()
     m_material->texture = m_texture;
     m_material->sampler = m_sampler;
 
-    m_local_width  = static_cast<double>(m_texture->width ()) / m_pixels_per_meter;
-    m_local_height = static_cast<double>(m_texture->height()) / m_pixels_per_meter;
+    m_local_width  = static_cast<float>(m_texture->width ()) / m_pixels_per_meter;
+    m_local_height = static_cast<float>(m_texture->height()) / m_pixels_per_meter;
 
     auto geometry = erhe::geometry::shapes::make_rectangle(
         m_local_width,
@@ -202,16 +202,6 @@ void Rendertarget_mesh::handle_node_scene_host_update(
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 void Rendertarget_mesh::update_headset()
 {
-    const auto* headset = g_headset_view->get_headset();
-    if (headset != nullptr)
-    {
-        m_controller_pose = headset->controller_pose();
-        m_controller_trigger_click         = headset->trigger_click()->currentState;
-        m_controller_trigger_click_changed = headset->trigger_click()->changedSinceLastSync;
-        m_controller_trigger_value_float   = headset->trigger_value()->currentState;
-        m_controller_trigger_value_changed = headset->trigger_value()->changedSinceLastSync;
-    }
-
 #if 0
     auto* hand_tracker = headset_view.get_hand_tracker();
     if (hand_tracker == nullptr)
@@ -430,44 +420,6 @@ void Rendertarget_mesh::render_done()
     return m_pointer;
 }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-[[nodiscard]] auto Rendertarget_mesh::get_pointer_finger() const -> std::optional<Finger_point>
-{
-    return m_pointer_finger;
-}
-
-[[nodiscard]] auto Rendertarget_mesh::get_finger_trigger() const -> bool
-{
-    return m_finger_trigger;
-}
-
-[[nodiscard]] auto Rendertarget_mesh::get_controller_pose() const -> const erhe::xr::Pose&
-{
-    return m_controller_pose;
-}
-
-[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_click() const -> bool
-{
-    return m_controller_trigger_click;
-}
-
-[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_click_changed() const -> bool
-{
-    return m_controller_trigger_click_changed;
-}
-
-[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_value() const -> float
-{
-    return m_controller_trigger_value_float;
-}
-
-[[nodiscard]] auto Rendertarget_mesh::get_controller_trigger_value_changed() const -> bool
-{
-    return m_controller_trigger_value_changed;
-}
-
-#endif
-
 [[nodiscard]] auto Rendertarget_mesh::width() const -> float
 {
     return static_cast<float>(m_texture->width());
@@ -478,7 +430,7 @@ void Rendertarget_mesh::render_done()
     return static_cast<float>(m_texture->height());
 }
 
-[[nodiscard]] auto Rendertarget_mesh::pixels_per_meter() const -> double
+[[nodiscard]] auto Rendertarget_mesh::pixels_per_meter() const -> float
 {
     return m_pixels_per_meter;
 }

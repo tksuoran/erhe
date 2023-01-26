@@ -80,27 +80,5 @@ void Editor_view_client::update()
     erhe::application::g_commands->on_update();
  }
 
-void Editor_view_client::update_keyboard(
-    const bool                   pressed,
-    const erhe::toolkit::Keycode code,
-    const uint32_t               modifier_mask
-)
-{
-    g_viewport_windows->update_keyboard(pressed, code, modifier_mask);
-}
-
-void Editor_view_client::update_mouse(
-    const erhe::toolkit::Mouse_button button,
-    const int                         count
-)
-{
-    g_viewport_windows->update_mouse(button, count);
-}
-
-void Editor_view_client::update_mouse(const double x, const double y)
-{
-    g_viewport_windows->update_mouse(x, y);
-}
-
 } // namespace hextiles
 
