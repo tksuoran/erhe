@@ -132,7 +132,7 @@ void Hotbar::initialize_component()
     {
         auto& xr_right = headset->get_actions_right();
         m_trackpad_click_command.bind(xr_right.trackpad);
-        commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click);
+        commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click, erhe::application::Button_trigger::Button_pressed);
         m_trackpad_click_command.set_host(this);
         m_trackpad_command.set_host(this);
     }
@@ -371,12 +371,8 @@ auto Hotbar::try_call(erhe::application::Input_arguments& input) -> bool
     {
         return false;
     }
-    if (input.button_bits == 0)
-    {
-        return false;
-    }
 
-    const auto position = input.vec2_absolute_value;
+    const auto position = input.vector2.absolute_value;
 
     const auto old_slot = m_slot;
     if (position.x < -0.2f)

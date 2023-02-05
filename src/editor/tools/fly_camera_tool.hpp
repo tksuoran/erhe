@@ -28,7 +28,7 @@ class Fly_camera_space_mouse_listener
     : public erhe::toolkit::Space_mouse_listener
 {
 public:
-    explicit Fly_camera_space_mouse_listener();
+    Fly_camera_space_mouse_listener();
     ~Fly_camera_space_mouse_listener() noexcept;
 
     auto is_active     () -> bool                                 override;
@@ -46,10 +46,9 @@ class Fly_camera_turn_command
     : public erhe::application::Command
 {
 public:
-    explicit Fly_camera_turn_command();
-
+    Fly_camera_turn_command();
+    void try_ready() override;
     auto try_call (erhe::application::Input_arguments& input) -> bool override;
-    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Fly_camera_move_command
@@ -57,12 +56,12 @@ class Fly_camera_move_command
 {
 public:
     Fly_camera_move_command(
-        const Control                            control,
-        const erhe::application::Controller_item item,
-        const bool                               active
+        Control                            control,
+        erhe::application::Controller_item item,
+        bool                               active
     );
 
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
 
 private:
     Control                            m_control;
@@ -78,9 +77,9 @@ class Fly_camera_tool
     , public erhe::application::Imgui_window
 {
 public:
-    static constexpr int              c_priority{5};
-    static constexpr std::string_view c_type_name   {"Fly_camera_tool"};
-    static constexpr std::string_view c_title   {"Fly Camera"};
+    static constexpr int              c_priority {5};
+    static constexpr std::string_view c_type_name{"Fly_camera_tool"};
+    static constexpr std::string_view c_title    {"Fly Camera"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
     Fly_camera_tool ();

@@ -120,206 +120,185 @@ void Commands::register_command(Command* const command)
     return m_update_bindings;
 }
 
-auto Commands::bind_command_to_key(
+void Commands::bind_command_to_key(
     Command* const                command,
     const erhe::toolkit::Keycode  code,
     const bool                    pressed,
     const std::optional<uint32_t> modifier_mask
-) -> erhe::toolkit::Unique_id<Key_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    auto& binding = m_key_bindings.emplace_back(command, code, pressed, modifier_mask);
-    return binding.get_id();
-}
-
-auto Commands::bind_command_to_mouse_button(
-    Command* const                    command,
-    const erhe::toolkit::Mouse_button button
-) -> erhe::toolkit::Unique_id<Mouse_button_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    auto binding = std::make_unique<Mouse_button_binding>(command, button);
-    auto id = binding->get_id();
-    m_mouse_bindings.push_back(std::move(binding));
-    return id;
-}
-
-auto Commands::bind_command_to_mouse_wheel(
-    Command* const command
-) -> erhe::toolkit::Unique_id<Mouse_wheel_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    auto binding = std::make_unique<Mouse_wheel_binding>(command);
-    auto id = binding->get_id();
-    m_mouse_wheel_bindings.push_back(std::move(binding));
-    return id;
-}
-
-auto Commands::bind_command_to_mouse_motion(
-    Command* const command
-) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    auto binding = std::make_unique<Mouse_motion_binding>(command);
-    auto id = binding->get_id();
-    m_mouse_bindings.push_back(std::move(binding));
-    return id;
-}
-
-auto Commands::bind_command_to_mouse_drag(
-    Command* const                    command,
-    const erhe::toolkit::Mouse_button button
-) -> erhe::toolkit::Unique_id<Mouse_drag_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    auto binding = std::make_unique<Mouse_drag_binding>(command, button);
-    auto id = binding->get_id();
-    m_mouse_bindings.push_back(std::move(binding));
-    return id;
-}
-
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-auto Commands::bind_command_to_xr_boolean_action(
-    Command* const                     command,
-    erhe::xr::Xr_action_boolean* const xr_action
-) -> erhe::toolkit::Unique_id<Xr_boolean_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    Xr_boolean_binding binding{command, xr_action};
-    auto id = binding.get_id();
-    m_xr_boolean_bindings.emplace_back(std::move(binding));
-    return id;
-}
-
-auto Commands::bind_command_to_xr_float_action(
-    Command* const                   command,
-    erhe::xr::Xr_action_float* const xr_action
-) -> erhe::toolkit::Unique_id<Xr_float_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    Xr_float_binding binding{command, xr_action};
-    auto id = binding.get_id();
-    m_xr_float_bindings.push_back(std::move(binding));
-    return id;
-}
-
-auto Commands::bind_command_to_xr_vector2f_action(
-    Command* const                      command,
-    erhe::xr::Xr_action_vector2f* const xr_action
-) -> erhe::toolkit::Unique_id<Xr_vector2f_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    Xr_vector2f_binding binding{command, xr_action};
-    auto id = binding.get_id();
-    m_xr_vector2f_bindings.push_back(std::move(binding));
-    return id;
-}
-#endif
-
-auto Commands::bind_command_to_update(
-    Command* const command
-) -> erhe::toolkit::Unique_id<Update_binding>::id_type
-{
-    std::lock_guard<std::mutex> lock{m_command_mutex};
-
-    auto& binding = m_update_bindings.emplace_back(command);
-    return binding.get_id();
-}
-
-void Commands::remove_command_binding(
-    const erhe::toolkit::Unique_id<Command_binding>::id_type binding_id
 )
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_key_bindings.emplace_back(command, code, pressed, modifier_mask);
+}
 
-    m_key_bindings.erase(
-        std::remove_if(
-            m_key_bindings.begin(),
-            m_key_bindings.end(),
-            [binding_id](const Key_binding& binding)
-            {
-                return binding.get_id() == binding_id;
-            }
-        ),
-        m_key_bindings.end()
-    );
-    m_mouse_bindings.erase(
-        std::remove_if(
-            m_mouse_bindings.begin(),
-            m_mouse_bindings.end(),
-            [binding_id](const std::unique_ptr<Mouse_binding>& binding)
-            {
-                return binding.get()->get_id() == binding_id;
-            }
-        ),
-        m_mouse_bindings.end()
-    );
-    m_mouse_wheel_bindings.erase(
-        std::remove_if(
-            m_mouse_wheel_bindings.begin(),
-            m_mouse_wheel_bindings.end(),
-            [binding_id](const std::unique_ptr<Mouse_wheel_binding>& binding)
-            {
-                return binding.get()->get_id() == binding_id;
-            }
-        ),
-        m_mouse_wheel_bindings.end()
-    );
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_xr_boolean_bindings.erase(
-        std::remove_if(
-            m_xr_boolean_bindings.begin(),
-            m_xr_boolean_bindings.end(),
-            [binding_id](const Xr_boolean_binding& binding)
-            {
-                return binding.get_id() == binding_id;
-            }
-        ),
-        m_xr_boolean_bindings.end()
-    );
-    m_xr_float_bindings.erase(
-        std::remove_if(
-            m_xr_float_bindings.begin(),
-            m_xr_float_bindings.end(),
-            [binding_id](const Xr_float_binding& binding)
-            {
-                return binding.get_id() == binding_id;
-            }
-        ),
-        m_xr_float_bindings.end()
-    );
-    m_xr_vector2f_bindings.erase(
-        std::remove_if(
-            m_xr_vector2f_bindings.begin(),
-            m_xr_vector2f_bindings.end(),
-            [binding_id](const Xr_vector2f_binding& binding)
-            {
-                return binding.get_id() == binding_id;
-            }
-        ),
-        m_xr_vector2f_bindings.end()
-    );
-#endif
-    m_update_bindings.erase(
-        std::remove_if(
-            m_update_bindings.begin(),
-            m_update_bindings.end(),
-            [binding_id](const Update_binding& binding)
-            {
-                return binding.get_id() == binding_id;
-            }
-        ),
-        m_update_bindings.end()
+void Commands::bind_command_to_mouse_button(
+    Command* const                    command,
+    const erhe::toolkit::Mouse_button button,
+    const bool                        trigger_on_pressed
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_mouse_bindings.push_back(
+        std::make_unique<Mouse_button_binding>(command, button, trigger_on_pressed)
     );
 }
+
+void Commands::bind_command_to_mouse_wheel(
+    Command* const command
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_mouse_wheel_bindings.push_back(
+        std::make_unique<Mouse_wheel_binding>(command)
+    );
+}
+
+void Commands::bind_command_to_mouse_motion(
+    Command* const command
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_mouse_bindings.push_back(
+        std::make_unique<Mouse_motion_binding>(command)
+    );
+}
+
+void Commands::bind_command_to_mouse_drag(
+    Command* const                    command,
+    const erhe::toolkit::Mouse_button button,
+    const bool                        call_on_button_down_without_motion
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_mouse_bindings.push_back(
+        std::make_unique<Mouse_drag_binding>(command, button, call_on_button_down_without_motion)
+    );
+}
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+void Commands::bind_command_to_xr_boolean_action(
+    Command* const                     command,
+    erhe::xr::Xr_action_boolean* const xr_action,
+    Button_trigger                     button_trigger
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_xr_boolean_bindings.emplace_back(command, xr_action, button_trigger);
+}
+
+void Commands::bind_command_to_xr_float_action(
+    Command* const                   command,
+    erhe::xr::Xr_action_float* const xr_action
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_xr_float_bindings.emplace_back(command, xr_action);
+}
+
+void Commands::bind_command_to_xr_vector2f_action(
+    Command* const                      command,
+    erhe::xr::Xr_action_vector2f* const xr_action
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_xr_vector2f_bindings.emplace_back(command, xr_action);
+}
+#endif
+
+void Commands::bind_command_to_update(
+    Command* const command
+)
+{
+    std::lock_guard<std::mutex> lock{m_command_mutex};
+    m_update_bindings.emplace_back(command);
+}
+
+//void Commands::remove_command_binding(
+//    const erhe::toolkit::Unique_id<Command_binding>::id_type binding_id
+//)
+//{
+//    std::lock_guard<std::mutex> lock{m_command_mutex};
+//
+//    m_key_bindings.erase(
+//        std::remove_if(
+//            m_key_bindings.begin(),
+//            m_key_bindings.end(),
+//            [binding_id](const Key_binding& binding)
+//            {
+//                return binding.get_id() == binding_id;
+//            }
+//        ),
+//        m_key_bindings.end()
+//    );
+//    m_mouse_bindings.erase(
+//        std::remove_if(
+//            m_mouse_bindings.begin(),
+//            m_mouse_bindings.end(),
+//            [binding_id](const std::unique_ptr<Mouse_binding>& binding)
+//            {
+//                return binding.get()->get_id() == binding_id;
+//            }
+//        ),
+//        m_mouse_bindings.end()
+//    );
+//    m_mouse_wheel_bindings.erase(
+//        std::remove_if(
+//            m_mouse_wheel_bindings.begin(),
+//            m_mouse_wheel_bindings.end(),
+//            [binding_id](const std::unique_ptr<Mouse_wheel_binding>& binding)
+//            {
+//                return binding.get()->get_id() == binding_id;
+//            }
+//        ),
+//        m_mouse_wheel_bindings.end()
+//    );
+//#if defined(ERHE_XR_LIBRARY_OPENXR)
+//    m_xr_boolean_bindings.erase(
+//        std::remove_if(
+//            m_xr_boolean_bindings.begin(),
+//            m_xr_boolean_bindings.end(),
+//            [binding_id](const Xr_boolean_binding& binding)
+//            {
+//                return binding.get_id() == binding_id;
+//            }
+//        ),
+//        m_xr_boolean_bindings.end()
+//    );
+//    m_xr_float_bindings.erase(
+//        std::remove_if(
+//            m_xr_float_bindings.begin(),
+//            m_xr_float_bindings.end(),
+//            [binding_id](const Xr_float_binding& binding)
+//            {
+//                return binding.get_id() == binding_id;
+//            }
+//        ),
+//        m_xr_float_bindings.end()
+//    );
+//    m_xr_vector2f_bindings.erase(
+//        std::remove_if(
+//            m_xr_vector2f_bindings.begin(),
+//            m_xr_vector2f_bindings.end(),
+//            [binding_id](const Xr_vector2f_binding& binding)
+//            {
+//                return binding.get_id() == binding_id;
+//            }
+//        ),
+//        m_xr_vector2f_bindings.end()
+//    );
+//#endif
+//    m_update_bindings.erase(
+//        std::remove_if(
+//            m_update_bindings.begin(),
+//            m_update_bindings.end(),
+//            [binding_id](const Update_binding& binding)
+//            {
+//                return binding.get_id() == binding_id;
+//            }
+//        ),
+//        m_update_bindings.end()
+//    );
+//}
 
 void Commands::command_inactivated(Command* const command)
 {
@@ -364,30 +343,23 @@ void Commands::on_update()
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
+    for (auto& binding : m_update_bindings)
     {
-        Input_arguments context{
-            m_last_mouse_button_bits,
-            m_last_mouse_position,
-            glm::vec2{0.0f, 0.0f}
-        };
-
-        for (auto& binding : m_update_bindings)
+        if (!binding.is_command_host_enabled())
         {
-            if (!binding.is_command_host_enabled())
-            {
-                continue;
-            }
-            binding.on_update(context);
+            continue;
         }
+        binding.on_update();
     }
 
     // Call mouse drag bindings if buttons are being held down
     if (m_last_mouse_button_bits != 0)
     {
-        Input_arguments context{
-            m_last_mouse_button_bits,
-            m_last_mouse_position,
-            glm::vec2{0.0f, 0.0f}
+        Input_arguments dummy_input{
+            .vector2{
+                .absolute_value{0.0f, 0.0f},
+                .relative_value{0.0f, 0.0f}
+            }
         };
 
         for (auto& binding : m_mouse_bindings)
@@ -408,7 +380,7 @@ void Commands::on_update()
                     const uint32_t bit    = (1 << button);
                     if ((m_last_mouse_button_bits & bit) == bit)
                     {
-                        drag_binding->on_motion(context);
+                        drag_binding->on_motion(dummy_input);
                     }
                 }
             }
@@ -446,9 +418,25 @@ void Commands::sort_mouse_bindings()
             auto* const rhs_command = rhs.get()->get_command();
             ERHE_VERIFY(lhs_command != nullptr);
             ERHE_VERIFY(rhs_command != nullptr);
-            return get_command_priority(lhs_command) > get_command_priority(rhs_command);
+            const auto lhs_priority = get_command_priority(lhs_command);
+            const auto rhs_priority = get_command_priority(rhs_command);
+            const bool is_higher = lhs_priority > rhs_priority;
+            log_input->trace(
+                "lhs = {} {}, rhs = {} {}, is_higher = {}",
+                lhs_command->get_name(), lhs_priority,
+                rhs_command->get_name(), rhs_priority,
+                is_higher
+            );
+            return is_higher;
         }
     );
+    log_input->trace("Mouse bindings after sort:");
+    for (const auto& binding : m_mouse_bindings)
+    {
+        auto* const command = binding->get_command();
+        const auto priority = get_command_priority(command);
+        log_input->trace("{} {}", priority, command->get_name());
+    }
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -530,11 +518,6 @@ auto Commands::last_mouse_position_delta() const -> glm::vec2
     return m_last_mouse_position_delta;
 }
 
-auto Commands::last_mouse_wheel_delta() const -> glm::vec2
-{
-    return m_last_mouse_wheel_delta;
-}
-
 void Commands::update_active_mouse_command(
     Command* const command
 )
@@ -547,6 +530,7 @@ void Commands::update_active_mouse_command(
     )
     {
         ERHE_VERIFY(m_active_mouse_command == nullptr);
+        log_input->trace("Set active mouse command = {}", command->get_name());
         m_active_mouse_command = command;
     }
     else if (
@@ -554,6 +538,7 @@ void Commands::update_active_mouse_command(
         (m_active_mouse_command == command)
     )
     {
+        log_input->trace("reset active mouse command");
         m_active_mouse_command = nullptr;
     }
 }
@@ -577,12 +562,27 @@ void Commands::on_mouse_button(
         m_last_mouse_button_bits = m_last_mouse_button_bits & ~bit_mask;
     }
 
-    Input_arguments context{
-        m_last_mouse_button_bits,
-        m_last_mouse_position
+    Input_arguments input{
+        .button_pressed = pressed
     };
+
+    const char* button_name = erhe::toolkit::c_str(button);
+    log_input->trace("Mouse button {} {}", button_name, pressed ? "pressed" : "released");
     for (const auto& binding : m_mouse_bindings)
     {
+        const bool button_match = binding->get_button() != button;
+        log_input->trace(
+            "  {}/{} {} {} {}",
+            binding->get_command()->get_priority(),
+            get_command_priority(binding->get_command()),
+            binding->is_command_host_enabled() ? "host enabled" : "host disabled",
+            binding->get_command()->get_name(),
+            button_match ? "button match" : "button mismatch"
+        );
+        if (button_match)
+        {
+            continue;
+        }
         if (!binding->is_command_host_enabled())
         {
             continue;
@@ -590,12 +590,14 @@ void Commands::on_mouse_button(
 
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding->on_button(context, button, pressed))
+        if (binding->on_button(input))
         {
+            log_input->trace("Mouse button {} {} consumed by {}", button_name, pressed, command->get_name());
             update_active_mouse_command(command);
             break;
         }
     }
+    log_input->trace("Mouse button {} {} was not consumed", button_name, pressed);
 }
 
 void Commands::on_mouse_wheel(const float x, const float y)
@@ -604,13 +606,12 @@ void Commands::on_mouse_wheel(const float x, const float y)
 
     sort_mouse_bindings();
 
-    m_last_mouse_wheel_delta.x = x;
-    m_last_mouse_wheel_delta.y = y;
-
-    Input_arguments context{
-        m_last_mouse_button_bits,
-        m_last_mouse_position,
-        m_last_mouse_wheel_delta
+    Input_arguments input{
+        .vector2
+        {
+            .absolute_value = glm::vec2{x, y},
+            .relative_value = glm::vec2{x, y}
+        }
     };
     for (const auto& binding : m_mouse_wheel_bindings)
     {
@@ -621,7 +622,7 @@ void Commands::on_mouse_wheel(const float x, const float y)
 
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
-        binding->on_wheel(context); // does not set active mouse command - each wheel event is one shot
+        binding->on_wheel(input); // does not set active mouse command - each wheel event is one shot
     }
 }
 
@@ -633,10 +634,11 @@ void Commands::on_mouse_move(const float x, const float y)
     m_last_mouse_position_delta = m_last_mouse_position - new_mouse_position;
 
     m_last_mouse_position = new_mouse_position;
-    Input_arguments context{
-        m_last_mouse_button_bits,
-        m_last_mouse_position,
-        m_last_mouse_position_delta
+    Input_arguments input{
+        .vector2{
+            .absolute_value = m_last_mouse_position,
+            .relative_value = m_last_mouse_position_delta
+        }
     };
 
     for (const auto& binding : m_mouse_bindings)
@@ -648,7 +650,7 @@ void Commands::on_mouse_move(const float x, const float y)
 
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding->on_motion(context))
+        if (binding->on_motion(input))
         {
             update_active_mouse_command(command);
             break;
@@ -665,13 +667,12 @@ void Commands::on_xr_action(
 
     sort_xr_bindings();
 
-    const bool click = xr_action.state.currentState == XR_TRUE;
-    Input_arguments context{
-        (click ? uint32_t{1} : uint32_t{0}),
-        glm::vec2{0.0, 0.0}
+    const bool state = xr_action.state.currentState == XR_TRUE;
+    Input_arguments input{
+        .button_pressed = state
     };
 
-    log_input->trace("{}: {}", xr_action.name, click);
+    log_input->trace("{}: {}", xr_action.name, state);
     for (auto& binding : m_xr_boolean_bindings)
     {
         if (binding.xr_action != &xr_action)
@@ -693,14 +694,14 @@ void Commands::on_xr_action(
 
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding.on_value_changed(context))
+        if (binding.on_value_changed(input))
         {
-            log_input->trace("XR bool {} consumed by {}", click, command->get_name());
+            log_input->trace("XR bool {} consumed by {}", state, command->get_name());
             return;
         }
     }
 
-    log_input->trace("OpenXR bool {} was not consumed", click);
+    log_input->trace("OpenXR bool {} was not consumed", state);
 }
 
 void Commands::on_xr_action(
@@ -711,9 +712,8 @@ void Commands::on_xr_action(
 
     sort_xr_bindings();
 
-    Input_arguments context{
-        0,
-        glm::vec2{xr_action.state.currentState, 0.0f}
+    Input_arguments input{
+        .float_value = xr_action.state.currentState
     };
 
     for (auto& binding : m_xr_float_bindings)
@@ -729,7 +729,7 @@ void Commands::on_xr_action(
 
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding.on_value_changed(context))
+        if (binding.on_value_changed(input))
         {
             return;
         }
@@ -747,10 +747,12 @@ void Commands::on_xr_action(
     sort_xr_bindings();
 
     Input_arguments context{
-        0,
-        glm::vec2{
-            xr_action.state.currentState.x,
-            xr_action.state.currentState.y
+        .vector2{
+            .absolute_value = glm::vec2{
+                xr_action.state.currentState.x,
+                xr_action.state.currentState.y
+            },
+            .relative_value = glm::vec2{0.0f, 0.0f}
         }
     };
 
@@ -786,8 +788,9 @@ void Commands::commands(const State filter)
         {
             const auto* host = command->get_host();
             const std::string label = fmt::format(
-                "{} {} : {} {} {}",
+                "{}/{} {} : {} {} {}",
                 command->get_priority(),
+                get_command_priority(command),
                 command->get_name(),
                 host ? host->get_description() : "",
                 host ? host->get_priority() : 0,
@@ -857,8 +860,9 @@ void Commands::imgui()
         for (const auto& binding : m_key_bindings)
         {
             ImGui::Text(
-                "%d %s %s <- %s %s %s",
+                "%d/%d %s %s <- %s %s %s",
                 binding.get_command()->get_priority(),
+                get_command_priority(binding.get_command()),
                 binding.is_command_host_enabled() ? "Enabled" : "Disabled",
                 binding.get_command()->get_name(),
                 Command_binding::c_type_strings[static_cast<int>(binding.get_type())],
@@ -876,8 +880,9 @@ void Commands::imgui()
         for (const auto& binding : m_update_bindings)
         {
             ImGui::Text(
-                "%d %s %s <- %s",
+                "%d/%d %s %s <- %s",
                 binding.get_command()->get_priority(),
+                get_command_priority(binding.get_command()),
                 binding.is_command_host_enabled() ? "Enabled" : "Disabled",
                 binding.get_command()->get_name(),
                 Command_binding::c_type_strings[static_cast<int>(binding.get_type())]
@@ -898,12 +903,13 @@ void Commands::imgui()
                     {
                         break;
                     }
-                    case Command_binding::Type::Mouse_click:
+                    case Command_binding::Type::Mouse_button:
                     {
                         const auto click_binding = reinterpret_cast<Mouse_button_binding*>(binding.get());
                         ImGui::Text(
-                            "%d %s %s <- %s %d",
+                            "%d/%d %s %s <- %s %d",
                             binding->get_command()->get_priority(),
+                            get_command_priority(binding->get_command()),
                             binding->is_command_host_enabled() ? "Enabled" : "Disabled",
                             binding->get_command()->get_name(),
                             Command_binding::c_type_strings[static_cast<int>(binding->get_type())],
@@ -926,8 +932,9 @@ void Commands::imgui()
                     case Command_binding::Type::Mouse_motion:
                     {
                         ImGui::Text(
-                            "%d %s ,_ %s",
+                            "%d/%d %s ,_ %s",
                             binding->get_command()->get_priority(),
+                            get_command_priority(binding->get_command()),
                             binding->get_command()->get_name(),
                             Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
                         );
@@ -941,8 +948,9 @@ void Commands::imgui()
             for (const auto& binding : m_mouse_wheel_bindings)
             {
                 ImGui::Text(
-                    "%d %s <- %s",
+                    "%d/%d %s <- %s",
                     binding->get_command()->get_priority(),
+                    get_command_priority(binding->get_command()),
                     binding->get_command()->get_name(),
                     Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
                 );
@@ -957,8 +965,9 @@ void Commands::imgui()
         for (const auto& binding : m_xr_boolean_bindings)
         {
             ImGui::Text(
-                "%d %s %s <- %s %s",
+                "%d/%d %s %s <- %s %s",
                 binding.get_command()->get_priority(),
+                get_command_priority(binding.get_command()),
                 binding.is_command_host_enabled() ? "Enabled" : "Disabled",
                 binding.get_command()->get_name(),
                 binding.xr_action->name.c_str(),
@@ -972,8 +981,9 @@ void Commands::imgui()
         for (const auto& binding : m_xr_float_bindings)
         {
             ImGui::Text(
-                "%d %s %s: <- %s %s",
+                "%d/%d %s %s: <- %s %s",
                 binding.get_command()->get_priority(),
+                get_command_priority(binding.get_command()),
                 binding.is_command_host_enabled() ? "Enabled" : "Disabled",
                 binding.get_command()->get_name(),
                 binding.xr_action->name.c_str(),
@@ -987,8 +997,9 @@ void Commands::imgui()
         for (const auto& binding : m_xr_vector2f_bindings)
         {
             ImGui::Text(
-                "%d %s %s: <- %s %s",
+                "%d/%d %s %s: <- %s %s",
                 binding.get_command()->get_priority(),
+                get_command_priority(binding.get_command()),
                 binding.is_command_host_enabled() ? "Enabled" : "Disabled",
                 binding.get_command()->get_name(),
                 binding.xr_action->name.c_str(),

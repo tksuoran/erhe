@@ -24,14 +24,14 @@ public:
     void bind();
 
     void allocate(
-        const gl::Buffer_target target,
-        const unsigned int      binding_point,
-        const std::size_t       size
+        gl::Buffer_target target,
+        unsigned int      binding_point,
+        std::size_t       size
     );
 
     void allocate(
-        const gl::Buffer_target target,
-        const std::size_t       size
+        gl::Buffer_target target,
+        std::size_t       size
     );
 
     [[nodiscard]] auto writer        () -> Buffer_writer&;

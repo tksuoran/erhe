@@ -40,6 +40,8 @@
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/application/window.hpp"
+#include "erhe/application/windows/commands_window.hpp"
+#include "erhe/application/windows/log_window.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
@@ -64,10 +66,12 @@ private:
     erhe::components::Components                 m_components;
 
     erhe::application::Commands                  commands;
+    erhe::application::Commands_window           commands_window;
     erhe::application::Configuration             configuration;
     erhe::application::Gl_context_provider       gl_context_provider;
     erhe::application::Imgui_renderer            imgui_renderer;
     erhe::application::Imgui_windows             imgui_windows;
+    erhe::application::Log_window                log_window;
     erhe::application::Renderdoc_capture_support renderdoc_capture_support;
     erhe::application::Rendergraph               rendergraph;
     erhe::application::Shader_monitor            shader_monitor;
@@ -136,12 +140,14 @@ auto Application_impl::initialize_components(
     m_components.add(application          );
     m_components.add(&application_time    );
     m_components.add(&commands            );
+    m_components.add(&commands_window     );
     m_components.add(&configuration       );
     m_components.add(&gl_context_provider );
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     m_components.add(&imgui_renderer      );
     m_components.add(&imgui_windows       );
 #endif
+    m_components.add(&log_window          );
     m_components.add(&renderdoc_capture_support);
     m_components.add(&rendergraph         );
     m_components.add(&view                );
@@ -201,10 +207,10 @@ auto Application_impl::initialize_components(
     component_initialization_complete(true);
 
     erhe::application::log_startup->info("Window configuration");
-    //const auto& config = configuration.windows;
-    //init_window(commands_window       , config.commands            );
+    const auto& config = configuration.windows;
+    init_window(commands_window, config.commands);
+    init_window(log_window     , config.log     );
     //init_window(line_renderer_set     , config.line_renderer       );
-    //init_window(log_window            , config.log                 );
     //init_window(performance_window    , config.performance         );
     //init_window(pipelines             , config.pipelines           );
 
@@ -240,6 +246,21 @@ void Application_impl::component_initialization_complete(const bool initializati
         auto& root_view = context_window->get_root_view();
 
         root_view.reset_view(erhe::application::g_view);
+    }
+}
+
+void Application_impl::init_window(
+    erhe::application::Imgui_window&                      imgui_window,
+    const erhe::application::Configuration::Window_entry& config
+) const
+{
+    if (config.window)
+    {
+        imgui_window.show();
+    }
+    else
+    {
+        imgui_window.hide();
     }
 }
 

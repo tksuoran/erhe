@@ -38,8 +38,7 @@ class Open_new_viewport_window_command
 {
 public:
     Open_new_viewport_window_command();
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
 };
 
 /// <summary>

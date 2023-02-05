@@ -65,11 +65,8 @@ void Fly_camera_space_mouse_listener::on_button(const int)
 }
 #endif
 
-void Fly_camera_turn_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Fly_camera_turn_command::try_ready()
 {
-    static_cast<void>(input);
     if (g_fly_camera_tool == nullptr)
     {
         return;
@@ -138,7 +135,7 @@ auto Fly_camera_turn_command::try_call(
         return false;
     }
 
-    const auto value = input.vec2_relative_value;
+    const auto value = input.vector2.relative_value;
     if (get_command_state() == erhe::application::State::Ready)
     {
         if (g_fly_camera_tool->get_hover_scene_view() == nullptr)
@@ -173,11 +170,8 @@ Fly_camera_move_command::Fly_camera_move_command(
 {
 }
 
-auto Fly_camera_move_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Fly_camera_move_command::try_call() -> bool
 {
-    static_cast<void>(input);
     if (g_fly_camera_tool == nullptr)
     {
         return false;
@@ -289,7 +283,7 @@ void Fly_camera_tool::initialize_component()
     commands.bind_command_to_key(&m_move_backward_inactive_command, erhe::toolkit::Key_s, false);
 
     commands.register_command(&m_turn_command);
-    commands.bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left);
+    commands.bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left, false);
 
     m_camera_controller = std::make_shared<Frame_controller>();
 

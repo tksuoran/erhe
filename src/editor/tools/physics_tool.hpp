@@ -49,9 +49,8 @@ class Physics_tool_drag_command
 {
 public:
     Physics_tool_drag_command();
-
-    auto try_call   (erhe::application::Input_arguments& input) -> bool override;
-    void try_ready  (erhe::application::Input_arguments& input) override;
+    void try_ready  () override;
+    auto try_call   () -> bool override;
     void on_inactive() override;
 };
 
@@ -90,7 +89,6 @@ public:
     // Public API
     auto acquire_target() -> bool;
     void release_target();
-    void begin_point_to_point_constraint();
 
     [[nodiscard]] auto get_mode() const -> Physics_tool_mode;
     void set_mode(Physics_tool_mode value);

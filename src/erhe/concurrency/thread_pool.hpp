@@ -54,7 +54,7 @@ private:
     };
 
 public:
-    explicit Thread_pool(size_t size);
+    explicit Thread_pool(std::size_t size);
     ~Thread_pool() noexcept;
 
     int size() const;

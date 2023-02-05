@@ -153,12 +153,8 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
         const auto* headset = g_headset_view->get_headset();
         ERHE_VERIFY(headset != nullptr);
 
-        const auto* node                   = m_rendertarget_mesh->get_node();
+        const auto* node = m_rendertarget_mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        //const auto& pose                   = m_rendertarget_mesh->get_controller_pose();
-        //const bool  trigger_click          = m_rendertarget_mesh->get_controller_trigger_click();
-        //const bool  trigger_click_changed  = m_rendertarget_mesh->get_controller_trigger_click_changed();
-        ////const float trigger_value          = m_rendertarget_mesh->get_controller_trigger_value();
         auto* left_aim_pose  = headset->get_actions_left().aim_pose;
         auto* right_aim_pose = headset->get_actions_right().aim_pose;
         const bool use_right = (

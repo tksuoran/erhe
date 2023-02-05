@@ -27,24 +27,23 @@ class Selection_tool_delete_command
     : public erhe::application::Command
 {
 public:
-    explicit Selection_tool_delete_command();
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    Selection_tool_delete_command();
+    auto try_call() -> bool override;
 };
 
 class Selection_tool_select_command
     : public erhe::application::Command
 {
 public:
-    explicit Selection_tool_select_command();
-    void try_ready(erhe::application::Input_arguments& input) override;
-    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    Selection_tool_select_command();
+    void try_ready() override;
+    auto try_call () -> bool override;
 };
 
 class Range_selection
 {
 public:
-    explicit Range_selection();
+    Range_selection();
 
     void set_terminator(const std::shared_ptr<erhe::scene::Item>& item);
     void entry         (const std::shared_ptr<erhe::scene::Item>& item, bool attachments_expanded);

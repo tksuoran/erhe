@@ -7,24 +7,19 @@
 namespace erhe::application {
 
 class Command;
-class Input_arguments;
+union Input_arguments;
 
 class Update_binding
     : public Command_binding
 {
 public:
     explicit Update_binding(Command* const command);
-    ~Update_binding() noexcept override;
-
     Update_binding();
-    Update_binding(const Update_binding&) = delete;
-    Update_binding(Update_binding&& other) noexcept;
-    auto operator=(const Update_binding&) -> Update_binding& = delete;
-    auto operator=(Update_binding&& other) noexcept -> Update_binding&;
+    ~Update_binding() noexcept override;
 
     [[nodiscard]] auto get_type() const -> Type override { return Command_binding::Type::Update; }
 
-    virtual auto on_update(Input_arguments& input) -> bool;
+    virtual auto on_update() -> bool;
 };
 
 

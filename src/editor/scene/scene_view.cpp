@@ -60,7 +60,7 @@ void Scene_view::set_hover(
     {
         g_editor_message_bus->send_message(
             Editor_message{
-                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh,
+                .update_flags = Message_flag_bit::c_flag_bit_hover_mesh
             }
         );
     }

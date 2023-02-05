@@ -31,9 +31,14 @@ namespace hextiles
 {
 
 #pragma region commands
+Map_free_zoom_command::Map_free_zoom_command()
+    : Command{"Map.hover"}
+{
+}
+
 auto Map_free_zoom_command::try_call(erhe::application::Input_arguments& input) -> bool
 {
-    const auto  wheel = input.vec2_relative_value;
+    const auto  wheel = input.vector2.relative_value;
     const float v = wheel.x + wheel.y;
     const float k = 0.1f;
 
@@ -44,6 +49,11 @@ auto Map_free_zoom_command::try_call(erhe::application::Input_arguments& input) 
 
     g_map_window->scale_zoom(1.0f + v * k);
     return true;
+}
+
+Map_mouse_scroll_command::Map_mouse_scroll_command()
+    : Command{"Map.mouse_scroll"}
+{
 }
 
 auto Map_mouse_scroll_command::try_call(erhe::application::Input_arguments& input) -> bool
@@ -62,16 +72,12 @@ auto Map_mouse_scroll_command::try_call(erhe::application::Input_arguments& inpu
     //m_map_window.hover(
     //    window_position
     //);
-    g_map_window->scroll(
-        glm::vec2{input.vec2_relative_value}
-    );
+    g_map_window->scroll(input.vector2.relative_value);
     return true;
 }
 
-void Map_mouse_scroll_command::try_ready(erhe::application::Input_arguments& input)
+void Map_mouse_scroll_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Inactive)
     {
         return;
@@ -80,26 +86,40 @@ void Map_mouse_scroll_command::try_ready(erhe::application::Input_arguments& inp
     set_ready();
 }
 
-auto Map_scroll_command::try_call(erhe::application::Input_arguments& input) -> bool
+Map_scroll_command::Map_scroll_command(
+    const float dx,
+    const float dy
+)
+    : Command {"Map.scroll"}
+    , m_offset{dx, dy}
 {
-    static_cast<void>(input);
+}
 
+auto Map_scroll_command::try_call() -> bool
+{
     g_map_window->scroll_tiles(m_offset);
     return true;
 }
 
-auto Map_zoom_command::try_call(erhe::application::Input_arguments& input) -> bool
+Map_zoom_command::Map_zoom_command(const float scale)
+    : Command{"Map.scroll"}
+    , m_scale{scale}
 {
-    static_cast<void>(input);
+}
 
+auto Map_zoom_command::try_call() -> bool
+{
     g_map_window->scale_zoom(m_scale);
     return true;
 }
 
-auto Map_grid_cycle_command::try_call(erhe::application::Input_arguments& input) -> bool
+Map_grid_cycle_command::Map_grid_cycle_command()
+    : Command{"Map.grid_cycle"}
 {
-    static_cast<void>(input);
+}
 
+auto Map_grid_cycle_command::try_call() -> bool
+{
     g_map_window->grid_cycle();
     return true;
 }
@@ -158,7 +178,7 @@ void Map_window::initialize_component()
     commands.register_command(&m_grid_cycle_command);
 
     commands.bind_command_to_mouse_wheel(&m_free_zoom_command);
-    commands.bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right, true);
 
     commands.bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_w, false);
     commands.bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);

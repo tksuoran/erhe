@@ -312,6 +312,7 @@ void Headset_view::update_pointer_context_from_controller()
 
     this->Scene_view::set_world_from_control(m);
     this->Scene_view::update_hover_with_raytrace();
+    this->Scene_view::update_grid_hover();
 }
 
 void Headset_view::render_headset()
@@ -419,6 +420,7 @@ void Headset_view::render_headset()
                 }
                 g_editor_rendering->render_content            (render_context, false);
                 g_editor_rendering->render_selection          (render_context, false);
+                g_editor_rendering->render_brush              (render_context);
                 g_editor_rendering->render_tool_meshes        (render_context);
                 g_editor_rendering->render_rendertarget_meshes(render_context);
             }

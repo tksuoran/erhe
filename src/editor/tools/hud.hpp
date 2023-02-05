@@ -27,8 +27,7 @@ class Toggle_hud_visibility_command
 {
 public:
     Toggle_hud_visibility_command();
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
 };
 
 class Hud_drag_command
@@ -36,8 +35,8 @@ class Hud_drag_command
 {
 public:
     Hud_drag_command();
-    auto try_call   (erhe::application::Input_arguments& input) -> bool override;
-    void try_ready  (erhe::application::Input_arguments& input) override;
+    void try_ready  () override;
+    auto try_call   () -> bool override;
     void on_inactive() override;
 };
 

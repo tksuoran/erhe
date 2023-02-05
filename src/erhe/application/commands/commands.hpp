@@ -12,6 +12,9 @@
 #include <functional>
 #include <mutex>
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "erhe/application/commands/xr_boolean_binding.hpp"
+#endif
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 namespace erhe::xr {
@@ -80,53 +83,49 @@ public:
 #endif
     [[nodiscard]] auto get_update_bindings     () const -> const std::vector<Update_binding>&;
 
-    auto bind_command_to_key(
+    void bind_command_to_key(
         Command*                command,
         erhe::toolkit::Keycode  code,
         bool                    pressed       = true,
         std::optional<uint32_t> modifier_mask = {}
-    ) -> erhe::toolkit::Unique_id<Key_binding>::id_type;
+    );
 
-    auto bind_command_to_mouse_button(
+    void bind_command_to_mouse_button(
         Command*                    command,
-        erhe::toolkit::Mouse_button button
-    ) -> erhe::toolkit::Unique_id<Mouse_button_binding>::id_type;
+        erhe::toolkit::Mouse_button button,
+        bool                        trigger_on_pressed
+    );
 
-    auto bind_command_to_mouse_wheel(
-        Command* command
-    ) -> erhe::toolkit::Unique_id<Mouse_wheel_binding>::id_type;
+    void bind_command_to_mouse_wheel(Command* command);
+    void bind_command_to_mouse_motion(Command* command);
 
-    auto bind_command_to_mouse_motion(
-        Command* command
-    ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
-
-    auto bind_command_to_mouse_drag(
+    void bind_command_to_mouse_drag(
         Command*                    command,
-        erhe::toolkit::Mouse_button button
-    ) -> erhe::toolkit::Unique_id<Mouse_motion_binding>::id_type;
+        erhe::toolkit::Mouse_button button,
+        bool                        call_on_button_down_without_motion
+    );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    auto bind_command_to_xr_boolean_action(
+    void bind_command_to_xr_boolean_action(
         Command*                     command,
-        erhe::xr::Xr_action_boolean* xr_action
-    ) -> erhe::toolkit::Unique_id<Xr_boolean_binding>::id_type;
+        erhe::xr::Xr_action_boolean* xr_action,
+        Button_trigger               button_trigger
+    );
 
-    auto bind_command_to_xr_float_action(
+    void bind_command_to_xr_float_action(
         Command*                   command,
         erhe::xr::Xr_action_float* xr_action
-    ) -> erhe::toolkit::Unique_id<Xr_float_binding>::id_type;
+    );
 
-    auto bind_command_to_xr_vector2f_action(
+    void bind_command_to_xr_vector2f_action(
         Command*                      command,
         erhe::xr::Xr_action_vector2f* xr_action
-    ) -> erhe::toolkit::Unique_id<Xr_vector2f_binding>::id_type;
+    );
 #endif
 
-    auto bind_command_to_update(
+    void bind_command_to_update(
         Command* command
-    ) -> erhe::toolkit::Unique_id<Update_binding>::id_type;
-
-    void remove_command_binding(erhe::toolkit::Unique_id<Command_binding>::id_type binding_id);
+    );
 
     [[nodiscard]] auto accept_mouse_command(Command* command) const -> bool
     {
@@ -140,7 +139,6 @@ public:
     [[nodiscard]] auto last_mouse_button_bits   () const -> uint32_t;
     [[nodiscard]] auto last_mouse_position      () const -> glm::vec2;
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::vec2;
-    [[nodiscard]] auto last_mouse_wheel_delta   () const -> glm::vec2;
 
     // Subset of erhe::toolkit::View
     void on_key         (erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed);
@@ -168,7 +166,6 @@ private:
     uint32_t   m_last_mouse_button_bits   {0u};
     glm::vec2  m_last_mouse_position      {0.0f, 0.0f};
     glm::vec2  m_last_mouse_position_delta{0.0f, 0.0f};
-    glm::vec2  m_last_mouse_wheel_delta   {0.0f, 0.0f};
 
     std::vector<Command*>                             m_commands;
     std::vector<Key_binding>                          m_key_bindings;

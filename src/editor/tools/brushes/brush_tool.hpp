@@ -34,8 +34,7 @@ class Brush_tool_preview_command
 {
 public:
     Brush_tool_preview_command();
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
 };
 
 class Brush_tool_insert_command
@@ -43,9 +42,8 @@ class Brush_tool_insert_command
 {
 public:
     Brush_tool_insert_command();
-
-    void try_ready(erhe::application::Input_arguments& input) override;
-    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready() override;
+    auto try_call () -> bool override;
 };
 
 class Editor_message;

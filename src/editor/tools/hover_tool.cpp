@@ -181,10 +181,7 @@ void Hover_tool::tool_render(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (
-        (context.scene_view == nullptr) ||
-        (context.viewport_window == nullptr)
-    )
+    if (context.scene_view == nullptr)
     {
         return;
     }
@@ -199,13 +196,48 @@ void Hover_tool::tool_render(
         return;
     }
 
+    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
+
+    if (entry.normal.has_value())
+    {
+        const auto p0 = entry.position.value();
+        const auto p1 = entry.position.value() + entry.normal.value();
+        line_renderer.set_thickness(10.0f);
+        line_renderer.add_lines(
+            get_line_color_from_slot(entry.slot),
+            {
+                {
+                    glm::vec3{p0},
+                    glm::vec3{p1}
+                }
+            }
+        );
+        if (m_show_snapped_grid_position && entry.grid)
+        {
+            const auto sp0 = entry.grid->snap_world_position(p0);
+            const auto sp1 = sp0 + entry.normal.value();
+            line_renderer.add_lines(
+                glm::vec4{1.0f, 1.0f, 0.0f, 1.0},
+                {
+                    {
+                        glm::vec3{sp0},
+                        glm::vec3{sp1}
+                    }
+                }
+            );
+        }
+    }
+
+    if (context.viewport_window == nullptr)
+    {
+        return;
+    }
+
     const auto position_in_viewport_opt = context.viewport_window->project_to_viewport(entry.position.value());
     if (!position_in_viewport_opt.has_value())
     {
         return;
     }
-
-    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
     //constexpr uint32_t red   = 0xff0000ffu;
     //constexpr uint32_t blue  = 0xffff0000u;
@@ -286,36 +318,6 @@ void Hover_tool::tool_render(
             text_color,
             text_line_3.c_str() // erhe::physics::c_motion_mode_strings[motion_mode_index]
         );
-    }
-
-    if (entry.normal.has_value())
-    {
-        const auto p0 = entry.position.value();
-        const auto p1 = entry.position.value() + entry.normal.value();
-        line_renderer.set_thickness(10.0f);
-        line_renderer.add_lines(
-            get_line_color_from_slot(entry.slot),
-            {
-                {
-                    glm::vec3{p0},
-                    glm::vec3{p1}
-                }
-            }
-        );
-        if (m_show_snapped_grid_position && entry.grid)
-        {
-            const auto sp0 = entry.grid->snap_world_position(p0);
-            const auto sp1 = sp0 + entry.normal.value();
-            line_renderer.add_lines(
-                glm::vec4{1.0f, 1.0f, 0.0f, 1.0},
-                {
-                    {
-                        glm::vec3{sp0},
-                        glm::vec3{sp1}
-                    }
-                }
-            );
-        }
     }
 }
 

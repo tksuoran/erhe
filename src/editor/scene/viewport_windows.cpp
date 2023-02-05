@@ -67,11 +67,8 @@ Open_new_viewport_window_command::Open_new_viewport_window_command()
 {
 }
 
-auto Open_new_viewport_window_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Open_new_viewport_window_command::try_call() -> bool
 {
-    static_cast<void>(input);
     g_viewport_windows->open_new_imgui_viewport_window();
     return true;
 }

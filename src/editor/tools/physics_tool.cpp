@@ -51,12 +51,8 @@ Physics_tool_drag_command::Physics_tool_drag_command()
 {
 }
 
-void Physics_tool_drag_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Physics_tool_drag_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Inactive)
     {
         log_physics->trace("PT state not inactive");
@@ -70,12 +66,8 @@ void Physics_tool_drag_command::try_ready(
     }
 }
 
-auto Physics_tool_drag_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Physics_tool_drag_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (get_command_state() == erhe::application::State::Inactive)
     {
         return false;
@@ -173,7 +165,7 @@ void Physics_tool::initialize_component()
 
     auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_drag_command);
-    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)

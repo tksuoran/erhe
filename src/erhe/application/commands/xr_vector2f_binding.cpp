@@ -15,13 +15,9 @@ Xr_vector2f_binding::Xr_vector2f_binding(
 {
 }
 
-Xr_vector2f_binding::Xr_vector2f_binding()
-{
-}
+Xr_vector2f_binding::Xr_vector2f_binding() = default;
 
-Xr_vector2f_binding::~Xr_vector2f_binding() noexcept
-{
-}
+Xr_vector2f_binding::~Xr_vector2f_binding() noexcept = default;
 
 [[nodiscard]] auto Xr_vector2f_binding::get_type() const -> Type
 {
@@ -38,7 +34,7 @@ auto Xr_vector2f_binding::on_value_changed(
         return false;
     }
 
-    command->try_ready(input);
+    command->try_ready();
     const bool consumed = command->try_call(input);
     if (consumed)
     {

@@ -22,10 +22,8 @@ Log_window_toggle_pause_command::Log_window_toggle_pause_command()
 {
 }
 
-auto Log_window_toggle_pause_command::try_call(Input_arguments& input) -> bool
+auto Log_window_toggle_pause_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     g_log_window->toggle_pause();
     return true;
 }

@@ -69,12 +69,8 @@ Brush_tool_preview_command::Brush_tool_preview_command()
 {
 }
 
-auto Brush_tool_preview_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Brush_tool_preview_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (
         (get_command_state() != erhe::application::State::Active) ||
         !g_brush_tool->is_enabled()
@@ -91,24 +87,16 @@ Brush_tool_insert_command::Brush_tool_insert_command()
 {
 }
 
-void Brush_tool_insert_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Brush_tool_insert_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (g_brush_tool->try_insert_ready())
     {
         set_ready();
     }
 }
 
-auto Brush_tool_insert_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Brush_tool_insert_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Ready)
     {
         return false;
@@ -170,14 +158,15 @@ void Brush_tool::initialize_component()
     commands.register_command(&m_preview_command);
     commands.register_command(&m_insert_command);
     commands.bind_command_to_update      (&m_preview_command);
-    commands.bind_command_to_mouse_button(&m_insert_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_button(&m_insert_command, erhe::toolkit::Mouse_button_right, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)
     {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.trigger_click);
+        commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.trigger_click, erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.a_click,       erhe::application::Button_trigger::Button_pressed);
     }
 #endif
 

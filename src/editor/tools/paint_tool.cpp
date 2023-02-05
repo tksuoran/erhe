@@ -53,12 +53,8 @@ Paint_vertex_command::Paint_vertex_command()
 {
 }
 
-void Paint_vertex_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Paint_vertex_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (!g_paint_tool->is_enabled())
     {
         return;
@@ -70,12 +66,8 @@ void Paint_vertex_command::try_ready(
     }
 }
 
-auto Paint_vertex_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Paint_vertex_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (!g_paint_tool->is_enabled())
     {
         return false;
@@ -171,14 +163,13 @@ void Paint_tool::initialize_component()
 
     auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_paint_vertex_command);
-    commands.bind_command_to_mouse_button(&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
-    commands.bind_command_to_mouse_drag (&m_paint_vertex_command, erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_drag(&m_paint_vertex_command, erhe::toolkit::Mouse_button_left, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)
     {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click);
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click, erhe::application::Button_trigger::Any);
         commands.bind_command_to_update           (&m_drag_redirect_update_command);
     }
 #endif
@@ -246,6 +237,18 @@ void Paint_tool::initialize_component()
     m_paint_vertex_command.set_host(this);
 
     g_paint_tool = this;
+}
+
+void Paint_tool::handle_priority_update(int old_priority, int new_priority)
+{
+    if (new_priority < old_priority)
+    {
+        disable();
+    }
+    if (new_priority > old_priority)
+    {
+        enable();
+    }
 }
 
 auto Paint_tool::try_ready() -> bool

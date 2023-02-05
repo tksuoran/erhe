@@ -59,16 +59,20 @@ Command::~Command() noexcept
 {
 }
 
-auto Command::try_call(Input_arguments& input) -> bool
+void Command::try_ready()
 {
-    static_cast<void>(input);
+    set_ready();
+}
+
+auto Command::try_call() -> bool
+{
     return false;
 }
 
-void Command::try_ready(Input_arguments& input)
+auto Command::try_call(Input_arguments& input) -> bool
 {
     static_cast<void>(input);
-    set_ready();
+    return try_call();
 }
 
 void Command::on_inactive()
@@ -101,7 +105,7 @@ void Command::set_inactive()
     {
         return;
     }
-    log_command_state_transition->info(
+    log_command_state_transition->trace(
         "{} -> inactive",
         get_name()
     );
@@ -117,7 +121,7 @@ void Command::disable()
         return;
     }
 
-    log_command_state_transition->info("{} -> disabled", get_name());
+    log_command_state_transition->trace("{} -> disabled", get_name());
     if (m_state == State::Active)
     {
         set_inactive();
@@ -234,19 +238,13 @@ Drag_enable_command::Drag_enable_command(Command& update_command)
     set_description(Command::get_name());
 }
 
-void Drag_enable_command::try_ready(Input_arguments& input)
-{
-    static_cast<void>(input);
-    set_active();
-}
-
 auto Drag_enable_command::try_call(Input_arguments& input) -> bool
 {
-    const bool enable = input.button_bits != 0;
+    const bool enable = input.button_pressed;
     this->Command_host::set_enabled(enable);
     if (enable) // TODO This assymetry does not look great
     {
-        m_update_command.try_ready(input);
+        m_update_command.try_ready();
     }
     else
     {
@@ -279,22 +277,12 @@ Drag_enable_float_command::Drag_enable_float_command(
     set_description(Command::get_name());
 }
 
-void Drag_enable_float_command::try_ready(Input_arguments& input)
-{
-    static_cast<void>(input);
-    set_active();
-}
-
 auto Drag_enable_float_command::try_call(Input_arguments& input) -> bool
 {
     static_cast<void>(input);
 
-    const bool enable =
-        !Command_host::is_enabled() &&
-        (input.vec2_absolute_value.x >= m_min_to_enable);
-    const bool disable =
-        Command_host::is_enabled() &&
-        (input.vec2_absolute_value.x <= m_max_to_disable);
+    const bool enable  = !Command_host::is_enabled() && (input.float_value >= m_min_to_enable);
+    const bool disable =  Command_host::is_enabled() && (input.float_value <= m_max_to_disable);
 
     if (!enable && !disable)
     {
@@ -306,7 +294,7 @@ auto Drag_enable_float_command::try_call(Input_arguments& input) -> bool
     this->Command_host::set_enabled(enable);
     if (enable) // TODO This assymetry does not look great
     {
-        m_update_command.try_ready(input);
+        m_update_command.try_ready();
     }
     else
     {
@@ -329,14 +317,14 @@ Redirect_command::Redirect_command(Command& target_command)
 {
 }
 
-void Redirect_command::try_ready(Input_arguments& input)
+void Redirect_command::try_ready()
 {
-    m_target_command.try_ready(input);
+    m_target_command.try_ready();
 }
 
-auto Redirect_command::try_call(Input_arguments& input) -> bool
+auto Redirect_command::try_call() -> bool
 {
-    return m_target_command.try_call(input);
+    return m_target_command.try_call();
 }
 
 //
@@ -349,18 +337,13 @@ Drag_float_command::Drag_float_command(Command& target_command)
 {
 }
 
-void Drag_float_command::try_ready(Input_arguments& input)
-{
-    static_cast<void>(input);
-}
-
-auto Drag_float_command::try_call(Input_arguments& input) -> bool
+auto Drag_float_command::try_call() -> bool
 {
     if (!is_enabled())
     {
         return false;
     }
-    return m_target_command.try_call(input);
+    return m_target_command.try_call();
 }
 
 //
@@ -373,9 +356,13 @@ Drag_vector2f_command::Drag_vector2f_command(Command& target_command)
 {
 }
 
-void Drag_vector2f_command::try_ready(Input_arguments& input)
+auto Drag_vector2f_command::try_call() -> bool
 {
-    static_cast<void>(input);
+    if (!is_enabled())
+    {
+        return false;
+    }
+    return m_target_command.try_call();
 }
 
 auto Drag_vector2f_command::try_call(Input_arguments& input) -> bool
@@ -398,18 +385,13 @@ Drag_pose_command::Drag_pose_command(Command& target_command
 {
 }
 
-void Drag_pose_command::try_ready(Input_arguments& input)
-{
-    static_cast<void>(input);
-}
-
-auto Drag_pose_command::try_call(Input_arguments& input) -> bool
+auto Drag_pose_command::try_call() -> bool
 {
     if (!is_enabled())
     {
         return false;
     }
-    return m_target_command.try_call(input);
+    return m_target_command.try_call();
 }
 
 //
@@ -428,18 +410,17 @@ void Xr_float_click_command::bind(erhe::xr::Xr_action_float* xr_action_for_value
     m_xr_action_for_value = xr_action_for_value;
 }
 
-void Xr_float_click_command::try_ready(Input_arguments& input)
+void Xr_float_click_command::try_ready()
 {
-    Input_arguments patched_input = input;
-    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState;
-    m_target_command.try_ready(patched_input);
+    m_target_command.try_ready();
 }
 
-auto Xr_float_click_command::try_call(Input_arguments& input) -> bool
+auto Xr_float_click_command::try_call() -> bool
 {
-    Input_arguments patched_input = input;
-    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState;
-    return m_target_command.try_call(patched_input);
+    Input_arguments input{
+        .float_value = m_xr_action_for_value->state.currentState
+    };
+    return m_target_command.try_call(input);
 }
 
 //
@@ -457,20 +438,23 @@ void Xr_vector2f_click_command::bind(erhe::xr::Xr_action_vector2f* xr_action_for
     m_xr_action_for_value = xr_action_for_value;
 }
 
-void Xr_vector2f_click_command::try_ready(Input_arguments& input)
+void Xr_vector2f_click_command::try_ready()
 {
-    Input_arguments patched_input = input;
-    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState.x;
-    patched_input.vec2_absolute_value.y = m_xr_action_for_value->state.currentState.y;
-    m_target_command.try_ready(patched_input);
+    m_target_command.try_ready();
 }
 
-auto Xr_vector2f_click_command::try_call(Input_arguments& input) -> bool
+auto Xr_vector2f_click_command::try_call() -> bool
 {
-    Input_arguments patched_input = input;
-    patched_input.vec2_absolute_value.x = m_xr_action_for_value->state.currentState.x;
-    patched_input.vec2_absolute_value.y = m_xr_action_for_value->state.currentState.y;
-    return m_target_command.try_call(patched_input);
+    Input_arguments input
+    {
+        .vector2 = {
+            .absolute_value = glm::vec2{
+                m_xr_action_for_value->state.currentState.x,
+                m_xr_action_for_value->state.currentState.y
+            }
+        }
+    };
+    return m_target_command.try_call(input);
 }
 
 //
@@ -488,21 +472,22 @@ void Xr_pose_click_command::bind(erhe::xr::Xr_action_pose* xr_action_for_value)
     m_xr_action_for_value = xr_action_for_value;
 }
 
-void Xr_pose_click_command::try_ready(Input_arguments& input)
+void Xr_pose_click_command::try_ready()
 {
-    Input_arguments patched_input = input;
-    patched_input.pose_orientation = m_xr_action_for_value->orientation;
-    patched_input.pose_position    = m_xr_action_for_value->position;
-    m_target_command.try_ready(patched_input);
+    m_target_command.try_ready();
 }
 
 
-auto Xr_pose_click_command::try_call(Input_arguments& input) -> bool
+auto Xr_pose_click_command::try_call() -> bool
 {
-    Input_arguments patched_input = input;
-    patched_input.pose_orientation = m_xr_action_for_value->orientation;
-    patched_input.pose_position    = m_xr_action_for_value->position;
-    return m_target_command.try_call(patched_input);
+    Input_arguments input
+    {
+        .pose = {
+            .orientation = m_xr_action_for_value->orientation,
+            .position    = m_xr_action_for_value->position
+        }
+    };
+    return m_target_command.try_call(input);
 }
 #endif
 

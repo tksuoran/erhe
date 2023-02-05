@@ -38,12 +38,8 @@ Material_paint_command::Material_paint_command()
 {
 }
 
-void Material_paint_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Material_paint_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Inactive)
     {
         return;
@@ -55,11 +51,8 @@ void Material_paint_command::try_ready(
     }
 }
 
-auto Material_paint_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Material_paint_command::try_call() -> bool
 {
-    static_cast<void>(input);
     if (get_command_state() == erhe::application::State::Inactive)
     {
         return false;
@@ -76,12 +69,8 @@ auto Material_paint_command::try_call(
     return get_command_state() == erhe::application::State::Active;
 }
 
-void Material_pick_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Material_pick_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Inactive)
     {
         return;
@@ -98,12 +87,8 @@ Material_pick_command::Material_pick_command()
 {
 }
 
-auto Material_pick_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Material_pick_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (get_command_state() == erhe::application::State::Inactive)
     {
         return false;
@@ -167,15 +152,15 @@ void Material_paint_tool::initialize_component()
     auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_paint_command);
     commands.register_command(&m_pick_command);
-    commands.bind_command_to_mouse_button(&m_paint_command, erhe::toolkit::Mouse_button_right);
-    commands.bind_command_to_mouse_button(&m_pick_command,  erhe::toolkit::Mouse_button_right);
+    commands.bind_command_to_mouse_button(&m_paint_command, erhe::toolkit::Mouse_button_left, false);
+    commands.bind_command_to_mouse_button(&m_pick_command,  erhe::toolkit::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)
     {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.trigger_click);
-        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.a_click);
+        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.trigger_click, erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.a_click, erhe::application::Button_trigger::Button_pressed);
     }
 #endif
 
@@ -276,6 +261,18 @@ void Material_paint_tool::set_active_command(const int command)
         {
             break;
         }
+    }
+}
+
+void Material_paint_tool::handle_priority_update(int old_priority, int new_priority)
+{
+    if (new_priority < old_priority)
+    {
+        disable();
+    }
+    if (new_priority > old_priority)
+    {
+        enable();
     }
 }
 

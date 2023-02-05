@@ -21,30 +21,33 @@ using erhe::scene::Item_flags;
 
 #pragma region Command
 
-auto Create_new_camera_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+Create_new_camera_command::Create_new_camera_command()
+    : Command{"scene.create_new_camera"}
 {
-    static_cast<void>(input);
+}
 
+auto Create_new_camera_command::try_call() -> bool
+{
     return g_scene_commands->create_new_camera().operator bool();
 }
 
-auto Create_new_empty_node_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+Create_new_empty_node_command::Create_new_empty_node_command()
+    : Command{"scene.create_new_empty_node"}
 {
-    static_cast<void>(input);
+}
 
+auto Create_new_empty_node_command::try_call() -> bool
+{
     return g_scene_commands->create_new_empty_node().operator bool();
 }
 
-auto Create_new_light_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+Create_new_light_command::Create_new_light_command()
+    : Command{"scene.create_new_light"}
 {
-    static_cast<void>(input);
+}
 
+auto Create_new_light_command::try_call() -> bool
+{
     return g_scene_commands->create_new_light().operator bool();
 }
 #pragma endregion Command

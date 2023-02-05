@@ -25,17 +25,8 @@ class Map_scroll_command final
     : public erhe::application::Command
 {
 public:
-    Map_scroll_command(
-        const float dx,
-        const float dy
-    )
-        : Command {"Map.scroll"}
-        , m_offset{dx, dy}
-    {
-    }
-    ~Map_scroll_command() noexcept final {}
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    Map_scroll_command(float dx, float dy);
+    auto try_call() -> bool override;
 
 private:
     glm::vec2 m_offset;
@@ -45,12 +36,7 @@ class Map_free_zoom_command final
     : public erhe::application::Command
 {
 public:
-    explicit Map_free_zoom_command()
-        : Command{"Map.hover"}
-    {
-    }
-    ~Map_free_zoom_command() noexcept final {}
-
+    Map_free_zoom_command();
     auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
@@ -58,27 +44,17 @@ class Map_mouse_scroll_command final
     : public erhe::application::Command
 {
 public:
-    explicit Map_mouse_scroll_command()
-        : Command{"Map.mouse_scroll"}
-    {
-    }
-    ~Map_mouse_scroll_command() noexcept final {}
-
+    Map_mouse_scroll_command();
+    void try_ready() override;
     auto try_call (erhe::application::Input_arguments& input) -> bool override;
-    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Map_zoom_command
     : public erhe::application::Command
 {
 public:
-    Map_zoom_command(const float scale)
-        : Command{"Map.scroll"}
-        , m_scale{scale}
-    {
-    }
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    explicit Map_zoom_command(float scale);
+    auto try_call() -> bool override;
 
 private:
     float m_scale{1.0f};
@@ -88,12 +64,8 @@ class Map_grid_cycle_command
     : public erhe::application::Command
 {
 public:
-    Map_grid_cycle_command()
-        : Command{"Map.grid_cycle"}
-    {
-    }
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    Map_grid_cycle_command();
+    auto try_call() -> bool override;
 };
 
 class Map_window

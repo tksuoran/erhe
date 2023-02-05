@@ -60,6 +60,13 @@ void Map_tool_window::imgui()
         g_map_generator->show();
     }
 
+    const auto hover_pos_opt = g_map_editor->get_hover_tile_position();
+    if (hover_pos_opt.has_value())
+    {
+        const auto hover_pos = hover_pos_opt.value();
+        ImGui::Text("Hover pos = %d, %d", hover_pos.x, hover_pos.y);
+    }
+
 #if 0
     ImGui::Combo("Grid", &m_grid, c_grid_mode_strings, IM_ARRAYSIZE(c_grid_mode_strings));
     //ImGui::Text("Zoom: %.2f", m_zoom);

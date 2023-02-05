@@ -11,7 +11,7 @@ class Reverse
     : public Geometry_operation
 {
 public:
-    explicit Reverse(Geometry& source, Geometry& destination);
+    Reverse(Geometry& source, Geometry& destination);
 };
 
 [[nodiscard]] auto reverse(

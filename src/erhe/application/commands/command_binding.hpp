@@ -16,7 +16,7 @@ public:
         None         =  0,
         Key          =  1,
         Mouse        =  2,
-        Mouse_click  =  3,
+        Mouse_button =  3,
         Mouse_drag   =  4,
         Mouse_motion =  5,
         Mouse_wheel  =  6,
@@ -32,7 +32,7 @@ public:
         "None",
         "Key",
         "Mouse",
-        "Mouse_click",
+        "Mouse_button",
         "Mouse_drag",
         "Mouse_motion",
         "Mouse_wheel",
@@ -44,23 +44,19 @@ public:
     };
 
     explicit Command_binding(Command* const command);
+    Command_binding();
     virtual ~Command_binding() noexcept;
 
-    Command_binding();
-    Command_binding(const Command_binding&) = delete;
-    Command_binding(Command_binding&& other) noexcept;
-    auto operator=(const Command_binding&) -> Command_binding& = delete;
-    auto operator=(Command_binding&& other) noexcept -> Command_binding&;
 
     [[nodiscard]] virtual auto get_type                    () const -> Type { return Type::None; }
-    [[nodiscard]] auto         get_id                      () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
+    //[[nodiscard]] auto         get_id                      () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
     [[nodiscard]] auto         get_command                 () const -> Command*;
     [[nodiscard]] auto         is_command_host_enabled     () const -> bool;
     [[nodiscard]] auto         get_command_host_description() const -> const char*;
 
 private:
     Command*                                  m_command{nullptr};
-    erhe::toolkit::Unique_id<Command_binding> m_id;
+    //erhe::toolkit::Unique_id<Command_binding> m_id;
 };
 
 } // namespace erhe::application

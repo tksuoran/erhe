@@ -19,7 +19,7 @@ class Xr_action_pose;
 
 namespace erhe::application {
 
-class Input_arguments;
+union Input_arguments;
 
 class Command_host
 {
@@ -51,7 +51,8 @@ public:
     Command& operator=(Command&&) = delete;
 
     // Virtual interface
-    virtual void try_ready         (Input_arguments& input);
+    virtual void try_ready         ();
+    virtual auto try_call          () -> bool;
     virtual auto try_call          (Input_arguments& input) -> bool;
     virtual auto get_priority      () const -> int;
     virtual auto is_enabled        () const -> bool;
@@ -82,7 +83,7 @@ class Helper_command
     : public Command
 {
 public:
-    explicit Helper_command(Command& target_command, const std::string name);
+    Helper_command(Command& target_command, const std::string name);
     auto get_priority      () const -> int override;
     auto is_enabled        () const -> bool override;
     auto get_command_state () const -> State override;
@@ -98,9 +99,7 @@ class Drag_enable_command
 {
 public:
     explicit Drag_enable_command(Command& update_command);
-
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    auto try_call(Input_arguments& input) -> bool override;
 
 private:
     Command& m_update_command;
@@ -111,14 +110,13 @@ class Drag_enable_float_command
     , public Command_host
 {
 public:
-    explicit Drag_enable_float_command(
+    Drag_enable_float_command(
         Command& update_command,
         float    min_to_enable,
         float    max_to_disable
     );
 
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    auto try_call(Input_arguments& input) -> bool override;
 
 private:
     Command& m_update_command;
@@ -132,9 +130,8 @@ class Redirect_command
 {
 public:
     explicit Redirect_command(Command& target_command);
-
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    void try_ready() override;
+    auto try_call () -> bool override;
 };
 
 class Drag_float_command
@@ -142,9 +139,7 @@ class Drag_float_command
 {
 public:
     explicit Drag_float_command(Command& target_command);
-
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    auto try_call () -> bool override;
 };
 
 class Drag_vector2f_command
@@ -152,9 +147,8 @@ class Drag_vector2f_command
 {
 public:
     explicit Drag_vector2f_command(Command& target_command);
-
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
+    auto try_call(Input_arguments& input) -> bool override;
 };
 
 class Drag_pose_command
@@ -162,9 +156,7 @@ class Drag_pose_command
 {
 public:
     explicit Drag_pose_command(Command& target_command);
-
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
 };
 
 //
@@ -178,8 +170,8 @@ public:
 
     void bind(erhe::xr::Xr_action_float* xr_action_for_value);
 
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    void try_ready() override;
+    auto try_call () -> bool override;
 
 private:
     erhe::xr::Xr_action_float* m_xr_action_for_value{nullptr};
@@ -193,8 +185,8 @@ public:
 
     void bind(erhe::xr::Xr_action_vector2f* xr_action_for_value);
 
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    void try_ready() override;
+    auto try_call () -> bool override;
 
 private:
     erhe::xr::Xr_action_vector2f* m_xr_action_for_value{nullptr};
@@ -208,8 +200,8 @@ public:
 
     void bind(erhe::xr::Xr_action_pose* xr_action_for_value);
 
-    void try_ready(Input_arguments& input) override;
-    auto try_call (Input_arguments& input) -> bool override;
+    void try_ready() override;
+    auto try_call () -> bool override;
 
 private:
     erhe::xr::Xr_action_pose* m_xr_action_for_value{nullptr};

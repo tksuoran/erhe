@@ -32,7 +32,7 @@ class Imgui_viewport;
 class Imgui_window
 {
 public:
-    explicit Imgui_window(const std::string_view title);
+    explicit Imgui_window(std::string_view title);
     virtual ~Imgui_window() noexcept;
 
     [[nodiscard]] auto is_visible     () const -> bool;

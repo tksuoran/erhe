@@ -44,12 +44,8 @@ Hud_drag_command::Hud_drag_command()
 {
 }
 
-void Hud_drag_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Hud_drag_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Inactive)
     {
         return;
@@ -61,12 +57,8 @@ void Hud_drag_command::try_ready(
     }
 }
 
-auto Hud_drag_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Hud_drag_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Active)
     {
         return false;
@@ -93,14 +85,8 @@ Toggle_hud_visibility_command::Toggle_hud_visibility_command()
 {
 }
 
-auto Toggle_hud_visibility_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Toggle_hud_visibility_command::try_call() -> bool
 {
-    if (input.button_bits == 0)
-    {
-        return true; // consume anyway
-    }
     g_hud->toggle_visibility();
     return true;
 }
@@ -190,11 +176,11 @@ void Hud::initialize_component()
     if (headset != nullptr)
     {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.menu_click);
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.b_click);
+        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.menu_click, erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.b_click,    erhe::application::Button_trigger::Button_pressed);
         commands.bind_command_to_xr_float_action  (&m_drag_float_enable_command, xr_right.squeeze_value);
         commands.bind_command_to_update           (&m_drag_float_redirect_update_command);
-        commands.bind_command_to_xr_boolean_action(&m_drag_bool_enable_command, xr_right.squeeze_click);
+        commands.bind_command_to_xr_boolean_action(&m_drag_bool_enable_command, xr_right.squeeze_click, erhe::application::Button_trigger::Any);
         commands.bind_command_to_update           (&m_drag_bool_redirect_update_command);
     }
     m_drag_command.set_host(this);

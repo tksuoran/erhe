@@ -11,7 +11,7 @@ class Normalize
     : public Geometry_operation
 {
 public:
-    explicit Normalize(Geometry& source, Geometry& destination);
+    Normalize(Geometry& source, Geometry& destination);
 };
 
 [[nodiscard]] auto normalize(

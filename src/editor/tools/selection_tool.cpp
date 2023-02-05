@@ -201,33 +201,20 @@ Selection_tool_select_command::Selection_tool_select_command()
 {
 }
 
-void Selection_tool_select_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Selection_tool_select_command::try_ready()
 {
-    static_cast<void>(input);
-
     if (g_selection_tool->on_select_try_ready())
     {
         set_ready();
     }
 }
 
-auto Selection_tool_select_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Selection_tool_select_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (get_command_state() != erhe::application::State::Ready)
     {
         log_selection->trace("selection tool not in ready state");
         return false;
-    }
-
-    if (input.button_bits == 0)
-    {
-        return true; // consume anyway
     }
 
     const bool consumed = g_selection_tool->on_select();
@@ -240,12 +227,8 @@ Selection_tool_delete_command::Selection_tool_delete_command()
 {
 }
 
-auto Selection_tool_delete_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Selection_tool_delete_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     return g_selection_tool->delete_selection();
 }
 
@@ -304,15 +287,15 @@ void Selection_tool::initialize_component()
     auto& commands = *erhe::application::g_commands;
     commands.register_command            (&m_select_command);
     commands.register_command            (&m_delete_command);
-    commands.bind_command_to_mouse_button(&m_select_command, erhe::toolkit::Mouse_button_left);
-    commands.bind_command_to_key         (&m_delete_command, erhe::toolkit::Key_delete, true);
+    commands.bind_command_to_mouse_button(&m_select_command, erhe::toolkit::Mouse_button_left, false);
+    commands.bind_command_to_key         (&m_delete_command, erhe::toolkit::Key_delete,        true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)
     {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_select_command, xr_right.trigger_click);
-        commands.bind_command_to_xr_boolean_action(&m_select_command, xr_right.a_click);
+        commands.bind_command_to_xr_boolean_action(&m_select_command, xr_right.trigger_click, erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_select_command, xr_right.a_click,       erhe::application::Button_trigger::Button_pressed);
     }
 #endif
 

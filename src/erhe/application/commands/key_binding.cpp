@@ -18,30 +18,9 @@ Key_binding::Key_binding(
 {
 }
 
-Key_binding::Key_binding()
-{
-}
+Key_binding::Key_binding() = default;
 
-Key_binding::~Key_binding() noexcept
-{
-}
-
-Key_binding::Key_binding(Key_binding&& other) noexcept
-    : Command_binding{std::move(other)}
-    , m_code         {other.m_code}
-    , m_pressed      {other.m_pressed}
-    , m_modifier_mask{other.m_modifier_mask}
-{
-}
-
-auto Key_binding::operator=(Key_binding&& other) noexcept -> Key_binding&
-{
-    Command_binding::operator=(std::move(other));
-    m_code          = other.m_code;
-    m_pressed       = other.m_pressed;
-    m_modifier_mask = other.m_modifier_mask;
-    return *this;
-}
+Key_binding::~Key_binding() noexcept = default;
 
 [[nodiscard]] auto Key_binding::get_keycode() const -> erhe::toolkit::Keycode
 {

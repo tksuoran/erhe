@@ -16,7 +16,7 @@ namespace erhe::geometry::operation
 class Geometry_operation
 {
 public:
-    explicit Geometry_operation(
+    Geometry_operation(
         Geometry& source,
         Geometry& destination
     )

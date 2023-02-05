@@ -25,9 +25,9 @@ class Paint_vertex_command
     : public erhe::application::Command
 {
 public:
-    explicit Paint_vertex_command();
-    auto try_call (erhe::application::Input_arguments& input) -> bool override;
-    void try_ready(erhe::application::Input_arguments& input) override;
+    Paint_vertex_command();
+    void try_ready() override;
+    auto try_call () -> bool override;
 };
 
 enum class Paint_mode
@@ -72,6 +72,9 @@ public:
 
     // Implements Imgui_window
     void imgui() override;
+
+    // Implements Tool
+    void handle_priority_update(int old_priority, int new_priority) override;
 
     auto try_ready() -> bool;
     void paint();

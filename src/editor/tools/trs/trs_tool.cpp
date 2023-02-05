@@ -67,25 +67,17 @@ Trs_tool_drag_command::Trs_tool_drag_command()
 {
 }
 
-void Trs_tool_drag_command::try_ready(
-    erhe::application::Input_arguments& input
-)
+void Trs_tool_drag_command::try_ready()
 {
-    if (g_trs_tool->on_drag_ready(input))
+    if (g_trs_tool->on_drag_ready())
     {
         set_ready();
     }
 }
 
-auto Trs_tool_drag_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Trs_tool_drag_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
-    if (
-        (get_command_state() == erhe::application::State::Ready)
-    )
+    if (get_command_state() == erhe::application::State::Ready)
     {
         set_active();
     }
@@ -176,15 +168,15 @@ void Trs_tool::initialize_component()
 
     auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_drag_command);
-    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
+    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)
     {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click);
-        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.a_click);
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click, erhe::application::Button_trigger::Any);
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.a_click,       erhe::application::Button_trigger::Any);
         commands.bind_command_to_update           (&m_drag_redirect_update_command);
     }
 #endif
@@ -463,10 +455,8 @@ auto Trs_tool::on_drag() -> bool
     }
 }
 
-auto Trs_tool::on_drag_ready(erhe::application::Input_arguments& input) -> bool
+auto Trs_tool::on_drag_ready() -> bool
 {
-    static_cast<void>(input);
-
     log_trs_tool->trace("TRS on_drag_ready");
 
     m_active_handle = m_hover_handle;

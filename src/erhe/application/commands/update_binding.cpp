@@ -8,26 +8,11 @@ Update_binding::Update_binding(Command* const command)
 {
 }
 
-Update_binding::Update_binding()
-{
-}
+Update_binding::Update_binding() = default;
 
-Update_binding::~Update_binding() noexcept
-{
-}
+Update_binding::~Update_binding() noexcept = default;
 
-Update_binding::Update_binding(Update_binding&& other) noexcept
-    : Command_binding{std::move(other)}
-{
-}
-
-auto Update_binding::operator=(Update_binding&& other) noexcept -> Update_binding&
-{
-    Command_binding::operator=(std::move(other));
-    return *this;
-}
-
-auto Update_binding::on_update(Input_arguments& input) -> bool
+auto Update_binding::on_update() -> bool
 {
     auto* const command = get_command();
     if (command->get_command_state() == State::Disabled)
@@ -42,7 +27,7 @@ auto Update_binding::on_update(Input_arguments& input) -> bool
     {
         return false;
     }
-    const bool consumed = command->try_call(input);
+    const bool consumed = command->try_call();
     static_cast<void>(consumed);
     return false;
 }

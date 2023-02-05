@@ -26,36 +26,24 @@ class Create_new_camera_command
     : public erhe::application::Command
 {
 public:
-    explicit Create_new_camera_command()
-        : Command{"scene.create_new_camera"}
-    {
-    }
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    Create_new_camera_command();
+    auto try_call() -> bool override;
 };
 
 class Create_new_empty_node_command
     : public erhe::application::Command
 {
 public:
-    explicit Create_new_empty_node_command()
-        : Command{"scene.create_new_empty_node"}
-    {
-    }
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    Create_new_empty_node_command();
+    auto try_call() -> bool override;
 };
 
 class Create_new_light_command
     : public erhe::application::Command
 {
 public:
-    explicit Create_new_light_command()
-        : Command{"scene.create_new_light"}
-    {
-    }
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    Create_new_light_command();
+    auto try_call() -> bool override;
 };
 
 class Scene_commands

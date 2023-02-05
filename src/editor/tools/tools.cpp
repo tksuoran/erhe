@@ -68,6 +68,15 @@ void Tools::initialize_component()
     g_tools = this;
 }
 
+void Tools::post_initialize()
+{
+    for (const auto& tool : m_tools)
+    {
+        const auto priority = tool->get_priority();
+        tool->handle_priority_update(priority + 1, priority);
+    }
+}
+
 [[nodiscard]] auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
 {
     return m_scene_root;
@@ -109,7 +118,7 @@ void Tools::set_priority_tool(Tool* priority_tool)
 
     if (m_priority_tool != nullptr)
     {
-        log_tools->trace("de-prioritizing tool {}", m_priority_tool->get_description());
+        log_tools->info("de-prioritizing tool {}", m_priority_tool->get_description());
         m_priority_tool->set_priority_boost(0);
     }
 
@@ -117,12 +126,12 @@ void Tools::set_priority_tool(Tool* priority_tool)
 
     if (m_priority_tool != nullptr)
     {
-        log_tools->trace("prioritizing tool {}", m_priority_tool->get_description());
+        log_tools->info("prioritizing tool {}", m_priority_tool->get_description());
         m_priority_tool->set_priority_boost(100);
     }
     else
     {
-        log_tools->trace("active tool reset");
+        log_tools->info("active tool reset");
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

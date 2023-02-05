@@ -8,7 +8,7 @@
 
 namespace erhe::application {
 
-class Input_arguments;
+union Input_arguments;
 
 // Key pressesed or released
 class Key_binding
@@ -21,13 +21,8 @@ public:
         const bool                    pressed,
         const std::optional<uint32_t> modifier_mask
     );
-    ~Key_binding() noexcept override;
-
     Key_binding();
-    Key_binding(const Key_binding&) = delete;
-    Key_binding(Key_binding&& other) noexcept;
-    auto operator=(const Key_binding&) -> Key_binding& = delete;
-    auto operator=(Key_binding&& other) noexcept -> Key_binding&;
+    ~Key_binding() noexcept override;
 
     auto on_key(
         Input_arguments&             input,

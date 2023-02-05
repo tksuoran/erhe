@@ -15,21 +15,9 @@ Xr_float_binding::Xr_float_binding(
 {
 }
 
-Xr_float_binding::Xr_float_binding()
-{
-}
+Xr_float_binding::Xr_float_binding() = default;
 
-Xr_float_binding::~Xr_float_binding() noexcept
-{
-}
-
-Xr_float_binding::Xr_float_binding(
-    Xr_float_binding&& other
-) noexcept = default;
-
-auto Xr_float_binding::operator=(
-    Xr_float_binding&& other
-) noexcept -> Xr_float_binding& = default;
+Xr_float_binding::~Xr_float_binding() noexcept = default;
 
 [[nodiscard]] auto Xr_float_binding::get_type() const -> Type
 {
@@ -48,7 +36,7 @@ auto Xr_float_binding::on_value_changed(
     }
 
     bool consumed{false};
-    command->try_ready(input);
+    command->try_ready();
     consumed = command->try_call(input);
     log_input_event_consumed->trace(
         "{} consumed OpenXR float input event",

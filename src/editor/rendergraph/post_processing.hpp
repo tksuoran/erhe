@@ -160,7 +160,7 @@ private:
     class Offsets
     {
     public:
-        explicit Offsets(
+        Offsets(
             erhe::graphics::Shader_resource& block,
             std::size_t                      source_texture_count
         );

@@ -24,7 +24,7 @@ class Parallel_task_queue
     : public ITask_queue
 {
 public:
-    explicit Parallel_task_queue(const std::string_view name, std::size_t thread_count);
+    Parallel_task_queue(const std::string_view name, std::size_t thread_count);
 
     void enqueue(std::function<void()>&& func) override;
     void wait   () override;

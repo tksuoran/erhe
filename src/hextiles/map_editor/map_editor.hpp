@@ -19,12 +19,7 @@ class Map_hover_command final
     : public erhe::application::Command
 {
 public:
-    explicit Map_hover_command()
-        : Command{"Map_editor.hover"}
-    {
-    }
-    ~Map_hover_command() noexcept final {}
-
+    Map_hover_command();
     auto try_call(erhe::application::Input_arguments& input) -> bool override;
 };
 
@@ -32,18 +27,15 @@ class Map_primary_brush_command final
     : public erhe::application::Command
 {
 public:
-    explicit Map_primary_brush_command()
-        : Command{"Map_editor.primary_brush"}
-    {
-    }
-    ~Map_primary_brush_command() noexcept final {}
-
+    Map_primary_brush_command();
+    void try_ready() override;
+    auto try_call () -> bool override;
     auto try_call (erhe::application::Input_arguments& input) -> bool override;
-    void try_ready(erhe::application::Input_arguments& input) override;
 };
 
 class Map_editor
-    : public erhe::components::Component
+    : public erhe::application::Command_host
+    , public erhe::components::Component
 {
 public:
     static constexpr const char* c_title{"Map Editor"};
@@ -55,16 +47,19 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void initialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Public API
     void render         ();
     void terrain_palette();
-    [[nodiscard]] auto get_map() -> Map*;
+    [[nodiscard]] auto get_map                () -> Map*;
+    [[nodiscard]] auto get_hover_tile_position() const -> std::optional<Tile_coordinate>;
 
     // Commands
     void hover        (glm::vec2 window_position);
-    void primary_brush(glm::vec2 mouse_position);
+    void primary_brush();
 
 private:
     // Commands

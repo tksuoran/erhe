@@ -8,34 +8,20 @@ Mouse_binding::Mouse_binding(Command* const command)
 {
 }
 
-Mouse_binding::Mouse_binding()
-{
-}
+Mouse_binding::Mouse_binding() = default;
 
-Mouse_binding::~Mouse_binding() noexcept
-{
-}
+Mouse_binding::~Mouse_binding() noexcept = default;
 
-Mouse_binding::Mouse_binding(Mouse_binding&& other) noexcept
-    : Command_binding{std::move(other)}
+auto Mouse_binding::get_button() const -> erhe::toolkit::Mouse_button
 {
-}
-
-auto Mouse_binding::operator=(Mouse_binding&& other) noexcept -> Mouse_binding&
-{
-    Command_binding::operator=(std::move(other));
-    return *this;
+    return erhe::toolkit::Mouse_button_none;
 }
 
 auto Mouse_binding::on_button(
-    Input_arguments&                  input,
-    const erhe::toolkit::Mouse_button button,
-    const bool                        pressed
+    Input_arguments& input
 ) -> bool
 {
     static_cast<void>(input);
-    static_cast<void>(button);
-    static_cast<void>(pressed);
     return false;
 }
 

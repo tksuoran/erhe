@@ -32,7 +32,7 @@ class Bvh_geometry
     ////, public erhe::toolkit::Bounding_volume_source
 {
 public:
-    explicit Bvh_geometry(
+    Bvh_geometry(
         const std::string_view debug_label,
         const Geometry_type    geometry_type
     );

@@ -53,9 +53,8 @@ Capture_frame_command::Capture_frame_command()
 {
 }
 
-auto Capture_frame_command::try_call(erhe::application::Input_arguments& input) -> bool
+auto Capture_frame_command::try_call() -> bool
 {
-    static_cast<void>(input);
     g_editor_rendering->trigger_capture();
     return true;
 }

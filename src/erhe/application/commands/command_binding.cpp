@@ -8,31 +8,9 @@ Command_binding::Command_binding(Command* const command)
 {
 }
 
-Command_binding::Command_binding()
-{
-}
+Command_binding::Command_binding() = default;
 
-Command_binding::~Command_binding() noexcept
-{
-}
-
-Command_binding::Command_binding(Command_binding&& other) noexcept
-    : m_command{other.m_command}
-    , m_id     {std::move(other.m_id)}
-{
-}
-
-auto Command_binding::operator=(Command_binding&& other) noexcept -> Command_binding&
-{
-    m_command = other.m_command;
-    m_id      = std::move(other.m_id);
-    return *this;
-}
-
-auto Command_binding::get_id() const -> erhe::toolkit::Unique_id<Command_binding>::id_type
-{
-    return m_id.get_id();
-}
+Command_binding::~Command_binding() noexcept = default;
 
 auto Command_binding::get_command() const -> Command*
 {

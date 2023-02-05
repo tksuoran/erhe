@@ -22,12 +22,8 @@ Undo_command::Undo_command()
 {
 }
 
-auto Undo_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Undo_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (g_operation_stack->can_undo())
     {
         g_operation_stack->undo();
@@ -44,12 +40,8 @@ Redo_command::Redo_command()
 {
 }
 
-auto Redo_command::try_call(
-    erhe::application::Input_arguments& input
-) -> bool
+auto Redo_command::try_call() -> bool
 {
-    static_cast<void>(input);
-
     if (g_operation_stack->can_redo())
     {
         g_operation_stack->redo();

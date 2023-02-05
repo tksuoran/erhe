@@ -20,8 +20,7 @@ class Undo_command
 {
 public:
     Undo_command();
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
 };
 
 class Redo_command
@@ -29,8 +28,7 @@ class Redo_command
 {
 public:
     Redo_command();
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call() -> bool override;
 };
 
 class Operation_stack

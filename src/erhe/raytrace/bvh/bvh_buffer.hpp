@@ -12,7 +12,7 @@ class Bvh_buffer
     : public IBuffer
 {
 public:
-    explicit Bvh_buffer  (const std::string_view debug_label, const std::size_t capacity_bytes_count);
+    Bvh_buffer           (const std::string_view debug_label, const std::size_t capacity_bytes_count);
     explicit Bvh_buffer  (Bvh_buffer&& other) noexcept;
     Bvh_buffer& operator=(Bvh_buffer&& other) noexcept;
     ~Bvh_buffer          () noexcept override;

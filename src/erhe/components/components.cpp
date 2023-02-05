@@ -189,7 +189,7 @@ class Concurrent_execution_queue
     : public IExecution_queue
 {
 public:
-    explicit Concurrent_execution_queue(size_t thread_count);
+    explicit Concurrent_execution_queue(std::size_t thread_count);
 
     void enqueue(std::function<void()> task) override;
     void wait   () override;

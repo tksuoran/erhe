@@ -15,7 +15,22 @@
 namespace hextiles
 {
 
-auto Map_primary_brush_command::try_call(erhe::application::Input_arguments& input) -> bool
+Map_primary_brush_command::Map_primary_brush_command()
+    : Command{"Map_editor.primary_brush"}
+{
+}
+
+void Map_primary_brush_command::try_ready()
+{
+    if (get_command_state() != erhe::application::State::Inactive)
+    {
+        return;
+    }
+
+    set_ready();
+}
+
+auto Map_primary_brush_command::try_call() -> bool
 {
     if (get_command_state() == erhe::application::State::Ready)
     {
@@ -27,25 +42,24 @@ auto Map_primary_brush_command::try_call(erhe::application::Input_arguments& inp
         return false;
     }
 
-    g_map_editor->primary_brush(input.vec2_absolute_value);
+    g_map_editor->primary_brush();
     return true;
 }
 
-void Map_primary_brush_command::try_ready(erhe::application::Input_arguments& input)
+auto Map_primary_brush_command::try_call(erhe::application::Input_arguments& input) -> bool
 {
-    if (get_command_state() != erhe::application::State::Inactive)
-    {
-        return;
-    }
+    g_map_editor->hover(input.vector2.absolute_value);
+    return try_call();
+}
 
-    // TODO only set ready when hovering over map
-    set_ready();
-    g_map_editor->primary_brush(input.vec2_absolute_value);
+Map_hover_command::Map_hover_command()
+    : Command{"Map_editor.hover"}
+{
 }
 
 auto Map_hover_command::try_call(erhe::application::Input_arguments& input) -> bool
 {
-    g_map_editor->hover(input.vec2_absolute_value);
+    g_map_editor->hover(input.vector2.absolute_value);
     return false;
 }
 
@@ -58,15 +72,21 @@ Map_editor::Map_editor()
 
 Map_editor::~Map_editor() noexcept
 {
+    ERHE_VERIFY(g_map_editor == nullptr);
+}
+
+void Map_editor::deinitialize_component()
+{
     ERHE_VERIFY(g_map_editor == this);
+    m_map_hover_command.set_host(nullptr);
+    m_map_primary_brush_command.set_host(nullptr);
     g_map_editor = nullptr;
 }
 
-//void Map_editor::declare_required_components()
-//{
-//    require<erhe::application::Commands>();
-//    m_map_window = require<Map_window>();
-//}
+void Map_editor::declare_required_components()
+{
+    require<erhe::application::Commands>();
+}
 
 void Map_editor::initialize_component()
 {
@@ -82,7 +102,10 @@ void Map_editor::initialize_component()
     erhe::application::g_commands->register_command(&m_map_primary_brush_command);
 
     erhe::application::g_commands->bind_command_to_mouse_motion(&m_map_hover_command);
-    erhe::application::g_commands->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left);
+    erhe::application::g_commands->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left, true);
+
+    m_map_hover_command.set_host(this);
+    m_map_primary_brush_command.set_host(this);
 
     g_map_editor = this;
 }
@@ -101,14 +124,14 @@ void Map_editor::hover(glm::vec2 position_in_root)
     m_hover_tile_position = g_map_window->pixel_to_tile(hover_pixel_position);
 }
 
-void Map_editor::primary_brush(glm::vec2 position_in_root)
+void Map_editor::primary_brush()
 {
-    const glm::vec2 mouse_position = g_map_window->to_content(position_in_root);
-    const auto pixel_position = Pixel_coordinate{
-        static_cast<pixel_t>(mouse_position.x),
-        static_cast<pixel_t>(mouse_position.y)
-    };
-    const auto tile_position = g_map_window->pixel_to_tile(pixel_position);
+    const auto tile_position_opt = m_hover_tile_position; //g_map_window->pixel_to_tile(pixel_position);
+    if (!tile_position_opt.has_value())
+    {
+        return;
+    }
+    const auto tile_position = tile_position_opt.value();
 
     std::function<void(Tile_coordinate)> set_terrain_op =
     [this] (Tile_coordinate position) -> void
@@ -172,9 +195,14 @@ void Map_editor::render()
     g_map_window->print(text, location);
 }
 
-[[nodiscard]] auto Map_editor::get_map() -> Map*
+auto Map_editor::get_map() -> Map*
 {
     return m_map;
+}
+
+auto Map_editor::get_hover_tile_position() const -> std::optional<Tile_coordinate>
+{
+    return m_hover_tile_position;
 }
 
 } // namespace hextiles

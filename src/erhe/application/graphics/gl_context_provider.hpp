@@ -65,12 +65,12 @@ private:
 class Scoped_gl_context
 {
 public:
-    explicit Scoped_gl_context();
-    ~Scoped_gl_context        () noexcept;
-    Scoped_gl_context         (const Scoped_gl_context&) = delete;
-    auto operator=            (const Scoped_gl_context&) = delete;
-    Scoped_gl_context         (Scoped_gl_context&&)      = delete;
-    auto operator=            (Scoped_gl_context&&)      = delete;
+    Scoped_gl_context ();
+    ~Scoped_gl_context() noexcept;
+    Scoped_gl_context (const Scoped_gl_context&) = delete;
+    auto operator=    (const Scoped_gl_context&) = delete;
+    Scoped_gl_context (Scoped_gl_context&&)      = delete;
+    auto operator=    (Scoped_gl_context&&)      = delete;
 
 private:
     Gl_worker_context m_context;

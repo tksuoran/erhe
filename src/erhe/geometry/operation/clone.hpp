@@ -11,7 +11,7 @@ class Clone
     : public Geometry_operation
 {
 public:
-    explicit Clone(
+    Clone(
         Geometry& source,
         Geometry& destination,
         glm::mat4 transform

@@ -28,7 +28,7 @@ class Depth_to_color_rendergraph_node
     : public erhe::application::Texture_rendergraph_node
 {
 public:
-    explicit Depth_to_color_rendergraph_node();
+    Depth_to_color_rendergraph_node();
 
     // Implements erhe::application::Rendergraph_node
     void execute_rendergraph_node() override;

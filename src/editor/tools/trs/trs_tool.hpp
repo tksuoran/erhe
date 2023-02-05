@@ -44,9 +44,8 @@ class Trs_tool_drag_command
 {
 public:
     Trs_tool_drag_command();
-
-    auto try_call   (erhe::application::Input_arguments& input) -> bool override;
-    void try_ready  (erhe::application::Input_arguments& input) override;
+    void try_ready  () override;
+    auto try_call   () -> bool override;
     void on_inactive() override;
 };
 
@@ -103,7 +102,7 @@ public:
     [[nodiscard]] auto is_trs_active() const -> bool;
 
     // Commands
-    auto on_drag_ready(erhe::application::Input_arguments& input) -> bool;
+    auto on_drag_ready() -> bool;
     auto on_drag      () -> bool;
     void end_drag     ();
 

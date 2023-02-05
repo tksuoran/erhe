@@ -10,33 +10,18 @@ namespace erhe::application {
 
 Mouse_drag_binding::Mouse_drag_binding(
     Command* const                    command,
-    const erhe::toolkit::Mouse_button button
+    const erhe::toolkit::Mouse_button button,
+    const bool                        call_on_button_down_without_motion
 )
-    : Mouse_binding{command}
-    , m_button     {button }
+    : Mouse_binding                       {command}
+    , m_button                            {button }
+    , m_call_on_button_down_without_motion{call_on_button_down_without_motion}
 {
 }
 
-Mouse_drag_binding::Mouse_drag_binding()
-{
-}
+Mouse_drag_binding::Mouse_drag_binding() = default;
 
-Mouse_drag_binding::~Mouse_drag_binding() noexcept
-{
-}
-
-Mouse_drag_binding::Mouse_drag_binding(Mouse_drag_binding&& other) noexcept
-    : Mouse_binding{std::move(other)}
-    , m_button     {other.m_button}
-{
-}
-
-auto Mouse_drag_binding::operator=(Mouse_drag_binding&& other) noexcept -> Mouse_drag_binding&
-{
-    Mouse_binding::operator=(std::move(other));
-    this->m_button = other.m_button;
-    return *this;
-}
+Mouse_drag_binding::~Mouse_drag_binding() noexcept = default;
 
 [[nodiscard]] auto Mouse_drag_binding::get_button() const -> erhe::toolkit::Mouse_button
 {
@@ -44,16 +29,9 @@ auto Mouse_drag_binding::operator=(Mouse_drag_binding&& other) noexcept -> Mouse
 }
 
 auto Mouse_drag_binding::on_button(
-    Input_arguments&                  input,
-    const erhe::toolkit::Mouse_button button,
-    const bool                        pressed
+    Input_arguments& input
 ) -> bool
 {
-    if (m_button != button)
-    {
-        return false;
-    }
-
     auto* const command = get_command();
     if (command->get_command_state() == State::Disabled)
     {
@@ -71,13 +49,22 @@ auto Mouse_drag_binding::on_button(
     }
 
     // Mouse button down when in Inactive state -> transition to Ready state
-    if (pressed)
+    if (input.button_pressed)
     {
         if (command->get_command_state() == State::Inactive)
         {
-            command->try_ready(input);
+            command->try_ready();
         }
-        return command->get_command_state() == State::Active; // Consumes event if command transitioned directly to active
+        if (m_call_on_button_down_without_motion)
+        {
+            const bool active = command->get_command_state() == State::Ready;
+            if (active)
+            {
+                command->try_call(input);
+            }
+            return active; // Consumes event if command transitioned directly to active
+        }
+        return false;
     }
     else
     {
@@ -91,7 +78,7 @@ auto Mouse_drag_binding::on_button(
             log_input_event_consumed->trace(
                 "{} consumed mouse drag release {}",
                 command->get_name(),
-                erhe::toolkit::c_str(button)
+                erhe::toolkit::c_str(m_button)
             );
         }
         return consumed;
@@ -108,7 +95,7 @@ auto Mouse_drag_binding::on_motion(Input_arguments& input) -> bool
 
     if (command->get_command_state() == State::Ready)
     {
-        const auto value = input.vec2_relative_value;
+        const auto value = input.vector2.relative_value;
         if ((value.x != 0.0f) || (value.y != 0.0f))
         {
             command->set_active();

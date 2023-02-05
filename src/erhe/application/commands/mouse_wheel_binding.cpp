@@ -8,24 +8,9 @@ Mouse_wheel_binding::Mouse_wheel_binding(Command* const command)
 {
 }
 
-Mouse_wheel_binding::Mouse_wheel_binding()
-{
-}
+Mouse_wheel_binding::Mouse_wheel_binding() = default;
 
-Mouse_wheel_binding::~Mouse_wheel_binding() noexcept
-{
-}
-
-Mouse_wheel_binding::Mouse_wheel_binding(Mouse_wheel_binding&& other) noexcept
-    : Command_binding{std::move(other)}
-{
-}
-
-auto Mouse_wheel_binding::operator=(Mouse_wheel_binding&& other) noexcept -> Mouse_wheel_binding&
-{
-    Command_binding::operator=(std::move(other));
-    return *this;
-}
+Mouse_wheel_binding::~Mouse_wheel_binding() noexcept = default;
 
 auto Mouse_wheel_binding::on_wheel(Input_arguments& input) -> bool
 {

@@ -8,24 +8,9 @@ Mouse_motion_binding::Mouse_motion_binding(Command* const command)
 {
 }
 
-Mouse_motion_binding::Mouse_motion_binding()
-{
-}
+Mouse_motion_binding::Mouse_motion_binding() = default;
 
-Mouse_motion_binding::~Mouse_motion_binding() noexcept
-{
-}
-
-Mouse_motion_binding::Mouse_motion_binding(Mouse_motion_binding&& other) noexcept
-    : Mouse_binding{std::move(other)}
-{
-}
-
-auto Mouse_motion_binding::operator=(Mouse_motion_binding&& other) noexcept -> Mouse_motion_binding&
-{
-    Mouse_binding::operator=(std::move(other));
-    return *this;
-}
+Mouse_motion_binding::~Mouse_motion_binding() noexcept = default;
 
 auto Mouse_motion_binding::on_motion(Input_arguments& input) -> bool
 {
