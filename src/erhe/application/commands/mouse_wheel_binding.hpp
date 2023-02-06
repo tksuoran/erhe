@@ -12,7 +12,7 @@ class Mouse_wheel_binding
     : public Command_binding
 {
 public:
-    explicit Mouse_wheel_binding(Command* const command);
+    explicit Mouse_wheel_binding(Command* command);
     Mouse_wheel_binding();
     ~Mouse_wheel_binding() noexcept override;
 

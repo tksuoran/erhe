@@ -64,19 +64,19 @@ private:
     };
 
     auto make_scalar_button(
-        float* const      value,
-        const uint32_t    text_color,
-        const uint32_t    background_color,
-        const char* const label,
-        const char* const imgui_label
+        float*      value,
+        uint32_t    text_color,
+        uint32_t    background_color,
+        const char* label,
+        const char* imgui_label
     ) const -> Value_edit_state;
 
     auto make_angle_button(
-        float&            radians_value,
-        const uint32_t    text_color,
-        const uint32_t    background_color,
-        const char* const label,
-        const char* const imgui_label
+        float&      radians_value,
+        uint32_t    text_color,
+        uint32_t    background_color,
+        const char* label,
+        const char* imgui_label
     ) const -> Value_edit_state;
 
     struct Node_state

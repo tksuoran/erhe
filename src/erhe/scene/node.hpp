@@ -158,9 +158,9 @@ public:
     Node_data node_data;
 };
 
-[[nodiscard]] auto is_node(const Item* const scene_item) -> bool;
+[[nodiscard]] auto is_node(const Item* scene_item) -> bool;
 [[nodiscard]] auto is_node(const std::shared_ptr<Item>& scene_item) -> bool;
-[[nodiscard]] auto as_node(Item* const scene_item) -> Node*;
+[[nodiscard]] auto as_node(Item* scene_item) -> Node*;
 [[nodiscard]] auto as_node(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Node>;
 
 [[nodiscard]] auto as_node_attachment(

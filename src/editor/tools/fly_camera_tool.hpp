@@ -103,7 +103,7 @@ public:
     // Public API
 
     [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
-    void set_camera (erhe::scene::Camera* const camera);
+    void set_camera (erhe::scene::Camera* camera);
     void translation(int tx, int ty, int tz);
     void rotation   (int rx, int ry, int rz);
 

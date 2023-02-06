@@ -168,7 +168,7 @@ public:
     auto add                                   (Component* component) -> Component&;
     void show_dependencies                     () const;
     void cleanup_components                    ();
-    void launch_component_initialization       (const bool parallel);
+    void launch_component_initialization       (bool parallel);
     void wait_component_initialization_complete();
     void on_thread_exit                        ();
     void on_thread_enter                       ();
@@ -181,25 +181,25 @@ public:
     void collect_uninitialized_depended_by(Component* component, std::set<Component*>& result);
 
 private:
-    [[nodiscard]] auto get_component_to_initialize(const bool in_worker_thread) -> Component*;
+    [[nodiscard]] auto get_component_to_initialize(bool in_worker_thread) -> Component*;
     void queue_all_components_to_be_processed();
-    void initialize_component                (const bool in_worker_thread);
+    void initialize_component                (bool in_worker_thread);
     void deinitialize_component              (Component* component);
     void post_initialize_components          ();
 
-    std::mutex                              m_mutex;
-    Component_vector                        m_components;
-    Component_vector                        m_initialization_order;
-    std::set<IUpdate_fixed_step    *>       m_fixed_step_updates;
-    std::set<IUpdate_once_per_frame*>       m_once_per_frame_updates;
-    bool                                    m_parallel_initialization{false};
-    bool                                    m_is_ready               {false};
-    std::condition_variable                 m_component_processed;
-    std::set<Component*>                    m_components_to_process;
-    std::unique_ptr<IExecution_queue>       m_execution_queue;
-    std::size_t                             m_initialize_component_count_worker_thread{0};
-    std::size_t                             m_initialize_component_count_main_thread  {0};
-    std::atomic<int>                        m_count_initialized_in_worker_thread      {0};
+    std::mutex                        m_mutex;
+    Component_vector                  m_components;
+    Component_vector                  m_initialization_order;
+    std::set<IUpdate_fixed_step    *> m_fixed_step_updates;
+    std::set<IUpdate_once_per_frame*> m_once_per_frame_updates;
+    bool                              m_parallel_initialization{false};
+    bool                              m_is_ready               {false};
+    std::condition_variable           m_component_processed;
+    std::set<Component*>              m_components_to_process;
+    std::unique_ptr<IExecution_queue> m_execution_queue;
+    std::size_t                       m_initialize_component_count_worker_thread{0};
+    std::size_t                       m_initialize_component_count_main_thread  {0};
+    std::atomic<int>                  m_count_initialized_in_worker_thread      {0};
 };
 
 template<typename T>

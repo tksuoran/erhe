@@ -53,9 +53,9 @@ public:
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
 
-[[nodiscard]] auto is_mesh(const Item* const scene_item) -> bool;
+[[nodiscard]] auto is_mesh(const Item* scene_item) -> bool;
 [[nodiscard]] auto is_mesh(const std::shared_ptr<Item>& scene_item) -> bool;
-[[nodiscard]] auto as_mesh(Item* const scene_item) -> Mesh*;
+[[nodiscard]] auto as_mesh(Item* scene_item) -> Mesh*;
 [[nodiscard]] auto as_mesh(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Mesh>;
 
 [[nodiscard]] auto get_mesh(const erhe::scene::Node* node) -> std::shared_ptr<Mesh>;

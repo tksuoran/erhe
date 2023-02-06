@@ -11,16 +11,16 @@ class Renderbuffer
 {
 public:
     Renderbuffer(
-        const gl::Internal_format internal_format,
-        const unsigned int        width,
-        const unsigned int        height
+        gl::Internal_format internal_format,
+        unsigned int        width,
+        unsigned int        height
     );
 
     Renderbuffer(
-        const gl::Internal_format internal_format,
-        const unsigned int        sample_count,
-        const unsigned int        width,
-        const unsigned int        height
+        gl::Internal_format internal_format,
+        unsigned int        sample_count,
+        unsigned int        width,
+        unsigned int        height
     );
 
     ~Renderbuffer() noexcept;

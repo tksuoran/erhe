@@ -109,11 +109,11 @@ private:
 #endif
 };
 
-[[nodiscard]] auto is_rendertarget(const erhe::scene::Item* const scene_item) -> bool;
+[[nodiscard]] auto is_rendertarget(const erhe::scene::Item* scene_item) -> bool;
 [[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
-[[nodiscard]] auto as_rendertarget(erhe::scene::Item* const scene_item) -> Rendertarget_mesh*;
+[[nodiscard]] auto as_rendertarget(erhe::scene::Item* scene_item) -> Rendertarget_mesh*;
 [[nodiscard]] auto as_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>;
 
-[[nodiscard]] auto get_rendertarget(const erhe::scene::Node* const node) -> std::shared_ptr<Rendertarget_mesh>;
+[[nodiscard]] auto get_rendertarget(const erhe::scene::Node* node) -> std::shared_ptr<Rendertarget_mesh>;
 
 } // namespace erhe::application

@@ -6,9 +6,9 @@ namespace erhe::geometry::shapes
 {
 
 [[nodiscard]] auto make_sphere(
-    const double       radius,
-    const unsigned int slice_count,
-    const unsigned int stack_division
+    double       radius,
+    unsigned int slice_count,
+    unsigned int stack_division
 ) -> Geometry;
 
 } // namespace erhe::geometry::shapes

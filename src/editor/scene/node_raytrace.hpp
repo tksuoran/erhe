@@ -96,7 +96,7 @@ private:
     std::unique_ptr<erhe::raytrace::IInstance> m_instance;
 };
 
-auto is_raytrace(const erhe::scene::Item* const scene_item) -> bool;
+auto is_raytrace(const erhe::scene::Item* scene_item) -> bool;
 auto is_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
 auto as_raytrace(erhe::scene::Item* scene_item) -> Node_raytrace*;
 auto as_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Node_raytrace>;
@@ -122,10 +122,10 @@ void draw_ray_hit(
 );
 
 [[nodiscard]] auto project_ray(
-    erhe::raytrace::IScene* const raytrace_scene,
-    erhe::scene::Mesh*            ignore_mesh,
-    erhe::raytrace::Ray&          ray,
-    erhe::raytrace::Hit&          hit
+    erhe::raytrace::IScene* raytrace_scene,
+    erhe::scene::Mesh*      ignore_mesh,
+    erhe::raytrace::Ray&    ray,
+    erhe::raytrace::Hit&    hit
 ) -> bool;
 
 } // namespace editor

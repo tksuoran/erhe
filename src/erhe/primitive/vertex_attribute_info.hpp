@@ -20,11 +20,11 @@ class Vertex_attribute_info
 public:
     Vertex_attribute_info();
     Vertex_attribute_info(
-        erhe::graphics::Vertex_format* const               vertex_format,
-        const gl::Vertex_attrib_type                       default_data_type,
-        const std::size_t                                  dimension,
-        const erhe::graphics::Vertex_attribute::Usage_type semantic,
-        const unsigned int                                 semantic_index
+        erhe::graphics::Vertex_format*               vertex_format,
+        gl::Vertex_attrib_type                       default_data_type,
+        std::size_t                                  dimension,
+        erhe::graphics::Vertex_attribute::Usage_type semantic,
+        unsigned int                                 semantic_index
     );
 
     [[nodiscard]] auto is_valid() -> bool;

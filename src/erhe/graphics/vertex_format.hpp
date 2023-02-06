@@ -15,25 +15,25 @@ class Vertex_format final
 {
 public:
     Vertex_format();
-    explicit Vertex_format(std::initializer_list<Vertex_attribute> attributes);
+    explicit Vertex_format(const std::initializer_list<Vertex_attribute> attributes);
 
     void add_attribute(
         const Vertex_attribute& attribute
     );
 
     [[nodiscard]] auto has_attribute(
-        const Vertex_attribute::Usage_type usage_type,
-        const unsigned int                 index = 0
+        Vertex_attribute::Usage_type usage_type,
+        unsigned int                 index = 0
     ) const -> bool;
 
     [[nodiscard]] auto find_attribute_maybe(
-        const Vertex_attribute::Usage_type usage_type,
-        const unsigned int                 index = 0
+        Vertex_attribute::Usage_type usage_type,
+        unsigned int                 index = 0
     ) const -> const Vertex_attribute*;
 
     [[nodiscard]] auto find_attribute(
-        const Vertex_attribute::Usage_type usage_type,
-        const unsigned int                 index = 0
+        Vertex_attribute::Usage_type usage_type,
+        unsigned int                 index = 0
     ) const -> gsl::not_null<const Vertex_attribute*>;
 
     [[nodiscard]] auto stride() const -> size_t

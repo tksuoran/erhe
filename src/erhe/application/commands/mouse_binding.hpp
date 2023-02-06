@@ -13,7 +13,7 @@ class Mouse_binding
     : public Command_binding
 {
 public:
-    explicit Mouse_binding(Command* const command);
+    explicit Mouse_binding(Command* command);
     Mouse_binding();
     ~Mouse_binding() noexcept override;
 

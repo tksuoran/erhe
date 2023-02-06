@@ -62,7 +62,7 @@ public:
     static constexpr std::string_view c_type_name{"Post_processing_node"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
-    Post_processing_node(const std::string_view name);
+    explicit Post_processing_node(const std::string_view name);
 
     // Implements Rendergraph_node
     [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }

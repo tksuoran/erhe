@@ -108,7 +108,6 @@ void Grid::render(const Render_context& context)
 
     const erhe::scene::Node* camera_node = context.camera->get_node();
     ERHE_VERIFY(camera_node != nullptr);
-    const glm::vec3 camera_position = camera_node->position_in_world();
     const glm::mat4 m = world_from_grid();
 
     const float extent     = static_cast<float>(m_cell_count) * m_cell_size;

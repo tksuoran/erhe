@@ -43,13 +43,12 @@ public:
         "Update"
     };
 
-    explicit Command_binding(Command* const command);
+    explicit Command_binding(Command* command);
     Command_binding();
     virtual ~Command_binding() noexcept;
 
 
     [[nodiscard]] virtual auto get_type                    () const -> Type { return Type::None; }
-    //[[nodiscard]] auto         get_id                      () const -> erhe::toolkit::Unique_id<Command_binding>::id_type;
     [[nodiscard]] auto         get_command                 () const -> Command*;
     [[nodiscard]] auto         is_command_host_enabled     () const -> bool;
     [[nodiscard]] auto         get_command_host_description() const -> const char*;

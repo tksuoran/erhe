@@ -32,7 +32,7 @@ class Move_unit_command final
     : public erhe::application::Command
 {
 public:
-    Move_unit_command(direction_t direction)
+    explicit Move_unit_command(const direction_t direction)
         : Command    {"move_unit"}
         , m_direction{direction}
     {
@@ -49,7 +49,7 @@ class Select_unit_command final
     : public erhe::application::Command
 {
 public:
-    Select_unit_command(int direction)
+    explicit Select_unit_command(const int direction)
         : Command    {"select_unit"}
         , m_direction{direction}
     {

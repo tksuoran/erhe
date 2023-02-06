@@ -157,8 +157,6 @@ void Node_tree_window::move_selection(
             : "After_anchor"
     );
 
-    const auto parent = target_node->parent().lock();
-
     Compound_operation::Parameters compound_parameters;
     const auto& selection = g_selection_tool->selection();
     const auto& drag_item = get_item_by_id(payload_id);

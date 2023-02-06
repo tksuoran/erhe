@@ -149,7 +149,7 @@ constexpr Mouse_button Mouse_button_x2     = 5;
 constexpr Mouse_button Mouse_button_count  = 6;
 constexpr Mouse_button Mouse_button_none   = 0xffffffff;
 
-extern auto c_str(const Mouse_button button) -> const char*;
+extern auto c_str(Mouse_button button) -> const char*;
 
 class Event_handler;
 class View;

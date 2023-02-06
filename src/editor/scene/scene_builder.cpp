@@ -654,7 +654,7 @@ void Scene_builder::make_brushes()
                         major_radius,
                         minor_radius,
                         10 * std::max(1, config.detail),
-                            8 * std::max(1, config.detail)
+                        8 * std::max(1, config.detail)
                     )
                 );
                 make_brush(

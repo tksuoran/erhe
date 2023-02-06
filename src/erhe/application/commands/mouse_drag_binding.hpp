@@ -10,7 +10,7 @@ class Mouse_drag_binding
 {
 public:
     Mouse_drag_binding(
-        Command* const              command,
+        Command*                    command,
         erhe::toolkit::Mouse_button button,
         bool                        call_on_button_down_without_motion
     );

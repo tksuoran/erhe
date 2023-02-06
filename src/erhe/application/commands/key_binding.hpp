@@ -16,19 +16,19 @@ class Key_binding
 {
 public:
     Key_binding(
-        Command* const                command,
-        const erhe::toolkit::Keycode  code,
-        const bool                    pressed,
+        Command*                      command,
+        erhe::toolkit::Keycode        code,
+        bool                          pressed,
         const std::optional<uint32_t> modifier_mask
     );
     Key_binding();
     ~Key_binding() noexcept override;
 
     auto on_key(
-        Input_arguments&             input,
-        const bool                   pressed,
-        const erhe::toolkit::Keycode code,
-        const uint32_t               modifier_mask
+        Input_arguments&       input,
+        bool                   pressed,
+        erhe::toolkit::Keycode code,
+        uint32_t               modifier_mask
     ) -> bool;
 
     [[nodiscard]] auto get_type   () const -> Type override { return Command_binding::Type::Key; }

@@ -57,7 +57,7 @@ class Gpu_timer_plot
 public:
     explicit Gpu_timer_plot(
         erhe::graphics::Gpu_timer* timer,
-        const std::size_t          width = 256
+        std::size_t                width = 256
     );
 
     void sample() override;
@@ -75,7 +75,7 @@ class Cpu_timer_plot
 public:
     explicit Cpu_timer_plot(
         erhe::toolkit::Timer* timer,
-        const std::size_t     width = 256
+        std::size_t           width = 256
     );
 
     void sample() override;

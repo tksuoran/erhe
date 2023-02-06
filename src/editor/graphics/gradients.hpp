@@ -14,7 +14,7 @@ namespace gradient
 class Stop
 {
 public:
-    Stop(const float t, const uint8_t r, const uint8_t g, const uint8_t b);
+    Stop(float t, uint8_t r, uint8_t g, uint8_t b);
 
     float     t;
     glm::vec3 color;

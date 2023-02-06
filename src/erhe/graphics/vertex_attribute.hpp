@@ -50,7 +50,7 @@ public:
         std::size_t            dimension {0};
     };
 
-    [[nodiscard]] static auto desc(const Usage_type usage) -> const char*;
+    [[nodiscard]] static auto desc(Usage_type usage) -> const char*;
 
     [[nodiscard]] auto stride    () const -> size_t;
     [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool;

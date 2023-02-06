@@ -54,10 +54,10 @@ public:
     {
     public:
         void attach(
-            const gl::Framebuffer_attachment attachment_point,
-            const gsl::not_null<Texture*>    texture,
-            const unsigned int               level = 0,
-            const unsigned int               layer = 0
+            gl::Framebuffer_attachment    attachment_point,
+            const gsl::not_null<Texture*> texture,
+            unsigned int                  level = 0,
+            unsigned int                  layer = 0
         );
 
         void attach(

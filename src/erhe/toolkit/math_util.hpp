@@ -339,76 +339,76 @@ template <typename T>
 }
 
 [[nodiscard]] auto create_frustum(
-    const float left,
-    const float right,
-    const float bottom,
-    const float top,
-    const float z_near,
-    const float z_far
+    float left,
+    float right,
+    float bottom,
+    float top,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_frustum_simple(
-    const float width,
-    const float height,
-    const float z_near,
-    const float z_far
+    float width,
+    float height,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_perspective(
-    const float fov_x,
-    const float fov_y,
-    const float z_near,
-    const float z_far
+    float fov_x,
+    float fov_y,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_perspective_xr(
-    const float fov_left,
-    const float fov_right,
-    const float fov_up,
-    const float fov_down,
-    const float z_near,
-    const float z_far
+    float fov_left,
+    float fov_right,
+    float fov_up,
+    float fov_down,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_perspective_vertical(
-    const float fov_y,
-    const float aspect_ratio,
-    const float z_near,
-    const float z_far
+    float fov_y,
+    float aspect_ratio,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_perspective_horizontal(
-    const float fov_x,
-    const float aspect_ratio,
-    const float z_near,
-    const float z_far
+    float fov_x,
+    float aspect_ratio,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_projection(
-    const float     s,
-    const float     p,
-    const float     n,
-    const float     f,
-    const float     w,
-    const float     h,
-    const glm::vec3 v,
-    const glm::vec3 e
+    float     s,
+    float     p,
+    float     n,
+    float     f,
+    float     w,
+    float     h,
+    glm::vec3 v,
+    glm::vec3 e
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_orthographic(
-    const float left,
-    const float right,
-    const float bottom,
-    const float top,
-    const float z_near,
-    const float z_far
+    float left,
+    float right,
+    float bottom,
+    float top,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 [[nodiscard]] auto create_orthographic_centered(
-    const float width,
-    const float height,
-    const float z_near,
-    const float z_far
+    float width,
+    float height,
+    float z_near,
+    float z_far
 ) -> glm::mat4;
 
 template <typename T>
@@ -539,9 +539,9 @@ void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b);
 
 void rgb_to_hsv(float r, float g, float b, float& h, float& s, float& v);
 
-[[nodiscard]] auto srgb_to_linear(const float cs) -> float;
+[[nodiscard]] auto srgb_to_linear(float cs) -> float;
 
-[[nodiscard]] auto linear_rgb_to_srgb(const float cl) -> float;
+[[nodiscard]] auto linear_rgb_to_srgb(float cl) -> float;
 
 [[nodiscard]] auto srgb_to_linear_rgb(const glm::vec3 srgb) -> glm::vec3;
 
@@ -560,8 +560,8 @@ void cartesian_to_spherical_iso(
 );
 
 [[nodiscard]] auto spherical_to_cartesian_iso(
-    const float theta,
-    const float phi
+    float theta,
+    float phi
 ) -> glm::vec3;
 
 template <typename T>
@@ -574,10 +574,10 @@ public:
 
 template <typename T>
 [[nodiscard]] auto closest_points(
-    const typename vector_types<T>::vec3 P0,
-    const typename vector_types<T>::vec3 P1,
-    const typename vector_types<T>::vec3 Q0,
-    const typename vector_types<T>::vec3 Q1
+    const typename vector_types<T>::vec3& P0,
+    const typename vector_types<T>::vec3& P1,
+    const typename vector_types<T>::vec3& Q0,
+    const typename vector_types<T>::vec3& Q1
 ) -> std::optional<
     Closest_points<T>
 >
@@ -610,9 +610,9 @@ template <typename T>
 
 template <typename T>
 [[nodiscard]] auto closest_point(
-    const typename vector_types<T>::vec2 P0,
-    const typename vector_types<T>::vec2 P1,
-    const typename vector_types<T>::vec2 Q
+    const typename vector_types<T>::vec2& P0,
+    const typename vector_types<T>::vec2& P1,
+    const typename vector_types<T>::vec2& Q
 ) -> std::optional<typename vector_types<T>::vec2>
 {
     const auto u = P1 - P0;
@@ -626,9 +626,9 @@ template <typename T>
 
 template <typename T>
 [[nodiscard]] auto closest_point(
-    const typename vector_types<T>::vec3 P0,
-    const typename vector_types<T>::vec3 P1,
-    const typename vector_types<T>::vec3 Q
+    const typename vector_types<T>::vec3& P0,
+    const typename vector_types<T>::vec3& P1,
+    const typename vector_types<T>::vec3& Q
 ) -> std::optional<typename vector_types<T>::vec3>
 {
     const auto u = P1 - P0;
@@ -644,9 +644,9 @@ template <typename T>
 
 template <typename T>
 [[nodiscard]] auto line_point_distance(
-    const typename vector_types<T>::vec2 P0,
-    const typename vector_types<T>::vec2 P1,
-    const typename vector_types<T>::vec2 Q
+    const typename vector_types<T>::vec2& P0,
+    const typename vector_types<T>::vec2& P1,
+    const typename vector_types<T>::vec2& Q
 ) -> std::optional<T>
 {
     typename vector_types<T>::vec2 PC;
@@ -659,9 +659,9 @@ template <typename T>
 
 template <typename T>
 [[nodiscard]] auto line_point_distance(
-    const typename vector_types<T>::vec3 P0,
-    const typename vector_types<T>::vec3 P1,
-    const typename vector_types<T>::vec3 Q
+    const typename vector_types<T>::vec3& P0,
+    const typename vector_types<T>::vec3& P1,
+    const typename vector_types<T>::vec3& Q
 ) -> std::optional<T>
 {
     typename vector_types<T>::vec3 PC;
@@ -675,10 +675,10 @@ template <typename T>
 
 template <typename T>
 [[nodiscard]] auto intersect_plane(
-    const typename vector_types<T>::vec3 plane_normal,
-    const typename vector_types<T>::vec3 point_on_plane,
-    const typename vector_types<T>::vec3 ray_origin,
-    const typename vector_types<T>::vec3 ray_direction
+    const typename vector_types<T>::vec3& plane_normal,
+    const typename vector_types<T>::vec3& point_on_plane,
+    const typename vector_types<T>::vec3& ray_origin,
+    const typename vector_types<T>::vec3& ray_direction
 ) -> std::optional<T>
 {
     const T denominator = glm::dot(plane_normal, ray_direction);
@@ -691,9 +691,9 @@ template <typename T>
 
 template <typename T>
 [[nodiscard]] auto project_point_to_plane(
-    const typename vector_types<T>::vec3 plane_normal,
-    const typename vector_types<T>::vec3 point_on_plane,
-    typename vector_types<T>::vec3       point_to_project
+    const typename vector_types<T>::vec3& plane_normal,
+    const typename vector_types<T>::vec3& point_on_plane,
+    typename vector_types<T>::vec3&       point_to_project
 ) -> std::optional<typename vector_types<T>::vec3>
 {
     const auto n = plane_normal;
@@ -715,9 +715,9 @@ template <typename T>
 // Returns angle of rotation in radians for point q from reference_direction
 template <typename T>
 [[nodiscard]] auto angle_of_rotation(
-    const typename vector_types<T>::vec3 q,
-    const typename vector_types<T>::vec3 axis_for_rotation,
-    const typename vector_types<T>::vec3 reference_direction
+    const typename vector_types<T>::vec3& q,
+    const typename vector_types<T>::vec3& axis_for_rotation,
+    const typename vector_types<T>::vec3& reference_direction
 ) -> T
 {
     using vec3 = typename vector_types<T>::vec3;
@@ -803,14 +803,14 @@ class Bounding_volume_combiner
     : public erhe::toolkit::Bounding_volume_source
 {
 public:
-    void add_point(const glm::mat4& transform, const glm::vec3 point)
+    void add_point(const glm::mat4& transform, const glm::vec3& point)
     {
         m_offsets.push_back(m_points.size());
         m_sizes.push_back(1);
         m_points.push_back(glm::vec3{transform * glm::vec4{point, 1.0f}});
     }
 
-    void add_box(const glm::mat4& transform, const glm::vec3 min_corner, const glm::vec3 max_corner)
+    void add_box(const glm::mat4& transform, const glm::vec3& min_corner, const glm::vec3& max_corner)
     {
         const glm::vec3& a = min_corner;
         const glm::vec3& b = max_corner;
@@ -826,7 +826,7 @@ public:
         m_points.push_back(glm::vec3{transform * glm::vec4{b.x, b.y, b.z, 1.0f}});
     }
 
-    void add_sphere(const glm::mat4& transform, const glm::vec3 center, const float radius)
+    void add_sphere(const glm::mat4& transform, const glm::vec3& center, const float radius)
     {
         const glm::vec3 o = center;
         const float     r = radius;

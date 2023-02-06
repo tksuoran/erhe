@@ -23,19 +23,19 @@ public:
     [[nodiscard]] auto less         () const -> bool;
     [[nodiscard]] auto stop         () const -> bool;
     [[nodiscard]] auto current_value() const -> float;
-    void set_damp              (const float value);
-    void set_max_value         (const float value);
-    void set_max_delta         (const float value);
+    void set_damp              (float value);
+    void set_max_value         (float value);
+    void set_max_delta         (float value);
     void update                ();
-    void adjust                (const float delta);
-    void adjust                (const double delta);
-    void set_more              (const bool value);
-    void set_less              (const bool value);
-    void set_stop              (const bool value);
-    void set                   (const Controller_item item, const bool value);
+    void adjust                (float delta);
+    void adjust                (double delta);
+    void set_more              (bool value);
+    void set_less              (bool value);
+    void set_stop              (bool value);
+    void set                   (Controller_item item, bool value);
     void reset                 ();
-    void set_damp_mode         (const bool linear, const bool multiply);
-    void set_damp_and_max_delta(const float damp, const float max_delta);
+    void set_damp_mode         (bool linear, bool multiply);
+    void set_damp_and_max_delta(float damp, float max_delta);
 
 private:
     void dampen();

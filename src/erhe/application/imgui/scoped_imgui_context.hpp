@@ -14,7 +14,7 @@ class Imgui_windows;
 class Scoped_imgui_context
 {
 public:
-    Scoped_imgui_context(Imgui_viewport& imgui_viewport);
+    explicit Scoped_imgui_context(Imgui_viewport& imgui_viewport);
     ~Scoped_imgui_context();
 
 private:

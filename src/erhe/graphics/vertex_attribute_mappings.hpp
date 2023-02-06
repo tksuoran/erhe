@@ -21,7 +21,7 @@ class Vertex_attribute_mappings final
 {
 public:
     Vertex_attribute_mappings();
-    explicit Vertex_attribute_mappings(std::initializer_list<Vertex_attribute_mapping>);
+    explicit Vertex_attribute_mappings(const std::initializer_list<Vertex_attribute_mapping>);
 
     void collect_attributes(
         std::vector<Vertex_input_attribute>& attributes,

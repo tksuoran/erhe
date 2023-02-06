@@ -206,8 +206,7 @@ auto PNG_writer::write(
     );
 
     result = ::spng_encode_image(m_image_encoder, data.data(), data.size(), SPNG_FMT_PNG, SPNG_ENCODE_FINALIZE);
-
-    return true;
+    return result != 0;
 }
 
 } // namespace erhe::graphics

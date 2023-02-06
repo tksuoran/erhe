@@ -100,13 +100,13 @@ public:
     );
     void imgui();
 
-    void set_line_color(const float r, const float g, const float b, const float a);
+    void set_line_color(float r, float g, float b, float a);
     void set_line_color(const glm::vec3& color);
     void set_line_color(const glm::vec4& color);
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     void set_line_color(const ImVec4 color);
 #endif
-    void set_thickness (const float thickness);
+    void set_thickness (float thickness);
 
     void add_lines(
         const std::initializer_list<Line> lines
@@ -147,7 +147,7 @@ public:
         const glm::vec4& color,
         const glm::vec3& min_corner,
         const glm::vec3& max_corner,
-        const bool       z_cross = false
+        bool             z_cross = false
     );
 
     void add_sphere(
@@ -264,7 +264,7 @@ private:
 
     void put(
         const glm::vec3&        point,
-        const float             thickness,
+        float                   thickness,
         const glm::vec4&        color,
         const gsl::span<float>& gpu_float_data,
         std::size_t&            word_offset

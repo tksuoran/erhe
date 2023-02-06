@@ -109,9 +109,9 @@ private:
     };
 };
 
-[[nodiscard]] auto is_light(const Item* const scene_item) -> bool;
+[[nodiscard]] auto is_light(const Item* scene_item) -> bool;
 [[nodiscard]] auto is_light(const std::shared_ptr<Item>& scene_item) -> bool;
-[[nodiscard]] auto as_light(Item* const scene_item) -> Light*;
+[[nodiscard]] auto as_light(Item* scene_item) -> Light*;
 [[nodiscard]] auto as_light(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Light>;
 
 auto get_light(const erhe::scene::Node* node) -> std::shared_ptr<Light>;

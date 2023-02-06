@@ -6,7 +6,11 @@
 namespace erhe::geometry::operation
 {
 
-Clone::Clone(Geometry& source, Geometry& destination, glm::mat4 transform)
+Clone::Clone(
+    Geometry&        source,
+    Geometry&        destination,
+    const glm::mat4& transform
+)
     : Geometry_operation{source, destination}
 {
     destination.points                               = source.points;
@@ -51,8 +55,8 @@ Clone::Clone(Geometry& source, Geometry& destination, glm::mat4 transform)
 }
 
 auto clone(
-    Geometry&       source,
-    const glm::mat4 transform
+    Geometry&        source,
+    const glm::mat4& transform
 ) -> Geometry
 {
     return Geometry{

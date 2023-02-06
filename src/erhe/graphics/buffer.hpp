@@ -18,24 +18,24 @@ public:
     ~Buffer() noexcept;
 
     Buffer(
-        const gl::Buffer_target       target,
-        const std::size_t             capacity_bytes_count,
-        const gl::Buffer_storage_mask storage_mask
+        gl::Buffer_target       target,
+        std::size_t             capacity_bytes_count,
+        gl::Buffer_storage_mask storage_mask
     ) noexcept;
 
     Buffer(
-        const gl::Buffer_target          target,
-        const std::size_t                capacity_byte_count,
-        const gl::Buffer_storage_mask    storage_mask,
-        const gl::Map_buffer_access_mask map_buffer_access_mask
+        gl::Buffer_target          target,
+        std::size_t                capacity_byte_count,
+        gl::Buffer_storage_mask    storage_mask,
+        gl::Map_buffer_access_mask map_buffer_access_mask
     ) noexcept;
 
     Buffer(
-        const gl::Buffer_target          target,
-        const std::size_t                capacity_byte_count,
-        const gl::Buffer_storage_mask    storage_mask,
-        const gl::Map_buffer_access_mask map_buffer_access_mask,
-        const std::string_view           debug_label
+        gl::Buffer_target          target,
+        std::size_t                capacity_byte_count,
+        gl::Buffer_storage_mask    storage_mask,
+        gl::Map_buffer_access_mask map_buffer_access_mask,
+        std::string_view           debug_label
     ) noexcept;
 
     Buffer        (const Buffer&) = delete;
@@ -46,13 +46,13 @@ public:
     [[nodiscard]] auto map                () const          -> gsl::span<std::byte>;
     [[nodiscard]] auto debug_label        () const noexcept -> const std::string&;
     [[nodiscard]] auto capacity_byte_count() const noexcept -> std::size_t;
-    [[nodiscard]] auto allocate_bytes     (const std::size_t byte_count, const std::size_t alignment = 64) noexcept -> std::size_t;
+    [[nodiscard]] auto allocate_bytes     (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::size_t;
     [[nodiscard]] auto free_capacity_bytes() const noexcept -> std::size_t;
     [[nodiscard]] auto target             () const noexcept -> gl::Buffer_target;
     [[nodiscard]] auto gl_name            () const noexcept -> unsigned int;
     void unmap                () noexcept;
-    void flush_bytes          (const std::size_t byte_offset, const std::size_t byte_count) noexcept;
-    void flush_and_unmap_bytes(const std::size_t byte_count) noexcept;
+    void flush_bytes          (std::size_t byte_offset, std::size_t byte_count) noexcept;
+    void flush_and_unmap_bytes(std::size_t byte_count) noexcept;
     void set_debug_label      (const std::string_view label) noexcept;
     void dump                 () const noexcept;
 

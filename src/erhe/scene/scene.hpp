@@ -131,9 +131,9 @@ private:
     bool                                      m_nodes_sorted{false};
 };
 
-[[nodiscard]] auto is_scene(const Item* const scene_item) -> bool;
+[[nodiscard]] auto is_scene(const Item* scene_item) -> bool;
 [[nodiscard]] auto is_scene(const std::shared_ptr<Item>& scene_item) -> bool;
-[[nodiscard]] auto as_scene(Item* const scene_item) -> Scene*;
+[[nodiscard]] auto as_scene(Item* scene_item) -> Scene*;
 [[nodiscard]] auto as_scene(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Scene>;
 
 } // namespace erhe::scene

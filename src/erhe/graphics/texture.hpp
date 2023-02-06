@@ -19,9 +19,9 @@ class Texture_create_info
 {
 public:
     [[nodiscard]] static auto calculate_level_count(
-        const int width,
-        const int height = 0,
-        const int depth = 0
+        int width,
+        int height = 0,
+        int depth = 0
     ) -> int;
 
     [[nodiscard]] auto calculate_level_count() const -> int;
@@ -46,43 +46,43 @@ class Texture
 public:
     using Create_info = Texture_create_info;
 
-    static auto storage_dimensions(const gl::Texture_target target) -> int;
-    static auto mipmap_dimensions (const gl::Texture_target target) -> int;
+    static auto storage_dimensions(gl::Texture_target target) -> int;
+    static auto mipmap_dimensions (gl::Texture_target target) -> int;
     static auto size_level_count  (int size) -> int;
 
     explicit Texture(const Create_info& create_info);
     ~Texture        () noexcept;
 
     void upload(
-        const gl::Internal_format internal_format,
-        const int                 width,
-        const int                 height = 1,
-        const int                 depth = 1
+        gl::Internal_format internal_format,
+        int                 width,
+        int                 height = 1,
+        int                 depth = 1
     );
 
     void upload(
-        const gl::Internal_format        internal_format,
+        gl::Internal_format              internal_format,
         const gsl::span<const std::byte> data,
-        const int                        width,
-        const int                        height = 1,
-        const int                        depth = 1,
-        const int                        level = 0,
-        const int                        x = 0,
-        const int                        y = 0,
-        const int                        z = 0
+        int                              width,
+        int                              height = 1,
+        int                              depth = 1,
+        int                              level = 0,
+        int                              x = 0,
+        int                              y = 0,
+        int                              z = 0
     );
     void upload_subimage(
-        const gl::Internal_format        internal_format,
+        gl::Internal_format              internal_format,
         const gsl::span<const std::byte> data,
-        const int                        src_row_length,
-        const int                        src_x,
-        const int                        src_y,
-        const int                        width,
-        const int                        height,
-        const int                        level,
-        const int                        x,
-        const int                        y,
-        const int                        z = 0
+        int                              src_row_length,
+        int                              src_x,
+        int                              src_y,
+        int                              width,
+        int                              height,
+        int                              level,
+        int                              x,
+        int                              y,
+        int                              z = 0
     );
 
     void set_debug_label(const std::string& value);

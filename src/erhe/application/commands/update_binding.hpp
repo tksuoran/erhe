@@ -13,7 +13,7 @@ class Update_binding
     : public Command_binding
 {
 public:
-    explicit Update_binding(Command* const command);
+    explicit Update_binding(Command* command);
     Update_binding();
     ~Update_binding() noexcept override;
 

@@ -72,7 +72,7 @@ private:
     bool      m_transform_update{false};
 };
 
-auto is_frame_controller(const erhe::scene::Item* const item) -> bool;
+auto is_frame_controller(const erhe::scene::Item* item) -> bool;
 auto is_frame_controller(const std::shared_ptr<erhe::scene::Item>& item) -> bool;
 auto as_frame_controller(erhe::scene::Item* item) -> Frame_controller*;
 auto as_frame_controller(const std::shared_ptr<erhe::scene::Item>& item) -> std::shared_ptr<Frame_controller>;

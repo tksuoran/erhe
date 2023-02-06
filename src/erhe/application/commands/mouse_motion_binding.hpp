@@ -8,7 +8,7 @@ class Mouse_motion_binding
     : public Mouse_binding
 {
 public:
-    explicit Mouse_motion_binding(Command* const command);
+    explicit Mouse_motion_binding(Command* command);
     Mouse_motion_binding();
     ~Mouse_motion_binding() noexcept override;
 

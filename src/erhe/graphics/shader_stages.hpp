@@ -46,7 +46,7 @@ public:
             }
 
             Shader_stage(
-                const gl::Shader_type       type,
+                gl::Shader_type             type,
                 const std::filesystem::path path
             )
                 : type{type}

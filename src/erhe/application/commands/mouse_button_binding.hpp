@@ -10,7 +10,7 @@ class Mouse_button_binding
 {
 public:
     Mouse_button_binding(
-        Command* const              command,
+        Command*                    command,
         erhe::toolkit::Mouse_button button,
         bool                        trigger_on_pressed = false
     );

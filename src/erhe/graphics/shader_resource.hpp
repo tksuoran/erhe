@@ -78,15 +78,15 @@ public:
     // Block (uniform block or shader storage block)
     Shader_resource(
         const std::string_view           block_name,
-        const int                        binding_point,
-        const Type                       block_type,
+        int                              binding_point,
+        Type                             block_type,
         const std::optional<std::size_t> array_size = {}
     );
 
     // Basic type
     Shader_resource(
         std::string_view                 basic_name,
-        const gl::Uniform_type           basic_type,
+        gl::Uniform_type                 basic_type,
         const std::optional<std::size_t> array_size = {},
         Shader_resource*                 parent = nullptr
     );
@@ -95,8 +95,8 @@ public:
     Shader_resource(
         const std::string_view           sampler_name,
         gsl::not_null<Shader_resource*>  parent,
-        const int                        location,
-        const gl::Uniform_type           sampler_type,
+        int                              location,
+        gl::Uniform_type                 sampler_type,
         const std::optional<std::size_t> array_size = {},
         const std::optional<int>         dedicated_texture_unit = {}
     );
@@ -146,7 +146,7 @@ public:
 
     auto add_sampler(
         const std::string_view           name,
-        const gl::Uniform_type           sampler_type,
+        gl::Uniform_type                 sampler_type,
         const std::optional<int>         dedicated_texture_unit = {},
         const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;

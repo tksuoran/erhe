@@ -64,9 +64,9 @@ public:
     void enter_event_loop   ();
     void poll_events        ();
     void get_cursor_position(float& xpos, float& ypos);
-    void set_visible        (const bool visible);
-    void set_cursor         (const Mouse_cursor cursor);
-    void capture_mouse      (const bool capture);
+    void set_visible        (bool visible);
+    void set_cursor         (Mouse_cursor cursor);
+    void capture_mouse      (bool capture);
 
     auto get_device_pointer() const -> void*;
     auto get_window_handle () const -> void*;

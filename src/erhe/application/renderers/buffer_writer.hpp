@@ -22,7 +22,7 @@ public:
 
     void shader_storage_align();
     void uniform_align       ();
-    void begin               (const gl::Buffer_target buffer_target);
+    void begin               (gl::Buffer_target buffer_target);
     void end                 ();
     void reset               ();
 };

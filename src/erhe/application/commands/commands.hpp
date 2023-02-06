@@ -68,7 +68,7 @@ public:
     void deinitialize_component     () override;
 
     // Public API
-    void register_command(Command* const command);
+    void register_command(Command* command);
     void imgui           ();
     void sort_bindings   ();
 
@@ -134,7 +134,7 @@ public:
             (m_active_mouse_command == command);
     }
 
-    void command_inactivated(Command* const command);
+    void command_inactivated(Command* command);
 
     [[nodiscard]] auto last_mouse_button_bits   () const -> uint32_t;
     [[nodiscard]] auto last_mouse_position      () const -> glm::vec2;
@@ -153,12 +153,12 @@ public:
 #endif
 
 private:
-    [[nodiscard]] auto get_command_priority(Command* const command) const -> int;
+    [[nodiscard]] auto get_command_priority(Command* command) const -> int;
 
     void sort_mouse_bindings        ();
     void sort_xr_bindings           ();
     void inactivate_ready_commands  ();
-    void update_active_mouse_command(Command* const command);
+    void update_active_mouse_command(Command* command);
     void commands                   (State filter);
 
     std::mutex m_command_mutex;

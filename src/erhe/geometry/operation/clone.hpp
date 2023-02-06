@@ -12,15 +12,15 @@ class Clone
 {
 public:
     Clone(
-        Geometry& source,
-        Geometry& destination,
-        glm::mat4 transform
+        Geometry&        source,
+        Geometry&        destination,
+        const glm::mat4& transform
     );
 };
 
 [[nodiscard]] auto clone(
     erhe::geometry::Geometry& source,
-    const glm::mat4           transform
+    const glm::mat4&          transform
 ) -> erhe::geometry::Geometry;
 
 } // namespace erhe::geometry::operation

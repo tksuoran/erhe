@@ -49,7 +49,7 @@ class Window_imgui_viewport
     : public Imgui_viewport
 {
 public:
-    Window_imgui_viewport(const std::string_view name);
+    explicit Window_imgui_viewport(const std::string_view name);
 
     // Implements Rendergraph_node
     void execute_rendergraph_node() override;

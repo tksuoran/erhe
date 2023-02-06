@@ -392,13 +392,7 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
     {
         return {};
     }
-    Scene_root* scene_root = reinterpret_cast<Scene_root*>(scene_host);
-    if (scene_root == nullptr)
-    {
-        return {};
-    }
-
-    auto content_library = scene_root->content_library();
+    auto* scene_root = reinterpret_cast<Scene_root*>(scene_host);
 
     const auto parent = selected_node
         ? selected_node

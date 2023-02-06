@@ -68,7 +68,7 @@ private:
     bool                                             m_transform_change_from_physics{false};
 };
 
-auto is_physics(const erhe::scene::Item* const scene_item) -> bool;
+auto is_physics(const erhe::scene::Item* scene_item) -> bool;
 auto is_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
 auto as_physics(erhe::scene::Item* scene_item) -> Node_physics*;
 auto as_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Node_physics>;

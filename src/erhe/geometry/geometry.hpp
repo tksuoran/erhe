@@ -533,28 +533,28 @@ public:
     // Allocates new Edge / Edge_id
     // - Points must be already allocated
     // - Points must be ordered
-    auto make_edge(const Point_id a, const Point_id b) -> Edge_id;
+    auto make_edge(Point_id a, Point_id b) -> Edge_id;
 
     // Reserves new point corner.
     // - Point must be already allocated.
     // - Corner must be already allocated.
     // - Does not actually create point corner, only allocates space
-    void reserve_point_corner(const Point_id point_id, const Corner_id corner_id);
+    void reserve_point_corner(Point_id point_id, Corner_id corner_id);
 
     // Allocates new edge polygon.
     // - Edge must be already allocated.
     // - Polygon must be already allocated.
-    auto make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon_id) -> Edge_polygon_id;
+    auto make_edge_polygon(Edge_id edge_id, Polygon_id polygon_id) -> Edge_polygon_id;
 
     // Allocates new polygon corner.
     // - Polygon must be already allocated.
     // - Corner must be already allocated.
-    auto make_polygon_corner_(const Polygon_id polygon_id, const Corner_id corner_id) -> Polygon_corner_id;
+    auto make_polygon_corner_(Polygon_id polygon_id, Corner_id corner_id) -> Polygon_corner_id;
 
     // Allocates new polygon corner.
     // - Polygon must be already allocated.
     // - Point must be already allocated.
-    auto make_polygon_corner(const Polygon_id polygon_id, const Point_id point_id) -> Corner_id;
+    auto make_polygon_corner(Polygon_id polygon_id, Point_id point_id) -> Corner_id;
 
     // Calculates the number of triangles as if all faces were triangulated
     [[nodiscard]] auto count_polygon_triangles() const -> std::size_t;
@@ -601,17 +601,17 @@ public:
         return m_edge_property_map_collection;
     }
 
-    void reserve_points(const std::size_t point_count);
+    void reserve_points(std::size_t point_count);
 
-    void reserve_polygons(const std::size_t polygon_count);
+    void reserve_polygons(std::size_t polygon_count);
 
-    auto make_point(const float x, const float y, const float z) -> Point_id;
+    auto make_point(float x, float y, float z) -> Point_id;
 
-    auto make_point(const float x, const float y, const float z, const float s, const float t) -> Point_id;
+    auto make_point(float x, float y, float z, float s, float t) -> Point_id;
 
-    auto make_point(const double x, const double y, const double z) -> Point_id;
+    auto make_point(double x, double y, double z) -> Point_id;
 
-    auto make_point(const double x, const double y, const double z, const double s, const double t) -> Point_id;
+    auto make_point(double x, double y, double z, double s, double t) -> Point_id;
 
     auto make_polygon(const std::initializer_list<Point_id> point_list) -> Polygon_id;
 
@@ -658,7 +658,7 @@ public:
         const bool override_existing  = false
     ) -> bool;
 
-    auto generate_polygon_texture_coordinates(const bool overwrite_existing_texture_coordinates = false) -> bool;
+    auto generate_polygon_texture_coordinates(bool overwrite_existing_texture_coordinates = false) -> bool;
 
     [[nodiscard]] auto has_polygon_texture_coordinates() const -> bool;
 

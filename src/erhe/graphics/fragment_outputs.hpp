@@ -10,7 +10,7 @@ namespace erhe::graphics
 class Fragment_outputs
 {
 public:
-    explicit Fragment_outputs(std::initializer_list<Fragment_output> outputs);
+    explicit Fragment_outputs(const std::initializer_list<Fragment_output> outputs);
 
     [[nodiscard]] auto source() const -> std::string;
 

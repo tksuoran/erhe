@@ -52,7 +52,7 @@ public:
 
     void enqueue(
         Buffer&                buffer,
-        const std::size_t      offset,
+        std::size_t            offset,
         std::vector<uint8_t>&& data
     );
 

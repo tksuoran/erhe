@@ -130,7 +130,7 @@ void Operations::imgui()
     {
         const auto& node0 = as_node(g_selection_tool->selection().at(0));
         const auto& node1 = as_node(g_selection_tool->selection().at(1));
-        if (node1 && node1)
+        if (node0 && node1)
         {
             g_operation_stack->push(
                 std::make_shared<Node_attach_operation>(

@@ -48,8 +48,8 @@ public:
     static auto make(
         const Vertex_attribute_mappings& mappings,
         const Vertex_format&             vertex_format,
-        Buffer* const                    vertex_buffer,
-        Buffer* const                    index_buffer
+        Buffer*                          vertex_buffer,
+        Buffer*                          index_buffer
     ) -> Vertex_input_state_data;
 };
 
@@ -82,7 +82,7 @@ class Vertex_input_state_tracker
 {
 public:
     void reset  ();
-    void execute(const Vertex_input_state* const state);
+    void execute(const Vertex_input_state* state);
 
 private:
     unsigned int m_last{0};

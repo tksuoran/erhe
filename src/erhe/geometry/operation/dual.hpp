@@ -13,7 +13,7 @@ public:
     Dual(
         Geometry& source,
         Geometry& destination,
-        bool post_process = true
+        bool      post_process = true
     );
 };
 

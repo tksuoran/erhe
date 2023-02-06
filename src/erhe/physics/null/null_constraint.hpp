@@ -15,7 +15,7 @@ class Null_point_to_point_constraint
     : public IConstraint
 {
 public:
-    Null_point_to_point_constraint(
+    explicit Null_point_to_point_constraint(
         const Point_to_point_constraint_settings& settings
     )
         : m_settings{settings}

@@ -45,13 +45,13 @@ public:
     void set_mask                  (const uint32_t mask) override;
     void set_vertex_attribute_count(const unsigned int count) override;
     void set_buffer(
-        const Buffer_type  type,
-        const unsigned int slot,
-        const Format       format,
-        IBuffer* const     buffer,
-        const std::size_t  byte_offset,
-        const std::size_t  byte_stride,
-        const std::size_t  item_count
+        Buffer_type  type,
+        unsigned int slot,
+        Format       format,
+        IBuffer*     buffer,
+        std::size_t  byte_offset,
+        std::size_t  byte_stride,
+        std::size_t  item_count
     ) override;
     void set_user_data(void* ptr) override;
     [[nodiscard]] auto get_mask     () const -> uint32_t         override;

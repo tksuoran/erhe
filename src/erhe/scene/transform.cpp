@@ -46,7 +46,7 @@ void Transform::fix_inverse()
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-auto Transform::inverse(const Transform& transform) -> const Transform
+auto Transform::inverse(const Transform& transform) -> Transform
 {
     return Transform{transform.inverse_matrix(), transform.matrix()};
 }
@@ -57,7 +57,7 @@ void Transform::set_translation(const float x, const float y, const float z)
     m_inverse_matrix = erhe::toolkit::create_translation<float>(glm::vec3{-x, -y, -z});
 }
 
-auto Transform::create_translation(const float x, const float y, const float z) -> const Transform
+auto Transform::create_translation(const float x, const float y, const float z) -> Transform
 {
     return Transform{
         erhe::toolkit::create_translation<float>(glm::vec3{ x,  y,  z}),
@@ -65,7 +65,7 @@ auto Transform::create_translation(const float x, const float y, const float z) 
     };
 }
 
-auto Transform::create_translation(const glm::vec3 translation) -> const Transform
+auto Transform::create_translation(const glm::vec3& translation) -> Transform
 {
     return Transform{
         erhe::toolkit::create_translation<float>( translation),
@@ -73,13 +73,13 @@ auto Transform::create_translation(const glm::vec3 translation) -> const Transfo
     };
 }
 
-void Transform::set_rotation(const float angle_radians, const vec3 axis)
+void Transform::set_rotation(const float angle_radians, const vec3& axis)
 {
     m_matrix         = erhe::toolkit::create_rotation<float>( angle_radians, axis);
     m_inverse_matrix = erhe::toolkit::create_rotation<float>(-angle_radians, axis);
 }
 
-auto Transform::create_rotation(const float angle_radians, const glm::vec3 axis) -> const Transform
+auto Transform::create_rotation(const float angle_radians, const glm::vec3& axis) -> Transform
 {
     return Transform{
         erhe::toolkit::create_rotation<float>( angle_radians, axis),
@@ -93,7 +93,7 @@ void Transform::set_scale(const float s)
     m_inverse_matrix = erhe::toolkit::create_scale(1.0f / s);
 }
 
-auto Transform::create_scale(const float s) -> const Transform
+auto Transform::create_scale(const float s) -> Transform
 {
     return Transform{
         erhe::toolkit::create_scale<float>(s),
@@ -110,7 +110,7 @@ void Transform::set_scale(const float x, const float y, const float z)
     m_inverse_matrix = erhe::toolkit::create_scale<float>(1.0f / x_scale, 1.0f / y_scale, 1.0f / z_scale);
 }
 
-auto Transform::create_scale(const float x, const float y, const float z) -> const Transform
+auto Transform::create_scale(const float x, const float y, const float z) -> Transform
 {
     const float x_scale = (x != 0.0f) ? x : 1.0f;
     const float y_scale = (y != 0.0f) ? y : 1.0f;
@@ -121,7 +121,7 @@ auto Transform::create_scale(const float x, const float y, const float z) -> con
     };
 }
 
-auto Transform::create_scale(const glm::vec3 scale) -> const Transform
+auto Transform::create_scale(const glm::vec3& scale) -> Transform
 {
     const float x_scale = (scale.x != 0.0f) ? scale.x : 1.0f;
     const float y_scale = (scale.y != 0.0f) ? scale.y : 1.0f;
@@ -188,19 +188,19 @@ void Transform::set_perspective_horizontal(
     m_inverse_matrix = glm::inverse(m_matrix);
 }
 
-void Transform::set(const mat4 matrix)
+void Transform::set(const mat4& matrix)
 {
     m_matrix         = matrix;
     m_inverse_matrix = glm::inverse(matrix);
 }
 
-void Transform::set(const mat4 matrix, const mat4 inverse_matrix)
+void Transform::set(const mat4& matrix, const mat4& inverse_matrix)
 {
     m_matrix         = matrix;
     m_inverse_matrix = inverse_matrix;
 }
 
-void Transform::catenate(const mat4 m)
+void Transform::catenate(const mat4& m)
 {
     m_matrix         = m_matrix * m;
     m_inverse_matrix = glm::inverse(m_matrix);

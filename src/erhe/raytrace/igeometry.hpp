@@ -147,13 +147,13 @@ public:
     virtual void set_mask                  (const uint32_t mask) = 0;
     virtual void set_vertex_attribute_count(const unsigned int count) = 0;
     virtual void set_buffer(
-        const Buffer_type  type,
-        const unsigned int slot,
-        const Format       format,
-        IBuffer* const     buffer,
-        const std::size_t  byte_offset,
-        const std::size_t  byte_stride,
-        const std::size_t  item_count
+        Buffer_type  type,
+        unsigned int slot,
+        Format       format,
+        IBuffer*     buffer,
+        std::size_t  byte_offset,
+        std::size_t  byte_stride,
+        std::size_t  item_count
     ) = 0;
     virtual void set_user_data(void* ptr) = 0;
     [[nodiscard]] virtual auto get_mask     () const -> uint32_t         = 0;
