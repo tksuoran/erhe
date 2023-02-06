@@ -297,6 +297,10 @@ void Forward_renderer::render_fullscreen(
     erhe::graphics::Scoped_debug_group forward_renderer_render{c_forward_renderer_render};
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+
+    m_material_buffers->update(parameters.materials);
+    m_material_buffers->bind();
+
     if (camera != nullptr)
     {
         m_camera_buffers->update(

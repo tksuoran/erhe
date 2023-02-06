@@ -45,6 +45,7 @@
 #include "tools/trs/rotate_tool.hpp"
 #include "tools/trs/trs_tool.hpp"
 
+#include "windows/brdf_slice_window.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #include "windows/layers_window.hpp"
@@ -155,12 +156,10 @@ private:
     erhe::graphics::OpenGL_state_tracker         opengl_state_tracker;
     erhe::scene::Scene_message_bus               scene_message_bus;
 
-    editor::Program_interface      program_interface     ;
-    editor::Programs               programs              ;
-    editor::Image_transfer         image_transfer        ;
+    editor::Brdf_slice_window      brdf_slice_window     ;
     editor::Brush_tool             brush_tool            ;
-    editor::Create                 create                ;
     editor::Content_library_window content_library_window;
+    editor::Create                 create                ;
     editor::Debug_draw             debug_draw            ;
     editor::Debug_view_window      debug_view_window     ;
     editor::Debug_visualizations   debug_visualizations  ;
@@ -173,23 +172,26 @@ private:
     editor::Grid_tool              grid_tool             ;
     editor::Hotbar                 hotbar                ;
     editor::Hover_tool             hover_tool            ;
+    editor::Hud                    hud                   ;
     editor::Icon_set               icon_set              ;
     editor::Id_renderer            id_renderer           ;
+    editor::Image_transfer         image_transfer        ;
     editor::Layers_window          layers_window         ;
     editor::Material_paint_tool    material_paint_tool   ;
     editor::Material_preview       material_preview      ;
     editor::Mesh_memory            mesh_memory           ;
     editor::Move_tool              move_tool             ;
-    editor::Properties             properties            ;
     editor::Node_tree_window       node_tree_window      ;
     editor::Operation_stack        operation_stack       ;
     editor::Operations             operations            ;
-    editor::Hud                    hud                   ;
     editor::Paint_tool             paint_tool            ;
     editor::Physics_tool           physics_tool          ;
     editor::Physics_window         physics_window        ;
     editor::Post_processing        post_processing       ;
     editor::Post_processing_window post_processing_window;
+    editor::Program_interface      program_interface     ;
+    editor::Programs               programs              ;
+    editor::Properties             properties            ;
     editor::Rendergraph_window     rendergraph_window    ;
     editor::Rotate_tool            rotate_tool           ;
     editor::Scene_builder          scene_builder         ;
@@ -197,8 +199,8 @@ private:
     editor::Selection_tool         selection_tool        ;
     editor::Settings_window        settings_window       ;
     editor::Shadow_renderer        shadow_renderer       ;
-    editor::Tools                  tools                 ;
     editor::Tool_properties_window tool_properties_window;
+    editor::Tools                  tools                 ;
     editor::Trs_tool               trs_tool              ;
     editor::Viewport_config        viewport_config       ;
     editor::Viewport_windows       viewport_windows      ;
@@ -308,12 +310,10 @@ auto Application_impl::initialize_components(
         m_components.add(&line_renderer_set );
         m_components.add(&opengl_state_tracker);
 
-        m_components.add(&program_interface     );
-        m_components.add(&programs              );
-        m_components.add(&image_transfer        );
+        m_components.add(&brdf_slice_window     );
         m_components.add(&brush_tool            );
-        m_components.add(&create                );
         m_components.add(&content_library_window);
+        m_components.add(&create                );
         m_components.add(&debug_draw            );
         m_components.add(&debug_view_window     );
         m_components.add(&debug_visualizations  );
@@ -326,23 +326,26 @@ auto Application_impl::initialize_components(
         m_components.add(&grid_tool             );
         m_components.add(&hotbar                );
         m_components.add(&hover_tool            );
+        m_components.add(&hud                   );
         m_components.add(&icon_set              );
         m_components.add(&id_renderer           );
+        m_components.add(&image_transfer        );
         m_components.add(&layers_window         );
         m_components.add(&material_paint_tool   );
         m_components.add(&material_preview      );
         m_components.add(&mesh_memory           );
         m_components.add(&move_tool             );
-        m_components.add(&properties            );
         m_components.add(&node_tree_window      );
         m_components.add(&operation_stack       );
         m_components.add(&operations            );
-        m_components.add(&hud                   );
         m_components.add(&paint_tool            );
         m_components.add(&physics_tool          );
         m_components.add(&physics_window        );
         m_components.add(&post_processing       );
         m_components.add(&post_processing_window);
+        m_components.add(&program_interface     );
+        m_components.add(&programs              );
+        m_components.add(&properties            );
         m_components.add(&rendergraph_window    );
         m_components.add(&rotate_tool           );
         m_components.add(&scene_builder         );
@@ -351,8 +354,8 @@ auto Application_impl::initialize_components(
         m_components.add(&selection_tool        );
         m_components.add(&settings_window       );
         m_components.add(&shadow_renderer       );
-        m_components.add(&tools                 );
         m_components.add(&tool_properties_window);
+        m_components.add(&tools                 );
         m_components.add(&trs_tool              );
         m_components.add(&viewport_config       );
         m_components.add(&viewport_windows      );

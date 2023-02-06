@@ -11,6 +11,11 @@
 #include <memory>
 #include <optional>
 
+namespace erhe::primitive
+{
+    class Material;
+}
+
 namespace editor
 {
 
@@ -28,13 +33,13 @@ class Light_block
 {
 public:
     std::size_t  shadow_texture;          // uvec2
-    std::size_t  reserved_1;              // uvec2
+    std::size_t  brdf_phi_incident_phi;   // vec2  - was reserved1
     std::size_t  directional_light_count; // uint
     std::size_t  spot_light_count;        // uint
     std::size_t  point_light_count;       // uint
-    std::size_t  reserved_0;              // uint
+    std::size_t  brdf_material;           // uint  - was reserved0
     std::size_t  ambient_light;           // vec4
-    std::size_t  reserved_2;              // uvec3
+    std::size_t  reserved_2;              // uvec4
     Light_struct light;
     std::size_t  light_struct;
 };
@@ -78,6 +83,11 @@ public:
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
     uint64_t                                              shadow_map_texture_handle;
+
+    // TODO A bit hacky injection of these parameters..
+    float                                                 brdf_phi         {0.0f};
+    float                                                 brdf_incident_phi{0.0f};
+    std::shared_ptr<erhe::primitive::Material>            brdf_material    {};
 };
 
 class Light_buffer

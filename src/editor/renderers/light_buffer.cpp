@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 
 #include "erhe/log/log_glm.hpp"
+#include "erhe/primitive/material.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
@@ -27,11 +28,11 @@ Light_interface::Light_interface(const std::size_t max_light_count)
     , light_struct{"Light"}
     , offsets     {
         .shadow_texture          = light_block.add_uvec2("shadow_texture"         )->offset_in_parent(),
-        .reserved_1              = light_block.add_uvec2("reserved_1"             )->offset_in_parent(),
+        .brdf_phi_incident_phi   = light_block.add_vec2 ("brdf_phi_incident_phi"  )->offset_in_parent(),
         .directional_light_count = light_block.add_uint ("directional_light_count")->offset_in_parent(),
         .spot_light_count        = light_block.add_uint ("spot_light_count"       )->offset_in_parent(),
         .point_light_count       = light_block.add_uint ("point_light_count"      )->offset_in_parent(),
-        .reserved_0              = light_block.add_uint ("reserved_0"             )->offset_in_parent(),
+        .brdf_material           = light_block.add_uint ("brdf_material"          )->offset_in_parent(),
         .ambient_light           = light_block.add_vec4 ("ambient_light"          )->offset_in_parent(),
         .reserved_2              = light_block.add_uvec4("reserved_2"             )->offset_in_parent(),
         .light = {
@@ -154,8 +155,6 @@ auto Light_buffer::update(
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
     uint32_t       point_light_count      {0u};
-    const uint32_t uint32_zero            {0u};
-    const uint32_t uvec2_zero[2]          {0u, 0u};
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
     const uint32_t shadow_map_texture_handle_uvec2[2] = {
         light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle & 0xffffffffu)) : 0,
@@ -196,6 +195,7 @@ auto Light_buffer::update(
         }
 
         //ERHE_VERIFY(camera != nullptr);
+        using vec2 = glm::vec2;
         using vec3 = glm::vec3;
         using vec4 = glm::vec4;
         using mat4 = glm::mat4;
@@ -218,6 +218,7 @@ auto Light_buffer::update(
         const vec4  direction_outer_spot = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
         const auto  light_index          = light_projection_transforms->index;
         const auto  light_offset         = light_array_offset + light_index * light_struct_size;
+
         ERHE_VERIFY(light_offset < buffer.capacity_byte_count());
         max_light_index = std::max(max_light_index, light_index);
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.matrix()));
@@ -228,13 +229,16 @@ auto Light_buffer::update(
     }
     writer.write_offset += (max_light_index + 1) * light_struct_size;
 
+    const auto brdf_phi_incident_phi = light_projections != nullptr ? glm::vec2{light_projections->brdf_phi, light_projections->brdf_incident_phi} : glm::vec2{0.0f, 0.0f};
+    const auto brdf_material         = light_projections != nullptr ? (light_projections->brdf_material ? light_projections->brdf_material->material_buffer_index : 0) : 0;
+
     // Late write to begin of buffer to full in light counts
     write(light_gpu_data, common_offset + offsets.shadow_texture,          as_span(shadow_map_texture_handle_uvec2));
-    write(light_gpu_data, common_offset + offsets.reserved_1,              as_span(uvec2_zero)               );
+    write(light_gpu_data, common_offset + offsets.brdf_phi_incident_phi,   as_span(brdf_phi_incident_phi)    );
     write(light_gpu_data, common_offset + offsets.directional_light_count, as_span(directional_light_count)  );
     write(light_gpu_data, common_offset + offsets.spot_light_count,        as_span(spot_light_count)         );
     write(light_gpu_data, common_offset + offsets.point_light_count,       as_span(point_light_count)        );
-    write(light_gpu_data, common_offset + offsets.reserved_0,              as_span(uint32_zero)              );
+    write(light_gpu_data, common_offset + offsets.brdf_material,           as_span(brdf_material)            );
     write(light_gpu_data, common_offset + offsets.ambient_light,           as_span(ambient_light)            );
     write(light_gpu_data, common_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
 

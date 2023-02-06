@@ -86,6 +86,7 @@ public:
     std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
     std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;
 
+    std::unique_ptr<erhe::graphics::Shader_stages> brdf_slice;
     std::unique_ptr<erhe::graphics::Shader_stages> brush;
     std::unique_ptr<erhe::graphics::Shader_stages> standard;
     std::unique_ptr<erhe::graphics::Shader_stages> anisotropic_slope;

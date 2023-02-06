@@ -136,6 +136,7 @@ void Programs::initialize_component()
     prototypes.emplace_back(&anisotropic_slope       , make_prototype(CI{ .name = "anisotropic_slope"       , .default_uniform_block = shadow_default_uniform_block} ));
     prototypes.emplace_back(&anisotropic_engine_ready, make_prototype(CI{ .name = "anisotropic_engine_ready", .default_uniform_block = shadow_default_uniform_block} ));
     prototypes.emplace_back(&circular_brushed_metal  , make_prototype(CI{ .name = "circular_brushed_metal"  , .default_uniform_block = shadow_default_uniform_block} ));
+    prototypes.emplace_back(&brdf_slice              , make_prototype(CI{ .name = "brdf_slice"              , .default_uniform_block = shadow_default_uniform_block} ));
     prototypes.emplace_back(&brush                   , make_prototype(CI{ .name = "brush"                   , .default_uniform_block = shadow_default_uniform_block} ));
     prototypes.emplace_back(&textured                , make_prototype(CI{ .name = "textured"                , .default_uniform_block = base_texture_default_uniform_block } ));
     prototypes.emplace_back(&wide_lines_draw_color   , make_prototype(CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}}));

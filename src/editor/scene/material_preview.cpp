@@ -77,7 +77,9 @@ void Material_preview::initialize_component()
     m_last_content_library = std::make_shared<Content_library>();
     m_last_content_library->is_shown_in_ui = true; //// TODO
 
-    m_last_material = std::make_shared<erhe::primitive::Material>("Dummy Material");
+    m_last_material = std::make_shared<erhe::primitive::Material>("Material A");
+    m_last_content_library->materials.add(m_last_material);
+    m_last_material = std::make_shared<erhe::primitive::Material>("Material B");
     m_last_content_library->materials.add(m_last_material);
 
     m_scene_root = std::make_shared<Scene_root>(
@@ -283,6 +285,11 @@ void Material_preview::render_preview(
 [[nodiscard]] auto Material_preview::get_scene_root() -> std::shared_ptr<Scene_root>
 {
     return m_scene_root;
+}
+
+[[nodiscard]] auto Material_preview::get_content_library() -> std::shared_ptr<Content_library>
+{
+    return m_last_content_library;
 }
 
 void Material_preview::imgui()

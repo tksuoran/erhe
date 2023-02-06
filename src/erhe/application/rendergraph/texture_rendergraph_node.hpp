@@ -22,8 +22,8 @@ class Texture_rendergraph_node_create_info
 {
 public:
     std::string         name;
-    int                 input_key;
-    int                 output_key;
+    int                 input_key           {Rendergraph_node_key::none};
+    int                 output_key          {Rendergraph_node_key::none};
     gl::Internal_format color_format        {0};
     gl::Internal_format depth_stencil_format{0};
 };

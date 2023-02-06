@@ -192,7 +192,6 @@ void Scene_view::set_world_from_control(
     {
         return;
     }
-    const glm::vec3 direction              = glm::normalize(far_position_in_world - near_position_in_world);
     const glm::mat4 camera_world_from_node = camera_node->world_from_node();
     const glm::vec3 camera_up_in_world     = glm::vec3{camera_world_from_node * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
     const glm::mat4 transform = erhe::toolkit::create_look_at(

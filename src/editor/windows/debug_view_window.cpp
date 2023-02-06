@@ -281,6 +281,7 @@ void Debug_view_window::declare_required_components()
 {
     require<erhe::application::Imgui_windows>();
     require<erhe::application::Rendergraph>();
+    require<Programs>();
 }
 
 void Debug_view_window::initialize_component()

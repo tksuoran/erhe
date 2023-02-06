@@ -61,7 +61,8 @@ public:
     void imgui() override;
 
     // Public API
-    [[nodiscard]] auto get_scene_root() -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_scene_root     () -> std::shared_ptr<Scene_root>;
+    [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
 
     void render_preview(
         const std::shared_ptr<Content_library>&           content_library,

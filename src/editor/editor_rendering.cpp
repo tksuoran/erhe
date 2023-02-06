@@ -598,7 +598,10 @@ void Editor_rendering::render_viewport_main(
         erhe::graphics::g_opengl_state_tracker->depth_stencil.reset(); // workaround issue in stencil state tracking
     }
 
-    if (erhe::application::g_line_renderer_set != nullptr)
+    if (
+        (erhe::application::g_line_renderer_set != nullptr) &&
+        (context.camera != nullptr)
+    )
     {
         erhe::application::g_line_renderer_set->begin();
         g_tools->render_tools(context);

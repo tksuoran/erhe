@@ -65,7 +65,7 @@ public:
     void set_area_size(int size);
 
 private:
-    int m_area_size    {0};
+    int m_area_size{0};
 };
 
 /// Rendergraph sink node for showing texture in ImGui window
