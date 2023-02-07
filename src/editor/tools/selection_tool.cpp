@@ -1,4 +1,4 @@
-#include "tools/selection_tool.hpp"
+#include "selection_tool.hpp"
 
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
@@ -20,7 +20,7 @@
 #include "tools/trs/move_tool.hpp"
 #include "tools/trs/rotate_tool.hpp"
 #include "windows/node_tree_window.hpp"
-#include "windows/viewport_config.hpp"
+#include "windows/viewport_config_window.hpp"
 
 #include "erhe/application/application_view.hpp"
 #include "erhe/application/commands/commands.hpp"
