@@ -413,13 +413,13 @@ void Id_renderer::render(const Render_parameters& parameters)
         }
         gl::disable    (gl::Enable_cap::framebuffer_srgb);
         gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
-        gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
-        gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
         if (m_use_scissor)
         {
             gl::scissor(idr.x_offset, idr.y_offset, s_extent, s_extent);
             gl::enable (gl::Enable_cap::scissor_test);
         }
+        gl::clear_color(1.0f, 1.0f, 1.0f, 0.1f);
+        gl::clear      (gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
     }
 
     m_primitive_buffers->reset_id_ranges();

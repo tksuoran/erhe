@@ -1,4 +1,4 @@
-#include "windows/viewport_config.hpp"
+#include "windows/viewport_config_window.hpp"
 
 #include "renderers/primitive_buffer.hpp"
 #include "tools/hotbar.hpp"
@@ -15,9 +15,9 @@
 namespace editor
 {
 
-Viewport_config* g_viewport_config{nullptr};
+Viewport_config_window* g_viewport_config_window{nullptr};
 
-Viewport_config::Viewport_config()
+Viewport_config_window::Viewport_config_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
 {
@@ -27,25 +27,23 @@ Viewport_config::Viewport_config()
     data.render_style_selected.edge_lines = false;
 }
 
-Viewport_config::~Viewport_config()
+Viewport_config_window::~Viewport_config_window() = default;
+
+void Viewport_config_window::deinitialize_component()
 {
+    ERHE_VERIFY(g_viewport_config_window == this);
+    g_viewport_config_window = nullptr;
 }
 
-void Viewport_config::deinitialize_component()
-{
-    ERHE_VERIFY(g_viewport_config == this);
-    g_viewport_config = nullptr;
-}
-
-void Viewport_config::declare_required_components()
+void Viewport_config_window::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
 }
 
-void Viewport_config::initialize_component()
+void Viewport_config_window::initialize_component()
 {
-    ERHE_VERIFY(g_viewport_config == nullptr);
+    ERHE_VERIFY(g_viewport_config_window == nullptr);
     erhe::application::g_imgui_windows->register_imgui_window(this);
     const auto& config = erhe::application::g_configuration->viewport;
     data.render_style_not_selected.polygon_fill      = config.polygon_fill;
@@ -68,11 +66,11 @@ void Viewport_config::initialize_component()
     data.selection_bounding_box    = config.selection_bounding_box;
     data.selection_bounding_sphere = config.selection_bounding_sphere;
     data.clear_color               = config.clear_color;
-    g_viewport_config = this;
+    g_viewport_config_window = this;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Viewport_config::render_style_ui(Render_style& render_style)
+void Viewport_config_window::render_style_ui(Render_style& render_style)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -149,7 +147,7 @@ void Viewport_config::render_style_ui(Render_style& render_style)
 }
 #endif
 
-void Viewport_config::imgui()
+void Viewport_config_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION

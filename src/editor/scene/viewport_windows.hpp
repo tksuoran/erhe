@@ -1,7 +1,7 @@
 #pragma once
 
 #include "editor_message.hpp"
-#include "windows/viewport_config.hpp"
+#include "renderers/viewport_config.hpp"
 
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/commands/command.hpp"

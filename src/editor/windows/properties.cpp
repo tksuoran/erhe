@@ -8,6 +8,7 @@
 #include "tools/selection_tool.hpp"
 #include "scene/frame_controller.hpp"
 #include "scene/material_library.hpp"
+#include "scene/material_preview.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
@@ -983,6 +984,8 @@ void Properties::imgui()
             {
                 selected_material->set_name(name);
             }
+            g_material_preview->render_preview(selected_material);
+            g_material_preview->show_preview();
             ImGui::SliderFloat("Metallic",    &selected_material->metallic,     0.0f,  1.0f);
             ImGui::SliderFloat("Reflectance", &selected_material->reflectance,  0.35f, 1.0f);
             ImGui::SliderFloat("Roughness X", &selected_material->roughness.x,  0.1f,  0.8f);

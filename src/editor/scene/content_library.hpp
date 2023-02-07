@@ -49,6 +49,7 @@ public:
 
     void add   (const std::shared_ptr<T>& entry);
     auto remove(const std::shared_ptr<T>& entry) -> bool;
+    void clear ();
 
 private:
     mutable std::mutex              m_mutex;
@@ -87,6 +88,13 @@ auto Library<T>::make(Args&& ...args) -> std::shared_ptr<T>
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_entries.push_back(entry);
     return entry;
+}
+
+template <typename T>
+void Library<T>::clear()
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    m_entries.clear();
 }
 
 template <typename T>

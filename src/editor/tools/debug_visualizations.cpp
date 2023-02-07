@@ -13,7 +13,6 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs/trs_tool.hpp"
-#include "windows/viewport_config.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
@@ -568,6 +567,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         return;
     }
 
+    const auto* viewport_config = context.viewport_window->get_config();
+
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
     const auto& selection = g_selection_tool->selection();
@@ -604,7 +605,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 const auto camera = as_camera(attachment);
                 if (
                     camera &&
-                    (g_viewport_config->data.debug_visualizations.camera == Visualization_mode::selected)
+                    (viewport_config != nullptr) &&
+                    (viewport_config->debug_visualizations.camera == Visualization_mode::selected)
                 )
                 {
                     camera_visualization(context, camera.get());
@@ -639,8 +641,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                     );
                     const uint32_t  text_color = 0xff88ff88u;
                     const glm::vec3 point_in_window_z_negated{
-                            point_in_window.x,
-                            point_in_window.y,
+                         point_in_window.x,
+                         point_in_window.y,
                         -point_in_window.z
                     };
                     erhe::application::g_text_renderer->print(

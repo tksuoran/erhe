@@ -81,8 +81,8 @@ Light_projections::Light_projections(
 )
     : parameters
         {
-            .view_camera          = view_camera,
-            .shadow_map_viewport  = light_texture_viewport
+            .view_camera         = view_camera,
+            .shadow_map_viewport = light_texture_viewport
         }
     , shadow_map_texture_handle{shadow_map_texture_handle}
 {

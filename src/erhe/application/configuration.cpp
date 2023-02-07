@@ -281,6 +281,7 @@ void Configuration::parse_args(int argc, char** argv)
             ini_get(section, "dynamic_enable", physics.dynamic_enable);
         }
 
+        get_window(ini, "brdf_slice",           windows.brdf_slice          );
         get_window(ini, "commands",             windows.commands            );
         get_window(ini, "create",               windows.create              );
         get_window(ini, "content_library",      windows.content_library     );
@@ -294,7 +295,6 @@ void Configuration::parse_args(int argc, char** argv)
         get_window(ini, "layers",               windows.layers              );
         get_window(ini, "line_renderer",        windows.line_renderer       );
         get_window(ini, "log",                  windows.log                 );
-        get_window(ini, "material_preview",     windows.material_preview    );
         get_window(ini, "node_tree",            windows.node_tree           );
         get_window(ini, "operation_stack",      windows.operation_stack     );
         get_window(ini, "operations",           windows.operations          );

@@ -71,7 +71,7 @@ Viewport_window::Viewport_window(
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
     : erhe::application::Rendergraph_node{name}
-    , m_viewport_config                  {g_viewport_config->data}
+    , m_viewport_config                  {g_viewport_config_window->data}
     , m_name                             {name}
     , m_scene_root                       {scene_root}
     , m_tool_scene_root                  {g_tools->get_tool_scene_root()}
@@ -518,7 +518,7 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
     return shadow_render_node;
 }
 
-auto Viewport_window::get_config() -> Viewport_config_data*
+auto Viewport_window::get_config() -> Viewport_config*
 {
     return &m_viewport_config;
 }

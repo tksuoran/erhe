@@ -7,6 +7,7 @@
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
+#include "renderers/viewport_config.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 #include "rendertarget_mesh.hpp"
@@ -16,7 +17,6 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 #include "windows/debug_view_window.hpp"
-#include "windows/viewport_config.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif

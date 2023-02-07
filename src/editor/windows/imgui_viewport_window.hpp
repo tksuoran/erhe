@@ -1,6 +1,5 @@
 #pragma once
 
-#include "windows/viewport_config.hpp"
 #include "erhe/application/rendergraph/texture_rendergraph_node.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
 

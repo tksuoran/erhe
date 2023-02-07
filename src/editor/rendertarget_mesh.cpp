@@ -11,7 +11,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
-#include "windows/viewport_config.hpp"
+#include "windows/viewport_config_window.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
@@ -404,12 +404,12 @@ void Rendertarget_mesh::render_done()
 {
     gl::generate_texture_mipmap(m_texture->gl_name());
 
-    if (g_viewport_config->rendertarget_mesh_lod_bias != m_sampler->lod_bias)
+    if (g_viewport_config_window->rendertarget_mesh_lod_bias != m_sampler->lod_bias)
     {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
             gl::Texture_min_filter::linear_mipmap_linear,
             gl::Texture_mag_filter::nearest,
-            g_viewport_config->rendertarget_mesh_lod_bias
+            g_viewport_config_window->rendertarget_mesh_lod_bias
         );
         m_material->sampler = m_sampler;
     }

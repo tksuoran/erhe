@@ -11,6 +11,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "tools/tools.hpp"
+#include "windows/content_library_window.hpp"
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -89,6 +90,12 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
+    const auto selected_material = g_content_library_window->selected_material();
+    if (!selected_material)
+    {
+        return;
+    }
+
     ERHE_PROFILE_FUNCTION
 
     erhe::graphics::Scoped_debug_group pass_scope{"BRDF Slice"};
@@ -103,13 +110,6 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         m_framebuffer->gl_name()
     );
 
-    const auto& content_library = g_material_preview->get_content_library();
-    if (!content_library)
-    {
-        return;
-    }
-    const auto& materials = content_library->materials.entries();
-
     Light_projections light_projections;
     light_projections.brdf_phi          = g_brdf_slice_window->phi;
     light_projections.brdf_incident_phi = g_brdf_slice_window->incident_phi;
@@ -119,7 +119,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         Forward_renderer::Render_parameters{
             .light_projections = &light_projections,
             .lights            = {},
-            .materials         = materials,
+            .materials         = gsl::span<const std::shared_ptr<erhe::primitive::Material>>(&selected_material, 1),
             .mesh_spans        = {},
             .passes            = { &m_renderpass },
             .shadow_texture    = nullptr,
@@ -141,23 +141,6 @@ void Brdf_slice_rendergraph_node::set_area_size(const int size)
     erhe::application::Resource_routing resource_routing,
     int                                 key,
     int                                 depth
-) const -> erhe::scene::Viewport
-{
-    static_cast<void>(resource_routing); // TODO Validate
-    static_cast<void>(key); // TODO Validate
-    static_cast<void>(depth);
-    return erhe::scene::Viewport{
-        .x      = 0,
-        .y      = 0,
-        .width  = m_area_size,
-        .height = m_area_size
-    };
-}
-
-[[nodiscard]] auto Brdf_slice_rendergraph_node::get_consumer_input_viewport(
-    const erhe::application::Resource_routing resource_routing,
-    const int                                 key,
-    const int                                 depth
 ) const -> erhe::scene::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
@@ -193,8 +176,9 @@ void Brdf_slice_window::deinitialize_component()
 
 void Brdf_slice_window::declare_required_components()
 {
-    require<erhe::application::Imgui_windows>();
-    require<erhe::application::Rendergraph>();
+    require<erhe::application::Gl_context_provider>();
+    require<erhe::application::Imgui_windows      >();
+    require<erhe::application::Rendergraph        >();
     require<Programs>();
 }
 
@@ -203,6 +187,8 @@ void Brdf_slice_window::initialize_component()
     ERHE_VERIFY(g_brdf_slice_window == nullptr);
 
     erhe::application::g_imgui_windows->register_imgui_window(this);
+
+    const erhe::application::Scoped_gl_context gl_context;
 
     m_node = std::make_shared<Brdf_slice_rendergraph_node>();
     erhe::application::g_rendergraph->register_node(m_node);
@@ -253,16 +239,14 @@ void Brdf_slice_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    const auto& content_library = g_material_preview->get_content_library();
-    if (!content_library)
+    const auto selected_material = g_content_library_window->selected_material();
+    if (!selected_material)
     {
         return;
     }
 
     ImGui::SliderFloat("Phi",          &phi, 0.0, 1.57);
     ImGui::SliderFloat("Incident Phi", &incident_phi, 0.0, 1.57);
-
-    content_library->materials.combo("Material", material, true);
 
     const auto  available_size = ImGui::GetContentRegionAvail();
     const float image_size     = std::min(available_size.x, available_size.y);
@@ -289,15 +273,15 @@ void Brdf_slice_window::imgui()
         (area_size      > 0)
     )
     {
-        auto cursor_position = ImGui::GetCursorPos();
-        cursor_position.x += (available_size.x - image_size) / 2.0f;
-        cursor_position.y += (available_size.y - image_size) / 2.0f;
-        ImGui::SetCursorPos(cursor_position);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-        SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_window::imgui() - drawing image using texture {}", m_texture->gl_name());
+        ////auto cursor_position = ImGui::GetCursorPos();
+        ////cursor_position.x += (available_size.x - image_size) / 2.0f;
+        ////cursor_position.y += (available_size.y - image_size) / 2.0f;
+        ////ImGui::SetCursorPos(cursor_position);
+        ////ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+        ////SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_window::imgui() - drawing image using texture {}", m_texture->gl_name());
         image(texture, area_size, area_size);
-        // bool is_hovered = ImGui::IsItemHovered();
-        ImGui::PopStyleVar();
+        ////// bool is_hovered = ImGui::IsItemHovered();
+        ////ImGui::PopStyleVar();
     }
     else
     {

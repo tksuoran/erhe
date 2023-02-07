@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -48,6 +49,7 @@ public:
     float                                    transparency{0.0f};
     std::shared_ptr<erhe::graphics::Texture> texture;
     std::shared_ptr<erhe::graphics::Sampler> sampler;
+    std::optional<uint32_t>                  preview_slot;
 
     erhe::toolkit::Unique_id<Material>       m_id;
     std::string                              m_name;

@@ -43,7 +43,7 @@ class Node_raytrace;
 class Render_context;
 class Scene_root;
 class Scene_view;
-class Viewport_config;
+class Viewport_config_window;
 class Viewport_window;
 
 class Rendertarget_mesh

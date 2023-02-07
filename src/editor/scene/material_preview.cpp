@@ -1,16 +1,18 @@
 #include "scene/material_preview.hpp"
 
+#include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/viewport_config.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
 
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
@@ -37,7 +39,6 @@ Material_preview* g_material_preview{nullptr};
 
 Material_preview::Material_preview()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
 {
 }
 
@@ -59,14 +60,13 @@ void Material_preview::deinitialize_component()
     m_key_light.reset();
     m_camera_node.reset();
     m_camera.reset();
-    m_last_content_library.reset();
+    m_content_library.reset();
     m_last_material.reset();
     g_material_preview = nullptr;
 }
 
 void Material_preview::declare_required_components()
 {
-    require<erhe::application::Imgui_windows>();
     require<Editor_scenes>();
     require<Mesh_memory>();
 }
@@ -74,16 +74,11 @@ void Material_preview::declare_required_components()
 void Material_preview::initialize_component()
 {
     ERHE_VERIFY(g_material_preview == nullptr);
-    m_last_content_library = std::make_shared<Content_library>();
-    m_last_content_library->is_shown_in_ui = true; //// TODO
-
-    m_last_material = std::make_shared<erhe::primitive::Material>("Material A");
-    m_last_content_library->materials.add(m_last_material);
-    m_last_material = std::make_shared<erhe::primitive::Material>("Material B");
-    m_last_content_library->materials.add(m_last_material);
+    m_content_library = std::make_shared<Content_library>();
+    m_content_library->is_shown_in_ui = false;
 
     m_scene_root = std::make_shared<Scene_root>(
-        m_last_content_library,
+        m_content_library,
         "Material preview scene"
     );
 
@@ -91,15 +86,16 @@ void Material_preview::initialize_component()
 
     m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
-
     make_preview_scene();
+    make_rendertarget();
 
     g_material_preview = this;
 }
 
 void Material_preview::make_rendertarget()
 {
+    const erhe::application::Scoped_gl_context gl_context;
+
     m_width        = 256;
     m_height       = 256;
     m_color_format = gl::Internal_format::rgba16f;
@@ -117,7 +113,7 @@ void Material_preview::make_rendertarget()
         }
     );
     m_color_texture->set_debug_label("Material Preview Color Texture");
-    const float clear_value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    const float clear_value[4] = { 1.0f, 0.0f, 0.5f, 0.0f };
     gl::clear_tex_image(
         m_color_texture->gl_name(),
         0,
@@ -155,10 +151,34 @@ void Material_preview::make_rendertarget()
     {
         m_framebuffer.reset();
     }
+
+    m_shadow_texture = std::make_shared<Texture>(
+        Texture::Create_info
+        {
+            .target          = gl::Texture_target::texture_2d_array,
+            .internal_format = gl::Internal_format::depth_component32f,
+            .width           = 1,
+            .height          = 1,
+            .depth           = 1
+        }
+    );
+
+    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
+    m_shadow_texture->set_debug_label("Material Preview Shadowmap");
+    float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
+    gl::clear_tex_image(
+        m_shadow_texture->gl_name(),
+        0,
+        gl::Pixel_format::depth_component,
+        gl::Pixel_type::float_,
+        &depth_clear_value
+    );
 }
 
 void Material_preview::make_preview_scene()
 {
+    const erhe::application::Scoped_gl_context gl_context;
+
     erhe::geometry::Geometry sphere_geometry = erhe::geometry::shapes::make_sphere(
         m_radius,
         std::max(1, m_slice_count),
@@ -174,7 +194,6 @@ void Material_preview::make_preview_scene()
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     m_mesh->mesh_data.primitives.push_back(
         erhe::primitive::Primitive{
-            .material              = m_last_material,
             .gl_primitive_geometry = gl_primitive_geometry,
             .normal_style          = erhe::primitive::Normal_style::corner_normals
         }
@@ -230,15 +249,21 @@ void Material_preview::make_preview_scene()
 }
 
 void Material_preview::render_preview(
-    const std::shared_ptr<Content_library>&           content_library,
-    const std::shared_ptr<erhe::primitive::Material>& material,
-    const erhe::scene::Viewport&                      viewport
+    const std::shared_ptr<erhe::primitive::Material>& material
+    //const erhe::scene::Viewport&                      viewport
 )
 {
-    m_last_content_library = content_library;
-    m_last_material        = material;
+    erhe::graphics::Scoped_debug_group outer_debug_scope{"Material preview"};
+
+    m_content_library->materials.entries().clear();
+    m_content_library->materials.add(material);
+    m_last_material = material;
 
     m_mesh->mesh_data.primitives.front().material = material;
+
+    erhe::scene::Viewport viewport{
+        0, 0, m_width, m_height
+    };
 
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -250,24 +275,67 @@ void Material_preview::render_preview(
     );
     gl::clear_stencil(0);
     gl::clear_depth_f(*erhe::application::g_configuration->depth_clear_value_pointer());
+
+    Viewport_config viewport_config;
+    viewport_config.post_processing_enable = false;
+
+    const auto& layers = m_scene_root->layers();
+
+    m_light_projections = Light_projections{
+        layers.light()->lights,
+        m_camera.get(),
+        erhe::scene::Viewport{},
+        0
+    };
+
+    const Render_context context
+    {
+        .scene_view      = this,
+        .viewport_window = nullptr,
+        .viewport_config = &viewport_config,
+        .camera          = m_camera.get(),
+        .viewport        = erhe::scene::Viewport{
+            .x      = 0,
+            .y      = 0,
+            .width  = m_width,
+            .height = m_height
+        },
+        .override_shader_stages = nullptr
+    };
+
+    gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
     gl::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
         gl::Clear_buffer_mask::depth_buffer_bit |
         gl::Clear_buffer_mask::stencil_buffer_bit
     );
+    g_editor_rendering->render_content(context, true);
+    gl::disable(gl::Enable_cap::scissor_test);
+}
 
-    //// const Render_context context
-    //// {
-    ////     .scene_view             = nullptr,
-    ////     .viewport_window        = nullptr,
-    ////     .viewport_config        = m_viewport_config.get(),
-    ////     .camera                 = m_camera.lock().get(),
-    ////     .viewport               = output_viewport,
-    ////     .override_shader_stages = get_override_shader_stages()
-    //// };
-    ////
-    //// gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
-    //// m_editor_rendering->render_content(context, true);
+auto Material_preview::get_scene_root() const -> std::shared_ptr<Scene_root>
+{
+    return m_scene_root;
+}
+
+auto Material_preview::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
+{
+    return m_camera;
+}
+
+auto Material_preview::get_rendergraph_node() -> std::shared_ptr<erhe::application::Rendergraph_node>
+{
+    return {};
+}
+
+auto Material_preview::get_light_projections() const -> const Light_projections*
+{
+    return &m_light_projections;
+}
+
+auto Material_preview::get_shadow_texture() const -> erhe::graphics::Texture*
+{
+    return m_shadow_texture.get();
 }
 
 ////void Material_preview::generate_torus_geometry()
@@ -282,18 +350,22 @@ void Material_preview::render_preview(
 ////    );
 ////}
 
-[[nodiscard]] auto Material_preview::get_scene_root() -> std::shared_ptr<Scene_root>
-{
-    return m_scene_root;
-}
-
 [[nodiscard]] auto Material_preview::get_content_library() -> std::shared_ptr<Content_library>
 {
-    return m_last_content_library;
+    return m_content_library;
 }
 
-void Material_preview::imgui()
+void Material_preview::show_preview()
 {
+    erhe::application::g_imgui_renderer->image(
+        m_color_texture,
+        m_width,
+        m_height,
+        glm::vec2{0.0f, 1.0f},
+        glm::vec2{1.0f, 0.0f},
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
 }
 
 }  // namespace erhe::application

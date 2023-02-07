@@ -587,8 +587,8 @@ void Viewport_windows::viewport_toolbar(
     }
     if (button_pressed)
     {
-        g_viewport_config->show();
-        g_viewport_config->edit_data = viewport_window.get_config();
+        g_viewport_config_window->show();
+        g_viewport_config_window->edit_data = viewport_window.get_config();
     }
     ImGui::PopID();
 }

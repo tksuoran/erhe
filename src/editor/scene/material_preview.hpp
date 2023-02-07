@@ -1,6 +1,8 @@
 #pragma once
 
-#include "erhe/application/imgui/imgui_window.hpp"
+#include "renderers/light_buffer.hpp"
+#include "scene/scene_view.hpp"
+
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/scene/viewport.hpp"
@@ -31,11 +33,12 @@ namespace editor
 {
 
 class Content_library;
+class Light_projections;
 class Scene_root;
 
 class Material_preview
     : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    , public Scene_view
 {
 public:
     static constexpr std::string_view c_type_name{"Material_preview"};
@@ -58,32 +61,40 @@ public:
     void deinitialize_component     () override;
 
     // Implements Imgui_window
-    void imgui() override;
+    //void imgui() override;
+
+    // Implements Scene_view
+    auto get_scene_root       () const -> std::shared_ptr<Scene_root>                          override;
+    auto get_camera           () const -> std::shared_ptr<erhe::scene::Camera>                 override;
+    auto get_rendergraph_node ()       -> std::shared_ptr<erhe::application::Rendergraph_node> override;
+    auto get_light_projections() const -> const Light_projections*                             override;
+    auto get_shadow_texture   () const -> erhe::graphics::Texture*                             override;
 
     // Public API
-    [[nodiscard]] auto get_scene_root     () -> std::shared_ptr<Scene_root>;
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
 
     void render_preview(
-        const std::shared_ptr<Content_library>&           content_library,
-        const std::shared_ptr<erhe::primitive::Material>& material,
-        const erhe::scene::Viewport&                      viewport
+        const std::shared_ptr<erhe::primitive::Material>& material
+        //const erhe::scene::Viewport&                      viewport
     );
+    void show_preview();
 
 private:
     void make_rendertarget();
     void make_preview_scene();
     //// void generate_torus_geometry();
 
-    int                                           m_width;
-    int                                           m_height;
+    int                                           m_width{0};
+    int                                           m_height{0};
     gl::Internal_format                           m_color_format;
     gl::Internal_format                           m_depth_format;
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
     std::shared_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
+    Light_projections                             m_light_projections;
 
     std::shared_ptr<Scene_root>          m_scene_root;
+    std::shared_ptr<Content_library>     m_content_library;
     std::shared_ptr<erhe::scene::Node>   m_node;
     std::shared_ptr<erhe::scene::Mesh>   m_mesh;
     std::shared_ptr<erhe::scene::Node>   m_key_light_node;
@@ -91,10 +102,10 @@ private:
     std::shared_ptr<erhe::scene::Node>   m_camera_node;
     std::shared_ptr<erhe::scene::Camera> m_camera;
 
-    std::shared_ptr<Content_library>           m_last_content_library;
+    std::shared_ptr<erhe::graphics::Texture>   m_shadow_texture;
     std::shared_ptr<erhe::primitive::Material> m_last_material;
 
-    glm::vec4 m_clear_color{0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec4         m_clear_color{0.0f, 0.0f, 0.0f, 0.0f};
 
     int   m_slice_count{40};
     int   m_stack_count{22};

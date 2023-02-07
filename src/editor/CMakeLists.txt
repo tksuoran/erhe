@@ -8,6 +8,8 @@ erhe_target_sources_grouped(
 
     graphics/gradients.cpp
     graphics/gradients.hpp
+    graphics/icon_rasterization.cpp
+    graphics/icon_rasterization.hpp
     graphics/icon_set.cpp
     graphics/icon_set.hpp
     graphics/image_transfer.cpp
@@ -68,6 +70,8 @@ erhe_target_sources_grouped(
     renderers/render_context.hpp
     renderers/shadow_renderer.cpp
     renderers/shadow_renderer.hpp
+    renderers/viewport_config.cpp
+    renderers/viewport_config.hpp
 
     rendergraph/basic_viewport_window.cpp
     rendergraph/basic_viewport_window.hpp
@@ -146,6 +150,8 @@ erhe_target_sources_grouped(
     tools/tools.cpp
     tools/tools.hpp
 
+    windows/brdf_slice_window.cpp
+    windows/brdf_slice_window.hpp
     windows/content_library_window.cpp
     windows/content_library_window.hpp
     windows/debug_view_window.cpp
@@ -170,8 +176,8 @@ erhe_target_sources_grouped(
     windows/settings.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
-    windows/viewport_config.cpp
-    windows/viewport_config.hpp
+    windows/viewport_config_window.cpp
+    windows/viewport_config_window.hpp
 
     editor_application.cpp
     editor_application.hpp

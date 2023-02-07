@@ -196,6 +196,7 @@ public:
     class Windows
     {
     public:
+        Window_entry brdf_slice          {false};
         Window_entry commands            {false};
         Window_entry create              {false};
         Window_entry content_library     {false};
@@ -209,7 +210,6 @@ public:
         Window_entry layers              {false};
         Window_entry line_renderer       {false};
         Window_entry log                 {false};
-        Window_entry material_preview    {false};
         Window_entry node_tree           {false};
         Window_entry operation_stack     {false};
         Window_entry operations          {false};

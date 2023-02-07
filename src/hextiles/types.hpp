@@ -5,8 +5,6 @@
 namespace hextiles
 {
 
-constexpr int Input_context_type_map = 0;
-
 using pixel_t        = int;
 using coordinate_t   = int16_t;
 using direction_t    = int;

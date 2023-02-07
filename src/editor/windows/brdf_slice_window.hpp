@@ -42,14 +42,7 @@ public:
         int                                 depth = 0
     ) const -> erhe::scene::Viewport override;
 
-    [[nodiscard]] auto get_consumer_input_viewport(
-        erhe::application::Resource_routing resource_routing,
-        int                                 key,
-        int                                 depth = 0
-    ) const -> erhe::scene::Viewport override;
-
 private:
-
     void initialize_pipeline();
 
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "windows/viewport_config.hpp"
+#include "windows/viewport_config_window.hpp"
 #include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
 
@@ -106,7 +106,7 @@ public:
     void set_window_viewport(int x, int y, int width, int height);
     void set_is_hovered     (bool is_hovered);
     void set_camera         (const std::shared_ptr<erhe::scene::Camera>& camera);
-    auto get_config         () -> Viewport_config_data*;
+    auto get_config         () -> Viewport_config*;
 
     [[nodiscard]] auto viewport_from_window(const glm::vec2 position_in_window) const -> glm::vec2;
     [[nodiscard]] auto project_to_viewport (const glm::vec3 position_in_world) const -> std::optional<glm::vec3>;
@@ -144,7 +144,7 @@ private:
 
     static int s_serial;
 
-    Viewport_config_data               m_viewport_config;
+    Viewport_config                    m_viewport_config;
 
     // TODO Consider if these links are a good thing, or if they should
     //      be discovered from the graph instead.

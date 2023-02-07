@@ -16,7 +16,6 @@
 #include "tools/hotbar.hpp"
 #include "tools/hud.hpp"
 #include "tools/tools.hpp"
-#include "windows/viewport_config.hpp"
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
 
@@ -384,7 +383,7 @@ void Headset_view::render_headset()
             //// }
             //// else
             {
-                const auto& clear_color = g_viewport_config->data.clear_color;
+                const glm::vec4 clear_color{0.0f, 0.0f, 0.0f, 0.0f};
 
                 gl::clear_color(
                     clear_color[0],
@@ -402,7 +401,7 @@ void Headset_view::render_headset()
 
                 Render_context render_context {
                     .scene_view      = this,
-                    .viewport_config = &viewport_config.data,
+                    .viewport_config = &viewport_config,
                     .camera          = as_camera(view_resources->camera.get()),
                     .viewport        = viewport
                 };

@@ -58,7 +58,7 @@
 #include "windows/rendergraph_window.hpp"
 #include "windows/settings.hpp"
 #include "windows/tool_properties_window.hpp"
-#include "windows/viewport_config.hpp"
+#include "windows/viewport_config_window.hpp"
 
 #include "scene/debug_draw.hpp"
 #include "scene/scene_builder.hpp"
@@ -202,7 +202,7 @@ private:
     editor::Tool_properties_window tool_properties_window;
     editor::Tools                  tools                 ;
     editor::Trs_tool               trs_tool              ;
-    editor::Viewport_config        viewport_config       ;
+    editor::Viewport_config_window viewport_config_window;
     editor::Viewport_windows       viewport_windows      ;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -357,7 +357,7 @@ auto Application_impl::initialize_components(
         m_components.add(&tool_properties_window);
         m_components.add(&tools                 );
         m_components.add(&trs_tool              );
-        m_components.add(&viewport_config       );
+        m_components.add(&viewport_config_window);
         m_components.add(&viewport_windows      );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -406,6 +406,7 @@ auto Application_impl::initialize_components(
     init_window(performance_window    , config.performance         );
     init_window(pipelines             , config.pipelines           );
 
+    init_window(brdf_slice_window     , config.brdf_slice          );
     init_window(create                , config.create              );
     init_window(content_library_window, config.content_library     );
     init_window(debug_view_window     , config.debug_view          );
@@ -417,7 +418,6 @@ auto Application_impl::initialize_components(
 #endif
     init_window(hover_tool            , config.hover_tool          );
     init_window(hud                   , config.hud                 );
-    init_window(material_preview      , config.material_preview    );
     init_window(layers_window         , config.layers              );
     init_window(node_tree_window      , config.node_tree           );
     init_window(operation_stack       , config.operation_stack     );
@@ -431,7 +431,7 @@ auto Application_impl::initialize_components(
     init_window(trs_tool              , config.trs                 );
     init_window(tools                 , config.tools               );
     init_window(tool_properties_window, config.tool_properties     );
-    init_window(viewport_config       , config.viewport_config     );
+    init_window(viewport_config_window, config.viewport_config     );
 
     if (
         configuration.physics.static_enable &&

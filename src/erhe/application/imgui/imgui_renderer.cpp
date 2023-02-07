@@ -704,6 +704,20 @@ auto Imgui_renderer::image_button(
     const bool                                      linear
 ) -> bool
 {
+    if (!texture)
+    {
+        if ((width == 0) || (height == 0))
+        {
+            return false;
+        }
+        ImGui::PushID        (id);
+        ImGui::PushStyleColor(ImGuiCol_Button, background_color);
+        ImGui::Button        ("", ImVec2{static_cast<float>(width), static_cast<float>(height)});
+        ImGui::PopStyleColor ();
+        ImGui::PopID         ();
+        return ImGui::IsItemClicked();
+    }
+
     const auto& sampler = linear ? m_linear_sampler : m_nearest_sampler;
     const uint64_t handle = erhe::graphics::get_handle(
         *texture.get(),

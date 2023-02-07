@@ -66,7 +66,7 @@ void Scene_view::set_hover(
     }
 }
 
-auto Scene_view::get_light_projections() const -> Light_projections*
+auto Scene_view::get_light_projections() const -> const Light_projections*
 {
     auto* shadow_render_node = get_shadow_render_node();
     if (shadow_render_node == nullptr)

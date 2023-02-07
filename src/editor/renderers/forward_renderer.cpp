@@ -325,7 +325,7 @@ void Forward_renderer::render_fullscreen(
             //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
-    if (!lights.empty())
+
     {
         m_light_buffers->update(lights, parameters.light_projections, parameters.ambient_light);
         m_light_buffers->bind_light_buffer();

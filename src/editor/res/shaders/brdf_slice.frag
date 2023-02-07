@@ -196,7 +196,8 @@ vec3 brdf(
     vec3  specular_microfacet = D * Vis * F;
     vec3  diffuse_lambert     = m_i_pi * (1.0 - metallic) * base_color;
     vec3  diffuse_factor      = vec3(1.0) - F;
-    return N_dot_L * (diffuse_factor * diffuse_lambert + specular_microfacet);
+    //return N_dot_L * (diffuse_factor * diffuse_lambert + specular_microfacet);
+    return (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
 float sample_light_visibility(vec4 position, uint light_index, float N_dot_L) {
@@ -252,10 +253,10 @@ void main() {
     const int   useThetaHSquared = 0;
     const int   useNDotL         = 0;
     const int   showChroma       = 0;
-    float incidentPhi      = light_block.brdf_phi_incident_phi.x;
-    float phiD             = light_block.brdf_phi_incident_phi.y;
+    float phiD             = light_block.brdf_phi_incident_phi.x;
+    float incidentPhi      = light_block.brdf_phi_incident_phi.y;
     const float brightness       = 1.0;
-    const float exposure         = 1.0;
+    const float exposure         = 0.0;
     const float gamma            = 2.2;
 
     // orthonormal vectors

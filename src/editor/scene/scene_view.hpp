@@ -1,7 +1,6 @@
 #pragma once
 
 #include "editor_message.hpp"
-#include "windows/viewport_config.hpp"
 #include "renderers/programs.hpp"
 #include "scene/node_raytrace_mask.hpp"
 
@@ -44,6 +43,7 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
+    class Mesh;
 }
 
 namespace editor
@@ -107,10 +107,6 @@ public:
     std::size_t                               local_index  {std::numeric_limits<std::size_t>::max()};
 };
 
-constexpr int Input_context_type_scene_view      = 0;
-constexpr int Input_context_type_viewport_window = 1;
-constexpr int Input_context_type_headset_view    = 2;
-
 class Viewport_window;
 
 class Scene_view
@@ -120,7 +116,9 @@ public:
     [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
+    [[nodiscard]] virtual auto get_shadow_texture    () const -> erhe::graphics::Texture*;
     [[nodiscard]] virtual auto get_rendergraph_node  () -> std::shared_ptr<erhe::application::Rendergraph_node> = 0;
+    [[nodiscard]] virtual auto get_light_projections () const -> const Light_projections*;
     [[nodiscard]] virtual auto as_viewport_window    () -> Viewport_window*;
     [[nodiscard]] virtual auto as_viewport_window    () const -> const Viewport_window*;
 
@@ -144,8 +142,6 @@ public:
     [[nodiscard]] auto get_control_position_in_world_at_distance(float distance) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_hover                                (std::size_t slot) const -> const Hover_entry&;
     [[nodiscard]] auto get_nearest_hover                        (uint32_t slot_mask) const -> const Hover_entry&;
-    [[nodiscard]] auto get_light_projections                    () const -> Light_projections*;
-    [[nodiscard]] auto get_shadow_texture                       () const -> erhe::graphics::Texture*;
 
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);
