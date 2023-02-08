@@ -94,13 +94,13 @@ public:
     [[nodiscard]] auto get_hotbar_rasterization() const -> const Icon_rasterization&;
 
 private:
-    Icon_rasterization m_small;
-    Icon_rasterization m_large;
-    Icon_rasterization m_hotbar;
-    int                m_row_count   {0};
-    int                m_column_count{0};
-    int                m_row         {0};
-    int                m_column      {0};
+    std::optional<Icon_rasterization> m_small;
+    std::optional<Icon_rasterization> m_large;
+    std::optional<Icon_rasterization> m_hotbar;
+    int                               m_row_count   {0};
+    int                               m_column_count{0};
+    int                               m_row         {0};
+    int                               m_column      {0};
 };
 
 extern Icon_set* g_icon_set;

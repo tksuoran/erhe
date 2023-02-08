@@ -21,9 +21,9 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
-
+#include "erhe/physics/iworld.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
-
+#include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
@@ -50,18 +50,30 @@ Material_preview::~Material_preview() noexcept
 void Material_preview::deinitialize_component()
 {
     ERHE_VERIFY(g_material_preview == this);
+    m_scene_root->sanity_check();
+
     m_color_texture.reset();
     m_depth_renderbuffer.reset();
     m_framebuffer.reset();
-    m_scene_root.reset();
-    m_node.reset();
+
     m_mesh.reset();
-    m_key_light_node.reset();
+    m_node.reset();
+
     m_key_light.reset();
-    m_camera_node.reset();
+    m_key_light_node.reset();
+
     m_camera.reset();
-    m_content_library.reset();
+    m_camera_node.reset();
+
+    m_shadow_texture.reset();
     m_last_material.reset();
+    m_content_library.reset();
+    m_scene_root->sanity_check();
+
+    const auto use_count = m_scene_root.use_count();
+    ERHE_VERIFY(use_count == 1);
+    m_scene_root.reset();
+    reset_hover_slots();
     g_material_preview = nullptr;
 }
 
@@ -81,8 +93,6 @@ void Material_preview::initialize_component()
         m_content_library,
         "Material preview scene"
     );
-
-    g_editor_scenes->register_scene_root(m_scene_root);
 
     m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
@@ -306,8 +316,7 @@ void Material_preview::render_preview(
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
     gl::clear(
         gl::Clear_buffer_mask::color_buffer_bit |
-        gl::Clear_buffer_mask::depth_buffer_bit |
-        gl::Clear_buffer_mask::stencil_buffer_bit
+        gl::Clear_buffer_mask::depth_buffer_bit
     );
     g_editor_rendering->render_content(context, true);
     gl::disable(gl::Enable_cap::scissor_test);

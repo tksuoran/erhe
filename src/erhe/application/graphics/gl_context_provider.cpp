@@ -34,6 +34,11 @@ void Gl_context_provider::deinitialize_component()
     g_gl_context_provider = nullptr;
 }
 
+void Gl_context_provider::declare_required_components()
+{
+    require<Window>();
+}
+
 void Gl_context_provider::initialize_component()
 {
     ERHE_VERIFY(g_gl_context_provider == nullptr);

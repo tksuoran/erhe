@@ -11,6 +11,8 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
+#include "erhe/physics/iworld.hpp"
+#include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"

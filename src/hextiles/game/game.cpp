@@ -16,13 +16,13 @@
 namespace hextiles
 {
 
-auto Move_unit_command::try_call(erhe::application::Input_arguments&) -> bool
+auto Move_unit_command::try_call() -> bool
 {
     g_game->move_unit(m_direction);
     return true;
 }
 
-auto Select_unit_command::try_call(erhe::application::Input_arguments&) -> bool
+auto Select_unit_command::try_call() -> bool
 {
     g_game->select_unit(m_direction);
     return true;

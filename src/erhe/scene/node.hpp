@@ -5,6 +5,7 @@
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -24,7 +25,7 @@ public:
     explicit Node_attachment(const std::string_view name);
     virtual ~Node_attachment() noexcept;
 
-    void set_node(Node* node);
+    void set_node(Node* node, std::size_t position = 0);
 
     virtual void handle_node_update           (Node* old_node, Node* new_node);
     virtual void handle_node_flag_bits_update (const uint64_t old_node_flag_bits, const uint64_t new_node_flag_bits);
@@ -96,6 +97,8 @@ public:
     explicit Node(const std::string_view name);
     ~Node() noexcept override;
 
+    void remove();
+
     // Implements Item
     auto get_type () const -> uint64_t    override;
     auto type_name() const -> const char* override;
@@ -106,7 +109,9 @@ public:
     void handle_scene_host_update(Scene_host* old_scene_host, Scene_host* new_scene_host);
     void handle_transform_update (uint64_t serial) const;
     void handle_add_child        (const std::shared_ptr<Node>& child_node, std::size_t position = 0);
+    void handle_add_attachment   (const std::shared_ptr<Node_attachment>& attachment, std::size_t position = 0);
     void handle_remove_child     (Node* child_node);
+    void handle_remove_attachment(Node_attachment* attachment);
 
     [[nodiscard]] auto parent                                 () const -> std::weak_ptr<Node>;
     [[nodiscard]] auto get_depth                              () const -> size_t;
@@ -154,6 +159,8 @@ public:
     void set_node_from_world   (const Transform& node_from_world);
     void attach                (const std::shared_ptr<Node_attachment>& attachment);
     auto detach                (Node_attachment* attachment) -> bool;
+
+    void recursive_remove();
 
     Node_data node_data;
 };

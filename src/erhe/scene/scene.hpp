@@ -91,7 +91,6 @@ public:
     void sanity_check          () const;
     void sort_transform_nodes  ();
     void update_node_transforms();
-    void reset_scene_host      ();
 
     //[[nodiscard]] auto get_node_by_id         (const erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Node>;
     [[nodiscard]] auto get_mesh_by_id       (erhe::toolkit::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;

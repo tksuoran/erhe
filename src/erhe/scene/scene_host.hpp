@@ -16,6 +16,7 @@ class Scene_host
 public:
     virtual ~Scene_host() noexcept;
 
+    [[nodiscard]] virtual auto get_host_name   () const -> const char* = 0;
     [[nodiscard]] virtual auto get_hosted_scene() -> Scene* = 0;
     virtual void register_node    (const std::shared_ptr<Node>&   node)   = 0;
     virtual void unregister_node  (const std::shared_ptr<Node>&   node)   = 0;

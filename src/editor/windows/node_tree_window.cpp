@@ -20,6 +20,8 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/windows/log_window.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/physics/iworld.hpp"
+#include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"

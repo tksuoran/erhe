@@ -1,4 +1,4 @@
-#include "selection_tool.hpp"
+#include "tools/selection_tool.hpp"
 
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
@@ -14,7 +14,6 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
-#include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/trs/trs_tool.hpp"
 #include "tools/trs/move_tool.hpp"

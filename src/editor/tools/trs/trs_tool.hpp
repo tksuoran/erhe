@@ -211,11 +211,11 @@ private:
     float                                     m_rotate_snap          {15.0f};
     erhe::scene::Transform                    m_parent_from_node_before;
 
-    bool                  m_cast_rays{false};
-    Debug_rendering       m_debug_rendering;
-    Drag                  m_drag;
-    Rotation_context      m_rotation;
-    Handle_visualizations m_visualization;
+    bool                                 m_cast_rays{false};
+    Debug_rendering                      m_debug_rendering;
+    Drag                                 m_drag;
+    Rotation_context                     m_rotation;
+    std::optional<Handle_visualizations> m_visualization;
 };
 
 extern Trs_tool* g_trs_tool;

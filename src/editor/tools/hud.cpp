@@ -117,8 +117,10 @@ void Hud::deinitialize_component()
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_drag_command.set_host(nullptr);
 #endif
-    m_rendertarget_node.reset();
+
     m_rendertarget_mesh.reset();
+
+    m_rendertarget_node.reset();
     m_rendertarget_imgui_viewport.reset();
     g_hud = nullptr;
 }

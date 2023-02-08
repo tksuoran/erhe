@@ -71,7 +71,7 @@ auto Mouse_button_binding::on_button(
         if (command_state == State::Ready)
         {
             log_input->trace("  {}->try_call()", command->get_name());
-            consumed = command->try_call(input);
+            consumed = command->try_call_with_input(input);
             log_input_event_consumed->info(
                 "{} consumed mouse button {} {}",
                 command->get_name(),

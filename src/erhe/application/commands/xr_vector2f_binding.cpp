@@ -35,7 +35,7 @@ auto Xr_vector2f_binding::on_value_changed(
     }
 
     command->try_ready();
-    const bool consumed = command->try_call(input);
+    const bool consumed = command->try_call_with_input(input);
     if (consumed)
     {
         log_input_event_consumed->info(

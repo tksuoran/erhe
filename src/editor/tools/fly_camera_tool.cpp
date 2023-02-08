@@ -126,7 +126,7 @@ Fly_camera_turn_command::Fly_camera_turn_command()
 {
 }
 
-auto Fly_camera_turn_command::try_call(
+auto Fly_camera_turn_command::try_call_with_input(
     erhe::application::Input_arguments& input
 ) -> bool
 {
@@ -360,16 +360,10 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera)
         }
     }
 
-    auto* old_host = m_camera_controller->get_node();
-    if (old_host != nullptr)
-    {
-        m_camera_controller->reset();
-        old_host->detach(m_camera_controller.get());
-    }
-    if (camera != nullptr)
-    {
-        camera->get_node()->attach(m_camera_controller);
-    }
+    erhe::scene::Node* node = (camera != nullptr)
+        ? camera->get_node()
+        : nullptr;
+    m_camera_controller->set_node(node);
 }
 
 auto Fly_camera_tool::get_camera() const -> erhe::scene::Camera*

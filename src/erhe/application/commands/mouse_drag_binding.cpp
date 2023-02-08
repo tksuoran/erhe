@@ -60,7 +60,7 @@ auto Mouse_drag_binding::on_button(
             const bool active = command->get_command_state() == State::Ready;
             if (active)
             {
-                command->try_call(input);
+                command->try_call_with_input(input);
             }
             return active; // Consumes event if command transitioned directly to active
         }
@@ -107,7 +107,7 @@ auto Mouse_drag_binding::on_motion(Input_arguments& input) -> bool
         return false;
     }
 
-    const bool consumed = command->try_call(input);
+    const bool consumed = command->try_call_with_input(input);
     if (consumed)
     {
         log_input_event_consumed->trace(

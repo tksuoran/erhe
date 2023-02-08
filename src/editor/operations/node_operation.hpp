@@ -6,15 +6,8 @@
 
 #include <vector>
 
-namespace erhe::scene
-{
-    class Scene;
-}
-
 namespace editor
 {
-
-class Selection_tool;
 
 class Node_operation
     : public IOperation

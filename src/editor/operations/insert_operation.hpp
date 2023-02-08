@@ -7,36 +7,10 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-namespace erhe::geometry
-{
-    class Geometry;
-}
-
-namespace erhe::scene
-{
-    class Light_layer;
-    class Mesh_layer;
-    class Scene;
-};
-
-namespace erhe::physics
-{
-    class IWorld;
-};
-
-namespace erhe::raytrace
-{
-    class IScene;
-};
-
 namespace editor
 {
 
 class Node_attach_operation;
-class Node_physics;
-class Node_raytrace;
-class Scene_root;
-class Selection_tool;
 
 class Node_transform_operation
     : public IOperation

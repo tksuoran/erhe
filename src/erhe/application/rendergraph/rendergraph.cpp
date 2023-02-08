@@ -3,6 +3,7 @@
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/application_log.hpp"
+#include "erhe/application/graphics/gl_context_provider.hpp"
 
 #include "erhe/graphics/debug.hpp"
 
@@ -20,10 +21,17 @@ Rendergraph::~Rendergraph()
     ERHE_VERIFY(g_rendergraph == nullptr);
 }
 
+void Rendergraph::declare_required_components()
+{
+    require<Gl_context_provider>();
+}
+
 void Rendergraph::deinitialize_component()
 {
     ERHE_VERIFY(g_rendergraph == this);
     g_rendergraph = nullptr;
+
+    const Scoped_gl_context gl_context{};
     m_nodes.clear();
 }
 

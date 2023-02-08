@@ -68,7 +68,7 @@ auto Key_binding::on_key(
         return false;
     }
 
-    const bool consumed = command->try_call(input);
+    const bool consumed = command->try_call_with_input(input);
     if (consumed)
     {
         log_input_event_consumed->trace(

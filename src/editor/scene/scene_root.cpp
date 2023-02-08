@@ -113,9 +113,9 @@ Scene_root::Scene_root(
     m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
 }
 
-Scene_root::~Scene_root() noexcept
+[[nodiscard]] auto Scene_root::get_host_name() const -> const char*
 {
-    m_scene->reset_scene_host();
+    return "Scene_root";
 }
 
 [[nodiscard]] auto Scene_root::get_hosted_scene() -> Scene*
@@ -170,11 +170,6 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
 void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
-    if (m_scene)
-    {
-        m_scene->unregister_mesh(mesh);
-    }
-
     if (is_rendertarget(mesh))
     {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
@@ -188,6 +183,10 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         {
             m_rendertarget_meshes.erase(i, m_rendertarget_meshes.end());
         }
+    }
+    if (m_scene)
+    {
+        m_scene->unregister_mesh(mesh);
     }
 }
 

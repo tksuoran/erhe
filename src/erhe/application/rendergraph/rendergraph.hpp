@@ -35,8 +35,9 @@ public:
 
     // Implements Component
     [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void initialize_component  () override;
-    void deinitialize_component() override;
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void deinitialize_component     () override;
 
     // Public API
     [[nodiscard]] auto get_nodes() const -> const std::vector<std::shared_ptr<Rendergraph_node>>&;

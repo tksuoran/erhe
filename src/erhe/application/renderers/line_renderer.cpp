@@ -136,6 +136,7 @@ void Line_renderer_set::deinitialize_component()
     {
         i.reset();
     }
+    m_pipeline.reset();
     g_line_renderer_set = nullptr;
 }
 
@@ -160,12 +161,13 @@ void Line_renderer_set::initialize_component()
 
     erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_initialize_component};
 
-    m_pipeline.initialize();
+    m_pipeline = Line_renderer_pipeline();
+    m_pipeline->initialize();
 
     for (unsigned int stencil_reference = 0; stencil_reference <= s_max_stencil_reference; ++stencil_reference)
     {
-        visible.at(stencil_reference) = std::make_unique<Line_renderer>("visible", 8u + stencil_reference, &m_pipeline);
-        hidden .at(stencil_reference) = std::make_unique<Line_renderer>("hidden",  8u + stencil_reference, &m_pipeline);
+        visible.at(stencil_reference) = std::make_unique<Line_renderer>("visible", 8u + stencil_reference, &m_pipeline.value());
+        hidden .at(stencil_reference) = std::make_unique<Line_renderer>("hidden",  8u + stencil_reference, &m_pipeline.value());
     }
 
     g_line_renderer_set = this;

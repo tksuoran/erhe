@@ -22,8 +22,8 @@ class Scene_message
 public:
     Scene_event_type      event_type;
     Scene*                scene{nullptr};
-    std::shared_ptr<Node> lhs;
-    std::shared_ptr<Node> rhs;
+    std::shared_ptr<Node> lhs{};
+    std::shared_ptr<Node> rhs{};
 };
 
 }

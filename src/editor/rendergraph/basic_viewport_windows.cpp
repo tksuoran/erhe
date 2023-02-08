@@ -55,12 +55,8 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
-auto Open_new_viewport_window_command::try_call(
-    erhe::application::Command_context& context
-) -> bool
+auto Open_new_viewport_window_command::try_call() -> bool
 {
-    static_cast<void>(context);
-
     return m_viewport_windows.open_new_viewport_window();
 }
 

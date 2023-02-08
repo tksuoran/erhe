@@ -46,6 +46,7 @@ namespace editor
 Handle_visualizations::Handle_visualizations(Trs_tool& trs_tool)
     : m_trs_tool{trs_tool}
 {
+    initialize();
 }
 
 void Handle_visualizations::update_scale(
@@ -81,7 +82,7 @@ void Handle_visualizations::update_mesh_visibility(
     const auto active_handle = m_trs_tool.get_active_handle();
     const auto hover_handle  = m_trs_tool.get_hover_handle();
     const bool show_all      = (active_handle == Handle::e_handle_none); // nothing is active, so show all handles
-    const auto handle        = m_trs_tool.get_handle(mesh.get());
+    const auto handle        = get_handle(mesh.get());
     const bool show          = get_handle_visibility(handle);
     const bool translate_x   = m_trs_tool.is_x_translate_active() && (handle == Handle::e_handle_translate_x);
     const bool translate_y   = m_trs_tool.is_y_translate_active() && (handle == Handle::e_handle_translate_y);

@@ -23,7 +23,7 @@ auto Mouse_motion_binding::on_motion(Input_arguments& input) -> bool
 
     // Motion binding never consumes the event, so that all
     // motion bindings can process the motion.
-    static_cast<void>(command->try_call(input));
+    static_cast<void>(command->try_call_with_input(input));
     return false;
 }
 

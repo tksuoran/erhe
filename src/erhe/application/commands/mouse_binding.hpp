@@ -1,6 +1,6 @@
 #pragma once
 
-#include "command_binding.hpp"
+#include "erhe/application/commands/command_binding.hpp"
 
 #include "erhe/toolkit/view.hpp"
 

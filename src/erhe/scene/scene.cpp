@@ -317,14 +317,6 @@ void Scene::update_node_transforms()
     }
 }
 
-void Scene::reset_scene_host()
-{
-    for (auto& node : m_flat_node_vector)
-    {
-        node->node_data.host = nullptr;
-    }
-}
-
 Scene::Scene(
     const std::string_view name,
     Scene_host* const      host
@@ -341,7 +333,15 @@ Scene::Scene(
 
 Scene::~Scene()
 {
-    reset_scene_host();
+    sanity_check();
+
+    m_root_node->recursive_remove();
+
+    m_flat_node_vector.clear();
+    m_mesh_layers.clear();
+    m_light_layers.clear();
+    m_cameras.clear();
+    m_root_node.reset();
 }
 
 auto Scene::get_type() const -> uint64_t
@@ -406,6 +406,13 @@ void Scene::unregister_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
+    log->trace(
+        "unregister {} depth {} child count = {}",
+        node->get_name(),
+        node->get_depth(),
+        node->node_data.children.size()
+    );
+
     const auto i = std::remove(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);
     if (i == m_flat_node_vector.end())
     {

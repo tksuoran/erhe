@@ -36,7 +36,7 @@ Map_free_zoom_command::Map_free_zoom_command()
 {
 }
 
-auto Map_free_zoom_command::try_call(erhe::application::Input_arguments& input) -> bool
+auto Map_free_zoom_command::try_call_with_input(erhe::application::Input_arguments& input) -> bool
 {
     const auto  wheel = input.vector2.relative_value;
     const float v = wheel.x + wheel.y;
@@ -56,7 +56,7 @@ Map_mouse_scroll_command::Map_mouse_scroll_command()
 {
 }
 
-auto Map_mouse_scroll_command::try_call(erhe::application::Input_arguments& input) -> bool
+auto Map_mouse_scroll_command::try_call_with_input(erhe::application::Input_arguments& input) -> bool
 {
     if (get_command_state() == erhe::application::State::Ready)
     {

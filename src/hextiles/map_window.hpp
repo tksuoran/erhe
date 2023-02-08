@@ -37,7 +37,7 @@ class Map_free_zoom_command final
 {
 public:
     Map_free_zoom_command();
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Map_mouse_scroll_command final
@@ -45,8 +45,8 @@ class Map_mouse_scroll_command final
 {
 public:
     Map_mouse_scroll_command();
-    void try_ready() override;
-    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready          () override;
+    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Map_zoom_command

@@ -314,7 +314,7 @@ public:
     );
 
 private:
-    Line_renderer_pipeline m_pipeline;
+    std::optional<Line_renderer_pipeline> m_pipeline;
 
 public:
     static constexpr unsigned int s_max_stencil_reference = 4;

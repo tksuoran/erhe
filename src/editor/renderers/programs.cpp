@@ -40,6 +40,7 @@ void Programs::deinitialize_component()
     linear_sampler.reset();
     linear_mipmap_linear_sampler.reset();
 
+    brdf_slice.reset();
     brush.reset();
     standard.reset();
     anisotropic_slope.reset();

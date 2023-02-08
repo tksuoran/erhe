@@ -51,17 +51,17 @@ public:
     Command& operator=(Command&&) = delete;
 
     // Virtual interface
-    virtual void try_ready         ();
-    virtual auto try_call          () -> bool;
-    virtual auto try_call          (Input_arguments& input) -> bool;
-    virtual auto get_priority      () const -> int;
-    virtual auto is_enabled        () const -> bool;
-    virtual auto get_target_command() -> Command&;
-    virtual void disable           ();
-    virtual void enable            ();
-    virtual void on_inactive       ();
-    virtual auto get_host          () const -> Command_host*;
-    virtual auto get_command_state () const -> State;
+    virtual void try_ready          ();
+    virtual auto try_call           () -> bool;
+    virtual auto try_call_with_input(Input_arguments& input) -> bool;
+    virtual auto get_priority       () const -> int;
+    virtual auto is_enabled         () const -> bool;
+    virtual auto get_target_command () -> Command&;
+    virtual void disable            ();
+    virtual void enable             ();
+    virtual void on_inactive        ();
+    virtual auto get_host           () const -> Command_host*;
+    virtual auto get_command_state  () const -> State;
 
     // Non-virtual public API
     [[nodiscard]] auto get_name() const -> const char*;
@@ -99,7 +99,7 @@ class Drag_enable_command
 {
 public:
     explicit Drag_enable_command(Command& update_command);
-    auto try_call(Input_arguments& input) -> bool override;
+    auto try_call_with_input(Input_arguments& input) -> bool override;
 
 private:
     Command& m_update_command;
@@ -116,7 +116,7 @@ public:
         float    max_to_disable
     );
 
-    auto try_call(Input_arguments& input) -> bool override;
+    auto try_call_with_input(Input_arguments& input) -> bool override;
 
 private:
     Command& m_update_command;
@@ -139,7 +139,7 @@ class Drag_float_command
 {
 public:
     explicit Drag_float_command(Command& target_command);
-    auto try_call () -> bool override;
+    auto try_call() -> bool override;
 };
 
 class Drag_vector2f_command
@@ -148,7 +148,7 @@ class Drag_vector2f_command
 public:
     explicit Drag_vector2f_command(Command& target_command);
     auto try_call() -> bool override;
-    auto try_call(Input_arguments& input) -> bool override;
+    auto try_call_with_input(Input_arguments& input) -> bool override;
 };
 
 class Drag_pose_command
@@ -167,9 +167,7 @@ class Xr_float_click_command
 {
 public:
     explicit Xr_float_click_command(Command& target_command);
-
-    void bind(erhe::xr::Xr_action_float* xr_action_for_value);
-
+    void bind     (erhe::xr::Xr_action_float* xr_action_for_value);
     void try_ready() override;
     auto try_call () -> bool override;
 
@@ -182,9 +180,7 @@ class Xr_vector2f_click_command
 {
 public:
     explicit Xr_vector2f_click_command(Command& target_command);
-
-    void bind(erhe::xr::Xr_action_vector2f* xr_action_for_value);
-
+    void bind     (erhe::xr::Xr_action_vector2f* xr_action_for_value);
     void try_ready() override;
     auto try_call () -> bool override;
 
@@ -197,9 +193,7 @@ class Xr_pose_click_command
 {
 public:
     explicit Xr_pose_click_command(Command& target_command);
-
-    void bind(erhe::xr::Xr_action_pose* xr_action_for_value);
-
+    void bind     (erhe::xr::Xr_action_pose* xr_action_for_value);
     void try_ready() override;
     auto try_call () -> bool override;
 

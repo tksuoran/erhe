@@ -54,6 +54,7 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
+#include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"

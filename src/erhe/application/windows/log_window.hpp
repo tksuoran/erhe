@@ -25,7 +25,6 @@ class Log_window_toggle_pause_command
 {
 public:
     Log_window_toggle_pause_command();
-
     auto try_call() -> bool override;
 };
 

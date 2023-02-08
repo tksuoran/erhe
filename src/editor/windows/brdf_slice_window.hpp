@@ -72,8 +72,7 @@ public:
     void deinitialize_component     () override;
 
     // Overrides Framebuffer_window / Imgui_window
-    void imgui () override;
-    void hidden() override;
+    void imgui() override;
 
     float                                      phi         {0.0f};
     float                                      incident_phi{0.0f};

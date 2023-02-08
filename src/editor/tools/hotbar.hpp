@@ -26,8 +26,7 @@ class Hotbar_trackpad_command
 {
 public:
     Hotbar_trackpad_command();
-
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Hotbar

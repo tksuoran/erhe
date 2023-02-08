@@ -35,6 +35,11 @@ namespace erhe::graphics
     class Vertex_format;
 }
 
+namespace erhe::physics
+{
+    class IWorld;
+}
+
 namespace erhe::raytrace
 {
     class IScene;
@@ -62,11 +67,6 @@ namespace erhe::scene
     class Message_bus;
     class Node;
     class Scene;
-}
-
-namespace erhe::physics
-{
-    class IWorld;
 }
 
 namespace editor
@@ -122,10 +122,10 @@ public:
         const std::shared_ptr<Content_library>& content_library,
         const std::string_view                  name
     );
-    ~Scene_root() noexcept override;
 
     // Implements Scene_host
-    [[nodiscard]] auto get_hosted_scene() -> erhe::scene::Scene*  override;
+    [[nodiscard]] auto get_host_name   () const -> const char*   override;
+    [[nodiscard]] auto get_hosted_scene() -> erhe::scene::Scene* override;
     void register_node    (const std::shared_ptr<erhe::scene::Node>&   node)   override;
     void unregister_node  (const std::shared_ptr<erhe::scene::Node>&   node)   override;
     void register_camera  (const std::shared_ptr<erhe::scene::Camera>& camera) override;
@@ -172,14 +172,14 @@ public:
 
 private:
     mutable std::mutex                              m_mutex;
+    std::mutex                                      m_rendertarget_meshes_mutex;
+    std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
-    std::shared_ptr<erhe::scene::Scene>             m_scene;
     std::shared_ptr<erhe::scene::Camera>            m_camera;
     std::shared_ptr<Content_library>                m_content_library;
     std::shared_ptr<Frame_controller>               m_camera_controls;
-    std::mutex                                      m_rendertarget_meshes_mutex;
-    std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
+    std::shared_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;
 };
 

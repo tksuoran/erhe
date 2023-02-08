@@ -47,8 +47,8 @@ class Fly_camera_turn_command
 {
 public:
     Fly_camera_turn_command();
-    void try_ready() override;
-    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready          () override;
+    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Fly_camera_move_command

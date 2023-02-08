@@ -53,7 +53,9 @@ Hotbar_trackpad_command::Hotbar_trackpad_command()
 {
 }
 
-auto Hotbar_trackpad_command::try_call(erhe::application::Input_arguments& input) -> bool
+auto Hotbar_trackpad_command::try_call_with_input(
+    erhe::application::Input_arguments& input
+) -> bool
 {
     return g_hotbar->try_call(input);
 }
@@ -82,8 +84,11 @@ void Hotbar::deinitialize_component()
     m_trackpad_click_command.set_host(nullptr);
     m_trackpad_command.set_host(nullptr);
 #endif
-    m_rendertarget_node.reset();
+
     m_rendertarget_mesh.reset();
+
+    m_rendertarget_node.reset();
+
     m_rendertarget_imgui_viewport.reset();
     m_hover_scene_view = nullptr;
     m_slots.clear();
@@ -379,14 +384,14 @@ auto Hotbar::try_call(erhe::application::Input_arguments& input) -> bool
     {
         m_slot = (m_slot == m_slot_first)
             ? m_slot_last
-            : --m_slot;
+            : m_slot - 1;
     }
 
     if (position.x > 0.2f)
     {
         m_slot = (m_slot == m_slot_last)
             ? m_slot_first
-            : ++m_slot;
+            : m_slot + 1;
     }
 
     if (m_slot != old_slot)

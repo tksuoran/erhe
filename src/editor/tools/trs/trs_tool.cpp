@@ -114,7 +114,6 @@ Trs_tool::Trs_tool()
     , erhe::components::Component   {c_type_name}
     , m_drag_redirect_update_command{m_drag_command}
     , m_drag_enable_command         {m_drag_redirect_update_command}
-    , m_visualization               {*this}
 {
 }
 
@@ -127,6 +126,11 @@ void Trs_tool::deinitialize_component()
 {
     ERHE_VERIFY(g_trs_tool == this);
     m_drag_command.set_host(nullptr);
+    m_target_node.reset();
+    m_visualization.reset();
+    m_tool_node.reset();
+    m_original_motion_mode.reset();
+
     g_trs_tool = nullptr;
 }
 
@@ -158,7 +162,7 @@ void Trs_tool::initialize_component()
     {
         return;
     }
-    m_visualization.initialize();
+    m_visualization.emplace(*this);
 
     set_base_priority(c_priority);
     set_description  (c_title);
@@ -219,12 +223,12 @@ void Trs_tool::on_message(Editor_message& message)
 
 void Trs_tool::set_translate(const bool enabled)
 {
-    m_visualization.set_translate(enabled);
+    m_visualization->set_translate(enabled);
 }
 
 void Trs_tool::set_rotate(const bool enabled)
 {
-    m_visualization.set_rotate(enabled);
+    m_visualization->set_rotate(enabled);
 }
 
 auto Trs_tool::get_target_node() const -> std::shared_ptr<erhe::scene::Node>
@@ -252,7 +256,7 @@ void Trs_tool::set_node(
     }
 
     m_target_node = node;
-    m_visualization.set_target(m_target_node.lock());
+    m_visualization->set_target(m_target_node.lock());
 }
 
 void Trs_tool::touch()
@@ -310,20 +314,20 @@ void Trs_tool::end_move()
 
 void Trs_tool::set_local(const bool local)
 {
-    m_visualization.set_local(local);
+    m_visualization->set_local(local);
 }
 
 void Trs_tool::viewport_toolbar(bool& hovered)
 {
     if (g_icon_set != nullptr)
     {
-        m_visualization.viewport_toolbar(hovered);
+        m_visualization->viewport_toolbar(hovered);
     }
 }
 
 void Trs_tool::imgui()
 {
-    m_visualization.imgui();
+    m_visualization->imgui();
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 
     ImGui::Checkbox("Cast Rays", &m_cast_rays);
@@ -513,7 +517,7 @@ auto Trs_tool::on_drag_ready() -> bool
     // For rotation
     if (is_rotate_active() && target_node)
     {
-        const bool world        = !m_visualization.get_local();
+        const bool world        = !m_visualization->get_local();
         const vec3 n            = get_plane_normal(world);
         const vec3 side         = get_plane_side  (world);
         const vec3 center       = target_node->position_in_world();
@@ -571,7 +575,7 @@ void Trs_tool::end_drag()
 
 auto Trs_tool::get_axis_direction() const -> vec3
 {
-    const bool local = m_visualization.get_local();
+    const bool local = m_visualization->get_local();
     switch (m_active_handle)
     {
         //using enum Handle;
@@ -830,7 +834,7 @@ void Trs_tool::update_plane_translate_2d(Viewport_window* viewport_window)
     }
 
     const vec3 p0      = m_drag.initial_position_in_world;
-    const vec3 world_n = get_plane_normal(!m_visualization.get_local());
+    const vec3 world_n = get_plane_normal(!m_visualization->get_local());
     const auto Q0_opt  = viewport_window->position_in_world_viewport_depth(1.0);
     const auto Q1_opt  = viewport_window->position_in_world_viewport_depth(0.0);
     if (
@@ -871,7 +875,7 @@ void Trs_tool::update_plane_translate_3d(Scene_view* scene_view)
     }
 
     const vec3 p0              = m_drag.initial_position_in_world;
-    const vec3 world_n         = get_plane_normal(!m_visualization.get_local());
+    const vec3 world_n         = get_plane_normal(!m_visualization->get_local());
     const auto Q_origin_opt    = scene_view->get_control_ray_origin_in_world();
     const auto Q_direction_opt = scene_view->get_control_ray_direction_in_world();
     if (
@@ -1094,7 +1098,7 @@ void Trs_tool::update_for_view(Scene_view* scene_view)
     erhe::scene::Scene* const view_scene = camera_node->get_scene();
 
     update_visibility(view_scene);
-    m_visualization.update_scale(view_position_in_world);
+    m_visualization->update_scale(view_position_in_world);
     update_transforms();
 
     //if (root() == nullptr)
@@ -1201,7 +1205,7 @@ void Trs_tool::tool_render(
     const vec3  side2             = normalize(cross(n, side1));
     const vec3  position_in_world = target_node->position_in_world();
     const float distance          = length(position_in_world - vec3{camera_node->position_in_world()});
-    const float scale             = m_visualization.get_scale() * distance / 100.0f;
+    const float scale             = m_visualization->get_scale() * distance / 100.0f;
     const float r1                = scale * 6.0f;
 
     constexpr vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};
@@ -1301,7 +1305,7 @@ auto Trs_tool::get_hover_handle() const -> Handle
 
 auto Trs_tool::get_handle(erhe::scene::Mesh* mesh) const -> Handle
 {
-    return m_visualization.get_handle(mesh);
+    return m_visualization->get_handle(mesh);
 }
 
 auto Trs_tool::get_handle_type(const Handle handle) const -> Handle_type
@@ -1358,14 +1362,14 @@ void Trs_tool::update_transforms()
         log_trs_tool->error("Node '{}' has no scene root", target_node->get_name());
         return;
     }
-    m_visualization.update_transforms();
+    m_visualization->update_transforms();
 }
 
 void Trs_tool::update_visibility(const erhe::scene::Scene* view_scene)
 {
     const auto target_node = m_target_node.lock();
     const bool visible = target_node && (target_node->get_scene() == view_scene);
-    m_visualization.update_visibility(visible);
+    m_visualization->update_visibility(visible);
     update_transforms();
 }
 

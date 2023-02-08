@@ -84,7 +84,7 @@ auto Xr_boolean_binding::on_value_changed(Input_arguments& input) -> bool
     )
     {
         log_input->trace("  {}->try_call()", command->get_name());
-        consumed = command->try_call(input);
+        consumed = command->try_call_with_input(input);
         log_input_event_consumed->trace(
             "  {} {} XR bool {}",
             command->get_name(),

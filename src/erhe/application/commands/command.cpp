@@ -69,7 +69,7 @@ auto Command::try_call() -> bool
     return false;
 }
 
-auto Command::try_call(Input_arguments& input) -> bool
+auto Command::try_call_with_input(Input_arguments& input) -> bool
 {
     static_cast<void>(input);
     return try_call();
@@ -238,7 +238,7 @@ Drag_enable_command::Drag_enable_command(Command& update_command)
     set_description(Command::get_name());
 }
 
-auto Drag_enable_command::try_call(Input_arguments& input) -> bool
+auto Drag_enable_command::try_call_with_input(Input_arguments& input) -> bool
 {
     const bool enable = input.button_pressed;
     this->Command_host::set_enabled(enable);
@@ -277,7 +277,7 @@ Drag_enable_float_command::Drag_enable_float_command(
     set_description(Command::get_name());
 }
 
-auto Drag_enable_float_command::try_call(Input_arguments& input) -> bool
+auto Drag_enable_float_command::try_call_with_input(Input_arguments& input) -> bool
 {
     static_cast<void>(input);
 
@@ -365,13 +365,13 @@ auto Drag_vector2f_command::try_call() -> bool
     return m_target_command.try_call();
 }
 
-auto Drag_vector2f_command::try_call(Input_arguments& input) -> bool
+auto Drag_vector2f_command::try_call_with_input(Input_arguments& input) -> bool
 {
     if (!is_enabled())
     {
         return false;
     }
-    return m_target_command.try_call(input);
+    return m_target_command.try_call_with_input(input);
 }
 
 //
@@ -420,7 +420,7 @@ auto Xr_float_click_command::try_call() -> bool
     Input_arguments input{
         .float_value = m_xr_action_for_value->state.currentState
     };
-    return m_target_command.try_call(input);
+    return m_target_command.try_call_with_input(input);
 }
 
 //
@@ -454,7 +454,7 @@ auto Xr_vector2f_click_command::try_call() -> bool
             }
         }
     };
-    return m_target_command.try_call(input);
+    return m_target_command.try_call_with_input(input);
 }
 
 //
@@ -487,7 +487,7 @@ auto Xr_pose_click_command::try_call() -> bool
             .position    = m_xr_action_for_value->position
         }
     };
-    return m_target_command.try_call(input);
+    return m_target_command.try_call_with_input(input);
 }
 #endif
 

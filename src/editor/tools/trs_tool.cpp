@@ -72,8 +72,8 @@ void Trs_tool_drag_command::try_ready(
     }
 }
 
-auto Trs_tool_drag_command::try_call(
-    erhe::application::Command_context& context
+auto Trs_tool_drag_command::try_call_with_input(
+    erhe::application::Input_arguments& input
 ) -> bool
 {
     if (!m_trs_tool.is_active())
@@ -86,7 +86,7 @@ auto Trs_tool_drag_command::try_call(
         m_trs_tool.is_active()
     )
     {
-        set_active(context);
+        set_active();
     }
 
     if (get_command_state() != erhe::application::State::Active)
@@ -94,10 +94,10 @@ auto Trs_tool_drag_command::try_call(
         return false; // We might be ready, but not consuming event yet
     }
 
-    const bool still_active = m_trs_tool.on_drag(context);
+    const bool still_active = m_trs_tool.on_drag(input);
     if (!still_active)
     {
-        set_inactive(context);
+        set_inactive();
     }
     return still_active;
 }

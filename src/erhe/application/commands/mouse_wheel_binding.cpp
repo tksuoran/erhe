@@ -21,7 +21,7 @@ auto Mouse_wheel_binding::on_wheel(Input_arguments& input) -> bool
         return false;
     }
 
-    return command->try_call(input);
+    return command->try_call_with_input(input);
 }
 
 } // namespace erhe::application

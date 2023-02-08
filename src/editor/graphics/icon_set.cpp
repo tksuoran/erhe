@@ -31,6 +31,10 @@ Icon_set::~Icon_set()
 void Icon_set::deinitialize_component()
 {
     ERHE_VERIFY(g_icon_set == this);
+    const erhe::application::Scoped_gl_context gl_context;
+    m_small.reset();
+    m_large.reset();
+    m_hotbar.reset();
     g_icon_set = nullptr;
 }
 
@@ -113,9 +117,9 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
     const float u = static_cast<float>(m_column) / static_cast<float>(m_column_count);
     const float v = static_cast<float>(m_row   ) / static_cast<float>(m_row_count);
 
-    m_small .rasterize(*document.get(), m_column, m_row);
-    m_large .rasterize(*document.get(), m_column, m_row);
-    m_hotbar.rasterize(*document.get(), m_column, m_row);
+    m_small ->rasterize(*document.get(), m_column, m_row);
+    m_large ->rasterize(*document.get(), m_column, m_row);
+    m_hotbar->rasterize(*document.get(), m_column, m_row);
 
     ++m_column;
     if (m_column >= m_column_count)
@@ -145,17 +149,17 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
 
 [[nodiscard]] auto Icon_set::get_small_rasterization() const -> const Icon_rasterization&
 {
-    return m_small;
+    return m_small.value();
 }
 
 [[nodiscard]] auto Icon_set::get_large_rasterization() const -> const Icon_rasterization&
 {
-    return m_large;
+    return m_large.value();
 }
 
 [[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
 {
-    return m_hotbar;
+    return m_hotbar.value();
 }
 
 }

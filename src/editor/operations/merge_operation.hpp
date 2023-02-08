@@ -6,37 +6,16 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 
-namespace erhe::physics
-{
-    class ICollision_shape;
-    class IWorld;
-};
-
 namespace erhe::primitive
 {
     class Build_info;
-    class Primitive_geometry;
-};
-
-namespace erhe::raytrace
-{
-    class IScene;
-    class IGeometry;
-};
-
-namespace erhe::scene
-{
-    class Mesh_layer;
-    class Scene;
-};
+}
 
 namespace editor
 {
 
 class Node_physics;
 class Node_raytrace;
-class Scene_root;
-class Selection_tool;
 
 class Merge_operation
     : public IOperation
@@ -64,7 +43,7 @@ private:
         std::shared_ptr<erhe::scene::Node>      before_parent;
         std::shared_ptr<Node_physics>           node_physics;
         std::shared_ptr<Node_raytrace>          node_raytrace;
-        std::vector<erhe::primitive::Primitive> primitives;
+        std::vector<erhe::primitive::Primitive> primitives{};
     };
 
     Parameters                                                 m_parameters;

@@ -20,7 +20,7 @@ class Map_hover_command final
 {
 public:
     Map_hover_command();
-    auto try_call(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Map_primary_brush_command final
@@ -28,9 +28,9 @@ class Map_primary_brush_command final
 {
 public:
     Map_primary_brush_command();
-    void try_ready() override;
-    auto try_call () -> bool override;
-    auto try_call (erhe::application::Input_arguments& input) -> bool override;
+    void try_ready           () override;
+    auto try_call            () -> bool override;
+    auto try_call_with_input (erhe::application::Input_arguments& input) -> bool override;
 };
 
 class Map_editor

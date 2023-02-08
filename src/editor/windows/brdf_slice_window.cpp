@@ -193,43 +193,7 @@ void Brdf_slice_window::initialize_component()
     m_node = std::make_shared<Brdf_slice_rendergraph_node>();
     erhe::application::g_rendergraph->register_node(m_node);
 
-    const auto& window_imgui_viewport = erhe::application::g_imgui_windows->get_window_viewport();
-    //render_graph->register_node(window_imgui_viewport);
-
-    if (window_imgui_viewport)
-    {
-        erhe::application::g_rendergraph->connect(
-            erhe::application::Rendergraph_node_key::window,
-            m_node,
-            window_imgui_viewport
-        );
-    }
-
     g_brdf_slice_window = this;
-}
-
-void Brdf_slice_window::hidden()
-{
-    m_node->set_enabled(false);
-
-    // TODO
-    const auto* input = m_node->get_input(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
-        erhe::application::Rendergraph_node_key::depth_visualization
-    );
-    if (
-        (input == nullptr) ||
-        input->producer_nodes.empty())
-    {
-        return;
-    }
-
-    const auto& producer_node = input->producer_nodes.front().lock();
-    if (!producer_node)
-    {
-        return;
-    }
-    producer_node->set_enabled(false);
 }
 
 void Brdf_slice_window::imgui()

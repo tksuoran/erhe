@@ -22,7 +22,6 @@ class Capture_frame_command
 {
 public:
     Capture_frame_command();
-
     auto try_call() -> bool override;
 };
 
