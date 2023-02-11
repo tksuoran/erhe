@@ -288,7 +288,7 @@ void Debug_view_window::initialize_component()
 {
     ERHE_VERIFY(g_debug_view_window == nullptr);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "debug_view");
 
     m_node = std::make_shared<Debug_view_node>();
     erhe::application::g_rendergraph->register_node(m_node);

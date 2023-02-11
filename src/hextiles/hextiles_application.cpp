@@ -57,10 +57,6 @@ public:
 
     auto initialize_components(Application* application, int argc, char** argv) -> bool;
     void component_initialization_complete(bool initialization_succeeded);
-    void init_window(
-        erhe::application::Imgui_window&                      imgui_window,
-        const erhe::application::Configuration::Window_entry& config
-    ) const;
 
 private:
     erhe::components::Components                 m_components;
@@ -206,14 +202,6 @@ auto Application_impl::initialize_components(
     erhe::application::log_startup->info("Component initialization complete");
     component_initialization_complete(true);
 
-    erhe::application::log_startup->info("Window configuration");
-    const auto& config = configuration.windows;
-    init_window(commands_window, config.commands);
-    init_window(log_window     , config.log     );
-    //init_window(line_renderer_set     , config.line_renderer       );
-    //init_window(performance_window    , config.performance         );
-    //init_window(pipelines             , config.pipelines           );
-
     gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
     gl::disable     (gl::Enable_cap::primitive_restart);
     gl::enable      (gl::Enable_cap::primitive_restart_fixed_index);
@@ -246,21 +234,6 @@ void Application_impl::component_initialization_complete(const bool initializati
         auto& root_view = context_window->get_root_view();
 
         root_view.reset_view(erhe::application::g_view);
-    }
-}
-
-void Application_impl::init_window(
-    erhe::application::Imgui_window&                      imgui_window,
-    const erhe::application::Configuration::Window_entry& config
-) const
-{
-    if (config.window)
-    {
-        imgui_window.show();
-    }
-    else
-    {
-        imgui_window.hide();
     }
 }
 

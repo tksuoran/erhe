@@ -149,7 +149,7 @@ void Hotbar::initialize_component()
     set_flags      (Tool_flags::background);
     g_tools->register_tool(this);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, nullptr);
     this->Imgui_window::m_show_in_menu = false;
 
     const auto& scene_root         = g_scene_builder->get_scene_root();

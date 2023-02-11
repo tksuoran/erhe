@@ -113,8 +113,16 @@ erhe_target_sources_grouped(
     tools/brushes/brush.hpp
     tools/brushes/brush_tool.cpp
     tools/brushes/brush_tool.hpp
-    tools/brushes/create.cpp
-    tools/brushes/create.hpp
+    tools/brushes/create/create.cpp
+    tools/brushes/create/create.hpp
+    tools/brushes/create/create_box.cpp
+    tools/brushes/create/create_box.hpp
+    tools/brushes/create/create_cone.cpp
+    tools/brushes/create/create_cone.hpp
+    tools/brushes/create/create_torus.cpp
+    tools/brushes/create/create_torus.hpp
+    tools/brushes/create/create_uv_sphere.cpp
+    tools/brushes/create/create_uv_sphere.hpp
     tools/trs/handle_visualizations.cpp
     tools/trs/handle_visualizations.hpp
     tools/trs/move_tool.cpp

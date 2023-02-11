@@ -55,7 +55,7 @@ void Rendergraph_window::declare_required_components()
 void Rendergraph_window::initialize_component()
 {
     ERHE_VERIFY(g_rendergraph_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "rendergraph");
     g_rendergraph_window = this;
 }
 

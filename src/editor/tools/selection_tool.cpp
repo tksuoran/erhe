@@ -280,7 +280,7 @@ void Selection_tool::initialize_component()
     set_icon         (g_icon_set->icons.select);
     g_tools->register_tool(this);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "selection_tool");
     hide();
 
     auto& commands = *erhe::application::g_commands;

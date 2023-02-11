@@ -42,7 +42,7 @@ void New_game_window::initialize_component()
 {
     ERHE_VERIFY(g_new_game_window == nullptr);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "new_game");
     m_player_names.clear();
     m_player_names.push_back("Player 1");
     m_player_names.push_back("Player 2");

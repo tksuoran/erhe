@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 
 #include <gsl/gsl>
@@ -14,7 +13,6 @@ class Tool;
 
 class Tools
     : public erhe::components::Component
-    , public erhe::application::Imgui_window
 {
 public:
     static constexpr std::string_view c_type_name{"Editor_tools"};
@@ -36,9 +34,6 @@ public:
     void initialize_component       () override;
     void deinitialize_component     () override;
     void post_initialize            () override;
-
-    // Implements Imgui_window
-    void imgui() override;
 
     // Public API
     void render_tools     (const Render_context& context);

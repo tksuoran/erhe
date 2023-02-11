@@ -47,7 +47,7 @@ void Settings_window::initialize_component()
 {
     ERHE_VERIFY(g_settings_window == nullptr);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "settings");
 
     const erhe::application::Scoped_gl_context gl_context;
 

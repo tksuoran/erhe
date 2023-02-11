@@ -65,7 +65,7 @@ void Content_library_window::declare_required_components()
 void Content_library_window::initialize_component()
 {
     ERHE_VERIFY(g_content_library_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "content_library");
     g_content_library_window = this;
 }
 

@@ -39,7 +39,7 @@ void Post_processing_window::declare_required_components()
 void Post_processing_window::initialize_component()
 {
     ERHE_VERIFY(g_post_processing_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "post_processing");
     g_post_processing_window = this;
 }
 

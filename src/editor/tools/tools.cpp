@@ -23,7 +23,6 @@ Tools* g_tools{nullptr};
 
 Tools::Tools()
     : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
 {
 }
 
@@ -64,8 +63,6 @@ void Tools::initialize_component()
     g_editor_scenes->register_scene_root(m_scene_root);
 
     m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this);
 
     g_tools = this;
 }
@@ -180,10 +177,6 @@ void Tools::set_priority_tool(Tool* priority_tool)
 [[nodiscard]] auto Tools::get_tools() const -> const std::vector<Tool*>&
 {
     return m_tools;
-}
-
-void Tools::imgui()
-{
 }
 
 }  // namespace erhe::application

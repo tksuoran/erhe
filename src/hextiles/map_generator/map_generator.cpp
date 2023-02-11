@@ -36,7 +36,7 @@ Map_generator::~Map_generator()
 void Map_generator::initialize_component()
 {
     ERHE_VERIFY(g_map_generator == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "map_generator");
     hide();
     g_map_generator = this;
 }

@@ -65,7 +65,7 @@ void Grid_tool::initialize_component()
     set_flags      (Tool_flags::background);
     set_icon       (g_icon_set->icons.grid);
     g_tools->register_tool(this);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "grid");
 
     //const auto& config = get<erhe::application::Configuration>()->grid;
 

@@ -204,7 +204,6 @@ auto Viewport_windows::create_viewport_window(
         const auto shadow_render_node = g_shadow_renderer->create_node_for_scene_view(
             *new_viewport_window.get()
         );
-        erhe::application::g_rendergraph->register_node(shadow_render_node);
         erhe::application::g_rendergraph->connect(
             erhe::application::Rendergraph_node_key::shadow_maps,
             shadow_render_node,
@@ -332,7 +331,10 @@ auto Viewport_windows::create_imgui_viewport_window(
         viewport_window
     );
     m_imgui_viewport_windows.push_back(imgui_viewport_window);
-    erhe::application::g_imgui_windows->register_imgui_window(imgui_viewport_window.get());
+    erhe::application::g_imgui_windows->register_imgui_window(
+        imgui_viewport_window.get(),
+        nullptr
+    );
     erhe::application::g_rendergraph->register_node(imgui_viewport_window);
     erhe::application::g_rendergraph->connect(
         erhe::application::Rendergraph_node_key::viewport,

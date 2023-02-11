@@ -253,7 +253,7 @@ void Fly_camera_tool::initialize_component()
     set_description  (c_title);
     set_flags        (Tool_flags::background);
     g_tools->register_tool(this);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "fly_camera");
 
     auto& commands = *erhe::application::g_commands;
 

@@ -48,7 +48,7 @@ void Operations::declare_required_components()
 void Operations::initialize_component()
 {
     ERHE_VERIFY(g_operations == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "operations");
     g_operations = this;
 }
 

@@ -38,7 +38,7 @@ void Tool_properties_window::declare_required_components()
 void Tool_properties_window::initialize_component()
 {
     ERHE_VERIFY(g_tool_properties_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "tool_properties");
     g_tool_properties_window = this;
 }
 

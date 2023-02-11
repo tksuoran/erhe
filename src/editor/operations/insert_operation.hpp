@@ -29,8 +29,8 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute(const Operation_context& context) override;
-    void undo   (const Operation_context& context) override;
+    void execute() override;
+    void undo   () override;
 
 private:
     Parameters m_parameters;
@@ -79,8 +79,8 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute(const Operation_context& context) override;
-    void undo   (const Operation_context& context) override;
+    void execute() override;
+    void undo   () override;
 
 private:
     Mode                                                m_mode;

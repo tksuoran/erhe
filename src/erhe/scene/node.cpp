@@ -117,15 +117,15 @@ void Node_attachment::set_node(
             this_shared,
             position
         );
-    }
 
-    handle_node_update(old_node, node);
-    if (new_host != old_host)
-    {
-        handle_node_scene_host_update(old_host, new_host);
-        if (m_node != nullptr)
+        handle_node_update(old_node, node);
+        if (new_host != old_host)
         {
-            handle_node_transform_update();
+            handle_node_scene_host_update(old_host, new_host);
+            if (m_node != nullptr)
+            {
+                handle_node_transform_update();
+            }
         }
     }
 };
@@ -151,6 +151,7 @@ Node::~Node() noexcept
         get_depth(),
         node_data.children.size()
     );
+    remove();
 }
 
 void Node::remove()

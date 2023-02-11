@@ -70,7 +70,7 @@ void Debug_visualizations::initialize_component()
     set_description  (c_title);
     g_tools->register_tool(this);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "debug_visualizations");
 
     g_editor_message_bus->add_receiver(
         [&](Editor_message& message)

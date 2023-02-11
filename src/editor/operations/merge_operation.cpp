@@ -191,7 +191,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     );
 }
 
-void Merge_operation::execute(const Operation_context&)
+void Merge_operation::execute()
 {
     log_operations->trace("begin Op Execute {}", describe());
 
@@ -269,7 +269,7 @@ void Merge_operation::execute(const Operation_context&)
     log_operations->trace("end Op Execute {}", describe());
 }
 
-void Merge_operation::undo(const Operation_context&)
+void Merge_operation::undo()
 {
     log_operations->trace("Op Undo {}", describe());
 

@@ -36,30 +36,6 @@ auto to_lower(std::string data) -> std::string
     return data;
 }
 
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    int&                             destination
-)
-{
-    if (ini.has(key))
-    {
-        destination = std::stoi(ini.get(key));
-    }
-}
-
-void ini_get(
-    const mINI::INIMap<std::string>& ini,
-    std::string                      key,
-    float&                           destination
-)
-{
-    if (ini.has(key))
-    {
-        destination = std::stof(ini.get(key));
-    }
-}
-
 auto split(
     const std::string& s,
     const char         delimeter
@@ -92,6 +68,76 @@ auto trim(
     const auto strRange = strEnd - strBegin + 1;
 
     return str.substr(strBegin, strRange);
+}
+
+void ini_get(
+    const mINI::INIMap<std::string>& ini,
+    std::string                      key,
+    int&                             destination
+)
+{
+    if (ini.has(key))
+    {
+        destination = std::stoi(ini.get(key));
+    }
+}
+
+void ini_get(
+    const mINI::INIMap<std::string>& ini,
+    std::string                      key,
+    float&                           destination
+)
+{
+    if (ini.has(key))
+    {
+        destination = std::stof(ini.get(key));
+    }
+}
+
+void ini_get(
+    const mINI::INIMap<std::string>& ini,
+    std::string                      key,
+    glm::vec2&                       destination
+)
+{
+    if (ini.has(key))
+    {
+        std::string value = ini.get(key);
+        const auto values = split(value, ',');
+        if (values.size() > 0)
+        {
+            destination.x = std::stof(trim(values.at(0)));
+        }
+        if (values.size() > 1)
+        {
+            destination.y = std::stof(trim(values.at(1)));
+        }
+    }
+}
+
+void ini_get(
+    const mINI::INIMap<std::string>& ini,
+    std::string                      key,
+    glm::vec3&                       destination
+)
+{
+    if (ini.has(key))
+    {
+        std::string value = ini.get(key);
+        const auto values = split(value, ',');
+        if (values.size() > 0)
+        {
+            destination.x = std::stof(trim(values.at(0)));
+        }
+        if (values.size() > 1)
+        {
+            destination.y = std::stof(trim(values.at(1)));
+        }
+        if (values.size() > 2)
+        {
+            destination.z = std::stof(trim(values.at(2)));
+        }
+    }
 }
 
 void ini_get(
@@ -150,18 +196,61 @@ void ini_get(
     }
 }
 
-void Configuration::get_window(mINI::INIStructure& ini, const char* key, Window_entry& entry)
+Ini::~Ini() noexcept = default;
+
+class Ini_impl
+    : public Ini
 {
-    if (ini.has("windows"))
+public:
+    Ini_impl(const char* path)
     {
-        const auto& section = ini["windows"];
-        ini_get(section, key, entry.window);
+        mINI::INIFile file{path};
+        if (!file.read(ini))
+        {
+            log_startup->warn("Unable to read ini file '{}'", path);
+        }
     }
-    if (ini.has("hud_windows"))
+    ~Ini_impl() noexcept override = default;
+    auto has_section(const char* section) const -> bool override
     {
-        const auto& section = ini["hud_windows"];
-        ini_get(section, key, entry.hud_window);
+        return ini.has(section);
     }
+    void get(const char* section, const char* key, int& destination) const override
+    {
+        ini_get(ini.get(section), key, destination);
+    }
+    void get(const char* section, const char* key, float& destination) const override
+    {
+        ini_get(ini.get(section), key, destination);
+    }
+    void get(const char* section, const char* key, glm::vec2& destination) const override
+    {
+        ini_get(ini.get(section), key, destination);
+    }
+    void get(const char* section, const char* key, glm::vec3& destination) const override
+    {
+        ini_get(ini.get(section), key, destination);
+    }
+    void get(const char* section, const char* key, glm::vec4& destination) const override
+    {
+        ini_get(ini.get(section), key, destination);
+    }
+    void get(const char* section, const char* key, std::string& destination) const override
+    {
+        ini_get(ini.get(section), key, destination);
+    }
+    void get(const char* section, const char* key, bool& destination) const override
+    {
+        ini_get(ini.get(section), key, destination);
+    }
+
+private:
+    mINI::INIStructure ini;
+};
+
+auto get_ini(const char* path) -> std::unique_ptr<Ini>
+{
+    return std::make_unique<Ini_impl>(path);
 }
 
 Configuration* g_configuration{nullptr};
@@ -280,37 +369,6 @@ void Configuration::parse_args(int argc, char** argv)
             ini_get(section, "static_enable",  physics.static_enable);
             ini_get(section, "dynamic_enable", physics.dynamic_enable);
         }
-
-        get_window(ini, "brdf_slice",           windows.brdf_slice          );
-        get_window(ini, "commands",             windows.commands            );
-        get_window(ini, "create",               windows.create              );
-        get_window(ini, "content_library",      windows.content_library     );
-        get_window(ini, "debug_view",           windows.debug_view          );
-        get_window(ini, "debug_visualizations", windows.debug_visualizations);
-        get_window(ini, "fly_camera",           windows.fly_camera          );
-        get_window(ini, "grid",                 windows.grid                );
-        get_window(ini, "headset_view",         windows.headset_view        );
-        get_window(ini, "hover_tool",           windows.hover_tool          );
-        get_window(ini, "hud",                  windows.hud                 );
-        get_window(ini, "layers",               windows.layers              );
-        get_window(ini, "line_renderer",        windows.line_renderer       );
-        get_window(ini, "log",                  windows.log                 );
-        get_window(ini, "node_tree",            windows.node_tree           );
-        get_window(ini, "operation_stack",      windows.operation_stack     );
-        get_window(ini, "operations",           windows.operations          );
-        get_window(ini, "paint_tool",           windows.paint_tool          );
-        get_window(ini, "performance",          windows.performance         );
-        get_window(ini, "pipelines",            windows.pipelines           );
-        get_window(ini, "physics",              windows.physics             );
-        get_window(ini, "post_processing",      windows.post_processing     );
-        get_window(ini, "properties",           windows.properties          );
-        get_window(ini, "render_graph",         windows.render_graph        );
-        get_window(ini, "settings",             windows.settings            );
-        get_window(ini, "tool_properties",      windows.tool_properties     );
-        get_window(ini, "tools",                windows.tools               );
-        get_window(ini, "trs",                  windows.trs                 );
-        get_window(ini, "viewport",             windows.viewport            );
-        get_window(ini, "viewport_config",      windows.viewport_config     );
 
         if (ini.has("scene"))
         {

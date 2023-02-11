@@ -168,7 +168,6 @@ void Trs_tool::initialize_component()
     set_description  (c_title);
 
     g_tools->register_tool(this);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
 
     auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_drag_command);

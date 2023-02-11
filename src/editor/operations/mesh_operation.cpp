@@ -41,7 +41,7 @@ Mesh_operation::~Mesh_operation() noexcept
 {
 }
 
-void Mesh_operation::execute(const Operation_context&)
+void Mesh_operation::execute()
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -58,7 +58,7 @@ void Mesh_operation::execute(const Operation_context&)
     }
 }
 
-void Mesh_operation::undo(const Operation_context&)
+void Mesh_operation::undo()
 {
     log_operations->trace("Op Undo {}", describe());
 

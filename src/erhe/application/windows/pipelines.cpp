@@ -36,7 +36,7 @@ void Pipelines::declare_required_components()
 
 void Pipelines::initialize_component()
 {
-    g_imgui_windows->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this, "pipelines");
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)

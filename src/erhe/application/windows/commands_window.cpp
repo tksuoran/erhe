@@ -41,7 +41,7 @@ void Commands_window::initialize_component()
 {
     ERHE_VERIFY(g_imgui_windows != nullptr);
 
-    g_imgui_windows->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this, "commands");
 }
 
 void Commands_window::imgui()

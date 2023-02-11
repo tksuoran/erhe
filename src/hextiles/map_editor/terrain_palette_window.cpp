@@ -31,7 +31,7 @@ void Terrain_palette_window::initialize_component()
 {
     ERHE_VERIFY(g_terrain_palette_window == nullptr);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "terrain_palette");
     hide();
 
     g_terrain_palette_window = this;

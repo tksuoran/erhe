@@ -48,7 +48,7 @@ void Menu_window::declare_required_components()
 void Menu_window::initialize_component()
 {
     ERHE_VERIFY(g_menu_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "menu");
     g_menu_window = this;
 }
 

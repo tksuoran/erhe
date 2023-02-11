@@ -67,6 +67,7 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
     void deinitialize_component     () override;
+    void post_initialize            () override;
 
     // Implements Imgui_window
     void imgui() override;

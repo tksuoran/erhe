@@ -20,6 +20,21 @@ void ini_get (const mINI::INIMap<std::string>& ini, std::string key, glm::vec4& 
 void ini_get (const mINI::INIMap<std::string>& ini, std::string key, std::string& destination);
 void ini_get (const mINI::INIMap<std::string>& ini, std::string key, bool& destination);
 
+class Ini
+{
+public:
+    virtual ~Ini() noexcept;
+    virtual auto has_section(const char* section) const -> bool = 0;
+    virtual void get(const char* section, const char* key, int&         destination) const = 0;
+    virtual void get(const char* section, const char* key, float&       destination) const = 0;
+    virtual void get(const char* section, const char* key, glm::vec3&   destination) const = 0;
+    virtual void get(const char* section, const char* key, glm::vec2&   destination) const = 0;
+    virtual void get(const char* section, const char* key, glm::vec4&   destination) const = 0;
+    virtual void get(const char* section, const char* key, std::string& destination) const = 0;
+    virtual void get(const char* section, const char* key, bool&        destination) const = 0;
+};
+
+auto get_ini(const char* path) -> std::unique_ptr<Ini>;
 
 class Configuration
     : public erhe::components::Component
@@ -183,51 +198,6 @@ public:
         bool  johnson_solids             {false};
     };
     Scene scene;
-
-    class Window_entry
-    {
-    public:
-        bool window{false};
-        bool hud_window{false};
-    };
-
-    void get_window(mINI::INIStructure& ini, const char* key, Window_entry& entry);
-
-    class Windows
-    {
-    public:
-        Window_entry brdf_slice          {false};
-        Window_entry commands            {false};
-        Window_entry create              {false};
-        Window_entry content_library     {false};
-        Window_entry debug_view          {false};
-        Window_entry debug_visualizations{false};
-        Window_entry fly_camera          {false};
-        Window_entry grid                {false};
-        Window_entry headset_view        {false};
-        Window_entry hover_tool          {false};
-        Window_entry hud                 {false};
-        Window_entry layers              {false};
-        Window_entry line_renderer       {false};
-        Window_entry log                 {false};
-        Window_entry node_tree           {false};
-        Window_entry operation_stack     {false};
-        Window_entry operations          {false};
-        Window_entry properties          {false};
-        Window_entry paint_tool          {false};
-        Window_entry performance         {false};
-        Window_entry pipelines           {false};
-        Window_entry physics             {false};
-        Window_entry post_processing     {false};
-        Window_entry render_graph        {false};
-        Window_entry settings            {false};
-        Window_entry tool_properties     {false};
-        Window_entry tools               {false};
-        Window_entry trs                 {false};
-        Window_entry viewport            {true};
-        Window_entry viewport_config     {false};
-    };
-    Windows windows;
 
     class Viewport
     {

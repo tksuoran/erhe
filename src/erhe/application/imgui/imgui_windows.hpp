@@ -52,10 +52,11 @@ public:
     [[nodiscard]] auto get_window_viewport      () -> std::shared_ptr<Window_imgui_viewport>;
     [[nodiscard]] auto get_imgui_builtin_windows() -> Imgui_builtin_windows&;
     void register_imgui_viewport (const std::shared_ptr<Imgui_viewport>& viewport);
-    void register_imgui_window   (Imgui_window* window);
+    void register_imgui_window   (Imgui_window* window, const char* ini_entry);
     void make_current            (const Imgui_viewport* imgui_viewport);
     void imgui_windows           ();
     void window_menu             (Imgui_viewport* imgui_viewport);
+    auto get_windows             () -> std::vector<Imgui_window*>&;
 
     [[nodiscard]] auto want_capture_keyboard() const -> bool;
     [[nodiscard]] auto want_capture_mouse   () const -> bool;

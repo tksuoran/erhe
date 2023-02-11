@@ -42,11 +42,6 @@ public:
     void component_initialization_complete(const bool initialization_succeeded);
 
 private:
-    void init_window(
-        erhe::application::Imgui_window&                      imgui_window,
-        const erhe::application::Configuration::Window_entry& config
-    ) const;
-
     Application_impl* m_impl{nullptr};
 };
 

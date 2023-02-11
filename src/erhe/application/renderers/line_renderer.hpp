@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
@@ -270,22 +269,20 @@ private:
         std::size_t&            word_offset
     );
 
-    std::deque<Frame_resources>        m_frame_resources;
-    std::string                        m_name;
-    Line_renderer_pipeline*            m_pipeline                   {nullptr};
-    std::size_t                        m_line_count                 {0};
-    Buffer_writer                      m_view_writer;
-    Buffer_writer                      m_vertex_writer;
-    std::size_t                        m_current_frame_resource_slot{0};
-    glm::vec4                          m_line_color                 {1.0f, 1.0f, 1.0f, 1.0f};
-    float                              m_line_thickness             {1.0f};
-    bool                               m_inside_begin_end           {false};
-    std::vector<std::function<void()>> m_imgui;
+    std::deque<Frame_resources> m_frame_resources;
+    std::string                 m_name;
+    Line_renderer_pipeline*     m_pipeline                   {nullptr};
+    std::size_t                 m_line_count                 {0};
+    Buffer_writer               m_view_writer;
+    Buffer_writer               m_vertex_writer;
+    std::size_t                 m_current_frame_resource_slot{0};
+    glm::vec4                   m_line_color                 {1.0f, 1.0f, 1.0f, 1.0f};
+    float                       m_line_thickness             {1.0f};
+    bool                        m_inside_begin_end           {false};
 };
 
 class Line_renderer_set
     : public erhe::components::Component
-    , public Imgui_window
 {
 public:
     static constexpr std::string_view c_type_name{"Line_renderer_set"};
@@ -300,9 +297,6 @@ public:
     void declare_required_components() override;
     void initialize_component       () override;
     void deinitialize_component     () override;
-
-    // Implements Imgui_window
-    void imgui() override;
 
     // Public API
     void begin     ();

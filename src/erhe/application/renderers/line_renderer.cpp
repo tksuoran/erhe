@@ -116,7 +116,6 @@ Line_renderer_set* g_line_renderer_set{nullptr};
 
 Line_renderer_set::Line_renderer_set()
     : Component{c_type_name}
-    , Imgui_window{c_title}
 {
 }
 
@@ -142,7 +141,6 @@ void Line_renderer_set::deinitialize_component()
 
 void Line_renderer_set::declare_required_components()
 {
-    require<Imgui_windows>();
     require<Gl_context_provider>();
     require<Configuration      >();
     require<Shader_monitor     >();
@@ -154,8 +152,6 @@ void Line_renderer_set::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_line_renderer_set == nullptr);
-
-    g_imgui_windows->register_imgui_window(this);
 
     const Scoped_gl_context gl_context;
 
@@ -247,12 +243,6 @@ void Line_renderer_set::next_frame()
 {
     for (auto& entry : visible) entry->next_frame();
     for (auto& entry : hidden ) entry->next_frame();
-}
-
-void Line_renderer_set::imgui()
-{
-    for (auto& entry: hidden ) entry->imgui();
-    for (auto& entry: visible) entry->imgui();
 }
 
 void Line_renderer_set::render(
@@ -619,15 +609,6 @@ void Line_renderer::add_cube(
             }
         );
     }
-}
-
-void Line_renderer::imgui()
-{
-    for (const auto& fun : m_imgui)
-    {
-        fun();
-    }
-    m_imgui.clear();
 }
 
 void Line_renderer::add_sphere(

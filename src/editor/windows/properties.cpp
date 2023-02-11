@@ -78,7 +78,7 @@ void Properties::declare_required_components()
 void Properties::initialize_component()
 {
     ERHE_VERIFY(g_properties == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "properties");
     g_properties = this;
 }
 

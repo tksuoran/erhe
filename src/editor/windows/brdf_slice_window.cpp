@@ -186,7 +186,7 @@ void Brdf_slice_window::initialize_component()
 {
     ERHE_VERIFY(g_brdf_slice_window == nullptr);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "brdf_slice");
 
     const erhe::application::Scoped_gl_context gl_context;
 

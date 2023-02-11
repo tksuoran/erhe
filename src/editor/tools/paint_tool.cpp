@@ -159,7 +159,7 @@ void Paint_tool::initialize_component()
     set_flags        (Tool_flags::toolbox);
     set_icon         (g_icon_set->icons.brush_small);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "paint_tool");
 
     auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_paint_vertex_command);

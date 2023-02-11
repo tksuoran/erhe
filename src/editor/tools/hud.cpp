@@ -161,7 +161,7 @@ void Hud::initialize_component()
         return;
     }
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "hud");
 
     const erhe::application::Scoped_gl_context gl_context;
 

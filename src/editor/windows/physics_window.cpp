@@ -55,23 +55,7 @@ void Physics_window::declare_required_components()
 void Physics_window::initialize_component()
 {
     ERHE_VERIFY(g_physics_window == nullptr);
-    //const Scoped_gl_context gl_context{Component::get<Gl_context_provider>()};
-    //
-    //auto rendertarget = get<Editor_imgui_windows>()->create_rendertarget(
-    //    "Physics",
-    //    1000,
-    //    1000,
-    //    1000.0
-    //);
-    //const auto placement = erhe::toolkit::create_look_at(
-    //    glm::vec3{-0.5f, 1.0f, 1.0f},
-    //    glm::vec3{0.0f, 1.0f, 0.0f},
-    //    glm::vec3{0.0f, 1.0f, 0.0f}
-    //);
-    //rendertarget->mesh_node()->set_parent_from_node(placement);
-    //
-    //rendertarget->register_imgui_window(this);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "physics");
     m_min_size[0] = 120.0f;
     m_min_size[1] = 120.0f;
     g_physics_window = this;

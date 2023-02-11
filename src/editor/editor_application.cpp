@@ -5,7 +5,7 @@
 #include "editor_scenes.hpp"
 #include "editor_view_client.hpp"
 #include "tools/brushes/brush_tool.hpp"
-#include "tools/brushes/create.hpp"
+#include "tools/brushes/create/create.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/image_transfer.hpp"
 #include "operations/operation_stack.hpp"
@@ -127,10 +127,6 @@ public:
 
     auto initialize_components(Application* application, int argc, char** argv) -> bool;
     void component_initialization_complete(bool initialization_succeeded);
-    void init_window(
-        erhe::application::Imgui_window&                      imgui_window,
-        const erhe::application::Configuration::Window_entry& config
-    ) const;
 
 private:
     erhe::components::Components                 m_components;
@@ -243,35 +239,6 @@ Application_impl::Application_impl() = default;
 Application_impl::~Application_impl()
 {
     m_components.cleanup_components();
-}
-
-void Application_impl::init_window(
-    erhe::application::Imgui_window&                      imgui_window,
-    const erhe::application::Configuration::Window_entry& config
-) const
-{
-    if (
-        (erhe::application::g_configuration->headset.openxr && config.window) ||
-        config.hud_window
-    )
-    {
-        const auto viewport = hud.get_rendertarget_imgui_viewport();
-        if (viewport)
-        {
-            imgui_window.set_viewport(viewport.get());
-            imgui_window.show();
-            return;
-        }
-    }
-
-    if (config.window || config.hud_window)
-    {
-        imgui_window.show();
-    }
-    else
-    {
-        imgui_window.hide();
-    }
 }
 
 auto Application_impl::initialize_components(
@@ -397,41 +364,6 @@ auto Application_impl::initialize_components(
 
     erhe::application::log_startup->info("Component initialization complete");
     component_initialization_complete(true);
-
-    erhe::application::log_startup->info("Window configuration");
-    const auto& config = configuration.windows;
-    init_window(commands_window       , config.commands            );
-    init_window(line_renderer_set     , config.line_renderer       );
-    init_window(log_window            , config.log                 );
-    init_window(performance_window    , config.performance         );
-    init_window(pipelines             , config.pipelines           );
-
-    init_window(brdf_slice_window     , config.brdf_slice          );
-    init_window(create                , config.create              );
-    init_window(content_library_window, config.content_library     );
-    init_window(debug_view_window     , config.debug_view          );
-    init_window(debug_visualizations  , config.debug_visualizations);
-    init_window(fly_camera_tool       , config.fly_camera          );
-    init_window(grid_tool             , config.grid                );
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    init_window(headset_view          , config.headset_view        );
-#endif
-    init_window(hover_tool            , config.hover_tool          );
-    init_window(hud                   , config.hud                 );
-    init_window(layers_window         , config.layers              );
-    init_window(node_tree_window      , config.node_tree           );
-    init_window(operation_stack       , config.operation_stack     );
-    init_window(operations            , config.operations          );
-    init_window(paint_tool            , config.paint_tool          );
-    init_window(physics_window        , config.physics             );
-    init_window(post_processing_window, config.post_processing     );
-    init_window(properties            , config.properties          );
-    init_window(rendergraph_window    , config.render_graph        );
-    init_window(settings_window       , config.settings            );
-    init_window(trs_tool              , config.trs                 );
-    init_window(tools                 , config.tools               );
-    init_window(tool_properties_window, config.tool_properties     );
-    init_window(viewport_config_window, config.viewport_config     );
 
     if (
         configuration.physics.static_enable &&

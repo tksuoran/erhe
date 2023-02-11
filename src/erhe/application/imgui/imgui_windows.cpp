@@ -103,9 +103,20 @@ void Imgui_windows::make_current(const Imgui_viewport* imgui_viewport)
     }
 }
 
-void Imgui_windows::register_imgui_window(Imgui_window* window)
+void Imgui_windows::register_imgui_window(Imgui_window* window, const char* ini_entry)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
+
+    auto ini = get_ini("erhe.ini");
+    if (ini_entry != nullptr)
+    {
+        bool show_window{false};
+        ini->get("windows", ini_entry, show_window);
+        if (!show_window)
+        {
+            window->hide();
+        }
+    }
 
     window->set_viewport(m_window_imgui_viewport.get());
 
@@ -266,6 +277,11 @@ void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
     }
 
     ImGui::PopStyleVar();
+}
+
+auto Imgui_windows::get_windows() -> std::vector<Imgui_window*>&
+{
+    return m_imgui_windows;
 }
 
 [[nodiscard]] auto Imgui_windows::want_capture_keyboard() const -> bool

@@ -57,7 +57,7 @@ void Log_window::declare_required_components()
 void Log_window::initialize_component()
 {
     ERHE_VERIFY(g_log_window == nullptr);
-    g_imgui_windows->register_imgui_window(this);
+    g_imgui_windows->register_imgui_window(this, "log");
     m_min_size[0] = 220.0f;
     m_min_size[1] = 120.0f;
 

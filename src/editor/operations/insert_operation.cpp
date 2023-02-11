@@ -31,14 +31,14 @@ auto Node_transform_operation::describe() const -> std::string
     return ss.str();
 }
 
-void Node_transform_operation::execute(const Operation_context&)
+void Node_transform_operation::execute()
 {
     log_operations->trace("Op Execute {}", describe());
 
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
 }
 
-void Node_transform_operation::undo(const Operation_context&)
+void Node_transform_operation::undo()
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -103,7 +103,7 @@ Node_insert_remove_operation::~Node_insert_remove_operation() noexcept
 {
 }
 
-void Node_insert_remove_operation::execute(const Operation_context& context)
+void Node_insert_remove_operation::execute()
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -136,7 +136,7 @@ void Node_insert_remove_operation::execute(const Operation_context& context)
 
     for (auto& child_parent_change : m_parent_changes)
     {
-        child_parent_change->execute(context);
+        child_parent_change->execute();
     }
 
     m_node->set_parent(m_after_parent);
@@ -155,7 +155,7 @@ void Node_insert_remove_operation::execute(const Operation_context& context)
     }
 }
 
-void Node_insert_remove_operation::undo(const Operation_context& context)
+void Node_insert_remove_operation::undo()
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -189,7 +189,7 @@ void Node_insert_remove_operation::undo(const Operation_context& context)
     )
     {
         auto& child_parent_change = *i;
-        child_parent_change->undo(context);
+        child_parent_change->undo();
     }
 
     if (g_selection_tool != nullptr)

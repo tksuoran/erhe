@@ -44,7 +44,7 @@ void Viewport_config_window::declare_required_components()
 void Viewport_config_window::initialize_component()
 {
     ERHE_VERIFY(g_viewport_config_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "viewport_config");
     const auto& config = erhe::application::g_configuration->viewport;
     data.render_style_not_selected.polygon_fill      = config.polygon_fill;
     data.render_style_not_selected.edge_lines        = config.edge_lines;

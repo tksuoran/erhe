@@ -63,7 +63,7 @@ void Hover_tool::initialize_component()
 
     set_flags(Tool_flags::background);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this);
+    erhe::application::g_imgui_windows->register_imgui_window(this, "hover");
 
     set_description(c_title);
     set_flags      (Tool_flags::toolbox);
