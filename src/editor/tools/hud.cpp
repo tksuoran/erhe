@@ -147,8 +147,16 @@ void Hud::initialize_component()
     ERHE_VERIFY(g_hud == nullptr);
     g_hud = this; // due to early out
 
-    const auto& configuration = *erhe::application::g_configuration;
-    const auto& config        = configuration.hud;
+    auto ini = erhe::application::get_ini("erhe.ini", "hud");
+    ini->get("enabled", config.enabled);
+    ini->get("show",    config.show);
+    ini->get("locked",  config.locked);
+    ini->get("width",   config.width);
+    ini->get("height",  config.height);
+    ini->get("ppm",     config.ppm);
+    ini->get("x",       config.x);
+    ini->get("y",       config.y);
+    ini->get("z",       config.z);
 
     m_enabled    = config.enabled;
     m_is_visible = config.show;

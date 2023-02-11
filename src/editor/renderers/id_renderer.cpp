@@ -123,8 +123,10 @@ void Id_renderer::initialize_component()
     ERHE_VERIFY(g_id_renderer == nullptr);
     g_id_renderer = this; // due to early exit
 
-    const auto& config = *erhe::application::g_configuration;
-    if (!config.id_renderer.enabled)
+    auto ini = erhe::application::get_ini("erhe.ini", "id_renderer");
+    ini->get("enabled", config.enabled);
+
+    if (!config.enabled)
     {
         log_render->info("Id renderer disabled due to erhe.ini setting");
         return;
@@ -134,10 +136,10 @@ void Id_renderer::initialize_component()
 
     auto& shader_resources  = *g_program_interface->shader_resources.get();
     m_camera_buffers        = std::make_unique<Camera_buffer       >(&shader_resources.camera_interface);
-    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(config.renderer.max_draw_count);
+    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(g_program_interface->config.max_draw_count);
     m_primitive_buffers     = std::make_unique<Primitive_buffer    >(&shader_resources.primitive_interface);
 
-    const auto reverse_depth = config.graphics.reverse_depth;
+    const auto reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
     m_pipeline.data = {
         .name           = "ID Renderer",
@@ -183,8 +185,7 @@ auto Id_renderer::current_id_frame_resources() -> Id_frame_resources&
 
 void Id_renderer::next_frame()
 {
-    const auto& config = *erhe::application::g_configuration;
-    if (!config.id_renderer.enabled)
+    if (!config.enabled)
     {
         return;
     }
@@ -200,8 +201,7 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = *erhe::application::g_configuration;
-    if (!config.id_renderer.enabled)
+    if (!config.enabled)
     {
         return;
     }
@@ -335,8 +335,7 @@ void Id_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& config = *erhe::application::g_configuration;
-    if (!config.id_renderer.enabled)
+    if (!config.enabled)
     {
         return;
     }

@@ -37,6 +37,13 @@ class Id_renderer
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        bool enabled{true};
+    };
+    Config config;
+
     class Id_query_result
     {
     public:

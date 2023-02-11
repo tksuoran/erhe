@@ -35,6 +35,18 @@ class Hotbar
     , public Tool
 {
 public:
+    class Config
+    {
+    public:
+        bool  enabled  {true};
+        bool  show     {true};
+        int   icon_size{128};
+        float x        {0.0f};
+        float y        {0.0f};
+        float z        {0.0f};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Hotbar"};
     static constexpr std::string_view c_title{"Hotbar"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});

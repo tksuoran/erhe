@@ -55,6 +55,15 @@ class Trs_tool
     , public Tool
 {
 public:
+    class Config
+    {
+    public:
+        float scale         {4.0f};
+        bool  show_translate{true};
+        bool  show_rotate   {false};
+    };
+    Config config;
+
     enum class Reference_mode : unsigned int
     {
         local = 0,

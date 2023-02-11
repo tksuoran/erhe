@@ -212,9 +212,11 @@ void Text_renderer::initialize_component()
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_text_renderer == nullptr);
 
-    const auto& config = *g_configuration;
+    auto ini = erhe::application::get_ini("erhe.ini", "text_renderer");
+    ini->get("enabled",   config.enabled);
+    ini->get("font_size", config.font_size);
 
-    if (!config.text_renderer.enabled)
+    if (!config.enabled)
     {
         log_startup->info("Text renderer disabled due to erhe.ini setting");
         return;
@@ -275,7 +277,7 @@ void Text_renderer::initialize_component()
 
     m_font = std::make_unique<erhe::ui::Font>(
         "res/fonts/SourceSansPro-Regular.otf",
-        config.text_renderer.font_size,
+        config.font_size,
         1.0f
     );
 
@@ -412,7 +414,7 @@ void Text_renderer::print(
 
 auto Text_renderer::font_size() -> float
 {
-    return static_cast<float>(g_configuration->text_renderer.font_size);
+    return static_cast<float>(config.font_size);
 }
 
 auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rectangle

@@ -12,6 +12,7 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -55,6 +56,11 @@ void Physics_window::declare_required_components()
 void Physics_window::initialize_component()
 {
     ERHE_VERIFY(g_physics_window == nullptr);
+
+    auto ini = erhe::application::get_ini("erhe.ini", "physics");
+    ini->get("static_enable",  config.static_enable);
+    ini->get("dynamic_enable", config.dynamic_enable);
+
     erhe::application::g_imgui_windows->register_imgui_window(this, "physics");
     m_min_size[0] = 120.0f;
     m_min_size[1] = 120.0f;

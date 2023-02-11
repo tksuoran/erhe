@@ -17,6 +17,14 @@ class Physics_window
     , public erhe::application::Imgui_window
 {
 public:
+    class Config
+    {
+    public:
+        bool static_enable {false};
+        bool dynamic_enable{false};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Physics_window"};
     static constexpr std::string_view c_title{"Physics"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});

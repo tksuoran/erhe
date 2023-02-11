@@ -26,6 +26,7 @@
 #include "tools/grid_tool.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
+#include "windows/physics_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -141,6 +142,31 @@ void Scene_builder::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_scene_builder == nullptr);
+
+    auto ini = erhe::application::get_ini("erhe.ini", "scene");
+    ini->get("directional_light_intensity", config.directional_light_intensity);
+    ini->get("directional_light_radius",    config.directional_light_radius);
+    ini->get("directional_light_height",    config.directional_light_height);
+    ini->get("directional_light_count",     config.directional_light_count);
+    ini->get("spot_light_intensity",        config.spot_light_intensity);
+    ini->get("spot_light_radius",           config.spot_light_radius);
+    ini->get("spot_light_height",           config.spot_light_height);
+    ini->get("spot_light_count",            config.spot_light_count);
+    ini->get("floor_size",                  config.floor_size);
+    ini->get("instance_count",              config.instance_count);
+    ini->get("instance_gap",                config.instance_gap);
+    ini->get("object_scale",                config.object_scale);
+    ini->get("mass_scale",                  config.mass_scale);
+    ini->get("detail",                      config.detail);
+    ini->get("gltf_files",                  config.gltf_files);
+    ini->get("obj_files",                   config.obj_files);
+    ini->get("floor",                       config.floor);
+    ini->get("sphere",                      config.sphere);
+    ini->get("torus",                       config.torus);
+    ini->get("cylinder",                    config.cylinder);
+    ini->get("cone",                        config.cone);
+    ini->get("platonic_solids",             config.platonic_solids);
+    ini->get("johnson_solids",              config.johnson_solids);
 
     const erhe::application::Scoped_gl_context gl_context;
 
@@ -358,14 +384,12 @@ auto Scene_builder::make_brush(
     const bool                 instantiate_to_scene
 ) -> std::shared_ptr<Brush>
 {
-    const auto& configuration = *erhe::application::g_configuration;
     return make_brush(
         Brush_data{
             .build_info      = build_info(),
             .normal_style    = Normal_style::polygon_normals,
             .geometry        = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
-            .density         = configuration.scene.mass_scale,
-            .physics_enabled = configuration.physics.static_enable
+            .density         = config.mass_scale,
         },
         instantiate_to_scene
     );
@@ -377,14 +401,12 @@ auto Scene_builder::make_brush(
     const bool                                       instantiate_to_scene
 ) -> std::shared_ptr<Brush>
 {
-    const auto& configuration = *erhe::application::g_configuration;
     return make_brush(
         Brush_data{
             .build_info      = build_info(),
             .normal_style    = Normal_style::polygon_normals,
             .geometry        = geometry,
-            .density         = configuration.scene.mass_scale,
-            .physics_enabled = configuration.physics.static_enable
+            .density         = config.mass_scale,
         },
         instantiate_to_scene
     );
@@ -412,8 +434,6 @@ void Scene_builder::make_brushes()
         execution_queue = std::make_unique<Serial_task_queue>();
     }
 
-    const auto& config = erhe::application::g_configuration->scene;
-
     // Floor
     if (config.floor)
     {
@@ -425,7 +445,7 @@ void Scene_builder::make_brushes()
         m_collision_shapes.push_back(floor_box_shape);
 
         execution_queue->enqueue(
-            [this, &floor_box_shape, &config, &configuration]()
+            [this, &floor_box_shape, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Floor brush");
 
@@ -443,7 +463,6 @@ void Scene_builder::make_brushes()
                         .density         = 0.0f,
                         .volume          = 0.0f,
                         .collision_shape = floor_box_shape,
-                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     }
                 );
             }
@@ -482,7 +501,7 @@ void Scene_builder::make_brushes()
     if (config.obj_files)
     {
         execution_queue->enqueue(
-            [this, &config, &configuration]()
+            [this, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("parse .obj files");
 
@@ -511,11 +530,10 @@ void Scene_builder::make_brushes()
                         make_brush(
                             Brush_data
                             {
-                                .build_info      = build_info(),
-                                .normal_style    = Normal_style::polygon_normals,
-                                .geometry        = geometry,
-                                .density         = config.mass_scale,
-                                .physics_enabled = erhe::application::g_configuration->physics.static_enable
+                                .build_info   = build_info(),
+                                .normal_style = Normal_style::polygon_normals,
+                                .geometry     = geometry,
+                                .density      = config.mass_scale
                             },
                             instantiate
                         );
@@ -528,7 +546,7 @@ void Scene_builder::make_brushes()
     if (config.platonic_solids)
     {
         execution_queue->enqueue(
-            [this, &config, &configuration]()
+            [this, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
@@ -548,8 +566,7 @@ void Scene_builder::make_brushes()
                         .density         = config.mass_scale,
                         .collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
                             vec3{scale * 0.5f}
-                        ),
-                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
+                        )
                     },
                     instantiate
                 );
@@ -560,7 +577,7 @@ void Scene_builder::make_brushes()
     if (config.sphere)
     {
         execution_queue->enqueue(
-            [this, &config, &configuration]()
+            [this, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Sphere");
                 constexpr bool instantiate = global_instantiate;
@@ -579,8 +596,7 @@ void Scene_builder::make_brushes()
                         .density         = config.mass_scale,
                         .collision_shape = erhe::physics::ICollision_shape::create_sphere_shape_shared(
                             config.object_scale
-                        ),
-                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
+                        )
                     },
                     instantiate
                 );
@@ -591,7 +607,7 @@ void Scene_builder::make_brushes()
     if (config.torus)
     {
         execution_queue->enqueue(
-            [this, &config, &configuration]()
+            [this, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Torus");
 
@@ -666,7 +682,6 @@ void Scene_builder::make_brushes()
                         .density                     = config.mass_scale,
                         .collision_volume_calculator = torus_collision_volume_calculator,
                         .collision_shape_generator   = torus_collision_shape_generator,
-                        .physics_enabled             = erhe::application::g_configuration->physics.static_enable
                     },
                     instantiate
                 );
@@ -678,7 +693,7 @@ void Scene_builder::make_brushes()
     if (config.cylinder)
     {
         execution_queue->enqueue(
-            [this, &config, &configuration]()
+            [this, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
@@ -706,8 +721,7 @@ void Scene_builder::make_brushes()
                         .collision_shape = erhe::physics::ICollision_shape::create_cylinder_shape_shared(
                             erhe::physics::Axis::Y,
                             vec3{scale, scale, scale}
-                        ),
-                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
+                        )
                     },
                     instantiate
                 );
@@ -718,7 +732,7 @@ void Scene_builder::make_brushes()
     if (config.cone)
     {
         execution_queue->enqueue(
-            [this, &config, &configuration]()
+            [this, &configuration]()
             {
                 ERHE_PROFILE_SCOPE("Cone");
 
@@ -735,19 +749,18 @@ void Scene_builder::make_brushes()
 
                 make_brush(
                     Brush_data{
-                        .build_info      = build_info(),
-                        .normal_style    = Normal_style::corner_normals,
-                        .geometry        = std::make_shared<erhe::geometry::Geometry>(
+                        .build_info   = build_info(),
+                        .normal_style = Normal_style::corner_normals,
+                        .geometry     = std::make_shared<erhe::geometry::Geometry>(
                             std::move(cone_geometry)
                         ),
-                        .density         = config.mass_scale,
+                        .density      = config.mass_scale
                         // Sadly, Jolt does not have cone shape
                         //erhe::physics::ICollision_shape::create_cone_shape_shared(
                         //    erhe::physics::Axis::Y,
                         //    object_scale,
                         //    2.0f * object_scale
                         //)
-                        .physics_enabled = erhe::application::g_configuration->physics.static_enable
                     },
                     instantiate
                 );
@@ -827,7 +840,7 @@ void Scene_builder::make_brushes()
         for (const auto& key_name : library.names)
         {
             execution_queue->enqueue(
-                [this, &library, &key_name, &config, &configuration]()
+                [this, &library, &key_name, &configuration]()
                 {
                     auto geometry = library.make_geometry(key_name);
                     if (geometry.get_polygon_count() == 0)
@@ -846,8 +859,7 @@ void Scene_builder::make_brushes()
                             .build_info         = build_info(),
                             .normal_style       = Normal_style::polygon_normals,
                             .geometry_generator = [shared_geometry](){ return shared_geometry; },
-                            .density            = config.mass_scale,
-                            .physics_enabled    = erhe::application::g_configuration->physics.static_enable
+                            .density            = config.mass_scale
                         },
                         false
                     );
@@ -907,8 +919,6 @@ void Scene_builder::add_room()
 void Scene_builder::make_mesh_nodes()
 {
     ERHE_PROFILE_FUNCTION
-
-    const auto& config = erhe::application::g_configuration->scene;
 
     m_scene_root->scene().sanity_check();
 
@@ -1176,7 +1186,6 @@ auto Scene_builder::make_spot_light(
 
 void Scene_builder::setup_lights()
 {
-    const auto& config =erhe::application::g_configuration->scene;
     const auto& layers = m_scene_root->layers();
     layers.light()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
 

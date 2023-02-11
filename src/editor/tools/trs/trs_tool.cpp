@@ -154,6 +154,12 @@ void Trs_tool::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_trs_tool == nullptr);
+    g_trs_tool = this; // visualizations needs config
+
+    auto ini = erhe::application::get_ini("erhe.ini", "trs_tool");
+    ini->get("scale",          config.scale);
+    ini->get("show_translate", config.show_translate);
+    ini->get("show_rotate",    config.show_rotate);
 
     const erhe::application::Scoped_gl_context gl_context;
 
@@ -192,8 +198,6 @@ void Trs_tool::initialize_component()
     );
 
     m_drag_command.set_host(this);
-
-    g_trs_tool = this;
 }
 
 void Trs_tool::on_message(Editor_message& message)

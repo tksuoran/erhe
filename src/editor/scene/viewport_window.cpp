@@ -173,7 +173,7 @@ void Viewport_window::execute_rendergraph_node()
         .override_shader_stages = get_override_shader_stages()
     };
 
-    if (m_is_hovered && erhe::application::g_configuration->id_renderer.enabled)
+    if (m_is_hovered && g_id_renderer->config.enabled)
     {
         g_editor_rendering->render_id(context);
     }
@@ -367,7 +367,7 @@ void Viewport_window::update_hover()
         scene_root->update_pointer_for_rendertarget_meshes(this);
     }
 
-    if (erhe::application::g_configuration->id_renderer.enabled)
+    if (g_id_renderer->config.enabled)
     {
         update_hover_with_id_render();
     }

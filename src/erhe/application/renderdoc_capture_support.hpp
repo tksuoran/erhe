@@ -14,6 +14,13 @@ class Renderdoc_capture_support
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        bool capture_support{true};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Renderdoc_capture_support"};
     static constexpr uint32_t c_type_hash{
         compiletime_xxhash::xxh32(

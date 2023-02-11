@@ -25,6 +25,14 @@ class Mesh_memory
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        int vertex_buffer_size{32}; // in megabytes
+        int index_buffer_size  {8}; // in megabytes
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Mesh_memory"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 

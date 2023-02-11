@@ -6,6 +6,9 @@
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
 #include "tools/tool.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_view.hpp"
+#endif
 
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
@@ -134,7 +137,7 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (erhe::application::g_configuration->headset.openxr)
+    if (g_headset_view->config.openxr)
     {
         using namespace erhe::toolkit;
         const bool allow_secondary =

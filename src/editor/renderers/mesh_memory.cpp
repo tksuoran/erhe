@@ -48,12 +48,16 @@ void Mesh_memory::initialize_component()
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_mesh_memory == nullptr);
 
+    auto ini = erhe::application::get_ini("erhe.ini", "mesh_memory");
+    ini->get("vertex_buffer_size", config.vertex_buffer_size);
+    ini->get("index_buffer_size",  config.index_buffer_size);
+
     const erhe::application::Scoped_gl_context gl_context;
 
     static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-    const std::size_t vertex_byte_count = static_cast<std::size_t>(erhe::application::g_configuration->mesh_memory.vertex_buffer_size) * 1024 * 1024;
-    const std::size_t index_byte_count  = static_cast<std::size_t>(erhe::application::g_configuration->mesh_memory.index_buffer_size) * 1024 * 1024;
+    const std::size_t vertex_byte_count = static_cast<std::size_t>(config.vertex_buffer_size) * 1024 * 1024;
+    const std::size_t index_byte_count  = static_cast<std::size_t>(config.index_buffer_size) * 1024 * 1024;
 
     gl_buffer_transfer_queue = std::make_unique<erhe::graphics::Buffer_transfer_queue>();
 

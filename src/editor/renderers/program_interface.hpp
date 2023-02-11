@@ -18,6 +18,17 @@ class Program_interface
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        int max_material_count  {256};
+        int max_light_count     {256};
+        int max_camera_count    {256};
+        int max_primitive_count {8000}; // GLTF primitives
+        int max_draw_count      {8000};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Program_interface"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 

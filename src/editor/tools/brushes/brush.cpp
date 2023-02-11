@@ -3,6 +3,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "editor_log.hpp"
+#include "windows/physics_window.hpp"
 
 #include "erhe/geometry/operation/clone.hpp"
 #include "erhe/physics/icollision_shape.hpp"
@@ -148,7 +149,7 @@ void Brush::late_initialize()
     }
 
     if (
-        data.physics_enabled &&
+        g_physics_window->config.static_enable &&
         !data.collision_shape &&
         !data.collision_shape_generator
     )

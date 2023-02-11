@@ -72,6 +72,15 @@ class Icon_set
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        int small_icon_size {16};
+        int large_icon_size {32};
+        int hotbar_icon_size{128};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Icon_set"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 

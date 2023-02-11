@@ -55,7 +55,10 @@ void Shader_monitor::initialize_component()
     ERHE_VERIFY(g_shader_monitor == nullptr);
     g_shader_monitor = this; // here due to early exit
 
-    if (!g_configuration->shader_monitor.enabled)
+    auto ini = erhe::application::get_ini("erhe.ini", "shader_monitor");
+    ini->get("enabled", config.enabled);
+
+    if (!config.enabled)
     {
         log_startup->info("Shader monitor disabled due to erhe.ini setting");
         return;

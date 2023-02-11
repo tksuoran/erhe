@@ -366,8 +366,8 @@ auto Application_impl::initialize_components(
     component_initialization_complete(true);
 
     if (
-        configuration.physics.static_enable &&
-        configuration.physics.dynamic_enable
+        g_physics_window->config.static_enable &&
+        g_physics_window->config.dynamic_enable
     )
     {
         const auto& test_scene_root = scene_builder.get_scene_root();

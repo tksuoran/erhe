@@ -96,7 +96,11 @@ void Shadow_renderer::initialize_component()
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_shadow_renderer == nullptr);
 
-    const auto& config = erhe::application::g_configuration->shadow_renderer;
+    auto ini = erhe::application::get_ini("erhe.ini", "shadow_renderer");
+    ini->get("enabled",                    config.enabled);
+    ini->get("tight_frustum_fit",          config.tight_frustum_fit);
+    ini->get("shadow_map_resolution",      config.shadow_map_resolution);
+    ini->get("shadow_map_max_light_count", config.shadow_map_max_light_count);
 
     if (!config.enabled)
     {
@@ -118,13 +122,10 @@ void Shadow_renderer::initialize_component()
 
     auto& shader_resources  = *g_program_interface->shader_resources.get();
     m_light_buffers         = std::make_unique<Light_buffer        >(&shader_resources.light_interface);
-    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(erhe::application::g_configuration->renderer.max_draw_count);
+    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(g_program_interface->config.max_draw_count);
     m_primitive_buffers     = std::make_unique<Primitive_buffer    >(&shader_resources.primitive_interface);
 
-    ERHE_VERIFY(
-        erhe::application::g_configuration->shadow_renderer.shadow_map_max_light_count <=
-        erhe::application::g_configuration->renderer.max_light_count
-    );
+    ERHE_VERIFY(config.shadow_map_max_light_count <= g_program_interface->config.max_light_count);
 
     m_vertex_input = std::make_unique<Vertex_input_state>(
         erhe::graphics::Vertex_input_state_data::make(
@@ -172,10 +173,9 @@ auto Shadow_renderer::create_node_for_scene_view(
     Scene_view& scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    const auto& config        = erhe::application::g_configuration->shadow_renderer;
-    const int   resolution    = config.enabled ? config.shadow_map_resolution      : 1;
-    const int   light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
-    const bool  reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
+    const int  resolution    = config.enabled ? config.shadow_map_resolution      : 1;
+    const int  light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
+    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
         *this,
@@ -191,10 +191,9 @@ auto Shadow_renderer::create_node_for_scene_view(
 
 void Shadow_renderer::handle_graphics_settings_changed()
 {
-    const auto& config        = erhe::application::g_configuration->shadow_renderer;
-    const int   resolution    = config.enabled ? config.shadow_map_resolution      : 1;
-    const int   light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
-    const bool  reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
+    const int  resolution    = config.enabled ? config.shadow_map_resolution      : 1;
+    const int  light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
+    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
     for (const auto& node : m_nodes)
     {
@@ -232,7 +231,6 @@ auto Shadow_renderer::get_nodes() const -> const std::vector<std::shared_ptr<Sha
 
 void Shadow_renderer::next_frame()
 {
-    const auto& config = erhe::application::g_configuration->shadow_renderer;
     if (!config.enabled)
     {
         return;
@@ -258,7 +256,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     };
 
     if (
-        !erhe::application::g_configuration->shadow_renderer.enabled ||
+        !config.enabled ||
         !parameters.scene_root
     )
     {

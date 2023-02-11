@@ -147,7 +147,7 @@ auto Window::create_gl_window() -> bool
 
     if (
         g_configuration->graphics.force_no_bindless ||
-        g_configuration->renderdoc.capture_support
+        erhe::application::g_renderdoc_capture_support->config.capture_support
     )
     {
         if (erhe::graphics::Instance::info.use_bindless_texture)

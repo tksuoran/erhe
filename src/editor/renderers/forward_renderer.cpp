@@ -88,7 +88,7 @@ void Forward_renderer::initialize_component()
     m_light_buffers         = Light_buffer        {&shader_resources.light_interface};
     m_camera_buffers        = Camera_buffer       {&shader_resources.camera_interface};
     m_draw_indirect_buffers = Draw_indirect_buffer{
-        static_cast<size_t>(erhe::application::g_configuration->renderer.max_draw_count)
+        static_cast<size_t>(g_program_interface->config.max_draw_count)
     };
     m_primitive_buffers     = Primitive_buffer    {&shader_resources.primitive_interface};
 

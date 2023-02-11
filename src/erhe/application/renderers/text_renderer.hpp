@@ -47,6 +47,14 @@ class Text_renderer
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        bool enabled{true};
+        int  font_size{14};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Text_renderer"};
     static constexpr uint32_t         c_type_hash{
         compiletime_xxhash::xxh32(

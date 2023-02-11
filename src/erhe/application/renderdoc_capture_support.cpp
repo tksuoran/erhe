@@ -52,11 +52,14 @@ void Renderdoc_capture_support::initialize_component()
 {
     ERHE_VERIFY((g_renderdoc_capture_support == nullptr) || (g_renderdoc_capture_support == this));
     g_renderdoc_capture_support = this; // due to early exit
+
+    auto ini = erhe::application::get_ini("erhe.ini", "renderdoc");
+    ini->get("capture_support", config.capture_support);
     if (m_is_initialized)
     {
         return;
     }
-    if (!g_configuration->renderdoc.capture_support)
+    if (!config.capture_support)
     {
         return;
     }

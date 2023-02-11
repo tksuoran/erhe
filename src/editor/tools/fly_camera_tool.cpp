@@ -249,6 +249,13 @@ void Fly_camera_tool::initialize_component()
     m_space_mouse_listener.set_active(true);
 #endif
 
+    auto ini = erhe::application::get_ini("erhe.ini", "camera_controls");
+    ini->get("invert_x",           config.invert_x);
+    ini->get("invert_y",           config.invert_y);
+    ini->get("velocity_damp",      config.velocity_damp);
+    ini->get("velocity_max_delta", config.velocity_max_delta);
+    ini->get("sensitivity",        config.sensitivity);
+
     set_base_priority(c_priority);
     set_description  (c_title);
     set_flags        (Tool_flags::background);
@@ -287,7 +294,6 @@ void Fly_camera_tool::initialize_component()
 
     m_camera_controller = std::make_shared<Frame_controller>();
 
-    const auto& config = erhe::application::g_configuration->camera_controls;
     m_camera_controller->get_controller(Control::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_controller(Control::translate_y).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
     m_camera_controller->get_controller(Control::translate_z).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);

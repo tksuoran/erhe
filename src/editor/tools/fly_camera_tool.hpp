@@ -77,6 +77,17 @@ class Fly_camera_tool
     , public erhe::application::Imgui_window
 {
 public:
+    class Config
+    {
+    public:
+        bool  invert_x          {false};
+        bool  invert_y          {false};
+        float velocity_damp     {0.92f};
+        float velocity_max_delta{0.004f};
+        float sensitivity       {1.0f};
+    };
+    Config config;
+
     static constexpr int              c_priority {5};
     static constexpr std::string_view c_type_name{"Fly_camera_tool"};
     static constexpr std::string_view c_title    {"Fly Camera"};

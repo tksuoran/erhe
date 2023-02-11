@@ -117,7 +117,13 @@ void Hotbar::initialize_component()
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_hotbar == nullptr);
 
-    const auto& config = erhe::application::g_configuration->hotbar;
+    auto ini = erhe::application::get_ini("erhe.ini", "hotbar");
+    ini->get("enabled", config.enabled);
+    ini->get("show",    config.show);
+    ini->get("x",       config.x);
+    ini->get("y",       config.y);
+    ini->get("z",       config.z);
+
     m_enabled = config.enabled;
     m_show    = config.show;
     m_x       = config.x;

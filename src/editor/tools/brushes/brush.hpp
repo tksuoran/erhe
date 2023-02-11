@@ -83,7 +83,6 @@ public:
     Collision_volume_calculator                      collision_volume_calculator{};
     std::shared_ptr<erhe::physics::ICollision_shape> collision_shape            {};
     Collision_shape_generator                        collision_shape_generator  {};
-    bool                                             physics_enabled            {true};
 };
 
 class Instance_create_info final

@@ -53,6 +53,7 @@ public:
     [[nodiscard]] auto get_imgui_builtin_windows() -> Imgui_builtin_windows&;
     void register_imgui_viewport (const std::shared_ptr<Imgui_viewport>& viewport);
     void register_imgui_window   (Imgui_window* window, const char* ini_entry);
+    void register_imgui_window   (Imgui_window* window, bool visible);
     void make_current            (const Imgui_viewport* imgui_viewport);
     void imgui_windows           ();
     void window_menu             (Imgui_viewport* imgui_viewport);

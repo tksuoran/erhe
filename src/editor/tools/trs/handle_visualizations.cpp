@@ -332,9 +332,9 @@ void Handle_visualizations::initialize()
     const auto scene_root = m_trs_tool.get_tool_scene_root();
     m_tool_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
 
-    m_scale          = erhe::application::g_configuration->trs_tool.scale;
-    m_show_translate = erhe::application::g_configuration->trs_tool.show_translate;
-    m_show_rotate    = erhe::application::g_configuration->trs_tool.show_rotate;
+    m_scale          = g_trs_tool->config.scale;
+    m_show_translate = g_trs_tool->config.show_translate;
+    m_show_rotate    = g_trs_tool->config.show_rotate;
 
     m_x_material        = make_material("x",        glm::vec3{1.00f, 0.00f, 0.0f}, Mode::Normal);
     m_y_material        = make_material("y",        glm::vec3{0.23f, 1.00f, 0.0f}, Mode::Normal);

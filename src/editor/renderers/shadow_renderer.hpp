@@ -40,6 +40,16 @@ class Shadow_renderer
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        bool enabled                   {true};
+        bool tight_frustum_fit         {true};
+        int  shadow_map_resolution     {2048};
+        int  shadow_map_max_light_count{8};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Shadow_renderer"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 

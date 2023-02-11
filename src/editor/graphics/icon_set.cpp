@@ -50,7 +50,11 @@ void Icon_set::initialize_component()
     ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_icon_set == nullptr);
 
-    const auto& config = *erhe::application::g_configuration;
+    auto ini = erhe::application::get_ini("erhe.ini", "icons");
+    ini->get("small_icon_size",  config.small_icon_size);
+    ini->get("large_icon_size",  config.large_icon_size);
+    ini->get("hotbar_icon_size", config.hotbar_icon_size);
+
     m_row_count    = 16;
     m_column_count = 16;
     m_row          = 0;
@@ -58,9 +62,9 @@ void Icon_set::initialize_component()
 
     const erhe::application::Scoped_gl_context gl_context;
 
-    m_small  = Icon_rasterization(config.imgui.small_icon_size, m_column_count, m_row_count);
-    m_large  = Icon_rasterization(config.imgui.large_icon_size, m_column_count, m_row_count);
-    m_hotbar = Icon_rasterization(config.hotbar.icon_size,      m_column_count, m_row_count);
+    m_small  = Icon_rasterization(config.small_icon_size,  m_column_count, m_row_count);
+    m_large  = Icon_rasterization(config.large_icon_size,  m_column_count, m_row_count);
+    m_hotbar = Icon_rasterization(config.hotbar_icon_size, m_column_count, m_row_count);
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 

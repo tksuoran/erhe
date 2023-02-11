@@ -19,6 +19,13 @@ class Shader_monitor
     , public erhe::components::IUpdate_once_per_frame
 {
 public:
+    class Config
+    {
+    public:
+        bool enabled{true};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Shader_monitor"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 

@@ -163,13 +163,18 @@ void Program_interface::initialize_component()
 
     ERHE_VERIFY(g_program_interface == nullptr);
 
-    const auto& config = *erhe::application::g_configuration;
+    auto ini = erhe::application::get_ini("erhe.ini", "renderer");
+    ini->get("max_material_count",  config.max_material_count );
+    ini->get("max_light_count",     config.max_light_count    );
+    ini->get("max_camera_count",    config.max_camera_count   );
+    ini->get("max_primitive_count", config.max_primitive_count);
+    ini->get("max_draw_count",      config.max_draw_count     );
 
     shader_resources = std::make_unique<Shader_resources>(
-        config.renderer.max_material_count,
-        config.renderer.max_light_count,
-        config.renderer.max_camera_count,
-        config.renderer.max_primitive_count
+        config.max_material_count,
+        config.max_light_count,
+        config.max_camera_count,
+        config.max_primitive_count
     );
 
     g_program_interface = this;

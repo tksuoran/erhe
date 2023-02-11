@@ -115,7 +115,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
     const auto pointer = m_rendertarget_mesh->get_pointer();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (!erhe::application::g_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
+    if (!g_headset_view->config.openxr) // TODO Figure out better way to combine different input methods
 #endif
     {
         if (pointer.has_value())
@@ -148,7 +148,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (erhe::application::g_configuration->headset.openxr) // TODO Figure out better way to combine different input methods
+    if (g_headset_view->config.openxr) // TODO Figure out better way to combine different input methods
     {
         const auto* headset = g_headset_view->get_headset();
         ERHE_VERIFY(headset != nullptr);

@@ -44,8 +44,22 @@ void Viewport_config_window::declare_required_components()
 void Viewport_config_window::initialize_component()
 {
     ERHE_VERIFY(g_viewport_config_window == nullptr);
+
     erhe::application::g_imgui_windows->register_imgui_window(this, "viewport_config");
-    const auto& config = erhe::application::g_configuration->viewport;
+
+    auto ini = erhe::application::get_ini("erhe.ini", "viewport");
+    ini->get("polygon_fill",              config.polygon_fill);
+    ini->get("edge_lines",                config.edge_lines);
+    ini->get("edge_color",                config.edge_color);
+    ini->get("selection_polygon_fill",    config.selection_polygon_fill);
+    ini->get("selection_edge_lines",      config.selection_edge_lines);
+    ini->get("corner_points",             config.corner_points);
+    ini->get("polygon_centroids",         config.polygon_centroids);
+    ini->get("selection_bounding_box",    config.selection_bounding_box);
+    ini->get("selection_bounding_sphere", config.selection_bounding_sphere);
+    ini->get("selection_edge_color",      config.selection_edge_color);
+    ini->get("clear_color",               config.clear_color);
+
     data.render_style_not_selected.polygon_fill      = config.polygon_fill;
     data.render_style_not_selected.edge_lines        = config.edge_lines;
     data.render_style_not_selected.corner_points     = config.corner_points;

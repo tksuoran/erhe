@@ -24,17 +24,16 @@ class Ini
 {
 public:
     virtual ~Ini() noexcept;
-    virtual auto has_section(const char* section) const -> bool = 0;
-    virtual void get(const char* section, const char* key, int&         destination) const = 0;
-    virtual void get(const char* section, const char* key, float&       destination) const = 0;
-    virtual void get(const char* section, const char* key, glm::vec3&   destination) const = 0;
-    virtual void get(const char* section, const char* key, glm::vec2&   destination) const = 0;
-    virtual void get(const char* section, const char* key, glm::vec4&   destination) const = 0;
-    virtual void get(const char* section, const char* key, std::string& destination) const = 0;
-    virtual void get(const char* section, const char* key, bool&        destination) const = 0;
+    virtual void get(const char* key, int&         destination) const = 0;
+    virtual void get(const char* key, float&       destination) const = 0;
+    virtual void get(const char* key, glm::vec3&   destination) const = 0;
+    virtual void get(const char* key, glm::vec2&   destination) const = 0;
+    virtual void get(const char* key, glm::vec4&   destination) const = 0;
+    virtual void get(const char* key, std::string& destination) const = 0;
+    virtual void get(const char* key, bool&        destination) const = 0;
 };
 
-auto get_ini(const char* path) -> std::unique_ptr<Ini>;
+auto get_ini(const char* path, const char* section) -> std::unique_ptr<Ini>;
 
 class Configuration
     : public erhe::components::Component
@@ -70,26 +69,10 @@ public:
         std::string mono_font       {"res/fonts/SourceCodePro-Semibold.otf"};
         float       font_size       {17.0f};
         float       vr_font_size    {22.0f};
-        int         small_icon_size {16};
-        int         large_icon_size {32};
-        int         hotbar_icon_size{128};
         float       padding         {2.0f};
         float       rounding        {3.0f};
     };
     Imgui imgui;
-
-    class Headset
-    {
-    public:
-        bool openxr           {false};
-        bool quad_view        {false};
-        bool debug            {false};
-        bool depth            {false};
-        bool visibility_mask  {false};
-        bool hand_tracking    {false};
-        bool composition_alpha{false};
-    };
-    Headset headset;
 
     class Threading
     {
@@ -101,7 +84,6 @@ public:
     class Graphics
     {
     public:
-        bool low_hdr          {false}; // TODO remove
         bool reverse_depth    {true};  // TODO move to editor
         bool simpler_shaders  {true};  // TODO move to editor
         bool post_processing  {true};  // TODO move to editor
@@ -110,14 +92,6 @@ public:
         int  msaa_sample_count{4};     // TODO move to editor
     };
     Graphics graphics;
-
-    class Mesh_memory
-    {
-    public:
-        int vertex_buffer_size{32}; // in megabytes
-        int index_buffer_size  {8}; // in megabytes
-    };
-    Mesh_memory mesh_memory;
 
     class Window
     {
@@ -132,171 +106,6 @@ public:
         int   height       {1080};
     };
     Window window;
-
-    class Shadow_renderer
-    {
-    public:
-        bool enabled                   {true};
-        bool tight_frustum_fit         {true};
-        int  shadow_map_resolution     {2048};
-        int  shadow_map_max_light_count{8};
-    };
-    Shadow_renderer shadow_renderer;
-
-    class Text_renderer
-    {
-    public:
-        bool enabled{true};
-        int  font_size{14};
-    };
-    Text_renderer text_renderer;
-
-    class Renderer
-    {
-    public:
-        int max_material_count  {256};
-        int max_light_count     {256};
-        int max_camera_count    {256};
-        int max_primitive_count {8000}; // GLTF primitives
-        int max_draw_count      {8000};
-    };
-    Renderer renderer;
-
-    class Physics
-    {
-    public:
-        bool static_enable {false};
-        bool dynamic_enable{false};
-    };
-    Physics physics;
-
-    class Scene
-    {
-    public:
-        float directional_light_intensity{20.0f};
-        float directional_light_radius   {6.0f};
-        float directional_light_height   {10.0f};
-        int   directional_light_count    {4};
-        float spot_light_intensity       {150.0f};
-        float spot_light_radius          {20.0f};
-        float spot_light_height          {10.0f};
-        int   spot_light_count           {3};
-        float floor_size                 {40.0f};
-        int   instance_count             {1};
-        float instance_gap               {0.4f};
-        float object_scale               {1.0f};
-        float mass_scale                 {1.0f};
-        int   detail                     {2};
-        bool  floor                      {true};
-        bool  gltf_files                 {false};
-        bool  obj_files                  {false};
-        bool  sphere                     {false};
-        bool  torus                      {false};
-        bool  cylinder                   {false};
-        bool  cone                       {false};
-        bool  platonic_solids            {true};
-        bool  johnson_solids             {false};
-    };
-    Scene scene;
-
-    class Viewport
-    {
-    public:
-        bool      polygon_fill             {true};
-        bool      edge_lines               {false};
-        bool      selection_polygon_fill   {true};
-        bool      selection_edge_lines     {false};
-        bool      corner_points            {false};
-        bool      polygon_centroids        {false};
-        bool      selection_bounding_sphere{true};
-        bool      selection_bounding_box   {true};
-        glm::vec4 edge_color               {0.0f, 0.0f, 0.0f, 0.5f};
-        glm::vec4 selection_edge_color     {0.0f, 0.0f, 0.0f, 0.5f};
-        glm::vec4 clear_color              {0.1f, 0.2f, 0.4f, 1.0f};
-    };
-    Viewport viewport;
-
-    class Shader_monitor
-    {
-    public:
-        bool enabled{true};
-    };
-    Shader_monitor shader_monitor;
-
-    class Id_renderer
-    {
-    public:
-        bool enabled{true};
-    };
-    Id_renderer id_renderer;
-
-    class Renderdoc
-    {
-    public:
-        bool capture_support{true};
-    };
-    Renderdoc renderdoc;
-
-    class Grid
-    {
-    public:
-        bool      enabled   {false};
-        glm::vec4 major_color{1.0f, 1.0f, 1.0f, 1.0f};
-        glm::vec4 minor_color{0.5f, 0.5f, 0.5f, 0.5f};
-        float     major_width{4.0f};
-        float     minor_width{2.0f};
-        float     cell_size {1.0f};
-        int       cell_div  {10};
-        int       cell_count{2};
-    };
-    Grid grid;
-
-    class Camera_controls
-    {
-    public:
-        bool  invert_x          {false};
-        bool  invert_y          {false};
-        float velocity_damp     {0.92f};
-        float velocity_max_delta{0.004f};
-        float sensitivity       {1.0f};
-    };
-    Camera_controls camera_controls;
-
-    class Trs_tool
-    {
-    public:
-        float scale         {4.0f};
-        bool  show_translate{true};
-        bool  show_rotate   {false};
-    };
-    Trs_tool trs_tool;
-
-    class Hud
-    {
-    public:
-        bool  enabled{true};
-        bool  show   {true};
-        bool  locked {false};
-        int   width  {1024};
-        int   height {1024};
-        float ppm    {5000.0f};
-        float x      {0.0f};
-        float y      {0.0f};
-        float z      {0.0f};
-    };
-    Hud hud;
-
-    class Hotbar
-    {
-    public:
-        bool  enabled  {true};
-        bool  show     {true};
-        int   icon_size{128};
-        float x        {0.0f};
-        float y        {0.0f};
-        float z        {0.0f};
-    };
-    Hotbar hotbar;
 };
 
 extern Configuration* g_configuration;

@@ -67,7 +67,15 @@ void Grid_tool::initialize_component()
     g_tools->register_tool(this);
     erhe::application::g_imgui_windows->register_imgui_window(this, "grid");
 
-    //const auto& config = get<erhe::application::Configuration>()->grid;
+    auto ini = erhe::application::get_ini("erhe.ini", "grid");
+    ini->get("enabled",     config.enabled);
+    ini->get("major_color", config.major_color);
+    ini->get("minor_color", config.minor_color);
+    ini->get("major_width", config.major_width);
+    ini->get("minor_width", config.minor_width);
+    ini->get("cell_size",   config.cell_size);
+    ini->get("cell_div",    config.cell_div);
+    ini->get("cell_count",  config.cell_count);
 
     std::shared_ptr<Grid> grid = std::make_shared<Grid>();
 

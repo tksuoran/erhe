@@ -105,17 +105,22 @@ void Imgui_windows::make_current(const Imgui_viewport* imgui_viewport)
 
 void Imgui_windows::register_imgui_window(Imgui_window* window, const char* ini_entry)
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
-
-    auto ini = get_ini("erhe.ini");
+    bool show_window{false};
     if (ini_entry != nullptr)
     {
-        bool show_window{false};
-        ini->get("windows", ini_entry, show_window);
-        if (!show_window)
-        {
-            window->hide();
-        }
+        auto ini = get_ini("erhe.ini", "windows");
+        ini->get(ini_entry, show_window);
+    }
+    register_imgui_window(window, show_window);
+}
+
+void Imgui_windows::register_imgui_window(Imgui_window* window, const bool visible)
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+
+    if (!visible)
+    {
+        window->hide();
     }
 
     window->set_viewport(m_window_imgui_viewport.get());

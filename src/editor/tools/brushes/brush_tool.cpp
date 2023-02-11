@@ -539,8 +539,7 @@ void Brush_tool_impl::do_insert_operation()
             ? hover_node->world_from_node() * hover_from_brush
             : hover_from_brush,
         .material         = g_content_library_window->selected_material(),
-        .scale            = m_transform_scale,
-        .physics_enabled  = erhe::application::g_configuration->physics.static_enable
+        .scale            = m_transform_scale
     };
     const auto instance_node = brush->make_instance(brush_instance_create_info);
 

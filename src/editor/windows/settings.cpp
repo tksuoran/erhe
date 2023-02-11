@@ -1,6 +1,7 @@
 #include "windows/settings.hpp"
 
 #include "editor_message_bus.hpp"
+#include "renderers/shadow_renderer.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -41,6 +42,7 @@ void Settings_window::declare_required_components()
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
+    require<Shadow_renderer>();
 }
 
 void Settings_window::initialize_component()
@@ -116,11 +118,10 @@ void Settings_window::initialize_component()
         const auto& settings = m_settings.at(i);
         if (settings.name == m_used_settings)
         {
-            auto& configuration = *erhe::application::g_configuration;
-            configuration.shadow_renderer.enabled                    = settings.shadow_enable;
-            configuration.shadow_renderer.shadow_map_resolution      = settings.shadow_resolution;
-            configuration.shadow_renderer.shadow_map_max_light_count = settings.shadow_light_count;
-            configuration.graphics.msaa_sample_count                 = settings.msaa_sample_count;
+            g_shadow_renderer->config.enabled                              = settings.shadow_enable;
+            g_shadow_renderer->config.shadow_map_resolution                = settings.shadow_resolution;
+            g_shadow_renderer->config.shadow_map_max_light_count           = settings.shadow_light_count;
+            erhe::application::g_configuration->graphics.msaa_sample_count = settings.msaa_sample_count;
             m_settings_index = static_cast<int>(i);
             break;
         }
@@ -147,11 +148,10 @@ void Settings_window::use_settings(const Settings& settings)
 {
     m_used_settings = settings.name;
 
-    auto& configuration = *erhe::application::g_configuration;
-    configuration.shadow_renderer.enabled                    = settings.shadow_enable;
-    configuration.shadow_renderer.shadow_map_resolution      = settings.shadow_resolution;
-    configuration.shadow_renderer.shadow_map_max_light_count = settings.shadow_light_count;
-    configuration.graphics.msaa_sample_count                 = settings.msaa_sample_count;
+    g_shadow_renderer->config.enabled                              = settings.shadow_enable;
+    g_shadow_renderer->config.shadow_map_resolution                = settings.shadow_resolution;
+    g_shadow_renderer->config.shadow_map_max_light_count           = settings.shadow_light_count;
+    erhe::application::g_configuration->graphics.msaa_sample_count = settings.msaa_sample_count;
 
     g_editor_message_bus->send_message(
         Editor_message{

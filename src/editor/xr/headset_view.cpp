@@ -120,13 +120,21 @@ void Headset_view::initialize_component()
     ERHE_VERIFY(g_headset_view == nullptr);
     g_headset_view = this; // we have early out
 
+    auto ini = erhe::application::get_ini("erhe.ini", "headset");
+    ini->get("openxr",            config.openxr);
+    ini->get("quad_view",         config.quad_view);
+    ini->get("debug",             config.debug);
+    ini->get("depth",             config.depth);
+    ini->get("visibility_mask",   config.visibility_mask);
+    ini->get("hand_tracking",     config.hand_tracking);
+    ini->get("composition_alpha", config.composition_alpha);
+
     erhe::application::g_imgui_windows->register_imgui_window(this, "headset_view");
 
     m_scene_root = g_scene_builder->get_scene_root();
 
     setup_root_camera();
 
-    const auto config = erhe::application::g_configuration->headset;
     if (!config.openxr)
     {
         return;

@@ -26,6 +26,20 @@ class Grid_tool
     , public Tool
 {
 public:
+    class Config
+    {
+    public:
+        bool      enabled   {false};
+        glm::vec4 major_color{1.0f, 1.0f, 1.0f, 1.0f};
+        glm::vec4 minor_color{0.5f, 0.5f, 0.5f, 0.5f};
+        float     major_width{4.0f};
+        float     minor_width{2.0f};
+        float     cell_size {1.0f};
+        int       cell_div  {10};
+        int       cell_count{2};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Grid_tool"};
     static constexpr std::string_view c_title{"Grid"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});

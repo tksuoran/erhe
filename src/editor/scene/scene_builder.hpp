@@ -46,6 +46,35 @@ class Scene_builder
     : public erhe::components::Component
 {
 public:
+    class Config
+    {
+    public:
+        float directional_light_intensity{20.0f};
+        float directional_light_radius   {6.0f};
+        float directional_light_height   {10.0f};
+        int   directional_light_count    {4};
+        float spot_light_intensity       {150.0f};
+        float spot_light_radius          {20.0f};
+        float spot_light_height          {10.0f};
+        int   spot_light_count           {3};
+        float floor_size                 {40.0f};
+        int   instance_count             {1};
+        float instance_gap               {0.4f};
+        float object_scale               {1.0f};
+        float mass_scale                 {1.0f};
+        int   detail                     {2};
+        bool  floor                      {true};
+        bool  gltf_files                 {false};
+        bool  obj_files                  {false};
+        bool  sphere                     {false};
+        bool  torus                      {false};
+        bool  cylinder                   {false};
+        bool  cone                       {false};
+        bool  platonic_solids            {true};
+        bool  johnson_solids             {false};
+    };
+    Config config;
+
     static constexpr std::string_view c_type_name{"Scene_builder"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
