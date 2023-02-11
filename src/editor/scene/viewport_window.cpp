@@ -523,7 +523,7 @@ auto Viewport_window::get_config() -> Viewport_config*
     return &m_viewport_config;
 }
 
-auto Viewport_window::imgui_toolbar() -> bool
+auto Viewport_window::viewport_toolbar() -> bool
 {
     bool hovered = false;
     if (g_viewport_windows != nullptr)
@@ -634,7 +634,7 @@ auto Viewport_window::imgui_toolbar() -> bool
     //// if (post_processing_node)
     //// {
     ////     ImGui::SameLine();
-    ////     post_processing_node->imgui_toolbar();
+    ////     post_processing_node->viewport_toolbar();
     //// }
     return hovered;
 }

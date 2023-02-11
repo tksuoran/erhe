@@ -127,7 +127,7 @@ public:
 
     auto get_shadow_render_node() const -> Shadow_render_node* override;
 
-    [[nodiscard]] auto imgui_toolbar() -> bool;
+    [[nodiscard]] auto viewport_toolbar() -> bool;
 
     // TODO Consider if these links are a good thing, or if they should
     //      be discovered from the graph instead.

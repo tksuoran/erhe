@@ -188,7 +188,7 @@ void Imgui_viewport_window::toolbar(bool& hovered)
         return;
     }
 
-    if (viewport_window->imgui_toolbar())
+    if (viewport_window->viewport_toolbar())
     {
         hovered = true;
     }

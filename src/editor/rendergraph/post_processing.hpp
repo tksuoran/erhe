@@ -92,7 +92,7 @@ public:
     ) const -> erhe::scene::Viewport override;
 
     // Public API
-    void imgui_toolbar();
+    void viewport_toolbar();
 
     // For Post_processing
     [[nodiscard]] auto get_downsample_nodes() -> const std::vector<Downsample_node>&;

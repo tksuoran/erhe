@@ -5,6 +5,7 @@
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/renderpass.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/viewport_config.hpp"
@@ -21,6 +22,7 @@
 #   include "xr/headset_view.hpp"
 #endif
 
+#include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -39,6 +41,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/viewport.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -48,6 +51,14 @@ using erhe::graphics::Color_blend_state;
 
 
 #pragma region Commands
+class Capture_frame_command
+    : public erhe::application::Command
+{
+public:
+    Capture_frame_command();
+    auto try_call() -> bool override;
+};
+
 Capture_frame_command::Capture_frame_command()
     : Command{"editor.capture_frame"}
 {
@@ -60,7 +71,75 @@ auto Capture_frame_command::try_call() -> bool
 }
 #pragma endregion Commands
 
-Editor_rendering* g_editor_rendering{nullptr};
+IEditor_rendering::~IEditor_rendering() noexcept = default;
+
+class Editor_rendering_impl
+    : public IEditor_rendering
+{
+public:
+    Editor_rendering_impl()
+    {
+        ERHE_VERIFY(g_editor_rendering == nullptr);
+        erhe::application::g_commands->register_command(&m_capture_frame_command);
+        erhe::application::g_commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+        g_editor_rendering = this;
+    }
+    ~Editor_rendering_impl() noexcept override
+    {
+        ERHE_VERIFY(g_editor_rendering == this);
+        g_editor_rendering = nullptr;
+    }
+
+    void post_initialize();
+
+    // Implements
+    void trigger_capture           () override;
+    void render                    () override;
+    void render_viewport_main      (const Render_context& context, bool has_pointer) override;
+    void render_viewport_overlay   (const Render_context& context, bool has_pointer) override;
+    void render_content            (const Render_context& context, bool polygon_fill) override;
+    void render_selection          (const Render_context& context, bool polygon_fill) override;
+    void render_tool_meshes        (const Render_context& context) override;
+    void render_rendertarget_meshes(const Render_context& context) override;
+    void render_brush              (const Render_context& context) override;
+    void render_id                 (const Render_context& context) override;
+    void begin_frame               () override;
+    void end_frame                 () override;
+
+private:
+    void setup_renderpasses();
+
+    [[nodiscard]] auto width () const -> int;
+    [[nodiscard]] auto height() const -> int;
+
+    // Commands
+    Capture_frame_command m_capture_frame_command;
+
+    bool       m_trigger_capture{false};
+
+    Renderpass m_rp_polygon_fill_standard;
+    Renderpass m_rp_tool1_hidden_stencil;
+    Renderpass m_rp_tool2_visible_stencil;
+    Renderpass m_rp_tool3_depth_clear;
+    Renderpass m_rp_tool4_depth;
+    Renderpass m_rp_tool5_visible_color;
+    Renderpass m_rp_tool6_hidden_color;
+    Renderpass m_rp_line_hidden_blend;
+    Renderpass m_rp_brush_back;
+    Renderpass m_rp_brush_front;
+    Renderpass m_rp_edge_lines;
+    Renderpass m_rp_corner_points;
+    Renderpass m_rp_polygon_centroids;
+    Renderpass m_rp_rendertarget_meshes;
+
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_selection_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_gui_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_brush_timer;
+    std::unique_ptr<erhe::graphics::Gpu_timer> m_tools_timer;
+};
+
+IEditor_rendering* g_editor_rendering{nullptr};
 
 Editor_rendering::Editor_rendering()
     : erhe::components::Component{c_type_name}
@@ -74,29 +153,7 @@ Editor_rendering::~Editor_rendering() noexcept
 
 void Editor_rendering::deinitialize_component()
 {
-    ERHE_VERIFY(g_editor_rendering == this);
-    m_rp_polygon_fill_standard.reset();
-    m_rp_tool1_hidden_stencil.reset();
-    m_rp_tool2_visible_stencil.reset();
-    m_rp_tool3_depth_clear.reset();
-    m_rp_tool4_depth.reset();
-    m_rp_tool5_visible_color.reset();
-    m_rp_tool6_hidden_color.reset();
-    m_rp_line_hidden_blend.reset();
-    m_rp_brush_back.reset();
-    m_rp_brush_front.reset();
-    m_rp_edge_lines.reset();
-    m_rp_corner_points.reset();
-    m_rp_polygon_centroids.reset();
-    m_rp_rendertarget_meshes.reset();
-
-    m_content_timer.reset();
-    m_selection_timer.reset();
-    m_gui_timer.reset();
-    m_brush_timer.reset();
-    m_tools_timer.reset();
-
-    g_editor_rendering = nullptr;
+    m_impl.reset();
 }
 
 void Editor_rendering::declare_required_components()
@@ -111,14 +168,15 @@ void Editor_rendering::declare_required_components()
 void Editor_rendering::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
-    ERHE_VERIFY(g_editor_rendering == nullptr);
-
-    erhe::application::g_commands->register_command(&m_capture_frame_command);
-    erhe::application::g_commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
-    g_editor_rendering = this;
+    m_impl = std::make_unique<Editor_rendering_impl>();
 }
 
 void Editor_rendering::post_initialize()
+{
+    m_impl->post_initialize();
+}
+
+void Editor_rendering_impl::post_initialize()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -128,7 +186,7 @@ void Editor_rendering::post_initialize()
     m_content_timer = std::make_unique<erhe::graphics::Gpu_timer>("Content");
 }
 
-void Editor_rendering::setup_renderpasses()
+void Editor_rendering_impl::setup_renderpasses()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -478,33 +536,22 @@ void Editor_rendering::setup_renderpasses()
     //m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 }
 
-void Editor_rendering::update_once_per_frame(const erhe::components::Time_context&)
-{
-    if (erhe::application::g_line_renderer_set != nullptr) erhe::application::g_line_renderer_set->next_frame();
-    if (erhe::application::g_text_renderer     != nullptr) erhe::application::g_text_renderer    ->next_frame();
-
-    if (g_forward_renderer != nullptr) g_forward_renderer ->next_frame();
-    if (g_id_renderer      != nullptr) g_id_renderer      ->next_frame();
-    if (g_post_processing  != nullptr) g_post_processing  ->next_frame();
-    if (g_shadow_renderer  != nullptr) g_shadow_renderer  ->next_frame();
-}
-
-void Editor_rendering::trigger_capture()
+void Editor_rendering_impl::trigger_capture()
 {
     m_trigger_capture = true;
 }
 
-auto Editor_rendering::width() const -> int
+auto Editor_rendering_impl::width() const -> int
 {
     return erhe::application::g_view->width();
 }
 
-auto Editor_rendering::height() const -> int
+auto Editor_rendering_impl::height() const -> int
 {
     return erhe::application::g_view->height();
 }
 
-void Editor_rendering::begin_frame()
+void Editor_rendering_impl::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -525,7 +572,7 @@ void Editor_rendering::begin_frame()
 #endif
 }
 
-void Editor_rendering::end_frame()
+void Editor_rendering_impl::end_frame()
 {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (g_headset_view != nullptr)
@@ -539,6 +586,14 @@ void Editor_rendering::end_frame()
         g_post_processing->next_frame();
     }
 
+    if (erhe::application::g_line_renderer_set != nullptr) erhe::application::g_line_renderer_set->next_frame();
+    if (erhe::application::g_text_renderer     != nullptr) erhe::application::g_text_renderer    ->next_frame();
+
+    if (g_forward_renderer != nullptr) g_forward_renderer ->next_frame();
+    if (g_id_renderer      != nullptr) g_id_renderer      ->next_frame();
+    if (g_post_processing  != nullptr) g_post_processing  ->next_frame();
+    if (g_shadow_renderer  != nullptr) g_shadow_renderer  ->next_frame();
+
     if (m_trigger_capture)
     {
         erhe::application::g_window->end_renderdoc_capture();
@@ -546,7 +601,7 @@ void Editor_rendering::end_frame()
     }
 }
 
-void Editor_rendering::render()
+void Editor_rendering_impl::render()
 {
     ERHE_PROFILE_FUNCTION
 
@@ -555,7 +610,7 @@ void Editor_rendering::render()
     begin_frame();
 }
 
-void Editor_rendering::render_viewport_main(
+void Editor_rendering_impl::render_viewport_main(
     const Render_context& context,
     const bool            has_pointer
 )
@@ -625,7 +680,7 @@ void Editor_rendering::render_viewport_main(
     gl::disable(gl::Enable_cap::scissor_test);
 }
 
-void Editor_rendering::render_viewport_overlay(
+void Editor_rendering_impl::render_viewport_overlay(
     const Render_context& context,
     const bool            has_pointer
 )
@@ -638,7 +693,7 @@ void Editor_rendering::render_viewport_overlay(
     // TODO move text renderer here when correct framebuffer is bound
 }
 
-void Editor_rendering::render_id(const Render_context& context)
+void Editor_rendering_impl::render_id(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -686,7 +741,7 @@ void Editor_rendering::render_id(const Render_context& context)
     );
 }
 
-void Editor_rendering::render_content(const Render_context& context, bool polygon_fill)
+void Editor_rendering_impl::render_content(const Render_context& context, bool polygon_fill)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -815,7 +870,7 @@ void Editor_rendering::render_content(const Render_context& context, bool polygo
     }
 }
 
-void Editor_rendering::render_rendertarget_meshes(
+void Editor_rendering_impl::render_rendertarget_meshes(
     const Render_context& context
 )
 {
@@ -861,7 +916,7 @@ void Editor_rendering::render_rendertarget_meshes(
     );
 }
 
-void Editor_rendering::render_selection(const Render_context& context, bool polygon_fill)
+void Editor_rendering_impl::render_selection(const Render_context& context, bool polygon_fill)
 {
     if (
         (context.camera          == nullptr) ||
@@ -992,7 +1047,7 @@ void Editor_rendering::render_selection(const Render_context& context, bool poly
     gl::disable(gl::Enable_cap::program_point_size);
 }
 
-void Editor_rendering::render_tool_meshes(const Render_context& context)
+void Editor_rendering_impl::render_tool_meshes(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -1045,7 +1100,7 @@ void Editor_rendering::render_tool_meshes(const Render_context& context)
     );
 }
 
-void Editor_rendering::render_brush(const Render_context& context)
+void Editor_rendering_impl::render_brush(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION
 

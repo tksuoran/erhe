@@ -224,7 +224,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     return downsample_nodes_changed;
 }
 
-void Post_processing_node::imgui_toolbar()
+void Post_processing_node::viewport_toolbar()
 {
     // TODO Fix ImGui::Checkbox("Post Processing", &m_enabled);
 }

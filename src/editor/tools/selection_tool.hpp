@@ -58,6 +58,10 @@ private:
     std::vector<std::shared_ptr<erhe::scene::Item>> m_entries;
 };
 
+///class ISelection_tool
+///{
+///public:
+///};
 
 class Selection_tool
     : public erhe::application::Imgui_window

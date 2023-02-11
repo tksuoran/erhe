@@ -1,10 +1,8 @@
 #pragma once
 
-#include "renderers/renderpass.hpp"
-
-#include "erhe/application/commands/command.hpp"
 #include "erhe/components/components.hpp"
-#include "erhe/scene/viewport.hpp"
+
+#include <memory>
 
 namespace erhe::graphics
 {
@@ -17,17 +15,28 @@ namespace editor
 class Editor_rendering;
 class Render_context;
 
-class Capture_frame_command
-    : public erhe::application::Command
+class IEditor_rendering
 {
 public:
-    Capture_frame_command();
-    auto try_call() -> bool override;
+    virtual ~IEditor_rendering() noexcept;
+    virtual void trigger_capture           () = 0;
+    virtual void render                    () = 0;
+    virtual void render_viewport_main      (const Render_context& context, bool has_pointer) = 0;
+    virtual void render_viewport_overlay   (const Render_context& context, bool has_pointer) = 0;
+    virtual void render_content            (const Render_context& context, bool polygon_fill) = 0;
+    virtual void render_selection          (const Render_context& context, bool polygon_fill) = 0;
+    virtual void render_tool_meshes        (const Render_context& context) = 0;
+    virtual void render_rendertarget_meshes(const Render_context& context) = 0;
+    virtual void render_brush              (const Render_context& context) = 0;
+    virtual void render_id                 (const Render_context& context) = 0;
+    virtual void begin_frame               () = 0;
+    virtual void end_frame                 () = 0;
 };
+
+class Editor_rendering_impl;
 
 class Editor_rendering
     : public erhe::components::Component
-    , public erhe::components::IUpdate_once_per_frame
 {
 public:
     static constexpr std::string_view c_type_name{"Editor_rendering"};
@@ -49,58 +58,11 @@ public:
     void deinitialize_component     () override;
     void post_initialize            () override;
 
-    // Implements IUpdate_once_per_frame
-    void update_once_per_frame(const erhe::components::Time_context&) override;
-
-    // Public API
-    void trigger_capture           ();
-    void render                    ();
-    void render_viewport_main      (const Render_context& context, bool has_pointer);
-    void render_viewport_overlay   (const Render_context& context, bool has_pointer);
-    void render_content            (const Render_context& context, bool polygon_fill);
-    void render_selection          (const Render_context& context, bool polygon_fill);
-    void render_tool_meshes        (const Render_context& context);
-    void render_rendertarget_meshes(const Render_context& context);
-    void render_brush              (const Render_context& context);
-    void render_id                 (const Render_context& context);
-
-    void begin_frame();
-    void end_frame  ();
-
 private:
-    void setup_renderpasses();
-
-    [[nodiscard]] auto width () const -> int;
-    [[nodiscard]] auto height() const -> int;
-
-    // Commands
-    Capture_frame_command m_capture_frame_command;
-
-    bool       m_trigger_capture{false};
-
-    Renderpass m_rp_polygon_fill_standard;
-    Renderpass m_rp_tool1_hidden_stencil;
-    Renderpass m_rp_tool2_visible_stencil;
-    Renderpass m_rp_tool3_depth_clear;
-    Renderpass m_rp_tool4_depth;
-    Renderpass m_rp_tool5_visible_color;
-    Renderpass m_rp_tool6_hidden_color;
-    Renderpass m_rp_line_hidden_blend;
-    Renderpass m_rp_brush_back;
-    Renderpass m_rp_brush_front;
-    Renderpass m_rp_edge_lines;
-    Renderpass m_rp_corner_points;
-    Renderpass m_rp_polygon_centroids;
-    Renderpass m_rp_rendertarget_meshes;
-
-    std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
-    std::unique_ptr<erhe::graphics::Gpu_timer> m_selection_timer;
-    std::unique_ptr<erhe::graphics::Gpu_timer> m_gui_timer;
-    std::unique_ptr<erhe::graphics::Gpu_timer> m_brush_timer;
-    std::unique_ptr<erhe::graphics::Gpu_timer> m_tools_timer;
+    std::unique_ptr<Editor_rendering_impl> m_impl;
 };
 
-extern Editor_rendering* g_editor_rendering;
+extern IEditor_rendering* g_editor_rendering;
 
 static constexpr unsigned int s_stencil_edge_lines               =  1u; // 0 inc
 static constexpr unsigned int s_stencil_tool_mesh_hidden         =  2u;
