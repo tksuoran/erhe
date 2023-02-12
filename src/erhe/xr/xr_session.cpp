@@ -194,7 +194,7 @@ auto Xr_session::create_session() -> bool
     return true;
 }
 
-Xr_session::~Xr_session()
+Xr_session::~Xr_session() noexcept
 {
     log_xr->trace("{}", __func__);
 

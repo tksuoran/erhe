@@ -28,7 +28,7 @@ Swapchain_image::Swapchain_image(
 {
 }
 
-Swapchain_image::~Swapchain_image()
+Swapchain_image::~Swapchain_image() noexcept
 {
     if (m_swapchain != nullptr)
     {

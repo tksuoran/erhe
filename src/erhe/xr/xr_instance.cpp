@@ -244,7 +244,7 @@ auto Xr_instance::get_proc_addr(const char* function) const -> PFN_xrVoidFunctio
     return nullptr;
 }
 
-Xr_instance::~Xr_instance()
+Xr_instance::~Xr_instance() noexcept
 {
     ERHE_PROFILE_FUNCTION
 

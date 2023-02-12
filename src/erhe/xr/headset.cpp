@@ -25,9 +25,7 @@ Headset::Headset(
     m_xr_session = std::make_unique<Xr_session>(*m_xr_instance.get(), *context_window);
 }
 
-Headset::~Headset()
-{
-}
+Headset::~Headset() noexcept = default;
 
 [[nodiscard]] auto Headset::get_actions_left() -> Xr_actions&
 {

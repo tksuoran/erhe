@@ -83,7 +83,7 @@ Headset_view::Headset_view()
 {
 }
 
-Headset_view::~Headset_view()
+Headset_view::~Headset_view() noexcept
 {
     ERHE_VERIFY(g_headset_view == nullptr);
 }

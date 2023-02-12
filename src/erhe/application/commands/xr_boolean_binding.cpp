@@ -1,4 +1,4 @@
-#include "erhe/application/commands/Xr_boolean_binding.hpp"
+#include "erhe/application/commands/xr_boolean_binding.hpp"
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/application_log.hpp"
