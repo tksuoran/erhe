@@ -9,5 +9,14 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
+if (WIN32)
+    set(ERHE_ADDITIONAL_GL_INCLUDES "${PROJECT_SOURCE_DIR}/src/khronos/khronos")
+endif ()
+
 function (erhe_target_settings target)
+    if (WIN32)
+        target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:NOMINMAX>)
+        target_compile_definitions(${target} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:_CRT_SECURE_NO_WARNINGS>)
+    endif ()
 endfunction()
+

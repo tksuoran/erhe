@@ -162,7 +162,7 @@
             "generator": "Visual Studio 16 2019"
         },
         {
-            "name": "VConfigure isual Studio 2022",
+            "name": "Configure Visual Studio 2022",
             "inherits": [
                 "Configure Base",
                 "Configure Windows"

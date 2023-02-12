@@ -1,13 +1,23 @@
-@rem rd /S /Q build
-@rem cmake -G "Visual Studio 16 2019" -A x64 -Thost=x64 -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -Wno-dev -DEMBREE_ISPC_SUPPORT=FALSE -DEMBREE_TASKING_SYSTEM=INTERNAL -DEMBREE_TUTORIALS=OFF -DEMBREE_STATIC_LIB=ON
+@rem    -DCMAKE_C_COMPILER="C:\\Program Files\\LLVM\\bin\\clang.exe" ^
+@rem    -DCMAKE_CXX_COMPILER="C:\\Program Files\\LLVM\\bin\\clang++.exe" ^
 
-cmake
+set CC="C:\\Program Files\\LLVM\\bin\\clang.exe"
+set CXX="C:\\Program Files\\LLVM\\bin\\clang++.exe"
+
+cmake ^
     -G "Ninja" ^
     -B build_ninja ^
     -S . ^
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ^
     -Wno-dev ^
-    -DEMBREE_ISPC_SUPPORT=FALSE ^
-    -DEMBREE_TASKING_SYSTEM=INTERNAL ^
-    -DEMBREE_TUTORIALS=OFF ^
-    -DEMBREE_STATIC_LIB=ON
+    -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
+    -DERHE_GLTF_LIBRARY=cgltf ^
+    -DERHE_GUI_LIBRARY=imgui ^
+    -DERHE_PHYSICS_LIBRARY=none ^
+    -DERHE_PNG_LIBRARY=mango ^
+    -DERHE_PROFILE_LIBRARY=none ^
+    -DERHE_RAYTRACE_LIBRARY=bvh ^
+    -DERHE_SVG_LIBRARY=lunasvg ^
+    -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
+    -DERHE_WINDOW_LIBRARY=glfw ^
+    -DERHE_XR_LIBRARY=openxr
