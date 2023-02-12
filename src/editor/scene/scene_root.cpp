@@ -97,8 +97,8 @@ Scene_root::Scene_root(
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name
 )
-    : m_scene          {std::make_shared<Scene>(name, this)}
-    , m_content_library{content_library}
+    : m_content_library{content_library}
+    , m_scene          {std::make_shared<Scene>(name, this)}
     , m_layers         (*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION
