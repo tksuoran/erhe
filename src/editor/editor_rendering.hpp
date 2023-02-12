@@ -4,11 +4,6 @@
 
 #include <memory>
 
-namespace erhe::graphics
-{
-    class Gpu_timer;
-}
-
 namespace editor
 {
 

@@ -12,6 +12,18 @@ class Operation_stack;
 
 class Operation_stack_impl;
 
+class IOperation_stack
+{
+public:
+    virtual ~IOperation_stack() noexcept;
+
+    [[nodiscard]] virtual auto can_undo() const -> bool = 0;
+    [[nodiscard]] virtual auto can_redo() const -> bool = 0;
+    virtual void push(const std::shared_ptr<IOperation>& operation) = 0;
+    virtual void undo() = 0;
+    virtual void redo() = 0;
+};
+
 class Operation_stack
     : public erhe::components::Component
 {
@@ -29,17 +41,10 @@ public:
     void initialize_component       () override;
     void deinitialize_component     () override;
 
-    // Public API
-    [[nodiscard]] auto can_undo() const -> bool;
-    [[nodiscard]] auto can_redo() const -> bool;
-    void push(const std::shared_ptr<IOperation>& operation);
-    void undo();
-    void redo();
-
 private:
     std::unique_ptr<Operation_stack_impl> m_impl;
 };
 
-extern Operation_stack* g_operation_stack;
+extern IOperation_stack* g_operation_stack;
 
 } // namespace editor

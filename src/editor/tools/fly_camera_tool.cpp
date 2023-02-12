@@ -503,7 +503,13 @@ void Fly_camera_tool::imgui()
     float speed = m_camera_controller->translate_z.max_delta();
 
     auto* camera = get_camera();
-    const auto& scene_root = g_editor_scenes->get_current_scene_root();
+    auto* hover_scene_view = Tool::get_hover_scene_view();
+    if (hover_scene_view == nullptr)
+    {
+        return;
+    }
+
+    const auto& scene_root = hover_scene_view->get_scene_root();
     if (!scene_root)
     {
         return;

@@ -5,6 +5,8 @@
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/enums.hpp"
 
+#include <memory>
+
 namespace erhe::graphics
 {
     class Buffer;
@@ -21,18 +23,28 @@ namespace erhe::primitive
 namespace editor
 {
 
+class IMesh_memory
+{
+public:
+    virtual ~IMesh_memory() noexcept;
+
+    [[nodiscard]] virtual auto gl_vertex_format() const -> erhe::graphics::Vertex_format& = 0;
+    [[nodiscard]] virtual auto gl_index_type   () const -> gl::Draw_elements_type = 0;
+
+    std::unique_ptr<erhe::graphics::Buffer_transfer_queue> gl_buffer_transfer_queue;
+    std::unique_ptr<erhe::primitive::Gl_buffer_sink>       gl_buffer_sink;
+    std::unique_ptr<erhe::graphics::Vertex_input_state>    vertex_input;
+    std::shared_ptr<erhe::graphics::Buffer>                gl_vertex_buffer;
+    std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
+    erhe::primitive::Build_info                            build_info;
+};
+
+class Mesh_memory_impl;
+
 class Mesh_memory
     : public erhe::components::Component
 {
 public:
-    class Config
-    {
-    public:
-        int vertex_buffer_size{32}; // in megabytes
-        int index_buffer_size  {8}; // in megabytes
-    };
-    Config config;
-
     static constexpr std::string_view c_type_name{"Mesh_memory"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
 
@@ -45,18 +57,10 @@ public:
     void initialize_component       () override;
     void deinitialize_component     () override;
 
-    // Public API
-    [[nodiscard]] auto gl_vertex_format() const -> erhe::graphics::Vertex_format&;
-    [[nodiscard]] auto gl_index_type   () const -> gl::Draw_elements_type;
-
-    std::unique_ptr<erhe::graphics::Buffer_transfer_queue> gl_buffer_transfer_queue;
-    std::unique_ptr<erhe::primitive::Gl_buffer_sink>       gl_buffer_sink;
-    std::unique_ptr<erhe::graphics::Vertex_input_state>    vertex_input;
-    std::shared_ptr<erhe::graphics::Buffer>                gl_vertex_buffer;
-    std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
-    erhe::primitive::Build_info                            build_info;
+private:
+    std::unique_ptr<Mesh_memory_impl> m_impl;
 };
 
-extern Mesh_memory* g_mesh_memory;
+extern IMesh_memory* g_mesh_memory;
 
 } // namespace editor

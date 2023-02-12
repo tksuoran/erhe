@@ -9,7 +9,40 @@
 namespace editor
 {
 
-Editor_scenes* g_editor_scenes{nullptr};
+IEditor_scenes::~IEditor_scenes() noexcept = default;
+
+class Editor_scenes_impl
+    : public IEditor_scenes
+{
+public:
+    Editor_scenes_impl()
+    {
+        ERHE_VERIFY(g_editor_scenes == nullptr);
+        g_editor_scenes = this;
+    }
+    ~Editor_scenes_impl() noexcept override
+    {
+        ERHE_VERIFY(g_editor_scenes == this);
+        g_editor_scenes = nullptr;
+    }
+
+    void register_scene_root   (const std::shared_ptr<Scene_root>& scene_root) override;
+    void update_node_transforms() override;
+    void sanity_check          () override;
+
+    [[nodiscard]] auto get_scene_roots       () -> const std::vector<std::shared_ptr<Scene_root>>& override;
+    [[nodiscard]] auto scene_combo(
+        const char*                  label,
+        std::shared_ptr<Scene_root>& in_out_selected_entry,
+        const bool                   empty_option
+    ) const -> bool override;
+
+private:
+    std::mutex                               m_mutex;
+    std::vector<std::shared_ptr<Scene_root>> m_scene_roots;
+};
+
+IEditor_scenes* g_editor_scenes{nullptr};
 
 Editor_scenes::Editor_scenes()
     : Component{c_type_name}
@@ -23,19 +56,15 @@ Editor_scenes::~Editor_scenes() noexcept
 
 void Editor_scenes::deinitialize_component()
 {
-    ERHE_VERIFY(g_editor_scenes == this);
-    m_scene_roots.clear();
-    m_current_scene_root.reset();
-    g_editor_scenes = nullptr;
+    m_impl.reset();
 }
 
 void Editor_scenes::initialize_component()
 {
-    ERHE_VERIFY(g_editor_scenes == nullptr);
-    g_editor_scenes = this;
+    m_impl = std::make_unique<Editor_scenes_impl>();
 }
 
-void Editor_scenes::register_scene_root(
+void Editor_scenes_impl::register_scene_root(
     const std::shared_ptr<Scene_root>& scene_root
 )
 {
@@ -44,9 +73,7 @@ void Editor_scenes::register_scene_root(
     m_scene_roots.push_back(scene_root);
 }
 
-void Editor_scenes::update_once_per_frame(
-    const erhe::components::Time_context&
-)
+void Editor_scenes_impl::update_node_transforms()
 {
     for (const auto& scene_root : m_scene_roots)
     {
@@ -54,25 +81,12 @@ void Editor_scenes::update_once_per_frame(
     }
 }
 
-[[nodiscard]] auto Editor_scenes::get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&
+[[nodiscard]] auto Editor_scenes_impl::get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&
 {
     return m_scene_roots;
 }
 
-[[nodiscard]] auto Editor_scenes::get_current_scene_root() -> const std::shared_ptr<Scene_root>&
-{
-    if (m_current_scene_root)
-    {
-        return m_current_scene_root;
-    }
-    if (!m_scene_roots.empty())
-    {
-        return m_scene_roots.front();
-    }
-    return m_current_scene_root;
-}
-
-void Editor_scenes::sanity_check()
+void Editor_scenes_impl::sanity_check()
 {
 #if !defined(NDEBUG)
     for (const auto& scene_root : m_scene_roots)
@@ -82,7 +96,7 @@ void Editor_scenes::sanity_check()
 #endif
 }
 
-auto Editor_scenes::scene_combo(
+auto Editor_scenes_impl::scene_combo(
     const char*                  label,
     std::shared_ptr<Scene_root>& in_out_selected_entry,
     const bool                   empty_option

@@ -265,10 +265,6 @@ void Brush_tool_impl::on_message(Editor_message& message)
     {
         on_motion();
     }
-    //// if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_tool_select))
-    //// {
-    ////     remove_brush_mesh();
-    //// }
 }
 
 void Brush_tool_impl::handle_priority_update(int old_priority, int new_priority)

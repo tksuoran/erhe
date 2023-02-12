@@ -1,12 +1,8 @@
 #pragma once
 
 #include "erhe/components/components.hpp"
-#include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/graphics/shader_stages.hpp"
 
-#include <filesystem>
-#include <string_view>
-#include <vector>
+#include <memory>
 
 namespace erhe::graphics
 {
@@ -55,25 +51,10 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Debug Miscellaneous"
 };
 
-class Programs
-    : public erhe::components::Component
+class IPrograms
 {
 public:
-    static constexpr std::string_view c_type_name{"Programs"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Programs      ();
-    ~Programs     () noexcept override;
-    Programs      (const Programs&) = delete;
-    void operator=(const Programs&) = delete;
-    Programs      (Programs&&)      = delete;
-    void operator=(Programs&&)      = delete;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    virtual ~IPrograms() noexcept;
 
     static constexpr std::size_t s_texture_unit_count = 15; // for non bindless textures
 
@@ -110,35 +91,34 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_i;
     std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_g;
     std::unique_ptr<erhe::graphics::Shader_stages> debug_misc;
-
-private:
-    class Program_prototype
-    {
-    public:
-        Program_prototype();
-
-        Program_prototype(
-            std::unique_ptr<erhe::graphics::Shader_stages>*             program,
-            std::unique_ptr<erhe::graphics::Shader_stages::Prototype>&& prototype
-        );
-
-        std::unique_ptr<erhe::graphics::Shader_stages>*           program{nullptr};
-        std::unique_ptr<erhe::graphics::Shader_stages::Prototype> prototype;
-    };
-
-    void queue(Program_prototype& program_prototype);
-
-    [[nodiscard]] auto make_prototype(
-        erhe::graphics::Shader_stages::Create_info create_info
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages::Prototype>;
-
-    [[nodiscard]] auto make_program(
-        erhe::graphics::Shader_stages::Prototype& prototype
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
-
-    std::filesystem::path m_shader_path;
 };
 
-extern Programs* g_programs;
+class Programs_impl;
+
+class Programs
+    : public erhe::components::Component
+{
+public:
+    static constexpr std::string_view c_type_name{"Programs"};
+    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+
+    Programs      ();
+    ~Programs     () noexcept override;
+    Programs      (const Programs&) = delete;
+    void operator=(const Programs&) = delete;
+    Programs      (Programs&&)      = delete;
+    void operator=(Programs&&)      = delete;
+
+    // Implements Component
+    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
+    void declare_required_components() override;
+    void initialize_component       () override;
+    void deinitialize_component     () override;
+
+private:
+    std::unique_ptr<Programs_impl> m_impl;
+};
+
+extern IPrograms* g_programs;
 
 }

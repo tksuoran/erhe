@@ -73,14 +73,20 @@ auto Redo_command::try_call() -> bool
 }
 #pragma endregion Commands
 
+IOperation_stack::~IOperation_stack() noexcept = default;
+
 class Operation_stack_impl
-    : public Tool
+    : IOperation_stack
+    , public Tool
     , public erhe::application::Imgui_window
 {
 public:
     Operation_stack_impl()
         : erhe::application::Imgui_window{Operation_stack::c_title}
     {
+        ERHE_VERIFY(g_operation_stack == nullptr);
+        g_operation_stack = this;
+
         erhe::application::g_imgui_windows->register_imgui_window(this, "operation_stack");
 
         erhe::application::g_commands->register_command(&m_undo_command);
@@ -92,15 +98,20 @@ public:
         m_redo_command.set_host(this);
     }
 
+    ~Operation_stack_impl() noexcept override
+    {
+        ERHE_VERIFY(g_operation_stack == this);
+        g_operation_stack = nullptr;
+    }
+
     // Implements Window
     void imgui() override;
 
-    // Public API
-    [[nodiscard]] auto can_undo() const -> bool;
-    [[nodiscard]] auto can_redo() const -> bool;
-    void push(const std::shared_ptr<IOperation>& operation);
-    void undo();
-    void redo();
+    [[nodiscard]] auto can_undo() const -> bool override;
+    [[nodiscard]] auto can_redo() const -> bool override;
+    void push(const std::shared_ptr<IOperation>& operation) override;
+    void undo() override;
+    void redo() override;
 
 private:
     void imgui(
@@ -115,10 +126,10 @@ private:
     std::vector<std::shared_ptr<IOperation>> m_undone;
 };
 
-Operation_stack* g_operation_stack{nullptr};
+IOperation_stack* g_operation_stack{nullptr};
 
 Operation_stack::Operation_stack()
-    : erhe::components::Component    {c_type_name}
+    : erhe::components::Component{c_type_name}
 {
 }
 
@@ -129,9 +140,7 @@ Operation_stack::~Operation_stack() noexcept
 
 void Operation_stack::deinitialize_component()
 {
-    ERHE_VERIFY(g_operation_stack == this);
     m_impl.reset();
-    g_operation_stack = nullptr;
 }
 
 void Operation_stack::declare_required_components()
@@ -142,17 +151,7 @@ void Operation_stack::declare_required_components()
 
 void Operation_stack::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
-    ERHE_VERIFY(g_operation_stack == nullptr);
-
     m_impl = std::make_unique<Operation_stack_impl>();
-
-    g_operation_stack = this;
-}
-
-void Operation_stack::push(const std::shared_ptr<IOperation>& operation)
-{
-    m_impl->push(operation);
 }
 
 void Operation_stack_impl::push(const std::shared_ptr<IOperation>& operation)
@@ -160,11 +159,6 @@ void Operation_stack_impl::push(const std::shared_ptr<IOperation>& operation)
     operation->execute();
     m_executed.push_back(operation);
     m_undone.clear();
-}
-
-void Operation_stack::undo()
-{
-    m_impl->undo();
 }
 
 void Operation_stack_impl::undo()
@@ -179,10 +173,6 @@ void Operation_stack_impl::undo()
     m_undone.push_back(operation);
 }
 
-void Operation_stack::redo()
-{
-    m_impl->redo();
-}
 void Operation_stack_impl::redo()
 {
     if (m_undone.empty())
@@ -195,19 +185,9 @@ void Operation_stack_impl::redo()
     m_executed.push_back(operation);
 }
 
-auto Operation_stack::can_undo() const -> bool
-{
-    return m_impl->can_undo();
-}
-
 auto Operation_stack_impl::can_undo() const -> bool
 {
     return !m_executed.empty();
-}
-
-auto Operation_stack::can_redo() const -> bool
-{
-    return m_impl->can_redo();
 }
 
 auto Operation_stack_impl::can_redo() const -> bool

@@ -80,9 +80,9 @@ public:
     Editor_rendering_impl()
     {
         ERHE_VERIFY(g_editor_rendering == nullptr);
+        g_editor_rendering = this;
         erhe::application::g_commands->register_command(&m_capture_frame_command);
         erhe::application::g_commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
-        g_editor_rendering = this;
     }
     ~Editor_rendering_impl() noexcept override
     {
@@ -167,7 +167,6 @@ void Editor_rendering::declare_required_components()
 
 void Editor_rendering::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
     m_impl = std::make_unique<Editor_rendering_impl>();
 }
 
@@ -178,8 +177,6 @@ void Editor_rendering::post_initialize()
 
 void Editor_rendering_impl::post_initialize()
 {
-    ERHE_PROFILE_FUNCTION
-
     setup_renderpasses();
 
     // Init here (in main thread) so no scoped GL context needed

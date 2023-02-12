@@ -74,6 +74,7 @@ void Editor_view_client::update()
     erhe::application::g_time->update_once_per_frame();
 
     g_editor_rendering->begin_frame ();
+    g_editor_scenes->update_node_transforms();
     erhe::application::g_imgui_windows ->imgui_windows();
     erhe::application::g_rendergraph   ->execute      ();
     erhe::application::g_imgui_renderer->next_frame   ();
