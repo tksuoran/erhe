@@ -735,7 +735,7 @@ template <typename T>
 auto safe_normalize_cross(
     const typename vector_types<T>::vec3& lhs,
     const typename vector_types<T>::vec3& rhs
-) -> vector_types<T>::vec3
+) -> typename vector_types<T>::vec3
 {
     const T d = glm::dot(lhs, rhs);
     if (std::abs(d) > T{0.999})

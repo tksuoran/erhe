@@ -18,7 +18,7 @@ public:
     ~Mouse_drag_binding() noexcept override;
 
     [[nodiscard]] auto get_type  () const -> Type override { return Command_binding::Type::Mouse_drag; }
-    [[nodiscard]] auto get_button() const -> erhe::toolkit::Mouse_button;
+    [[nodiscard]] auto get_button() const -> erhe::toolkit::Mouse_button override;
 
     auto on_button(Input_arguments& input) -> bool override;
     auto on_motion(Input_arguments& input) -> bool override;

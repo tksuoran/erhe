@@ -12,7 +12,7 @@
 
 namespace erhe::application {
 
-Command_host::~Command_host() = default;
+Command_host::~Command_host() noexcept = default;
 
 void Command_host::set_description(const std::string_view description)
 {

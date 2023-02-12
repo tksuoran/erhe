@@ -6,7 +6,7 @@
 namespace editor
 {
 
-Tool::~Tool()
+Tool::~Tool() noexcept
 {
     m_hover_scene_view = nullptr;
 }
