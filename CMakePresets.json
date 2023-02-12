@@ -162,13 +162,58 @@
             "generator": "Visual Studio 16 2019"
         },
         {
-            "name": "VConfigure isual Studio 2022",
+            "name": "Configure Visual Studio 2022",
             "inherits": [
                 "Configure Base",
                 "Configure Windows"
             ],
             "generator": "Visual Studio 17 2022"
         },
+
+
+
+        {
+            "name": "Configure Clang Windows Ninja",
+            "hidden": false,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "ERHE_PHYSICS_LIBRARY": "none",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "1",
+                "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang.exe",
+                "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang++.exe",
+                "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
+                "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
+            },
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [ "Windows" ]
+                }
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+
+
+
+
+        {
+            "name": "Configure Clang 15 Debug",
+            "inherits": [ "Configure Debug", "Configure Clang 15" ]
+        },
+        {
+            "name": "Configure Clang 15 Release",
+            "inherits": [ "Configure Release", "Configure Clang 15" ]
+        },
+
         {
             "name": "Configure Clang 15",
             "hidden": true,
@@ -280,6 +325,17 @@
         {
             "name": "Build Clang 15 Release",
             "configurePreset": "Configure Clang 15 Release",
+            "configuration": "Release"
+        },
+
+        {
+            "name": "Build Clang 15 Windows Ninja Debug",
+            "configurePreset": "Configure Clang Windows Ninja",
+            "configuration": "Debug"
+        },
+        {
+            "name": "Build Clang 15 Windows Ninja Release",
+            "configurePreset": "Configure Clang Windows Ninja",
             "configuration": "Release"
         }
     ]
