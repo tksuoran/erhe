@@ -203,17 +203,6 @@
         },
 
 
-
-
-        {
-            "name": "Configure Clang 15 Debug",
-            "inherits": [ "Configure Debug", "Configure Clang 15" ]
-        },
-        {
-            "name": "Configure Clang 15 Release",
-            "inherits": [ "Configure Release", "Configure Clang 15" ]
-        },
-
         {
             "name": "Configure Clang 15",
             "hidden": true,
