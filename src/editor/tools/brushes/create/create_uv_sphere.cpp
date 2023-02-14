@@ -20,10 +20,10 @@ namespace editor
 {
 
 void Create_uv_sphere::render_preview(
-    const Render_context&         render_context,
-    const erhe::scene::Transform& transform
+    const Create_preview_settings& preview_settings
 )
 {
+    const Render_context& render_context = preview_settings.render_context;
     const auto* camera_node = render_context.get_camera_node();
     if (camera_node == nullptr)
     {
@@ -31,20 +31,18 @@ void Create_uv_sphere::render_preview(
     }
 
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
-    const glm::vec4 edge_color            {1.0f, 1.0f, 1.0f, 1.0f};
-    const glm::vec4 great_circle_color    {0.5f, 0.5f, 0.5f, 0.5f};
-    const float     edge_thickness        {6.0f};
-    const float     great_circle_thickness{4.0f};
     line_renderer.add_sphere(
-        transform,
-        edge_color,
-        great_circle_color,
-        edge_thickness,
-        great_circle_thickness,
+        preview_settings.transform,
+        preview_settings.major_color,
+        preview_settings.minor_color,
+        preview_settings.major_thickness,
+        preview_settings.minor_thickness,
         glm::vec3{0.0f, 0.0f,0.0f},
         m_radius,
         &camera_node->world_from_node_transform(),
-        80
+        preview_settings.ideal_shape // TODO Current preview only works for ideal shape
+            ? std::max(80, m_slice_count)
+            : m_slice_count
     );
 }
 
@@ -52,9 +50,9 @@ void Create_uv_sphere::imgui()
 {
     ImGui::Text("Sphere Parameters");
 
-    ImGui::SliderFloat("Radius",  &m_radius,      0.0f, 4.0f);
-    ImGui::SliderInt  ("Slices",  &m_slice_count, 1, 100);
-    ImGui::SliderInt  ("Stacks",  &m_stack_count, 1, 100);
+    ImGui::SliderFloat("Radius", &m_radius,      0.0f, 4.0f);
+    ImGui::SliderInt  ("Slices", &m_slice_count, 1, 100);
+    ImGui::SliderInt  ("Stacks", &m_stack_count, 1, 100);
 }
 
 [[nodiscard]] auto Create_uv_sphere::create(

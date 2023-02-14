@@ -20,10 +20,10 @@ namespace editor
 {
 
 void Create_box::render_preview(
-    const Render_context&         render_context,
-    const erhe::scene::Transform& transform
+    const Create_preview_settings& preview_settings
 )
 {
+    const Render_context& render_context = preview_settings.render_context;
     if (render_context.scene_view == nullptr)
     {
         return;
@@ -33,10 +33,9 @@ void Create_box::render_preview(
     if (view_camera)
     {
         auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
-        const glm::vec4 major_color{1.0f, 1.0f, 1.0f, 1.0f};
         line_renderer.add_cube(
-            transform.matrix(),
-            major_color,
+            preview_settings.transform.matrix(),
+            preview_settings.major_color,
             -0.5f * m_size,
              0.5f * m_size
         );

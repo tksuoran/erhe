@@ -2,21 +2,17 @@
 
 #include "erhe/components/components.hpp"
 
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <vector>
+
 namespace erhe::application
 {
 
 class Imgui_window;
 class Imgui_viewport;
 class Window_imgui_viewport;
-
-class Imgui_builtin_windows
-{
-public:
-    bool demo        {false};
-    bool style_editor{false};
-    bool metrics     {false};
-    bool stack_tool  {false};
-};
 
 /// <summary>
 /// Maintains collection of Imgui_windows and Imgui_viewports
@@ -48,17 +44,19 @@ public:
     void deinitialize_component     () override;
 
     // Public API
-    [[nodiscard]] auto get_mutex                () -> std::mutex&;
-    [[nodiscard]] auto get_window_viewport      () -> std::shared_ptr<Window_imgui_viewport>;
-    [[nodiscard]] auto get_imgui_builtin_windows() -> Imgui_builtin_windows&;
-    void register_imgui_viewport (const std::shared_ptr<Imgui_viewport>& viewport);
-    void register_imgui_window   (Imgui_window* window, const char* ini_entry);
-    void register_imgui_window   (Imgui_window* window, bool visible);
-    void make_current            (const Imgui_viewport* imgui_viewport);
-    void imgui_windows           ();
-    void window_menu             (Imgui_viewport* imgui_viewport);
-    auto get_windows             () -> std::vector<Imgui_window*>&;
+    void lock_mutex             ();
+    void unlock_mutex           ();
+    void queue                  (std::function<void()>&& operation);
+    void flush_queue            ();
+    void register_imgui_viewport(const std::shared_ptr<Imgui_viewport>& viewport);
+    void register_imgui_window  (Imgui_window* window, const char* ini_entry);
+    void register_imgui_window  (Imgui_window* window, bool visible);
+    void make_current           (const Imgui_viewport* imgui_viewport);
+    void imgui_windows          ();
+    void window_menu            (Imgui_viewport* imgui_viewport);
+    auto get_windows            () -> std::vector<Imgui_window*>&;
 
+    [[nodiscard]] auto get_window_viewport  () -> std::shared_ptr<Window_imgui_viewport>;
     [[nodiscard]] auto want_capture_keyboard() const -> bool;
     [[nodiscard]] auto want_capture_mouse   () const -> bool;
 
@@ -73,12 +71,14 @@ public:
     void on_mouse_wheel (float x, float y);
 
 private:
-    std::mutex                                   m_mutex;
+    std::recursive_mutex                         m_mutex;
+    bool                                         m_iterating{false};
     std::vector<std::shared_ptr<Imgui_viewport>> m_imgui_viewports;
     std::vector<Imgui_window*>                   m_imgui_windows;
+    std::mutex                                   m_queued_operations_mutex;
+    std::vector<std::function<void()>>           m_queued_operations;
     const Imgui_viewport*                        m_current_viewport{nullptr}; // current context
     std::shared_ptr<Window_imgui_viewport>       m_window_imgui_viewport;
-    Imgui_builtin_windows                        m_imgui_builtin_windows;
 };
 
 extern Imgui_windows* g_imgui_windows;

@@ -110,6 +110,8 @@ private:
     erhe::application::Drag_enable_command       m_drag_bool_enable_command;
 #endif
 
+    std::weak_ptr<erhe::scene::Node>             m_drag_node;
+
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;

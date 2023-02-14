@@ -9,14 +9,15 @@ namespace erhe::application
 Scoped_imgui_context::Scoped_imgui_context(
     Imgui_viewport& imgui_viewport
 )
-    : m_lock{g_imgui_windows->get_mutex()}
 {
+    g_imgui_windows->lock_mutex();
     g_imgui_windows->make_current(&imgui_viewport);
 }
 
-Scoped_imgui_context::~Scoped_imgui_context()
+Scoped_imgui_context::~Scoped_imgui_context() noexcept
 {
     g_imgui_windows->make_current(nullptr);
+    g_imgui_windows->unlock_mutex();
 }
 
 }  // namespace editor

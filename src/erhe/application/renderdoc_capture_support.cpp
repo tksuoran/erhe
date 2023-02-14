@@ -55,12 +55,22 @@ void Renderdoc_capture_support::initialize_component()
 
     auto ini = erhe::application::get_ini("erhe.ini", "renderdoc");
     ini->get("capture_support", config.capture_support);
+
     if (m_is_initialized)
     {
         return;
     }
     if (!config.capture_support)
     {
+        return;
+    }
+
+    bool openxr{false};
+    auto headset_ini = erhe::application::get_ini("erhe.ini", "headset");
+    headset_ini->get("openxr", openxr);
+    if (openxr)
+    {
+        log_renderdoc->warn("Disabling RenderDoc capture support due to OpenXR being enabled.");
         return;
     }
 

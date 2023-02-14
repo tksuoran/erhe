@@ -442,7 +442,7 @@ auto is_rendertarget(const erhe::scene::Item* const scene_item) -> bool
         return false;
     }
     using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Item_flags::rendertarget);
+    return test_all_rhs_bits_set(scene_item->get_type(), erhe::scene::Item_type::rendertarget);
 }
 
 auto is_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
@@ -457,7 +457,7 @@ auto as_rendertarget(erhe::scene::Item* const scene_item) -> Rendertarget_mesh*
         return nullptr;
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Item_flags::rendertarget))
+    if (!test_all_rhs_bits_set(scene_item->get_type(), erhe::scene::Item_type::rendertarget))
     {
         return nullptr;
     }
@@ -471,7 +471,7 @@ auto as_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> st
         return {};
     }
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_flag_bits(), erhe::scene::Item_flags::rendertarget))
+    if (!test_all_rhs_bits_set(scene_item->get_type(), erhe::scene::Item_type::rendertarget))
     {
         return {};
     }

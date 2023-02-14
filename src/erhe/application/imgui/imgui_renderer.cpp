@@ -546,12 +546,12 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     IM_ASSERT(io.BackendRendererUserData == NULL && "Already initialized a platform backend renderer");
 
     io.BackendRendererUserData = this;
-    io.BackendRendererName = "erhe";
+    io.BackendRendererName     = "erhe";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
     io.ConfigFlags  |= ImGuiConfigFlags_NavNoCaptureKeyboard;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
-    auto& style = ImGui::GetStyle();
+    auto& style = imgui_context->Style;
     style.WindowMenuButtonPosition = ImGuiDir_None;
 
     style.WindowPadding    = ImVec2{2.0f, 2.0f};
@@ -574,7 +574,7 @@ void Imgui_renderer::use_as_backend_renderer_on_context(ImGuiContext* imgui_cont
     style.GrabRounding      = 3.0f;
     style.TabRounding       = 3.0f;
 
-    ImVec4* colors = ImGui::GetStyle().Colors;
+    ImVec4* colors = style.Colors;
     colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 0.61f);
     colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
     colors[ImGuiCol_WindowBg]               = ImVec4(0.10f, 0.14f, 0.13f, 0.99f);

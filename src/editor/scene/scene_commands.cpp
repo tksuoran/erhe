@@ -5,12 +5,16 @@
 #include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "rendertarget_mesh.hpp"
+#include "rendertarget_imgui_viewport.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/application/commands/commands.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -210,8 +214,83 @@ auto Scene_commands::create_new_light(
         )
     );
 
-
     return new_light;
+}
+
+auto Scene_commands::create_new_rendertarget(
+    erhe::scene::Node* parent
+) -> std::shared_ptr<Rendertarget_mesh>
+{
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr)
+    {
+        return {};
+    }
+
+    auto new_node = std::make_shared<erhe::scene::Node>("new light node");
+    auto new_mesh = std::make_shared<Rendertarget_mesh>(
+        2048,
+        2048,
+        600.0f
+    );
+    new_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
+    new_mesh->enable_flag_bits(
+        erhe::scene::Item_flags::rendertarget |
+        erhe::scene::Item_flags::visible      |
+        erhe::scene::Item_flags::show_in_ui
+    );
+
+    new_node = std::make_shared<erhe::scene::Node>("Hud RT node");
+    new_node->set_parent_from_node(
+        erhe::toolkit::mat4_rotate_xz_180
+    );
+    new_node->set_parent(scene_root->scene().get_root_node());
+    new_node->attach(new_mesh);
+    new_node->enable_flag_bits(
+        erhe::scene::Item_flags::rendertarget |
+        erhe::scene::Item_flags::visible      |
+        erhe::scene::Item_flags::show_in_ui
+    );
+    auto node_raytrace = new_mesh->get_node_raytrace();
+    if (node_raytrace)
+    {
+        new_node->attach(node_raytrace);
+    }
+
+    auto rendertarget_imgui_viewport = std::make_shared<Rendertarget_imgui_viewport>(
+        new_mesh.get(),
+        "Rendertarget Viewport"
+    );
+
+    rendertarget_imgui_viewport->set_menu_visible(true);
+    erhe::application::g_imgui_windows->queue(
+        [rendertarget_imgui_viewport]()
+        {
+            erhe::application::g_imgui_windows->register_imgui_viewport(rendertarget_imgui_viewport);
+        }
+    );
+
+    new_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
+    g_operation_stack->push(
+        std::make_shared<Compound_operation>(
+            Compound_operation::Parameters{
+                .operations = {
+                    std::make_shared<Node_insert_remove_operation>(
+                        Node_insert_remove_operation::Parameters{
+                            .node   = new_node,
+                            .parent = (parent != nullptr)
+                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
+                                : scene_root->get_hosted_scene()->get_root_node(),
+                            .mode   = Scene_item_operation::Mode::insert
+                        }
+                    ),
+                    std::make_shared<Attach_operation>(new_mesh, new_node)
+                }
+            }
+        )
+    );
+
+    return new_mesh;
 }
 
 } // namespace editor

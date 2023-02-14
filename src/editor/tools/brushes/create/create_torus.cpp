@@ -20,10 +20,10 @@ namespace editor
 {
 
 void Create_torus::render_preview(
-    const Render_context&         render_context,
-    const erhe::scene::Transform& transform
+    const Create_preview_settings& preview_settings
 )
 {
+    const Render_context& render_context = preview_settings.render_context;
     const auto* camera_node = render_context.get_camera_node();
     if (camera_node == nullptr)
     {
@@ -31,21 +31,18 @@ void Create_torus::render_preview(
     }
 
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
-    const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
-    const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
-    const float     major_thickness{6.0f};
     line_renderer.add_torus(
-        transform,
-        major_color,
-        minor_color,
-        major_thickness,
+        preview_settings.transform,
+        preview_settings.major_color,
+        preview_settings.minor_color,
+        preview_settings.major_thickness,
         m_major_radius,
         m_minor_radius,
         m_use_debug_camera
             ? m_debug_camera
             : camera_node->position_in_world(),
-        20,
-        10,
+        preview_settings.ideal_shape ? std::max(20, m_major_steps) : m_major_steps,
+        preview_settings.ideal_shape ? std::max(10, m_minor_steps) : m_minor_steps,
         m_epsilon,
         m_debug_major,
         m_debug_minor

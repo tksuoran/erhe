@@ -86,6 +86,7 @@ public:
         prototypes.emplace_back(&brdf_slice              , make_prototype(CI{ .name = "brdf_slice"              , .default_uniform_block = shadow_default_uniform_block} ));
         prototypes.emplace_back(&brush                   , make_prototype(CI{ .name = "brush"                   , .default_uniform_block = shadow_default_uniform_block} ));
         prototypes.emplace_back(&textured                , make_prototype(CI{ .name = "textured"                , .default_uniform_block = base_texture_default_uniform_block } ));
+        prototypes.emplace_back(&sky                     , make_prototype(CI{ .name = "sky"                     , .default_uniform_block = base_texture_default_uniform_block } ));
         prototypes.emplace_back(&wide_lines_draw_color   , make_prototype(CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}}));
         prototypes.emplace_back(&wide_lines_vertex_color , make_prototype(CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}}));
         prototypes.emplace_back(&points                  , make_prototype(CI{ .name = "points" } ));

@@ -204,19 +204,17 @@ void Hud::initialize_component()
     const auto& scene_root = g_scene_builder->get_scene_root();
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::content |
-        erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::visible      |
+        erhe::scene::Item_flags::rendertarget |
         erhe::scene::Item_flags::show_in_ui
     );
-
-    //m_rendertarget_mesh->disable_flag_bits(erhe::scene::Item_flags::visible);
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
     m_rendertarget_node->set_parent(scene_root->scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
     m_rendertarget_node->enable_flag_bits(
-        erhe::scene::Item_flags::content |
-        erhe::scene::Item_flags::visible |
+        erhe::scene::Item_flags::visible      |
+        erhe::scene::Item_flags::rendertarget |
         erhe::scene::Item_flags::show_in_ui
     );
     auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
@@ -312,9 +310,30 @@ auto Hud::try_begin_drag() -> bool
     {
         return false;
     }
+
+    const auto& drag_entry = scene_view->get_nearest_hover(
+        Hover_entry::content_bit      |
+        Hover_entry::rendertarget_bit
+        //Hover_entry::grid_bit
+    );
+    if (!drag_entry.valid || !drag_entry.mesh)
+    {
+        return false;
+    }
+    auto* node = drag_entry.mesh->get_node();
+    if (node == nullptr)
+    {
+        return false;
+    }
+    m_drag_node = as_node(node->shared_from_this());
+    auto drag_node = m_drag_node.lock();
+    if (!drag_node)
+    {
+        return false;
+    }
     const glm::mat4 world_from_control = world_from_control_opt.value();
-    const glm::mat4 node_from_world    = m_rendertarget_node->node_from_world();
-    const glm::mat4 world_from_node    = m_rendertarget_node->world_from_node();
+    const glm::mat4 node_from_world    = drag_node->node_from_world();
+    const glm::mat4 world_from_node    = drag_node->world_from_node();
     m_node_from_control = node_from_world * world_from_control;
     return true;
 }
@@ -332,14 +351,23 @@ void Hud::on_drag()
     {
         return;
     }
+
+    auto drag_node = m_drag_node.lock();
+    if (!drag_node)
+    {
+        return;
+    }
+
     const glm::mat4 control_from_world = control_from_world_opt.value();
     const glm::mat4 node_from_world    = m_node_from_control.value() * control_from_world;
-    m_rendertarget_node->set_node_from_world(node_from_world);
+    drag_node->set_node_from_world(node_from_world);
+    //m_rendertarget_node->set_node_from_world(node_from_world);
 }
 
 void Hud::end_drag()
 {
     m_node_from_control.reset();
+    m_drag_node.reset();
 }
 
 void Hud::on_message(Editor_message& message)

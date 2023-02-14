@@ -323,6 +323,18 @@ void Imgui_viewport::on_char(
     io.AddInputCharacter(codepoint);
 }
 
+void Imgui_viewport::builtin_imgui_window_menu()
+{
+    if (ImGui::BeginMenu("ImGui"))
+    {
+        ImGui::MenuItem("Demo",             "", &m_imgui_builtin_windows.demo);
+        ImGui::MenuItem("Style Editor",     "", &m_imgui_builtin_windows.style_editor);
+        ImGui::MenuItem("Metrics/Debugger", "", &m_imgui_builtin_windows.metrics);
+        ImGui::MenuItem("Stack Tool",       "", &m_imgui_builtin_windows.stack_tool);
+        ImGui::EndMenu();
+    }
+}
+
 void Imgui_viewport::menu()
 {
     ERHE_VERIFY(g_imgui_windows != nullptr);
@@ -332,27 +344,26 @@ void Imgui_viewport::menu()
         g_imgui_windows->window_menu(this);
         ImGui::EndMainMenuBar();
     }
-    auto& imgui_builtin_windows = g_imgui_windows->get_imgui_builtin_windows();
-    if (imgui_builtin_windows.demo)
+    if (m_imgui_builtin_windows.demo)
     {
-        ImGui::ShowDemoWindow(&imgui_builtin_windows.demo);
+        ImGui::ShowDemoWindow(&m_imgui_builtin_windows.demo);
     }
 
-    if (imgui_builtin_windows.style_editor)
+    if (m_imgui_builtin_windows.style_editor)
     {
-        ImGui::Begin("Dear ImGui Style Editor", &imgui_builtin_windows.style_editor);
+        ImGui::Begin("Dear ImGui Style Editor", &m_imgui_builtin_windows.style_editor);
         ImGui::ShowStyleEditor();
         ImGui::End();
     }
 
-    if (imgui_builtin_windows.metrics)
+    if (m_imgui_builtin_windows.metrics)
     {
-        ImGui::ShowMetricsWindow(&imgui_builtin_windows.metrics);
+        ImGui::ShowMetricsWindow(&m_imgui_builtin_windows.metrics);
     }
 
-    if (imgui_builtin_windows.stack_tool)
+    if (m_imgui_builtin_windows.stack_tool)
     {
-        ImGui::ShowStackToolWindow(&imgui_builtin_windows.stack_tool);
+        ImGui::ShowStackToolWindow(&m_imgui_builtin_windows.stack_tool);
     }
 }
 

@@ -222,6 +222,27 @@ constexpr glm::mat4 mat4_rotate_xz_cw{
     0.0f, 0.0f,  0.0f, 1.0f
 };
 
+constexpr glm::mat4 mat4_rotate_xz_180{
+    -1.0f, 0.0f,  0.0f, 0.0f,
+     0.0f, 1.0f,  0.0f, 0.0f,
+     0.0f, 0.0f, -1.0f, 0.0f,
+     0.0f, 0.0f,  0.0f, 1.0f
+};
+
+constexpr glm::mat4 mat4_rotate_xy_180{
+    -1.0f,  0.0f, 0.0f, 0.0f,
+     0.0f, -1.0f, 0.0f, 0.0f,
+     0.0f,  0.0f, 1.0f, 0.0f,
+     0.0f,  0.0f, 0.0f, 1.0f
+};
+
+constexpr glm::mat4 mat4_rotate_yz_180{
+    1.0f,  0.0f,  0.0f, 0.0f,
+    0.0f, -1.0f,  0.0f, 0.0f,
+    0.0f,  0.0f, -1.0f, 0.0f,
+    0.0f,  0.0f,  0.0f, 1.0f
+};
+
 template <typename T>
 [[nodiscard]] auto unproject(
     const typename vector_types<T>::mat4 world_from_clip,

@@ -24,6 +24,7 @@ public:
     virtual void render_rendertarget_meshes(const Render_context& context) = 0;
     virtual void render_brush              (const Render_context& context) = 0;
     virtual void render_id                 (const Render_context& context) = 0;
+    virtual void render_sky                (const Render_context& context) = 0;
     virtual void begin_frame               () = 0;
     virtual void end_frame                 () = 0;
 };

@@ -15,10 +15,7 @@ class Scoped_imgui_context
 {
 public:
     explicit Scoped_imgui_context(Imgui_viewport& imgui_viewport);
-    ~Scoped_imgui_context();
-
-private:
-    std::lock_guard<std::mutex> m_lock;
+    ~Scoped_imgui_context() noexcept;
 };
 
 } // namespace erhe::application

@@ -14,12 +14,14 @@ namespace erhe::scene
 {
     class Camera;
     class Light;
+    class Mesh;
     class Node;
 }
 
 namespace editor
 {
 
+class Rendertarget_mesh;
 class Scene_root;
 
 class Create_new_camera_command
@@ -62,10 +64,11 @@ public:
     void initialize_component       () override;
 
     // Public API
-    auto create_new_camera    (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
-    auto create_new_empty_node(erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
-    auto create_new_light     (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
-    auto get_scene_root       (erhe::scene::Node* parent) const -> Scene_root*;
+    auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
+    auto create_new_empty_node  (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+    auto create_new_light       (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
+    auto create_new_rendertarget(erhe::scene::Node* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;
+    auto get_scene_root         (erhe::scene::Node* parent) const -> Scene_root*;
 
 private:
     // Commands

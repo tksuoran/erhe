@@ -28,10 +28,7 @@ class Create_box
     : public Brush_create
 {
 public:
-    void render_preview(
-        const Render_context&         context,
-        const erhe::scene::Transform& transform
-    ) override;
+    void render_preview(const Create_preview_settings& preview_settings) override;
 
     void imgui() override;
 

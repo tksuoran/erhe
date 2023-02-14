@@ -25,10 +25,7 @@ class Create_cone
     : public Brush_create
 {
 public:
-    void render_preview(
-        const Render_context&         context,
-        const erhe::scene::Transform& transform
-    ) override;
+    void render_preview(const Create_preview_settings& preview_settings) override;
 
     void imgui() override;
 
@@ -40,6 +37,8 @@ private:
     float m_height       {1.33f};
     float m_bottom_radius{1.0f};
     float m_top_radius   {0.5f};
+    bool  m_use_top      {true};
+    bool  m_use_bottom   {true};
 };
 
 

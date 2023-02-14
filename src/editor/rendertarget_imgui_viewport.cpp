@@ -50,27 +50,19 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     erhe::application::g_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
 
     ImGuiIO& io = m_imgui_context->IO;
-    io.MouseDrawCursor = true;
-    io.FontDefault = erhe::application::g_imgui_renderer->vr_primary_font();
-
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");
-
+    io.ConfigFlags             = io.ConfigFlags & ~ImGuiConfigFlags_DockingEnable;
+    io.DisplaySize             = ImVec2{m_rendertarget_mesh->width(), m_rendertarget_mesh->height()};
+    io.FontDefault             = erhe::application::g_imgui_renderer->vr_primary_font();
+    io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
+    io.MouseDrawCursor         = true;
     io.BackendPlatformUserData = this;
     io.BackendPlatformName     = "erhe rendertarget";
-    io.DisplaySize             = ImVec2{
-        static_cast<float>(m_rendertarget_mesh->width()),
-        static_cast<float>(m_rendertarget_mesh->height())
-    };
-    io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
-    io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
-
     io.MousePos                = ImVec2{-FLT_MAX, -FLT_MAX};
     io.MouseHoveredViewport    = 0;
 
     m_last_mouse_x = -FLT_MAX;
     m_last_mouse_y = -FLT_MAX;
-
-    ImGui::SetCurrentContext(nullptr);
 }
 
 Rendertarget_imgui_viewport::~Rendertarget_imgui_viewport() noexcept = default;

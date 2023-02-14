@@ -15,13 +15,22 @@ class Brush;
 class Brush_data;
 class Render_context;
 
+class Create_preview_settings
+{
+public:
+    const Render_context&         render_context;
+    const erhe::scene::Transform& transform;
+    glm::vec4                     major_color    {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4                     minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
+    const float                   major_thickness{6.0f};
+    const float                   minor_thickness{3.0f};
+    bool                          ideal_shape    {false};
+};
+
 class Brush_create
 {
 public:
-    virtual void render_preview(
-        const Render_context&         context,
-        const erhe::scene::Transform& transform
-    ) = 0;
+    virtual void render_preview(const Create_preview_settings& preview_settings) = 0;
 
     virtual void imgui() = 0;
 
@@ -50,7 +59,5 @@ public:
 private:
     std::unique_ptr<Create_impl> m_impl;
 };
-
-extern Create* g_create;
 
 } // namespace editor

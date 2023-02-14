@@ -62,9 +62,14 @@ void Imgui_windows::initialize_component()
     g_imgui_windows = this;
 }
 
-[[nodiscard]] auto Imgui_windows::get_mutex() -> std::mutex&
+void Imgui_windows::lock_mutex()
 {
-    return m_mutex;
+    m_mutex.lock();
+}
+
+void Imgui_windows::unlock_mutex()
+{
+    m_mutex.unlock();
 }
 
 [[nodiscard]] auto Imgui_windows::get_window_viewport() -> std::shared_ptr<Window_imgui_viewport>
@@ -72,16 +77,29 @@ void Imgui_windows::initialize_component()
     return m_window_imgui_viewport;
 }
 
-[[nodiscard]] auto Imgui_windows::get_imgui_builtin_windows() -> Imgui_builtin_windows&
+void Imgui_windows::queue(std::function<void()>&& operation)
 {
-    return m_imgui_builtin_windows;
+    const std::lock_guard<std::mutex> lock{m_queued_operations_mutex};
+    m_queued_operations.push_back(std::move(operation));
+}
+
+void Imgui_windows::flush_queue()
+{
+    const std::lock_guard<std::mutex> lock{m_queued_operations_mutex}; // TODO Can this be avoided?
+    while (!m_queued_operations.empty())
+    {
+        auto op = m_queued_operations.back();
+        m_queued_operations.pop_back();
+        op();
+    }
 }
 
 void Imgui_windows::register_imgui_viewport(
     const std::shared_ptr<Imgui_viewport>& viewport
 )
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    ERHE_VERIFY(!m_iterating);
+    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
     m_imgui_viewports.emplace_back(viewport);
 
     if (g_rendergraph != nullptr)
@@ -116,7 +134,8 @@ void Imgui_windows::register_imgui_window(Imgui_window* window, const char* ini_
 
 void Imgui_windows::register_imgui_window(Imgui_window* window, const bool visible)
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    ERHE_VERIFY(!m_iterating);
+    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
 
     if (!visible)
     {
@@ -150,8 +169,10 @@ void Imgui_windows::imgui_windows()
 {
     ERHE_PROFILE_FUNCTION
 
-    //Scoped_imgui_context scoped_context{m_imgui_context};
+    ERHE_VERIFY(!m_iterating);
 
+    //Scoped_imgui_context scoped_context{m_imgui_context};
+    m_iterating = true;
     for (const auto& viewport : m_imgui_viewports)
     {
         Scoped_imgui_context imgui_context{*viewport.get()};
@@ -221,12 +242,15 @@ void Imgui_windows::imgui_windows()
             viewport->end_imgui_frame();
         }
     }
+    m_iterating = false;
+    flush_queue();
 }
 
 void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
 {
     ERHE_VERIFY(m_current_viewport != nullptr);
-
+    bool was_iterating = m_iterating;
+    m_iterating = true;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
     if (ImGui::BeginMenu("Window"))
@@ -254,14 +278,7 @@ void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
 
         ImGui::Separator();
 
-        if (ImGui::BeginMenu("ImGui"))
-        {
-            ImGui::MenuItem("Demo",             "", &m_imgui_builtin_windows.demo);
-            ImGui::MenuItem("Style Editor",     "", &m_imgui_builtin_windows.style_editor);
-            ImGui::MenuItem("Metrics/Debugger", "", &m_imgui_builtin_windows.metrics);
-            ImGui::MenuItem("Stack Tool",       "", &m_imgui_builtin_windows.stack_tool);
-            ImGui::EndMenu();
-        }
+        imgui_viewport->builtin_imgui_window_menu();
 
         ImGui::Separator();
         if (ImGui::MenuItem("Close All"))
@@ -282,10 +299,12 @@ void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
     }
 
     ImGui::PopStyleVar();
+    m_iterating = was_iterating;
 }
 
 auto Imgui_windows::get_windows() -> std::vector<Imgui_window*>&
 {
+    ERHE_VERIFY(!m_iterating);
     return m_imgui_windows;
 }
 

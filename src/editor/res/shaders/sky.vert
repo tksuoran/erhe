@@ -1,30 +1,35 @@
-out vec2      v_texcoord;
-out vec4      v_position;
-out vec4      v_color;
-out mat3      v_TBN;
-out flat uint v_material_index;
-out float     v_tangent_scale;
-out float     v_line_width;
+out vec4 v_position;
 
 void main()
 {
-    mat4 world_from_node = primitive.primitives[gl_DrawID].world_from_node;
-    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+    //  Vertices of a fullscreen triangle:          .
+    //                                              .
+    //  gl_Position           v_texcoord            .
+    //                                              .
+    //   3  c                 2  c                  .
+    //      |\                   |\                 .
+    //   2  |  \                 |  \               .
+    //      |    \               |    \             .
+    //   1  +-----\           1  +-----\            .
+    //      |     | \            |     | \          .
+    //   0  |  +  |  \           |     |  \         .
+    //      |     |    \         |     |    \       .
+    //  -1  a-----+-----b     0  a-----+-----b      .
+    //                                              .
+    //     -1  0  1  2  3        0     1     2      .
+    const vec4 positions[3] = vec4[3](
+        vec4(-1.0, -1.0, 0.0, 1.0),
+        vec4( 3.0, -1.0, 0.0, 1.0),
+        vec4(-1.0,  3.0, 0.0, 1.0)
+    );
+    const vec2 texcoords[3] = vec2[3](
+        vec2(0.0, 0.0),
+        vec2(2.0, 0.0),
+        vec2(0.0, 2.0)
+    );
 
-    //vec3 normal          = a_normal;
+    mat4 world_from_clip = camera.cameras[0].world_from_clip;
 
-    vec3 normal          = normalize(vec3(world_from_node * vec4(a_normal,        0.0)));
-    vec3 tangent         = normalize(vec3(world_from_node * vec4(a_tangent.xyz,   0.0)));
-    vec3 bitangent       = normalize(vec3(world_from_node * vec4(a_bitangent.xyz, 0.0)));
-    //vec3 bitangent       = normalize(cross(normal, tangent)) * a_tangent.w;
-    vec4 position        = world_from_node * vec4(a_position, 1.0);
-
-    v_tangent_scale  = a_tangent.w;
-    v_position       = position;
-    v_TBN            = mat3(tangent, bitangent, normal);
-    gl_Position      = clip_from_world * position;
-    v_material_index = primitive.primitives[gl_DrawID].material_index;
-    v_texcoord       = a_texcoord;
-    v_color          = a_color;
-    v_line_width     = primitive.primitives[gl_DrawID].size;
+    gl_Position = positions[gl_VertexID];
+    v_position = world_from_clip * gl_Position;
 }

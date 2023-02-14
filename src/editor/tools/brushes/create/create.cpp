@@ -60,9 +60,7 @@ public:
         g_tools->register_tool(this);
     }
 
-    ~Create_impl()
-    {
-    }
+    ~Create_impl() noexcept override = default;
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
@@ -77,6 +75,8 @@ private:
 
     erhe::primitive::Normal_style m_normal_style{erhe::primitive::Normal_style::point_normals};
     float                         m_density     {1.0f};
+    bool                          m_preview_ideal_shape{false};
+    bool                          m_preview_shape{true};
     Create_uv_sphere              m_create_uv_sphere;
     Create_cone                   m_create_cone;
     Create_torus                  m_create_torus;
@@ -89,7 +89,7 @@ private:
 Create* g_create{nullptr};
 
 Create::Create()
-    : erhe::components::Component    {c_type_name}
+    : erhe::components::Component{c_type_name}
 {
 }
 
@@ -102,8 +102,6 @@ void Create::deinitialize_component()
 {
     ERHE_VERIFY(g_create == this);
     m_impl.reset();
-    //m_brush_create = nullptr;
-    //m_brush.reset();
     g_create = nullptr;
 }
 
@@ -115,11 +113,8 @@ void Create::declare_required_components()
 
 void Create::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
     ERHE_VERIFY(g_create == nullptr);
-
     m_impl = std::make_unique<Create_impl>();
-
     g_create = this;
 }
 
@@ -152,13 +147,16 @@ auto Create_impl::find_parent() -> std::shared_ptr<erhe::scene::Node>
     const auto selected_scene  = g_selection_tool->get_first_selected_scene();
     const auto viewport_window = g_viewport_windows->last_window();
 
+    Scene_view* scene_view = get_hover_scene_view();
     erhe::scene::Scene_host* scene_host = selected_node
         ? reinterpret_cast<Scene_root*>(selected_node->get_item_host())
         : selected_scene
             ? reinterpret_cast<Scene_root*>(selected_scene->get_root_node()->get_item_host())
             : viewport_window
                 ? viewport_window->get_scene_root().get()
-                : nullptr;
+                : (scene_view != nullptr)
+                    ? scene_view->get_scene_root().get()
+                    : nullptr;
     if (scene_host == nullptr)
     {
         return {};
@@ -189,19 +187,25 @@ void Create_impl::imgui()
     ImGui::Text("Nodes");
     if (ImGui::Button("Empty Node", button_size))
     {
-        g_scene_commands->create_new_empty_node();
+        g_scene_commands->create_new_empty_node(parent.get());
     }
     if (ImGui::Button("Camera", button_size))
     {
-        g_scene_commands->create_new_camera();
+        g_scene_commands->create_new_camera(parent.get());
     }
     if (ImGui::Button("Light", button_size))
     {
-        g_scene_commands->create_new_light();
+        g_scene_commands->create_new_light(parent.get());
+    }
+    if (ImGui::Button("Rendertarget", button_size))
+    {
+        g_scene_commands->create_new_rendertarget(parent.get());
     }
 
     ImGui::Separator();
     ImGui::Text("Meshes");
+    ImGui::Checkbox("Preview Ideal Shape", &m_preview_ideal_shape);
+    ImGui::Checkbox("Preview Shape",       &m_preview_shape);
     brush_create_button("UV Sphere", &m_create_uv_sphere);
     brush_create_button("Cone",      &m_create_cone);
     brush_create_button("Torus",     &m_create_torus);
@@ -352,7 +356,30 @@ void Create_impl::tool_render(const Render_context& context)
         : erhe::scene::Transform{};
     if (m_brush_create != nullptr)
     {
-        m_brush_create->render_preview(context, transform);
+        if (m_preview_ideal_shape)
+        {
+            const Create_preview_settings preview_settings
+            {
+                .render_context = context,
+                .transform      = transform,
+                .major_color    = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f},
+                .minor_color    = glm::vec4{1.0f, 0.5f, 0.0f, 0.5f},
+                .ideal_shape    = true
+            };
+            m_brush_create->render_preview(preview_settings);
+        }
+        if (m_preview_shape)
+        {
+            const Create_preview_settings preview_settings
+            {
+                .render_context = context,
+                .transform      = transform,
+                .major_color    = glm::vec4{0.5f, 1.0f, 0.0f, 1.0f},
+                .minor_color    = glm::vec4{0.5f, 1.0f, 0.0f, 0.5f},
+                .ideal_shape    = false
+            };
+            m_brush_create->render_preview(preview_settings);
+        }
     }
 }
 

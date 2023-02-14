@@ -74,6 +74,7 @@ public:
     std::unique_ptr<erhe::graphics::Shader_stages> anisotropic_engine_ready;
     std::unique_ptr<erhe::graphics::Shader_stages> circular_brushed_metal;
     std::unique_ptr<erhe::graphics::Shader_stages> textured;
+    std::unique_ptr<erhe::graphics::Shader_stages> sky;
     std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_draw_color;
     std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_vertex_color;
     std::unique_ptr<erhe::graphics::Shader_stages> points;

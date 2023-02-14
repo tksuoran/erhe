@@ -20,10 +20,10 @@ namespace editor
 {
 
 void Create_cone::render_preview(
-    const Render_context&         render_context,
-    const erhe::scene::Transform& transform
+    const Create_preview_settings& preview_settings
 )
 {
+    const Render_context& render_context = preview_settings.render_context;
     const auto* camera_node = render_context.get_camera_node();
     if (camera_node == nullptr)
     {
@@ -31,22 +31,20 @@ void Create_cone::render_preview(
     }
 
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
-    const glm::vec4 major_color    {1.0f, 1.0f, 1.0f, 1.0f};
-    const glm::vec4 minor_color    {1.0f, 1.0f, 1.0f, 0.5f};
-    const float     major_thickness{6.0f};
-    const float     minor_thickness{3.0f};
     line_renderer.add_cone(
-        transform,
-        major_color,
-        minor_color,
-        major_thickness,
-        minor_thickness,
-        glm::vec3{0.0f, 0.0f,0.0f},
+        preview_settings.transform,
+        preview_settings.major_color,
+        preview_settings.minor_color,
+        preview_settings.major_thickness,
+        preview_settings.minor_thickness,
+        glm::vec3{0.0f, 0.0f, 0.0f},
         m_height,
         m_bottom_radius,
         m_top_radius,
         camera_node->position_in_world(),
-        80
+        preview_settings.ideal_shape
+            ? std::max(80, m_slice_count)
+            : m_slice_count
     );
 }
 
@@ -59,6 +57,8 @@ void Create_cone::imgui()
     ImGui::SliderFloat("Top Radius",    &m_top_radius,    0.0f, 3.0f);
     ImGui::SliderInt  ("Slices",        &m_slice_count,   1, 40);
     ImGui::SliderInt  ("Stacks",        &m_stack_count,   1, 6);
+    ImGui::Checkbox   ("Use Top",       &m_use_top);
+    ImGui::Checkbox   ("Use Bottom",    &m_use_bottom);
 }
 
 [[nodiscard]] auto Create_cone::create(
@@ -71,8 +71,8 @@ void Create_cone::imgui()
             m_height,
             m_bottom_radius,
             m_top_radius,
-            true,
-            true,
+            m_use_bottom,
+            m_use_top,
             std::max(3, m_slice_count), // slice count
             std::max(1, m_stack_count)  // stack count
         )

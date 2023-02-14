@@ -103,6 +103,7 @@ public:
     void render_rendertarget_meshes(const Render_context& context) override;
     void render_brush              (const Render_context& context) override;
     void render_id                 (const Render_context& context) override;
+    void render_sky                (const Render_context& context) override;
     void begin_frame               () override;
     void end_frame                 () override;
 
@@ -131,7 +132,9 @@ private:
     Renderpass m_rp_corner_points;
     Renderpass m_rp_polygon_centroids;
     Renderpass m_rp_rendertarget_meshes;
+    Renderpass m_rp_sky;
 
+    std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_selection_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_gui_timer;
@@ -206,6 +209,25 @@ void Editor_rendering_impl::setup_renderpasses()
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     };
+
+    m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
+
+    m_rp_sky.pipeline.data = {
+        .name           = "Sky",
+        .shader_stages  = g_programs->sky.get(),
+        .vertex_input   = m_empty_vertex_input.get(),
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_none,
+        .depth_stencil  = Depth_stencil_state{
+            .depth_test_enable   = true,
+            .depth_write_enable  = false,
+            .depth_compare_op    = gl::Depth_function::equal, // Depth buffer must be cleared to the far plane value
+            .stencil_test_enable = false
+        },
+        .color_blend    = Color_blend_state::color_blend_disabled
+    };
+    m_rp_sky.begin = [](){ gl::depth_range(0.0f, 0.0f); };
+    m_rp_sky.end   = [](){ gl::depth_range(0.0f, 1.0f); };
 
     // Tool pass one: For hidden tool parts, set stencil to 1.
     // Only reads depth buffer, only writes stencil buffer.
@@ -643,9 +665,17 @@ void Editor_rendering_impl::render_viewport_main(
         erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
         erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
 
+        // Opaque
+        render_sky      (context);
         render_content  (context, true);
         render_selection(context, true);
-        render_brush    (context);
+        render_content  (context, false);
+        render_selection(context, false);
+
+        // Transparent
+        render_brush              (context);
+        render_rendertarget_meshes(context);
+        render_tool_meshes        (context);
 
         erhe::graphics::g_opengl_state_tracker->depth_stencil.reset(); // workaround issue in stencil state tracking
     }
@@ -659,14 +689,6 @@ void Editor_rendering_impl::render_viewport_main(
         g_tools->render_tools(context);
         erhe::application::g_line_renderer_set->end();
         erhe::application::g_line_renderer_set->render(context.viewport, *context.camera);
-    }
-
-    if (g_forward_renderer)
-    {
-        render_content            (context, false);
-        render_selection          (context, false);
-        render_tool_meshes        (context);
-        render_rendertarget_meshes(context);
     }
 
     if (erhe::application::g_text_renderer != nullptr)
@@ -865,6 +887,23 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
             }
         );
     }
+}
+
+void Editor_rendering_impl::render_sky(const Render_context& context)
+{
+    g_forward_renderer->render_fullscreen(
+        Forward_renderer::Render_parameters{
+            .camera            = context.camera,
+            .light_projections = nullptr,
+            .lights            = {},
+            .materials         = {},
+            .mesh_spans        = {},
+            .passes            = { &m_rp_sky},
+            .shadow_texture    = nullptr,
+            .viewport          = context.viewport
+        },
+        nullptr
+    );
 }
 
 void Editor_rendering_impl::render_rendertarget_meshes(

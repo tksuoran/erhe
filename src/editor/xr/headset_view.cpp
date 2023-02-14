@@ -438,8 +438,15 @@ void Headset_view::render_headset()
                     .viewport        = viewport
                 };
 
-                g_editor_rendering->render_content(render_context, true);
+                // Opaque
+                g_editor_rendering->render_content  (render_context, true);
                 g_editor_rendering->render_selection(render_context, true);
+                g_editor_rendering->render_content  (render_context, false);
+                g_editor_rendering->render_selection(render_context, false);
+                g_editor_rendering->render_sky      (render_context);
+
+                // Transparent
+                g_editor_rendering->render_rendertarget_meshes(render_context);
 
                 if (erhe::application::g_line_renderer_set != nullptr) // && m_headset->trigger_value() > 0.0f)
                 {
@@ -449,11 +456,8 @@ void Headset_view::render_headset()
                     erhe::application::g_line_renderer_set->render(viewport, *render_context.camera);
                     erhe::application::g_line_renderer_set->end();
                 }
-                g_editor_rendering->render_content            (render_context, false);
-                g_editor_rendering->render_selection          (render_context, false);
-                g_editor_rendering->render_brush              (render_context);
-                g_editor_rendering->render_tool_meshes        (render_context);
-                g_editor_rendering->render_rendertarget_meshes(render_context);
+                g_editor_rendering->render_brush      (render_context);
+                g_editor_rendering->render_tool_meshes(render_context);
             }
 
             return true;
