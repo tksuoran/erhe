@@ -29,10 +29,8 @@ auto Mesh_layer::get_mesh_by_id(
     const erhe::toolkit::Unique_id<Node>::id_type mesh_id
 ) const -> std::shared_ptr<Mesh>
 {
-    for (const auto& mesh : meshes)
-    {
-        if (mesh->get_id() == mesh_id)
-        {
+    for (const auto& mesh : meshes) {
+        if (mesh->get_id() == mesh_id) {
             return mesh;
         }
     }
@@ -50,11 +48,9 @@ void Mesh_layer::add(const std::shared_ptr<Mesh>& mesh)
 
 #ifndef NDEBUG
     const auto i = std::find(meshes.begin(), meshes.end(), mesh);
-    if (i != meshes.end())
-    {
+    if (i != meshes.end()) {
         log->error("mesh {} already in layer meshes", mesh->get_name());
-    }
-    else
+    } else
 #endif
     {
         meshes.push_back(mesh);
@@ -68,12 +64,9 @@ void Mesh_layer::remove(
     ERHE_VERIFY(mesh);
 
     const auto i = std::remove(meshes.begin(), meshes.end(), mesh);
-    if (i == meshes.end())
-    {
+    if (i == meshes.end()) {
         log->error("mesh {} not in layer meshes", mesh->get_name());
-    }
-    else
-    {
+    } else {
         meshes.erase(i, meshes.end());
     }
 }
@@ -91,10 +84,8 @@ auto Light_layer::get_light_by_id(
     const erhe::toolkit::Unique_id<Node>::id_type light_id
 ) const -> std::shared_ptr<Light>
 {
-    for (const auto& light : lights)
-    {
-        if (light->get_id() == light_id)
-        {
+    for (const auto& light : lights) {
+        if (light->get_id() == light_id) {
             return light;
         }
     }
@@ -117,11 +108,9 @@ void Light_layer::add(
     {
 #ifndef NDEBUG
         const auto i = std::find(lights.begin(), lights.end(), light);
-        if (i != lights.end())
-        {
+        if (i != lights.end()) {
             log->error("light {} already in layer lights", light->get_name());
-        }
-        else
+        } else
 #endif
         {
             lights.push_back(light);
@@ -139,12 +128,9 @@ void Light_layer::remove(
 
     const auto i = std::remove(lights.begin(), lights.end(), light);
 
-    if (i == lights.end())
-    {
+    if (i == lights.end()) {
         log->error("light {} not in layer lights", light->get_name());
-    }
-    else
-    {
+    } else {
         lights.erase(i, lights.end());
     }
 }
@@ -153,10 +139,8 @@ void Light_layer::remove(
 //    const erhe::toolkit::Unique_id<Node>::id_type id
 //) const -> std::shared_ptr<Node>
 //{
-//    for (const auto& node : flat_node_vector)
-//    {
-//        if (node->get_id() == id)
-//        {
+//    for (const auto& node : flat_node_vector) {
+//        if (node->get_id() == id) {
 //            return node;
 //        }
 //    }
@@ -167,10 +151,8 @@ auto Scene::get_camera_by_id(
     const erhe::toolkit::Unique_id<Node>::id_type id
 ) const -> std::shared_ptr<Camera>
 {
-    for (const auto& camera : m_cameras)
-    {
-        if (camera->get_id() == id)
-        {
+    for (const auto& camera : m_cameras) {
+        if (camera->get_id() == id) {
             return camera;
         }
     }
@@ -181,11 +163,9 @@ auto Scene::get_mesh_by_id(
     const erhe::toolkit::Unique_id<Node>::id_type id
 ) const -> std::shared_ptr<Mesh>
 {
-    for (const auto& layer : m_mesh_layers)
-    {
+    for (const auto& layer : m_mesh_layers) {
         const auto& mesh = layer->get_mesh_by_id(id);
-        if (mesh)
-        {
+        if (mesh) {
             return mesh;
         }
     }
@@ -196,11 +176,9 @@ auto Scene::get_light_by_id(
     const erhe::toolkit::Unique_id<Node>::id_type id
 ) const -> std::shared_ptr<Light>
 {
-    for (const auto& layer : m_light_layers)
-    {
+    for (const auto& layer : m_light_layers) {
         const auto& light = layer->get_light_by_id(id);
-        if (light)
-        {
+        if (light) {
             return light;
         }
     }
@@ -211,10 +189,8 @@ auto Scene::get_mesh_layer_by_id(
     const Layer_id id
 ) const -> std::shared_ptr<Mesh_layer>
 {
-    for (const auto& layer : m_mesh_layers)
-    {
-        if (layer->id == id)
-        {
+    for (const auto& layer : m_mesh_layers) {
+        if (layer->id == id) {
             return layer;
         }
     }
@@ -225,10 +201,8 @@ auto Scene::get_light_layer_by_id(
     const Layer_id id
 ) const -> std::shared_ptr<Light_layer>
 {
-    for (const auto& layer : m_light_layers)
-    {
-        if (layer->id == id)
-        {
+    for (const auto& layer : m_light_layers) {
+        if (layer->id == id) {
             return layer;
         }
     }
@@ -306,13 +280,11 @@ void Scene::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_nodes_sorted)
-    {
+    if (!m_nodes_sorted) {
         sort_transform_nodes();
     }
 
-    for (auto& node : m_flat_node_vector)
-    {
+    for (auto& node : m_flat_node_vector) {
         node->update_transform(0);
     }
 }
@@ -372,11 +344,9 @@ void Scene::register_node(
 
 #ifndef NDEBUG
     const auto i = std::find(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);
-    if (i != m_flat_node_vector.end())
-    {
+    if (i != m_flat_node_vector.end()) {
         log->error("{} {} already in scene nodes", node->type_name(), node->get_name());
-    }
-    else
+    } else
 #endif
     {
         ERHE_VERIFY(node->node_data.host == nullptr);
@@ -387,10 +357,8 @@ void Scene::register_node(
 
     ERHE_VERIFY(!node->parent().expired());
 
-    if ((node->get_flag_bits() & Item_flags::no_message) == 0)
-    {
-        if (erhe::scene::g_scene_message_bus != nullptr)
-        {
+    if ((node->get_flag_bits() & Item_flags::no_message) == 0) {
+        if (erhe::scene::g_scene_message_bus != nullptr) {
             g_scene_message_bus->send_message(
                 Scene_message{
                     .event_type = Scene_event_type::node_added_to_scene,
@@ -414,22 +382,17 @@ void Scene::unregister_node(
     );
 
     const auto i = std::remove(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);
-    if (i == m_flat_node_vector.end())
-    {
+    if (i == m_flat_node_vector.end()) {
         log->error("Node {} not in scene nodes", node->get_name());
-    }
-    else
-    {
+    } else {
         node->node_data.host = nullptr;
         m_flat_node_vector.erase(i, m_flat_node_vector.end());
     }
 
     sanity_check();
 
-    if ((node->get_flag_bits() & Item_flags::no_message) == 0)
-    {
-        if (erhe::scene::g_scene_message_bus != nullptr)
-        {
+    if ((node->get_flag_bits() & Item_flags::no_message) == 0) {
+        if (erhe::scene::g_scene_message_bus != nullptr) {
             g_scene_message_bus->send_message(
                 Scene_message{
                     .event_type = Scene_event_type::node_removed_from_scene,
@@ -445,11 +408,9 @@ void Scene::register_camera(const std::shared_ptr<Camera>& camera)
 {
 #ifndef NDEBUG
     const auto i = std::find(m_cameras.begin(), m_cameras.end(), camera);
-    if (i != m_cameras.end())
-    {
+    if (i != m_cameras.end()) {
         log->error("camera {} already in scene cameras", camera->get_name());
-    }
-    else
+    } else
 #endif
     {
         m_cameras.push_back(camera);
@@ -460,12 +421,9 @@ void Scene::unregister_camera(const std::shared_ptr<Camera>& camera)
 {
     ERHE_VERIFY(camera);
     const auto i = std::remove(m_cameras.begin(), m_cameras.end(), camera);
-    if (i == m_cameras.end())
-    {
+    if (i == m_cameras.end()) {
         log->error("camera {} not in scene cameras", camera->get_name());
-    }
-    else
-    {
+    } else {
         m_cameras.erase(i, m_cameras.end());
     }
 }
@@ -474,12 +432,9 @@ void Scene::register_mesh(const std::shared_ptr<Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
     auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
-    if (mesh_layer)
-    {
+    if (mesh_layer) {
         mesh_layer->add(mesh);
-    }
-    else
-    {
+    } else {
         log->error("mesh {} layer not found", mesh->get_name());
     }
 }
@@ -488,12 +443,9 @@ void Scene::unregister_mesh(const std::shared_ptr<Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
     auto mesh_layer = get_mesh_layer_by_id(mesh->mesh_data.layer_id);
-    if (mesh_layer)
-    {
+    if (mesh_layer) {
         mesh_layer->remove(mesh);
-    }
-    else
-    {
+    } else {
         log->error("mesh {} layer not found", mesh->get_name());
     }
 }
@@ -502,12 +454,9 @@ void Scene::register_light(const std::shared_ptr<Light>& light)
 {
     ERHE_VERIFY(light);
     auto light_layer = get_light_layer_by_id(light->layer_id);
-    if (light_layer)
-    {
+    if (light_layer) {
         light_layer->add(light);
-    }
-    else
-    {
+    } else {
         log->error("light {} layer not found", light->get_name());
     }
 }
@@ -516,23 +465,20 @@ void Scene::unregister_light(const std::shared_ptr<Light>& light)
 {
     ERHE_VERIFY(light);
     auto light_layer = get_light_layer_by_id(light->layer_id);
-    if (light_layer)
-    {
+    if (light_layer) {
         light_layer->remove(light);
-    }
-    else
-    {
+    } else {
         log->error("light {} layer not found", light->get_name());
     }
 }
 
+using namespace erhe::toolkit;
+
 auto is_scene(const Item* const item) -> bool
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return false;
     }
-    using namespace erhe::toolkit;
     return test_all_rhs_bits_set(item->get_type(), Item_type::scene);
 }
 
@@ -543,13 +489,10 @@ auto is_scene(const std::shared_ptr<Item>& item) -> bool
 
 auto as_scene(Item* const item) -> Scene*
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return nullptr;
     }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::scene))
-    {
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::scene)) {
         return nullptr;
     }
     return reinterpret_cast<Scene*>(item);
@@ -557,13 +500,10 @@ auto as_scene(Item* const item) -> Scene*
 
 auto as_scene(const std::shared_ptr<Item>& item) -> std::shared_ptr<Scene>
 {
-    if (!item)
-    {
+    if (!item) {
         return {};
     }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::scene))
-    {
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::scene)) {
         return {};
     }
     return std::static_pointer_cast<Scene>(item);

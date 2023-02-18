@@ -44,33 +44,22 @@ auto split(
     std::vector<std::string> result;
     const std::size_t length = text.size();
     std::size_t span_start = std::string::npos;
-    for (std::size_t i = 0; i < length; ++i)
-    {
+    for (std::size_t i = 0; i < length; ++i) {
         char c = text[i];
-        if (c == separator)
-        {
-            if (span_start != std::string::npos)
-            {
+        if (c == separator) {
+            if (span_start != std::string::npos) {
                 const std::size_t span_length = i - span_start;
-                if (span_length > 0)
-                {
+                if (span_length > 0) {
                     result.emplace_back(text.substr(span_start, span_length));
                 }
                 span_start = std::string::npos;
             }
-        }
-        else
-        {
-            if (span_start == std::string::npos)
-            {
-                span_start = i;
-            }
+        } else if (span_start == std::string::npos) {
+            span_start = i;
         }
     }
-    if (span_start != std::string::npos)
-    {
-        if (length > span_start)
-        {
+    if (span_start != std::string::npos) {
+        if (length > span_start) {
             const std::size_t span_length = length - span_start;
             result.emplace_back(text.substr(span_start, span_length));
         }
@@ -81,10 +70,8 @@ auto split(
 auto digits_only(std::string s) -> std::string
 {
     const std::size_t size = s.size();
-    for (std::size_t i = 0; i < size; ++i)
-    {
-        if (::isdigit(s[i]) == 0)
-        {
+    for (std::size_t i = 0; i < size; ++i) {
+        if (::isdigit(s[i]) == 0) {
             return (i == 0) ? "" : s.substr(0, i);
         }
     }
@@ -133,11 +120,9 @@ void Instance::initialize()
         int num_extensions{0};
 
         gl::get_integer_v(gl::Get_p_name::num_extensions, &num_extensions);
-        if (num_extensions > 0)
-        {
+        if (num_extensions > 0) {
             extensions.reserve(num_extensions);
-            for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i)
-            {
+            for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i) {
                 const auto* extension_str = gl::get_string_i(gl::String_name::extensions, i);
                 auto e = std::string(reinterpret_cast<const char*>(extension_str));
                 extensions.push_back(e);
@@ -182,8 +167,7 @@ void Instance::initialize()
     // GL 3.0 introduced context flags
     int context_flags = 0;
     gl::get_integer_v(gl::Get_p_name::context_flags, &context_flags);
-    if ((static_cast<unsigned int>(context_flags) & static_cast<unsigned int>(GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)) != 0)
-    {
+    if ((static_cast<unsigned int>(context_flags) & static_cast<unsigned int>(GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)) != 0) {
         info.forward_compatible = true;
         log_configuration->info("forward compatible");
     }
@@ -191,13 +175,11 @@ void Instance::initialize()
     // GL 3.3 introduced context profile mask
     int context_profile_mask = 0;
     gl::get_integer_v(gl::Get_p_name::context_profile_mask, &context_profile_mask);
-    if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_CORE_PROFILE_BIT)) != 0)
-    {
+    if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_CORE_PROFILE_BIT)) != 0) {
         info.core_profile = true;
         log_configuration->info("core profile");
     }
-    if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)) != 0)
-    {
+    if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)) != 0) {
         info.compatibility_profile = true;
         log_configuration->info("compatibility profile");
     }
@@ -264,14 +246,12 @@ void Instance::initialize()
         limits.max_fragment_shader_storage_blocks
     );
 
-    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture))
-    {
+    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
         info.use_bindless_texture = true;
     }
     log_configuration->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
 
-    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture))
-    {
+    if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
         info.use_sparse_texture = true;
         GLint max_sparse_texture_size{};
         gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &max_sparse_texture_size);
@@ -289,8 +269,7 @@ void Instance::initialize()
             gl::Internal_format::stencil_index8
         };
 
-        for (const auto format : formats)
-        {
+        for (const auto format : formats) {
             GLint num_virtual_page_sizes{};
             gl::get_internalformat_iv(
                 gl::Texture_target::texture_2d,
@@ -300,8 +279,7 @@ void Instance::initialize()
                 &num_virtual_page_sizes
             );
 
-            if (num_virtual_page_sizes == 0)
-            {
+            if (num_virtual_page_sizes == 0) {
                 continue;
             }
 
@@ -333,8 +311,7 @@ void Instance::initialize()
                 z_sizes.data()
             );
             std::stringstream ss;
-            for (GLint i = 0; i < num_virtual_page_sizes; ++i)
-            {
+            for (GLint i = 0; i < num_virtual_page_sizes; ++i) {
                 ss << fmt::format(" {} x {} x {}", x_sizes[i], y_sizes[i], z_sizes[i]);
             }
             sparse_tile_sizes[format] = Tile_size{

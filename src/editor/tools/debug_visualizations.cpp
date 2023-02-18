@@ -104,28 +104,23 @@ void Debug_visualizations::mesh_selection_visualization(
     erhe::scene::Mesh*    mesh
 )
 {
-    if (mesh == nullptr)
-    {
+    if (mesh == nullptr) {
         return;
     }
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
     const auto* node = mesh->get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
 
     const auto* camera_node = render_context.get_camera_node();
-    if (camera_node == nullptr)
-    {
+    if (camera_node == nullptr) {
         return;
     }
 
-    for (const auto& primitive : mesh->mesh_data.primitives)
-    {
-        if (!primitive.source_geometry)
-        {
+    for (const auto& primitive : mesh->mesh_data.primitives) {
+        if (!primitive.source_geometry) {
             continue;
         }
         const auto& primitive_geometry = primitive.gl_primitive_geometry;
@@ -135,8 +130,7 @@ void Debug_visualizations::mesh_selection_visualization(
         //const bool  smallest_visualization = !m_viewport_config->selection_bounding_box && !m_viewport_config->selection_bounding_sphere;
         const bool  box_smaller            = box_volume < sphere_volume;
 
-        if (box_smaller)
-        {
+        if (box_smaller) {
             m_selection_bounding_volume.add_box(
                 node->world_from_node(),
                 primitive_geometry.bounding_box.min,
@@ -149,8 +143,7 @@ void Debug_visualizations::mesh_selection_visualization(
                 box_smaller &&
                 !m_selection_sphere
             )
-        )
-        {
+        ) {
             line_renderer.set_thickness(m_selection_major_width);
             line_renderer.add_cube(
                 node->world_from_node(),
@@ -159,8 +152,7 @@ void Debug_visualizations::mesh_selection_visualization(
                 primitive_geometry.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
             );
         }
-        if (!box_smaller)
-        {
+        if (!box_smaller) {
             m_selection_bounding_volume.add_sphere(
                 node->world_from_node(),
                 primitive_geometry.bounding_sphere.center,
@@ -173,13 +165,10 @@ void Debug_visualizations::mesh_selection_visualization(
                 !box_smaller &&
                 !m_selection_box
             )
-        )
-        {
-            if (render_context.scene_view != nullptr)
-            {
+        ) {
+            if (render_context.scene_view != nullptr) {
                 const auto& view_camera = render_context.scene_view->get_camera();
-                if (view_camera)
-                {
+                if (view_camera) {
                     const erhe::scene::Transform& camera_world_from_node_transform = camera_node->world_from_node_transform();
                     line_renderer.add_sphere(
                         node->world_from_node_transform(),
@@ -220,8 +209,7 @@ void Debug_visualizations::light_visualization(
     const erhe::scene::Light*            light
 )
 {
-    if (!test_bits(light->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations))
-    {
+    if (!test_bits(light->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations)) {
         return;
     }
 
@@ -234,8 +222,7 @@ void Debug_visualizations::light_visualization(
         .half_light_color = glm::vec4{0.5f * light->color, 0.5f}
     };
 
-    switch (light->type)
-    {
+    switch (light->type) {
         case erhe::scene::Light_type::directional: directional_light_visualization(light_context); break;
         case erhe::scene::Light_type::point:       point_light_visualization      (light_context); break;
         case erhe::scene::Light_type::spot:        spot_light_visualization       (light_context); break;
@@ -248,8 +235,7 @@ void Debug_visualizations::directional_light_visualization(
 )
 {
     const auto shadow_render_node = g_shadow_renderer->get_node_for_view(context.render_context.scene_view);
-    if (!shadow_render_node)
-    {
+    if (!shadow_render_node) {
         return;
     }
 
@@ -258,8 +244,7 @@ void Debug_visualizations::directional_light_visualization(
     const auto*              light                       = context.light;
     const auto               light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light);
 
-    if (light_projection_transforms == nullptr)
-    {
+    if (light_projection_transforms == nullptr) {
         return;
     }
 
@@ -284,8 +269,7 @@ void Debug_visualizations::directional_light_visualization(
 void Debug_visualizations::point_light_visualization(const Light_visualization_context& context)
 {
     const auto* node = context.light->get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
@@ -318,14 +302,12 @@ void Debug_visualizations::point_light_visualization(const Light_visualization_c
 void Debug_visualizations::spot_light_visualization(const Light_visualization_context& context)
 {
     const auto* node = context.light->get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
 
     const auto* camera_node = context.render_context.get_camera_node();
-    if (camera_node == nullptr)
-    {
+    if (camera_node == nullptr) {
         return;
     }
 
@@ -355,8 +337,7 @@ void Debug_visualizations::spot_light_visualization(const Light_visualization_co
 
     line_renderer.set_thickness(m_light_visualization_width);
 
-    for (int i = 0; i < light_cone_sides; ++i)
-    {
+    for (int i = 0; i < light_cone_sides; ++i) {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(light_cone_sides);
         const float t1 = glm::two_pi<float>() * static_cast<float>(i + 1) / static_cast<float>(light_cone_sides);
         line_renderer.add_lines(
@@ -456,8 +437,7 @@ void Debug_visualizations::spot_light_visualization(const Light_visualization_co
     };
 
     std::vector<Cone_edge> cone_edges;
-    for (int i = 0; i < edge_count; ++i)
-    {
+    for (int i = 0; i < edge_count; ++i) {
         const float phi     = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(edge_count);
         const float sin_phi = std::sin(phi);
         const float cos_phi = std::cos(phi);
@@ -490,26 +470,20 @@ void Debug_visualizations::spot_light_visualization(const Light_visualization_co
     }
 
     std::vector<Cone_edge> sign_flip_edges;
-    for (size_t i = 0; i < cone_edges.size(); ++i)
-    {
+    for (size_t i = 0; i < cone_edges.size(); ++i) {
         const std::size_t next_i    = (i + 1) % cone_edges.size();
         const auto&       edge      = cone_edges[i];
         const auto&       next_edge = cone_edges[next_i];
-        if (sign(edge.n_dot_v) != sign(next_edge.n_dot_v))
-        {
-            if (std::abs(edge.n_dot_v) < std::abs(next_edge.n_dot_v))
-            {
+        if (sign(edge.n_dot_v) != sign(next_edge.n_dot_v)) {
+            if (std::abs(edge.n_dot_v) < std::abs(next_edge.n_dot_v)) {
                 sign_flip_edges.push_back(edge);
-            }
-            else
-            {
+            } else {
                 sign_flip_edges.push_back(next_edge);
             }
         }
     }
 
-    for (auto& edge : sign_flip_edges)
-    {
+    for (auto& edge : sign_flip_edges) {
         line_renderer.add_lines(m, context.light_color, { { O, edge.p } } );
         //line_renderer.add_lines(m, red,   { { edge.p, edge.p + 0.1f * edge.n } }, thickness);
         //line_renderer.add_lines(m, green, { { edge.p, edge.p + 0.1f * edge.t } }, thickness);
@@ -522,19 +496,16 @@ void Debug_visualizations::camera_visualization(
     const erhe::scene::Camera*  camera
 )
 {
-    if (camera == render_context.camera)
-    {
+    if (camera == render_context.camera) {
         return;
     }
 
-    if (!test_bits(camera->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations))
-    {
+    if (!test_bits(camera->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations)) {
         return;
     }
 
     const auto* node = camera->get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
 
@@ -562,8 +533,7 @@ void Debug_visualizations::camera_visualization(
 void Debug_visualizations::selection_visualization(const Render_context& context)
 {
     const auto* scene = context.get_scene();
-    if (scene == nullptr)
-    {
+    if (scene == nullptr) {
         return;
     }
 
@@ -574,17 +544,13 @@ void Debug_visualizations::selection_visualization(const Render_context& context
     const auto& selection = g_selection_tool->selection();
 
     m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
-    for (const auto& scene_item : selection)
-    {
+    for (const auto& scene_item : selection) {
         const auto& node = as_node(scene_item);
-        if (node)
-        {
-            if (node->get_scene() != scene)
-            {
+        if (node) {
+            if (node->get_scene() != scene) {
                 continue;
             }
-            if (m_selection_node_axis_visible)
-            {
+            if (m_selection_node_axis_visible) {
                 const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
                 const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
                 const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
@@ -594,11 +560,9 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 line_renderer.add_lines( m, green, {{ O, axis_y }} );
                 line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
             }
-            for (const auto& attachment : node->attachments())
-            {
+            for (const auto& attachment : node->attachments()) {
                 const auto mesh = as_mesh(attachment);
-                if (mesh)
-                {
+                if (mesh) {
                     mesh_selection_visualization(context, mesh.get());
                 }
 
@@ -607,29 +571,23 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                     camera &&
                     (viewport_config != nullptr) &&
                     (viewport_config->debug_visualizations.camera == Visualization_mode::selected)
-                )
-                {
+                ) {
                     camera_visualization(context, camera.get());
                 }
             }
         }
     }
 
-    if (m_selection_bounding_volume.get_element_count() > 1)
-    {
-        if (m_selection_bounding_points_visible)
-        {
+    if (m_selection_bounding_volume.get_element_count() > 1) {
+        if (m_selection_bounding_points_visible) {
             const auto*     camera                = context.camera;
             const auto      projection_transforms = camera->projection_transforms(context.viewport);
             const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
 
-            for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i)
-            {
-                for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j)
-                {
+            for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i) {
+                for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j) {
                     const auto point = m_selection_bounding_volume.get_point(i, j);
-                    if (!point.has_value())
-                    {
+                    if (!point.has_value()) {
                         continue;
                     }
 
@@ -666,8 +624,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 (box_volume > 0.0f) &&
                 (box_volume < sphere_volume)
             )
-        )
-        {
+        ) {
             line_renderer.set_thickness(m_selection_major_width);
             line_renderer.add_cube(
                 glm::mat4{1.0f},
@@ -683,11 +640,9 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 (sphere_volume > 0.0f) &&
                 (sphere_volume < box_volume)
             )
-        )
-        {
+        ) {
             const auto* camera_node = context.get_camera_node();
-            if (camera_node != nullptr)
-            {
+            if (camera_node != nullptr) {
                 line_renderer.add_sphere(
                     erhe::scene::Transform{},
                     m_group_selection_major_color,
@@ -708,19 +663,16 @@ void Debug_visualizations::physics_nodes_visualization(const std::shared_ptr<Sce
 {
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
-    for (const auto& mesh : scene_root->layers().content()->meshes)
-    {
+    for (const auto& mesh : scene_root->layers().content()->meshes) {
         const auto* node = mesh->get_node();
-        if (node == nullptr)
-        {
+        if (node == nullptr) {
             continue;
         }
+
         const auto& node_physics = get_node_physics(node);
-        if (node_physics)
-        {
+        if (node_physics) {
             const erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
-            if (rigid_body != nullptr)
-            {
+            if (rigid_body != nullptr) {
                 const erhe::physics::Transform transform = rigid_body->get_world_transform();
                 {
                     const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
@@ -762,16 +714,14 @@ void Debug_visualizations::raytrace_nodes_visualization(const std::shared_ptr<Sc
     const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
     const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
 
-    for (const auto& mesh : scene_root->layers().content()->meshes)
-    {
+    for (const auto& mesh : scene_root->layers().content()->meshes) {
         const auto* node = mesh->get_node();
-        if (node == nullptr)
-        {
+        if (node == nullptr) {
             continue;
         }
+
         const auto& node_raytrace = get_raytrace(node);
-        if (node_raytrace)
-        {
+        if (node_raytrace) {
             const erhe::raytrace::IInstance* instance = node_raytrace->raytrace_instance();
             const auto m = instance->get_transform();
             line_renderer.add_lines( m, red,   {{ O, axis_x }} );
@@ -788,17 +738,14 @@ void Debug_visualizations::mesh_labels(
 {
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
-    if (mesh == nullptr)
-    {
+    if (mesh == nullptr) {
         return;
     }
     const auto* node = mesh->get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
-    if (context.camera == nullptr)
-    {
+    if (context.camera == nullptr) {
         return;
     }
     const auto*     camera                = context.camera;
@@ -806,17 +753,14 @@ void Debug_visualizations::mesh_labels(
     const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
 
     const glm::mat4 world_from_node = node->world_from_node();
-    for (auto& primitive : mesh->mesh_data.primitives)
-    {
+    for (auto& primitive : mesh->mesh_data.primitives) {
         const auto& geometry = primitive.source_geometry;
-        if (!geometry)
-        {
+        if (!geometry) {
             continue;
         }
 
         const auto* point_locations = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations);
-        if ((point_locations != nullptr) && m_show_points)
-        {
+        if ((point_locations != nullptr) && m_show_points) {
             auto* point_normals        = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals);
             auto* point_normals_smooth = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals_smooth);
 
@@ -824,19 +768,15 @@ void Debug_visualizations::mesh_labels(
                 static_cast<uint32_t>(m_max_labels),
                 geometry->get_point_count()
             );
-            for (erhe::geometry::Point_id point_id = 0; point_id < end; ++point_id)
-            {
-                if (!point_locations->has(point_id))
-                {
+            for (erhe::geometry::Point_id point_id = 0; point_id < end; ++point_id) {
+                if (!point_locations->has(point_id)) {
                     continue;
                 }
 
                 const auto p0 = point_locations->get(point_id);
                 glm::vec3  n{0.0f, 0.0f, 0.0f};
-                if ((point_normals_smooth == nullptr) || !point_normals_smooth->maybe_get(point_id, n))
-                {
-                    if (point_normals != nullptr)
-                    {
+                if ((point_normals_smooth == nullptr) || !point_normals_smooth->maybe_get(point_id, n)) {
+                    if (point_normals != nullptr) {
                         point_normals->maybe_get(point_id, n);
                     }
                 }
@@ -861,26 +801,22 @@ void Debug_visualizations::mesh_labels(
         }
 
         auto polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals  );
-        if (polygon_normals == nullptr)
-        {
+        if (polygon_normals == nullptr) {
             geometry->compute_polygon_normals();
             polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals  );
         }
 
-        if ((point_locations != nullptr) && m_show_edges)
-        {
+        if ((point_locations != nullptr) && m_show_edges) {
             const uint32_t end = (std::min)(
                 static_cast<uint32_t>(m_max_labels),
                 geometry->get_edge_count()
             );
 
             const float t = m_edge_label_line_length;
-            for (erhe::geometry::Edge_id edge_id = 0; edge_id < end; ++edge_id)
-            {
+            for (erhe::geometry::Edge_id edge_id = 0; edge_id < end; ++edge_id) {
                 const auto& edge = geometry->edges[edge_id];
 
-                if (!point_locations->has(edge.a) || !point_locations->has(edge.b))
-                {
+                if (!point_locations->has(edge.a) || !point_locations->has(edge.b)) {
                     continue;
                 }
 
@@ -892,8 +828,7 @@ void Debug_visualizations::mesh_labels(
                     (erhe::geometry::Edge::Edge_polygon_context_const& context)
                     {
                         glm::vec3 polygon_normal;
-                        if (polygon_normals->maybe_get(context.polygon_id, polygon_normal))
-                        {
+                        if (polygon_normals->maybe_get(context.polygon_id, polygon_normal)) {
                             normal_sum += polygon_normal;
                             ++polygon_count;
                         }
@@ -928,20 +863,16 @@ void Debug_visualizations::mesh_labels(
         }
 
         const auto polygon_centroids = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_centroids);
-        if ((polygon_centroids != nullptr) && m_show_polygons)
-        {
+        if ((polygon_centroids != nullptr) && m_show_polygons) {
             const uint32_t end = (std::min)(
                 static_cast<uint32_t>(m_max_labels),
                 geometry->get_polygon_count()
             );
-            for (erhe::geometry::Polygon_id polygon_id = 0; polygon_id < end; ++polygon_id)
-            {
-                if (!polygon_centroids->has(polygon_id))
-                {
+            for (erhe::geometry::Polygon_id polygon_id = 0; polygon_id < end; ++polygon_id) {
+                if (!polygon_centroids->has(polygon_id)) {
                     continue;
                 }
-                if (!polygon_normals->has(polygon_id))
-                {
+                if (!polygon_normals->has(polygon_id)) {
                     continue;
                 }
                 const glm::vec3 p = polygon_centroids->get(polygon_id);
@@ -961,8 +892,7 @@ void Debug_visualizations::mesh_labels(
 
                 label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
 
-                if (m_show_corners)
-                {
+                if (m_show_corners) {
                     const erhe::geometry::Polygon polygon = geometry->polygons.at(polygon_id);
                     polygon.for_each_corner_const(*geometry.get(), [&](auto& i)
                     {
@@ -1022,74 +952,59 @@ void Debug_visualizations::tool_render(
     const Render_context& context
 )
 {
-    if (erhe::application::g_line_renderer_set == nullptr)
-    {
+    if (erhe::application::g_line_renderer_set == nullptr) {
         return;
     }
 
-    if (m_tool_hide && (g_trs_tool != nullptr) && g_trs_tool->is_trs_active())
-    {
+    if (m_tool_hide && (g_trs_tool != nullptr) && g_trs_tool->is_trs_active()) {
         return;
     }
 
     std::shared_ptr<erhe::scene::Camera> selected_camera;
     const auto& selection = g_selection_tool->selection();
-    for (const auto& node : selection)
-    {
-        if (is_camera(node))
-        {
+    for (const auto& node : selection) {
+        if (is_camera(node)) {
             selected_camera = as_camera(node);
         }
     }
 
-    if (m_selection)
-    {
+    if (m_selection) {
         selection_visualization(context);
     }
 
-    if (context.scene_view == nullptr)
-    {
+    if (context.scene_view == nullptr) {
         return;
     }
 
     const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return;
     }
 
-    if (!m_show_only_selection)
-    {
-        for (const auto& mesh : scene_root->layers().content()->meshes)
-        {
+    if (!m_show_only_selection) {
+        for (const auto& mesh : scene_root->layers().content()->meshes) {
             mesh_labels(context, mesh.get());
         }
     }
 
-    if (m_lights)
-    {
-        for (const auto& light : scene_root->layers().light()->lights)
-        {
+    if (m_lights) {
+        for (const auto& light : scene_root->layers().light()->lights) {
             light_visualization(context, selected_camera, light.get());
         }
     }
 
-    if (m_cameras)
     //if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
-    {
-        for (const auto& camera : scene_root->scene().get_cameras())
-        {
+    if (m_cameras) {
+        for (const auto& camera : scene_root->scene().get_cameras()) {
             camera_visualization(context, camera.get());
         }
     }
 
-    if (m_physics)
-    {
+    if (m_physics) {
         physics_nodes_visualization(scene_root);
     }
 
-    if (m_raytrace)
-    {
+    if (m_raytrace) {
         raytrace_nodes_visualization(scene_root);
     }
 }
@@ -1103,19 +1018,13 @@ void Debug_visualizations::imgui()
     //// }
     //// m_lines.clear();
     Scene_view* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         ImGui::Text("- No Scene_view - ");
-    }
-    else
-    {
+    } else {
         const auto scene_view_camera = scene_view->get_camera();
-        if (!scene_view_camera)
-        {
+        if (!scene_view_camera) {
             ImGui::Text("- Scene_view without Camera - ");
-        }
-        else
-        {
+        } else {
             const std::string text = fmt::format(
                 "- Scene_view with Camera {} @ {} - ",
                 scene_view_camera->get_name(),
@@ -1143,8 +1052,7 @@ void Debug_visualizations::imgui()
     ImGui::Checkbox   ("Cameras",               &m_cameras);
     ImGui::Checkbox   ("Selection",             &m_selection);
     ImGui::Checkbox   ("Bounding points",       &m_selection_bounding_points_visible);
-    if (m_selection_bounding_points_visible)
-    {
+    if (m_selection_bounding_points_visible) {
         erhe::toolkit::Bounding_box    selection_bounding_box;
         erhe::toolkit::Bounding_sphere selection_bounding_sphere;
         erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);

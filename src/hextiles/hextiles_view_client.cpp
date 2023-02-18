@@ -37,8 +37,7 @@ void Hextiles_view_client::update()
     // TODO Use more render graph
     g_map_window->render();
     erhe::application::g_imgui_windows->imgui_windows();
-    if (erhe::application::g_rendergraph != nullptr)
-    {
+    if (erhe::application::g_rendergraph != nullptr) {
         erhe::application::g_rendergraph->execute();
     }
     erhe::application::g_imgui_renderer->next_frame();

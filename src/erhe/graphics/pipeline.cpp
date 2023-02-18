@@ -44,8 +44,7 @@ Pipeline::~Pipeline() noexcept
     const std::lock_guard<std::mutex> lock{s_mutex};
 
     const auto i = std::remove(s_pipelines.begin(), s_pipelines.end(), this);
-    if (i != s_pipelines.end())
-    {
+    if (i != s_pipelines.end()) {
         s_pipelines.erase(i, s_pipelines.end());
     }
 }

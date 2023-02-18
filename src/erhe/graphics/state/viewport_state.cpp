@@ -21,8 +21,7 @@ void Viewport_state_tracker::execute(Viewport_state const* state)
     ERHE_VERIFY(state != nullptr);
 
 #if !DISABLE_CACHE
-    if (m_last == state->serial)
-    {
+    if (m_last == state->serial) {
         return;
     }
 #endif

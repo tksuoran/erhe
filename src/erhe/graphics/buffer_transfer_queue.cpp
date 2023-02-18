@@ -43,8 +43,7 @@ void Buffer_transfer_queue::flush()
 
     const std::lock_guard<std::mutex> lock{m_mutex};
 
-    for (const auto& entry : m_queued)
-    {
+    for (const auto& entry : m_queued) {
         log_buffer->trace(
             "buffer upload {} transfer offset = {} size = {}",
             entry.target.gl_name(),

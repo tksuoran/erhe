@@ -53,21 +53,17 @@ void Rendergraph::sort()
     std::vector<std::shared_ptr<Rendergraph_node>> unsorted_nodes = m_nodes;
     std::vector<std::shared_ptr<Rendergraph_node>> sorted_nodes;
 
-    while (!unsorted_nodes.empty())
-    {
+    while (!unsorted_nodes.empty()) {
         bool found_node{false};
-        for (const auto& node : unsorted_nodes)
-        {
+        for (const auto& node : unsorted_nodes) {
             SPDLOG_LOGGER_TRACE(
                 log_rendergraph,
                 "Sort: Considering node '{}'", node->get_name()
             );
             {
                 bool any_missing_dependency{false};
-                for (const Rendergraph_consumer_connector& input : node->get_inputs())
-                {
-                    for (const auto& producer_node : input.producer_nodes)
-                    {
+                for (const Rendergraph_consumer_connector& input : node->get_inputs()) {
+                    for (const auto& producer_node : input.producer_nodes) {
                         // See if dependency is in already sorted nodes
                         const auto i = std::find_if(
                             sorted_nodes.begin(),
@@ -77,8 +73,7 @@ void Rendergraph::sort()
                                 return entry == producer_node.lock();
                             }
                         );
-                        if (i == sorted_nodes.end())
-                        {
+                        if (i == sorted_nodes.end()) {
                             //// const auto& producer = producer_node.lock();
                             SPDLOG_LOGGER_TRACE(
                                 log_rendergraph,
@@ -92,8 +87,7 @@ void Rendergraph::sort()
                         }
                     }
                 }
-                if (any_missing_dependency)
-                {
+                if (any_missing_dependency) {
                     continue;
                 }
             }
@@ -110,12 +104,9 @@ void Rendergraph::sort()
 
             // Remove from unsorted nodes
             const auto i = std::remove(unsorted_nodes.begin(), unsorted_nodes.end(), node);
-            if (i == unsorted_nodes.end())
-            {
+            if (i == unsorted_nodes.end()) {
                 log_rendergraph->error("Sort: Node '{}' is not in graph nodes", node->get_name());
-            }
-            else
-            {
+            } else {
                 unsorted_nodes.erase(i, unsorted_nodes.end());
             }
 
@@ -123,22 +114,17 @@ void Rendergraph::sort()
             break;
         }
 
-        if (!found_node)
-        {
+        if (!found_node) {
             log_rendergraph->error(
                 "No render graph node with met dependencies found. Graph is not acyclic:"
             );
-            for (const auto& node : m_nodes)
-            {
+            for (const auto& node : m_nodes) {
                 log_rendergraph->info("    Node: {}", node->get_name());
-                for (const Rendergraph_consumer_connector& input : node->get_inputs())
-                {
+                for (const Rendergraph_consumer_connector& input : node->get_inputs()) {
                     log_rendergraph->info("        Input key: {}", input.key);
-                    for (const auto& producer_node : input.producer_nodes)
-                    {
+                    for (const auto& producer_node : input.producer_nodes) {
                         const auto& producer = producer_node.lock();
-                        if (!producer)
-                        {
+                        if (!producer) {
                             continue;
                         }
                         log_rendergraph->info("          producer: {}", producer->get_name());
@@ -147,23 +133,18 @@ void Rendergraph::sort()
             }
 
             log_rendergraph->info("sorted nodes:");
-            for (const auto& node : sorted_nodes)
-            {
+            for (const auto& node : sorted_nodes) {
                 log_rendergraph->info("    Node: {}", node->get_name());
             }
 
             log_rendergraph->info("unsorted nodes:");
-            for (const auto& node : unsorted_nodes)
-            {
+            for (const auto& node : unsorted_nodes) {
                 log_rendergraph->info("    Node: {}", node->get_name());
-                for (const auto& input : node->get_inputs())
-                {
+                for (const auto& input : node->get_inputs()) {
                     log_rendergraph->info("        Input key: {}", input.key);
-                    for (const auto& producer_node : input.producer_nodes)
-                    {
+                    for (const auto& producer_node : input.producer_nodes) {
                         const auto& producer = producer_node.lock();
-                        if (!producer)
-                        {
+                        if (!producer) {
                             continue;
                         }
                         log_rendergraph->info("          producer: {}", producer->get_name());
@@ -188,10 +169,8 @@ void Rendergraph::execute()
     static constexpr std::string_view c_render_graph{"Render graph"};
     erhe::graphics::Scoped_debug_group render_graph_scope{c_render_graph};
 
-    for (const auto& node : m_nodes)
-    {
-        if (node->is_enabled())
-        {
+    for (const auto& node : m_nodes) {
+        if (node->is_enabled()) {
             SPDLOG_LOGGER_TRACE(log_rendergraph, "Execute render graph node '{}'", node->get_name());
             erhe::graphics::Scoped_debug_group render_graph_node_scope{node->get_name()};
             node->execute_rendergraph_node();
@@ -215,8 +194,7 @@ void Rendergraph::register_node(const std::shared_ptr<Rendergraph_node>& node)
             return entry.get() == node_raw;
         }
     );
-    if (i != m_nodes.end())
-    {
+    if (i != m_nodes.end()) {
         log_rendergraph->warn("Rendergraph_node '{}' is already registered to Rendergraph", node->get_name());
         return;
     }
@@ -231,8 +209,7 @@ void Rendergraph::register_node(const std::shared_ptr<Rendergraph_node>& node)
 
 void Rendergraph::unregister_node(Rendergraph_node* node)
 {
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
 
@@ -248,19 +225,15 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
             return entry.get() == node;
         }
     );
-    if (i == m_nodes.end())
-    {
+    if (i == m_nodes.end()) {
         log_rendergraph->error("Rendergraph::unregister_node(): node '{}' is not registered", node->get_name());
     }
 
     std::shared_ptr<Rendergraph_node> node_shared = *i;
     auto& inputs = node->get_inputs();
-    for (auto& input : inputs)
-    {
-        for (const auto& producer_node : input.producer_nodes)
-        {
-            if (producer_node.expired())
-            {
+    for (auto& input : inputs) {
+        for (const auto& producer_node : input.producer_nodes) {
+            if (producer_node.expired()) {
                 continue;
             }
             disconnect(input.key, producer_node, node_shared);
@@ -268,12 +241,9 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
         input.producer_nodes.clear();
     }
     auto& outputs = node->get_outputs();
-    for (auto& output : outputs)
-    {
-        for (const auto& consumer_node : output.consumer_nodes)
-        {
-            if (consumer_node.expired())
-            {
+    for (auto& output : outputs) {
+        for (const auto& consumer_node : output.consumer_nodes) {
+            if (consumer_node.expired()) {
                 continue;
             }
             disconnect(output.key, node_shared, consumer_node);
@@ -288,20 +258,17 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
 
 void Rendergraph::automatic_layout(const float image_size)
 {
-    if (m_nodes.empty())
-    {
+    if (m_nodes.empty()) {
         return;
     }
 
     // First, count how many nodes are at each depth (== column)
     std::vector<int> node_count_per_depth(1);
     int max_depth{0};
-    for (const auto& node : m_nodes)
-    {
+    for (const auto& node : m_nodes) {
         const int depth = node->get_depth();
         max_depth = std::max(depth, max_depth);
-        if (node_count_per_depth.size() < static_cast<std::size_t>(depth) + 1)
-        {
+        if (node_count_per_depth.size() < static_cast<std::size_t>(depth) + 1) {
             node_count_per_depth.resize(depth + 1);
         }
         ++node_count_per_depth[depth];
@@ -313,16 +280,14 @@ void Rendergraph::automatic_layout(const float image_size)
     std::vector<float> total_height_per_depth;
     float max_total_height{0.0f};
     total_height_per_depth.resize(node_count_per_depth.size());
-    for (const auto& node : m_nodes)
-    {
+    for (const auto& node : m_nodes) {
         const int   depth          = node->get_depth();
         const auto  node_size_opt  = node->get_size();
         const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
         const float aspect         = node_size.x / node_size.y;
         const auto  effective_size = glm::vec2{aspect * image_size, image_size};
 
-        if (total_height_per_depth[depth] != 0.0f)
-        {
+        if (total_height_per_depth[depth] != 0.0f) {
             total_height_per_depth[depth] += y_gap;
         }
         total_height_per_depth[depth] += effective_size.y;
@@ -330,8 +295,7 @@ void Rendergraph::automatic_layout(const float image_size)
     }
 
     float x_offset = 0.0f;
-    for (int depth = 0; depth <= max_depth; ++depth)
-    {
+    for (int depth = 0; depth <= max_depth; ++depth) {
         int   row_count    = node_count_per_depth[depth];
         float column_width = 0.0f;
         float y_offset     = 0.0f;
@@ -339,25 +303,20 @@ void Rendergraph::automatic_layout(const float image_size)
             auto i = m_nodes.begin(), end = m_nodes.end();
             i != end;
             ++i
-        )
-        {
+        ) {
             const auto& node           = *i;
             const auto  node_size_opt  = node->get_size();
             const auto  node_size      = node_size_opt.has_value() ? node_size_opt.value() : glm::vec2{400.0f, 100.0f};
             const float aspect         = node_size.x / node_size.y;
             const auto  effective_size = glm::vec2{aspect * image_size, image_size};
             const int   node_depth     = node->get_depth();
-            if (node_depth != depth)
-            {
+            if (node_depth != depth) {
                 continue;
             }
             column_width = std::max(column_width, effective_size.x);
-            if (row_count == 1)
-            {
+            if (row_count == 1) {
                 node->set_position(glm::vec2{x_offset, max_total_height * 0.5f - effective_size.y});
-            }
-            else
-            {
+            } else {
                 node->set_position(glm::vec2{x_offset, y_offset});
             }
             y_offset += effective_size.y + y_gap;
@@ -373,27 +332,23 @@ auto Rendergraph::connect(
 ) -> bool
 {
     const auto& source = source_node.lock();
-    if (!source)
-    {
+    if (!source) {
         log_rendergraph->error("Rendergraph connection '{}' source node is expired", key);
         return false;
     }
 
     const auto& sink = sink_node.lock();
-    if (!sink)
-    {
+    if (!sink) {
         log_rendergraph->error("Rendergraph connection '{}' sink node is expired", key);
         return false;
     }
 
     const bool sink_connected = sink->connect_input(key, source_node);
-    if (!sink_connected)
-    {
+    if (!sink_connected) {
         return false;
     }
     const bool source_connected = source->connect_output(key, sink_node);
-    if (!source_connected)
-    {
+    if (!source_connected) {
         return false;
     }
 
@@ -409,15 +364,13 @@ auto Rendergraph::disconnect(
 ) -> bool
 {
     const auto& source = source_node.lock();
-    if (!source)
-    {
+    if (!source) {
         log_rendergraph->error("Rendergraph connection '{}' source node is expired", key);
         return false;
     }
 
     const auto& sink = sink_node.lock();
-    if (!sink)
-    {
+    if (!sink) {
         log_rendergraph->error("Rendergraph connection '{}' sink node is expired", key);
         return false;
     }

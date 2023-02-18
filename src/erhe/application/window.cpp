@@ -108,20 +108,17 @@ auto Window::create_gl_window() -> bool
     log_startup->trace("current directory is {}", current_path.string());
     const bool exists          = std::filesystem::exists(path);
     const bool is_regular_file = std::filesystem::is_regular_file(path);
-    if (exists && is_regular_file)
-    {
+    if (exists && is_regular_file) {
         ERHE_PROFILE_SCOPE("icon");
 
         const bool open_ok = loader.open(path, image_info);
-        if (open_ok)
-        {
+        if (open_ok) {
             std::vector<std::byte> data;
             data.resize(static_cast<size_t>(image_info.width) * static_cast<size_t>(image_info.height) * 4);
             const auto span = gsl::span<std::byte>(data.data(), data.size());
             const bool load_ok = loader.load(span);
             loader.close();
-            if (load_ok)
-            {
+            if (load_ok) {
                 GLFWimage icons[1] = {
                     {
                         .width  = image_info.width,
@@ -148,17 +145,14 @@ auto Window::create_gl_window() -> bool
     if (
         g_configuration->graphics.force_no_bindless ||
         erhe::application::g_renderdoc_capture_support->config.capture_support
-    )
-    {
-        if (erhe::graphics::Instance::info.use_bindless_texture)
-        {
+    ) {
+        if (erhe::graphics::Instance::info.use_bindless_texture) {
             erhe::graphics::Instance::info.use_bindless_texture = false;
             log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
         }
     }
 
-    for (size_t i = 0; i < 3; ++i)
-    {
+    for (size_t i = 0; i < 3; ++i) {
         gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
         gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
         m_context_window->swap_buffers();
@@ -176,8 +170,7 @@ auto Window::get_context_window() const -> erhe::toolkit::Context_window*
 
 void Window::begin_renderdoc_capture()
 {
-    if (g_renderdoc_capture_support == nullptr)
-    {
+    if (g_renderdoc_capture_support == nullptr) {
         return;
     }
     g_renderdoc_capture_support->start_frame_capture(m_context_window.get());
@@ -185,8 +178,7 @@ void Window::begin_renderdoc_capture()
 
 void Window::end_renderdoc_capture()
 {
-    if (g_renderdoc_capture_support == nullptr)
-    {
+    if (g_renderdoc_capture_support == nullptr) {
         return;
     }
     g_renderdoc_capture_support->end_frame_capture(m_context_window.get());

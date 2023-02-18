@@ -22,7 +22,7 @@ public:
     virtual void disable      () = 0;
     virtual void set_transform(const glm::mat4 transform) = 0;
     virtual void set_scene    (IScene* scene) = 0;
-    virtual void set_mask     (const uint32_t mask) = 0;
+    virtual void set_mask     (uint32_t mask) = 0;
     virtual void set_user_data(void* ptr) = 0;
     [[nodiscard]] virtual auto get_transform() const -> glm::mat4        = 0;
     [[nodiscard]] virtual auto get_scene    () const -> IScene*          = 0;

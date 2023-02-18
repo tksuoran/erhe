@@ -48,13 +48,11 @@ public:
 
     static auto inverse(const Mode mode) -> Mode
     {
-        switch (mode)
-        {
+        switch (mode) {
             //using enum Mode;
             case Mode::insert: return Mode::remove;
             case Mode::remove: return Mode::insert;
-            default:
-            {
+            default: {
                 ERHE_FATAL("Bad Context::Mode %04x", static_cast<unsigned int>(mode));
                 // unreachable return Mode::insert;
             }

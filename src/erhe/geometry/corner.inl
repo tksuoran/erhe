@@ -31,8 +31,7 @@ void Corner::smooth_normalize(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (polygon_normals.has(polygon_id) == false)
-    {
+    if (polygon_normals.has(polygon_id) == false) {
         return;
     }
 
@@ -51,17 +50,14 @@ void Corner::smooth_normalize(
             polygon_normals.has(neighbor_polygon_id) &&
             polygon_attribute.has(neighbor_polygon_id) &&
             (neighbor_polygon.corner_count > 2)
-        )
-        {
+        ) {
             const auto neighbor_normal = polygon_normals.get(neighbor_polygon_id);
             float      cos_angle = glm::dot(polygon_normal, neighbor_normal);
-            if (cos_angle > 1.0f)
-            {
+            if (cos_angle > 1.0f) {
                 cos_angle = 1.0f;
             }
 
-            if (cos_angle < -1.0f)
-            {
+            if (cos_angle < -1.0f) {
                 cos_angle = -1.0f;
             }
 
@@ -69,8 +65,7 @@ void Corner::smooth_normalize(
             // Higher cosine means lesser angle means more sharp
             // Cosine == 1 == maximum sharpness
             // Cosine == -1 == minimum sharpness (flat)
-            if (cos_angle <= cos_max_smoothing_angle)
-            {
+            if (cos_angle <= cos_max_smoothing_angle) {
                 corner_value += polygon_attribute.get(neighbor_polygon_id);
             }
         }
@@ -92,8 +87,7 @@ void Corner::smooth_average(
     ERHE_PROFILE_FUNCTION
 
     const bool has_corner_normal = corner_normals.has(this_corner_id);
-    if (!has_corner_normal && !point_normals.has(point_id))
-    {
+    if (!has_corner_normal && !point_normals.has(point_id)) {
         return;
     }
 
@@ -107,10 +101,8 @@ void Corner::smooth_average(
     const Point& point = geometry.points[point_id];
     point.for_each_corner_const([&](const auto& i)
     {
-        if (!has_corner_normal || (corner_normals.get(i.corner_id) == corner_normal))
-        {
-            if (old_corner_attribute.has(i.corner_id))
-            {
+        if (!has_corner_normal || (corner_normals.get(i.corner_id) == corner_normal)) {
+            if (old_corner_attribute.has(i.corner_id)) {
                 corner_value += old_corner_attribute.get(i.corner_id);
                 ++participant_count;
             }

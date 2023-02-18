@@ -33,8 +33,7 @@ void set_error_checking(const bool enable)
 
 void check_error()
 {
-    if (!enable_error_checking)
-    {
+    if (!enable_error_checking) {
         return;
     }
 
@@ -44,8 +43,7 @@ void check_error()
     auto error_code = static_cast<gl::Error_code>(glGetError());
 #endif
 
-    if (error_code != gl::Error_code::no_error)
-    {
+    if (error_code != gl::Error_code::no_error) {
         log_gl->error("{}", gl::c_str(error_code));
         //error_fmt(log_gl, "{}", gl::c_str(error_code));
 #if defined(WIN32)
@@ -58,32 +56,29 @@ void check_error()
 
 auto size_of_type(const gl::Draw_elements_type type) -> size_t
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum gl::Draw_elements_type;
         case gl::Draw_elements_type::unsigned_byte:  return 1;
         case gl::Draw_elements_type::unsigned_short: return 2;
         case gl::Draw_elements_type::unsigned_int:   return 4;
-        default:
+        default: {
             ERHE_FATAL("Bad draw elements index type");
+        }
     }
 }
 
 auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum gl::Vertex_attrib_type;
         case gl::Vertex_attrib_type::byte:
-        case gl::Vertex_attrib_type::unsigned_byte:
-        {
+        case gl::Vertex_attrib_type::unsigned_byte: {
             return 1;
         }
 
         case gl::Vertex_attrib_type::half_float:
         case gl::Vertex_attrib_type::short_:
-        case gl::Vertex_attrib_type::unsigned_short:
-        {
+        case gl::Vertex_attrib_type::unsigned_short: {
             return 2;
         }
 
@@ -93,18 +88,15 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
         case gl::Vertex_attrib_type::int_2_10_10_10_rev:
         case gl::Vertex_attrib_type::unsigned_int:
         case gl::Vertex_attrib_type::unsigned_int_10f_11f_11f_rev:
-        case gl::Vertex_attrib_type::unsigned_int_2_10_10_10_rev:
-        {
+        case gl::Vertex_attrib_type::unsigned_int_2_10_10_10_rev: {
             return 4;
         }
 
-        case gl::Vertex_attrib_type::double_:
-        {
+        case gl::Vertex_attrib_type::double_: {
             return 8;
         }
 
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad vertex attribute type");
         }
     }
@@ -112,8 +104,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
 [[nodiscard]] auto is_indexed(const gl::Buffer_target type) -> bool
 {
-    switch (type)
-    {
+    switch (type) {
         case gl::Buffer_target::array_buffer             : return false;
         case gl::Buffer_target::atomic_counter_buffer    : return true;
         case gl::Buffer_target::copy_read_buffer         : return false;
@@ -129,8 +120,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
         case gl::Buffer_target::texture_buffer           : return false;
         case gl::Buffer_target::transform_feedback_buffer: return true;
         case gl::Buffer_target::uniform_buffer           : return true;
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad buffer target type");
         }
     }
@@ -138,8 +128,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
 [[nodiscard]] auto is_compressed(const gl::Internal_format format) -> bool
 {
-    switch (format)
-    {
+    switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return true;
         case gl::Internal_format::compressed_red                            : return true;
         case gl::Internal_format::compressed_red_rgtc1                      : return true;
@@ -248,8 +237,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
 [[nodiscard]] auto is_integer(const gl::Internal_format format) -> bool
 {
-    switch (format)
-    {
+    switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;
         case gl::Internal_format::compressed_red                            : return false;
         case gl::Internal_format::compressed_red_rgtc1                      : return false;
@@ -358,8 +346,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
 [[nodiscard]] auto has_color(const gl::Internal_format format) -> bool
 {
-    switch (format)
-    {
+    switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return true;
         case gl::Internal_format::compressed_red                            : return true;
         case gl::Internal_format::compressed_red_rgtc1                      : return true;
@@ -468,8 +455,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
 [[nodiscard]] auto has_alpha(const gl::Internal_format format) -> bool
 {
-    switch (format)
-    {
+    switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;
         case gl::Internal_format::compressed_red                            : return false;
         case gl::Internal_format::compressed_red_rgtc1                      : return false;
@@ -578,8 +564,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
 [[nodiscard]] auto has_depth(const gl::Internal_format format) -> bool
 {
-    switch (format)
-    {
+    switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;
         case gl::Internal_format::compressed_red                            : return false;
         case gl::Internal_format::compressed_red_rgtc1                      : return false;
@@ -688,8 +673,7 @@ auto size_of_type(const gl::Vertex_attrib_type type) -> size_t
 
 [[nodiscard]] auto has_stencil(const gl::Internal_format format) -> bool
 {
-    switch (format)
-    {
+    switch (format) {
         case gl::Internal_format::compressed_r11_eac                        : return false;
         case gl::Internal_format::compressed_red                            : return false;
         case gl::Internal_format::compressed_red_rgtc1                      : return false;

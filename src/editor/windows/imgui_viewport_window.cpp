@@ -122,8 +122,7 @@ Imgui_viewport_window::Imgui_viewport_window(
 void Imgui_viewport_window::on_mouse_move(glm::vec2 mouse_position_in_window)
 {
     auto viewport_window = m_viewport_window.lock();
-    if (!viewport_window)
-    {
+    if (!viewport_window) {
         return;
     }
     const auto mouse_position_in_viewport = viewport_window->viewport_from_window(mouse_position_in_window);
@@ -183,13 +182,11 @@ void Imgui_viewport_window::set_viewport(
 void Imgui_viewport_window::toolbar(bool& hovered)
 {
     const auto viewport_window = m_viewport_window.lock();
-    if (!viewport_window)
-    {
+    if (!viewport_window) {
         return;
     }
 
-    if (viewport_window->viewport_toolbar())
-    {
+    if (viewport_window->viewport_toolbar()) {
         hovered = true;
     }
 }
@@ -207,8 +204,7 @@ void Imgui_viewport_window::imgui()
     Rendergraph_node::set_enabled(true);
 
     const auto viewport_window = m_viewport_window.lock();
-    if (!viewport_window)
-    {
+    if (!viewport_window) {
         return;
     }
 
@@ -222,13 +218,11 @@ void Imgui_viewport_window::imgui()
         erhe::application::Rendergraph_node_key::viewport
     );
 
-    if (color_texture)
-    {
+    if (color_texture) {
         const int texture_width  = color_texture->width();
         const int texture_height = color_texture->height();
 
-        if ((texture_width >= 1) && (texture_height >= 1))
-        {
+        if ((texture_width >= 1) && (texture_height >= 1)) {
             SPDLOG_LOGGER_TRACE(
                 log_render,
                 "Imgui_viewport_window::imgui() rendering texture {} {}",
@@ -253,9 +247,7 @@ void Imgui_viewport_window::imgui()
                 m_viewport.height
             );
         }
-    }
-    else
-    {
+    } else {
         m_is_hovered = false;
         viewport_window->set_window_viewport(0, 0, 0, 0);
     }

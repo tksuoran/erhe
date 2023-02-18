@@ -56,8 +56,7 @@ void Controller::set_max_delta(const float value)
 
 void Controller::update()
 {
-    if (m_active)
-    {
+    if (m_active) {
         adjust(m_current_delta);
     }
 
@@ -67,12 +66,9 @@ void Controller::update()
 void Controller::adjust(const float delta)
 {
     m_current_value += delta;
-    if (m_current_value > m_max_value)
-    {
+    if (m_current_value > m_max_value) {
         m_current_value = m_max_value;
-    }
-    else if (m_current_value < m_min_value)
-    {
+    } else if (m_current_value < m_min_value) {
         m_current_value = m_min_value;
     }
 }
@@ -85,40 +81,28 @@ void Controller::adjust(const double delta)
 void Controller::dampen()
 {
     // Dampening by multiplying by a constant
-    if (m_dampen_multiply)
-    {
+    if (m_dampen_multiply) {
         const float old_value = m_current_value;
         m_current_value = m_current_value * m_damp;
 
-        if (m_current_value == old_value)
-        {
+        if (m_current_value == old_value) {
             m_current_value = 0.0f;
         }
-    }
-    else if (m_dampen_linear && !m_active) // Constant velocity dampening
-    {
-        if (m_current_value > m_max_delta)
-        {
+    } else if (m_dampen_linear && !m_active) { // Constant velocity dampening
+        if (m_current_value > m_max_delta) {
             m_current_value -= m_max_delta;
-            if (m_current_value < m_max_delta)
-            {
+            if (m_current_value < m_max_delta) {
                 m_current_value = 0.0f;
             }
-        }
-        else if (m_current_value < -m_max_delta)
-        {
+        } else if (m_current_value < -m_max_delta) {
             m_current_value += m_max_delta;
-            if (m_current_value > -m_max_delta)
-            {
+            if (m_current_value > -m_max_delta) {
                 m_current_value = 0.0f;
             }
-        }
-        else // Close to 0.0
-        {
+        } else { // Close to 0.0
             const float old_value = m_current_value;
             m_current_value *= m_damp;
-            if (m_current_value == old_value)
-            {
+            if (m_current_value == old_value) {
                 m_current_value = 0.0f;
             }
         }
@@ -133,19 +117,13 @@ auto Controller::more() const -> bool
 void Controller::set_more(const bool value)
 {
     m_more = value;
-    if (m_more)
-    {
+    if (m_more) {
         m_active        = true;
         m_current_delta = m_max_delta;
-    }
-    else
-    {
-        if (m_less)
-        {
+    } else {
+        if (m_less) {
             m_current_delta = -m_max_delta;
-        }
-        else
-        {
+        } else {
             m_active        = false;
             m_current_delta = 0.0f;
         }
@@ -160,19 +138,13 @@ auto Controller::less() const -> bool
 void Controller::set_less(const bool value)
 {
     m_less = value;
-    if (m_less)
-    {
+    if (m_less) {
         m_active = true;
         m_current_delta = -m_max_delta;
-    }
-    else
-    {
-        if (m_more)
-        {
+    } else {
+        if (m_more) {
             m_current_delta = m_max_delta;
-        }
-        else
-        {
+        } else {
             m_active = false;
             m_current_delta = 0.0f;
         }
@@ -186,8 +158,7 @@ auto Controller::stop() const -> bool
 
 void Controller::set(const Controller_item item, const bool value)
 {
-    switch (item)
-    {
+    switch (item) {
         //using enum Controller_item;
         case Controller_item::less: set_less(value); break;
         case Controller_item::more: set_more(value); break;
@@ -199,25 +170,16 @@ void Controller::set(const Controller_item item, const bool value)
 void Controller::set_stop(const bool value)
 {
     m_stop = value;
-    if (m_stop)
-    {
-        if (m_current_value > 0.0f)
-        {
+    if (m_stop) {
+        if (m_current_value > 0.0f) {
             m_current_delta = -m_max_delta;
-        }
-        else if (m_current_value < 0.0f)
-        {
+        } else if (m_current_value < 0.0f) {
             m_current_delta = m_max_delta;
         }
-    }
-    else
-    {
-        if (m_less && !m_more)
-        {
+    } else {
+        if (m_less && !m_more) {
             m_current_delta = -m_max_delta;
-        }
-        else if (!m_less && m_more)
-        {
+        } else if (!m_less && m_more) {
             m_current_delta = m_max_delta;
         }
     }

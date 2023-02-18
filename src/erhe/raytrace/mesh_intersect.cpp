@@ -40,14 +40,12 @@ auto ray_triangle_intersect(
 
     // if the determinant is negative the triangle is backfacing
     // if the determinant is close to 0, the ray misses the triangle
-    if (det < epsilon)
-    {
+    if (det < epsilon) {
         return false;
     }
 #else
     // ray and triangle are parallel if det is close to 0
-    if (std::fabs(det) < epsilon)
-    {
+    if (std::fabs(det) < epsilon) {
         return false;
     }
 #endif
@@ -55,14 +53,12 @@ auto ray_triangle_intersect(
 
     const vec3 tvec = origin - v0;
     u = glm::dot(tvec, pvec) * inv_det;
-    if ((u < 0.0f) || (u > 1.0f))
-    {
+    if ((u < 0.0f) || (u > 1.0f)) {
         return false;
     }
     const vec3 qvec = glm::cross(tvec, v0v1);
     v = glm::dot(direction, qvec) * inv_det;
-    if ((v < 0.0f) || (u + v > 1.0f))
-    {
+    if ((v < 0.0f) || (u + v > 1.0f)) {
         return false;
     }
 
@@ -92,18 +88,15 @@ auto intersect(
 
     out_t = std::numeric_limits<float>::max();
 
-    for (auto& primitive : mesh.mesh_data.primitives)
-    {
+    for (auto& primitive : mesh.mesh_data.primitives) {
         //const auto& primitive_geometry = primitive.gl_primitive_geometry;
         auto* geometry = primitive.source_geometry.get();
-        if (geometry == nullptr)
-        {
+        if (geometry == nullptr) {
             continue;
         }
 
         const auto* const point_locations = geometry->point_attributes().find<vec3>(c_point_locations);
-        if (point_locations == nullptr)
-        {
+        if (point_locations == nullptr) {
             return false;
         }
 
@@ -115,12 +108,7 @@ auto intersect(
             const Point_id  first_point_id  = first_corner.point_id;
             const vec3 v0 = point_locations->get(first_point_id);
 
-            for (
-                Polygon_corner_id j = 0;
-                j < i.polygon.corner_count;
-                ++j
-            )
-            {
+            for (Polygon_corner_id j = 0; j < i.polygon.corner_count; ++j) {
                 const std::size_t corner_index      = static_cast<std::size_t>(i.polygon.first_polygon_corner_id) + static_cast<size_t>(j);
                 const std::size_t next_corner_index = static_cast<std::size_t>(i.polygon.first_polygon_corner_id) + (static_cast<size_t>(j) + 1) % static_cast<size_t>(i.polygon.corner_count);
                 const Corner_id   corner_id         = geometry->polygon_corners[corner_index];
@@ -136,8 +124,7 @@ auto intersect(
                 float hit_u;
                 float hit_v;
                 const bool hit = ray_triangle_intersect(origin_in_mesh, direction_in_mesh, v0, v1, v2, hit_t, hit_u, hit_v);
-                if (hit)
-                {
+                if (hit) {
                     log_geometry->trace(
                         "hit polygon {} {}-{}-{} with t = {}",
                         i.polygon_id,
@@ -147,8 +134,7 @@ auto intersect(
                         hit_t
                     );
                 }
-                if (hit && (hit_t < out_t))
-                {
+                if (hit && (hit_t < out_t)) {
                     out_geometry   = geometry;
                     out_polygon_id = i.polygon_id;
                     out_t          = hit_t;
@@ -159,8 +145,7 @@ auto intersect(
         });
     }
 
-    if (out_t != std::numeric_limits<float>::max())
-    {
+    if (out_t != std::numeric_limits<float>::max()) {
         log_geometry->trace("final hit polygon {} with t = {}", out_polygon_id, out_t);
     }
     return out_t != std::numeric_limits<float>::max();

@@ -22,21 +22,17 @@ auto Shader_stages::format(const string& source) -> string
     std::stringstream sb;
     sb << fmt::format("{:>3}: ", line);
 
-    for (;;)
-    {
+    for (;;) {
         char c = *head;
         ++head;
-        if (c == '\r')
-        {
+        if (c == '\r') {
             continue;
         }
-        if (c == 0)
-        {
+        if (c == 0) {
             break;
         }
 
-        if (c == '\n')
-        {
+        if (c == '\n') {
             ++line;
             sb << fmt::format("\n{:>3}: ", line);
             continue;
@@ -70,8 +66,7 @@ void Shader_stages::reload(Prototype&& prototype)
         !prototype.is_valid()               ||
         (prototype.m_handle.gl_name() == 0) ||
         prototype.m_shaders.empty()
-    )
-    {
+    ) {
         return;
     }
 
@@ -107,8 +102,7 @@ void Shader_stages_tracker::execute(const Shader_stages* state)
     unsigned int name = (state != nullptr)
         ? state->gl_name()
         : 0;
-    if (m_last == name)
-    {
+    if (m_last == name) {
         return;
     }
     gl::use_program(name);

@@ -56,8 +56,7 @@ Basic_viewport_window::Basic_viewport_window(
 
 Basic_viewport_window::~Basic_viewport_window()
 {
-    if (g_viewport_windows != nullptr)
-    {
+    if (g_viewport_windows != nullptr) {
         g_viewport_windows->erase(this);
     }
 }
@@ -151,8 +150,7 @@ void Basic_viewport_window::set_viewport(erhe::scene::Viewport viewport)
     m_viewport = viewport;
 
     const auto viewport_window = m_viewport_window.lock();
-    if (viewport_window)
-    {
+    if (viewport_window) {
         viewport_window->set_window_viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     }
 }
@@ -160,8 +158,7 @@ void Basic_viewport_window::set_viewport(erhe::scene::Viewport viewport)
 void Basic_viewport_window::set_is_hovered(const bool is_hovered)
 {
     const auto viewport_window = m_viewport_window.lock();
-    if (viewport_window)
-    {
+    if (viewport_window) {
         viewport_window->set_is_hovered(is_hovered);
     }
 }

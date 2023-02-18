@@ -92,8 +92,7 @@ void Scene_commands::initialize_component()
 
 auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_root*
 {
-    if (parent != nullptr)
-    {
+    if (parent != nullptr) {
         return reinterpret_cast<Scene_root*>(parent->get_item_host());
     }
 
@@ -108,8 +107,7 @@ auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_ro
             : viewport_window
                 ? viewport_window->get_scene_root().get()
                 : nullptr;
-    if (scene_host == nullptr)
-    {
+    if (scene_host == nullptr) {
         return nullptr;
     }
 
@@ -122,8 +120,7 @@ auto Scene_commands::create_new_camera(
 ) -> std::shared_ptr<erhe::scene::Camera>
 {
     Scene_root* scene_root = get_scene_root(parent);
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return {};
     }
 
@@ -158,8 +155,7 @@ auto Scene_commands::create_new_empty_node(
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     Scene_root* scene_root = get_scene_root(parent);
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return {};
     }
 
@@ -185,8 +181,7 @@ auto Scene_commands::create_new_light(
 ) -> std::shared_ptr<erhe::scene::Light>
 {
     Scene_root* scene_root = get_scene_root(parent);
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return {};
     }
 
@@ -222,8 +217,7 @@ auto Scene_commands::create_new_rendertarget(
 ) -> std::shared_ptr<Rendertarget_mesh>
 {
     Scene_root* scene_root = get_scene_root(parent);
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return {};
     }
 
@@ -252,8 +246,7 @@ auto Scene_commands::create_new_rendertarget(
         erhe::scene::Item_flags::show_in_ui
     );
     auto node_raytrace = new_mesh->get_node_raytrace();
-    if (node_raytrace)
-    {
+    if (node_raytrace) {
         new_node->attach(node_raytrace);
     }
 

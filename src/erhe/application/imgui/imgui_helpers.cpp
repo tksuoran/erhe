@@ -23,14 +23,11 @@ void make_text_with_background(const char* text, float rounding, const ImVec4 ba
 
 void begin_button_style(const Item_mode mode)
 {
-    if (mode == Item_mode::active)
-    {
+    if (mode == Item_mode::active) {
         ImGui::PushStyleColor(ImGuiCol_Button,        c_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, c_color_hovered);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  c_color_active);
-    }
-    else if (mode == Item_mode::disabled)
-    {
+    } else if (mode == Item_mode::disabled) {
         ImGui::PushStyleColor(ImGuiCol_Button,        c_color_disabled);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, c_color_disabled_hovered);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  c_color_disabled_active);
@@ -41,8 +38,7 @@ void begin_button_style(const Item_mode mode)
 void end_button_style(const Item_mode mode)
 {
     ImGui::PopStyleVar();
-    if (mode != Item_mode::normal)
-    {
+    if (mode != Item_mode::normal) {
         ImGui::PopStyleColor(3);
     }
 }
@@ -65,13 +61,11 @@ bool make_button(
 void make_check_box(const char* label, bool* value, const Item_mode mode)
 {
     const bool original_value = *value;
-    if (mode == Item_mode::disabled)
-    {
+    if (mode == Item_mode::disabled) {
         ImGui::PushStyleColor(ImGuiCol_CheckMark, c_color_disabled);
     }
     ImGui::Checkbox(label, value);
-    if (mode == Item_mode::disabled)
-    {
+    if (mode == Item_mode::disabled) {
         ImGui::PopStyleColor(1);
         *value = original_value;
     }

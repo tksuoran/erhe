@@ -25,8 +25,7 @@ void Create_cone::render_preview(
 {
     const Render_context& render_context = preview_settings.render_context;
     const auto* camera_node = render_context.get_camera_node();
-    if (camera_node == nullptr)
-    {
+    if (camera_node == nullptr) {
         return;
     }
 

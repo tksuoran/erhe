@@ -73,49 +73,38 @@ void Rasterization_state_tracker::reset()
 void Rasterization_state_tracker::execute(const Rasterization_state& state)
 {
 #if DISABLE_CACHE
-    if (state.face_cull_enable)
-    {
+    if (state.face_cull_enable) {
         gl::enable(gl::Enable_cap::cull_face);
         gl::cull_face(state.cull_face_mode);
-    }
-    else
-    {
+    } else {
         gl::disable(gl::Enable_cap::cull_face);
     }
 
     gl::front_face(state.front_face_direction);
     gl::polygon_mode(gl::Material_face::front_and_back, state.polygon_mode);
 #else
-    if (state.face_cull_enable)
-    {
-        if (!m_cache.face_cull_enable)
-        {
+    if (state.face_cull_enable) {
+        if (!m_cache.face_cull_enable) {
             gl::enable(gl::Enable_cap::cull_face);
             m_cache.face_cull_enable = true;
         }
-        if (m_cache.cull_face_mode != state.cull_face_mode)
-        {
+        if (m_cache.cull_face_mode != state.cull_face_mode) {
             gl::cull_face(state.cull_face_mode);
             m_cache.cull_face_mode = state.cull_face_mode;
         }
-    }
-    else
-    {
-        if (m_cache.face_cull_enable)
-        {
+    } else {
+        if (m_cache.face_cull_enable) {
             gl::disable(gl::Enable_cap::cull_face);
             m_cache.face_cull_enable = false;
         }
     }
 
-    if (m_cache.front_face_direction != state.front_face_direction)
-    {
+    if (m_cache.front_face_direction != state.front_face_direction) {
         gl::front_face(state.front_face_direction);
         m_cache.front_face_direction = state.front_face_direction;
     }
 
-    if (m_cache.polygon_mode != state.polygon_mode)
-    {
+    if (m_cache.polygon_mode != state.polygon_mode) {
         gl::polygon_mode(gl::Material_face::front_and_back, state.polygon_mode);
         m_cache.polygon_mode = state.polygon_mode;
     }

@@ -54,8 +54,7 @@ void Shadow_render_node::reconfigure(
 
         m_texture.reset();
 
-        if (light_count > 0)
-        {
+        if (light_count > 0) {
             m_texture = std::make_shared<Texture>(
                 Texture::Create_info
                 {
@@ -70,16 +69,14 @@ void Shadow_render_node::reconfigure(
 
             m_texture->set_debug_label("Shadowmaps");
         }
-        if (resolution == 1)
-        {
+        if (resolution == 1) {
             float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
             gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
         }
     }
 
     m_framebuffers.clear();
-    for (int i = 0; i < light_count; ++i)
-    {
+    for (int i = 0; i < light_count; ++i) {
         ERHE_PROFILE_SCOPE("framebuffer creation");
 
         Framebuffer::Create_info create_info;
@@ -103,19 +100,16 @@ void Shadow_render_node::execute_rendergraph_node()
     // Render shadow maps
     const auto& scene_root = m_scene_view.get_scene_root();
     const auto& camera     = m_scene_view.get_camera();
-    if (!scene_root || !camera)
-    {
+    if (!scene_root || !camera) {
         return;
     }
 
     const auto& layers = scene_root->layers();
-    if (layers.content()->meshes.empty())
-    {
+    if (layers.content()->meshes.empty()) {
         return;
     }
 
-    if (!m_texture)
-    {
+    if (!m_texture) {
         return;
     }
 
@@ -195,8 +189,7 @@ auto Shadow_render_node::get_viewport() const -> erhe::scene::Viewport
 
 
 #if 0
-        if (erhe::graphics::Instance::info.use_sparse_texture)
-        {
+        if (erhe::graphics::Instance::info.use_sparse_texture) {
             // commit the whole texture for now
             gl::texture_page_commitment_ext(
                 m_texture->gl_name(),

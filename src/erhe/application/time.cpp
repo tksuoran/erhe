@@ -40,8 +40,7 @@ void Time::update()
     const auto duration   = new_time - m_current_time;
     double     frame_time = std::chrono::duration<double, std::ratio<1>>(duration).count();
 
-    if (frame_time > 0.25)
-    {
+    if (frame_time > 0.25) {
         frame_time = 0.25;
     }
 
@@ -49,8 +48,7 @@ void Time::update()
     m_time_accumulator += frame_time;
     const double dt = 1.0 / 100.0;
     //int steps = 0;
-    while (m_time_accumulator >= dt)
-    {
+    while (m_time_accumulator >= dt) {
         //++steps;
         update_fixed_step(
             erhe::components::Time_context{

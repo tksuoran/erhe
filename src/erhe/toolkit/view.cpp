@@ -6,8 +6,7 @@ namespace erhe::toolkit
 
 auto c_str(const Keycode code) -> const char*
 {
-    switch (code)
-    {
+    switch (code) {
         case Key_unknown      : return "unknown";
         case Key_space        : return "space";
         case Key_apostrophe   : return "apostrophe";
@@ -135,8 +134,7 @@ auto c_str(const Keycode code) -> const char*
 
 auto c_str(const Mouse_button button) -> const char*
 {
-    switch (button)
-    {
+    switch (button) {
         case Mouse_button_left  : return "left";
         case Mouse_button_right : return "right";
         case Mouse_button_middle: return "middle";
@@ -168,10 +166,8 @@ void Root_view::reset_view(View* view)
 
 void Root_view::on_idle()
 {
-    if (m_last_view != m_view)
-    {
-        if (m_last_view)
-        {
+    if (m_last_view != m_view) {
+        if (m_last_view) {
             m_last_view->on_exit();
         }
 
@@ -179,16 +175,14 @@ void Root_view::on_idle()
         m_last_view = m_view;
     }
 
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->update();
     }
 }
 
 void Root_view::on_close()
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         //m_view->on_exit();
         m_view->on_close();
         //m_view = nullptr;
@@ -196,80 +190,70 @@ void Root_view::on_close()
 
     //m_last_view = nullptr;
     //
-    //if (m_window != nullptr)
-    //{
+    //if (m_window != nullptr) {
     //    m_window->break_event_loop();
     //}
 }
 
 void Root_view::on_focus(int focused)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_focus(focused);
     }
 }
 
 void Root_view::on_cursor_enter(int entered)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_cursor_enter(entered);
     }
 }
 
 void Root_view::on_refresh()
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_refresh();
     }
 }
 
 void Root_view::on_resize(const int width, const int height)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_resize(width, height);
     }
 }
 
 void Root_view::on_key(const Keycode code, const Key_modifier_mask mask, const bool pressed)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_key(code, mask, pressed);
     }
 }
 
 void Root_view::on_char(const unsigned int codepoint)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_char(codepoint);
     }
 }
 
 void Root_view::on_mouse_move(const float x, const float y)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_mouse_move(x, y);
     }
 }
 
 void Root_view::on_mouse_button(const Mouse_button button, const bool pressed)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_mouse_button(button, pressed);
     }
 }
 
 void Root_view::on_mouse_wheel(const float x, const float y)
 {
-    if (m_view != nullptr)
-    {
+    if (m_view != nullptr) {
         m_view->on_mouse_wheel(x, y);
     }
 }

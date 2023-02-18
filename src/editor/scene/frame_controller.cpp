@@ -44,16 +44,14 @@ auto Frame_controller::get_controller(
     const Control control
 ) -> erhe::application::Controller&
 {
-    switch (control)
-    {
+    switch (control) {
         case Control::translate_x: return translate_x;
         case Control::translate_y: return translate_y;
         case Control::translate_z: return translate_z;
         case Control::rotate_x   : return rotate_x;
         case Control::rotate_y   : return rotate_y;
         case Control::rotate_z   : return rotate_z;
-        default:
-        {
+        default: {
             ERHE_FATAL("bad control %04x", static_cast<unsigned int>(control));
         }
     }
@@ -118,14 +116,12 @@ auto Frame_controller::type_name() const -> const char*
 
 void Frame_controller::handle_node_transform_update()
 {
-    if (m_transform_update)
-    {
+    if (m_transform_update) {
         return;
     }
 
     auto* node = get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
     const vec4 position  = node->position_in_world();
@@ -159,8 +155,7 @@ void Frame_controller::reset()
 void Frame_controller::update()
 {
     auto* node = get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return;
     }
 
@@ -231,26 +226,22 @@ void Frame_controller::update_fixed_step()
 
     const float speed = 0.8f + speed_modifier.current_value();
 
-    if (translate_x.current_value() != 0.0f)
-    {
+    if (translate_x.current_value() != 0.0f) {
         m_position += right() * translate_x.current_value() * speed;
     }
 
-    if (translate_y.current_value() != 0.0f)
-    {
+    if (translate_y.current_value() != 0.0f) {
         m_position += up() * translate_y.current_value() * speed;
     }
 
-    if (translate_z.current_value() != 0.0f)
-    {
+    if (translate_z.current_value() != 0.0f) {
         m_position += back() * translate_z.current_value() * speed;
     }
 
     if (
         (rotate_x.current_value() != 0.0f) ||
         (rotate_y.current_value() != 0.0f)
-    )
-    {
+    ) {
         m_heading += rotate_y.current_value();
         m_elevation += rotate_x.current_value();
         const mat4 elevation_matrix = erhe::toolkit::create_rotation(
@@ -323,8 +314,7 @@ auto as_frame_controller(
     erhe::scene::Item* item
 ) -> Frame_controller*
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return nullptr;
     }
     using namespace erhe::toolkit;
@@ -333,19 +323,17 @@ auto as_frame_controller(
             item->get_type(),
             erhe::scene::Item_type::frame_controller
         )
-    )
-    {
+    ) {
         return nullptr;
     }
-    return reinterpret_cast<Frame_controller*>(item);
+    return static_cast<Frame_controller*>(item);
 }
 
 auto as_frame_controller(
     const std::shared_ptr<erhe::scene::Item>& item
 ) -> std::shared_ptr<Frame_controller>
 {
-    if (!item)
-    {
+    if (!item) {
         return {};
     }
     using namespace erhe::toolkit;
@@ -354,8 +342,7 @@ auto as_frame_controller(
             item->get_type(),
             erhe::scene::Item_type::frame_controller
         )
-    )
-    {
+    ) {
         return {};
     }
     return std::static_pointer_cast<Frame_controller>(item);
@@ -365,11 +352,9 @@ auto get_frame_controller(
     const erhe::scene::Node* node
 ) -> std::shared_ptr<Frame_controller>
 {
-    for (const auto& attachment : node->attachments())
-    {
+    for (const auto& attachment : node->attachments()) {
         auto frame_controller = as_frame_controller(attachment);
-        if (frame_controller)
-        {
+        if (frame_controller) {
             return frame_controller;
         }
     }

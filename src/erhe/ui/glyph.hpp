@@ -26,12 +26,12 @@ class Glyph
 {
 public:
     Glyph(
-        FT_Library          library,
-        FT_Face             font_face,
-        const unsigned char c,
-        const float         bolding,
-        const float         outline_thickness,
-        const int           hint_mode
+        FT_Library    library,
+        FT_Face       font_face,
+        unsigned char c,
+        float         bolding,
+        float         outline_thickness,
+        int           hint_mode
     );
 
     [[nodiscard]] auto buffer() const -> const std::vector<unsigned char>&
@@ -80,8 +80,7 @@ public:
 private:
     static void validate(const FT_Error error)
     {
-        if (error != FT_Err_Ok)
-        {
+        if (error != FT_Err_Ok) {
             ERHE_FATAL("freetype error");
         }
     }

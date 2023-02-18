@@ -44,22 +44,18 @@ constexpr float drag_speed = 0.2f;
 
 void Type_editor::make_def(const char* tooltip_text, bool& value)
 {
-    if (ImGui::TableNextColumn())
-    {
+    if (ImGui::TableNextColumn()) {
         const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name.c_str(), value);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        if (m_current_column < m_value_colors.size())
-        {
+        if (m_current_column < m_value_colors.size()) {
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }
         ImGui::Checkbox(label.c_str(), &value);
-        if (m_current_column < m_value_colors.size())
-        {
+        if (m_current_column < m_value_colors.size()) {
             ImGui::PopStyleColor();
         }
-        if (ImGui::IsItemHovered())
-        {
+        if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
@@ -69,22 +65,18 @@ void Type_editor::make_def(const char* tooltip_text, bool& value)
 
 void Type_editor::make_def(const char* tooltip_text, int& value)
 {
-    if (ImGui::TableNextColumn())
-    {
+    if (ImGui::TableNextColumn()) {
         const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name.c_str(), value);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        if (m_current_column < m_value_colors.size())
-        {
+        if (m_current_column < m_value_colors.size()) {
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }
         ImGui::DragInt(label.c_str(), &value, drag_speed, 0, 999);
-        if (m_current_column < m_value_colors.size())
-        {
+        if (m_current_column < m_value_colors.size()) {
             ImGui::PopStyleColor();
         }
-        if (ImGui::IsItemHovered())
-        {
+        if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
@@ -92,10 +84,9 @@ void Type_editor::make_def(const char* tooltip_text, int& value)
     ++m_current_column;
 }
 
-void Type_editor::make_def(const char* tooltip_text, float& value, float min_value, float max_value)
+void Type_editor::make_def(const char* tooltip_text, float& value, const float min_value, const float max_value)
 {
-    if (ImGui::TableNextColumn())
-    {
+    if (ImGui::TableNextColumn()) {
         const auto label   = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto tooltip = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name.c_str(), value);
         ImGui::SetNextItemWidth(-FLT_MIN);
@@ -119,24 +110,20 @@ void Type_editor::make_def(const char* tooltip_text, float& value, float min_val
 
 void Type_editor::make_terrain_type_def(const char* tooltip_text, terrain_t& value)
 {
-    if (ImGui::TableNextColumn())
-    {
+    if (ImGui::TableNextColumn()) {
         terrain_tile_t terrain_tile = g_tiles->get_terrain_tile_from_terrain(value);
         const auto     label        = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto     tooltip      = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name.c_str(), value);
         g_rendering->terrain_image(terrain_tile, 2);
         ImGui::SameLine();
-        if (m_current_column < m_value_colors.size())
-        {
+        if (m_current_column < m_value_colors.size()) {
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }
         g_rendering->make_terrain_type_combo(label.c_str(), value);
-        if (m_current_column < m_value_colors.size())
-        {
+        if (m_current_column < m_value_colors.size()) {
             ImGui::PopStyleColor();
         }
-        if (ImGui::IsItemHovered())
-        {
+        if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
@@ -146,8 +133,7 @@ void Type_editor::make_terrain_type_def(const char* tooltip_text, terrain_t& val
 
 void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value, int player)
 {
-    if (ImGui::TableNextColumn())
-    {
+    if (ImGui::TableNextColumn()) {
         unit_tile_t unit_tile = g_tile_renderer->get_single_unit_tile(player, value);
         const auto  label     = fmt::format("##{}-{}", m_current_column, m_current_row);
         const auto  tooltip   = fmt::format("{} for {}: {}", tooltip_text, m_current_element_name.c_str(), value);
@@ -158,12 +144,10 @@ void Type_editor::make_unit_type_def(const char* tooltip_text, unit_t& value, in
             ImGui::PushStyleColor(ImGuiCol_Text, m_value_colors[m_current_column]);
         }
         g_rendering->make_unit_type_combo(label.c_str(), value, player);
-        if (m_current_column < m_value_colors.size())
-        {
+        if (m_current_column < m_value_colors.size()) {
             ImGui::PopStyleColor();
         }
-        if (ImGui::IsItemHovered())
-        {
+        if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", tooltip.c_str());
         }
     }
@@ -192,9 +176,9 @@ auto Type_editor::begin_table(int column_count) -> bool
 }
 
 void Type_editor::make_column(
-    const char* label,
-    float       width,
-    ImVec4      color
+    const char*  label,
+    const float  width,
+    const ImVec4 color
 )
 {
     ImGui::TableSetupColumn(label, ImGuiTableColumnFlags_WidthFixed, width);
@@ -211,15 +195,13 @@ void Type_editor::make_column(
 
 void Type_editor::table_headers_row()
 {
-    int column_count = ImGui::TableGetColumnCount();
+    const int column_count = ImGui::TableGetColumnCount();
     ImGui::TableSetupScrollFreeze(column_count, 1);
 
     //ImGui::TableHeadersRow();
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-    for (int column = 0; column < column_count; column++)
-    {
-        if (!ImGui::TableSetColumnIndex(column))
-        {
+    for (int column = 0; column < column_count; column++) {
+        if (!ImGui::TableSetColumnIndex(column)) {
             continue;
         }
         const char* column_name = ImGui::TableGetColumnName(column); // Retrieve name passed to TableSetupColumn()
@@ -265,24 +247,19 @@ void Type_editor::terrain_editor_imgui()
     ImGui::DragInt("Move Count", &m_simulate_move_count, drag_speed, 1, 99);
     ImGui::SameLine();
 
-    if (ImGui::Button("Simulate", button_size))
-    {
-        //for (int i = 0; i < 1000; ++i)
-        //{
-        //
+    if (ImGui::Button("Simulate", button_size)) {
+        //for (int i = 0; i < 1000; ++i) {
         //}
     }
 
     //ImGui::SameLine();
-    //if (ImGui::Button("Update", button_size))
-    //{
+    //if (ImGui::Button("Update", button_size)) {
     //    m_map_window->update_elevation_terrains();
     //}
 
     constexpr int column_count = 18;
 
-    if (!begin_table(column_count))
-    {
+    if (!begin_table(column_count)) {
         return;
     }
 
@@ -314,8 +291,7 @@ void Type_editor::terrain_editor_imgui()
     table_headers_row();
 
     const terrain_t end = static_cast<unit_t>(g_tiles->get_terrain_type_count());
-    for (m_current_terrain_id = 0; m_current_terrain_id < end; ++m_current_terrain_id)
-    {
+    for (m_current_terrain_id = 0; m_current_terrain_id < end; ++m_current_terrain_id) {
         m_current_row = m_current_terrain_id;
         ImGui::TableNextRow();
         {
@@ -324,8 +300,7 @@ void Type_editor::terrain_editor_imgui()
             m_current_element_name = terrain.name;
 
             // Icon and name
-            if (ImGui::TableNextColumn())
-            {
+            if (ImGui::TableNextColumn()) {
                 ImGui::SetNextItemWidth(20.0f);
                 ImGui::PushFont        (erhe::application::g_imgui_renderer->mono_font());
                 const auto row_label = fmt::format("{:>2}", m_current_row);
@@ -367,8 +342,7 @@ void Type_editor::terrain_group_editor_imgui()
 {
     constexpr int column_count = 13;
 
-    if (!begin_table(column_count))
-    {
+    if (!begin_table(column_count)) {
         return;
     }
 
@@ -395,8 +369,7 @@ void Type_editor::terrain_group_editor_imgui()
 
     const int end = static_cast<int>(g_tiles->get_terrain_group_count());
     std::optional<int> delete_row;
-    for (m_current_row = 0; m_current_row < end; ++m_current_row)
-    {
+    for (m_current_row = 0; m_current_row < end; ++m_current_row) {
         ImGui::TableNextRow();
         {
             auto& group = g_tiles->get_terrain_group(m_current_row);
@@ -410,8 +383,7 @@ void Type_editor::terrain_group_editor_imgui()
             //m_current_element_name = fmt::format("Group {}", m_current_row);
 
             // Icon and name
-            if (ImGui::TableNextColumn())
-            {
+            if (ImGui::TableNextColumn()) {
                 ImGui::SetNextItemWidth(20.0f);
                 ImGui::PushFont        (erhe::application::g_imgui_renderer->mono_font());
                 const auto row_label = fmt::format("{:>2}", m_current_row);
@@ -432,11 +404,9 @@ void Type_editor::terrain_group_editor_imgui()
             make_def             ("Promote to Group",   group.promoted);
             make_def             ("Demote to Group",    group.demoted);
 
-            if (ImGui::TableNextColumn())
-            {
+            if (ImGui::TableNextColumn()) {
                 const auto label = fmt::format("Remove##{}-{}", m_current_column, m_current_row);
-                if (ImGui::Button(label.c_str()))
-                {
+                if (ImGui::Button(label.c_str())) {
                     delete_row = m_current_row;
                 }
             }
@@ -444,15 +414,13 @@ void Type_editor::terrain_group_editor_imgui()
     }
 
     ImGui::TableNextRow();
-    if (ImGui::TableNextColumn() && ImGui::Button("Add"))
-    {
+    if (ImGui::TableNextColumn() && ImGui::Button("Add")) {
         g_tiles->add_terrain_group();
     }
     ImGui::PopStyleVar(2);
     ImGui::EndTable();
 
-    if (delete_row.has_value())
-    {
+    if (delete_row.has_value()) {
         g_tiles->remove_terrain_group(delete_row.value());
     }
 }
@@ -461,8 +429,7 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
 {
     constexpr int column_count = 9;
 
-    if (!begin_table(column_count))
-    {
+    if (!begin_table(column_count)) {
         return;
     }
 
@@ -485,8 +452,7 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
 
     const int end = static_cast<int>(g_tiles->get_terrain_replacement_rule_count());
     std::optional<int> delete_row;
-    for (m_current_row = 0; m_current_row < end; ++m_current_row)
-    {
+    for (m_current_row = 0; m_current_row < end; ++m_current_row) {
         ImGui::TableNextRow();
         {
             auto& rule = g_tiles->get_terrain_replacement_rule(m_current_row);
@@ -500,8 +466,7 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
             );
 
             // Icon and name
-            if (ImGui::TableNextColumn())
-            {
+            if (ImGui::TableNextColumn()) {
                 ImGui::SetNextItemWidth(20.0f);
                 ImGui::PushFont        (erhe::application::g_imgui_renderer->mono_font());
                 const auto row_label = fmt::format("{:>2}", m_current_row);
@@ -518,11 +483,9 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
             make_terrain_type_def("Secondary",   rule.secondary[2]);
             make_terrain_type_def("Replacement", rule.replacement);
 
-            if (ImGui::TableNextColumn())
-            {
+            if (ImGui::TableNextColumn()) {
                 const auto label = fmt::format("Remove##{}-{}", m_current_column, m_current_row);
-                if (ImGui::Button(label.c_str()))
-                {
+                if (ImGui::Button(label.c_str())) {
                     delete_row = m_current_row;
                 }
             }
@@ -530,16 +493,14 @@ void Type_editor::terrain_replacement_rule_editor_imgui()
     }
 
     ImGui::TableNextRow();
-    if (ImGui::TableNextColumn() && ImGui::Button("Add"))
-    {
+    if (ImGui::TableNextColumn() && ImGui::Button("Add")) {
         g_tiles->add_terrain_replacement_rule();
     }
 
     ImGui::PopStyleVar(2);
     ImGui::EndTable();
 
-    if (delete_row.has_value())
-    {
+    if (delete_row.has_value()) {
         g_tiles->remove_terrain_replacement_rule(delete_row.value());
     }
 }
@@ -571,18 +532,15 @@ void Type_editor::unit_editor_imgui()
     g_rendering->make_unit_type_combo("##Type B", m_simulate_unit_type_b);
     ImGui::SameLine();
 
-    if (ImGui::Button("Simulate"))
-    {
-        //for (int i = 0; i < 1000; ++i)
-        //{
+    if (ImGui::Button("Simulate")) {
+        //for (int i = 0; i < 1000; ++i) {
         //
         //}
     }
 
     constexpr int column_count = 38;
 
-    if (!begin_table(column_count))
-    {
+    if (!begin_table(column_count)) {
         return;
     }
 
@@ -644,8 +602,7 @@ void Type_editor::unit_editor_imgui()
     table_headers_row();
 
     const unit_t end = static_cast<unit_t>(g_tiles->get_unit_type_count());
-    for (m_current_unit_id = 0; m_current_unit_id < end; ++m_current_unit_id)
-    {
+    for (m_current_unit_id = 0; m_current_unit_id < end; ++m_current_unit_id) {
         m_current_row = m_current_unit_id;
         ImGui::TableNextRow();
         {
@@ -654,8 +611,7 @@ void Type_editor::unit_editor_imgui()
             m_current_element_name = unit.name;
 
             // 0 Icon and name
-            if (ImGui::TableNextColumn())
-            {
+            if (ImGui::TableNextColumn()) {
                 ImGui::SetNextItemWidth(20.0f);
                 ImGui::PushFont        (erhe::application::g_imgui_renderer->mono_font());
                 const auto row_label = fmt::format("{:>2}", m_current_row);

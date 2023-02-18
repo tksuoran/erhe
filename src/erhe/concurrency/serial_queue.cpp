@@ -39,12 +39,10 @@ Serial_queue::~Serial_queue() noexcept
 
 void Serial_queue::thread()
 {
-    while (!m_stop.load(std::memory_order_relaxed))
-    {
+    while (!m_stop.load(std::memory_order_relaxed)) {
         std::unique_lock<std::mutex> queue_lock{m_queue_mutex};
 
-        if (m_task_counter > 0)
-        {
+        if (m_task_counter > 0) {
             auto task = std::move(m_task_queue.front());
             m_task_queue.pop_front();
             queue_lock.unlock();
@@ -53,9 +51,7 @@ void Serial_queue::thread()
 
             std::unique_lock<std::mutex> wait_lock(m_wait_mutex);
             --m_task_counter;
-        }
-        else
-        {
+        } else {
             m_wait_condition.notify_all();
             m_task_condition.wait(
                 queue_lock,

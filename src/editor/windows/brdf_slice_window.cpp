@@ -84,15 +84,13 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
     // Execute base class in order to update texture and framebuffer
     Texture_rendergraph_node::execute_rendergraph_node();
 
-    if (!m_framebuffer)
-    {
+    if (!m_framebuffer) {
         // Likely because output ImGui window has no viewport size yet.
         return;
     }
 
     const auto selected_material = g_content_library_window->selected_material();
-    if (!selected_material)
-    {
+    if (!selected_material) {
         return;
     }
 
@@ -204,8 +202,7 @@ void Brdf_slice_window::imgui()
     ERHE_PROFILE_FUNCTION
 
     const auto selected_material = g_content_library_window->selected_material();
-    if (!selected_material)
-    {
+    if (!selected_material) {
         return;
     }
 
@@ -222,8 +219,7 @@ void Brdf_slice_window::imgui()
         erhe::application::Resource_routing::Resource_provided_by_producer,
         erhe::application::Rendergraph_node_key::texture_for_gui
     );
-    if (!texture)
-    {
+    if (!texture) {
         log_render->warn("Brdf_slice_window has no output render graph node");
         return;
     }
@@ -235,8 +231,7 @@ void Brdf_slice_window::imgui()
         (texture_width  > 0) &&
         (texture_height > 0) &&
         (area_size      > 0)
-    )
-    {
+    ) {
         ////auto cursor_position = ImGui::GetCursorPos();
         ////cursor_position.x += (available_size.x - image_size) / 2.0f;
         ////cursor_position.y += (available_size.y - image_size) / 2.0f;
@@ -246,9 +241,7 @@ void Brdf_slice_window::imgui()
         image(texture, area_size, area_size);
         ////// bool is_hovered = ImGui::IsItemHovered();
         ////ImGui::PopStyleVar();
-    }
-    else
-    {
+    } else {
         SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_window::imgui() - skipped - no texture or empty size");
     }
     SPDLOG_LOGGER_TRACE(log_render, "Brdf_slice_window::imgui() - done");

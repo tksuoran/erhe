@@ -39,8 +39,7 @@ void Weld::find_point_merge_candidates()
     source.for_each_point_const(
         [&](const auto& i)
         {
-            if (m_point_id_merge_candidates[i.point_id] != i.point_id)
-            {
+            if (m_point_id_merge_candidates[i.point_id] != i.point_id) {
                 //// log_merge->info("Point {} is already marked to be merged", i.point_id);
                 return; // continue already marked
             }
@@ -54,16 +53,14 @@ void Weld::find_point_merge_candidates()
                 nearby_point_indices
             );
 
-            for (const auto merge_point_id : nearby_point_indices)
-            {
+            for (const auto merge_point_id : nearby_point_indices) {
                 m_point_id_merge_candidates[merge_point_id] = i.point_id;
             }
         }
     );
 
     //// std::stringstream ss;
-    //// for (const auto id : m_point_id_merge_candidates)
-    //// {
+    //// for (const auto id : m_point_id_merge_candidates) {
     ////     ss << " " << id;
     //// }
     //// log_merge->info("Point merge candidates:{}", ss.str());
@@ -84,16 +81,14 @@ void Weld::rotate_polygons_to_least_point_first()
 
         // Find corner with smallest Point_id
         {
-            for (uint32_t j = 0; j < polygon.corner_count; ++j)
-            {
+            for (uint32_t j = 0; j < polygon.corner_count; ++j) {
                 Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
                 const Corner_id   corner_id         = source.polygon_corners[polygon_corner_id];
                 const Corner&     corner            = source.corners[corner_id];
                 const Point_id    point_id0         = corner.point_id;
                 const Point_id    point_id          = m_point_id_merge_candidates[point_id0];
                 copy_of_polygon_corners.push_back(corner_id);
-                if (point_id < min_point_id)
-                {
+                if (point_id < min_point_id) {
                     min_point_id = point_id;
                     min_point_slot = j;
                 }
@@ -101,8 +96,7 @@ void Weld::rotate_polygons_to_least_point_first()
         }
 
         // Rotate corners of polygon
-        for (uint32_t j = 0; j < polygon.corner_count; ++j)
-        {
+        for (uint32_t j = 0; j < polygon.corner_count; ++j) {
             Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
             const Corner_id   corner_id         = copy_of_polygon_corners.at((j + min_point_slot) % polygon.corner_count);
             source.polygon_corners[polygon_corner_id] = corner_id;
@@ -144,8 +138,7 @@ void Weld::sort_polygons()
     );
 
     //// log_merge->info("Sorted polygons:");
-    //// for (const auto id : m_polygon_id_sorted)
-    //// {
+    //// for (const auto id : m_polygon_id_sorted) {
     ////     log_merge->info(
     ////         "   {}: {}",
     ////         id,
@@ -157,8 +150,7 @@ void Weld::sort_polygons()
 auto Weld::format_polygon_points(const Polygon& polygon) const -> std::string
 {
     std::stringstream ss;
-    for (uint32_t i = 0; i < polygon.corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < polygon.corner_count; ++i) {
         const Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + i;
         const Corner_id         corner_id         = source.polygon_corners[polygon_corner_id];
         const Corner&           corner            = source.corners[corner_id];
@@ -191,17 +183,14 @@ void Weld::scan_for_equal_and_opposite_polygons()
         std::size_t left_sort_index = 0, end = m_polygon_id_sorted.size();
         left_sort_index < end;
         ++left_sort_index
-    )
-    {
+    ) {
         const Polygon_id left_polygon_id = m_polygon_id_sorted[left_sort_index];
-        if (m_polygon_id_remove[left_polygon_id])
-        {
+        if (m_polygon_id_remove[left_polygon_id]) {
             continue; // already marked
         }
         const Polygon& left_polygon = source.polygons[left_polygon_id];
 
-        if (left_polygon.corner_count == 0)
-        {
+        if (left_polygon.corner_count == 0) {
             m_polygon_id_remove[left_polygon_id] = true;
             continue;
         }
@@ -210,17 +199,14 @@ void Weld::scan_for_equal_and_opposite_polygons()
             std::size_t right_sort_index = left_sort_index + 1;
             right_sort_index < end;
             ++right_sort_index
-        )
-        {
+        ) {
             const Polygon_id right_polygon_id = m_polygon_id_sorted[right_sort_index];
-            if (m_polygon_id_remove[right_polygon_id])
-            {
+            if (m_polygon_id_remove[right_polygon_id]) {
                 continue; // already marked
             }
             const Polygon& right_polygon = source.polygons[right_polygon_id];
 
-            if (left_polygon.corner_count != right_polygon.corner_count)
-            {
+            if (left_polygon.corner_count != right_polygon.corner_count) {
                 continue;
             }
 
@@ -233,8 +219,7 @@ void Weld::scan_for_equal_and_opposite_polygons()
             const Corner&   right_first_corner    = source.corners        [right_first_corner_id];
             const Point_id  right_first_point_id0 = right_first_corner.point_id;
             const Point_id  right_first_point_id  = m_point_id_merge_candidates[right_first_point_id0];
-            if (left_first_point_id != right_first_point_id)
-            {
+            if (left_first_point_id != right_first_point_id) {
                 break; // Sliding window: Advance left
             }
 
@@ -243,8 +228,7 @@ void Weld::scan_for_equal_and_opposite_polygons()
             bool polygons_are_equal    = (corner_count >= 1);
             bool polygons_are_opposite = (corner_count >= 3);
 
-            for (uint32_t corner_index = 0; corner_index < corner_count; ++corner_index)
-            {
+            for (uint32_t corner_index = 0; corner_index < corner_count; ++corner_index) {
                 const Corner_id left_corner_id  = source.polygon_corners[left_polygon.first_polygon_corner_id + corner_index];
                 const Corner&   left_corner     = source.corners        [left_corner_id];
                 const Point_id  left_point_id0  = left_corner.point_id;
@@ -255,8 +239,7 @@ void Weld::scan_for_equal_and_opposite_polygons()
                 const Point_id  right_point_id0 = right_corner.point_id;
                 const Point_id  right_point_id  = m_point_id_merge_candidates[right_point_id0];
 
-                if (left_point_id != right_point_id)
-                {
+                if (left_point_id != right_point_id) {
                     polygons_are_equal = false;
                 }
                 const uint32_t  reverse_corner_index    = (corner_count - corner_index) % corner_count;
@@ -265,21 +248,18 @@ void Weld::scan_for_equal_and_opposite_polygons()
                 const Point_id  right_reverse_point_id0 = right_reverse_corner.point_id;
                 const Point_id  right_reverse_point_id  = m_point_id_merge_candidates[right_reverse_point_id0];
 
-                if (left_point_id != right_reverse_point_id)
-                {
+                if (left_point_id != right_reverse_point_id) {
                     polygons_are_opposite = false;
                 }
             }
 
             ERHE_VERIFY(!polygons_are_equal || !polygons_are_opposite); // Should not be able to be both
 
-            if (polygons_are_equal)
-            {
+            if (polygons_are_equal) {
                 m_polygon_id_remove[right_polygon_id] = true;
             }
 
-            if (polygons_are_opposite)
-            {
+            if (polygons_are_opposite) {
                 m_polygon_id_remove[left_polygon_id ] = true;
                 m_polygon_id_remove[right_polygon_id] = true;
             }
@@ -287,10 +267,8 @@ void Weld::scan_for_equal_and_opposite_polygons()
     }
 
     //// std::stringstream ss;
-    //// for (const auto id : m_polygon_id_sorted)
-    //// {
-    ////     if (m_polygon_id_remove[id])
-    ////     {
+    //// for (const auto id : m_polygon_id_sorted) {
+    ////     if (m_polygon_id_remove[id]) {
     ////         ss << " " << id;
     ////     }
     //// }
@@ -304,11 +282,9 @@ void Weld::mark_used_points()
         std::size_t sort_index = 0, end = m_polygon_id_sorted.size();
         sort_index < end;
         ++sort_index
-    )
-    {
+    ) {
         const Polygon_id polygon_id = m_polygon_id_sorted[sort_index];
-        if (m_polygon_id_remove[polygon_id])
-        {
+        if (m_polygon_id_remove[polygon_id]) {
             continue;
         }
         const Polygon& polygon = source.polygons[polygon_id];
@@ -323,10 +299,8 @@ void Weld::mark_used_points()
     }
 
     //// std::stringstream ss;
-    //// for (std::size_t i = 0; i < m_point_id_used.size(); ++i)
-    //// {
-    ////     if (m_point_id_used[i])
-    ////     {
+    //// for (std::size_t i = 0; i < m_point_id_used.size(); ++i) {
+    ////     if (m_point_id_used[i]){
     ////         ss << " " << i;
     ////     }
     //// }
@@ -336,10 +310,8 @@ void Weld::mark_used_points()
 void Weld::count_used_points()
 {
     m_used_point_count = 0;
-    for (const bool point_used : m_point_id_used)
-    {
-        if (point_used)
-        {
+    for (const bool point_used : m_point_id_used) {
+        if (point_used) {
             ++m_used_point_count;
         }
     }
@@ -376,8 +348,7 @@ Weld::Weld(
     point_old_to_new.reserve(m_used_point_count);
     source.for_each_point_const([&](auto& i)
     {
-        if (m_point_id_used[i.point_id])
-        {
+        if (m_point_id_used[i.point_id]) {
             make_new_point_from_point(i.point_id);
         }
     });
@@ -385,8 +356,7 @@ Weld::Weld(
     // Copy used polygons
     source.for_each_polygon_const([&](auto& i)
     {
-        if (m_polygon_id_remove[i.polygon_id])
-        {
+        if (m_polygon_id_remove[i.polygon_id]) {
             return;
         }
 

@@ -15,16 +15,14 @@ Update_binding::~Update_binding() noexcept = default;
 auto Update_binding::on_update() -> bool
 {
     auto* const command = get_command();
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         return false;
     }
     auto* host = command->get_host();
     if (
         (host != nullptr) &&
         !host->is_enabled()
-    )
-    {
+    ) {
         return false;
     }
     const bool consumed = command->try_call();

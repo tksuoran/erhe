@@ -35,12 +35,10 @@ void Hover_entry::reset()
 
 [[nodiscard]] auto Hover_entry::get_name() const -> const std::string&
 {
-    if (mesh)
-    {
+    if (mesh) {
         return mesh->get_name();
     }
-    if (grid)
-    {
+    if (grid) {
         return grid->get_name();
     }
     return empty_string;
@@ -56,8 +54,7 @@ void Scene_view::set_hover(
     m_hover_entries[slot]      = entry;
     m_hover_entries[slot].slot = slot;
 
-    if (mesh_changed || grid_changed)
-    {
+    if (mesh_changed || grid_changed) {
         g_editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_mesh
@@ -69,8 +66,7 @@ void Scene_view::set_hover(
 auto Scene_view::get_light_projections() const -> const Light_projections*
 {
     auto* shadow_render_node = get_shadow_render_node();
-    if (shadow_render_node == nullptr)
-    {
+    if (shadow_render_node == nullptr) {
         return nullptr;
     }
     Light_projections& light_projections = shadow_render_node->get_light_projections();
@@ -80,8 +76,7 @@ auto Scene_view::get_light_projections() const -> const Light_projections*
 auto Scene_view::get_shadow_texture() const -> erhe::graphics::Texture*
 {
     const auto* shadow_render_node = get_shadow_render_node();
-    if (shadow_render_node == nullptr)
-    {
+    if (shadow_render_node == nullptr) {
         return nullptr;
     }
     return shadow_render_node->get_texture().get();
@@ -99,8 +94,7 @@ auto Scene_view::get_control_from_world() const -> std::optional<glm::mat4>
 
 auto Scene_view::get_control_ray_origin_in_world() const -> std::optional<glm::vec3>
 {
-    if (!m_world_from_control.has_value())
-    {
+    if (!m_world_from_control.has_value()) {
         return {};
     }
     return glm::vec3{m_world_from_control.value() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -108,8 +102,7 @@ auto Scene_view::get_control_ray_origin_in_world() const -> std::optional<glm::v
 
 auto Scene_view::get_control_ray_direction_in_world() const -> std::optional<glm::vec3>
 {
-    if (!m_world_from_control.has_value())
-    {
+    if (!m_world_from_control.has_value()) {
         return {};
     }
     return glm::vec3{m_world_from_control.value() * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
@@ -119,8 +112,7 @@ auto Scene_view::get_control_position_in_world_at_distance(
     const float distance
 ) const -> std::optional<glm::vec3>
 {
-    if (!m_world_from_control.has_value())
-    {
+    if (!m_world_from_control.has_value()) {
         return {};
     }
 
@@ -137,20 +129,16 @@ auto Scene_view::get_hover(size_t slot) const -> const Hover_entry&
 auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entry&
 {
     std::size_t nearest_slot = 0;
-    if (m_world_from_control.has_value())
-    {
+    if (m_world_from_control.has_value()) {
         float nearest_distance = std::numeric_limits<float>::max();
-        for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
-        {
+        for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot){
             const uint32_t slot_bit = (1 << slot);
-            if ((slot_mask & slot_bit) == 0)
-            {
+            if ((slot_mask & slot_bit) == 0) {
                 continue;
             }
 
             const Hover_entry& entry = m_hover_entries[slot];
-            if (!entry.valid || !entry.position.has_value())
-            {
+            if (!entry.valid || !entry.position.has_value()) {
                 continue;
             }
             const float distance = glm::distance(
@@ -183,13 +171,11 @@ void Scene_view::set_world_from_control(
 )
 {
     const auto camera = get_camera();
-    if (!camera)
-    {
+    if (!camera) {
         return;
     }
     const auto* camera_node = camera->get_node();
-    if (camera_node == nullptr)
-    {
+    if (camera_node == nullptr) {
         return;
     }
     const glm::mat4 camera_world_from_node = camera_node->world_from_node();
@@ -210,8 +196,7 @@ void Scene_view::set_world_from_control(const glm::mat4& world_from_control)
 
 void Scene_view::reset_control_transform()
 {
-    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
-    {
+    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot) {
         set_hover(slot, Hover_entry{});
     }
 
@@ -220,8 +205,7 @@ void Scene_view::reset_control_transform()
 
 void Scene_view::reset_hover_slots()
 {
-    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot)
-    {
+    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot) {
         set_hover(slot, Hover_entry{});
     }
 }
@@ -230,8 +214,7 @@ void Scene_view::update_grid_hover()
 {
     const auto origin_opt    = get_control_ray_origin_in_world();
     const auto direction_opt = get_control_ray_direction_in_world();
-    if (!origin_opt.has_value() || !direction_opt.has_value())
-    {
+    if (!origin_opt.has_value() || !direction_opt.has_value()) {
         return;
     }
     const glm::vec3 ray_origin    = origin_opt.value();
@@ -240,8 +223,7 @@ void Scene_view::update_grid_hover()
     const Grid_hover_position hover_position = g_grid_tool->update_hover(ray_origin, ray_direction);
     Hover_entry entry;
     entry.valid = (hover_position.grid != nullptr);
-    if (entry.valid)
-    {
+    if (entry.valid) {
         entry.position = hover_position.position;
         entry.normal   = glm::vec3{
             hover_position.grid->world_from_grid() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}

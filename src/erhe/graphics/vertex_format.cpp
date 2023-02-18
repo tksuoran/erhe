@@ -16,8 +16,7 @@ Vertex_format::Vertex_format()
 
 Vertex_format::Vertex_format(std::initializer_list<Vertex_attribute> attributes)
 {
-    for (auto& attribute : attributes)
-    {
+    for (auto& attribute : attributes) {
         add_attribute(attribute);
     }
 }
@@ -26,8 +25,7 @@ void Vertex_format::align_to(const std::size_t alignment)
 {
     ERHE_VERIFY(alignment > 0);
 
-    while ((m_stride % alignment) != 0)
-    {
+    while ((m_stride % alignment) != 0) {
         ++m_stride;
     }
 }
@@ -50,15 +48,12 @@ void Vertex_format::add_attribute(
 
 auto Vertex_format::match(const Vertex_format& other) const -> bool
 {
-    if (m_attributes.size() != other.m_attributes.size())
-    {
+    if (m_attributes.size() != other.m_attributes.size()) {
         return false;
     }
 
-    for (size_t i = 0; i < m_attributes.size(); ++i)
-    {
-        if (m_attributes[i] != other.m_attributes[i])
-        {
+    for (size_t i = 0; i < m_attributes.size(); ++i) {
+        if (m_attributes[i] != other.m_attributes[i]) {
             return false;
         }
     }
@@ -71,10 +66,8 @@ auto Vertex_format::has_attribute(
     const unsigned int                 index
 ) const -> bool
 {
-    for (const auto& i : m_attributes)
-    {
-        if ((i.usage.type == usage_type) && (i.usage.index == index))
-        {
+    for (const auto& i : m_attributes) {
+        if ((i.usage.type == usage_type) && (i.usage.index == index)) {
             return true;
         }
     }
@@ -87,10 +80,8 @@ auto Vertex_format::find_attribute_maybe(
     const unsigned int                 index
 ) const -> const Vertex_attribute*
 {
-    for (const auto& i : m_attributes)
-    {
-        if ((i.usage.type == usage_type) && (i.usage.index== index))
-        {
+    for (const auto& i : m_attributes) {
+        if ((i.usage.type == usage_type) && (i.usage.index== index)) {
             return &(i);
         }
     }
@@ -103,10 +94,8 @@ auto Vertex_format::find_attribute(
     const unsigned int                 index
 ) const -> gsl::not_null<const Vertex_attribute*>
 {
-    for (const auto& i : m_attributes)
-    {
-        if ((i.usage.type == usage_type) && (i.usage.index == index))
-        {
+    for (const auto& i : m_attributes) {
+        if ((i.usage.type == usage_type) && (i.usage.index == index)) {
             return &(i);
         }
     }

@@ -206,15 +206,11 @@ template<typename T>
 [[nodiscard]] auto Component::get() const -> T*
 {
     T* component = try_get<T>();
-    if (!component)
-    {
+    if (!component) {
         auto get_result = m_components->get<T>();
-        if (get_result)
-        {
+        if (get_result) {
             ERHE_FATAL("component was not declared required");
-        }
-        else
-        {
+        } else {
             ERHE_FATAL("component was not registered to Components");
         }
     }
@@ -225,14 +221,10 @@ template<typename T>
 template<typename T>
 [[nodiscard]] auto Component::try_get() const -> T*
 {
-    switch (m_state)
-    {
-        case Component_state::Initializing:
-        {
-            for (const auto& component : m_initialized_dependencies)
-            {
-                if (component->get_type_hash() == T::c_type_hash)
-                {
+    switch (m_state) {
+        case Component_state::Initializing: {
+            for (const auto& component : m_initialized_dependencies) {
+                if (component->get_type_hash() == T::c_type_hash) {
                     return static_cast<T*>(component);
                 }
             }
@@ -240,8 +232,7 @@ template<typename T>
         }
 
         case Component_state::Post_initializing: // fall-through
-        case Component_state::Ready:
-        {
+        case Component_state::Ready: {
             ERHE_VERIFY(m_components != nullptr);
             auto get_result = m_components->get<T>();
             ERHE_VERIFY(
@@ -251,8 +242,7 @@ template<typename T>
             );
             return get_result;
         }
-        default:
-        {
+        default: {
             ERHE_FATAL("invalid get");
         }
     }
@@ -267,8 +257,7 @@ auto Component::require() -> T*
     T* const component = (m_components == nullptr)
         ? nullptr
         : m_components->get<T>();
-    if (component)
-    {
+    if (component) {
         depends_on(component);
     }
     return component;
@@ -282,8 +271,7 @@ auto Component::optional() -> T*
     T* const component = (m_components == nullptr)
         ? nullptr
         : m_components->get<T>();
-    if (component)
-    {
+    if (component) {
         depends_on(component);
     }
     return component;
@@ -292,10 +280,8 @@ auto Component::optional() -> T*
 template<typename T>
 [[nodiscard]] auto Components::get() const -> T*
 {
-    for (Component* component : m_components)
-    {
-        if (component->get_type_hash() == T::c_type_hash)
-        {
+    for (Component* component : m_components) {
+        if (component->get_type_hash() == T::c_type_hash) {
             return static_cast<T*>(component);
         }
     }

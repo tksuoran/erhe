@@ -505,14 +505,11 @@ public:
 
     [[nodiscard]] auto find_edge(Point_id a, Point_id b) -> std::optional<Edge>
     {
-        if (b < a)
-        {
+        if (b < a) {
             std::swap(a, b);
         }
-        for (const auto& edge : edges)
-        {
-            if (edge.a == a && edge.b == b)
-            {
+        for (const auto& edge : edges) {
+            if (edge.a == a && edge.b == b) {
                 return edge;
             }
         }

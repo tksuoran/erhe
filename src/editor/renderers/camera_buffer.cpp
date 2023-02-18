@@ -75,8 +75,7 @@ auto Camera_buffer::update(
     const glm::mat4 world_from_clip  = world_from_node * clip_from_camera.inverse_matrix();
     const glm::mat4 clip_from_world  = clip_from_camera.matrix() * camera_node.node_from_world();
 
-    if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
-    {
+    if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
         log_render->critical("camera buffer capacity {} exceeded", buffer.capacity_byte_count());
         ERHE_FATAL("camera buffer capacity exceeded");
     }

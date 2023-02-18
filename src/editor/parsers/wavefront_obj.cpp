@@ -139,8 +139,7 @@ auto parse_obj_geometry(
     // I dislike this big scope, I'd prefer just to
     // return {} but unfortunately having more than
     // one return kills named return value optimization.
-    if (opt_text.has_value())
-    {
+    if (opt_text.has_value()) {
         const std::string& text = opt_text.value();
 
         std::shared_ptr<erhe::geometry::Geometry> geometry{};
@@ -169,8 +168,7 @@ auto parse_obj_geometry(
         while (
             (line_pos != std::string::npos) ||
             (line_last_pos != std::string::npos)
-        )
-        {
+        ) {
             auto line = text.substr(line_last_pos, line_pos - line_last_pos);
             line.erase(
                 std::remove(
@@ -183,14 +181,12 @@ auto parse_obj_geometry(
 
             // Drop comments
             const auto coment_pos = line.find_first_of(comment);
-            if (coment_pos != std::string::npos)
-            {
+            if (coment_pos != std::string::npos) {
                 line.erase(line.begin() + coment_pos, line.end());
             }
 
             //log_parsers->trace("line: {}", line);
-            if (line.length() == 0)
-            {
+            if (line.length() == 0) {
                 line_last_pos = text.find_first_not_of(end_of_line, line_pos);
                 line_pos      = text.find_first_of(end_of_line, line_last_pos);
                 continue;
@@ -201,8 +197,7 @@ auto parse_obj_geometry(
             // process line
             std::string::size_type token_last_pos = line.find_first_not_of(delimiters, 0);
             std::string::size_type token_pos      = line.find_first_of    (delimiters, token_last_pos);
-            if (token_last_pos == std::string::npos || token_pos == std::string::npos)
-            {
+            if (token_last_pos == std::string::npos || token_pos == std::string::npos) {
                 line_last_pos = text.find_first_not_of(end_of_line, line_pos);
                 line_pos      = text.find_first_of(end_of_line, line_last_pos);
                 continue;
@@ -217,19 +212,15 @@ auto parse_obj_geometry(
             std::vector<int>   face_vertex_position_indices;
             std::vector<int>   face_vertex_texcoord_indices;
             std::vector<int>   face_vertex_normal_indices;
-            while ((token_pos != std::string::npos) || (token_last_pos != std::string::npos))
-            {
-                switch (command)
-                {
+            while ((token_pos != std::string::npos) || (token_last_pos != std::string::npos)) {
+                switch (command) {
                     //using enum Command;
-                    case Command::Object_name:
-                    {
+                    case Command::Object_name: {
                         // TODO Choose Geometry splitting based on o / g / s / mg
                         //      Currently fixed to use g
                         token_last_pos = line.find_first_not_of(end_of_line, token_pos);
                         token_pos      = line.find_first_of    (end_of_line, token_last_pos);
-                        if (token_last_pos != std::string::npos || token_pos != std::string::npos)
-                        {
+                        if (token_last_pos != std::string::npos || token_pos != std::string::npos) {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             geometry         = std::make_shared<erhe::geometry::Geometry>(arg_text);
                             point_positions  = geometry->point_attributes().create<glm::vec3>(c_point_locations);
@@ -243,12 +234,10 @@ auto parse_obj_geometry(
                         break;
                     }
 
-                    case Command::Group_name:
-                    {
+                    case Command::Group_name: {
                         token_last_pos = line.find_first_not_of(delimiters, token_pos);
                         token_pos      = line.find_first_of(end_of_line, token_last_pos);
-                        if (token_last_pos != std::string::npos || token_pos != std::string::npos)
-                        {
+                        if (token_last_pos != std::string::npos || token_pos != std::string::npos) {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             geometry         = std::make_shared<erhe::geometry::Geometry>(arg_text);
                             point_positions  = geometry->point_attributes().create<glm::vec3>(c_point_locations);
@@ -265,13 +254,11 @@ auto parse_obj_geometry(
 
                     case Command::Use_material:
                     case Command::Unknown:
-                    case Command::Material_library:
-                    {
+                    case Command::Material_library: {
                         // consume rest of the line for now
                         token_last_pos = line.find_first_not_of(end_of_line, token_pos);
                         token_pos      = line.find_first_of    (end_of_line, token_last_pos);
-                        if (token_last_pos != std::string::npos || token_pos != std::string::npos)
-                        {
+                        if (token_last_pos != std::string::npos || token_pos != std::string::npos) {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             //log_parsers->trace("arg: {}", arg_text);
                         }
@@ -304,8 +291,7 @@ auto parse_obj_geometry(
                     {
                         token_last_pos = line.find_first_not_of(delimiters, token_pos);
                         token_pos      = line.find_first_of    (delimiters, token_last_pos);
-                        if (token_last_pos != std::string::npos || token_pos != std::string::npos)
-                        {
+                        if (token_last_pos != std::string::npos || token_pos != std::string::npos) {
                             const auto  arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             const float value    = std::stof(arg_text);
                             //log_parsers->trace("arg: {}", arg_text);
@@ -315,31 +301,25 @@ auto parse_obj_geometry(
                         break;
                     }
 
-                    case Command::Face:
-                    {
+                    case Command::Face: {
                         token_last_pos = line.find_first_not_of(delimiters, token_pos);
                         token_pos      = line.find_first_of    (delimiters, token_last_pos);
-                        if (token_last_pos != std::string::npos || token_pos != std::string::npos)
-                        {
+                        if (token_last_pos != std::string::npos || token_pos != std::string::npos) {
                             const auto arg_text = line.substr(token_last_pos, token_pos - token_last_pos);
                             //log_parsers->trace("arg: {}", arg_text);
                             std::string::size_type subtoken_last_pos = arg_text.find_first_not_of(slash, 0);
                             std::string::size_type subtoken_pos      = arg_text.find_first_of(slash, subtoken_last_pos);
                             int subtoken_slot = 0;
-                            while ((subtoken_pos != std::string::npos) || (subtoken_last_pos != std::string::npos))
-                            {
+                            while ((subtoken_pos != std::string::npos) || (subtoken_last_pos != std::string::npos)) {
                                 const auto subtoken_text = arg_text.substr(subtoken_last_pos, subtoken_pos - subtoken_last_pos);
                                 //log_parsers->trace("subtoken: {}", subtoken_text);
-                                if (arg_text.length() > 0)
-                                {
+                                if (arg_text.length() > 0) {
                                     const int value = std::stoi(subtoken_text);
-                                    switch (subtoken_slot)
-                                    {
+                                    switch (subtoken_slot) {
                                         case 0: face_vertex_position_indices.push_back(value); break;
                                         case 1: face_vertex_texcoord_indices.push_back(value); break;
                                         case 2: face_vertex_normal_indices  .push_back(value); break;
-                                        default:
-                                        {
+                                        default: {
                                             //ERHE_FATAL("bad subtoken slot for wavefront obj parser face command");
                                             break;
                                         }
@@ -356,8 +336,7 @@ auto parse_obj_geometry(
                 }
             }
 
-            switch (command)
-            {
+            switch (command) {
                 //using enum Command;
                 case Command::Group_name:
                 case Command::Use_material:
@@ -365,16 +344,12 @@ auto parse_obj_geometry(
                 case Command::Material_library:
                 default:
                     break;
-                case Command::Vertex_position:
-                {
+                case Command::Vertex_position: {
                     //ZoneScopedN("position");
-                    if (float_args.size() >= 3)
-                    {
+                    if (float_args.size() >= 3) {
                         Expects(geometry);
-                        if (float_args.size() >= 6)
-                        {
-                            while (colors.size() < positions.size())
-                            {
+                        if (float_args.size() >= 6) {
+                            while (colors.size() < positions.size()) {
                                 colors.emplace_back(1.0f, 1.0f, 1.0f);
                             }
                             colors.emplace_back(float_args[3], float_args[4], float_args[5]);
@@ -391,11 +366,9 @@ auto parse_obj_geometry(
                     break;
                 }
 
-                case Command::Vertex_normal:
-                {
+                case Command::Vertex_normal: {
                     //ZoneScopedN("normal");
-                    if (float_args.size() == 3)
-                    {
+                    if (float_args.size() == 3) {
                         normals.emplace_back(float_args[0], float_args[1], float_args[2]);
                     }
                     //else
@@ -404,12 +377,10 @@ auto parse_obj_geometry(
                     //}
                     break;
                 }
-                case Command::Vertex_texture_coordinate:
-                {
+                case Command::Vertex_texture_coordinate: {
                     //ZoneScopedN("texcoord");
                     // TODO support 1 / 3
-                    if (float_args.size() == 2)
-                    {
+                    if (float_args.size() == 2) {
                         texcoords.emplace_back(float_args[0], float_args[1]);
                     }
                     //else
@@ -418,15 +389,13 @@ auto parse_obj_geometry(
                     //}
                     break;
                 }
-                case Command::Face:
-                {
+                case Command::Face: {
                     //ZoneScopedN("face");
                     Expects(geometry);
 
                     const Polygon_id polygon_id   = geometry->make_polygon();
                     const int        corner_count = static_cast<int>(face_vertex_position_indices.size());
-                    for (int i = 0; i < corner_count; ++i)
-                    {
+                    for (int i = 0; i < corner_count; ++i) {
                         const int obj_vertex_index = face_vertex_position_indices[i];
                         const int position_index =
                             (obj_vertex_index > 0)
@@ -437,12 +406,10 @@ auto parse_obj_geometry(
                         // Each erhe::geometry Geometry has it's own namespace for Point_id.
                         // This maps OBJ vertex indices to geometry Point_id.
                         constexpr auto null_point = std::numeric_limits<Point_id>::max();
-                        while (static_cast<int>(obj_point_to_geometry_point.size()) <= position_index)
-                        {
+                        while (static_cast<int>(obj_point_to_geometry_point.size()) <= position_index) {
                             obj_point_to_geometry_point.push_back(null_point);
                         }
-                        if (obj_point_to_geometry_point[position_index] == null_point)
-                        {
+                        if (obj_point_to_geometry_point[position_index] == null_point) {
                             obj_point_to_geometry_point[position_index] = geometry->make_point();
                         }
 
@@ -453,13 +420,11 @@ auto parse_obj_geometry(
 
                         point_positions->put(point_id, positions[position_index]);
 
-                        if (has_vertex_colors)
-                        {
+                        if (has_vertex_colors) {
                             point_colors->put(point_id, colors[position_index]);
                         }
 
-                        if (i < static_cast<int>(face_vertex_texcoord_indices.size()))
-                        {
+                        if (i < static_cast<int>(face_vertex_texcoord_indices.size())) {
                             const int obj_texcoord_index = face_vertex_texcoord_indices[i];
                             const int texcoord_index =
                                 (obj_texcoord_index > 0)
@@ -469,8 +434,7 @@ auto parse_obj_geometry(
                             corner_texcoords->put(corner_id, texcoords[texcoord_index]);
                         }
 
-                        if (i < static_cast<int>(face_vertex_normal_indices.size()))
-                        {
+                        if (i < static_cast<int>(face_vertex_normal_indices.size())) {
                             const int obj_normal_index = face_vertex_normal_indices[i];
                             const int normal_index =
                                 (obj_normal_index > 0)
@@ -487,8 +451,7 @@ auto parse_obj_geometry(
             line_pos = text.find_first_of(end_of_line, line_last_pos);
         }
 
-        for (auto g : result)
-        {
+        for (auto g : result) {
             ERHE_PROFILE_SCOPE("post processing");
 
             g->make_point_corners();
@@ -503,23 +466,3 @@ auto parse_obj_geometry(
 }
 
 } // namespace editor
-
-
-// mtllib teapot.mtl
-//
-// g Mesh1 Teapot Model
-//
-// usemtl FrontColor
-// v 0 2.4 -1.4
-// vt -0.109561 1.71761
-// vn 1.39147e-17 -0.369129 0.929378
-// v 0.229712 2.4 -1.38197
-// vt 0.120858 1.71761
-// vn -0.145716 -0.369332 0.917802
-// v 0.227403 2.43544 -1.36807
-// vt 0.119643 1.75572
-// vn -0.150341 -0.284166 0.946915
-// v 0 2.43544 -1.38593
-// vt -0.108459 1.75572
-// vn -1.64188e-16 -0.284002 0.958824
-// f 1/1/1 2/2/2 3/3/3 4/4/4

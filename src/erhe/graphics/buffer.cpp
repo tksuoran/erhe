@@ -192,8 +192,7 @@ auto Buffer::allocate_bytes(
 
     const std::lock_guard<std::mutex> lock{m_allocate_mutex};
 
-    while ((m_next_free_byte % alignment) != 0)
-    {
+    while ((m_next_free_byte % alignment) != 0) {
         ++m_next_free_byte;
     }
     const auto offset = m_next_free_byte;
@@ -281,8 +280,7 @@ auto Buffer::map_bytes(
             m_map_buffer_access_mask
         )
     );
-    if (map_pointer == nullptr)
-    {
+    if (map_pointer == nullptr) {
         log_buffer->warn("glMapNamedBufferRange() returned nullptr");
         GLint is_buffer = gl::is_buffer(gl_name());
         log_buffer->warn("is_buffer = {}", is_buffer);
@@ -406,8 +404,7 @@ void Buffer::dump() const noexcept
 
     uint32_t* data {nullptr};
     bool      unmap{false};
-    if (mapped == GL_FALSE)
-    {
+    if (mapped == GL_FALSE) {
         data = reinterpret_cast<uint32_t*>(
             gl::map_named_buffer_range(
                 gl_name(),
@@ -420,8 +417,7 @@ void Buffer::dump() const noexcept
     }
 
     std::vector<uint32_t> storage;
-    if (data == nullptr)
-    {
+    if (data == nullptr) {
         // This happens if we already had buffer mapped
         storage.resize(word_count + 1);
         data = storage.data();
@@ -429,24 +425,20 @@ void Buffer::dump() const noexcept
     }
 
     std::stringstream ss;
-    for (std::size_t i = 0; i < word_count; ++i)
-    {
-        if (i % 16u == 0)
-        {
+    for (std::size_t i = 0; i < word_count; ++i) {
+        if (i % 16u == 0) {
             ss << fmt::format("%08x: ", static_cast<unsigned int>(i));
         }
 
         ss << fmt::format("%08x ", data[i]);
 
-        if (i % 16u == 15u)
-        {
+        if (i % 16u == 15u) {
             ss << "\n";
         }
     }
     log_buffer->trace("\n{}", ss.str());
 
-    if (unmap)
-    {
+    if (unmap) {
         gl::unmap_named_buffer(gl_name());
     }
 }
@@ -462,8 +454,7 @@ void Buffer::flush_and_unmap_bytes(const std::size_t byte_count) noexcept
 
     // If explicit is not selected, unmap will do full flush
     // so we do manual flush only if explicit is selected
-    if (flush_explicit)
-    {
+    if (flush_explicit) {
         flush_bytes(0, byte_count);
     }
 

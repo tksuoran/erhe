@@ -24,14 +24,12 @@ void Create_box::render_preview(
 )
 {
     const Render_context& render_context = preview_settings.render_context;
-    if (render_context.scene_view == nullptr)
-    {
+    if (render_context.scene_view == nullptr) {
         return;
     }
 
     const auto& view_camera = render_context.scene_view->get_camera();
-    if (view_camera)
-    {
+    if (view_camera) {
         auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
         line_renderer.add_cube(
             preview_settings.transform.matrix(),

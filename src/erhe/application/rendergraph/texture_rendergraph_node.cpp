@@ -50,8 +50,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
 ) const -> std::shared_ptr<erhe::graphics::Texture>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
-    if (key != m_input_key)
-    {
+    if (key != m_input_key) {
         log_rendergraph->error(
             "Texture_rendergraph_node::get_consumer_input_texture({}, key = '{}', depth = {}) key mismatch (expected '{}')",
             c_str(resource_routing),
@@ -62,8 +61,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
         return std::shared_ptr<erhe::graphics::Texture>{};
     }
 
-    if (m_enabled)
-    {
+    if (m_enabled) {
         return m_color_texture;
     }
 
@@ -77,8 +75,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
 {
     ERHE_VERIFY(depth < rendergraph_max_depth);
-    if (key != m_input_key)
-    {
+    if (key != m_input_key) {
         log_rendergraph->error(
             "Texture_rendergraph_node::get_consumer_input_texture({}, key = '{}', depth = {}) key mismatch (expected '{}')",
             c_str(resource_routing),
@@ -89,8 +86,7 @@ Texture_rendergraph_node::Texture_rendergraph_node(
         return std::shared_ptr<erhe::graphics::Framebuffer>{};
     }
 
-    if (m_enabled)
-    {
+    if (m_enabled) {
         return m_framebuffer;
     }
 
@@ -135,8 +131,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
     if (
         (output_viewport.width  < 1) ||
         (output_viewport.height < 1)
-    )
-    {
+    ) {
         return;
     }
 
@@ -145,8 +140,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
         !m_color_texture ||
         (m_color_texture->width () != output_viewport.width ) ||
         (m_color_texture->height() != output_viewport.height)
-    )
-    {
+    ) {
         log_rendergraph->info(
             "Resizing Texture_rendergraph_node '{}' to {} x {}",
             get_name(),
@@ -179,12 +173,9 @@ void Texture_rendergraph_node::execute_rendergraph_node()
             &clear_value[0]
         );
 
-        if (m_depth_stencil_format == gl::Internal_format{0})
-        {
+        if (m_depth_stencil_format == gl::Internal_format{0}) {
             m_depth_stencil_renderbuffer.reset();
-        }
-        else
-        {
+        } else {
             m_depth_stencil_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
                 m_depth_stencil_format,
                 output_viewport.width,
@@ -203,17 +194,14 @@ void Texture_rendergraph_node::execute_rendergraph_node()
                 m_color_texture.get()
             );
 
-            if (m_depth_stencil_renderbuffer)
-            {
-                if (gl_helpers::has_depth(m_depth_stencil_format))
-                {
+            if (m_depth_stencil_renderbuffer) {
+                if (gl_helpers::has_depth(m_depth_stencil_format)) {
                     create_info.attach(
                         gl::Framebuffer_attachment::depth_attachment,
                         m_depth_stencil_renderbuffer.get()
                     );
                 }
-                if (gl_helpers::has_stencil(m_depth_stencil_format))
-                {
+                if (gl_helpers::has_stencil(m_depth_stencil_format)) {
                     create_info.attach(
                         gl::Framebuffer_attachment::stencil_attachment,
                         m_depth_stencil_renderbuffer.get()
@@ -236,8 +224,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
                 gl::Color_buffer::color_attachment0
             );
 
-            if (!m_framebuffer->check_status())
-            {
+            if (!m_framebuffer->check_status()) {
                 log_rendergraph->error("{} Texture_rendergraph_node framebuffer not complete", get_name());
                 m_framebuffer.reset();
             }

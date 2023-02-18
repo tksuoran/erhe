@@ -32,44 +32,36 @@ auto Mouse_button_binding::on_button(
 {
     auto* const command = get_command();
 
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         log_input->trace("  binding command {} is disabled", command->get_name());
         return false;
     }
 
-    if (!g_commands->accept_mouse_command(command))
-    {
+    if (!g_commands->accept_mouse_command(command)) {
         log_input->trace(
             "  command not accepted for mouse command{}",
             command->get_name()
         );
         // Paranoid check
-        if (command->get_command_state() != State::Inactive)
-        {
+        if (command->get_command_state() != State::Inactive) {
             command->set_inactive();
         }
         return false;
     }
 
-    if (input.button_pressed)
-    {
-        if (command->get_command_state() == State::Inactive)
-        {
+    if (input.button_pressed) {
+        if (command->get_command_state() == State::Inactive) {
             log_input->trace("  {}->try_ready()", command->get_name());
             command->try_ready();
         }
-        if (!m_trigger_on_pressed)
-        {
+        if (!m_trigger_on_pressed) {
             return false;
         }
     }
-    if (!input.button_pressed || m_trigger_on_pressed)
-    {
+    if (!input.button_pressed || m_trigger_on_pressed) {
         bool consumed{false};
         const auto command_state = command->get_command_state();
-        if (command_state == State::Ready)
-        {
+        if (command_state == State::Ready) {
             log_input->trace("  {}->try_call()", command->get_name());
             consumed = command->try_call_with_input(input);
             log_input_event_consumed->info(
@@ -84,9 +76,7 @@ auto Mouse_button_binding::on_button(
                 consumed ? "consumed" : "did not consume",
                 input.button_pressed ? "pressed" : "released"
             );
-        }
-        else
-        {
+        } else {
             log_input->trace(
                 "  command {} is not in ready state, state = {}",
                 command->get_name(),
@@ -106,14 +96,12 @@ auto Mouse_button_binding::on_motion(Input_arguments& input) -> bool
 
     auto* const command = get_command();
 
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled){
         return false;
     }
 
     // Motion when not in Inactive state -> transition to inactive state
-    if (command->get_command_state() != State::Inactive)
-    {
+    if (command->get_command_state() != State::Inactive) {
         command->set_inactive();
     }
 

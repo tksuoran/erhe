@@ -126,8 +126,7 @@ void Id_renderer::initialize_component()
     auto ini = erhe::application::get_ini("erhe.ini", "id_renderer");
     ini->get("enabled", config.enabled);
 
-    if (!config.enabled)
-    {
+    if (!config.enabled) {
         log_render->info("Id renderer disabled due to erhe.ini setting");
         return;
     }
@@ -172,8 +171,7 @@ void Id_renderer::create_id_frame_resources()
 {
     ERHE_PROFILE_FUNCTION
 
-    for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
-    {
+    for (size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_id_frame_resources.emplace_back(slot);
     }
 }
@@ -185,8 +183,7 @@ auto Id_renderer::current_id_frame_resources() -> Id_frame_resources&
 
 void Id_renderer::next_frame()
 {
-    if (!config.enabled)
-    {
+    if (!config.enabled) {
         return;
     }
 
@@ -201,21 +198,18 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!config.enabled)
-    {
+    if (!config.enabled) {
         return;
     }
 
     ERHE_VERIFY(m_use_renderbuffers != m_use_textures);
 
-    if (m_use_renderbuffers)
-    {
+    if (m_use_renderbuffers) {
         if (
             !m_color_renderbuffer ||
             (m_color_renderbuffer->width()  != static_cast<unsigned int>(viewport.width)) ||
             (m_color_renderbuffer->height() != static_cast<unsigned int>(viewport.height))
-        )
-        {
+        ) {
             m_color_renderbuffer = std::make_unique<Renderbuffer>(
                 gl::Internal_format::rgba8,
                 viewport.width,
@@ -236,14 +230,12 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
         }
     }
 
-    if (m_use_textures)
-    {
+    if (m_use_textures) {
         if (
             !m_color_texture ||
             (m_color_texture->width()  != viewport.width) ||
             (m_color_texture->height() != viewport.height)
-        )
-        {
+        ) {
             m_color_texture = std::make_unique<Texture>(
                 Texture::Create_info{
                     .target          = gl::Texture_target::texture_2d,
@@ -303,8 +295,7 @@ void Id_renderer::render(
         erhe::primitive::Primitive_mode::polygon_fill,
         id_filter
     );
-    if (draw_indirect_buffer_range.draw_indirect_count == 0)
-    {
+    if (draw_indirect_buffer_range.draw_indirect_count == 0) {
         return;
     }
 
@@ -335,8 +326,7 @@ void Id_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!config.enabled)
-    {
+    if (!config.enabled) {
         return;
     }
 
@@ -353,8 +343,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         (camera == nullptr)   ||
         (viewport.width == 0) ||
         (viewport.height == 0)
-    )
-    {
+    ) {
         return;
     }
 
@@ -403,8 +392,7 @@ void Id_renderer::render(const Render_parameters& parameters)
             gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, m_framebuffer->gl_name());
 #if !defined(NDEBUG)
             const auto status = gl::check_named_framebuffer_status(m_framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-            if (status != gl::Framebuffer_status::framebuffer_complete)
-            {
+            if (status != gl::Framebuffer_status::framebuffer_complete) {
                 log_framebuffer->error("read framebuffer status = {}", c_str(status));
             }
             ERHE_VERIFY(status == gl::Framebuffer_status::framebuffer_complete);
@@ -412,8 +400,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         }
         gl::disable    (gl::Enable_cap::framebuffer_srgb);
         gl::viewport   (viewport.x, viewport.y, viewport.width, viewport.height);
-        if (m_use_scissor)
-        {
+        if (m_use_scissor) {
             gl::scissor(idr.x_offset, idr.y_offset, s_extent, s_extent);
             gl::enable (gl::Enable_cap::scissor_test);
         }
@@ -424,8 +411,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     m_primitive_buffers->reset_id_ranges();
 
     erhe::graphics::g_opengl_state_tracker->execute(m_pipeline);
-    for (auto meshes : content_mesh_spans)
-    {
+    for (auto meshes : content_mesh_spans) {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_content)
         render(meshes);
     }
@@ -435,8 +421,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_tool)
         erhe::graphics::g_opengl_state_tracker->execute(m_selective_depth_clear_pipeline);
         gl::depth_range(0.0f, 0.0f);
-        for (auto mesh_spans : tool_mesh_spans)
-        {
+        for (auto mesh_spans : tool_mesh_spans) {
             render(mesh_spans);
         }
     }
@@ -448,8 +433,7 @@ void Id_renderer::render(const Render_parameters& parameters)
         erhe::graphics::g_opengl_state_tracker->execute(m_pipeline);
         gl::depth_range(0.0f, 1.0f);
 
-        for (auto meshes : tool_mesh_spans)
-        {
+        for (auto meshes : tool_mesh_spans) {
             render(meshes);
         }
     }
@@ -457,8 +441,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_read)
 
-        if (m_use_scissor)
-        {
+        if (m_use_scissor) {
             gl::disable(gl::Enable_cap::scissor_test);
         }
         gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, idr.pixel_pack_buffer.gl_name());
@@ -506,29 +489,24 @@ auto Id_renderer::get(
     float&    depth
 ) -> bool
 {
-    if (m_id_frame_resources.empty())
-    {
+    if (m_id_frame_resources.empty()) {
         return false;
     }
     int slot = static_cast<int>(m_current_id_frame_resource_slot);
 
-    for (size_t i = 0; i < s_frame_resources_count; ++i)
-    {
+    for (size_t i = 0; i < s_frame_resources_count; ++i) {
         --slot;
-        if (slot < 0)
-        {
+        if (slot < 0) {
             slot = s_frame_resources_count - 1;
         }
 
         auto& idr = m_id_frame_resources[slot];
 
-        if (idr.state == Id_frame_resources::State::Waiting_for_read)
-        {
+        if (idr.state == Id_frame_resources::State::Waiting_for_read) {
             GLint sync_status = GL_UNSIGNALED;
             gl::get_sync_iv(idr.sync, gl::Sync_parameter_name::sync_status, 4, nullptr, &sync_status);
 
-            if (sync_status == GL_SIGNALED)
-            {
+            if (sync_status == GL_SIGNALED) {
                 gl::bind_buffer(gl::Buffer_target::pixel_pack_buffer, idr.pixel_pack_buffer.gl_name());
 
                 auto gpu_data = idr.pixel_pack_buffer.map();
@@ -538,14 +516,11 @@ auto Id_renderer::get(
             }
         }
 
-        if (idr.state == Id_frame_resources::State::Read_complete)
-        {
-            if ((x >= idr.x_offset) && (y >= idr.y_offset))
-            {
+        if (idr.state == Id_frame_resources::State::Read_complete) {
+            if ((x >= idr.x_offset) && (y >= idr.y_offset)) {
                 const int x_ = x - idr.x_offset;
                 const int y_ = y - idr.y_offset;
-                if ((static_cast<size_t>(x_) < s_extent) && (static_cast<size_t>(y_) < s_extent))
-                {
+                if ((static_cast<size_t>(x_) < s_extent) && (static_cast<size_t>(y_) < s_extent)) {
                     const uint32_t       stride    = s_extent * 4;
                     const uint8_t        r         = idr.data[x_ * 4 + y_ * stride + 0];
                     const uint8_t        g         = idr.data[x_ * 4 + y_ * stride + 1];
@@ -568,19 +543,16 @@ auto Id_renderer::get(
 {
     Id_query_result result;
     const bool ok = get(x, y, result.id, result.depth);
-    if (!ok)
-    {
+    if (!ok) {
         return result;
     }
     result.valid = true;
 
-    for (auto& r : m_primitive_buffers->id_ranges())
-    {
+    for (auto& r : m_primitive_buffers->id_ranges()) {
         if (
             (result.id >= r.offset) &&
             (result.id < (r.offset + r.length))
-        )
-        {
+        ) {
             result.mesh                 = r.mesh;
             result.mesh_primitive_index = r.primitive_index;
             result.local_index          = result.id - r.offset;

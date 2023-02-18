@@ -31,8 +31,7 @@ void Vertex_input_state::on_thread_enter()
     this_thread_id_ss << std::this_thread::get_id();
     const std::string this_thread_id_string = this_thread_id_ss.str();
 
-    for (auto* vertex_input_state : s_all_vertex_input_states)
-    {
+    for (auto* vertex_input_state : s_all_vertex_input_states) {
         std::stringstream owner_thread_ss;
         owner_thread_ss << vertex_input_state->m_owner_thread;
         log_threads->trace(
@@ -41,8 +40,7 @@ void Vertex_input_state::on_thread_enter()
             fmt::ptr(vertex_input_state),
             owner_thread_ss.str() //vertex_input_state->m_owner_thread
         );
-        if (vertex_input_state->m_owner_thread == std::thread::id{})
-        {
+        if (vertex_input_state->m_owner_thread == std::thread::id{}) {
             vertex_input_state->create();
         }
     }
@@ -57,8 +55,7 @@ void Vertex_input_state::on_thread_exit()
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << this_thread_id;
     const std::string this_thread_id_string = this_thread_id_ss.str();
-    for (auto* vertex_input_state : s_all_vertex_input_states)
-    {
+    for (auto* vertex_input_state : s_all_vertex_input_states) {
         std::stringstream owner_thread_ss;
         owner_thread_ss << vertex_input_state->m_owner_thread;
         log_threads->trace(
@@ -67,8 +64,7 @@ void Vertex_input_state::on_thread_exit()
             fmt::ptr(vertex_input_state),
             owner_thread_ss.str() // vertex_input_state->m_owner_thread
         );
-        if (vertex_input_state->m_owner_thread == this_thread_id)
-        {
+        if (vertex_input_state->m_owner_thread == this_thread_id) {
             vertex_input_state->reset();
         }
     }
@@ -112,8 +108,7 @@ Vertex_input_state::Vertex_input_state(Vertex_input_state_data&& create_info)
 
 Vertex_input_state::~Vertex_input_state() noexcept
 {
-    if (!m_gl_vertex_array.has_value())
-    {
+    if (!m_gl_vertex_array.has_value()) {
         return;
     }
 
@@ -154,8 +149,7 @@ void Vertex_input_state::create()
     this_thread_id_ss << std::this_thread::get_id();
     //log_threads.trace("{}: create @ {}\n", std::this_thread::get_id(), fmt::ptr(this));
     log_threads->trace("{}: create @ {}", this_thread_id_ss.str(), fmt::ptr(this));
-    if (m_gl_vertex_array.has_value())
-    {
+    if (m_gl_vertex_array.has_value()) {
         ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         return;
     }
@@ -183,21 +177,17 @@ void Vertex_input_state::update()
         const auto ibo_gl_name = (m_data.index_buffer != nullptr)
             ? m_data.index_buffer->gl_name()
             : 0;
-        if (ibo_gl_name != 0)
-        {
+        if (ibo_gl_name != 0) {
             gl::vertex_array_element_buffer(gl_name(), ibo_gl_name);
         }
     }
 
-    for (const auto& attribute : m_data.attributes)
-    {
-        if (attribute.vertex_buffer == nullptr)
-        {
+    for (const auto& attribute : m_data.attributes) {
+        if (attribute.vertex_buffer == nullptr) {
             log_vertex_attribute_mappings->error("bad vertex input state: vbo == nullptr");
             continue;
         }
-        if (attribute.layout_location >= max_attribute_count)
-        {
+        if (attribute.layout_location >= max_attribute_count) {
             log_vertex_attribute_mappings->error("bad vertex input state: layout location >= max attribute count");
             continue;
         }
@@ -210,8 +200,7 @@ void Vertex_input_state::update()
             attribute.stride
         );
 
-        switch (attribute.shader_type)
-        {
+        switch (attribute.shader_type) {
             //using enum gl::Attribute_type;
             case gl::Attribute_type::bool_:
             case gl::Attribute_type::bool_vec2:
@@ -224,8 +213,7 @@ void Vertex_input_state::update()
             case gl::Attribute_type::unsigned_int:
             case gl::Attribute_type::unsigned_int_vec2:
             case gl::Attribute_type::unsigned_int_vec3:
-            case gl::Attribute_type::unsigned_int_vec4:
-            {
+            case gl::Attribute_type::unsigned_int_vec4: {
                 gl::vertex_array_attrib_i_format(
                     gl_name(),
                     attribute.layout_location,
@@ -248,8 +236,7 @@ void Vertex_input_state::update()
             case gl::Attribute_type::float_mat3x4:
             case gl::Attribute_type::float_mat4:
             case gl::Attribute_type::float_mat4x2:
-            case gl::Attribute_type::float_mat4x3:
-            {
+            case gl::Attribute_type::float_mat4x3: {
                 gl::vertex_array_attrib_format(
                     gl_name(),
                     attribute.layout_location,
@@ -274,8 +261,7 @@ void Vertex_input_state::update()
             case gl::Attribute_type::double_mat3x4:
             case gl::Attribute_type::double_mat4:
             case gl::Attribute_type::double_mat4x2:
-            case gl::Attribute_type::double_mat4x3:
-            {
+            case gl::Attribute_type::double_mat4x3: {
                 gl::vertex_array_attrib_l_format(
                     gl_name(),
                     attribute.layout_location,
@@ -286,8 +272,7 @@ void Vertex_input_state::update()
                 break;
             }
 
-            default:
-            {
+            default: {
                 ERHE_FATAL("Bad vertex attrib pointer type");
             }
         }
@@ -317,8 +302,7 @@ void Vertex_input_state_tracker::execute(const Vertex_input_state* const state)
     const unsigned int name = (state != nullptr)
         ? state->gl_name()
         : 0;
-    if (m_last == name)
-    {
+    if (m_last == name) {
         return;
     }
     gl::bind_vertex_array(name);

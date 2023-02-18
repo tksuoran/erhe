@@ -46,8 +46,7 @@ auto is_enabled(const Command command) -> bool
 
 void check_version(const Command command, const int min_version)
 {{
-    if (g_version >= min_version)
-    {{
+    if (g_version >= min_version) {{
         enable(command);
         return;
     }}
@@ -55,8 +54,7 @@ void check_version(const Command command, const int min_version)
 
 void check_extension(const Command command, const Extension extension)
 {{
-    if (is_enabled(extension))
-    {{
+    if (is_enabled(extension)) {{
         enable(command);
         return;
     }}
@@ -64,8 +62,7 @@ void check_extension(const Command command, const Extension extension)
 
 //void check_alias_command(Command alias_command, Command command)
 //{{
-//    if (is_enabled(command))
-//    {{
+//    if (is_enabled(command)) {{
 //        enable(alias_command);
 //        return;
 //    }}
@@ -75,8 +72,7 @@ void check_extension(const Command command, const Extension extension)
 
 auto c_str(const Extension extension) -> const char*
 {{
-    switch (extension)
-    {{
+    switch (extension) {{
 {EXTENSION_CASE_ENTRIES}
         default: return "?";
     }}
@@ -84,8 +80,7 @@ auto c_str(const Extension extension) -> const char*
 
 auto c_str(const Command command) -> const char*
 {{
-    switch (command)
-    {{
+    switch (command) {{
 {COMMAND_CASE_ENTRIES}
         default: return "?";
     }}
@@ -94,8 +89,7 @@ auto c_str(const Command command) -> const char*
 auto parse_extension(const std::string& extension_name) -> Extension
 {{
     const auto i = g_extension_map.find(extension_name);
-    if (i != g_extension_map.end())
-    {{
+    if (i != g_extension_map.end()) {{
         return i->second;
     }}
     return Extension::Extension_None;
@@ -104,8 +98,7 @@ auto parse_extension(const std::string& extension_name) -> Extension
 auto parse_command(const std::string& command_name) -> Command
 {{
     const auto i = g_command_map.find(command_name);
-    if (i != g_command_map.end())
-    {{
+    if (i != g_command_map.end()) {{
         return i->second;
     }}
     return Command::Command_None;
@@ -123,8 +116,7 @@ void command_info_init(
 {COMMAND_MAP_ENTRIES}
 
     g_version = version;
-    for (const auto& extension_str : extensions)
-    {{
+    for (const auto& extension_str : extensions) {{
         const auto extension = parse_extension(extension_str);
         enable(extension);
     }}

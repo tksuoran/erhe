@@ -54,10 +54,8 @@ void Post_processing_window::imgui()
     //ImGui::Checkbox("Linear", &m_linear);
 
     //const auto discrete = kernel_binom(m_taps, m_expand, m_reduce);
-    //if (ImGui::TreeNodeEx("Discrete", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
-    //{
-    //    for (size_t i = 0; i < discrete.weights.size(); ++i)
-    //    {
+    //if (ImGui::TreeNodeEx("Discrete", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+    //    for (size_t i = 0; i < discrete.weights.size(); ++i) {
     //        ImGui::Text(
     //            "W: %.3f O: %.3f",
     //            discrete.weights.at(i),
@@ -66,13 +64,10 @@ void Post_processing_window::imgui()
     //    }
     //    ImGui::TreePop();
     //}
-    //if (m_linear)
-    //{
+    //if (m_linear) {
     //    const auto linear = kernel_binom_linear(discrete);
-    //    if (ImGui::TreeNodeEx("Linear", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
-    //    {
-    //        for (size_t i = 0; i < linear.weights.size(); ++i)
-    //        {
+    //    if (ImGui::TreeNodeEx("Linear", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+    //        for (size_t i = 0; i < linear.weights.size(); ++i) {
     //            ImGui::Text(
     //                "W: %.3f O: %.3f",
     //                linear.weights.at(i),
@@ -84,27 +79,23 @@ void Post_processing_window::imgui()
     //}
 
     const auto viewport_window = g_viewport_windows->last_window();
-    if (!viewport_window)
-    {
+    if (!viewport_window) {
         return;
     }
     const auto  post_processing_node = viewport_window->get_post_processing_node();
     const auto& downsample_nodes     = post_processing_node->get_downsample_nodes();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-    for (auto& node : downsample_nodes)
-    {
+    for (auto& node : downsample_nodes) {
         if (
             !node.texture                ||
             (node.texture->width () < 1) ||
             (node.texture->height() < 1)
-        )
-        {
+        ) {
             continue;
         }
 
-        if (node.axis == 0)
-        {
+        if (node.axis == 0) {
             ImGui::SameLine();
         }
         image(

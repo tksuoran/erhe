@@ -104,8 +104,7 @@ public:
             static_cast<coordinate_t>(this->x + hex_neighbors[direction].x),
             static_cast<coordinate_t>(this->y + hex_neighbors[direction].y)
         };
-        if (res.is_even() && (hex_neighbors[direction].l == -1))
-        {
+        if (res.is_even() && (hex_neighbors[direction].l == -1)) {
             res.y -= 1;
         }
         return res;
@@ -127,8 +126,7 @@ inline auto operator!=(const Tile_coordinate& lhs, const Tile_coordinate& rhs) -
 
 inline auto operator<(const Tile_coordinate& lhs, const Tile_coordinate& rhs) -> bool
 {
-    if (lhs.x != rhs.x)
-    {
+    if (lhs.x != rhs.x) {
         return lhs.x < rhs.x;
     }
     return lhs.y < rhs.y;
@@ -136,8 +134,7 @@ inline auto operator<(const Tile_coordinate& lhs, const Tile_coordinate& rhs) ->
 
 inline auto operator>(const Tile_coordinate& lhs, const Tile_coordinate& rhs) -> bool
 {
-    if (lhs.x != rhs.x)
-    {
+    if (lhs.x != rhs.x) {
         return lhs.x > rhs.x;
     }
     return lhs.y > rhs.y;

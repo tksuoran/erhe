@@ -22,8 +22,7 @@ Map_primary_brush_command::Map_primary_brush_command()
 
 void Map_primary_brush_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive)
-    {
+    if (get_command_state() != erhe::application::State::Inactive) {
         return;
     }
 
@@ -32,13 +31,11 @@ void Map_primary_brush_command::try_ready()
 
 auto Map_primary_brush_command::try_call() -> bool
 {
-    if (get_command_state() == erhe::application::State::Ready)
-    {
+    if (get_command_state() == erhe::application::State::Ready) {
         set_active();
     }
 
-    if (get_command_state() != erhe::application::State::Active)
-    {
+    if (get_command_state() != erhe::application::State::Active) {
         return false;
     }
 
@@ -127,8 +124,7 @@ void Map_editor::hover(glm::vec2 position_in_root)
 void Map_editor::primary_brush()
 {
     const auto tile_position_opt = m_hover_tile_position; //g_map_window->pixel_to_tile(pixel_position);
-    if (!tile_position_opt.has_value())
-    {
+    if (!tile_position_opt.has_value()) {
         return;
     }
     const auto tile_position = tile_position_opt.value();
@@ -157,13 +153,10 @@ void Map_editor::terrain_palette()
     ImGui::Text("%s", terrain_type.name.c_str());
 
     terrain_tile_t terrain = 0;
-    for (int ty = 0; ty < Base_tiles::height; ++ty)
-    {
-        for (int tx = 0; tx < Base_tiles::width; ++tx)
-        {
+    for (int ty = 0; ty < Base_tiles::height; ++ty) {
+        for (int tx = 0; tx < Base_tiles::width; ++tx) {
             const bool pressed = g_map_window->tile_image(terrain, 2);
-            if (pressed)
-            {
+            if (pressed) {
                 m_left_brush = terrain;
             }
             ++terrain;
@@ -182,8 +175,7 @@ void Map_editor::render()
     if (
         !m_hover_tile_position.has_value() ||
         m_left_brush >= terrain_shapes.size()
-    )
-    {
+    ) {
         return;
     }
 

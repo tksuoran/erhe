@@ -43,21 +43,17 @@ gl::Program_interface program_interfaces[]
     const gl::Program_interface interface
 ) -> std::optional<gl::Program_interface>
 {
-    switch (interface)
-    {
+    switch (interface) {
         //using enum gl::Program_interface;
-        case gl::Program_interface::uniform_block:
-        {
+        case gl::Program_interface::uniform_block: {
             return gl::Program_interface::uniform;
         }
 
-        case gl::Program_interface::shader_storage_block:
-        {
+        case gl::Program_interface::shader_storage_block: {
             return gl::Program_interface::buffer_variable;
         }
 
-        default:
-        {
+        default: {
             return {};
         }
     }
@@ -117,13 +113,11 @@ template <typename T>
     const gl::Program_interface         interface
 ) -> bool
 {
-    switch (property)
-    {
+    switch (property) {
         //using enum gl::Program_resource_property;
         case gl::Program_resource_property::active_variables:
         case gl::Program_resource_property::buffer_binding:
-        case gl::Program_resource_property::num_active_variables:
-        {
+        case gl::Program_resource_property::num_active_variables: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -135,8 +129,7 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::array_size:
-        {
+        case gl::Program_resource_property::array_size: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -158,8 +151,7 @@ template <typename T>
         case gl::Program_resource_property::array_stride:
         case gl::Program_resource_property::block_index:
         case gl::Program_resource_property::is_row_major:
-        case gl::Program_resource_property::matrix_stride:
-        {
+        case gl::Program_resource_property::matrix_stride: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -169,13 +161,11 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::atomic_counter_buffer_index:
-        {
+        case gl::Program_resource_property::atomic_counter_buffer_index: {
             return interface == gl::Program_interface::uniform;
         }
 
-        case gl::Program_resource_property::buffer_data_size:
-        {
+        case gl::Program_resource_property::buffer_data_size: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -187,8 +177,7 @@ template <typename T>
         }
 
         case gl::Program_resource_property::num_compatible_subroutines:
-        case gl::Program_resource_property::compatible_subroutines:
-        {
+        case gl::Program_resource_property::compatible_subroutines: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -202,8 +191,7 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::is_per_patch:
-        {
+        case gl::Program_resource_property::is_per_patch: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -213,8 +201,7 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::location:
-        {
+        case gl::Program_resource_property::location: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -231,8 +218,7 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::location_component:
-        {
+        case gl::Program_resource_property::location_component: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -242,8 +228,7 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::location_index:
-        {
+        case gl::Program_resource_property::location_index: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -252,8 +237,7 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::name_length:
-        {
+        case gl::Program_resource_property::name_length: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -282,8 +266,7 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::offset:
-        {
+        case gl::Program_resource_property::offset: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -299,8 +282,7 @@ template <typename T>
         case gl::Program_resource_property::referenced_by_tess_evaluation_shader:
         case gl::Program_resource_property::referenced_by_geometry_shader:
         case gl::Program_resource_property::referenced_by_fragment_shader:
-        case gl::Program_resource_property::referenced_by_compute_shader:
-        {
+        case gl::Program_resource_property::referenced_by_compute_shader: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -315,24 +297,20 @@ template <typename T>
             );
         }
 
-        case gl::Program_resource_property::transform_feedback_buffer_index:
-        {
+        case gl::Program_resource_property::transform_feedback_buffer_index: {
             return interface == gl::Program_interface::transform_feedback_varying;
         }
 
-        case gl::Program_resource_property::transform_feedback_buffer_stride:
-        {
+        case gl::Program_resource_property::transform_feedback_buffer_stride: {
             return interface == gl::Program_interface::transform_feedback_buffer;
         }
 
         case gl::Program_resource_property::top_level_array_size:
-        case gl::Program_resource_property::top_level_array_stride:
-        {
+        case gl::Program_resource_property::top_level_array_stride: {
             return interface == gl::Program_interface::buffer_variable;
         }
 
-        case gl::Program_resource_property::type:
-        {
+        case gl::Program_resource_property::type: {
             return is_in_list<gl::Program_interface>(
                 interface,
                 {
@@ -345,8 +323,7 @@ template <typename T>
             );
         }
 
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad program property");
         }
     }
@@ -360,16 +337,14 @@ template <typename T>
 {
     Gl_shader gl_shader{shader.type};
 
-    if (m_state == state_fail)
-    {
+    if (m_state == state_fail) {
         return gl_shader;
     }
     ERHE_VERIFY((m_state == state_init) || (m_state == state_shader_compilation_started));
     const auto gl_name = gl_shader.gl_name();
 
     const std::string source{m_create_info.final_source(shader)};
-    if (source.empty())
-    {
+    if (source.empty()) {
         m_state = state_fail;
         return gl_shader;
     }
@@ -404,8 +379,7 @@ template <typename T>
     gl::get_shader_iv(gl_name, gl::Shader_parameter_name::compile_status, &compile_status);
     gl::get_shader_iv(gl_name, gl::Shader_parameter_name::delete_status,  &delete_status);
 
-    if (compile_status != GL_TRUE)
-    {
+    if (compile_status != GL_TRUE) {
         int length{0};
         gl::get_shader_iv(gl_name, gl::Shader_parameter_name::info_log_length, &length);
         std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
@@ -433,11 +407,9 @@ Shader_stages::Prototype::Prototype(
 void Shader_stages::Prototype::compile_shaders()
 {
     ERHE_VERIFY(m_state == state_init);
-    for (const auto& shader : m_create_info.shaders)
-    {
+    for (const auto& shader : m_create_info.shaders) {
         m_shaders.emplace_back(compile(shader));
-        if (m_state == state_fail)
-        {
+        if (m_state == state_fail) {
             break;
         }
     }
@@ -445,18 +417,15 @@ void Shader_stages::Prototype::compile_shaders()
 
 auto Shader_stages::Prototype::link_program() -> bool
 {
-    if (m_state == state_fail)
-    {
+    if (m_state == state_fail) {
         return false;
     }
 
-    if (m_state == state_init)
-    {
+    if (m_state == state_init) {
         compile_shaders();
     }
 
-    if (m_state == state_fail)
-    {
+    if (m_state == state_fail) {
         return false;
     }
 
@@ -464,21 +433,17 @@ auto Shader_stages::Prototype::link_program() -> bool
 
     const auto gl_name = m_handle.gl_name();
     ERHE_VERIFY(m_shaders.size() == m_create_info.shaders.size());
-    for (std::size_t i = 0, end = m_shaders.size(); i < end; ++i)
-    {
-        if (!post_compile(m_create_info.shaders[i], m_shaders[i]))
-        {
+    for (std::size_t i = 0, end = m_shaders.size(); i < end; ++i) {
+        if (!post_compile(m_create_info.shaders[i], m_shaders[i])) {
             m_state = state_fail;
             return false;
         }
         gl::attach_shader(gl_name, m_shaders[i].gl_name());
     }
 
-    if (!m_create_info.transform_feedback_varyings.empty())
-    {
+    if (!m_create_info.transform_feedback_varyings.empty()) {
         std::vector<char const *> c_array{m_create_info.transform_feedback_varyings.size()};
-        for (size_t i = 0; i < m_create_info.transform_feedback_varyings.size(); ++i)
-        {
+        for (size_t i = 0; i < m_create_info.transform_feedback_varyings.size(); ++i) {
             c_array[i] = m_create_info.transform_feedback_varyings[i].c_str();
         }
 
@@ -497,16 +462,13 @@ auto Shader_stages::Prototype::link_program() -> bool
 
 void Shader_stages::Prototype::post_link()
 {
-    if (m_state == state_fail)
-    {
+    if (m_state == state_fail) {
         return;
     }
 
-    if (m_state != state_program_link_started)
-    {
+    if (m_state != state_program_link_started) {
         link_program();
-        if (m_state == state_fail)
-        {
+        if (m_state == state_fail) {
             return;
         }
     }
@@ -546,44 +508,35 @@ void Shader_stages::Prototype::post_link()
     //int compute_work_group_size[3]          = {0, 0, 0};
     //gl::get_program_iv(gl_name, gl::Program_property::compute_work_group_size,               &compute_work_group_size[0]);
 
-    if (link_status != GL_TRUE)
-    {
+    if (link_status != GL_TRUE) {
         m_state = state_fail;
         std::string log(static_cast<std::size_t>(info_log_length) + 1, 0);
         gl::get_program_info_log(gl_name, info_log_length, nullptr, &log[0]);
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
-        for (const auto& s : m_create_info.shaders)
-        {
+        for (const auto& s : m_create_info.shaders) {
             const std::string f_source = format(m_create_info.final_source(s));
             log_glsl->error("\n{}", f_source);
         }
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
         return;
-    }
-    else
-    {
+    } else {
         m_state = state_ready;
         log_program->trace("Shader_stages linking succeeded:");
-        for (const auto& s : m_create_info.shaders)
-        {
+        for (const auto& s : m_create_info.shaders) {
             const std::string f_source = format(m_create_info.final_source(s));
             log_glsl->trace("\n{}", f_source);
         }
-        if (m_create_info.dump_reflection)
-        {
+        if (m_create_info.dump_reflection) {
             dump_reflection();
         }
-        if (m_create_info.dump_interface)
-        {
+        if (m_create_info.dump_interface) {
             const std::string f_source = format(m_create_info.interface_source());
             log_glsl->info("\n{}", f_source);
         }
-        if (m_create_info.dump_final_source)
-        {
-            for (const auto& s : m_create_info.shaders)
-            {
+        if (m_create_info.dump_final_source) {
+            for (const auto& s : m_create_info.shaders) {
                 const std::string f_source = format(m_create_info.final_source(s));
                 log_glsl->info("\n{}", f_source);
             }
@@ -593,12 +546,10 @@ void Shader_stages::Prototype::post_link()
 
 [[nodiscard]] auto Shader_stages::Prototype::is_valid() -> bool
 {
-    if ((m_state != state_ready) && (m_state != state_fail))
-    {
+    if ((m_state != state_ready) && (m_state != state_fail)) {
         post_link();
     }
-    if (m_state == state_ready)
-    {
+    if (m_state == state_ready) {
         return true;
     }
     //if (m_state == state_fail)
@@ -610,25 +561,21 @@ void Shader_stages::Prototype::post_link()
 auto is_array_and_nonzero(const std::string& name)
 {
     const std::size_t open_bracket_pos = name.find_first_of('[');
-    if (open_bracket_pos == std::string::npos)
-    {
+    if (open_bracket_pos == std::string::npos) {
         return false;
     }
 
     const std::size_t digit_pos = name.find_first_of("0123456789", open_bracket_pos + 1);
-    if (digit_pos != open_bracket_pos + 1)
-    {
+    if (digit_pos != open_bracket_pos + 1) {
         return false;
     }
 
     const std::size_t non_digit_pos = name.find_first_not_of("0123456789", digit_pos + 1);
-    if (non_digit_pos == std::string::npos)
-    {
+    if (non_digit_pos == std::string::npos) {
         return false;
     }
 
-    if (name.at(non_digit_pos) != ']')
-    {
+    if (name.at(non_digit_pos) != ']') {
         return false;
     }
 
@@ -641,8 +588,7 @@ auto is_array_and_nonzero(const std::string& name)
             (digit == '0') ||
             (digit == '1')
         )
-    )
-    {
+    ) {
         return false;
     }
 
@@ -683,13 +629,11 @@ void Shader_stages::Prototype::dump_reflection() const
 
     // Figure out maximum name length across all interfaces
     int max_name_length{0};
-    for (auto interface : program_interfaces)
-    {
+    for (auto interface : program_interfaces) {
         if (
             (interface == gl::Program_interface::atomic_counter_buffer    ) ||
             (interface == gl::Program_interface::transform_feedback_buffer)
-        )
-        {
+        ) {
             continue;
         }
 
@@ -707,8 +651,7 @@ void Shader_stages::Prototype::dump_reflection() const
     std::vector<char> name_buffer;
     name_buffer.resize(static_cast<size_t>(max_name_length) + 1);
 
-    for (auto interface : program_interfaces)
-    {
+    for (auto interface : program_interfaces) {
         int active_resource_count{0};
         gl::get_program_interface_iv(
             gl_name,
@@ -717,18 +660,15 @@ void Shader_stages::Prototype::dump_reflection() const
             &active_resource_count
         );
 
-        if (active_resource_count == 0)
-        {
+        if (active_resource_count == 0) {
             continue;
 
         }
         log_program->trace("{:<40} : {} resources", c_str(interface), active_resource_count);
 
         std::string name;
-        for (int i = 0; i < active_resource_count; ++i)
-        {
-            if (interface != gl::Program_interface::atomic_counter_buffer)
-            {
+        for (int i = 0; i < active_resource_count; ++i) {
+            if (interface != gl::Program_interface::atomic_counter_buffer) {
                 std::fill(begin(name_buffer), end(name_buffer), '\0');
                 gl::get_program_resource_name(
                     gl_name,
@@ -739,14 +679,11 @@ void Shader_stages::Prototype::dump_reflection() const
                     name_buffer.data()
                 );
                 name = std::string(name_buffer.data(), name_length);
-                if (is_array_and_nonzero(name))
-                {
+                if (is_array_and_nonzero(name)) {
                     continue;
                 }
                 log_program->trace("\t{:<40} : {}", i, name);
-            }
-            else
-            {
+            } else {
                 log_program->trace("\t{:<40} :", i);
             }
 
@@ -755,8 +692,7 @@ void Shader_stages::Prototype::dump_reflection() const
             if (
                 is_program_interface_allowed(property_num_active_variables, interface) &&
                 is_program_interface_allowed(property_active_variables,     interface)
-            )
-            {
+            ) {
                 GLsizei length{0};
                 GLint num_active_variables{0};
                 gl::get_program_resource_iv(
@@ -774,8 +710,7 @@ void Shader_stages::Prototype::dump_reflection() const
                     c_str(property_num_active_variables),
                     num_active_variables
                 );
-                if (num_active_variables > 0)
-                {
+                if (num_active_variables > 0) {
                     std::vector<GLint> indices;
                     indices.resize(num_active_variables);
                     std::fill(begin(indices), end(indices), 0);
@@ -793,11 +728,9 @@ void Shader_stages::Prototype::dump_reflection() const
                     ss << fmt::format("\t\t{:<40} = [ ", c_str(property_active_variables));
                     bool first{true};
                     bool skipped{false};
-                    for (int j = 0; j < num_active_variables; ++j)
-                    {
+                    for (int j = 0; j < num_active_variables; ++j) {
                         const auto member_interface_ = member_interface(interface);
-                        if (member_interface_.has_value())
-                        {
+                        if (member_interface_.has_value()) {
                             std::fill(begin(name_buffer), end(name_buffer), '\0');
                             gl::get_program_resource_name(
                                 gl_name,
@@ -808,25 +741,20 @@ void Shader_stages::Prototype::dump_reflection() const
                                 name_buffer.data()
                             );
                             name = std::string{name_buffer.data(), static_cast<size_t>(name_length)};
-                            if (is_array_and_nonzero(name))
-                            {
+                            if (is_array_and_nonzero(name)) {
                                 skipped = true;
                                 continue;
                             }
-                            if (skipped)
-                            {
+                            if (skipped) {
                                 ss << " ... ";
                                 skipped = false;
                             }
-                            if (!first)
-                            {
+                            if (!first) {
                                 ss << ", ";
                             }
                             ss << fmt::format("{} {}", indices[j], name);
                             first = false;
-                        }
-                        else
-                        {
+                        } else {
                             ss << fmt::format("{}", indices[j]);
                         }
                     }
@@ -836,10 +764,8 @@ void Shader_stages::Prototype::dump_reflection() const
             }
 
             // Query resource properties
-            for (auto property : program_resource_properties)
-            {
-                if (!is_program_interface_allowed(property, interface))
-                {
+            for (auto property : program_resource_properties) {
+                if (!is_program_interface_allowed(property, interface)) {
                     continue;
                 }
                 GLsizei length{0};
@@ -854,12 +780,9 @@ void Shader_stages::Prototype::dump_reflection() const
                     &length,
                     &param
                 );
-                if (property != gl::Program_resource_property::type)
-                {
+                if (property != gl::Program_resource_property::type) {
                     log_program->trace("\t\t{:<40} = {}", c_str(property), param);
-                }
-                else
-                {
+                } else {
                     log_program->trace("\t\t{:<40} = {}", c_str(property), gl::enum_string(param));
                 }
             }
@@ -869,15 +792,13 @@ void Shader_stages::Prototype::dump_reflection() const
     //const int buffer_size = std::max(active_uniform_max_length, active_uniform_block_max_name_length);
     //std::vector<char> buffer(static_cast<size_t>(buffer_size) + 1);
 
-    if (transform_feedback_varyings > 0)
-    {
+    if (transform_feedback_varyings > 0) {
         ERHE_VERIFY(transform_feedback_varying_max_length > 0);
         std::string        buffer_(static_cast<size_t>(transform_feedback_varying_max_length) + 1, 0);
         GLsizei            length {0};
         GLsizei            size2  {0};
         gl::Attribute_type type2;
-        for (unsigned int i = 0; i < static_cast<unsigned int>(transform_feedback_varyings); ++i)
-        {
+        for (unsigned int i = 0; i < static_cast<unsigned int>(transform_feedback_varyings); ++i) {
             gl::get_transform_feedback_varying(
                 gl_name,
                 i,
@@ -888,12 +809,9 @@ void Shader_stages::Prototype::dump_reflection() const
                 &buffer_[0]
             );
 
-            if (size2 > 1)
-            {
+            if (size2 > 1) {
                 log_program->info("transform feedback varying {} {} {}[{}]", i, gl::c_str(type2), &buffer_[0], size2);
-            }
-            else
-            {
+            } else {
                 log_program->info("Transform feedback varying {} {} {}", i, gl::c_str(type2), &buffer_[0]);
             }
         }
@@ -901,21 +819,17 @@ void Shader_stages::Prototype::dump_reflection() const
 
     // For each interface block,
     // ask GL driver locations of those uniforms, and place to uniform map for the program (prototype)
-    /// for (const auto& i : create_info.interface_blocks)
-    /// {
+    /// for (const auto& i : create_info.interface_blocks) {
     ///     auto block = i.second;
     ///     m_uniform_map.resize(block->members().size());
-    ///     for (auto& member : block->members())
-    ///     {
+    ///     for (auto& member : block->members()) {
     ///         std::stringstream ss;
     ///         ss << block->name() << "_" << member.name();
     ///         auto key = member.index_in_block();
-    ///         if (key >= 0)
-    ///         {
+    ///         if (key >= 0) {
     ///             auto u_key = static_cast<unsigned int>(key);
     ///             auto uniform_name = ss.str();
-    ///             if (m_uniform_map.size() < (u_key + 1))
-    ///             {
+    ///             if (m_uniform_map.size() < (u_key + 1)) {
     ///                 m_uniform_map.resize(u_key + 1);
     ///             }
     ///  ///             m_uniform_map[u_key] = gl::get_uniform_location(gl_name, uniform_name.c_str());

@@ -147,8 +147,7 @@ void make_combo(
         items,
         items_count
     );
-    if (changed)
-    {
+    if (changed) {
         value = to_value(static_cast<size_t>(int_value));
     }
 }
@@ -166,16 +165,14 @@ void Pipelines::rasterization(
             ImGuiTreeNodeFlags_DefaultOpen |
             ImGuiTreeNodeFlags_NoTreePushOnOpen
         )
-    )
-    {
+    ) {
         return;
     }
 
     ImGui::PushID("Rasterization");
     ImGui::SetNextItemWidth(item_width);
     ImGui::Checkbox("Face Cull", &rasterization.face_cull_enable);
-    if (rasterization.face_cull_enable)
-    {
+    if (rasterization.face_cull_enable) {
         // TODO Take into account reverse depth
         make_combo<gl::Cull_face_mode>(
             "Cull Mode",
@@ -221,8 +218,7 @@ void make_hex_uint(const char* label, unsigned int& value)
         255,
         "%02x"
     );
-    if (changed)
-    {
+    if (changed) {
         value = static_cast<unsigned int>(int_value);
     }
 }
@@ -240,8 +236,7 @@ void Pipelines::stencil_op(
             ImGuiTreeNodeFlags_DefaultOpen |
             ImGuiTreeNodeFlags_NoTreePushOnOpen
         )
-    )
-    {
+    ) {
         return;
     }
 
@@ -297,8 +292,7 @@ void Pipelines::depth_stencil(erhe::graphics::Depth_stencil_state& depth_stencil
             ImGuiTreeNodeFlags_DefaultOpen |
             ImGuiTreeNodeFlags_NoTreePushOnOpen
         )
-    )
-    {
+    ) {
         return;
     }
 
@@ -316,8 +310,7 @@ void Pipelines::depth_stencil(erhe::graphics::Depth_stencil_state& depth_stencil
     );
     ImGui::SetNextItemWidth(item_width);
     ImGui::Checkbox("Stencil Test", &depth_stencil.stencil_test_enable);
-    if (depth_stencil.stencil_test_enable)
-    {
+    if (depth_stencil.stencil_test_enable) {
         stencil_op("Stencil Front", depth_stencil.stencil_front);
         stencil_op("Stencil Back",  depth_stencil.stencil_back);
     }
@@ -338,8 +331,7 @@ void Pipelines::blend_state_component(
             ImGuiTreeNodeFlags_DefaultOpen |
             ImGuiTreeNodeFlags_NoTreePushOnOpen
         )
-    )
-    {
+    ) {
         return;
     }
 
@@ -383,8 +375,7 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
             ImGuiTreeNodeFlags_DefaultOpen |
             ImGuiTreeNodeFlags_NoTreePushOnOpen
         )
-    )
-    {
+    ) {
         return;
     }
 
@@ -392,8 +383,7 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 
     ImGui::SetNextItemWidth(item_width);
     ImGui::Checkbox("Blending Enabled", &color_blend.enabled);
-    if (color_blend.enabled)
-    {
+    if (color_blend.enabled) {
         blend_state_component("RGB",   color_blend.rgb);
         blend_state_component("Alpha", color_blend.alpha);
         ImGui::SetNextItemWidth(item_width);
@@ -404,8 +394,7 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
         );
     }
 
-    if (ImGui::TreeNodeEx("Write Mask", ImGuiTreeNodeFlags_DefaultOpen))
-    {
+    if (ImGui::TreeNodeEx("Write Mask", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::SetNextItemWidth(item_width);
         ImGui::Checkbox("Red",   &color_blend.write_mask.red);
         ImGui::SetNextItemWidth(item_width);
@@ -429,14 +418,12 @@ void Pipelines::imgui()
     ImGui::Begin(c_title.data());
     //const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
     auto pipelines = erhe::graphics::Pipeline::get_pipelines();
-    for (size_t i = 0, end = pipelines.size(); i < end; ++i)
-    {
+    for (size_t i = 0, end = pipelines.size(); i < end; ++i) {
         auto* pipeline = pipelines[i];
         if (
             (pipeline == nullptr) ||
             (pipeline->data.name == nullptr)
-        )
-        {
+        ) {
             continue;
         }
         const std::string label = fmt::format("{0}##{0}-{1}", pipeline->data.name, i);
@@ -445,8 +432,7 @@ void Pipelines::imgui()
                 label.c_str(),
                 ImGuiTreeNodeFlags_Framed
             )
-        )
-        {
+        ) {
             rasterization(pipeline->data.rasterization);
             depth_stencil(pipeline->data.depth_stencil);
             color_blend  (pipeline->data.color_blend);

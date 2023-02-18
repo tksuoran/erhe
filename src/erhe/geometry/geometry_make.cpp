@@ -22,8 +22,7 @@ auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id)
     ++m_serial;
     const Corner_id corner_id = m_next_corner_id++;
 
-    if (corner_id >= corners.size())
-    {
+    if (corner_id >= corners.size()) {
         corners.resize(static_cast<size_t>(corner_id) + s_grow);
     }
 
@@ -45,8 +44,7 @@ auto Geometry::make_point() -> Point_id
     const Point_id point_id = m_next_point_id++;
 
     // TODO
-    if (point_id >= points.size())
-    {
+    if (point_id >= points.size()) {
         points.resize(static_cast<size_t>(point_id) + s_grow);
     }
 
@@ -67,8 +65,7 @@ auto Geometry::make_polygon() -> Polygon_id
     const Polygon_id polygon_id = m_next_polygon_id++;
 
     // TODO
-    if (polygon_id >= polygons.size())
-    {
+    if (polygon_id >= polygons.size()) {
         polygons.resize(static_cast<size_t>(polygon_id) + s_grow);
     }
 
@@ -92,8 +89,7 @@ auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
     Expects(b < points.size());
     const Edge_id edge_id = m_next_edge_id++;
 
-    if (edge_id >= edges.size())
-    {
+    if (edge_id >= edges.size()) {
         edges.resize(static_cast<size_t>(edge_id) + s_grow);
     }
 
@@ -179,8 +175,7 @@ void Geometry::sort_point_corners()
     bool failures{false};
     for_each_point([&](auto& i)
     {
-        if (i.point.corner_count < 2)
-        {
+        if (i.point.corner_count < 2) {
             return;
         }
         point_corner_infos.clear();
@@ -195,16 +190,14 @@ void Geometry::sort_point_corners()
             bool             found            = false;
             polygon.for_each_corner_neighborhood_const(*this, [&](auto& k)
             {
-                if (k.corner_id == middle_corner_id)
-                {
+                if (k.corner_id == middle_corner_id) {
                     prev_corner_id = k.prev_corner_id;
                     next_corner_id = k.next_corner_id;
                     found          = true;
                     return k.break_iteration();
                 }
             });
-            if (!found)
-            {
+            if (!found) {
                 return;
             }
             const Corner& prev_corner = corners[prev_corner_id];
@@ -222,8 +215,7 @@ void Geometry::sort_point_corners()
         });
 
         // log_geometry->info("sort: point_id = {}", i.point_id);
-        for (uint32_t j = 0, end = static_cast<uint32_t>(point_corner_infos.size()); j < end; ++j)
-        {
+        for (uint32_t j = 0, end = static_cast<uint32_t>(point_corner_infos.size()); j < end; ++j) {
             const uint32_t     next_j = (j + 1) % end;
             Point_corner_info& head   = point_corner_infos[j];
             Point_corner_info& next   = point_corner_infos[next_j];
@@ -236,8 +228,7 @@ void Geometry::sort_point_corners()
             //     head.prev_point_id,
             //     head.next_point_id
             // );
-            for (uint32_t k = 0; k < end; ++k)
-            {
+            for (uint32_t k = 0; k < end; ++k) {
                 Point_corner_info& node = point_corner_infos[k];
                 // log_geometry->info(
                 //     "    k = node.point_corner_id = {}, node.next_point_id = {}, prev_point_id = {}, used = {}",
@@ -247,23 +238,19 @@ void Geometry::sort_point_corners()
                 //     node.prev_point_id,
                 //     node.used
                 // );
-                if (node.used)
-                {
+                if (node.used) {
                     continue;
                 }
-                if (node.next_point_id == head.prev_point_id)
-                {
+                if (node.next_point_id == head.prev_point_id) {
                     found = true;
                     node.used = true;
-                    if (k != next_j)
-                    {
+                    if (k != next_j) {
                         std::swap(next, node);
                     }
                     break;
                 }
             }
-            if (!found)
-            {
+            if (!found) {
                 log_geometry->warn(
                     "Could not sort point corners for point_id = {} head.prev_point_id = {}",
                     i.point_id,
@@ -277,8 +264,7 @@ void Geometry::sort_point_corners()
     });
 
     ///// TODO
-    if (failures)
-    {
+    if (failures) {
         log_geometry->error("Could not sort point corners");
         debug_trace();
     }
@@ -297,13 +283,10 @@ auto Geometry::make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon
     ++m_serial;
 
     Edge& edge = edges[edge_id];
-    if (edge.polygon_count == 0)
-    {
+    if (edge.polygon_count == 0) {
         edge.first_edge_polygon_id = m_next_edge_polygon_id;
         m_edge_polygon_edge = edge_id;
-    }
-    else
-    {
+    } else {
         ERHE_VERIFY(m_edge_polygon_edge == edge_id);
     }
     ++m_next_edge_polygon_id;
@@ -318,8 +301,7 @@ auto Geometry::make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon
         edge.polygon_count
     );
 
-    if (edge_polygon_id >= edge_polygons.size())
-    {
+    if (edge_polygon_id >= edge_polygons.size()) {
         edge_polygons.resize(edge_polygon_id + s_grow);
     }
 
@@ -343,13 +325,10 @@ auto Geometry::make_polygon_corner_(
     ++m_serial;
 
     Polygon& polygon = polygons[polygon_id];
-    if (polygon.corner_count == 0)
-    {
+    if (polygon.corner_count == 0) {
         polygon.first_polygon_corner_id = m_next_polygon_corner_id;
         m_polygon_corner_polygon = polygon_id;
-    }
-    else
-    {
+    } else {
         ERHE_VERIFY(m_polygon_corner_polygon == polygon_id);
     }
     ++m_next_polygon_corner_id;
@@ -365,8 +344,7 @@ auto Geometry::make_polygon_corner_(
         polygon.corner_count
     );
 
-    if (polygon_corner_id >= polygon_corners.size())
-    {
+    if (polygon_corner_id >= polygon_corners.size()) {
         polygon_corners.resize(polygon_corner_id + s_grow);
     }
 
@@ -476,8 +454,7 @@ auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_
         auto i = rbegin(point_list), end = rend(point_list);
         i != end;
         ++i
-    )
-    {
+    ) {
         const Point_id point_id = *i;
         make_polygon_corner(polygon_id, point_id);
     }

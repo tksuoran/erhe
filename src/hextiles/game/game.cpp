@@ -102,8 +102,7 @@ void Game::reveal(Map& target_map, Tile_coordinate position, int radius) const
 /// void Game::update_once_per_frame(const erhe::components::Time_context& time_context)
 /// {
 ///     m_frame_time = time_context.time;
-///     if (m_players.empty())
-///     {
+///     if (m_players.empty()) {
 ///         return;
 ///     }
 /// 
@@ -111,31 +110,25 @@ void Game::reveal(Map& target_map, Tile_coordinate position, int radius) const
 ///     get_current_player().update(context);
 /// }
 
-auto Game::move_unit(direction_t direction) -> bool
+auto Game::move_unit(const direction_t direction) -> bool
 {
-    if (m_players.empty())
-    {
+    if (m_players.empty()) {
         return false;
     }
-    if (g_game_window->is_visible() == false)
-    {
+    if (g_game_window->is_visible() == false) {
         return false;
     }
 
-    get_current_player().move_unit(
-        direction
-    );
+    get_current_player().move_unit(direction);
     return true;
 }
 
-auto Game::select_unit(int direction) -> bool
+auto Game::select_unit(const int direction) -> bool
 {
-    if (m_players.empty())
-    {
+    if (m_players.empty()) {
         return false;
     }
-    if (g_game_window->is_visible() == false)
-    {
+    if (g_game_window->is_visible() == false) {
         return false;
     }
 
@@ -156,14 +149,11 @@ auto Game::get_unit_tile(const Tile_coordinate position, const Unit* ignore) -> 
 
     //std::vector<Player_unit> player_units;
 
-    for (int player_index = 0; player_index < m_players.size(); ++player_index)
-    {
+    for (int player_index = 0; player_index < m_players.size(); ++player_index) {
         const int player_id = player_index + 1;
         const Player& player = m_players[player_index];
-        for (const Unit& unit : player.cities)
-        {
-            if (unit.location != position)
-            {
+        for (const Unit& unit : player.cities) {
+            if (unit.location != position) {
                 continue;
             }
             const Unit_type& unit_type = g_tiles->get_unit_type(unit.type);
@@ -172,14 +162,11 @@ auto Game::get_unit_tile(const Tile_coordinate position, const Unit* ignore) -> 
             return g_tile_renderer->get_single_unit_tile(player_index, unit.type);
         }
 
-        for (const Unit& unit : player.units)
-        {
-            if (unit.location != position)
-            {
+        for (const Unit& unit : player.units) {
+            if (unit.location != position) {
                 continue;
             }
-            if (&unit == ignore)
-            {
+            if (&unit == ignore) {
                 continue;
             }
             const Unit_type& unit_type = g_tiles->get_unit_type(unit.type);
@@ -191,20 +178,17 @@ auto Game::get_unit_tile(const Tile_coordinate position, const Unit* ignore) -> 
             //    (battle_type_player_id[unit_type.battle_type] == player_id)
             //);
             battle_type_player_id[unit_type.battle_type] = player_id;
-            if (found_unit_count == 0)
-            {
+            if (found_unit_count == 0) {
                 first_found_unit_tile = g_tile_renderer->get_single_unit_tile(player_index, unit.type);
             }
             ++found_unit_count;
         }
     }
 
-    if (found_unit_count == 0)
-    {
+    if (found_unit_count == 0) {
         return g_tile_renderer->get_special_unit_tile(7);
     }
-    if (found_unit_count == 1)
-    {
+    if (found_unit_count == 1) {
         return first_found_unit_tile;
     }
     return g_tile_renderer->get_multi_unit_tile(battle_type_player_id);
@@ -266,8 +250,7 @@ void Game::new_game(const Game_create_parameters& parameters)
     m_current_player = 0;
     m_turn           = 0;
     m_cities         = parameters.city_positions;
-    for (size_t i = 0; i < parameters.player_names.size(); ++i)
-    {
+    for (size_t i = 0; i < parameters.player_names.size(); ++i) {
         add_player(
             parameters.player_names[i],
             parameters.city_positions[parameters.player_starting_cities[i]]

@@ -20,8 +20,7 @@ void Compound_operation::execute()
 {
     log_operations->trace("Op Execute Begin {}", describe());
 
-    for (auto& operation : m_parameters.operations)
-    {
+    for (auto& operation : m_parameters.operations) {
         operation->execute();
     }
 
@@ -37,8 +36,7 @@ void Compound_operation::undo()
         end = rend(m_parameters.operations);
         i < end;
         ++i
-    )
-    {
+    ) {
         auto& operation = *i;
         operation->undo();
     }
@@ -51,14 +49,10 @@ auto Compound_operation::describe() const -> std::string
     std::stringstream ss;
     ss << "Compound ";
     bool first = true;
-    for (auto& operation : m_parameters.operations)
-    {
-        if (first)
-        {
+    for (auto& operation : m_parameters.operations) {
+        if (first) {
             first = false;
-        }
-        else
-        {
+        } else {
             ss << ", ";
         }
         ss << operation->describe();

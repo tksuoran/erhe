@@ -339,8 +339,7 @@ auto Application_impl::initialize_components(
     renderdoc_capture_support.initialize_component();
 
     erhe::application::log_startup->info("Creating window");
-    if (!window.create_gl_window())
-    {
+    if (!window.create_gl_window()) {
         erhe::application::log_startup->error("GL window creation failed, aborting");
         return false;
     }
@@ -348,12 +347,12 @@ auto Application_impl::initialize_components(
     erhe::application::log_startup->info("Launching component initialization");
     m_components.launch_component_initialization(configuration.threading.parallel_initialization);
 
-    if (configuration.threading.parallel_initialization)
-    {
+    if (configuration.threading.parallel_initialization) {
         erhe::application::log_startup->info("Parallel init -> Providing worker GL contexts");
         gl_context_provider.provide_worker_contexts(
             window.get_context_window(),
-            [this]() -> bool {
+            [this]() -> bool
+            {
                 return !m_components.is_component_initialization_complete();
             }
         );
@@ -368,8 +367,7 @@ auto Application_impl::initialize_components(
     if (
         g_physics_window->config.static_enable &&
         g_physics_window->config.dynamic_enable
-    )
-    {
+    ) {
         const auto& test_scene_root = scene_builder.get_scene_root();
         test_scene_root->physics_world().enable_physics_updates();
     }
@@ -389,19 +387,16 @@ auto Application_impl::initialize_components(
 
 void Application_impl::component_initialization_complete(const bool initialization_succeeded)
 {
-    if (initialization_succeeded)
-    {
+    if (initialization_succeeded) {
         gl::enable(gl::Enable_cap::primitive_restart);
         gl::primitive_restart_index(0xffffu);
 
-        if (erhe::application::g_window == nullptr)
-        {
+        if (erhe::application::g_window == nullptr) {
             return;
         }
 
         auto* const context_window = window.get_context_window();
-        if (context_window == nullptr)
-        {
+        if (context_window == nullptr) {
             return;
         }
 

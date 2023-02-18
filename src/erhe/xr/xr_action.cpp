@@ -37,8 +37,7 @@ Xr_action::Xr_action(
         &path
     );
     log_xr->info("xrStringToPath({}) = {:x}", name, path);
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->warn("xrStringToPath({}) returned error {}", name, c_str(result));
     }
 }
@@ -51,8 +50,7 @@ Xr_action_boolean::Xr_action_boolean(
 )
     : Xr_action{instance, name, profile_mask}
 {
-    if (name.length() >= XR_MAX_ACTION_NAME_SIZE)
-    {
+    if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
     }
@@ -61,8 +59,7 @@ Xr_action_boolean::Xr_action_boolean(
     create_info.type = XR_TYPE_ACTION_CREATE_INFO;
     create_info.next = nullptr;
     strncpy(create_info.actionName, name.data(), name.size());
-    for (auto& s : create_info.actionName)
-    {
+    for (auto& s : create_info.actionName) {
         s = (s == '/') ? '_' : s;
     }
     create_info.actionName[name.size()] = '\0';
@@ -76,7 +73,7 @@ Xr_action_boolean::Xr_action_boolean(
     create_info.countSubactionPaths    = 0;
     create_info.subactionPaths         = nullptr;
 
-     const XrResult result = xrCreateAction(
+    const XrResult result = xrCreateAction(
         action_set,
         &create_info,
         &action
@@ -90,8 +87,7 @@ Xr_action_boolean::Xr_action_boolean(
         fmt::ptr(action)
     );
 
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->error(
             "xrCreateAction() returned error {} for {}",
             c_str(result),
@@ -102,8 +98,7 @@ Xr_action_boolean::Xr_action_boolean(
 
 void Xr_action_boolean::get(const XrSession session)
 {
-    if (action == nullptr)
-    {
+    if (action == nullptr) {
         return;
     }
     const XrActionStateGetInfo action_state_get_info{
@@ -117,8 +112,7 @@ void Xr_action_boolean::get(const XrSession session)
         &action_state_get_info,
         &state
     );
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->error(
             "xrGetActionStateBoolean() returned error {}",
             c_str(result)
@@ -136,8 +130,7 @@ Xr_action_float::Xr_action_float(
 )
     : Xr_action{instance, name, profile_mask}
 {
-    if (name.length() >= XR_MAX_ACTION_NAME_SIZE)
-    {
+    if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
     }
@@ -146,8 +139,7 @@ Xr_action_float::Xr_action_float(
     create_info.type = XR_TYPE_ACTION_CREATE_INFO;
     create_info.next = nullptr;
     strncpy(create_info.actionName, name.data(), name.size());
-    for (auto& s : create_info.actionName)
-    {
+    for (auto& s : create_info.actionName) {
         s = (s == '/') ? '_' : s;
     }
     create_info.actionName[name.size()] = '\0';
@@ -175,8 +167,7 @@ Xr_action_float::Xr_action_float(
         fmt::ptr(action)
     );
 
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->error(
             "xrCreateAction() returned error {} for {}",
             c_str(result),
@@ -187,8 +178,7 @@ Xr_action_float::Xr_action_float(
 
 void Xr_action_float::get(const XrSession session)
 {
-    if (action == nullptr)
-    {
+    if (action == nullptr) {
         return;
     }
     const XrActionStateGetInfo action_state_get_info{
@@ -202,8 +192,7 @@ void Xr_action_float::get(const XrSession session)
         &action_state_get_info,
         &state
     );
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->error(
             "xrGetActionStateFloat() returned error {}",
             c_str(result)
@@ -221,8 +210,7 @@ Xr_action_vector2f::Xr_action_vector2f(
 )
     : Xr_action{instance, name, profile_mask}
 {
-    if (name.length() >= XR_MAX_ACTION_NAME_SIZE)
-    {
+    if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
     }
@@ -231,8 +219,7 @@ Xr_action_vector2f::Xr_action_vector2f(
     create_info.type = XR_TYPE_ACTION_CREATE_INFO;
     create_info.next = nullptr;
     strncpy(create_info.actionName, name.data(), name.size());
-    for (auto& s : create_info.actionName)
-    {
+    for (auto& s : create_info.actionName) {
         s = (s == '/') ? '_' : s;
     }
     create_info.actionName[name.size()] = '\0';
@@ -260,8 +247,7 @@ Xr_action_vector2f::Xr_action_vector2f(
         fmt::ptr(action)
     );
 
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->error(
             "xrCreateAction() returned error {} for {}",
             c_str(result),
@@ -272,8 +258,7 @@ Xr_action_vector2f::Xr_action_vector2f(
 
 void Xr_action_vector2f::get(const XrSession session)
 {
-    if (action == nullptr)
-    {
+    if (action == nullptr) {
         return;
     }
     const XrActionStateGetInfo action_state_get_info{
@@ -287,8 +272,7 @@ void Xr_action_vector2f::get(const XrSession session)
         &action_state_get_info,
         &state
     );
-    if (get_result != XR_SUCCESS)
-    {
+    if (get_result != XR_SUCCESS) {
         log_xr->error(
             "xrGetActionStateVector2f() returned error {}",
             c_str(get_result)
@@ -307,8 +291,7 @@ Xr_action_pose::Xr_action_pose(
 )
     : Xr_action{instance, name, profile_mask}
 {
-    if (name.length() >= XR_MAX_ACTION_NAME_SIZE)
-    {
+    if (name.length() >= XR_MAX_ACTION_NAME_SIZE) {
         ERHE_FATAL("name too long");
         return;
     }
@@ -317,8 +300,7 @@ Xr_action_pose::Xr_action_pose(
     create_info.type = XR_TYPE_ACTION_CREATE_INFO;
     create_info.next = nullptr;
     strncpy(create_info.actionName, name.data(), name.size());
-    for (auto& s : create_info.actionName)
-    {
+    for (auto& s : create_info.actionName) {
         s = (s == '/') ? '_' : s;
     }
     create_info.actionName[name.size()] = '\0';
@@ -346,8 +328,7 @@ Xr_action_pose::Xr_action_pose(
         fmt::ptr(action)
     );
 
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->error(
             "xrCreateAction() returned error {} for {}",
             c_str(result),
@@ -358,8 +339,7 @@ Xr_action_pose::Xr_action_pose(
 
 void Xr_action_pose::attach(const XrSession session)
 {
-    if (action == nullptr)
-    {
+    if (action == nullptr) {
         return;
     }
     const XrActionSpaceCreateInfo create_info
@@ -387,8 +367,7 @@ void Xr_action_pose::attach(const XrSession session)
         &create_info,
         &space
     );
-    if (result != XR_SUCCESS)
-    {
+    if (result != XR_SUCCESS) {
         log_xr->error(
             "xrCreateActionSpace() returned error {}",
             c_str(result)
@@ -402,8 +381,7 @@ void Xr_action_pose::get(
     const XrSpace   base_space
 )
 {
-    if (action == nullptr)
-    {
+    if (action == nullptr) {
         return;
     }
     const XrActionStateGetInfo action_state_get_info{
@@ -417,8 +395,7 @@ void Xr_action_pose::get(
         &action_state_get_info,
         &state
     );
-    if (get_result != XR_SUCCESS)
-    {
+    if (get_result != XR_SUCCESS) {
         log_xr->error(
             "xrGetActionStatePose() returned error {}",
             c_str(get_result)
@@ -431,20 +408,17 @@ void Xr_action_pose::get(
         time,
         &location
     );
-    if (locate_result != XR_SUCCESS)
-    {
+    if (locate_result != XR_SUCCESS) {
         log_xr->error(
             "xrLocateSpace() returned error {}",
             c_str(locate_result)
         );
     }
 
-    if ((location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT)
-    {
+    if ((location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) == XR_SPACE_LOCATION_POSITION_VALID_BIT) {
         position = to_glm(location.pose.position);
     }
-    if ((location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) == XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
-    {
+    if ((location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) == XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) {
         orientation = to_glm(location.pose.orientation);
     }
 }

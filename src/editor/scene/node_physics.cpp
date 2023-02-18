@@ -66,16 +66,14 @@ void Node_physics::handle_node_scene_host_update(
 {
     ERHE_VERIFY(old_scene_host != new_scene_host);
 
-    if (old_scene_host != nullptr)
-    {
+    if (old_scene_host != nullptr) {
         Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
         ERHE_VERIFY(old_scene_root != nullptr);
         auto& physics_world = old_scene_root->physics_world();
         physics_world.remove_rigid_body(rigid_body());
         m_physics_world = nullptr;
     }
-    if (new_scene_host != nullptr)
-    {
+    if (new_scene_host != nullptr) {
         log_physics->trace("attaching {} to physics world", m_rigid_body->get_debug_label());
         Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
         ERHE_VERIFY(new_scene_root != nullptr);
@@ -88,11 +86,9 @@ void Node_physics::handle_node_scene_host_update(
 // This is called from scene graph (Node) when mode is moved
 void Node_physics::handle_node_transform_update()
 {
-    ERHE_VERIFY(m_node);
+    // TODO ERHE_VERIFY(m_node != nullptr);
 
-    if (m_transform_change_from_physics)
-    //if (m_motion_mode != Motion_mode::e_dynamic)
-    {
+    if (m_transform_change_from_physics) {
         return;
     }
 
@@ -134,8 +130,7 @@ auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
 {
     ERHE_PROFILE_FUNCTION
 
-    if (get_node() == nullptr)
-    {
+    if (get_node() == nullptr) {
         return erhe::physics::Transform{};
     }
 
@@ -179,13 +174,15 @@ void Node_physics::set_world_from_node(
 {
     ERHE_PROFILE_FUNCTION
 
-    ERHE_VERIFY(m_node != nullptr);
+    // TODO ERHE_VERIFY(m_node != nullptr);
+    if (m_node == nullptr) {
+        return; // TODO FIX
+    }
 
     // TODO Take center of mass into account
 
     const glm::vec3 world_position = glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-    if (world_position.y < -100.0f)
-    {
+    if (world_position.y < -100.0f) {
         const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
         m_rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{world_from_node}, respawn_location});
         m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
@@ -207,12 +204,14 @@ void Node_physics::set_world_from_node(
 {
     ERHE_PROFILE_FUNCTION
 
-    ERHE_VERIFY(m_node != nullptr);
+    // TDOO ERHE_VERIFY(m_node != nullptr);
+    if (m_node == nullptr) {
+        return; // TODO FIX
+    }
 
     // TODO Take center of mass into account
 
-    if (world_from_node.origin.y < -100.0f)
-    {
+    if (world_from_node.origin.y < -100.0f) {
         const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
         m_rigid_body->set_world_transform (erhe::physics::Transform{world_from_node.basis, respawn_location});
         m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
@@ -248,8 +247,7 @@ auto Node_physics::rigid_body() const -> const IRigid_body*
 
 auto is_physics(const erhe::scene::Item* const scene_item) -> bool
 {
-    if (scene_item == nullptr)
-    {
+    if (scene_item == nullptr) {
         return false;
     }
     using namespace erhe::toolkit;
@@ -266,8 +264,7 @@ auto is_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
 
 auto as_physics(erhe::scene::Item* scene_item) -> Node_physics*
 {
-    if (scene_item == nullptr)
-    {
+    if (scene_item == nullptr) {
         return nullptr;
     }
     using namespace erhe::toolkit;
@@ -276,19 +273,17 @@ auto as_physics(erhe::scene::Item* scene_item) -> Node_physics*
             scene_item->get_type(),
             erhe::scene::Item_type::physics
         )
-    )
-    {
+    ) {
         return nullptr;
     }
-    return reinterpret_cast<Node_physics*>(scene_item);
+    return static_cast<Node_physics*>(scene_item);
 }
 
 auto as_physics(
     const std::shared_ptr<erhe::scene::Item>& scene_item
 ) -> std::shared_ptr<Node_physics>
 {
-    if (!scene_item)
-    {
+    if (!scene_item) {
         return {};
     }
     using namespace erhe::toolkit;
@@ -297,8 +292,7 @@ auto as_physics(
             scene_item->get_type(),
             erhe::scene::Item_type::physics
         )
-    )
-    {
+    ) {
         return {};
     }
     return std::static_pointer_cast<Node_physics>(scene_item);
@@ -308,11 +302,9 @@ auto get_node_physics(
     const erhe::scene::Node* node
 ) -> std::shared_ptr<Node_physics>
 {
-    for (const auto& attachment : node->attachments())
-    {
+    for (const auto& attachment : node->attachments()) {
         auto node_physics = as_physics(attachment);
-        if (node_physics)
-        {
+        if (node_physics) {
             return node_physics;
         }
     }

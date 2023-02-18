@@ -102,16 +102,14 @@ template <typename T>
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
         (std::abs(v.x) >= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_unit_x();
     }
 
     if (
         (std::abs(v.y) >= std::abs(v.x)) &&
         (std::abs(v.y) >= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_unit_y();
     }
     return vector_types<T>::vec3_unit_z();
@@ -125,16 +123,14 @@ template <typename T>
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
         (std::abs(v.x) <= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_unit_x();
     }
 
     if (
         (std::abs(v.y) <= std::abs(v.x)) &&
         (std::abs(v.y) <= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_unit_y();
     }
 
@@ -149,16 +145,14 @@ template <typename T>
     if (
         (std::abs(v.x) >= std::abs(v.y)) &&
         (std::abs(v.x) >= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_index_x();
     }
 
     if (
         (std::abs(v.y) >= std::abs(v.x)) &&
         (std::abs(v.y) >= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_index_y();
     }
     return vector_types<T>::vec3_index_z();
@@ -172,16 +166,14 @@ template <typename T>
     if (
         (std::abs(v.x) <= std::abs(v.y)) &&
         (std::abs(v.x) <= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_index_x();
     }
 
     if (
         (std::abs(v.y) <= std::abs(v.x)) &&
         (std::abs(v.y) <= std::abs(v.z))
-    )
-    {
+    ) {
         return vector_types<T>::vec3_index_y();
     }
     return vector_types<T>::vec3_index_z();
@@ -271,8 +263,7 @@ template <typename T>
     };
 
     const vec4 world_homogeneous = world_from_clip * ndc;
-    if (world_homogeneous.w == T{0.0})
-    {
+    if (world_homogeneous.w == T{0.0}) {
         return {};
     }
 
@@ -615,8 +606,7 @@ template <typename T>
     const auto e  = glm::dot(v, w0);
     const auto denominator = (a * c) - (b * b);
 
-    if (denominator < std::numeric_limits<T>::epsilon())
-    {
+    if (denominator < std::numeric_limits<T>::epsilon()) {
         return {};
     }
 
@@ -637,8 +627,7 @@ template <typename T>
 ) -> std::optional<typename vector_types<T>::vec2>
 {
     const auto u = P1 - P0;
-    if (glm::dot(u, u) < std::numeric_limits<T>::epsilon())
-    {
+    if (glm::dot(u, u) < std::numeric_limits<T>::epsilon()) {
         return {};
     }
     const auto t = glm::dot(u, Q - P0) / dot(u, u);
@@ -653,8 +642,7 @@ template <typename T>
 ) -> std::optional<typename vector_types<T>::vec3>
 {
     const auto u = P1 - P0;
-    if (dot(u, u) < std::numeric_limits<T>::epsilon())
-    {
+    if (dot(u, u) < std::numeric_limits<T>::epsilon()) {
         return {};
     }
     const auto t = glm::dot(u, Q - P0) / dot(u, u);
@@ -671,8 +659,7 @@ template <typename T>
 ) -> std::optional<T>
 {
     typename vector_types<T>::vec2 PC;
-    if (!closest_point<T>(P0, P1, Q, PC))
-    {
+    if (!closest_point<T>(P0, P1, Q, PC)) {
         return {};
     }
     return glm::distance(Q, PC);
@@ -686,8 +673,7 @@ template <typename T>
 ) -> std::optional<T>
 {
     typename vector_types<T>::vec3 PC;
-    if (!closest_point<T>(P0, P1, Q, PC))
-    {
+    if (!closest_point<T>(P0, P1, Q, PC)) {
         return {};
     }
     //distance = glm::distance(Q, PC);
@@ -703,8 +689,7 @@ template <typename T>
 ) -> std::optional<T>
 {
     const T denominator = glm::dot(plane_normal, ray_direction);
-    if (std::abs(denominator) < std::numeric_limits<T>::epsilon())
-    {
+    if (std::abs(denominator) < std::numeric_limits<T>::epsilon()) {
         return {};
     }
     return glm::dot(point_on_plane - ray_origin, plane_normal) / denominator;
@@ -722,8 +707,7 @@ template <typename T>
     const auto q = point_to_project;
     const T nominator   = dot(n, q - p);
     const T denominator = dot(n, n);
-    if (std::abs(denominator) < std::numeric_limits<T>::epsilon())
-    {
+    if (std::abs(denominator) < std::numeric_limits<T>::epsilon()) {
         return {};
     }
     const T                              t            = nominator / denominator;
@@ -759,8 +743,7 @@ auto safe_normalize_cross(
 ) -> typename vector_types<T>::vec3
 {
     const T d = glm::dot(lhs, rhs);
-    if (std::abs(d) > T{0.999})
-    {
+    if (std::abs(d) > T{0.999}) {
         return min_axis<T>(lhs);
     }
 

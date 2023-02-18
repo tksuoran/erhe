@@ -40,13 +40,11 @@ void Textures::initialize_component()
 
 auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
 {
-    switch (format)
-    {
+    switch (format) {
         //using enum erhe::graphics::Image_format;
         case erhe::graphics::Image_format::srgb8:        return gl::Internal_format::srgb8;
         case erhe::graphics::Image_format::srgb8_alpha8: return gl::Internal_format::srgb8_alpha8;
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad image format %04x", static_cast<unsigned int>(format));
         }
     }
@@ -60,16 +58,14 @@ auto Textures::load(
     if (
         !std::filesystem::exists(path) ||
         std::filesystem::is_empty(path)
-    )
-    {
+    ) {
         return {};
     }
 
     erhe::graphics::Image_info image_info;
     PNG_loader                 loader;
 
-    if (!loader.open(path, image_info))
-    {
+    if (!loader.open(path, image_info)) {
         return {};
     }
 
@@ -92,8 +88,7 @@ auto Textures::load(
 
     const bool ok = loader.load(span);
     loader.close();
-    if (!ok)
-    {
+    if (!ok) {
         return {};
     }
 

@@ -29,8 +29,7 @@ public:
 
     void send_message(Message_type message)
     {
-        for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++)
-        {
+        for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++) {
             (*iter)(message);
         }
     }
@@ -42,10 +41,8 @@ public:
 
     void update()
     {
-        while (!m_messages.empty())
-        {
-            for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++)
-            {
+        while (!m_messages.empty()) {
+            for (auto iter = m_receivers.begin(); iter != m_receivers.end(); iter++) {
                 (*iter)(m_messages.front());
             }
             m_messages.pop();

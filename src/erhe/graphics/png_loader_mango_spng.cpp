@@ -16,13 +16,11 @@ namespace erhe::graphics
 
 [[nodiscard]] auto from_spng(const enum ::spng_format format) -> Image_format
 {
-    if (format == SPNG_FMT_RGB8)
-    {
+    if (format == SPNG_FMT_RGB8) {
         return Image_format::srgb8; // gl::Internal_format::rgb8;
     }
 
-    if (format == SPNG_FMT_RGBA8)
-    {
+    if (format == SPNG_FMT_RGBA8) {
         return Image_format::srgb8_alpha8; //gl::Internal_format::rgba8;
     }
 
@@ -33,8 +31,7 @@ namespace erhe::graphics
 {
     //using Format = mango::image::Format;
 
-    switch (format)
-    {
+    switch (format) {
         //using enum gl::Internal_format;
         case gl::Internal_format::rgb8:  return ::spng_format::SPNG_FMT_RGB8;
         case gl::Internal_format::rgba8: return ::spng_format::SPNG_FMT_RGBA8;
@@ -46,8 +43,7 @@ namespace erhe::graphics
 
 [[nodiscard]] auto to_spng(const Image_format format) -> enum ::spng_format
 {
-    switch (format)
-    {
+    switch (format) {
         //using enum Image_format;
         case Image_format::srgb8:        return ::spng_format::SPNG_FMT_RGB8;
         case Image_format::srgb8_alpha8: return ::spng_format::SPNG_FMT_RGBA8;
@@ -83,42 +79,36 @@ auto PNG_loader::open(
     m_file = std::make_unique<mango::filesystem::File>(path.string());
     mango::filesystem::File& file = *m_file;
     m_image_decoder = ::spng_ctx_new(0);
-    if (m_image_decoder == nullptr)
-    {
+    if (m_image_decoder == nullptr) {
         m_file.reset();
         return false;
     }
 
     int result{};
     result = ::spng_set_png_buffer(m_image_decoder, file.data(), file.size());
-    if (result != 0)
-    {
+    if (result != 0) {
         return false;
     }
 
     result = ::spng_decode_chunks(m_image_decoder);
-    if (result != 0)
-    {
+    if (result != 0) {
         return false;
     }
 
-    struct ::spng_ihdr ihdr
-    {
+    struct ::spng_ihdr ihdr{
         .width      = 0,
         .height     = 0,
         .bit_depth  = 0,
         .color_type = SPNG_COLOR_TYPE_GRAYSCALE
     };
     result = ::spng_get_ihdr(m_image_decoder, &ihdr);
-    if (result != 0)
-    {
+    if (result != 0) {
         return false;
     }
 
     std::size_t image_size{};
     result = ::spng_decoded_image_size(m_image_decoder, SPNG_FMT_RGBA8, &image_size);
-    if (result != 0)
-    {
+    if (result != 0) {
         return false;
     }
 
@@ -167,27 +157,23 @@ auto PNG_writer::write(
     gsl::span<std::byte>         data
 ) -> bool
 {
-    if (m_image_encoder == nullptr)
-    {
+    if (m_image_encoder == nullptr) {
         return false;
     }
 
     int result{};
     result = ::spng_set_option(m_image_encoder, SPNG_ENCODE_TO_BUFFER, 0);
-    if (result != 0)
-    {
+    if (result != 0) {
         return false;
     }
 
     result = ::spng_set_png_stream(m_image_encoder, spng_rw, this);
-    if (result != 0)
-    {
+    if (result != 0) {
         return false;
     }
 
     /* Specify image dimensions, PNG format */
-    struct ::spng_ihdr ihdr =
-    {
+    struct ::spng_ihdr ihdr{
         .width      = static_cast<uint32_t>(info.width),
         .height     = static_cast<uint32_t>(info.height),
         .bit_depth  = 8,

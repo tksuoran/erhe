@@ -76,24 +76,20 @@ auto Primitive_buffer::update(
     const auto& offsets            = m_primitive_interface->offsets;
     const auto  primitive_gpu_data = buffer.map();
     m_writer.begin(buffer.target());
-    for (const auto& mesh : meshes)
-    {
-        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
-        {
+    for (const auto& mesh : meshes) {
+        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
             log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("primitive buffer capacity exceeded");
             break;
         }
 
         ERHE_VERIFY(mesh);
-        if (!filter(mesh->get_flag_bits()))
-        {
+        if (!filter(mesh->get_flag_bits())) {
             continue;
         }
 
         const auto* node = mesh->get_node();
-        if (node == nullptr)
-        {
+        if (node == nullptr) {
             continue;
         }
 
@@ -102,10 +98,8 @@ auto Primitive_buffer::update(
         const glm::mat4 world_from_node = node->world_from_node();
 
         std::size_t mesh_primitive_index{0};
-        for (const auto& primitive : mesh_data.primitives)
-        {
-            if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
-            {
+        for (const auto& primitive : mesh_data.primitives) {
+            if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
                 log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
                 ERHE_FATAL("primitive buffer capacity exceeded");
                 break;
@@ -116,8 +110,7 @@ auto Primitive_buffer::update(
             const uint32_t power_of_two       = erhe::toolkit::next_power_of_two(count);
             const uint32_t mask               = power_of_two - 1;
             const uint32_t current_bits       = m_id_offset & mask;
-            if (current_bits != 0)
-            {
+            if (current_bits != 0) {
                 const auto add = power_of_two - current_bits;
                 m_id_offset += add;
             }
@@ -153,8 +146,7 @@ auto Primitive_buffer::update(
             m_writer.write_offset += entry_size;
             ERHE_VERIFY(m_writer.write_offset <= buffer.capacity_byte_count());
 
-            if (use_id_ranges)
-            {
+            if (use_id_ranges) {
                 m_id_ranges.push_back(
                     Id_range{
                         .offset          = m_id_offset,

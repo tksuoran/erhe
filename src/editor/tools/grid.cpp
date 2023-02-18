@@ -75,11 +75,9 @@ auto Grid::snap_grid_position(const glm::vec3& position_in_grid) const -> glm::v
 
 auto Grid::world_from_grid() const -> glm::mat4
 {
-    if (m_plane_type == Grid_plane_type::Node)
-    {
+    if (m_plane_type == Grid_plane_type::Node) {
         const erhe::scene::Node* node = get_node();
-        if (node != nullptr)
-        {
+        if (node != nullptr) {
             return node->world_from_node();
         }
     }
@@ -88,11 +86,9 @@ auto Grid::world_from_grid() const -> glm::mat4
 
 auto Grid::grid_from_world() const -> glm::mat4
 {
-    if (m_plane_type == Grid_plane_type::Node)
-    {
+    if (m_plane_type == Grid_plane_type::Node) {
         const erhe::scene::Node* node = get_node();
-        if (node != nullptr)
-        {
+        if (node != nullptr) {
             return node->node_from_world();
         }
     }
@@ -101,8 +97,7 @@ auto Grid::grid_from_world() const -> glm::mat4
 
 void Grid::render(const Render_context& context)
 {
-    if (!m_enable)
-    {
+    if (!m_enable) {
         return;
     }
 
@@ -124,8 +119,7 @@ void Grid::render(const Render_context& context)
     major_renderer.set_line_color(m_major_color);
     minor_renderer.set_line_color(m_minor_color);
 
-    for (cell = -m_cell_count; cell < m_cell_count; ++cell)
-    {
+    for (cell = -m_cell_count; cell < m_cell_count; ++cell) {
         float xz = static_cast<float>(cell) * m_cell_size;
 
         major_renderer.add_lines(
@@ -141,8 +135,7 @@ void Grid::render(const Render_context& context)
                 }
             }
         );
-        for (int i = 0; i < (m_cell_div - 1); ++i)
-        {
+        for (int i = 0; i < (m_cell_div - 1); ++i) {
             xz += minor_step;
             minor_renderer.add_lines(
                 m,
@@ -196,8 +189,7 @@ void Grid::imgui()
         grid_plane_type_strings,
         IM_ARRAYSIZE(grid_plane_type_strings)
     );
-    if (m_plane_type != Grid_plane_type::Node)
-    {
+    if (m_plane_type != Grid_plane_type::Node) {
         ImGui::DragScalarN(
             "Offset",
             ImGuiDataType_Float,
@@ -224,28 +216,22 @@ void Grid::imgui()
         const glm::mat4 rotation     = erhe::toolkit::create_rotation<float>( radians, plane_normal);
         m_world_from_grid = orientation * rotation * offset;
         m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
-    }
-    else
-    {
+    } else {
         {
             erhe::scene::Node* host_node = get_node();
-            if (host_node != nullptr)
-            {
+            if (host_node != nullptr) {
                 const std::string label        = fmt::format("Node: {}", host_node->get_name());
                 const std::string detach_label = fmt::format("Detach from {}", host_node->get_name());
                 ImGui::TextUnformatted(label.c_str());
-                if (ImGui::Button(detach_label.c_str()))
-                {
+                if (ImGui::Button(detach_label.c_str())) {
                     host_node->detach(this);
                 }
             }
         }
         const auto& host_node = g_selection_tool->get_first_selected_node();
-        if (host_node)
-        {
+        if (host_node) {
             const std::string label = fmt::format("Attach to {}", host_node->get_name());
-            if (ImGui::Button(label.c_str()))
-            {
+            if (ImGui::Button(label.c_str())) {
                 host_node->attach(
                     std::static_pointer_cast<Grid>(shared_from_this())
                 );
@@ -259,8 +245,7 @@ auto Grid::intersect_ray(
     const glm::vec3& ray_direction_in_world
 ) -> std::optional<glm::vec3>
 {
-    if (!m_enable)
-    {
+    if (!m_enable) {
         return {};
     }
 
@@ -272,8 +257,7 @@ auto Grid::intersect_ray(
         ray_origin_in_grid,
         ray_direction_in_grid
     );
-    if (!intersection.has_value())
-    {
+    if (!intersection.has_value()) {
         return {};
     }
     const glm::vec3 position_in_grid = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
@@ -283,8 +267,7 @@ auto Grid::intersect_ray(
         (position_in_grid.x >  m_cell_size * static_cast<float>(m_cell_count)) ||
         (position_in_grid.z < -m_cell_size * static_cast<float>(m_cell_count)) ||
         (position_in_grid.z >  m_cell_size * static_cast<float>(m_cell_count))
-    )
-    {
+    ) {
         return {};
     }
 

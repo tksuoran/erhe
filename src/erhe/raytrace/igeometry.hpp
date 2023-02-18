@@ -144,8 +144,8 @@ public:
     virtual void commit                    () = 0;
     virtual void enable                    () = 0;
     virtual void disable                   () = 0;
-    virtual void set_mask                  (const uint32_t mask) = 0;
-    virtual void set_vertex_attribute_count(const unsigned int count) = 0;
+    virtual void set_mask                  (uint32_t mask) = 0;
+    virtual void set_vertex_attribute_count(unsigned int count) = 0;
     virtual void set_buffer(
         Buffer_type  type,
         unsigned int slot,

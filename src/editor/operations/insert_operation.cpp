@@ -51,8 +51,7 @@ auto Node_insert_remove_operation::describe() const -> std::string
 {
     ERHE_VERIFY(m_node);
     std::stringstream ss;
-    switch (m_mode)
-    {
+    switch (m_mode) {
         //using enum Mode;
         case Mode::insert: ss << "Node_insert "; break;
         case Mode::remove: ss << "Node_remove "; break;
@@ -70,21 +69,18 @@ Node_insert_remove_operation::Node_insert_remove_operation(
     m_node             = parameters.node,
     m_selection_before = g_selection_tool->selection();
 
-    if (parameters.mode == Mode::insert)
-    {
+    if (parameters.mode == Mode::insert) {
         m_selection_after = g_selection_tool->selection();
         m_after_parent    = parameters.parent;
     }
 
-    if (parameters.mode == Mode::remove)
-    {
+    if (parameters.mode == Mode::remove) {
         m_node         = parameters.node;
         m_after_parent = std::shared_ptr<erhe::scene::Node>{};
 
         const auto& children = parameters.node->children();
         const auto parent = parameters.node->parent().lock();
-        for (const auto& child : children)
-        {
+        for (const auto& child : children) {
             m_parent_changes.push_back(
                 std::make_shared<Node_attach_operation>(
                     parent,
@@ -109,19 +105,16 @@ void Node_insert_remove_operation::execute()
 
     {
         erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr)
-        {
+        if (scene != nullptr) {
             scene->sanity_check();
         }
     }
 
-    if (m_mode == Mode::remove)
-    {
+    if (m_mode == Mode::remove) {
         m_before_parent = m_node->parent().lock();
         const auto& children = m_node->children();
         m_parent_changes.clear();
-        for (const auto& child : children)
-        {
+        for (const auto& child : children) {
             log_tools->info("  child -> parent {}", child->get_name(), m_before_parent->get_name());
             m_parent_changes.push_back(
                 std::make_shared<Node_attach_operation>(
@@ -134,8 +127,7 @@ void Node_insert_remove_operation::execute()
         }
     }
 
-    for (auto& child_parent_change : m_parent_changes)
-    {
+    for (auto& child_parent_change : m_parent_changes) {
         child_parent_change->execute();
     }
 
@@ -143,14 +135,12 @@ void Node_insert_remove_operation::execute()
 
     {
         erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr)
-        {
+        if (scene != nullptr) {
             scene->sanity_check();
         }
     }
 
-    if (g_selection_tool != nullptr)
-    {
+    if (g_selection_tool != nullptr) {
         g_selection_tool->set_selection(m_selection_after);
     }
 }
@@ -161,8 +151,7 @@ void Node_insert_remove_operation::undo()
 
     {
         erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr)
-        {
+        if (scene != nullptr) {
             scene->sanity_check();
         }
     }
@@ -175,8 +164,7 @@ void Node_insert_remove_operation::undo()
 
     {
         erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr)
-        {
+        if (scene != nullptr) {
             scene->sanity_check();
         }
     }
@@ -186,14 +174,12 @@ void Node_insert_remove_operation::undo()
         end = rend(m_parent_changes);
         i < end;
         ++i
-    )
-    {
+    ) {
         auto& child_parent_change = *i;
         child_parent_change->undo();
     }
 
-    if (g_selection_tool != nullptr)
-    {
+    if (g_selection_tool != nullptr) {
         g_selection_tool->set_selection(m_selection_before);
     }
 }

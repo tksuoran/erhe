@@ -67,10 +67,8 @@ auto Material_buffer::update(
     m_writer.begin(buffer.target());
     m_used_handles.clear();
     uint32_t material_index = 0;
-    for (const auto& material : materials)
-    {
-        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
-        {
+    for (const auto& material : materials) {
+        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
             log_render->critical("material buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("material buffer capacity exceeded");
             break;
@@ -89,8 +87,7 @@ auto Material_buffer::update(
                 )
             : 0;
 
-        if (handle != 0)
-        {
+        if (handle != 0) {
             m_used_handles.insert(handle);
         }
 
@@ -103,12 +100,9 @@ auto Material_buffer::update(
         write(gpu_data, m_writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
         write(gpu_data, m_writer.write_offset + offsets.transparency, as_span(material->transparency));
 
-        if (erhe::graphics::Instance::info.use_bindless_texture)
-        {
+        if (erhe::graphics::Instance::info.use_bindless_texture) {
             write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(handle));
-        }
-        else
-        {
+        } else {
             std::optional<std::size_t> opt_texture_unit = erhe::graphics::s_texture_unit_cache.allocate_texture_unit(handle);
             const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : 0);
             const uint64_t magic        = static_cast<uint64_t>(0x7fff'ffff);

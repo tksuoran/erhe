@@ -71,18 +71,15 @@ void Menu_window::imgui()
 {
     constexpr ImVec2 button_size{130.0f, 0.0f};
 
-    if (ImGui::Button("New Game", button_size))
-    {
+    if (ImGui::Button("New Game", button_size)) {
         hide();
         g_new_game_window->show();
     }
-    //if (ImGui::Button("Load Game"))
-    //{
+    //if (ImGui::Button("Load Game")) {
     //    hide();
     //    get<Map_window>()->show();
     //}
-    if (ImGui::Button("Map Editor", button_size))
-    {
+    if (ImGui::Button("Map Editor", button_size)) {
         hide();
         g_map_window->set_map(g_map_editor->get_map());
         //get<Map_editor>()->get_map();
@@ -90,20 +87,17 @@ void Menu_window::imgui()
         g_terrain_palette_window->show();
         g_map_tool_window       ->show();
     }
-    if (ImGui::Button("Terrain Editor", button_size))
-    {
+    if (ImGui::Button("Terrain Editor", button_size)) {
         hide();
         g_terrain_editor_window                 ->show();
         g_terrain_group_editor_window           ->show();
         g_terrain_replacement_rule_editor_window->show();
     }
-    if (ImGui::Button("Unit Editor", button_size))
-    {
+    if (ImGui::Button("Unit Editor", button_size)) {
         hide();
         g_unit_editor_window->show();
     }
-    if (ImGui::Button("Quit", button_size))
-    {
+    if (ImGui::Button("Quit", button_size)) {
         erhe::application::g_view->on_close();
     }
 }

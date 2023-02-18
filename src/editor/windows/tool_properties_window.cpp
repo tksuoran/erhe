@@ -47,13 +47,11 @@ void Tool_properties_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    if (g_tools == nullptr)
-    {
+    if (g_tools == nullptr) {
         return;
     }
     auto* const tool = g_tools->get_priority_tool();
-    if (tool == nullptr)
-    {
+    if (tool == nullptr) {
         return;
     }
     tool->tool_properties();

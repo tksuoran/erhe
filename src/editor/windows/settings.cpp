@@ -62,8 +62,7 @@ void Settings_window::initialize_component()
         &num_sample_counts
     );
 
-    if (num_sample_counts > 0)
-    {
+    if (num_sample_counts > 0) {
         m_msaa_sample_count_entry_values.resize(num_sample_counts);
         m_msaa_sample_count_entry_s_strings.resize(num_sample_counts);
         m_msaa_sample_count_entry_strings.resize(num_sample_counts);
@@ -78,8 +77,7 @@ void Settings_window::initialize_component()
             m_msaa_sample_count_entry_values.begin(),
             m_msaa_sample_count_entry_values.end()
         );
-        for (std::size_t i = 0; i < num_sample_counts; ++i)
-        {
+        for (std::size_t i = 0; i < num_sample_counts; ++i) {
             m_msaa_sample_count_entry_strings.at(i) = fmt::format("{}", m_msaa_sample_count_entry_values.at(i));
             m_msaa_sample_count_entry_s_strings.at(i) = m_msaa_sample_count_entry_strings.at(i).c_str();
         }
@@ -113,11 +111,9 @@ void Settings_window::initialize_component()
     read_ini();
 
     // Override configuration
-    for (std::size_t i = 0, end = m_settings.size(); i < end; ++i)
-    {
+    for (std::size_t i = 0, end = m_settings.size(); i < end; ++i) {
         const auto& settings = m_settings.at(i);
-        if (settings.name == m_used_settings)
-        {
+        if (settings.name == m_used_settings) {
             g_shadow_renderer->config.enabled                              = settings.shadow_enable;
             g_shadow_renderer->config.shadow_map_resolution                = settings.shadow_resolution;
             g_shadow_renderer->config.shadow_map_max_light_count           = settings.shadow_light_count;
@@ -165,11 +161,9 @@ void Settings_window::read_ini()
     {
         mINI::INIFile file("presets.ini");
         mINI::INIStructure ini;
-        if (file.read(ini))
-        {
+        if (file.read(ini)) {
             m_settings.clear();
-            for (const auto& i : ini)
-            {
+            for (const auto& i : ini) {
                 const auto& section = i.second;
                 Settings settings;
                 settings.name = section.get("name");
@@ -186,11 +180,9 @@ void Settings_window::read_ini()
     {
         mINI::INIFile file("user.ini");
         mINI::INIStructure ini;
-        if (file.read(ini))
-        {
+        if (file.read(ini)) {
             const auto& section = ini["user"];
-            if (section.has("used_preset"))
-            {
+            if (section.has("used_preset")) {
                 m_used_settings = section.get("used_preset");
             }
         }
@@ -202,8 +194,7 @@ void Settings_window::write_ini()
     {
         mINI::INIFile file("presets.ini");
         mINI::INIStructure ini;
-        for (const auto& settings : m_settings)
-        {
+        for (const auto& settings : m_settings) {
             ini[settings.name]["name"              ] = settings.name;
             ini[settings.name]["shadow_enable"     ] = fmt::format("{}", settings.shadow_enable     );
             ini[settings.name]["msaa_sample_count" ] = fmt::format("{}", settings.msaa_sample_count );
@@ -225,11 +216,9 @@ void Settings_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 
     ImGui::Text("Used Preset: %s", m_used_settings.c_str());
-    if (!m_settings.empty())
-    {
+    if (!m_settings.empty()) {
         m_settings_names.resize(m_settings.size());
-        for (std::size_t i = 0, end = m_settings.size(); i < end; ++i)
-        {
+        for (std::size_t i = 0, end = m_settings.size(); i < end; ++i) {
             m_settings_names.at(i) = m_settings.at(i).name.c_str();
         }
 
@@ -245,8 +234,7 @@ void Settings_window::imgui()
 
     ImGui::NewLine();
 
-    if (!m_settings.empty())
-    {
+    if (!m_settings.empty()) {
         Settings& settings = m_settings.at(m_settings_index);
 
         ImGui::InputText("Preset Name", &settings.name);
@@ -257,10 +245,8 @@ void Settings_window::imgui()
             m_msaa_sample_count_entry_index = 0;
             m_msaa_sample_count_entry_index < m_msaa_sample_count_entry_values.size();
             ++m_msaa_sample_count_entry_index
-        )
-        {
-            if (m_msaa_sample_count_entry_values[m_msaa_sample_count_entry_index] >= settings.msaa_sample_count)
-            {
+        ) {
+            if (m_msaa_sample_count_entry_values[m_msaa_sample_count_entry_index] >= settings.msaa_sample_count) {
                 break;
             }
         }
@@ -275,8 +261,7 @@ void Settings_window::imgui()
             m_msaa_sample_count_entry_s_strings.data(),
             static_cast<int>(m_msaa_sample_count_entry_s_strings.size())
         );
-        if (msaa_changed)
-        {
+        if (msaa_changed) {
             settings.msaa_sample_count = m_msaa_sample_count_entry_values[m_msaa_sample_count_entry_index];
         }
 
@@ -296,10 +281,8 @@ void Settings_window::imgui()
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
     const bool add_pressed = ImGui::Button("Add Preset", button_size);
-    if (add_pressed || m_settings.empty())
-    {
-        Settings new_settings
-        {
+    if (add_pressed || m_settings.empty()) {
+        Settings new_settings{
             .name = "New preset"
         };
         m_settings.push_back(new_settings);
@@ -307,25 +290,21 @@ void Settings_window::imgui()
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("Remove Preset", button_size))
-    {
+    if (ImGui::Button("Remove Preset", button_size)) {
         m_settings.erase(m_settings.begin() + m_settings_index);
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("Use Preset", button_size))
-    {
+    if (ImGui::Button("Use Preset", button_size)) {
         use_settings(m_settings.at(m_settings_index));
     }
 
     ImGui::Separator();
-    if (ImGui::Button("Load Presets", button_size))
-    {
+    if (ImGui::Button("Load Presets", button_size)) {
         read_ini();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Save Presets", button_size))
-    {
+    if (ImGui::Button("Save Presets", button_size)) {
         write_ini();
     }
 #endif

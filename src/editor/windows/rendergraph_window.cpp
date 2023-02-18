@@ -68,8 +68,7 @@ namespace {
 
 auto get_connection_color(const int key) -> ImVec4
 {
-    switch (key)
-    {
+    switch (key) {
         case erhe::application::Rendergraph_node_key::window:              return ImVec4{0.4f, 0.5f, 0.8f, 1.0f};
         case erhe::application::Rendergraph_node_key::viewport:            return ImVec4{0.8f, 1.0f, 0.2f, 1.0f};
         case erhe::application::Rendergraph_node_key::shadow_maps:         return ImVec4{0.6f, 0.6f, 0.6f, 1.0f};
@@ -95,19 +94,14 @@ void Rendergraph_window::imgui()
     //    ImGuiTreeNodeFlags_Leaf
     //};
 
-    if (ImGui::TreeNodeEx("Render Graph", parent_flags))
-    {
+    if (ImGui::TreeNodeEx("Render Graph", parent_flags)) {
         const auto& render_graph_nodes = m_render_graph->get_nodes();
-        for (const auto& node : render_graph_nodes)
-        {
-            if (ImGui::TreeNodeEx(node->get_name().c_str(), parent_flags | ImGuiTreeNodeFlags_DefaultOpen))
-            {
+        for (const auto& node : render_graph_nodes) {
+            if (ImGui::TreeNodeEx(node->get_name().c_str(), parent_flags | ImGuiTreeNodeFlags_DefaultOpen)) {
                 const auto& inputs = node->get_inputs();
-                for (const auto& input : inputs)
-                {
+                for (const auto& input : inputs) {
                     const auto& producer_node = input.producer_node.lock();
-                    if (producer_node)
-                    {
+                    if (producer_node) {
                         ImGui::Text(
                             "Input '%s' Producer %s (%s)",
                             input.key.c_str(),
@@ -118,11 +112,9 @@ void Rendergraph_window::imgui()
                 }
 
                 const auto& outputs = node->get_outputs();
-                for (const auto& output : outputs)
-                {
+                for (const auto& output : outputs) {
                     const auto& consumer_node = output.consumer_node.lock();
-                    if (consumer_node)
-                    {
+                    if (consumer_node) {
                         ImGui::Text(
                             "Output '%s' Consumer %s (%s)",
                             output.key.c_str(),
@@ -139,13 +131,10 @@ void Rendergraph_window::imgui()
     }
 
     const auto& scene_roots = m_editor_scenes->get_scene_roots();
-    if (ImGui::TreeNodeEx("Scenes", parent_flags))
-    {
-        for (const auto& scene_root : scene_roots)
-        {
+    if (ImGui::TreeNodeEx("Scenes", parent_flags)) {
+        for (const auto& scene_root : scene_roots) {
             ImGui::Text("%s", scene_root->get_name().c_str());
-            //if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags))
-            //{
+            //if (ImGui::TreeNodeEx(scene_root->name().c_str(), parent_flags)) {
             //    ImGui::TreePop();
             //}
         }
@@ -161,13 +150,11 @@ void Rendergraph_window::imgui()
     const bool x_gap_changed = ImGui::SliderFloat("X Gap", &erhe::application::g_rendergraph->x_gap, 0.0f, 200.0f);
     ImGui::SetNextItemWidth(400.0f);
     const bool y_gap_changed = ImGui::SliderFloat("Y Gap", &erhe::application::g_rendergraph->y_gap, 0.0f, 200.0f);
-    if (ImGui::Button("Automatic Layout") || x_gap_changed || y_gap_changed)
-    {
+    if (ImGui::Button("Automatic Layout") || x_gap_changed || y_gap_changed) {
         erhe::application::g_rendergraph->automatic_layout(m_image_size);
     }
 
-    if (m_imnodes_context == nullptr)
-    {
+    if (m_imnodes_context == nullptr) {
         m_imnodes_context = ImNodes::Ez::CreateContext();
     }
     ImNodes::Ez::SetContext(m_imnodes_context);
@@ -180,21 +167,16 @@ void Rendergraph_window::imgui()
 
     const auto& render_graph_nodes = erhe::application::g_rendergraph->get_nodes();
 
-    for (const auto& node : render_graph_nodes)
-    {
-        if (node->is_enabled())
-        {
+    for (const auto& node : render_graph_nodes) {
+        if (node->is_enabled()) {
             ImGui::Text("Execute render graph node '%s'", node->get_name().c_str());
-        }
-        else
-        {
+        } else {
             ImGui::Text("Disabled render graph node '%s'", node->get_name().c_str());
         }
     }
 
     ImNodes::Ez::PushStyleVar(ImNodesStyleVar_CurveStrength, m_curve_strength);
-    for (const auto& node : render_graph_nodes)
-    {
+    for (const auto& node : render_graph_nodes) {
         // Start rendering node
         const auto   glm_position = node->get_position();
         const ImVec2 start_position{glm_position.x, glm_position.y};
@@ -202,14 +184,12 @@ void Rendergraph_window::imgui()
         ImVec2       position = start_position;
         bool         selected = start_selected;
         const std::string label = fmt::format("{}: {} ", node->get_depth(), node->get_name());
-        if (ImNodes::Ez::BeginNode(node.get(), label.c_str(), &position, &selected))
-        {
+        if (ImNodes::Ez::BeginNode(node.get(), label.c_str(), &position, &selected)) {
             const auto& inputs  = node->get_inputs();
             const auto& outputs = node->get_outputs();
 
             std::vector<ImNodes::Ez::SlotInfo> input_slot_infos;
-            for (const auto& input : inputs)
-            {
+            for (const auto& input : inputs) {
                 input_slot_infos.push_back(
                     ImNodes::Ez::SlotInfo{
                         .title = input.label.c_str(),
@@ -221,10 +201,8 @@ void Rendergraph_window::imgui()
             ImNodes::Ez::InputSlots(input_slot_infos.data(), static_cast<int>(input_slot_infos.size()));
 
             // Custom node content may go here
-            for (const auto& output : outputs)
-            {
-                if (output.resource_routing == erhe::application::Resource_routing::None)
-                {
+            for (const auto& output : outputs) {
+                if (output.resource_routing == erhe::application::Resource_routing::None) {
                     ImGui::Text("<%s>", output.label.c_str());
                     continue;
                 }
@@ -239,8 +217,7 @@ void Rendergraph_window::imgui()
                     (texture->width () >= 1) &&
                     (texture->height() >= 1) &&
                     (gl_helpers::has_color(texture->internal_format()))
-                )
-                {
+                ) {
                     const float aspect = static_cast<float>(texture->width()) / static_cast<float>(texture->height());
                     ImGui::Text("%s:", output.label.c_str());
                     erhe::application::g_imgui_renderer->image(
@@ -252,8 +229,7 @@ void Rendergraph_window::imgui()
                         glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
                         false
                     );
-                    if (ImGui::IsItemHovered())
-                    {
+                    if (ImGui::IsItemHovered()) {
                         std::string size = fmt::format(
                             "Size: {} x {}",
                             texture->width(),
@@ -269,16 +245,13 @@ void Rendergraph_window::imgui()
                         ImGui::TextUnformatted(format.c_str());
                         ImGui::EndTooltip();
                     }
-                }
-                else
-                {
+                } else {
                     ImGui::Text("(%s)", output.label.c_str());
                 }
             }
 
             std::vector<ImNodes::Ez::SlotInfo> output_slot_infos;
-            for (const auto& output : outputs)
-            {
+            for (const auto& output : outputs) {
                 output_slot_infos.push_back(
                     ImNodes::Ez::SlotInfo{output.label.c_str(), output.key}
                 );
@@ -306,13 +279,10 @@ void Rendergraph_window::imgui()
             //// }
 
             // Render output connections of this node
-            for (const auto& output : outputs)
-            {
-                for (const auto& consumer_node : output.consumer_nodes)
-                {
+            for (const auto& output : outputs) {
+                for (const auto& consumer_node : output.consumer_nodes) {
                     const auto consumer = consumer_node.lock();
-                    if (!consumer)
-                    {
+                    if (!consumer) {
                         continue;
                     }
                     const erhe::application::Rendergraph_consumer_connector* consumer_input =
@@ -326,8 +296,7 @@ void Rendergraph_window::imgui()
                         output.label.c_str()
                     );
                     ImNodes::Ez::PopStyleColor(1);
-                    if (!connection_ok)
-                    {
+                    if (!connection_ok) {
                         log_scene->info("Connection delete");
                         // Remove deleted connections
                         //((MyNode*) connection.InputNode)->DeleteConnection(connection);
@@ -344,26 +313,19 @@ void Rendergraph_window::imgui()
         if (
             (position.x != start_position.x) ||
             (position.y != start_position.y)
-        )
-        {
+        ) {
             node->set_position(glm::vec2{position.x, position.y});
         }
-        if (selected != start_selected)
-        {
+        if (selected != start_selected) {
             node->set_selected(selected);
         }
 
-        //if (node->Selected && ImGui::IsKeyPressed(ImGuiKey_Delete) && ImGui::IsWindowFocused())
-        //{
+        //if (node->Selected && ImGui::IsKeyPressed(ImGuiKey_Delete) && ImGui::IsWindowFocused()) {
         //    // Deletion order is critical: first we delete connections to us
-        //    for (auto& connection : node->Connections)
-        //    {
-        //        if (connection.OutputNode == node)
-        //        {
+        //    for (auto& connection : node->Connections) {
+        //        if (connection.OutputNode == node) {
         //            ((MyNode*) connection.InputNode)->DeleteConnection(connection);
-        //        }
-        //        else
-        //        {
+        //        } else {
         //            ((MyNode*) connection.OutputNode)->DeleteConnection(connection);
         //        }
         //    }
@@ -372,39 +334,31 @@ void Rendergraph_window::imgui()
         //
         //    delete node;
         //    it = nodes.erase(it);
-        //}
-        //else
-        //{
+        //} else {
         //    ++it;
         //}
     }
     ImNodes::Ez::PopStyleVar(1);
 
-    if (ImGui::IsMouseReleased(1) && ImGui::IsWindowHovered() && !ImGui::IsMouseDragging(1))
-    {
+    if (ImGui::IsMouseReleased(1) && ImGui::IsWindowHovered() && !ImGui::IsMouseDragging(1)) {
         ImGui::FocusWindow(ImGui::GetCurrentWindow());
         ImGui::OpenPopup("NodesContextMenu");
     }
 
-    if (ImGui::BeginPopup("NodesContextMenu"))
-    {
-        //// for (const auto& desc : available_nodes)
-        //// {
-        ////     if (ImGui::MenuItem(desc.first.c_str()))
-        ////     {
+    if (ImGui::BeginPopup("NodesContextMenu")) {
+        //// for (const auto& desc : available_nodes) {
+        ////     if (ImGui::MenuItem(desc.first.c_str())) {
         ////         nodes.push_back(desc.second());
         ////         ImNodes::AutoPositionNode(nodes.back());
         ////     }
         //// }
 
         ImGui::Separator();
-        if (ImGui::MenuItem("Reset Zoom"))
-        {
+        if (ImGui::MenuItem("Reset Zoom")) {
             ImNodes::GetCurrentCanvas()->Zoom = 1;
         }
 
-        if (ImGui::IsAnyMouseDown() && !ImGui::IsWindowHovered())
-        {
+        if (ImGui::IsAnyMouseDown() && !ImGui::IsWindowHovered()) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

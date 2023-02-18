@@ -111,8 +111,7 @@ auto Imgui_window::begin() -> bool
         &keep_visible,
         flags()
     );
-    if (!keep_visible)
-    {
+    if (!keep_visible) {
         hide();
     }
     return not_collapsed;

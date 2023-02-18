@@ -68,8 +68,7 @@ Headset_view_resources::Headset_view_resources(
     framebuffer = std::make_shared<Framebuffer>(create_info);
     framebuffer->set_debug_label(fmt::format("XR {}", slot));
 
-    if (!framebuffer->check_status())
-    {
+    if (!framebuffer->check_status()) {
         log_headset->warn("Invalid framebuffer for headset - disabling headset");
         return;
     }

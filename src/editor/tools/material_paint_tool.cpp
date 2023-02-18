@@ -40,29 +40,25 @@ Material_paint_command::Material_paint_command()
 
 void Material_paint_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive)
-    {
+    if (get_command_state() != erhe::application::State::Inactive) {
         return;
     }
 
-    if (g_material_paint_tool->on_paint_ready())
-    {
+    if (g_material_paint_tool->on_paint_ready()) {
         set_ready();
     }
 }
 
 auto Material_paint_command::try_call() -> bool
 {
-    if (get_command_state() == erhe::application::State::Inactive)
-    {
+    if (get_command_state() == erhe::application::State::Inactive) {
         return false;
     }
 
     if (
         g_material_paint_tool->on_paint() &&
         (get_command_state() == erhe::application::State::Ready)
-    )
-    {
+    ) {
         set_active();
     }
 
@@ -71,13 +67,11 @@ auto Material_paint_command::try_call() -> bool
 
 void Material_pick_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive)
-    {
+    if (get_command_state() != erhe::application::State::Inactive) {
         return;
     }
 
-    if (g_material_paint_tool->on_pick_ready())
-    {
+    if (g_material_paint_tool->on_pick_ready()) {
         set_ready();
     }
 }
@@ -89,16 +83,14 @@ Material_pick_command::Material_pick_command()
 
 auto Material_pick_command::try_call() -> bool
 {
-    if (get_command_state() == erhe::application::State::Inactive)
-    {
+    if (get_command_state() == erhe::application::State::Inactive) {
         return false;
     }
 
     if (
         g_material_paint_tool->on_pick() &&
         (get_command_state() == erhe::application::State::Ready)
-    )
-    {
+    ) {
        set_active();
     }
 
@@ -156,8 +148,7 @@ void Material_paint_tool::initialize_component()
     commands.bind_command_to_mouse_button(&m_pick_command,  erhe::toolkit::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
-    if (headset != nullptr)
-    {
+    if (headset != nullptr) {
         auto& xr_right = headset->get_actions_right();
         commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.trigger_click, erhe::application::Button_trigger::Button_pressed);
         commands.bind_command_to_xr_boolean_action(&m_paint_command, xr_right.a_click, erhe::application::Button_trigger::Button_pressed);
@@ -175,8 +166,7 @@ void Material_paint_tool::initialize_component()
 auto Material_paint_tool::on_paint_ready() -> bool
 {
     const auto viewport_window = g_viewport_windows->hover_window();
-    if (!viewport_window)
-    {
+    if (!viewport_window) {
         return false;
     }
     const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
@@ -186,8 +176,7 @@ auto Material_paint_tool::on_paint_ready() -> bool
 auto Material_paint_tool::on_pick_ready() -> bool
 {
     const auto viewport_window = g_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
-    {
+    if (viewport_window == nullptr) {
         return false;
     }
     const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
@@ -196,19 +185,16 @@ auto Material_paint_tool::on_pick_ready() -> bool
 
 auto Material_paint_tool::on_paint() -> bool
 {
-    if (m_material == nullptr)
-    {
+    if (m_material == nullptr) {
         return false;
     }
 
     const auto viewport_window = g_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
-    {
+    if (viewport_window == nullptr) {
         return false;
     }
     const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || !hover.mesh)
-    {
+    if (!hover.valid || !hover.mesh) {
         return false;
     }
     const auto& target_mesh      = hover.mesh;
@@ -222,13 +208,11 @@ auto Material_paint_tool::on_paint() -> bool
 auto Material_paint_tool::on_pick() -> bool
 {
     const auto viewport_window = g_viewport_windows->hover_window();
-    if (viewport_window == nullptr)
-    {
+    if (viewport_window == nullptr) {
         return false;
     }
     const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || !hover.mesh)
-    {
+    if (!hover.valid || !hover.mesh) {
         return false;
     }
     const auto& target_mesh      = hover.mesh;
@@ -243,22 +227,18 @@ void Material_paint_tool::set_active_command(const int command)
 {
     m_active_command = command;
 
-    switch (command)
-    {
-        case c_command_paint:
-        {
+    switch (command) {
+        case c_command_paint: {
             m_paint_command.enable();
             m_pick_command.disable();
             break;
         }
-        case c_command_pick:
-        {
+        case c_command_pick: {
             m_paint_command.disable();
             m_pick_command.enable();
             break;
         }
-        default:
-        {
+        default: {
             break;
         }
     }
@@ -266,12 +246,10 @@ void Material_paint_tool::set_active_command(const int command)
 
 void Material_paint_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    if (new_priority < old_priority)
-    {
+    if (new_priority < old_priority) {
         disable();
     }
-    if (new_priority > old_priority)
-    {
+    if (new_priority > old_priority) {
         enable();
     }
 }
@@ -280,14 +258,12 @@ void Material_paint_tool::tool_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     auto* hover_scene_view = Tool::get_hover_scene_view();
-    if (hover_scene_view == nullptr)
-    {
+    if (hover_scene_view == nullptr) {
         return;
     }
 
     const auto& scene_root = hover_scene_view->get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return;
     }
 
@@ -295,8 +271,7 @@ void Material_paint_tool::tool_properties()
     int command = m_active_command;
     ImGui::RadioButton("Paint", &command, c_command_paint); ImGui::SameLine();
     ImGui::RadioButton("Pick",  &command, c_command_pick);
-    if (command != m_active_command)
-    {
+    if (command != m_active_command) {
         set_active_command(command);
     }
 

@@ -23,15 +23,13 @@ namespace erhe::application {
 //// {
 ////     // Connection if compatible if producer and consumer have specified
 ////     // exactly the same resource ownership
-////     if (producer_resource_ownership == consumer_resource_ownership)
-////     {
+////     if (producer_resource_ownership == consumer_resource_ownership) {
 ////         return true;
 ////     }
 //// 
 ////     // If consumer asks resource from the producer, either
 ////     // producer owns the resource, or some other sink owns it.
-////     if (consumer_resource_ownership == Resource_ownership::Sink_asks_resource_from_producer)
-////     {
+////     if (consumer_resource_ownership == Resource_ownership::Sink_asks_resource_from_producer) {
 ////         return
 ////             (producer_resource_ownership == Resource_ownership::Producer_owns_resource) ||
 ////             (producer_resource_ownership == Resource_ownership::Sink_owns_resource);

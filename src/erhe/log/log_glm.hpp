@@ -9,8 +9,7 @@ template <> struct fmt::formatter<glm::vec2>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -29,8 +28,7 @@ template <> struct fmt::formatter<glm::vec3>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -49,8 +47,7 @@ template <> struct fmt::formatter<glm::vec4>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -70,8 +67,7 @@ template <> struct fmt::formatter<glm::dvec2>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -90,8 +86,7 @@ template <> struct fmt::formatter<glm::dvec3>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -110,8 +105,7 @@ template <> struct fmt::formatter<glm::dvec4>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -131,8 +125,7 @@ template <> struct fmt::formatter<glm::ivec2>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -151,8 +144,7 @@ template <> struct fmt::formatter<glm::ivec3>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 
@@ -171,8 +163,7 @@ template <> struct fmt::formatter<glm::ivec4>
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {
         auto it = ctx.begin(), end = ctx.end();
-        if (it != end && *it != '}')
-        {
+        if (it != end && *it != '}') {
             throw format_error("invalid format");
         }
 

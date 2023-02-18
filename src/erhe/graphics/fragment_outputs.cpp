@@ -10,8 +10,7 @@ static auto gl_fragment_output_type_name(
     const gl::Fragment_shader_output_type type
 ) -> char const *
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum gl::Fragment_shader_output_type;
         case gl::Fragment_shader_output_type::int_:              return "int    ";
         case gl::Fragment_shader_output_type::int_vec2:          return "ivec2  ";
@@ -29,8 +28,7 @@ static auto gl_fragment_output_type_name(
         case gl::Fragment_shader_output_type::double_vec2:       return "dvec2  ";
         case gl::Fragment_shader_output_type::double_vec3:       return "dvec3  ";
         case gl::Fragment_shader_output_type::double_vec4:       return "dvec4  ";
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad fragment outout type");
         }
     }
@@ -48,8 +46,7 @@ auto Fragment_outputs::source() const -> std::string
 {
     std::stringstream ss;
 
-    for (const auto& output : m_outputs)
-    {
+    for (const auto& output : m_outputs) {
         ss << "layout(location = " << output.location << ") ";
         ss << "out ";
         ss << gl_fragment_output_type_name(output.type) << " ";

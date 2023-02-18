@@ -130,8 +130,7 @@ void Hotbar::initialize_component()
     m_y       = config.y;
     m_z       = config.z;
 
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return;
     }
 
@@ -182,8 +181,7 @@ void Hotbar::initialize_component()
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
     m_rendertarget_node->attach(m_rendertarget_mesh);
     auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
-    if (node_raytrace)
-    {
+    if (node_raytrace) {
         m_rendertarget_node->attach(node_raytrace);
         m_rendertarget_node->show();
     }
@@ -212,15 +210,12 @@ void Hotbar::post_initialize()
     m_slot_first = 0;
     m_slot_last  = 0;
     const auto& tools = g_tools->get_tools();
-    for (Tool* tool : tools)
-    {
+    for (Tool* tool : tools) {
         const auto opt_icon = tool->get_icon();
-        if (!opt_icon.has_value())
-        {
+        if (!opt_icon.has_value()) {
             continue;
         }
-        if (erhe::toolkit::test_all_rhs_bits_set(tool->get_flags(), Tool_flags::toolbox))
-        {
+        if (erhe::toolkit::test_all_rhs_bits_set(tool->get_flags(), Tool_flags::toolbox)) {
             m_slot_last = m_slots.size();
             m_slots.push_back(tool);
         }
@@ -231,24 +226,19 @@ void Hotbar::on_message(Editor_message& message)
 {
     Tool::on_message(message);
 
-    if (!m_enabled || !m_show)
-    {
+    if (!m_enabled || !m_show) {
         return;
     }
 
     using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view))
-    {
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         Scene_view* const old_scene_view = m_hover_scene_view;
-        if (message.scene_view != old_scene_view)
-        {
+        if (message.scene_view != old_scene_view) {
             using Rendergraph_node = erhe::application::Rendergraph_node;
             auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
             auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
-            if (old_node != new_node)
-            {
-                if (old_node)
-                {
+            if (old_node != new_node) {
+                if (old_node) {
                     erhe::application::g_rendergraph->disconnect(
                         erhe::application::Rendergraph_node_key::rendertarget_texture,
                         m_rendertarget_imgui_viewport,
@@ -257,8 +247,7 @@ void Hotbar::on_message(Editor_message& message)
                 }
                 m_hover_scene_view = message.scene_view;
                 set_visibility(static_cast<bool>(new_node));
-                if (new_node)
-                {
+                if (new_node) {
                     erhe::application::g_rendergraph->connect(
                         erhe::application::Rendergraph_node_key::rendertarget_texture,
                         m_rendertarget_imgui_viewport,
@@ -269,26 +258,19 @@ void Hotbar::on_message(Editor_message& message)
         }
     }
 
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
-    {
-        if ((m_hover_scene_view != nullptr) && (m_hover_scene_view == message.scene_view))
-        {
-            if (message.scene_view != nullptr)
-            {
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
+        if ((m_hover_scene_view != nullptr) && (m_hover_scene_view == message.scene_view)) {
+            if (message.scene_view != nullptr) {
                 const auto& camera = message.scene_view->get_camera();
-                if (camera)
-                {
+                if (camera) {
                     const auto* camera_node = camera->get_node();
-                    if (camera_node != nullptr)
-                    {
+                    if (camera_node != nullptr) {
                         const auto& world_from_camera = camera_node->world_from_node();
                         update_node_transform(world_from_camera);
                         auto scene_root = message.scene_view->get_scene_root();
-                        if (scene_root)
-                        {
+                        if (scene_root) {
                             auto* scene = scene_root->get_hosted_scene();
-                            if (scene != nullptr)
-                            {
+                            if (scene != nullptr) {
                                 m_rendertarget_node->set_parent(scene->get_root_node());
                             }
                         }
@@ -304,15 +286,13 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     {
         const auto& headset_view = g_headset_view;
-        if (headset_view)
-        {
+        if (headset_view) {
             return headset_view->get_camera();
         }
     }
 #endif
     const auto viewport_window = g_viewport_windows->hover_window();
-    if (!viewport_window)
-    {
+    if (!viewport_window) {
         return {};
     }
     return viewport_window->get_camera();
@@ -369,8 +349,7 @@ void Hotbar::on_begin()
 
 void Hotbar::handle_slot_update()
 {
-    if ((m_slot >= m_slot_first) && (m_slot <= m_slot_last))
-    {
+    if ((m_slot >= m_slot_first) && (m_slot <= m_slot_last)) {
         Tool* new_tool = m_slots.at(m_slot);
         g_tools->set_priority_tool(new_tool);
     }
@@ -378,30 +357,26 @@ void Hotbar::handle_slot_update()
 
 auto Hotbar::try_call(erhe::application::Input_arguments& input) -> bool
 {
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return false;
     }
 
     const auto position = input.vector2.absolute_value;
 
     const auto old_slot = m_slot;
-    if (position.x < -0.2f)
-    {
+    if (position.x < -0.2f) {
         m_slot = (m_slot == m_slot_first)
             ? m_slot_last
             : m_slot - 1;
     }
 
-    if (position.x > 0.2f)
-    {
+    if (position.x > 0.2f) {
         m_slot = (m_slot == m_slot_last)
             ? m_slot_first
             : m_slot + 1;
     }
 
-    if (m_slot != old_slot)
-    {
+    if (m_slot != old_slot) {
         handle_slot_update();
     }
 
@@ -410,8 +385,7 @@ auto Hotbar::try_call(erhe::application::Input_arguments& input) -> bool
 
 auto Hotbar::get_color(const int color) -> glm::vec4&
 {
-    switch (color)
-    {
+    switch (color) {
         case 0:  return m_color_inactive;
         case 1:  return m_color_hover;
         case 2:  return m_color_active;
@@ -448,13 +422,11 @@ void Hotbar::tool_button(const uint32_t id, Tool* tool)
     const bool      is_boosted        {tool->get_priority_boost() > 0};
     const auto      opt_icon          {tool->get_icon()};
 
-    if (!opt_icon)
-    {
+    if (!opt_icon) {
         return;
     }
 
-    if (is_boosted)
-    {
+    if (is_boosted) {
         ImGui::PushStyleColor(ImGuiCol_Button, m_color_active);
     }
 
@@ -465,18 +437,15 @@ void Hotbar::tool_button(const uint32_t id, Tool* tool)
         tint_color
     );
 
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("%s", tool->get_description());
     }
 
-    if (is_boosted)
-    {
+    if (is_boosted) {
         ImGui::PopStyleColor();
     }
 
-    if (is_pressed)
-    {
+    if (is_pressed) {
         g_tools->set_priority_tool(is_boosted ? nullptr : tool);
     }
 }
@@ -495,8 +464,7 @@ void Hotbar::imgui()
     ImGui::PushStyleColor(ImGuiCol_Button,        m_color_inactive);
 
     uint32_t id = 0;
-    for (auto* tool : m_slots)
-    {
+    for (auto* tool : m_slots) {
         tool_button(++id, tool);
     }
     ImGui::PopStyleColor(3);
@@ -508,8 +476,7 @@ void Hotbar::set_visibility(const bool value)
 {
     Imgui_window::set_visibility(value);
 
-    if (!m_rendertarget_mesh)
-    {
+    if (!m_rendertarget_mesh) {
         return;
     }
 

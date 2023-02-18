@@ -70,14 +70,11 @@ Font::Font(
         outline_thickness
     );
 
-    if (m_hinting)
-    {
+    if (m_hinting) {
         //m_hint_mode = FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_LIGHT;
         //m_hint_mode = FT_LOAD_FORCE_AUTOHINT;
         m_hint_mode = 0;
-    }
-    else
-    {
+    } else {
         m_hint_mode = FT_LOAD_NO_HINTING; // NOLINT(hicpp-signed-bitwise)
     }
 
@@ -91,8 +88,7 @@ Font::Font(
     m_pixel_size = size;
 
     const bool render_ok = render();
-    if (!render_ok)
-    {
+    if (!render_ok) {
          log_font->error("Font loading failed. Check working directory '{}'", current_path.string());
     }
 }
@@ -103,8 +99,7 @@ auto Font::render() -> bool
 
     FT_Error res;
     res = FT_Init_FreeType(&m_freetype_library);
-    if (res != FT_Err_Ok)
-    {
+    if (res != FT_Err_Ok) {
         log_font->error("FT_Init_FreeType() returned error code {}", res);
         return false;
     }
@@ -118,8 +113,7 @@ auto Font::render() -> bool
     }
 
     res = FT_New_Face(m_freetype_library, m_path.string().c_str(), 0, &m_freetype_face);
-    if (res != FT_Err_Ok)
-    {
+    if (res != FT_Err_Ok) {
         log_font->error(
             "FT_New_Face(pathname = '{}') returned error code {}",
             m_path.string(),
@@ -128,8 +122,7 @@ auto Font::render() -> bool
         return false;
     }
     res = FT_Select_Charmap(m_freetype_face, FT_ENCODING_UNICODE);
-    if (res != FT_Err_Ok)
-    {
+    if (res != FT_Err_Ok) {
         log_font->error("FT_Select_Charmap() returned error code {}", res);
         return false;
     }
@@ -139,8 +132,7 @@ auto Font::render() -> bool
     auto ysize = m_pixel_size << 6u;
 
     res = FT_Set_Char_Size(m_freetype_face, xsize, ysize, m_dpi, m_dpi);
-    if (res != FT_Err_Ok)
-    {
+    if (res != FT_Err_Ok) {
         log_font->error("FT_Set_Char_Size() returned error code {}", res);
         return false;
     }
@@ -160,8 +152,7 @@ auto Font::render() -> bool
     for (float outline_thickness = m_outline_thickness;
          outline_thickness > 0.0f;
          outline_thickness -= 10.0f
-    )
-    {
+    ) {
         outline_sizes.emplace_back(outline_thickness);
     }
 
@@ -171,21 +162,19 @@ auto Font::render() -> bool
 
     // First pass: Render glyphs to bitmaps, keep track of glyph box
     for (auto c : m_chars)
-    {
+{
         const auto uc = static_cast<unsigned char>(c);
         glyphs[c] = make_unique<Glyph>(m_freetype_library, face, uc, m_bolding, 0.0f, m_hint_mode);
         const auto glyph = glyphs[c].get();
         glyph_box[c] = glyphs[c]->bitmap;
         m_glyph_to_char[glyph->glyph_index] = c;
 
-        if (m_outline_thickness == 0.0f)
-        {
+        if (m_outline_thickness == 0.0f) {
             continue;
         }
 
         auto& box = glyph_box[c];
-        for (size_t i = 0; i < outline_glyphs_vector.size(); ++i)
-        {
+        for (size_t i = 0; i < outline_glyphs_vector.size(); ++i) {
             auto& outline_glyphs = outline_glyphs_vector[i];
             auto  og             = make_unique<Glyph>(m_freetype_library, face, uc, m_bolding, outline_sizes[i], m_hint_mode);
             box.left   = std::min(box.left,   og->bitmap.left);
@@ -200,43 +189,37 @@ auto Font::render() -> bool
     rbp::SkylineBinPack packer;
     m_texture_width  = 2;
     m_texture_height = 2;
-    for (;;)
-    {
+    for (;;) {
         // Reserve 1 pixel border
         packer.Init(m_texture_width - 2, m_texture_height - 2, false);
 
         bool pack_failed = false;
-        for (auto c : m_chars)
-        {
+        for (auto c : m_chars) {
             const auto& box = glyph_box[c];
             const int width  = box.right - box.left;
             const int height = box.top   - box.bottom;
-            if (width == 0 || height == 0)
-            {
+            if (width == 0 || height == 0) {
                 glyphs[c]->atlas_rect = {};
                 continue;
             }
 
             glyphs[c]->atlas_rect = packer.Insert(width + 1, height + 1, rbp::SkylineBinPack::LevelBottomLeft);
-            if ((glyphs[c]->atlas_rect.width  == 0) ||
-                (glyphs[c]->atlas_rect.height == 0))
-            {
+            if (
+                (glyphs[c]->atlas_rect.width  == 0) ||
+                (glyphs[c]->atlas_rect.height == 0)
+            ) {
                 pack_failed = true;
                 break;
             }
         }
 
-        if (!pack_failed)
-        {
+        if (!pack_failed) {
             break;
         }
 
-        if (m_texture_width <= m_texture_height)
-        {
+        if (m_texture_width <= m_texture_height) {
             m_texture_width *= 2;
-        }
-        else
-        {
+        } else {
             m_texture_height *= 2;
         }
 
@@ -248,11 +231,9 @@ auto Font::render() -> bool
     // Third pass: render glyphs
     m_bitmap = make_unique<Bitmap>(m_texture_width, m_texture_height, 2);
     m_bitmap->fill(0);
-    for (auto c : m_chars)
-    {
+    for (auto c : m_chars) {
         auto uc = static_cast<unsigned char>(c);
-        if (!glyphs[c])
-        {
+        if (!glyphs[c]) {
             continue;
         }
         auto  g          = glyphs[c].get();
@@ -284,8 +265,7 @@ auto Font::render() -> bool
         d.b_top    = box.top;
         d.rotated  = rotated;
 
-        if (!rotated)
-        {
+        if (!rotated) {
             d.u[0] =  fx       * x_scale;
             d.v[0] =  fy       * y_scale;
             d.u[1] = (fx + fw) * x_scale;
@@ -294,9 +274,7 @@ auto Font::render() -> bool
             d.v[2] = (fy + fh) * y_scale;
             d.u[3] =  fx       * x_scale;
             d.v[3] = (fy + fh) * y_scale;
-        }
-        else
-        {
+        } else {
             d.u[0] = (fx + fh) * x_scale;
             d.v[0] =  fy       * y_scale;
             d.u[1] = (fx + fh) * x_scale;
@@ -306,8 +284,7 @@ auto Font::render() -> bool
             d.u[3] =  fx       * x_scale;
             d.v[3] =  fy       * y_scale;
         }
-        if (render)
-        {
+        if (render) {
             m_bitmap->blit<false>(
                 g->bitmap.width,
                 g->bitmap.height,
@@ -320,10 +297,8 @@ auto Font::render() -> bool
                 0,
                 rotated
             );
-            if (m_outline_thickness > 0.0f)
-            {
-                for (auto& outline_glyphs : outline_glyphs_vector)
-                {
+            if (m_outline_thickness > 0.0f) {
+                for (auto& outline_glyphs : outline_glyphs_vector) {
                     const auto og = outline_glyphs[c].get();
                     m_bitmap->blit<true>(
                         og->bitmap.width,
@@ -353,8 +328,7 @@ namespace {
 
 auto c_str_charmap(FT_Encoding encoding) -> const char*
 {
-    switch (encoding)
-    {
+    switch (encoding) {
         case FT_ENCODING_NONE:           return "none";
         case FT_ENCODING_MS_SYMBOL:      return "MS Symbol";
         case FT_ENCODING_UNICODE:        return "Unicode";
@@ -384,56 +358,43 @@ void Font::trace_info() const
     {
         std::stringstream ss;
         ss << "face flags    ";
-        if (face->face_flags & FT_FACE_FLAG_SCALABLE)
-        {
+        if (face->face_flags & FT_FACE_FLAG_SCALABLE) {
             ss << "scalable ";
         }
-        if (face->face_flags & FT_FACE_FLAG_FIXED_WIDTH)
-        {
+        if (face->face_flags & FT_FACE_FLAG_FIXED_WIDTH) {
             ss << "fixed_width ";
         }
-        if (face->face_flags & FT_FACE_FLAG_SFNT)
-        {
+        if (face->face_flags & FT_FACE_FLAG_SFNT) {
             ss << "sfnt ";
         }
-        if (face->face_flags & FT_FACE_FLAG_HORIZONTAL)
-        {
+        if (face->face_flags & FT_FACE_FLAG_HORIZONTAL) {
             ss << "horizontal ";
         }
-        if (face->face_flags & FT_FACE_FLAG_VERTICAL)
-        {
+        if (face->face_flags & FT_FACE_FLAG_VERTICAL) {
             ss << "vertical ";
         }
-        if (face->face_flags & FT_FACE_FLAG_KERNING)
-        {
+        if (face->face_flags & FT_FACE_FLAG_KERNING) {
             ss << "kerning ";
         }
-        if (face->face_flags & FT_FACE_FLAG_FAST_GLYPHS)
-        {
+        if (face->face_flags & FT_FACE_FLAG_FAST_GLYPHS) {
             ss << "fast_glyphs ";
         }
-        if (face->face_flags & FT_FACE_FLAG_MULTIPLE_MASTERS)
-        {
+        if (face->face_flags & FT_FACE_FLAG_MULTIPLE_MASTERS) {
             ss << "multiple_masters ";
         }
-        if (face->face_flags & FT_FACE_FLAG_GLYPH_NAMES)
-        {
+        if (face->face_flags & FT_FACE_FLAG_GLYPH_NAMES) {
             ss << "glyph_names ";
         }
-        if (face->face_flags & FT_FACE_FLAG_EXTERNAL_STREAM)
-        {
+        if (face->face_flags & FT_FACE_FLAG_EXTERNAL_STREAM) {
             ss << "external_stream ";
         }
-        if (face->face_flags & FT_FACE_FLAG_HINTER)
-        {
+        if (face->face_flags & FT_FACE_FLAG_HINTER) {
             ss << "hinter ";
         }
-        if (face->face_flags & FT_FACE_FLAG_CID_KEYED)
-        {
+        if (face->face_flags & FT_FACE_FLAG_CID_KEYED) {
             ss << "cid_keyed ";
         }
-        if (face->face_flags & FT_FACE_FLAG_TRICKY)
-        {
+        if (face->face_flags & FT_FACE_FLAG_TRICKY) {
             ss << "tricky ";
         }
         log_font->trace("{}", ss.str());
@@ -442,12 +403,10 @@ void Font::trace_info() const
     {
         std::stringstream ss;
         ss << "style flags   ";
-        if (face->style_flags & FT_STYLE_FLAG_ITALIC)
-        {
+        if (face->style_flags & FT_STYLE_FLAG_ITALIC) {
             ss << "italic ";
         }
-        if (face->style_flags & FT_STYLE_FLAG_BOLD)
-        {
+        if (face->style_flags & FT_STYLE_FLAG_BOLD) {
             ss << "bold ";
         }
         log_font->trace("{}", ss.str());
@@ -457,8 +416,7 @@ void Font::trace_info() const
     log_font->trace("style name    {}", face->style_name);
 
     log_font->trace("fixed sizes   {}", face->num_fixed_sizes);
-    for (int i = 0; i < face->num_fixed_sizes; ++i)
-    {
+    for (int i = 0; i < face->num_fixed_sizes; ++i) {
         log_font->trace("\t{} * {}", face->available_sizes[i].width, face->available_sizes[i].height);
     }
 
@@ -551,8 +509,7 @@ auto Font::print(
         text_position.z
     );
 
-    if (text.empty())
-    {
+    if (text.empty()) {
         return 0;
     }
 
@@ -575,21 +532,18 @@ auto Font::print(
 
     std::size_t chars_printed{0};
     std::size_t word_offset{0};
-    for (unsigned int i = 0; i < glyph_count; ++i)
-    {
+    for (unsigned int i = 0; i < glyph_count; ++i) {
         const auto  glyph_id  = glyph_info[i].codepoint;
         const float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
         const float y_offset  = static_cast<float>(glyph_pos[i].y_offset ) / 64.0f;
         const float x_advance = static_cast<float>(glyph_pos[i].x_advance) / 64.0f;
         const float y_advance = static_cast<float>(glyph_pos[i].y_advance) / 64.0f;
         auto j = m_glyph_to_char.find(glyph_id);
-        if (j != m_glyph_to_char.end())
-        {
+        if (j != m_glyph_to_char.end()) {
             auto c = j->second;
             auto uc = static_cast<unsigned char>(c);
             const ft_char& font_char = m_chars_256[uc];
-            if (font_char.width != 0)
-            {
+            if (font_char.width != 0) {
                 const float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
                 const float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
                 const float w  = static_cast<float>(font_char.width);
@@ -642,8 +596,7 @@ auto Font::measure(const std::string_view text) const -> Rectangle
 {
     ERHE_PROFILE_FUNCTION
 
-    if (text.empty())
-    {
+    if (text.empty()) {
         return Rectangle{0.0f, 0.0f, 0.0f, 0.0f};
     }
 
@@ -661,21 +614,18 @@ auto Font::measure(const std::string_view text) const -> Rectangle
     float y{0.0f};
     Rectangle bounds{};
     bounds.reset_for_grow();
-    for (unsigned int i = 0; i < glyph_count; ++i)
-    {
+    for (unsigned int i = 0; i < glyph_count; ++i) {
         const auto  glyph_id  = glyph_info[i].codepoint;
         const float x_offset  = static_cast<float>(glyph_pos[i].x_offset ) / 64.0f;
         const float y_offset  = static_cast<float>(glyph_pos[i].y_offset ) / 64.0f;
         const float x_advance = static_cast<float>(glyph_pos[i].x_advance) / 64.0f;
         const float y_advance = static_cast<float>(glyph_pos[i].y_advance) / 64.0f;
         const auto  j = m_glyph_to_char.find(glyph_id);
-        if (j != m_glyph_to_char.end())
-        {
+        if (j != m_glyph_to_char.end()) {
             const auto c = j->second;
             const auto uc = static_cast<unsigned char>(c);
             const ft_char& font_char = m_chars_256[uc];
-            if (font_char.width != 0)
-            {
+            if (font_char.width != 0) {
                 const float b  = static_cast<float>(font_char.g_bottom - font_char.b_bottom);
                 const float t  = static_cast<float>(font_char.g_top    - font_char.b_top);
                 const float w  = static_cast<float>(font_char.width);

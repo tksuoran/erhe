@@ -113,8 +113,7 @@ void Debug_draw::draw_contact_point(
 
 void Debug_draw::report_error_warning(const char* warning)
 {
-    if (warning == nullptr)
-    {
+    if (warning == nullptr) {
         return;
     }
     log_physics->warn(warning);

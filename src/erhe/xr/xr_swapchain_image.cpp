@@ -30,8 +30,7 @@ Swapchain_image::Swapchain_image(
 
 Swapchain_image::~Swapchain_image() noexcept
 {
-    if (m_swapchain != nullptr)
-    {
+    if (m_swapchain != nullptr) {
         m_swapchain->release();
     }
 }
@@ -77,8 +76,7 @@ Swapchain::~Swapchain()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_swapchain != XR_NULL_HANDLE)
-    {
+    if (m_xr_swapchain != XR_NULL_HANDLE) {
         check_gl_context_in_current_in_this_thread();
         check(xrDestroySwapchain(m_xr_swapchain));
     }
@@ -94,8 +92,7 @@ Swapchain::Swapchain(Swapchain&& other) noexcept
 void Swapchain::operator=(Swapchain&& other) noexcept
 {
     Expects(other.m_xr_swapchain != XR_NULL_HANDLE);
-    if (m_xr_swapchain != XR_NULL_HANDLE)
-    {
+    if (m_xr_swapchain != XR_NULL_HANDLE) {
         check_gl_context_in_current_in_this_thread();
         check(xrDestroySwapchain(m_xr_swapchain));
     }
@@ -108,13 +105,11 @@ auto Swapchain::acquire() -> std::optional<Swapchain_image>
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_swapchain == XR_NULL_HANDLE)
-    {
+    if (m_xr_swapchain == XR_NULL_HANDLE) {
         return {};
     }
 
-    const XrSwapchainImageAcquireInfo swapchain_image_acquire_info
-    {
+    const XrSwapchainImageAcquireInfo swapchain_image_acquire_info{
         .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO,
         .next = nullptr
     };
@@ -130,8 +125,7 @@ auto Swapchain::acquire() -> std::optional<Swapchain_image>
                 &image_index
             )
         )
-    )
-    {
+    ) {
         return {};
     }
 
@@ -143,13 +137,11 @@ auto Swapchain::release() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_swapchain == XR_NULL_HANDLE)
-    {
+    if (m_xr_swapchain == XR_NULL_HANDLE) {
         return true;
     }
 
-    const XrSwapchainImageReleaseInfo swapchain_image_release_info
-    {
+    const XrSwapchainImageReleaseInfo swapchain_image_release_info{
         .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO,
         .next = nullptr,
     };
@@ -164,13 +156,11 @@ auto Swapchain::wait() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_swapchain == XR_NULL_HANDLE)
-    {
+    if (m_xr_swapchain == XR_NULL_HANDLE) {
         return false;
     }
 
-    const XrSwapchainImageWaitInfo swapchain_image_wait_info
-    {
+    const XrSwapchainImageWaitInfo swapchain_image_wait_info{
         .type    = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
         .next    = nullptr,
         .timeout = XR_INFINITE_DURATION
@@ -198,8 +188,7 @@ auto Swapchain::enumerate_images() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_swapchain == XR_NULL_HANDLE)
-    {
+    if (m_xr_swapchain == XR_NULL_HANDLE){
         return false;
     }
 
@@ -210,8 +199,7 @@ auto Swapchain::enumerate_images() -> bool
 
     m_gl_textures.resize(image_count);
     std::vector<XrSwapchainImageOpenGLKHR> swapchain_images(image_count);
-    for (uint32_t i = 0; i < image_count; i++)
-    {
+    for (uint32_t i = 0; i < image_count; i++) {
         swapchain_images[i].type  = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
         swapchain_images[i].next  = nullptr;
         swapchain_images[i].image = 0;
@@ -227,8 +215,7 @@ auto Swapchain::enumerate_images() -> bool
         )
     );
 
-    for (uint32_t i = 0; i < image_count; i++)
-    {
+    for (uint32_t i = 0; i < image_count; i++) {
         m_gl_textures[i] = swapchain_images[i].image;
     }
 

@@ -155,20 +155,13 @@ public:
         const bool is_bottom = (stack == 0);
         const bool is_top    = (stack == stack_count);
 
-        if (is_top)
-        {
+        if (is_top) {
             return top_point_id;
-        }
-        else if (is_bottom)
-        {
+        } else if (is_bottom) {
             return bottom_point_id;
-        }
-        else if (slice == slice_count)
-        {
+        } else if (slice == slice_count) {
             return points[std::make_pair(0, stack)];
-        }
-        else
-        {
+        } else {
             return points[std::make_pair(slice, stack)];
         }
     }
@@ -197,29 +190,22 @@ public:
 #endif
 
         Point_id point_id;
-        if (is_top)
-        {
+        if (is_top) {
             point_id = top_point_id;
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("point id {:2} (top)", point_id);
 #endif
-        }
-        else if (is_bottom)
-        {
+        } else if (is_bottom) {
             point_id = bottom_point_id;
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("point id {:2} (bottom)", point_id);
 #endif
-        }
-        else if (slice == slice_count)
-        {
+        } else if (slice == slice_count) {
             point_id = points[std::make_pair(0, stack)];
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("point id {:2} (slice seam)", point_id);
 #endif
-        }
-        else
-        {
+        } else {
             point_id = points[std::make_pair(slice, stack)];
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("point id {:2}", point_id);
@@ -229,8 +215,7 @@ public:
         const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
         SPDLOG_LOGGER_TRACE(log_sphere, "{} corner id = {:2}", ss.str(), corner_id);
 
-        if (is_uv_discontinuity)
-        {
+        if (is_uv_discontinuity) {
             const auto s = 1.0f - static_cast<float>(rel_slice);
             const auto t = 1.0f - static_cast<float>(0.5 * (1.0 + rel_stack));
 
@@ -273,11 +258,9 @@ public:
         const glm::vec4 non_anisotropic          {0.0f, 0.0f, 0.0f, 0.0f}; // Used on tips
         const glm::vec4 anisotropic_no_texcoord  {1.0f, 0.0f, 0.0f, 0.0f}; // Used on lateral surface
 
-        for (int stack = 1; stack < stack_count; ++stack)
-        {
+        for (int stack = 1; stack < stack_count; ++stack) {
             const scalar rel_stack = static_cast<scalar>(stack) / static_cast<scalar>(stack_count);
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 const scalar rel_slice = static_cast<scalar>(slice) / static_cast<scalar>(slice_count);
                 points[std::make_pair(slice, stack)] = sphere_point(rel_slice, rel_stack);
             }
@@ -288,8 +271,7 @@ public:
         bottom_point_id = geometry.make_point(0.0f, static_cast<float>(-radius), 0.0f);
         point_normals->put(bottom_point_id, vec3{0.0f,-1.0f, 0.0f});
         SPDLOG_LOGGER_TRACE(log_sphere, "bottom point id = {}", bottom_point_id);
-        for (int slice = 0; slice < slice_count; ++slice)
-        {
+        for (int slice = 0; slice < slice_count; ++slice) {
             const int        stack              = 1;
             const scalar     rel_slice_centroid = (static_cast<scalar>(slice) + scalar{0.5}) / static_cast<scalar>(slice_count);
             const scalar     rel_stack_centroid = (static_cast<scalar>(stack) - scalar{0.5}) / static_cast<scalar>(slice_count);
@@ -326,13 +308,11 @@ public:
             int stack = 1;
             stack < (stack_count - 1);
             ++stack
-        )
-        {
+        ) {
             const scalar rel_stack_centroid =
                 (static_cast<scalar>(stack) + scalar{0.5}) / static_cast<scalar>(stack_count);
 
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 const scalar rel_slice_centroid =
                     (static_cast<scalar>(slice) + scalar{0.5}) / static_cast<scalar>(slice_count);
 
@@ -361,8 +341,7 @@ public:
         top_point_id = geometry.make_point(0.0f, static_cast<float>(radius), 0.0f);
         point_normals ->put(top_point_id, vec3{0.0f, 1.0f, 0.0f});
         SPDLOG_LOGGER_TRACE(log_sphere, "top point id    = {}", top_point_id);
-        for (int slice = 0; slice < slice_count; ++slice)
-        {
+        for (int slice = 0; slice < slice_count; ++slice) {
             const int    stack              = stack_count - 1;
             const scalar rel_slice_centroid = (static_cast<scalar>(slice) + scalar{0.5}) / static_cast<scalar>(slice_count);
             const scalar rel_stack_centroid = (static_cast<scalar>(stack) + scalar{0.5}) / static_cast<scalar>(stack_count);

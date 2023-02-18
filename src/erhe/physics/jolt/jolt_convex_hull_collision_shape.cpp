@@ -38,8 +38,7 @@ auto make_convex_hull_shape_settings(
     JPH::Array<JPH::Vec3> points;
     points.reserve(point_count);
     const float* data = point_data;
-    for (int i = 0; i < point_count; ++i)
-    {
+    for (int i = 0; i < point_count; ++i) {
         const float x = data[0];
         const float y = data[1];
         const float z = data[2];
@@ -69,8 +68,7 @@ Jolt_convex_hull_collision_shape::Jolt_convex_hull_collision_shape(
 
 //    std::vector<JPH::Vec3> points;
 //    points.resize(numPoints);
-//    for (int i = 0; i < numPoints; ++i)
-//    {
+//    for (int i = 0; i < numPoints; ++i) {
 //        points[i] = JPH::Vec3{
 //            pointData[0],
 //            pointData[1],

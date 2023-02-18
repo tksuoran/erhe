@@ -32,8 +32,7 @@ Geometry::Geometry(
 )
     : name{name}
 {
-    if (generator)
-    {
+    if (generator) {
         generator(*this);
     }
 }
@@ -99,10 +98,8 @@ auto Geometry::count_polygon_triangles() const -> std::size_t
         Polygon_id polygon_id = 0;
         polygon_id < m_next_polygon_id;
         ++polygon_id
-    )
-    {
-        if (polygons[polygon_id].corner_count < 2)
-        {
+    ) {
+        if (polygons[polygon_id].corner_count < 2) {
             continue;
         }
         triangle_count += polygons[polygon_id].corner_count - 2;
@@ -138,8 +135,7 @@ void Geometry::reserve_points(const std::size_t point_count)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (point_count > points.size())
-    {
+    if (point_count > points.size()) {
         points.reserve(point_count);
     }
 }
@@ -148,8 +144,7 @@ void Geometry::reserve_polygons(const std::size_t polygon_count)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (polygon_count > polygons.size())
-    {
+    if (polygon_count > polygons.size()) {
         polygons.reserve(polygon_count);
     }
 }
@@ -158,13 +153,11 @@ auto Geometry::has_polygon_normals() const -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_serial_polygon_normals == m_serial)
-    {
+    if (m_serial_polygon_normals == m_serial) {
         return true;
     }
 
-    if (m_next_polygon_id == 0)
-    {
+    if (m_next_polygon_id == 0) {
         return true;
     }
     return false;
@@ -175,8 +168,7 @@ auto Geometry::compute_polygon_normals() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (has_polygon_normals())
-    {
+    if (has_polygon_normals()) {
         return true;
     }
 
@@ -185,8 +177,7 @@ auto Geometry::compute_polygon_normals() -> bool
     auto*       const polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
     const auto* const point_locations = point_attributes()  .find          <vec3>(c_point_locations);
 
-    if (point_locations == nullptr)
-    {
+    if (point_locations == nullptr) {
         log_geometry->warn(
             "{} {}: Point locations are required, but not found.",
             __func__,
@@ -207,13 +198,11 @@ auto Geometry::compute_polygon_normals() -> bool
 
 auto Geometry::has_polygon_centroids() const -> bool
 {
-    if (m_serial_polygon_centroids == m_serial)
-    {
+    if (m_serial_polygon_centroids == m_serial) {
         return true;
     }
 
-    if (m_next_polygon_id == 0)
-    {
+    if (m_next_polygon_id == 0) {
         return true;
     }
 
@@ -224,8 +213,7 @@ auto Geometry::compute_polygon_centroids() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (has_polygon_centroids())
-    {
+    if (has_polygon_centroids()) {
         return true;
     }
 
@@ -234,8 +222,7 @@ auto Geometry::compute_polygon_centroids() -> bool
     auto*       const polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
     const auto* const point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
 
-    if (point_locations == nullptr)
-    {
+    if (point_locations == nullptr) {
         log_geometry->warn("{} {}: Point locations are required, but not found.", __func__, name);
         return false;
     }
@@ -252,12 +239,10 @@ auto Geometry::compute_polygon_centroids() -> bool
 
 auto Geometry::has_edges() const -> bool
 {
-    if (m_serial_edges == m_serial)
-    {
+    if (m_serial_edges == m_serial) {
         return true;
     }
-    if (m_next_polygon_id == 0)
-    {
+    if (m_next_polygon_id == 0) {
         return true;
     }
 
@@ -268,8 +253,7 @@ void Geometry::build_edges(bool is_manifold)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (has_edges())
-    {
+    if (has_edges()) {
         return;
     }
 
@@ -295,13 +279,11 @@ void Geometry::build_edges(bool is_manifold)
                 const Point_id a = j.prev_corner.point_id;
                 const Point_id b = j.corner.point_id;
                 ++polygon_edge_count;
-                if (a == b)
-                {
+                if (a == b) {
                     log_build_edges->warn("Bad edge {} - {}", a, b);
                     return;
                 }
-                if (a < b) // This does not work for non-shared edges going wrong direction
-                {
+                if (a < b) { // This does not work for non-shared edges going wrong direction
                     const Edge_id edge_id = make_edge(a, b);
                     const Point&  pa      = points[a];
                     make_edge_polygon(edge_id, i.polygon_id);
@@ -313,8 +295,7 @@ void Geometry::build_edges(bool is_manifold)
                          const Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
                          const Corner&    prev_corner         = corners[prev_corner_id];
                          const Point_id   prev_point_id       = prev_corner.point_id;
-                         if (prev_point_id == b)
-                         {
+                         if (prev_point_id == b) {
                              make_edge_polygon(edge_id, polygon_id_in_point);
                              ++polygon_index;
                          }
@@ -325,8 +306,7 @@ void Geometry::build_edges(bool is_manifold)
     }
 
     // Second pass - non-shared edges wrong direction or non-manifold wrong direction
-    if (!is_manifold || (get_edge_count() != polygon_edge_count / 2))
-    {
+    if (!is_manifold || (get_edge_count() != polygon_edge_count / 2)) {
         ERHE_PROFILE_SCOPE("second pass");
 
         for_each_polygon([&](auto& i)
@@ -337,14 +317,12 @@ void Geometry::build_edges(bool is_manifold)
             {
                 const Point_id a_ = j.prev_corner.point_id;
                 const Point_id b_ = j.corner.point_id;
-                if (a_ == b_)
-                {
+                if (a_ == b_) {
                     return;
                 }
 
                 auto edge = find_edge(a_, b_);
-                if (!edge)
-                {
+                if (!edge) {
                     // ERHE_VERIFY(b < a); This does not hold for non-manifold objects
                     {
                         const Point_id a = std::max(a_, b_);
@@ -360,8 +338,7 @@ void Geometry::build_edges(bool is_manifold)
                              const Corner_id  prev_corner_id      = polygon_in_point.prev_corner(*this, k.corner_id);
                              const Corner&    prev_corner         = corners[prev_corner_id];
                              const Point_id   prev_point_id       = prev_corner.point_id;
-                             if (prev_point_id == a)
-                             {
+                             if (prev_point_id == a) {
                                  make_edge_polygon(edge_id, polygon_id_in_point);
                                  ++polygon_index;
                              }
@@ -391,8 +368,7 @@ void Geometry::debug_trace() const
             ss << fmt::format("point {:2} corners  = ", i.point_id);
             i.point.for_each_corner_const(*this, [&](auto& j)
             {
-                if (j.point_corner_id > i.point.first_point_corner_id)
-                {
+                if (j.point_corner_id > i.point.first_point_corner_id) {
                     ss << ", ";
                 }
                 ss << fmt::format("{:2}", j.corner_id);
@@ -405,13 +381,12 @@ void Geometry::debug_trace() const
             ss << fmt::format("point {:2} polygons = ", i.point_id);
             i.point.for_each_corner_const(*this, [&](auto& j)
             {
-                if (j.point_corner_id > i.point.first_point_corner_id)
-                {
+                if (j.point_corner_id > i.point.first_point_corner_id) {
                     ss << ", ";
                 }
                 ss << fmt::format("{:2}", j.corner.polygon_id);
             });
-           log_geometry->info("{}", ss.str());
+            log_geometry->info("{}", ss.str());
         }
     });
 
@@ -422,8 +397,7 @@ void Geometry::debug_trace() const
             ss << fmt::format("polygon {:2} corners = ", i.polygon_id);
             i.polygon.for_each_corner_const(*this, [&](auto& j)
             {
-                if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
-                {
+                if (j.polygon_corner_id > i.polygon.first_polygon_corner_id) {
                     ss << ", ";
                 }
                 ss << fmt::format("{:2}", j.corner_id);
@@ -436,8 +410,7 @@ void Geometry::debug_trace() const
             i.polygon.for_each_corner_const(*this, [&](auto& j)
             {
                 Point_id point_id = j.corner.point_id;
-                if (j.polygon_corner_id > i.polygon.first_polygon_corner_id)
-                {
+                if (j.polygon_corner_id > i.polygon.first_polygon_corner_id) {
                     ss << ", ";
                 }
                 ss << fmt::format("{:2}", point_id);
@@ -471,12 +444,9 @@ auto Geometry::compute_point_normal(const Point_id point_id) -> vec3
 
     points[point_id].for_each_corner(*this, [&](auto& i)
     {
-        if (polygon_normals->has(i.corner.polygon_id))
-        {
+        if (polygon_normals->has(i.corner.polygon_id)) {
             normal_sum += polygon_normals->get(i.corner.polygon_id);
-        }
-        else
-        {
+        } else {
             // TODO on demand calculate polygon normal?
         }
     });
@@ -492,8 +462,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
 {
     ERHE_PROFILE_FUNCTION
 
-    if (has_point_normals())
-    {
+    if (has_point_normals()) {
         return true;
     }
 
@@ -501,11 +470,9 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
 
     auto* const point_normals   = point_attributes().find_or_create<vec3>(descriptor);
     const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
-    if (polygon_normals == nullptr)
-    {
+    if (polygon_normals == nullptr) {
         const bool polygon_normals_ok = compute_polygon_normals();
-        if (!polygon_normals_ok)
-        {
+        if (!polygon_normals_ok) {
             return false;
         }
         polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
@@ -518,8 +485,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
         vec3 normal_sum{0.0f};
         i.point.for_each_corner(*this, [&](auto& j)
         {
-            if (polygon_normals->has(j.corner.polygon_id))
-            {
+            if (polygon_normals->has(j.corner.polygon_id)) {
                 normal_sum += polygon_normals->get(j.corner.polygon_id);
             }
             // TODO else
@@ -535,8 +501,7 @@ auto Geometry::transform(const mat4& m) -> Geometry&
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m == mat4{1.0f})
-    {
+    if (m == mat4{1.0f}) {
         return *this;
     }
 
@@ -548,8 +513,7 @@ auto Geometry::transform(const mat4& m) -> Geometry&
     edge_attributes   ().transform(m);
 
     const auto det = glm::determinant(m);
-    if (det < 0.0f)
-    {
+    if (det < 0.0f) {
         reverse_polygons();
     }
 
@@ -560,8 +524,7 @@ void Geometry::reverse_polygons()
 {
     ERHE_PROFILE_FUNCTION
 
-    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
-    {
+    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id) {
         polygons[polygon_id].reverse(*this);
     }
 }
@@ -578,12 +541,10 @@ void Geometry::flip_reversed_polygons()
     const auto* const polygon_normals   = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
     const auto* const polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
 
-    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
-    {
+    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id) {
         const auto normal   = polygon_normals->get(polygon_id);
         const auto centroid = glm::normalize(polygon_centroids->get(polygon_id));
-        if (glm::dot(normal, centroid) < 0.0f)
-        {
+        if (glm::dot(normal, centroid) < 0.0f) {
             polygons[polygon_id].reverse(*this);
         }
     }
@@ -614,43 +575,30 @@ void Geometry::generate_texture_coordinates_spherical()
           auto* const corner_texcoords     = corner_attributes ().find_or_create<vec2>(c_corner_texcoords    );
     const auto* const point_locations      = point_attributes  ().find          <vec3>(c_point_locations     );
 
-    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id)
-    {
+    for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id) {
         Polygon& polygon = polygons[polygon_id];
         for (
             Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id,
             end = polygon.first_polygon_corner_id + polygon.corner_count;
             polygon_corner_id < end;
             ++polygon_corner_id
-        )
-        {
+        ) {
             const Corner_id corner_id = polygon_corners[polygon_corner_id];
             const Corner&   corner    = corners[corner_id];
             const Point_id  point_id  = corner.point_id;
 
             glm::vec3 normal{0.0f, 1.0f, 0.0f};
-            if ((point_locations != nullptr) && point_locations->has(point_id))
-            {
+            if ((point_locations != nullptr) && point_locations->has(point_id)) {
                 normal = glm::normalize(point_locations->get(point_id));
-            }
-            else if ((corner_normals != nullptr) && corner_normals->has(corner_id))
-            {
+            } else if ((corner_normals != nullptr) && corner_normals->has(corner_id)) {
                 normal = corner_normals->get(corner_id);
-            }
-            else if ((point_normals != nullptr) && point_normals->has(point_id))
-            {
+            } else if ((point_normals != nullptr) && point_normals->has(point_id)) {
                 normal = point_normals->get(point_id);
-            }
-            else if ((point_normals_smooth != nullptr) && point_normals_smooth->has(point_id))
-            {
+            } else if ((point_normals_smooth != nullptr) && point_normals_smooth->has(point_id)) {
                 normal = point_normals_smooth->get(point_id);
-            }
-            else if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id))
-            {
+            } else if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id)) {
                 normal = polygon_normals->get(polygon_id);
-            }
-            else
-            {
+            } else {
                 ERHE_FATAL("No normal sources");
             }
 
@@ -661,13 +609,10 @@ void Geometry::generate_texture_coordinates_spherical()
                 u = (-normal.z / std::abs(normal.x) + 1.0f) / 2.0f;
                 v = (-normal.y / std::abs(normal.x) + 1.0f) / 2.0f;
             }
-            //else if (std::abs(normal.y) >= std::abs(normal.x) && std::abs(normal.y) >= normal.z)
-            //{
+            //else if (std::abs(normal.y) >= std::abs(normal.x) && std::abs(normal.y) >= normal.z) {
             //    u = (-normal.z / std::abs(normal.y) + 1.0f) / 2.0f;
             //    v = (-normal.x / std::abs(normal.y) + 1.0f) / 2.0f;
-            //}
-            //else
-            //{
+            //} else {
             //    u = (-normal.x / std::abs(normal.z) + 1.0f) / 2.0f;
             //    v = (-normal.y / std::abs(normal.z) + 1.0f) / 2.0f;
             //}
@@ -685,8 +630,7 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
 {
     ERHE_PROFILE_FUNCTION
 
-    if (has_polygon_texture_coordinates())
-    {
+    if (has_polygon_texture_coordinates()) {
         return true;
     }
 
@@ -699,8 +643,7 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
     const auto* const point_locations   = point_attributes  ().find          <vec3>(c_point_locations  );
           auto* const corner_texcoords  = corner_attributes ().find_or_create<vec2>(c_corner_texcoords );
 
-    if (point_locations == nullptr)
-    {
+    if (point_locations == nullptr) {
         log_polygon_texcoords->warn(
             "{} geometry = {} - No point locations found. Skipping generation.",
             __func__,

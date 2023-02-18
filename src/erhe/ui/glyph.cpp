@@ -30,8 +30,7 @@ Glyph::Glyph(
     , outline_thickness{outline_thickness}
 {
     glyph_index = FT_Get_Char_Index(font_face, char_code);
-    if (glyph_index == 0)
-    {
+    if (glyph_index == 0) {
         return;
     }
 
@@ -54,16 +53,14 @@ Glyph::Glyph(
     metrics.y0        = static_cast<int>(std::floor(metrics.bearing_y - metrics.height + 0.5f));
     metrics.x_advance = static_cast<int>(std::floor(metrics.horizontal_advance));
 
-    if (!render)
-    {
+    if (!render) {
         return;
     }
 
     FT_Bitmap ft_bitmap;
     FT_Bitmap_New(&ft_bitmap);
 
-    if (outline)
-    {
+    if (outline) {
         FT_Stroker stroker;
 
         validate(FT_Stroker_New(library, &stroker));
@@ -95,16 +92,13 @@ Glyph::Glyph(
         FT_Done_Glyph(bitmap_glyph);
         FT_Done_Glyph(glyph);
         FT_Stroker_Done(stroker);
-    }
-    else
-    {
+    } else {
         bitmap.left = font_face->glyph->bitmap_left;
         bitmap.top  = font_face->glyph->bitmap_top;
         FT_Bitmap_Copy(library, &font_face->glyph->bitmap, &ft_bitmap);
     }
 
-    if (bolding > 0.0f)
-    {
+    if (bolding > 0.0f) {
         const int i_bolding = static_cast<int>(bolding * 64.0f);
         validate(FT_Bitmap_Embolden(library, &ft_bitmap, i_bolding, 0));
     }
@@ -117,10 +111,8 @@ Glyph::Glyph(
 
     m_buffer.resize(bitmap.height * bitmap.pitch);
 
-    for (int iy = 0; iy < bitmap.height; ++iy)
-    {
-        for (int ix = 0; ix < bitmap.width; ++ix)
-        {
+    for (int iy = 0; iy < bitmap.height; ++iy) {
+        for (int ix = 0; ix < bitmap.width; ++ix) {
             const int           src_x   = ix;
             const int           src_y   = bitmap.height - 1 - iy;
             const std::size_t   address = src_x + (src_y * bitmap.pitch);
@@ -136,13 +128,19 @@ Glyph::Glyph(
 void Glyph::dump() const
 {
     const char* shades = " .:#";
-    fmt::print("\nglyph index = {} code = '{}': width = {} height = {} left = {} top = {} outline = {}\n",
-               glyph_index, static_cast<char>(char_code), bitmap.width, bitmap.height, bitmap.left, bitmap.top, outline_thickness);
-    for (int iy = 0; iy < bitmap.height; ++iy)
-    {
+    fmt::print(
+        "\nglyph index = {} code = '{}': width = {} height = {} left = {} top = {} outline = {}\n",
+        glyph_index,
+        static_cast<char>(char_code),
+        bitmap.width,
+        bitmap.height,
+        bitmap.left,
+        bitmap.top,
+        outline_thickness
+    );
+    for (int iy = 0; iy < bitmap.height; ++iy) {
         fputc('|', stdout);
-        for (int ix = 0; ix < bitmap.width; ++ix)
-        {
+        for (int ix = 0; ix < bitmap.width; ++ix) {
             const auto offset = ix + (iy * bitmap.pitch);
             const auto value  = m_buffer[offset];
             fputc(shades[value / 64], stdout);

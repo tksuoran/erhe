@@ -76,19 +76,14 @@ void Layers_window::imgui()
         : g_icon_set->get_large_rasterization();
 
     std::shared_ptr<erhe::scene::Item> item_clicked;
-    for (const auto& scene_root : scene_roots)
-    {
-        if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags))
-        {
+    for (const auto& scene_root : scene_roots) {
+        if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags)) {
             const auto& scene       = scene_root->scene();
             const auto& mesh_layers = scene.get_mesh_layers();
-            for (const auto& layer : mesh_layers)
-            {
-                if (ImGui::TreeNodeEx(layer->get_name().c_str(), parent_flags))
-                {
+            for (const auto& layer : mesh_layers) {
+                if (ImGui::TreeNodeEx(layer->get_name().c_str(), parent_flags)) {
                     const auto& meshes = layer->meshes;
-                    for (const auto& mesh : meshes)
-                    {
+                    for (const auto& mesh : meshes) {
                         icon_rasterization.icon(mesh_icon);
                         ImGui::TreeNodeEx(
                             mesh->get_name().c_str(),
@@ -99,8 +94,7 @@ void Layers_window::imgui()
                                     : ImGuiTreeNodeFlags_None
                             )
                         );
-                        if (ImGui::IsItemClicked())
-                        {
+                        if (ImGui::IsItemClicked()) {
                             item_clicked = mesh->shared_from_this();
                         }
                     }
@@ -111,25 +105,17 @@ void Layers_window::imgui()
         }
     }
 
-    if (item_clicked && (g_selection_tool != nullptr))
-    {
-        if (false) // TODO shift or maybe ctrl?
-        {
-            if (item_clicked->is_selected())
-            {
+    if (item_clicked && (g_selection_tool != nullptr)) {
+        if (false) { // TODO shift or maybe ctrl?
+            if (item_clicked->is_selected()) {
                 g_selection_tool->remove_from_selection(item_clicked);
-            }
-            else
-            {
+            } else {
                 g_selection_tool->add_to_selection(item_clicked);
             }
-        }
-        else
-        {
+        } else {
             bool was_selected = item_clicked->is_selected();
             g_selection_tool->clear_selection();
-            if (!was_selected)
-            {
+            if (!was_selected) {
                 g_selection_tool->add_to_selection(item_clicked);
             }
         }

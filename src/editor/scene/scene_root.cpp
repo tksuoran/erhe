@@ -125,44 +125,38 @@ Scene_root::Scene_root(
 
 void Scene_root::register_node(const std::shared_ptr<erhe::scene::Node>& node)
 {
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->register_node(node);
     }
 }
 
 void Scene_root::unregister_node(const std::shared_ptr<erhe::scene::Node>& node)
 {
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->unregister_node(node);
     }
 }
 
 void Scene_root::register_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
 {
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->register_camera(camera);
     }
 }
 void Scene_root::unregister_camera(const std::shared_ptr<erhe::scene::Camera>& camera)
 {
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->unregister_camera(camera);
     }
 }
 
 void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->register_mesh(mesh);
     }
 
-    if (is_rendertarget(mesh))
-    {
+    if (is_rendertarget(mesh)) {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
         m_rendertarget_meshes.push_back(as_rendertarget(mesh));
     }
@@ -170,38 +164,31 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
 void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
-    if (is_rendertarget(mesh))
-    {
+    if (is_rendertarget(mesh)) {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
         const auto rendertarget = as_rendertarget(mesh);
         const auto i = std::remove(m_rendertarget_meshes.begin(), m_rendertarget_meshes.end(), rendertarget);
-        if (i == m_rendertarget_meshes.end())
-        {
+        if (i == m_rendertarget_meshes.end()) {
             log_scene->error("rendertarget mesh {} not in scene root", rendertarget->get_name());
-        }
-        else
-        {
+        } else {
             m_rendertarget_meshes.erase(i, m_rendertarget_meshes.end());
         }
     }
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->unregister_mesh(mesh);
     }
 }
 
 void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light)
 {
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->register_light(light);
     }
 }
 
 void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& light)
 {
-    if (m_scene)
-    {
+    if (m_scene) {
         m_scene->unregister_light(light);
     }
 }
@@ -263,18 +250,15 @@ auto Scene_root::camera_combo(
     int index = 0;
     std::vector<const char*>          names;
     std::vector<erhe::scene::Camera*> cameras;
-    if (nullptr_option || (selected_camera == nullptr))
-    {
+    if (nullptr_option || (selected_camera == nullptr)) {
         names.push_back("(none)");
         cameras.push_back(nullptr);
     }
     const auto& scene_cameras = scene().get_cameras();
-    for (const auto& camera : scene_cameras)
-    {
+    for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera.get());
-        if (selected_camera == camera.get())
-        {
+        if (selected_camera == camera.get()) {
             selected_camera_index = index;
         }
         ++index;
@@ -289,8 +273,7 @@ auto Scene_root::camera_combo(
             static_cast<int>(names.size())
         ) &&
         (selected_camera != cameras[selected_camera_index]);
-    if (camera_changed)
-    {
+    if (camera_changed) {
         selected_camera = cameras[selected_camera_index];
     }
     return camera_changed;
@@ -306,18 +289,15 @@ auto Scene_root::camera_combo(
     int index = 0;
     std::vector<const char*> names;
     std::vector<std::shared_ptr<erhe::scene::Camera>> cameras;
-    if (nullptr_option || (selected_camera == nullptr))
-    {
+    if (nullptr_option || (selected_camera == nullptr)) {
         names.push_back("(none)");
         cameras.push_back(nullptr);
     }
     const auto& scene_cameras = scene().get_cameras();
-    for (const auto& camera : scene_cameras)
-    {
+    for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
-        if (selected_camera == camera)
-        {
+        if (selected_camera == camera) {
             selected_camera_index = index;
         }
         ++index;
@@ -332,8 +312,7 @@ auto Scene_root::camera_combo(
             static_cast<int>(names.size())
         ) &&
         (selected_camera != cameras[selected_camera_index]);
-    if (camera_changed)
-    {
+    if (camera_changed) {
         selected_camera = cameras[selected_camera_index];
     }
     return camera_changed;
@@ -349,18 +328,15 @@ auto Scene_root::camera_combo(
     int index = 0;
     std::vector<const char*> names;
     std::vector<std::weak_ptr<erhe::scene::Camera>> cameras;
-    if (nullptr_option || selected_camera.expired())
-    {
+    if (nullptr_option || selected_camera.expired()) {
         names.push_back("(none)");
         cameras.push_back({});
     }
     const auto& scene_cameras = scene().get_cameras();
-    for (const auto& camera : scene_cameras)
-    {
+    for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
-        if (selected_camera.lock() == camera)
-        {
+        if (selected_camera.lock() == camera) {
             selected_camera_index = index;
         }
         ++index;
@@ -375,8 +351,7 @@ auto Scene_root::camera_combo(
             static_cast<int>(names.size())
         ) &&
         (selected_camera.lock() != cameras[selected_camera_index].lock());
-    if (camera_changed)
-    {
+    if (camera_changed) {
         selected_camera = cameras[selected_camera_index];
     }
     return camera_changed;
@@ -389,8 +364,7 @@ namespace
 
 [[nodiscard]] auto sort_value(const Light::Type light_type) -> int
 {
-    switch (light_type)
-    {
+    switch (light_type) {
         //using enum erhe::scene::Light_type;
         case erhe::scene::Light_type::directional: return 0;
         case erhe::scene::Light_type::point:       return 1;
@@ -426,8 +400,7 @@ void Scene_root::update_pointer_for_rendertarget_meshes(Scene_view* scene_view)
 {
     std::lock_guard<std::mutex> lock(m_rendertarget_meshes_mutex);
 
-    for (const auto& rendertarget_mesh : m_rendertarget_meshes)
-    {
+    for (const auto& rendertarget_mesh : m_rendertarget_meshes) {
         rendertarget_mesh->update_pointer(scene_view);
     }
 }

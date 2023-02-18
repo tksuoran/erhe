@@ -54,8 +54,7 @@ public:
     [[nodiscard]] auto         get_command_host_description() const -> const char*;
 
 private:
-    Command*                                  m_command{nullptr};
-    //erhe::toolkit::Unique_id<Command_binding> m_id;
+    Command* m_command{nullptr};
 };
 
 } // namespace erhe::application

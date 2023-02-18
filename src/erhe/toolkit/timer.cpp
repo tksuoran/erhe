@@ -39,8 +39,7 @@ auto Timer::all_timers() -> std::vector<Timer*>
 
 auto Timer::duration() const -> std::optional<std::chrono::steady_clock::duration>
 {
-    if (m_start_time.has_value() && m_end_time.has_value())
-    {
+    if (m_start_time.has_value() && m_end_time.has_value()) {
         return m_end_time.value() - m_start_time.value();
     }
     return {};

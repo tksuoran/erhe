@@ -77,26 +77,19 @@ public:
         const bool   is_uv_discontinuity = is_slice_seam || is_center;
 
         Point_id point_id;
-        if (is_center)
-        {
+        if (is_center) {
             point_id = center_point_id;
-        }
-        else
-        {
-            if (slice == slice_count)
-            {
+        } else {
+            if (slice == slice_count) {
                 point_id = points[std::make_pair(0, stack)];
-            }
-            else
-            {
+            } else {
                 point_id = points[std::make_pair(slice, stack)];
             }
         }
 
         const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
 
-        if (is_uv_discontinuity)
-        {
+        if (is_uv_discontinuity) {
             auto s = static_cast<float>(rel_slice);
             auto t = static_cast<float>(rel_stack);
 
@@ -131,14 +124,12 @@ public:
     void build()
     {
         // Make points
-        for (int stack = 0; stack < stack_count; ++stack)
-        {
+        for (int stack = 0; stack < stack_count; ++stack) {
             const double rel_stack =
                 (stack_count == 1)
                     ? 1.0
                     : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
-            for (int slice = 0; slice <= slice_count; ++slice)
-            {
+            for (int slice = 0; slice <= slice_count; ++slice) {
                 const double rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
 
                 points[std::make_pair(slice, stack)] = make_point(rel_slice, rel_stack);
@@ -146,40 +137,34 @@ public:
         }
 
         // Special case without center point
-        if (stack_count == 1)
-        {
+        if (stack_count == 1) {
             const Polygon_id polygon_id = geometry.make_polygon();
             polygon_centroids->put(polygon_id, vec3{0.0f, 0.0f, 0.0f});
             polygon_normals->put(polygon_id, vec3{0.0f, 0.0f, 1.0f});
 
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 make_corner(polygon_id, slice, 0);
             }
             return;
         }
 
         // Make center point if needed
-        if (inner_radius == 0.0f)
-        {
+        if (inner_radius == 0.0f) {
             center_point_id = geometry.make_point(0.0f, 0.0f, 0.0f);
         }
 
         // Quads/triangles
-        for (int stack = 0; stack < stack_count - 1; ++stack)
-        {
+        for (int stack = 0; stack < stack_count - 1; ++stack) {
             const double rel_stack_centroid = (stack_count == 1) ? 0.5 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
 
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 const double     rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
                 const Point_id   centroid_id        = make_point(rel_slice_centroid, rel_stack_centroid);
                 const Polygon_id polygon_id         = geometry.make_polygon();
 
                 polygon_centroids->put(polygon_id, point_locations->get(centroid_id));
                 polygon_normals->put(polygon_id, vec3{0.0f, 0.0f, 1.0f});
-                if ((stack == 0) && (inner_radius == 0.0))
-                {
+                if ((stack == 0) && (inner_radius == 0.0)) {
                     make_corner(polygon_id, slice, stack + 1);
                     make_corner(polygon_id, slice + 1, stack + 1);
                     const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack);
@@ -188,9 +173,7 @@ public:
                     const vec2 t2               = point_texcoords->get(get_point(slice + 1, stack));
                     const vec2 average_texcoord = (t1 + t2) / 2.0f;
                     corner_texcoords->put(tip_corner_id, average_texcoord);
-                }
-                else
-                {
+                } else {
                     make_corner(polygon_id, slice + 1, stack);
                     make_corner(polygon_id, slice, stack);
                     make_corner(polygon_id, slice, stack + 1);

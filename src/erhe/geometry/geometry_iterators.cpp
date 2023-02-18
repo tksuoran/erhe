@@ -11,16 +11,14 @@ void Geometry::for_each_corner(
         Corner_id corner_id = 0, end = get_corner_count();
         corner_id < end;
         ++corner_id
-    )
-    {
+    ) {
         Corner& corner = corners[corner_id];
         Corner_context context{
             .corner_id = corner_id,
             .corner    = corner
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -34,16 +32,14 @@ void Geometry::for_each_corner_const(
         Corner_id corner_id = 0, end = get_corner_count();
         corner_id < end;
         ++corner_id
-    )
-    {
+    ) {
         const Corner& corner = corners[corner_id];
         Corner_context_const context{
             .corner_id = corner_id,
             .corner    = corner
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -57,16 +53,14 @@ void Geometry::for_each_point(
         Point_id point_id = 0, end = get_point_count();
         point_id < end;
         ++point_id
-    )
-    {
+    ) {
         Point& point = points[point_id];
         Point_context context{
             .point_id = point_id,
             .point    = point
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -80,16 +74,14 @@ void Geometry::for_each_point_const(
         Point_id point_id = 0, end = get_point_count();
         point_id < end;
         ++point_id
-    )
-    {
+    ) {
         const Point& point = points[point_id];
         Point_context_const context{
             .point_id = point_id,
             .point    = point
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -103,16 +95,14 @@ void Geometry::for_each_polygon(
         Polygon_id polygon_id = 0, end = get_polygon_count();
         polygon_id < end;
         ++polygon_id
-    )
-    {
+    ) {
         Polygon& polygon = polygons[polygon_id];
         Polygon_context context{
             .polygon_id = polygon_id,
             .polygon    = polygon
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -126,16 +116,14 @@ void Geometry::for_each_polygon_const(
         Polygon_id polygon_id = 0, end = get_polygon_count();
         polygon_id < end;
         ++polygon_id
-    )
-    {
+    ) {
         const Polygon& polygon = polygons[polygon_id];
         Polygon_context_const context{
             .polygon_id = polygon_id,
             .polygon    = polygon
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -149,16 +137,14 @@ void Geometry::for_each_edge(
         Edge_id edge_id = 0, end = get_edge_count();
         edge_id < end;
         ++edge_id
-    )
-    {
+    ) {
         Edge& edge = edges[edge_id];
         Edge_context context{
             .edge_id = edge_id,
             .edge    = edge
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -172,16 +158,14 @@ void Geometry::for_each_edge_const(
         Edge_id edge_id = 0, end = get_edge_count();
         edge_id < end;
         ++edge_id
-    )
-    {
+    ) {
         const Edge& edge = edges[edge_id];
         Edge_context_const context{
             .edge_id = edge_id,
             .edge    = edge
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -197,8 +181,7 @@ void Point::for_each_corner(
         end = first_point_corner_id + corner_count;
         point_corner_id < end;
         ++point_corner_id
-    )
-    {
+    ) {
         Corner_id& corner_id = geometry.point_corners[point_corner_id];
         Point_corner_context context{
             .geometry        = geometry,
@@ -207,8 +190,7 @@ void Point::for_each_corner(
             .corner          = geometry.corners[corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -224,8 +206,7 @@ void Point::for_each_corner_const(
         end = first_point_corner_id + corner_count;
         point_corner_id < end;
         ++point_corner_id
-    )
-    {
+    ) {
         const Corner_id& corner_id = geometry.point_corners[point_corner_id];
         Point_corner_context_const context{
             .geometry        = geometry,
@@ -234,8 +215,7 @@ void Point::for_each_corner_const(
             .corner          = geometry.corners[corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -246,8 +226,7 @@ void Point::for_each_corner_neighborhood(
     std::function<void(Point_corner_neighborhood_context&)> callback
 )
 {
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Point_corner_id prev_point_corner_id = first_point_corner_id + (corner_count + i - 1) % corner_count;
         const Point_corner_id point_corner_id      = first_point_corner_id + i;
         const Point_corner_id next_point_corner_id = first_point_corner_id + (i + 1) % corner_count;
@@ -267,8 +246,7 @@ void Point::for_each_corner_neighborhood(
             .next_corner          = geometry.corners[next_corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -279,8 +257,7 @@ void Point::for_each_corner_neighborhood_const(
     std::function<void(Point_corner_neighborhood_context_const&)> callback
 ) const
 {
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Point_corner_id prev_point_corner_id = first_point_corner_id + (corner_count + i - 1) % corner_count;
         const Point_corner_id point_corner_id      = first_point_corner_id + i;
         const Point_corner_id next_point_corner_id = first_point_corner_id + (i + 1) % corner_count;
@@ -300,8 +277,7 @@ void Point::for_each_corner_neighborhood_const(
             .next_corner          = geometry.corners[next_corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -317,8 +293,7 @@ void Polygon::for_each_corner(
         end = first_polygon_corner_id + corner_count;
         polygon_corner_id < end;
         ++polygon_corner_id
-    )
-    {
+    ) {
         const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
         Polygon_corner_context context{
             .geometry          = geometry,
@@ -327,8 +302,7 @@ void Polygon::for_each_corner(
             .corner            = geometry.corners[corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -344,8 +318,7 @@ void Polygon::for_each_corner_const(
         end = first_polygon_corner_id + corner_count;
         polygon_corner_id < end;
         ++polygon_corner_id
-    )
-    {
+    ) {
         const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
         Polygon_corner_context_const context{
             .geometry          = geometry,
@@ -354,8 +327,7 @@ void Polygon::for_each_corner_const(
             .corner            = geometry.corners[corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -366,8 +338,7 @@ void Polygon::for_each_corner_neighborhood(
     std::function<void(Polygon_corner_neighborhood_context&)> callback
 )
 {
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
         const Polygon_corner_id polygon_corner_id      = first_polygon_corner_id + i;
         const Polygon_corner_id next_polygon_corner_id = first_polygon_corner_id + (i + 1) % corner_count;
@@ -387,8 +358,7 @@ void Polygon::for_each_corner_neighborhood(
             .next_corner            = geometry.corners[next_corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -399,8 +369,7 @@ void Polygon::for_each_corner_neighborhood_const(
     std::function<void(Polygon_corner_neighborhood_context_const&)> callback
 ) const
 {
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
         const Polygon_corner_id polygon_corner_id      = first_polygon_corner_id + i;
         const Polygon_corner_id next_polygon_corner_id = first_polygon_corner_id + (i + 1) % corner_count;
@@ -420,8 +389,7 @@ void Polygon::for_each_corner_neighborhood_const(
             .next_corner            = geometry.corners[next_corner_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -436,8 +404,7 @@ void Edge::for_each_polygon(
         end = first_edge_polygon_id + polygon_count;
         edge_polygon_id < end;
         ++edge_polygon_id
-    )
-    {
+    ) {
         const Polygon_id polygon_id = geometry.edge_polygons[edge_polygon_id];
         Edge_polygon_context context{
             .geometry        = geometry,
@@ -446,8 +413,7 @@ void Edge::for_each_polygon(
             .polygon         = geometry.polygons[polygon_id]
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }
@@ -463,8 +429,7 @@ void Edge::for_each_polygon_const(
         end = first_edge_polygon_id + polygon_count;
         edge_polygon_id < end;
         ++edge_polygon_id
-    )
-    {
+    ) {
         const Polygon_id polygon_id = geometry.edge_polygons.at(edge_polygon_id);
         Edge_polygon_context_const context{
             .geometry        = geometry,
@@ -473,8 +438,7 @@ void Edge::for_each_polygon_const(
             .polygon         = geometry.polygons.at(polygon_id)
         };
         callback(context);
-        if (context.break_)
-        {
+        if (context.break_) {
             return;
         }
     }

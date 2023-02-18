@@ -46,8 +46,7 @@ void Multi_buffer::allocate(
 
     log_multi_buffer->trace("{}: binding point = {} size = {}", m_name, binding_point, size);
 
-    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
-    {
+    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_buffers.emplace_back(
             target,
             size,
@@ -68,8 +67,7 @@ void Multi_buffer::allocate(
 
     log_multi_buffer->trace("{}: size = {}", m_name, size);
 
-    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
-    {
+    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_buffers.emplace_back(
             target,
             size,
@@ -118,8 +116,7 @@ void Multi_buffer::bind()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_writer.range.byte_count == 0)
-    {
+    if (m_writer.range.byte_count == 0) {
         return;
     }
 
@@ -144,8 +141,7 @@ void Multi_buffer::bind()
         m_writer.range.first_byte_offset + m_writer.range.byte_count <= buffer.capacity_byte_count()
     );
 
-    if (gl_helpers::is_indexed(buffer.target()))
-    {
+    if (gl_helpers::is_indexed(buffer.target())) {
         gl::bind_buffer_range(
             buffer.target(),
             static_cast<GLuint>    (m_binding_point),
@@ -153,9 +149,7 @@ void Multi_buffer::bind()
             static_cast<GLintptr>  (m_writer.range.first_byte_offset),
             static_cast<GLsizeiptr>(m_writer.range.byte_count)
         );
-    }
-    else
-    {
+    } else {
         gl::bind_buffer(buffer.target(), static_cast<GLuint>(buffer.gl_name()));
     }
 }

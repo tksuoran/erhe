@@ -146,8 +146,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     if (
         (m_width  == viewport.width) &&
         (m_height == viewport.height)
-    )
-    {
+    ) {
         return downsample_nodes_unchanged; // post processing nodes are
     }
 
@@ -156,17 +155,12 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     if (
         (viewport.width  < 1) ||
         (viewport.height < 1)
-    )
-    {
+    ) {
         log_post_processing->trace(
             "Resizing Post_processing_node '{}' to 0 x 0",
             get_name()
         );
-        if (
-            (m_width  != 0) ||
-            (m_height != 0)
-        )
-        {
+        if ((m_width  != 0) || (m_height != 0)) {
             m_width  = 0;
             m_height = 0;
             return downsample_nodes_changed;
@@ -190,32 +184,18 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     // First node is used the post processing input texture
     m_downsample_nodes.emplace_back("Post Processing Input", width, height, -1);
 
-    for (;;)
-    {
-        if (
-            (width == 1) &&
-            (height == 1)
-        )
-        {
+    for (;;) {
+        if ((width == 1) && (height == 1)) {
             break;
         }
-        if (
-            (width >= height) &&
-            (width > 1)
-        )
-        {
+        if ((width >= height) && (width > 1)) {
             width = width / 2;
             m_downsample_nodes.emplace_back("Post Processing Downsample X", width, height, 0);
         }
-        if (
-            (height > width) &&
-            (height > 1)
-        )
-        {
+        if ((height > width) && (height > 1)) {
             height = height / 2;
             m_downsample_nodes.emplace_back("Post Processing Downsample Y", width, height, 1);
-            if ((width + height) == 2)
-            {
+            if ((width + height) == 2) {
                 break;
             }
         }
@@ -269,8 +249,7 @@ void Post_processing_node::viewport_toolbar()
 
 void Post_processing_node::execute_rendergraph_node()
 {
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return;
     }
 
@@ -280,8 +259,7 @@ void Post_processing_node::execute_rendergraph_node()
     ERHE_PROFILE_GPU_SCOPE(c_post_processing)
 
     const bool downsample_nodes_unchanged = update_downsample_nodes();
-    if (!downsample_nodes_unchanged)
-    {
+    if (!downsample_nodes_unchanged) {
         return;
     }
 
@@ -402,17 +380,14 @@ void Post_processing::initialize_component()
             }
         };
 
-        if (erhe::graphics::Instance::info.use_bindless_texture)
-        {
+        if (erhe::graphics::Instance::info.use_bindless_texture) {
             x_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
             y_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
             compose_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
             x_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
             y_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
             compose_create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-        }
-        else
-        {
+        } else {
             m_source_texture_count = std::min(
                 m_source_texture_count,
                 static_cast<size_t>(erhe::graphics::Instance::limits.max_texture_image_units)
@@ -450,8 +425,7 @@ void Post_processing::initialize_component()
         m_downsample_x_shader_stages = std::make_unique<Shader_stages>(std::move(x_prototype));
         m_downsample_y_shader_stages = std::make_unique<Shader_stages>(std::move(y_prototype));
         m_compose_shader_stages      = std::make_unique<Shader_stages>(std::move(compose_prototype));
-        if (erhe::application::g_shader_monitor)
-        {
+        if (erhe::application::g_shader_monitor) {
             erhe::application::g_shader_monitor->add(x_create_info,       m_downsample_x_shader_stages.get());
             erhe::application::g_shader_monitor->add(y_create_info,       m_downsample_y_shader_stages.get());
             erhe::application::g_shader_monitor->add(compose_create_info, m_compose_shader_stages.get());
@@ -534,46 +508,34 @@ void Post_processing::post_process(Post_processing_node& node)
 
     const auto& downsample_nodes = node.get_downsample_nodes();
 
-    if (downsample_nodes.empty())
-    {
+    if (downsample_nodes.empty()) {
         return;
     }
 
-    if (downsample_nodes.size() > 1)
-    {
+    if (downsample_nodes.size() > 1) {
         for (
             std::size_t i = 0,
             end = downsample_nodes.size() - 2;
             i < end;
             ++i
-        )
-        {
+        ) {
             const Downsample_node&               source_downsample_node = downsample_nodes.at(i);
             const Downsample_node&               downsample_node        = downsample_nodes.at(i + 1);
             const erhe::graphics::Texture* const source_texture         = source_downsample_node.texture.get();
             const int width  = source_texture->width();
             const int height = source_texture->width();
 
-            if (
-                (width  == 1) &&
-                (height == 1)
-            )
-            {
+            if ((width  == 1) && (height == 1)) {
                 break;
             }
 
-            if (downsample_node.axis == 0)
-            {
+            if (downsample_node.axis == 0) {
                 erhe::graphics::Scoped_debug_group downsample_scope{"Downsample X"};
                 downsample(source_texture, downsample_node, m_downsample_x_pipeline);
-            }
-            else if (downsample_node.axis == 1)
-            {
+            } else if (downsample_node.axis == 1) {
                 erhe::graphics::Scoped_debug_group downsample_scope{"Downsample Y"};
                 downsample(source_texture, downsample_node, m_downsample_y_pipeline);
-            }
-            else
-            {
+            } else {
                 ERHE_FATAL("bad downsample axis");
             }
         }
@@ -643,13 +605,10 @@ void Post_processing::downsample(
         );
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make input texture resident");
         gl::make_texture_handle_resident_arb(handle);
-    }
-    else
-    {
+    } else {
         gl::bind_texture_unit(0, source_texture->gl_name());
         gl::bind_sampler     (0, m_linear_sampler->gl_name());
     }
@@ -665,8 +624,7 @@ void Post_processing::downsample(
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make input texture non resident");
         gl::make_texture_handle_non_resident_arb(handle);
     }
@@ -708,8 +666,7 @@ void Post_processing::compose(Post_processing_node& node)
     {
         ERHE_PROFILE_SCOPE("make textures resident");
         std::size_t texture_slot = 0;
-        for (const Downsample_node& downsample_node : downsample_nodes)
-        {
+        for (const Downsample_node& downsample_node : downsample_nodes) {
             const erhe::graphics::Texture* const texture = downsample_node.texture.get();
             const uint64_t handle = erhe::graphics::get_handle(
                 *texture,
@@ -723,12 +680,9 @@ void Post_processing::compose(Post_processing_node& node)
             };
             const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
-            if (erhe::graphics::Instance::info.use_bindless_texture)
-            {
+            if (erhe::graphics::Instance::info.use_bindless_texture) {
                 gl::make_texture_handle_resident_arb(handle);
-            }
-            else
-            {
+            } else {
                 gl::bind_texture_unit(static_cast<GLuint>(texture_slot), texture->gl_name());
                 gl::bind_sampler     (static_cast<GLuint>(texture_slot), m_linear_sampler->gl_name());
             }
@@ -738,10 +692,8 @@ void Post_processing::compose(Post_processing_node& node)
             write<uint32_t>(gpu_uint_data, parameter_writer.write_offset + (texture_slot * uvec4_size) + m_offsets.source_texture + 3, 0);
             ++texture_slot;
         }
-        if (!erhe::graphics::Instance::info.use_bindless_texture)
-        {
-            for (; texture_slot < m_source_texture_count; ++texture_slot)
-            {
+        if (!erhe::graphics::Instance::info.use_bindless_texture) {
+            for (; texture_slot < m_source_texture_count; ++texture_slot) {
                 gl::bind_texture_unit(static_cast<GLuint>(texture_slot), m_dummy_texture->gl_name());
                 gl::bind_sampler     (static_cast<GLuint>(texture_slot), m_nearest_sampler->gl_name());
             }
@@ -801,12 +753,10 @@ void Post_processing::compose(Post_processing_node& node)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures non-resident");
 
-        for (const Downsample_node& downsample_node : downsample_nodes)
-        {
+        for (const Downsample_node& downsample_node : downsample_nodes) {
             const erhe::graphics::Texture* const texture = downsample_node.texture.get();
             const uint64_t handle = erhe::graphics::get_handle(
                 *texture,
@@ -820,8 +770,7 @@ void Post_processing::compose(Post_processing_node& node)
             };
             const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
-            if (erhe::graphics::Instance::info.use_bindless_texture)
-            {
+            if (erhe::graphics::Instance::info.use_bindless_texture) {
                 gl::make_texture_handle_non_resident_arb(handle);
             }
         }
@@ -838,8 +787,7 @@ void Post_processing::compose(Post_processing_node& node)
 auto factorial(const int input) -> int
 {
     int result = 1;
-    for (int i = 1; i <= input; i++)
-    {
+    for (int i = 1; i <= input; i++) {
         result = result * i;
     }
     return result;
@@ -878,8 +826,7 @@ auto kernel_binom(
     const auto radius       = taps >> 1;
 
     // sanity check, avoid duped coefficients at center
-    if ((coeffs_count & 1) == 0)
-    {
+    if ((coeffs_count & 1) == 0) {
         return {}; // ValueError("Duped coefficients at center")
     }
 
@@ -887,8 +834,7 @@ auto kernel_binom(
     // https://en.wikipedia.org/wiki/Power_of_two
     // TODO: seems to be not optimal ...
     int sum = 0;
-    for (int x = 0; x < reduce_by; ++x)
-    {
+    for (int x = 0; x < reduce_by; ++x) {
         sum += 2 * binom(row, x);
     }
     const auto total = float(1 << row) - sum;
@@ -899,16 +845,14 @@ auto kernel_binom(
         int x = reduce_by + radius;
         x > reduce_by - 1;
         --x
-    )
-    {
+    ) {
         result.weights.push_back(binom(row, x) / total);
     }
     for (
         int offset = 0;
         offset <= radius;
         ++offset
-    )
-    {
+    ) {
         result.offsets.push_back(static_cast<float>(offset));
     }
     return result;
@@ -924,22 +868,19 @@ auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
 
     // sanity checks
     const auto pairs = w_count - 1;
-    if ((w_count & 1) == 0)
-    {
+    if ((w_count & 1) == 0) {
         return {};
         //raise ValueError("Duped coefficients at center")
     }
 
-    if ((pairs % 2 != 0))
-    {
+    if ((pairs % 2 != 0)) {
         return {};
         //raise ValueError("Can't perform bilinear reduction on non-paired texels")
     }
 
     Kernel result;
     result.weights.push_back(wd[0]);
-    for (int x = 1; x < w_count - 1; x += 2)
-    {
+    for (int x = 1; x < w_count - 1; x += 2) {
         result.weights.push_back(wd[x] + wd[x + 1]);
     }
 
@@ -948,8 +889,7 @@ auto kernel_binom_linear(const Kernel& discrete_data) -> Kernel
         int x = 1;
         x < w_count - 1;
         x += 2
-    )
-    {
+    ) {
         int i = (x - 1) / 2;
         const float value =
             (

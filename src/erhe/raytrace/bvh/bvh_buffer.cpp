@@ -67,8 +67,7 @@ auto Bvh_buffer::allocate_bytes(
 
     const std::lock_guard<std::mutex> lock{m_allocate_mutex};
 
-    while ((m_next_free_byte % alignment) != 0)
-    {
+    while ((m_next_free_byte % alignment) != 0) {
         ++m_next_free_byte;
     }
     const auto offset = m_next_free_byte;

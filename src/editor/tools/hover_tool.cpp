@@ -82,8 +82,7 @@ void Hover_tool::initialize_component()
 void Hover_tool::imgui()
 {
     auto* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         return;
     }
 
@@ -97,14 +96,12 @@ void Hover_tool::imgui()
     ImGui::Text("Content: %s",      (hover       .valid && hover       .mesh) ? hover       .mesh->get_name().c_str() : "");
     ImGui::Text("Tool: %s",         (tool        .valid && tool        .mesh) ? tool        .mesh->get_name().c_str() : "");
     ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget.mesh) ? rendertarget.mesh->get_name().c_str() : "");
-    if (grid.valid && grid.position.has_value())
-    {
+    if (grid.valid && grid.position.has_value()) {
         const std::string text = fmt::format("Grid: {}", grid.position.value());
         ImGui::TextUnformatted(text.c_str());
     }
 
-    if (nearest.valid)
-    {
+    if (nearest.valid) {
         {
             const std::string text = fmt::format("Nearest Primitive: {}", nearest.primitive);
             ImGui::TextUnformatted(text.c_str());
@@ -113,31 +110,26 @@ void Hover_tool::imgui()
             const std::string text = fmt::format("Nearest local_index: {}", nearest.local_index);
             ImGui::TextUnformatted(text.c_str());
         }
-        if (nearest.position.has_value())
-        {
+        if (nearest.position.has_value()) {
             const std::string text = fmt::format("Nearest Position: {}", nearest.position.value());
             ImGui::TextUnformatted(text.c_str());
         }
-        if (nearest.normal.has_value())
-        {
+        if (nearest.normal.has_value()) {
             const std::string text = fmt::format("Nearest Normal: {}", nearest.normal.value());
             ImGui::TextUnformatted(text.c_str());
         }
-        if (nearest.uv.has_value())
-        {
+        if (nearest.uv.has_value()) {
             const std::string text = fmt::format("Nearest UV: {}", nearest.uv.value());
             ImGui::TextUnformatted(text.c_str());
         }
     }
     const auto origin    = scene_view->get_control_ray_origin_in_world();
     const auto direction = scene_view->get_control_ray_direction_in_world();
-    if (origin.has_value())
-    {
+    if (origin.has_value()) {
         const std::string text = fmt::format("Ray Origin: {}", origin.value());
         ImGui::TextUnformatted(text.c_str());
     }
-    if (direction.has_value())
-    {
+    if (direction.has_value()) {
         const std::string text = fmt::format("Ray Direction: {}", direction.value());
         ImGui::TextUnformatted(text.c_str());
     }
@@ -150,8 +142,7 @@ void Hover_tool::imgui()
     constexpr uint32_t blue {0xffff0000u};
     constexpr uint32_t white{0xffffffffu};
 
-    switch (slot)
-    {
+    switch (slot) {
         case Hover_entry::content_slot: return white;
         case Hover_entry::tool_slot:    return blue;
         case Hover_entry::grid_slot:    return green;
@@ -166,8 +157,7 @@ void Hover_tool::imgui()
     constexpr glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
     constexpr glm::vec4 white{1.0f, 1.0f, 1.0f, 1.0f};
 
-    switch (slot)
-    {
+    switch (slot) {
         case Hover_entry::content_slot: return red;
         case Hover_entry::tool_slot: return blue;
         case Hover_entry::grid_slot: return green;
@@ -181,8 +171,7 @@ void Hover_tool::tool_render(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (context.scene_view == nullptr)
-    {
+    if (context.scene_view == nullptr) {
         return;
     }
 
@@ -191,15 +180,13 @@ void Hover_tool::tool_render(
     if (
         !entry.valid ||
         !entry.position.has_value()
-    )
-    {
+    ) {
         return;
     }
 
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
-    if (entry.normal.has_value())
-    {
+    if (entry.normal.has_value()) {
         const auto p0 = entry.position.value();
         const auto p1 = entry.position.value() + entry.normal.value();
         line_renderer.set_thickness(10.0f);
@@ -212,8 +199,7 @@ void Hover_tool::tool_render(
                 }
             }
         );
-        if (m_show_snapped_grid_position && entry.grid)
-        {
+        if (m_show_snapped_grid_position && entry.grid) {
             const auto sp0 = entry.grid->snap_world_position(p0);
             const auto sp1 = sp0 + entry.normal.value();
             line_renderer.add_lines(
@@ -228,14 +214,12 @@ void Hover_tool::tool_render(
         }
     }
 
-    if (context.viewport_window == nullptr)
-    {
+    if (context.viewport_window == nullptr) {
         return;
     }
 
     const auto position_in_viewport_opt = context.viewport_window->project_to_viewport(entry.position.value());
-    if (!position_in_viewport_opt.has_value())
-    {
+    if (!position_in_viewport_opt.has_value()) {
         return;
     }
 
@@ -280,15 +264,12 @@ void Hover_tool::tool_render(
         position_in_viewport.y + 16.0f * 2,
         -0.5f
     };
-    if (entry.mesh)
-    {
+    if (entry.mesh) {
         const auto* node = entry.mesh->get_node();
         auto node_physics = get_node_physics(node);
-        if (node_physics)
-        {
+        if (node_physics) {
             erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
-            if (rigid_body)
-            {
+            if (rigid_body) {
                 const glm::vec3 local_position = node->transform_point_from_world_to_local(entry.position.value());
                 const std::string text_line_3 = fmt::format(
                     "Position in {}: {}",
@@ -302,9 +283,7 @@ void Hover_tool::tool_render(
                 );
             }
         }
-    }
-    else if (entry.grid)
-    {
+    } else if (entry.grid) {
         const glm::vec3 local_position = glm::vec3{
             entry.grid->grid_from_world() * glm::vec4{entry.position.value(), 1.0f}
         };

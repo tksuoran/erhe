@@ -23,10 +23,8 @@ Space_mouse_controller::Space_mouse_controller(Space_mouse_listener& listener)
 {
     initialize();
 
-    if (m_device != nullptr)
-    {
-        if (!m_listener.is_active() && !m_running)
-        {
+    if (m_device != nullptr) {
+        if (!m_listener.is_active() && !m_running) {
             m_thread = std::make_unique<std::thread>(&Space_mouse_controller::run, this);
         }
     }
@@ -36,10 +34,8 @@ Space_mouse_controller::~Space_mouse_controller() noexcept
 {
     m_listener.set_active(false);
 
-    if (m_thread)
-    {
-        if (m_thread->joinable())
-        {
+    if (m_thread) {
+        if (m_thread->joinable()) {
             m_thread->join();
         }
     }
@@ -50,8 +46,7 @@ auto Space_mouse_controller::initialize() -> bool
     hid_device_info* const device_list = hid_enumerate(0x0u, 0x0u);
     hid_device_info* device = device_list;
 
-    while (device)
-    {
+    while (device) {
         if (
             (
                 device->vendor_id == USB_VENDOR_ID_LOGITECH ||
@@ -68,16 +63,14 @@ auto Space_mouse_controller::initialize() -> bool
                 device->product_id == USB_DEVICE_ID_SPACEPILOT              ||
                 device->product_id == USB_DEVICE_ID_SPACEPILOTPRO
             )
-        )
-        {
+        ) {
             log_space_mouse->trace(
                 "3D mouse: vendor = {:04x}, product = {:04x}",
                 device->vendor_id,
                 device->product_id
             );
             m_device = hid_open(device->vendor_id, device->product_id, nullptr);
-            if (m_device != nullptr)
-            {
+            if (m_device != nullptr) {
                 log_space_mouse->warn(
                     "3D mouse: vendor = {:04x}, product = {:04x} open failed",
                     device->vendor_id,
@@ -91,8 +84,7 @@ auto Space_mouse_controller::initialize() -> bool
     }
     hid_free_enumeration(device_list);
 
-    if (m_device == nullptr)
-    {
+    if (m_device == nullptr) {
         log_space_mouse->info("3D mouse: no supported device found");
         return false;
     }
@@ -102,8 +94,7 @@ auto Space_mouse_controller::initialize() -> bool
 
 auto remap(const unsigned char first, const unsigned char val) -> int
 {
-    switch (val)
-    {
+    switch (val) {
         case   0u: return first;
         case   1u: return first + 255;
         case 254u: return -512 + first;
@@ -119,24 +110,19 @@ void Space_mouse_controller::run()
 
     m_listener.set_active(true);
 
-    while (m_listener.is_active())
-    {
+    while (m_listener.is_active()) {
         std::array<unsigned char, 7> data{};
         const int result = hid_read_timeout(m_device, data.data(), data.size(), 400); //when timeout
-        if (result < 0)
-        {
+        if (result < 0) {
             log_space_mouse->error("3D mouse: read() error");
             stop();
         }
-        if (result > 0)
-        {
+        if (result > 0) {
             constexpr const unsigned char OP_TRANSLATION = 1;
             constexpr const unsigned char OP_ROTATION    = 2;
             constexpr const unsigned char OP_BUTTON      = 3;
-            switch (data[0])
-            {
-                case OP_TRANSLATION:
-                {
+            switch (data[0]) {
+                case OP_TRANSLATION: {
                     const int tx = remap((data[1] & 0x000000ff), (data[2]));
                     const int ty = remap((data[3] & 0x000000ff), (data[4]));
                     const int tz = remap((data[5] & 0x000000ff), (data[6]));
@@ -144,8 +130,7 @@ void Space_mouse_controller::run()
                     break;
                 }
 
-                case OP_ROTATION:
-                {
+                case OP_ROTATION: {
                     const int rx = remap((data[1] & 0x000000ff), (data[2]));
                     const int ry = remap((data[3] & 0x000000ff), (data[4]));
                     const int rz = remap((data[5] & 0x000000ff), (data[6]));
@@ -153,14 +138,12 @@ void Space_mouse_controller::run()
                     break;
                 }
 
-                case OP_BUTTON:
-                {
+                case OP_BUTTON: {
                     m_listener.on_button(data[1]);
                     break;
                 }
 
-                default:
-                {
+                default: {
                     break;
                 }
             }
@@ -172,12 +155,10 @@ void Space_mouse_controller::run()
 
 void Space_mouse_controller::stop()
 {
-    if (m_listener.is_active())
-    {
+    if (m_listener.is_active()) {
         m_listener.set_active(false);
 
-        if ((m_device != nullptr) && m_running)
-        {
+        if ((m_device != nullptr) && m_running) {
             hid_close(m_device);
             m_device = nullptr;
             hid_exit();

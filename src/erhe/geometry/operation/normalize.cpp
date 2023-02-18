@@ -56,8 +56,7 @@ Normalize::Normalize(
     destination.for_each_point_const([&](auto& i)
     {
         // TODO Figure out when and how this can happen
-        if (positions->has(i.point_id))
-        {
+        if (positions->has(i.point_id)) {
             const glm::vec3 old_position = positions->get(i.point_id);
             const glm::vec3 new_position = glm::normalize(old_position);
             positions->put(i.point_id, new_position);

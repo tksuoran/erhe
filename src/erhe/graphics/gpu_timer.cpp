@@ -37,8 +37,7 @@ void Gpu_timer::on_thread_enter()
     std::stringstream this_thread_id;
     this_thread_id << std::this_thread::get_id();
     const std::string this_thread_id_string = this_thread_id.str();
-    for (auto* gpu_timer : s_all_gpu_timers)
-    {
+    for (auto* gpu_timer : s_all_gpu_timers) {
         std::stringstream owner;
         owner << gpu_timer->m_owner_thread;
         log_threads->trace(
@@ -47,8 +46,7 @@ void Gpu_timer::on_thread_enter()
             fmt::ptr(gpu_timer),
             owner.str()
         );
-        if (gpu_timer->m_owner_thread == std::thread::id{})
-        {
+        if (gpu_timer->m_owner_thread == std::thread::id{}) {
             gpu_timer->create();
         }
     }
@@ -66,8 +64,7 @@ void Gpu_timer::on_thread_exit()
     std::stringstream this_thread_id_ss;
     this_thread_id_ss << std::this_thread::get_id();
     const std::string this_thread_id_string = this_thread_id_ss.str();
-    for (auto* gpu_timer : s_all_gpu_timers)
-    {
+    for (auto* gpu_timer : s_all_gpu_timers) {
         std::stringstream owner;
         owner << gpu_timer->m_owner_thread;
         log_threads->trace(
@@ -78,8 +75,7 @@ void Gpu_timer::on_thread_exit()
             //gpu_timer->m_owner_thread
             owner.str()
         );
-        if (gpu_timer->m_owner_thread == this_thread_id)
-        {
+        if (gpu_timer->m_owner_thread == this_thread_id) {
             gpu_timer->reset();
         }
     }
@@ -125,14 +121,10 @@ void Gpu_timer::create()
         fmt::ptr(this)
     );
 
-    for (auto& query : m_queries)
-    {
-        if (query.query_object.has_value())
-        {
+    for (auto& query : m_queries) {
+        if (query.query_object.has_value()) {
             Expects(m_owner_thread == std::this_thread::get_id());
-        }
-        else
-        {
+        } else {
             query.query_object.emplace(
                 Gl_query{gl::Query_target::time_elapsed}
             );
@@ -153,8 +145,7 @@ void Gpu_timer::reset()
         fmt::ptr(this)
     );
     m_owner_thread = {};
-    for (auto& query : m_queries)
-    {
+    for (auto& query : m_queries) {
         query.query_object.reset();
     }
 #endif
@@ -203,13 +194,11 @@ void Gpu_timer::read()
 #if defined(ERHE_USE_TIME_QUERY)
     Expects(m_owner_thread == std::this_thread::get_id());
 
-    for (size_t i = 0; i <= s_count; ++i)
-    {
+    for (size_t i = 0; i <= s_count; ++i) {
         const auto poll_index = (s_index + 1 + i) % s_count;
         auto&      query      = m_queries[poll_index];
         const auto name       = query.query_object.value().gl_name();
-        if (!query.pending)
-        {
+        if (!query.pending) {
             continue;
         }
         GLint result_available{};
@@ -218,8 +207,7 @@ void Gpu_timer::read()
             gl::Query_object_parameter_name::query_result_available,
             &result_available
         );
-        if (result_available != 0)
-        {
+        if (result_available != 0) {
             GLuint64 time_value{};
             gl::get_query_object_ui_64v(
                 name,
@@ -230,8 +218,7 @@ void Gpu_timer::read()
             query.pending = false;
         }
     }
-    for (size_t i = 0; i < s_count; ++i)
-    {
+    for (size_t i = 0; i < s_count; ++i) {
         const auto poll_index = (s_index + 1 + i) % s_count;
         auto&      query      = m_queries[poll_index];
         query.begin = false;
@@ -257,10 +244,8 @@ void Gpu_timer::end_frame()
 #if defined(ERHE_USE_TIME_QUERY)
     const std::lock_guard<std::mutex> lock{s_mutex};
 
-    for (auto* timer : s_all_gpu_timers)
-    {
-        if (timer->m_owner_thread == std::this_thread::get_id())
-        {
+    for (auto* timer : s_all_gpu_timers) {
+        if (timer->m_owner_thread == std::this_thread::get_id()) {
             timer->read();
         }
     }

@@ -105,8 +105,7 @@ public:
         point_normals   ->put(point_id, data.normal);
         point_tangents  ->put(point_id, data.tangent);
         point_bitangents->put(point_id, data.bitangent);
-        if (!is_uv_discontinuity)
-        {
+        if (!is_uv_discontinuity) {
             point_texcoords->put(point_id, data.texcoord);
         }
 
@@ -129,13 +128,11 @@ public:
         const bool is_major_seam = (major == major_axis_steps);
         const bool is_minor_seam = (minor == minor_axis_steps);
 
-        if (is_major_seam)
-        {
+        if (is_major_seam) {
             major = 0;
         }
 
-        if (is_minor_seam)
-        {
+        if (is_minor_seam) {
             minor = 0;
         }
 
@@ -157,13 +154,11 @@ public:
         const bool is_minor_seam       = (minor == minor_axis_steps);
         const bool is_uv_discontinuity = is_major_seam || is_minor_seam;
 
-        if (is_major_seam)
-        {
+        if (is_major_seam) {
             major = 0;
         }
 
-        if (is_minor_seam)
-        {
+        if (is_minor_seam) {
             minor = 0;
         }
 
@@ -176,8 +171,7 @@ public:
 
         const Corner_id corner_id = geometry.make_polygon_corner(polygon_id, point_id);
 
-        if (is_uv_discontinuity)
-        {
+        if (is_uv_discontinuity) {
             const auto t = static_cast<float>(rel_minor);
             const auto s = static_cast<float>(rel_major);
 
@@ -227,26 +221,22 @@ public:
         // green channel = apply texture coordinate to anisotropy
         const glm::vec4 anisotropic_no_texcoord{1.0f, 0.0f, 0.0f, 0.0f}; // Used on lateral surface
 
-        for (int major = 0; major < major_axis_steps; ++major)
-        {
+        for (int major = 0; major < major_axis_steps; ++major) {
             const auto rel_major = static_cast<double>(major) / static_cast<double>(major_axis_steps);
-            for (int minor = 0; minor < minor_axis_steps; ++minor)
-            {
+            for (int minor = 0; minor < minor_axis_steps; ++minor) {
                 auto           rel_minor = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
                 const Point_id point_id  = torus_point(rel_major, rel_minor);
                 points.push_back(point_id);
             }
         }
 
-        for (int major = 0; major < major_axis_steps; ++major)
-        {
+        for (int major = 0; major < major_axis_steps; ++major) {
             const int  next_major         = (major + 1);
             const auto rel_major          = static_cast<double>(major     ) / static_cast<double>(major_axis_steps);
             const auto rel_next_major     = static_cast<double>(next_major) / static_cast<double>(major_axis_steps);
             const auto rel_centroid_major = (rel_major + rel_next_major) / 2.0;
 
-            for (int minor = 0; minor < minor_axis_steps; ++minor)
-            {
+            for (int minor = 0; minor < minor_axis_steps; ++minor) {
                 const int  next_minor         = (minor + 1);
                 const auto rel_minor          = static_cast<double>(minor     ) / static_cast<double>(minor_axis_steps);
                 const auto rel_next_minor     = static_cast<double>(next_minor) / static_cast<double>(minor_axis_steps);

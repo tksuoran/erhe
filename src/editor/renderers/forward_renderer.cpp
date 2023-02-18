@@ -147,8 +147,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     );
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    if (camera != nullptr)
-    {
+    if (camera != nullptr) {
         m_camera_buffers->update(
             *camera->projection(),
             *camera->get_node(),
@@ -158,8 +157,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         m_camera_buffers->bind();
     }
 
-    if (!erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (!erhe::graphics::Instance::info.use_bindless_texture) {
         erhe::graphics::s_texture_unit_cache.reset(g_programs->base_texture_unit);
     }
 
@@ -175,25 +173,19 @@ void Forward_renderer::render(const Render_parameters& parameters)
     );
     m_light_buffers->bind_light_buffer();
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures resident");
 
-        if (enable_shadows)
-        {
+        if (enable_shadows) {
             gl::make_texture_handle_resident_arb(shadow_texture_handle);
         }
-        for (const uint64_t handle : m_material_buffers->used_handles())
-        {
+        for (const uint64_t handle : m_material_buffers->used_handles()) {
             gl::make_texture_handle_resident_arb(handle);
         }
-    }
-    else
-    {
+    } else {
         ERHE_PROFILE_SCOPE("bind texture units");
 
-        if (enable_shadows)
-        {
+        if (enable_shadows) {
             gl::bind_texture_unit(g_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
             gl::bind_sampler     (g_programs->shadow_texture_unit, g_programs->nearest_sampler->gl_name());
         }
@@ -201,18 +193,15 @@ void Forward_renderer::render(const Render_parameters& parameters)
         erhe::graphics::s_texture_unit_cache.bind(fallback_texture_handle);
     }
 
-    for (auto& pass : passes)
-    {
+    for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
-        if (!pipeline.data.shader_stages)
-        {
+        if (!pipeline.data.shader_stages) {
             continue;
         }
 
         const auto primitive_mode = pass->primitive_mode; //select_primitive_mode(pass);
 
-        if (pass->begin)
-        {
+        if (pass->begin) {
             ERHE_PROFILE_SCOPE("pass begin");
             pass->begin();
         }
@@ -221,15 +210,13 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
         erhe::graphics::g_opengl_state_tracker->execute(pipeline);
 
-        for (const auto& meshes : mesh_spans)
-        {
+        for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
 
             m_primitive_buffers->update(meshes, filter);
             const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(meshes, primitive_mode, filter);
-            if (draw_indirect_buffer_range.draw_indirect_count == 0)
-            {
+            if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 continue;
             }
             m_primitive_buffers->bind();
@@ -247,24 +234,20 @@ void Forward_renderer::render(const Render_parameters& parameters)
             }
         }
 
-        if (pass->end)
-        {
+        if (pass->end) {
             ERHE_PROFILE_SCOPE("pass end");
             pass->end();
         }
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures non resident");
 
-        if (enable_shadows)
-        {
+        if (enable_shadows) {
             ERHE_PROFILE_SCOPE("shadow texture non resident");
             gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
         }
-        for (const uint64_t handle : m_material_buffers->used_handles())
-        {
+        for (const uint64_t handle : m_material_buffers->used_handles()) {
             gl::make_texture_handle_non_resident_arb(handle);
         }
     }
@@ -301,8 +284,7 @@ void Forward_renderer::render_fullscreen(
     m_material_buffers->update(parameters.materials);
     m_material_buffers->bind();
 
-    if (camera != nullptr)
-    {
+    if (camera != nullptr) {
         m_camera_buffers->update(
             *camera->projection(),
             *camera->get_node(),
@@ -312,16 +294,12 @@ void Forward_renderer::render_fullscreen(
         m_camera_buffers->bind();
     }
 
-    if (light != nullptr)
-    {
+    if (light != nullptr) {
         const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
-        if (light_projection_transforms != nullptr)
-        {
+        if (light_projection_transforms != nullptr) {
             m_light_buffers->update_control(light_projection_transforms->index);
             m_light_buffers->bind_control_buffer();
-        }
-        else
-        {
+        } else {
             //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
@@ -331,29 +309,22 @@ void Forward_renderer::render_fullscreen(
         m_light_buffers->bind_light_buffer();
     }
 
-    if (enable_shadows)
-    {
-        if (erhe::graphics::Instance::info.use_bindless_texture)
-        {
+    if (enable_shadows) {
+        if (erhe::graphics::Instance::info.use_bindless_texture) {
             gl::make_texture_handle_resident_arb(shadow_texture_handle);
-        }
-        else
-        {
+        } else {
             gl::bind_texture_unit(g_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
             gl::bind_sampler     (g_programs->shadow_texture_unit, g_programs->nearest_sampler->gl_name());
         }
     }
 
-    for (auto& pass : passes)
-    {
+    for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
-        if (!pipeline.data.shader_stages)
-        {
+        if (!pipeline.data.shader_stages) {
             continue;
         }
 
-        if (pass->begin)
-        {
+        if (pass->begin) {
             pass->begin();
         }
 
@@ -362,16 +333,13 @@ void Forward_renderer::render_fullscreen(
         erhe::graphics::g_opengl_state_tracker->execute(pipeline);
         gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 3);
 
-        if (pass->end)
-        {
+        if (pass->end) {
             pass->end();
         }
     }
 
-    if (enable_shadows)
-    {
-        if (erhe::graphics::Instance::info.use_bindless_texture)
-        {
+    if (enable_shadows) {
+        if (erhe::graphics::Instance::info.use_bindless_texture) {
             gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
         }
     }

@@ -176,8 +176,7 @@ auto Application_impl::initialize_components(
     //renderdoc_capture_support.initialize_component();
 
     erhe::application::log_startup->info("Creating window");
-    if (!window.create_gl_window())
-    {
+    if (!window.create_gl_window()) {
         erhe::application::log_startup->error("GL window creation failed, aborting");
         return false;
     }
@@ -185,8 +184,7 @@ auto Application_impl::initialize_components(
     erhe::application::log_startup->info("Launching component initialization");
     m_components.launch_component_initialization(configuration.threading.parallel_initialization);
 
-    if (configuration.threading.parallel_initialization)
-    {
+    if (configuration.threading.parallel_initialization) {
         erhe::application::log_startup->info("Parallel init -> Providing worker GL contexts");
         gl_context_provider.provide_worker_contexts(
             window.get_context_window(),
@@ -215,19 +213,16 @@ auto Application_impl::initialize_components(
 
 void Application_impl::component_initialization_complete(const bool initialization_succeeded)
 {
-    if (initialization_succeeded)
-    {
+    if (initialization_succeeded) {
         gl::enable(gl::Enable_cap::primitive_restart);
         gl::primitive_restart_index(0xffffu);
 
-        if (erhe::application::g_window == nullptr)
-        {
+        if (erhe::application::g_window == nullptr) {
             return;
         }
 
         auto* const context_window = window.get_context_window();
-        if (context_window == nullptr)
-        {
+        if (context_window == nullptr) {
             return;
         }
 

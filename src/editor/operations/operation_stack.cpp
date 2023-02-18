@@ -43,13 +43,10 @@ Undo_command::Undo_command()
 
 auto Undo_command::try_call() -> bool
 {
-    if (g_operation_stack->can_undo())
-    {
+    if (g_operation_stack->can_undo()) {
         g_operation_stack->undo();
         return true;
-    }
-    else
-    {
+    } else {
         return false;
     }
 }
@@ -61,13 +58,10 @@ Redo_command::Redo_command()
 
 auto Redo_command::try_call() -> bool
 {
-    if (g_operation_stack->can_redo())
-    {
+    if (g_operation_stack->can_redo()) {
         g_operation_stack->redo();
         return true;
-    }
-    else
-    {
+    } else {
         return false;
     }
 }
@@ -163,8 +157,7 @@ void Operation_stack_impl::push(const std::shared_ptr<IOperation>& operation)
 
 void Operation_stack_impl::undo()
 {
-    if (m_executed.empty())
-    {
+    if (m_executed.empty()) {
         return;
     }
     auto operation = m_executed.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
@@ -175,8 +168,7 @@ void Operation_stack_impl::undo()
 
 void Operation_stack_impl::redo()
 {
-    if (m_undone.empty())
-    {
+    if (m_undone.empty()) {
         return;
     }
     auto operation = m_undone.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
@@ -212,14 +204,9 @@ void Operation_stack_impl::imgui(
         ImGuiTreeNodeFlags_Leaf
     };
 
-    if (ImGui::TreeNodeEx(stack_label, parent_flags))
-    {
-        for (const auto& op : operations)
-        {
-            ImGui::TreeNodeEx(
-                op->describe().c_str(),
-                leaf_flags
-            );
+    if (ImGui::TreeNodeEx(stack_label, parent_flags)) {
+        for (const auto& op : operations) {
+            ImGui::TreeNodeEx(op->describe().c_str(), leaf_flags);
         }
         ImGui::TreePop();
     }

@@ -304,8 +304,7 @@ void Commands::command_inactivated(Command* const command)
 {
     // std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    if (m_active_mouse_command == command)
-    {
+    if (m_active_mouse_command == command) {
         m_active_mouse_command = nullptr;
     }
 }
@@ -320,14 +319,11 @@ void Commands::on_key(
 
     Input_arguments context;
 
-    for (auto& binding : m_key_bindings)
-    {
-        if (!binding.is_command_host_enabled())
-        {
+    for (auto& binding : m_key_bindings) {
+        if (!binding.is_command_host_enabled()) {
             continue;
         }
-        if (binding.on_key(context, pressed, code, modifier_mask))
-        {
+        if (binding.on_key(context, pressed, code, modifier_mask)) {
             return;
         }
     }
@@ -343,18 +339,15 @@ void Commands::on_update()
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    for (auto& binding : m_update_bindings)
-    {
-        if (!binding.is_command_host_enabled())
-        {
+    for (auto& binding : m_update_bindings) {
+        if (!binding.is_command_host_enabled()) {
             continue;
         }
         binding.on_update();
     }
 
     // Call mouse drag bindings if buttons are being held down
-    if (m_last_mouse_button_bits != 0)
-    {
+    if (m_last_mouse_button_bits != 0) {
         Input_arguments dummy_input{
             .vector2{
                 .absolute_value{0.0f, 0.0f},
@@ -362,24 +355,19 @@ void Commands::on_update()
             }
         };
 
-        for (auto& binding : m_mouse_bindings)
-        {
-            if (!binding->is_command_host_enabled())
-            {
+        for (auto& binding : m_mouse_bindings) {
+            if (!binding->is_command_host_enabled()) {
                 continue;
             }
 
-            if (binding->get_type() == Command_binding::Type::Mouse_drag)
-            {
+            if (binding->get_type() == Command_binding::Type::Mouse_drag) {
                 auto*      drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
                 Command*   command      = binding->get_command();
                 const auto state        = command->get_command_state();
-                if ((state == State::Ready) || (state == State::Active))
-                {
+                if ((state == State::Ready) || (state == State::Active)) {
                     const auto     button = drag_binding->get_button();
                     const uint32_t bit    = (1 << button);
-                    if ((m_last_mouse_button_bits & bit) == bit)
-                    {
+                    if ((m_last_mouse_button_bits & bit) == bit) {
                         drag_binding->on_motion(dummy_input);
                     }
                 }
@@ -397,8 +385,7 @@ auto Commands::get_command_priority(Command* const command) const -> int
     }
 
     // Give priority for active mouse / cpntroller trigger commands
-    if (command == m_active_mouse_command)
-    {
+    if (command == m_active_mouse_command) {
         return 10000; // TODO max priority
     }
     return command->get_priority();
@@ -431,8 +418,7 @@ void Commands::sort_mouse_bindings()
         }
     );
     log_input->trace("Mouse bindings after sort:");
-    for (const auto& binding : m_mouse_bindings)
-    {
+    for (const auto& binding : m_mouse_bindings) {
         auto* const command = binding->get_command();
         const auto priority = get_command_priority(command);
         log_input->trace("{} {}", priority, command->get_name());
@@ -494,10 +480,8 @@ void Commands::inactivate_ready_commands()
 {
     //std::lock_guard<std::mutex> lock{m_command_mutex};
 
-    for (auto* command : m_commands)
-    {
-        if (command->get_command_state() == State::Ready)
-        {
+    for (auto* command : m_commands) {
+        if (command->get_command_state() == State::Ready) {
             command->set_inactive();
         }
     }
@@ -527,17 +511,14 @@ void Commands::update_active_mouse_command(
     if (
         (command->get_command_state() == State::Active) &&
         (m_active_mouse_command != command)
-    )
-    {
+    ) {
         ERHE_VERIFY(m_active_mouse_command == nullptr);
         log_input->trace("Set active mouse command = {}", command->get_name());
         m_active_mouse_command = command;
-    }
-    else if (
+    } else if (
         (command->get_command_state() != State::Active) &&
         (m_active_mouse_command == command)
-    )
-    {
+    ) {
         log_input->trace("reset active mouse command");
         m_active_mouse_command = nullptr;
     }
@@ -553,12 +534,9 @@ void Commands::on_mouse_button(
     sort_mouse_bindings();
 
     const uint32_t bit_mask = (1 << button);
-    if (pressed)
-    {
+    if (pressed) {
         m_last_mouse_button_bits = m_last_mouse_button_bits | bit_mask;
-    }
-    else
-    {
+    } else {
         m_last_mouse_button_bits = m_last_mouse_button_bits & ~bit_mask;
     }
 
@@ -568,8 +546,7 @@ void Commands::on_mouse_button(
 
     const char* button_name = erhe::toolkit::c_str(button);
     log_input->trace("Mouse button {} {}", button_name, pressed ? "pressed" : "released");
-    for (const auto& binding : m_mouse_bindings)
-    {
+    for (const auto& binding : m_mouse_bindings) {
         const bool button_match = binding->get_button() != button;
         log_input->trace(
             "  {}/{} {} {} {}",
@@ -579,19 +556,16 @@ void Commands::on_mouse_button(
             binding->get_command()->get_name(),
             button_match ? "button match" : "button mismatch"
         );
-        if (button_match)
-        {
+        if (button_match) {
             continue;
         }
-        if (!binding->is_command_host_enabled())
-        {
+        if (!binding->is_command_host_enabled()) {
             continue;
         }
 
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding->on_button(input))
-        {
+        if (binding->on_button(input)) {
             log_input->trace("Mouse button {} {} consumed by {}", button_name, pressed, command->get_name());
             update_active_mouse_command(command);
             break;
@@ -613,10 +587,8 @@ void Commands::on_mouse_wheel(const float x, const float y)
             .relative_value = glm::vec2{x, y}
         }
     };
-    for (const auto& binding : m_mouse_wheel_bindings)
-    {
-        if (!binding->is_command_host_enabled())
-        {
+    for (const auto& binding : m_mouse_wheel_bindings) {
+        if (!binding->is_command_host_enabled()) {
             continue;
         }
 
@@ -641,17 +613,14 @@ void Commands::on_mouse_move(const float x, const float y)
         }
     };
 
-    for (const auto& binding : m_mouse_bindings)
-    {
-        if (!binding->is_command_host_enabled())
-        {
+    for (const auto& binding : m_mouse_bindings) {
+        if (!binding->is_command_host_enabled()) {
             continue;
         }
 
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding->on_motion(input))
-        {
+        if (binding->on_motion(input)) {
             update_active_mouse_command(command);
             break;
         }
@@ -673,10 +642,8 @@ void Commands::on_xr_action(
     };
 
     log_input->trace("{}: {}", xr_action.name, state);
-    for (auto& binding : m_xr_boolean_bindings)
-    {
-        if (binding.xr_action != &xr_action)
-        {
+    for (auto& binding : m_xr_boolean_bindings) {
+        if (binding.xr_action != &xr_action) {
             continue;
         }
         log_input->trace(
@@ -687,15 +654,13 @@ void Commands::on_xr_action(
             binding.xr_action->name.c_str(),
             Command_binding::c_type_strings[static_cast<int>(binding.get_type())]
         );
-        if (!binding.is_command_host_enabled())
-        {
+        if (!binding.is_command_host_enabled()) {
             continue;
         }
 
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding.on_value_changed(input))
-        {
+        if (binding.on_value_changed(input)) {
             log_input->trace("XR bool {} consumed by {}", state, command->get_name());
             return;
         }
@@ -716,21 +681,17 @@ void Commands::on_xr_action(
         .float_value = xr_action.state.currentState
     };
 
-    for (auto& binding : m_xr_float_bindings)
-    {
-        if (binding.xr_action != &xr_action)
-        {
+    for (auto& binding : m_xr_float_bindings) {
+        if (binding.xr_action != &xr_action) {
             continue;
         }
-        if (!binding.is_command_host_enabled())
-        {
+        if (!binding.is_command_host_enabled()) {
             continue;
         }
 
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding.on_value_changed(input))
-        {
+        if (binding.on_value_changed(input)) {
             return;
         }
     }
@@ -756,21 +717,17 @@ void Commands::on_xr_action(
         }
     };
 
-    for (auto& binding : m_xr_vector2f_bindings)
-    {
-        if (binding.xr_action != &xr_action)
-        {
+    for (auto& binding : m_xr_vector2f_bindings) {
+        if (binding.xr_action != &xr_action) {
             continue;
         }
-        if (!binding.is_command_host_enabled())
-        {
+        if (!binding.is_command_host_enabled()) {
             continue;
         }
 
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding.on_value_changed(context))
-        {
+        if (binding.on_value_changed(context)) {
             log_input->trace("XR vector2f consumed by {}", command->get_name());
             return;
         }
@@ -782,10 +739,8 @@ void Commands::on_xr_action(
 
 void Commands::commands(const State filter)
 {
-    for (auto* command : m_commands)
-    {
-        if (command->get_command_state() == filter)
-        {
+    for (auto* command : m_commands) {
+        if (command->get_command_state() == filter) {
             const auto* host = command->get_host();
             const std::string label = fmt::format(
                 "{}/{} {} : {} {} {}",
@@ -817,28 +772,23 @@ void Commands::imgui()
             : "(none)"
     );
 
-    if (ImGui::TreeNodeEx("Commands", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        if (ImGui::TreeNodeEx("Active", ImGuiTreeNodeFlags_DefaultOpen))
-        {
+    if (ImGui::TreeNodeEx("Commands", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::TreeNodeEx("Active", ImGuiTreeNodeFlags_DefaultOpen)) {
             commands(State::Active);
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNodeEx("Ready", ImGuiTreeNodeFlags_DefaultOpen))
-        {
+        if (ImGui::TreeNodeEx("Ready", ImGuiTreeNodeFlags_DefaultOpen)) {
             commands(State::Ready);
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNodeEx("Inactive", ImGuiTreeNodeFlags_DefaultOpen))
-        {
+        if (ImGui::TreeNodeEx("Inactive", ImGuiTreeNodeFlags_DefaultOpen)) {
             commands(State::Inactive);
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNodeEx("Disabled", ImGuiTreeNodeFlags_DefaultOpen))
-        {
+        if (ImGui::TreeNodeEx("Disabled", ImGuiTreeNodeFlags_DefaultOpen)) {
             commands(State::Disabled);
             ImGui::TreePop();
         }
@@ -846,19 +796,15 @@ void Commands::imgui()
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Registered Commands"))
-    {
-        for (const auto& command : m_commands)
-        {
+    if (ImGui::TreeNodeEx("Registered Commands")) {
+        for (const auto& command : m_commands) {
             ImGui::Text("%d %s", command->get_priority(), command->get_name());
         }
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Key Bindings"))
-    {
-        for (const auto& binding : m_key_bindings)
-        {
+    if (ImGui::TreeNodeEx("Key Bindings")) {
+        for (const auto& binding : m_key_bindings) {
             ImGui::Text(
                 "%d/%d %s %s <- %s %s %s",
                 binding.get_command()->get_priority(),
@@ -875,10 +821,8 @@ void Commands::imgui()
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Update Bindings"))
-    {
-        for (const auto& binding : m_update_bindings)
-        {
+    if (ImGui::TreeNodeEx("Update Bindings")) {
+        for (const auto& binding : m_update_bindings) {
             ImGui::Text(
                 "%d/%d %s %s <- %s",
                 binding.get_command()->get_priority(),
@@ -891,79 +835,64 @@ void Commands::imgui()
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Mouse Bindings"))
-    {
-        {
-            for (const auto& binding : m_mouse_bindings)
-            {
-                const auto type = binding->get_type();
-                switch (type)
-                {
-                    default:
-                    {
-                        break;
-                    }
-                    case Command_binding::Type::Mouse_button:
-                    {
-                        const auto click_binding = reinterpret_cast<Mouse_button_binding*>(binding.get());
-                        ImGui::Text(
-                            "%d/%d %s %s <- %s %d",
-                            binding->get_command()->get_priority(),
-                            get_command_priority(binding->get_command()),
-                            binding->is_command_host_enabled() ? "Enabled" : "Disabled",
-                            binding->get_command()->get_name(),
-                            Command_binding::c_type_strings[static_cast<int>(binding->get_type())],
-                            click_binding->get_button()
-                        );
-                        break;
-                    }
-                    case Command_binding::Type::Mouse_drag:
-                    {
-                        const auto drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
-                        ImGui::Text(
-                            "%d %s <- %s %d",
-                            binding->get_command()->get_priority(),
-                            binding->get_command()->get_name(),
-                            Command_binding::c_type_strings[static_cast<int>(binding->get_type())],
-                            drag_binding->get_button()
-                        );
-                        break;
-                    }
-                    case Command_binding::Type::Mouse_motion:
-                    {
-                        ImGui::Text(
-                            "%d/%d %s ,_ %s",
-                            binding->get_command()->get_priority(),
-                            get_command_priority(binding->get_command()),
-                            binding->get_command()->get_name(),
-                            Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
-                        );
-                        break;
-                    }
+    if (ImGui::TreeNodeEx("Mouse Bindings")) {
+        for (const auto& binding : m_mouse_bindings) {
+            const auto type = binding->get_type();
+            switch (type) {
+                default: {
+                    break;
                 }
-
+                case Command_binding::Type::Mouse_button: {
+                    const auto click_binding = reinterpret_cast<Mouse_button_binding*>(binding.get());
+                    ImGui::Text(
+                        "%d/%d %s %s <- %s %d",
+                        binding->get_command()->get_priority(),
+                        get_command_priority(binding->get_command()),
+                        binding->is_command_host_enabled() ? "Enabled" : "Disabled",
+                        binding->get_command()->get_name(),
+                        Command_binding::c_type_strings[static_cast<int>(binding->get_type())],
+                        click_binding->get_button()
+                    );
+                    break;
+                }
+                case Command_binding::Type::Mouse_drag: {
+                    const auto drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
+                    ImGui::Text(
+                        "%d %s <- %s %d",
+                        binding->get_command()->get_priority(),
+                        binding->get_command()->get_name(),
+                        Command_binding::c_type_strings[static_cast<int>(binding->get_type())],
+                        drag_binding->get_button()
+                    );
+                    break;
+                }
+                case Command_binding::Type::Mouse_motion: {
+                    ImGui::Text(
+                        "%d/%d %s ,_ %s",
+                        binding->get_command()->get_priority(),
+                        get_command_priority(binding->get_command()),
+                        binding->get_command()->get_name(),
+                        Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
+                    );
+                    break;
+                }
             }
         }
-        {
-            for (const auto& binding : m_mouse_wheel_bindings)
-            {
-                ImGui::Text(
-                    "%d/%d %s <- %s",
-                    binding->get_command()->get_priority(),
-                    get_command_priority(binding->get_command()),
-                    binding->get_command()->get_name(),
-                    Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
-                );
-            }
+        for (const auto& binding : m_mouse_wheel_bindings) {
+            ImGui::Text(
+                "%d/%d %s <- %s",
+                binding->get_command()->get_priority(),
+                get_command_priority(binding->get_command()),
+                binding->get_command()->get_name(),
+                Command_binding::c_type_strings[static_cast<int>(binding->get_type())]
+            );
         }
         ImGui::TreePop();
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (ImGui::TreeNodeEx("OpenXR boolean action Bindings"))
-    {
-        for (const auto& binding : m_xr_boolean_bindings)
-        {
+    if (ImGui::TreeNodeEx("OpenXR boolean action Bindings")) {
+        for (const auto& binding : m_xr_boolean_bindings) {
             ImGui::Text(
                 "%d/%d %s %s <- %s %s",
                 binding.get_command()->get_priority(),
@@ -976,10 +905,8 @@ void Commands::imgui()
         }
         ImGui::TreePop();
     }
-    if (ImGui::TreeNodeEx("OpenXR float action Bindings", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (const auto& binding : m_xr_float_bindings)
-        {
+    if (ImGui::TreeNodeEx("OpenXR float action Bindings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (const auto& binding : m_xr_float_bindings) {
             ImGui::Text(
                 "%d/%d %s %s: <- %s %s",
                 binding.get_command()->get_priority(),
@@ -992,10 +919,8 @@ void Commands::imgui()
         }
         ImGui::TreePop();
     }
-    if (ImGui::TreeNodeEx("OpenXR vector2f action Bindings", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (const auto& binding : m_xr_vector2f_bindings)
-        {
+    if (ImGui::TreeNodeEx("OpenXR vector2f action Bindings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (const auto& binding : m_xr_vector2f_bindings) {
             ImGui::Text(
                 "%d/%d %s %s: <- %s %s",
                 binding.get_command()->get_priority(),

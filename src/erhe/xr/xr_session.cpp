@@ -68,15 +68,13 @@ Xr_session::Xr_session(
 
     log_xr->trace("{}", __func__);
 
-    if (instance.get_xr_instance() == XR_NULL_HANDLE)
-    {
+    if (instance.get_xr_instance() == XR_NULL_HANDLE) {
         log_xr->error("No XR Instance");
         return;
     }
 
     m_xr_views.resize(instance.get_xr_view_configuration_views().size());
-    for (auto& view : m_xr_views)
-    {
+    for (auto& view : m_xr_views) {
         view = XrView{
             .type = XR_TYPE_VIEW,
             .next = nullptr,
@@ -102,32 +100,25 @@ Xr_session::Xr_session(
         };
     }
 
-    if (!create_session())
-    {
+    if (!create_session()) {
         return;
     }
-    if (!enumerate_swapchain_formats())
-    {
+    if (!enumerate_swapchain_formats()) {
         return;
     }
-    if (!enumerate_reference_spaces())
-    {
+    if (!enumerate_reference_spaces()) {
         return;
     }
-    if (!create_swapchains())
-    {
+    if (!create_swapchains()) {
         return;
     }
-    if (!create_reference_space())
-    {
+    if (!create_reference_space()) {
         return;
     }
-    if (!attach_actions())
-    {
+    if (!attach_actions()) {
         return;
     }
-    if (!create_hand_tracking())
-    {
+    if (!create_hand_tracking()) {
         return;
     }
 }
@@ -155,8 +146,7 @@ auto Xr_session::create_session() -> bool
     );
 
     GLFWwindow* const glfw_window = m_context_window.get_glfw_window();
-    if (glfw_window == nullptr)
-    {
+    if (glfw_window == nullptr) {
         log_xr->error("No GLFW window");
         return false;
     }
@@ -185,8 +175,7 @@ auto Xr_session::create_session() -> bool
     abort();
 #endif
 
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         log_xr->error("xrCreateSession() created XR_NULL_HANDLE session");
         return false;
     }
@@ -198,27 +187,23 @@ Xr_session::~Xr_session() noexcept
 {
     log_xr->trace("{}", __func__);
 
-    if (m_instance.xrDestroyHandTrackerEXT != nullptr)
-    {
-        if (m_hand_tracker_left.hand_tracker != XR_NULL_HANDLE)
-        {
+    if (m_instance.xrDestroyHandTrackerEXT != nullptr) {
+        if (m_hand_tracker_left.hand_tracker != XR_NULL_HANDLE) {
             m_instance.xrDestroyHandTrackerEXT(m_hand_tracker_left.hand_tracker);
         }
-        if (m_hand_tracker_right.hand_tracker != XR_NULL_HANDLE)
-        {
+        if (m_hand_tracker_right.hand_tracker != XR_NULL_HANDLE) {
             m_instance.xrDestroyHandTrackerEXT(m_hand_tracker_right.hand_tracker);
         }
     }
 
     m_view_swapchains.clear();
 
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return;
     }
 
     log_xr->info("xrEndSession()");
-    check(xrEndSession    (m_xr_session));
+    check(xrEndSession(m_xr_session));
 
     check_gl_context_in_current_in_this_thread();
     check(xrDestroySession(m_xr_session));
@@ -251,8 +236,7 @@ auto Xr_session::get_xr_frame_state() const -> const XrFrameState&
 
 int color_format_score(const gl::Internal_format image_format)
 {
-    switch (image_format)
-    {
+    switch (image_format) {
         //using enum gl::Internal_format;
         case gl::Internal_format::rgba8:          return 1;
         case gl::Internal_format::srgb8_alpha8:   return 2;
@@ -265,8 +249,7 @@ int color_format_score(const gl::Internal_format image_format)
 
 auto Xr_session::enumerate_swapchain_formats() -> bool
 {
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
@@ -288,13 +271,11 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
     log_xr->info("Swapchain formats:");
     int best_color_format_score{0};
     m_swapchain_color_format = gl::Internal_format::srgb8_alpha8;
-    for (const auto swapchain_format : swapchain_formats)
-    {
+    for (const auto swapchain_format : swapchain_formats) {
         const auto gl_internal_format = static_cast<gl::Internal_format>(swapchain_format);
         log_xr->info("    {}", gl::c_str(gl_internal_format));
         const int color_score = color_format_score(gl_internal_format);
-        if (color_score > best_color_format_score)
-        {
+        if (color_score > best_color_format_score) {
             best_color_format_score = color_score;
             m_swapchain_color_format = gl_internal_format;
         }
@@ -306,8 +287,7 @@ auto Xr_session::enumerate_swapchain_formats() -> bool
 
 auto Xr_session::enumerate_reference_spaces() -> bool
 {
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
@@ -331,8 +311,7 @@ auto Xr_session::enumerate_reference_spaces() -> bool
         )
     );
     log_xr->info("Reference space types:");
-    for (const auto reference_space_type : m_xr_reference_space_types)
-    {
+    for (const auto reference_space_type : m_xr_reference_space_types) {
         log_xr->info("    {}", c_str(reference_space_type));
     }
 
@@ -341,17 +320,14 @@ auto Xr_session::enumerate_reference_spaces() -> bool
 
 auto Xr_session::create_swapchains() -> bool
 {
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
     const auto& views = m_instance.get_xr_view_configuration_views();
     m_view_swapchains.clear();
-    for (const auto& view : views)
-    {
-        const XrSwapchainCreateInfo color_swapchain_create_info
-        {
+    for (const auto& view : views) {
+        const XrSwapchainCreateInfo color_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
             .next        = nullptr,
             .createFlags = 0,
@@ -370,8 +346,7 @@ auto Xr_session::create_swapchains() -> bool
         check_gl_context_in_current_in_this_thread();
         ERHE_XR_CHECK(xrCreateSwapchain(m_xr_session, &color_swapchain_create_info, &color_swapchain));
 
-        const XrSwapchainCreateInfo depth_swapchain_create_info
-        {
+        const XrSwapchainCreateInfo depth_swapchain_create_info{
             .type        = XR_TYPE_SWAPCHAIN_CREATE_INFO,
             .next        = nullptr,
             .createFlags = 0,
@@ -398,8 +373,7 @@ auto Xr_session::create_swapchains() -> bool
 
 auto Xr_session::create_reference_space() -> bool
 {
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
@@ -469,12 +443,11 @@ auto Xr_session::create_reference_space() -> bool
 
 auto Xr_session::begin_session() -> bool
 {
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
-    XrSessionBeginInfo session_begin_info {
+    XrSessionBeginInfo session_begin_info{
         .type                         = XR_TYPE_SESSION_BEGIN_INFO,
         .next                         = nullptr,
         .primaryViewConfigurationType = m_instance.get_xr_view_configuration_type()
@@ -491,8 +464,7 @@ auto Xr_session::begin_session() -> bool
 
 auto Xr_session::end_session() -> bool
 {
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
@@ -509,8 +481,7 @@ auto Xr_session::is_session_running() const -> bool
 
 auto Xr_session::attach_actions() -> bool
 {
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         log_xr->warn("Session has no instance");
         return false;
     }
@@ -522,13 +493,11 @@ auto Xr_session::create_hand_tracking() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
-    if (m_instance.xrCreateHandTrackerEXT == nullptr)
-    {
+    if (m_instance.xrCreateHandTrackerEXT == nullptr) {
         return false;
     }
 
@@ -608,12 +577,9 @@ void Xr_session::update_view_pose()
         m_xr_frame_state.predictedDisplayTime,
         &location
     );
-    if (result == XR_SUCCESS)
-    {
+    if (result == XR_SUCCESS) {
         m_view_location = location;
-    }
-    else
-    {
+    } else {
         log_xr->warn("xrLocateSpace() failed");
     }
 }
@@ -622,8 +588,7 @@ void Xr_session::update_hand_tracking()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_instance.xrLocateHandJointsEXT == nullptr)
-    {
+    if (m_instance.xrLocateHandJointsEXT == nullptr) {
         return;
     }
 
@@ -657,8 +622,7 @@ void Xr_session::update_hand_tracking()
     m_instance.xrLocateHandJointsEXT(m_hand_tracker_left.hand_tracker, &leftHandJointsLocateInfo, &leftHandLocations);
     m_instance.xrLocateHandJointsEXT(m_hand_tracker_right.hand_tracker, &leftHandJointsLocateInfo/*rightHandJointsLocateInfo*/, &rightHandLocations);
 
-    if (leftHandLocations.isActive)
-    {
+    if (leftHandLocations.isActive) {
         log_xr->trace("Left hand is active");
         log_xr->trace("Left hand wrist position tracked=%s, rotation tracked=%s",
             (leftHandLocation[XR_HAND_JOINT_WRIST_EXT].locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT ? "true" : "false"),
@@ -669,9 +633,7 @@ void Xr_session::update_hand_tracking()
             leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.y,
             leftHandLocation[XR_HAND_JOINT_WRIST_EXT].pose.position.z
         );
-    }
-    else
-    {
+    } else {
         log_xr->trace("Left hand *Not* tracked");
     }
 
@@ -685,8 +647,7 @@ void Xr_session::update_hand_tracking()
         .time      = m_xr_frame_state.predictedDisplayTime
     };
 
-    if (m_hand_tracker_left.hand_tracker != XR_NULL_HANDLE)
-    {
+    if (m_hand_tracker_left.hand_tracker != XR_NULL_HANDLE) {
         check(
             m_instance.xrLocateHandJointsEXT(
                 m_hand_tracker_left.hand_tracker,
@@ -695,8 +656,7 @@ void Xr_session::update_hand_tracking()
             )
         );
     }
-    if (m_hand_tracker_right.hand_tracker != XR_NULL_HANDLE)
-    {
+    if (m_hand_tracker_right.hand_tracker != XR_NULL_HANDLE) {
         check(
             m_instance.xrLocateHandJointsEXT(
                 m_hand_tracker_right.hand_tracker,
@@ -731,13 +691,11 @@ auto Xr_session::begin_frame() -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
-    const XrFrameBeginInfo frame_begin_info
-    {
+    const XrFrameBeginInfo frame_begin_info{
         .type = XR_TYPE_FRAME_BEGIN_INFO,
         .next = nullptr
     };
@@ -746,12 +704,10 @@ auto Xr_session::begin_frame() -> bool
         check_gl_context_in_current_in_this_thread();
         log_xr->trace("xrBeginFrame()");
         const auto result = xrBeginFrame(m_xr_session, &frame_begin_info);
-        if (result == XR_SUCCESS)
-        {
+        if (result == XR_SUCCESS) {
             return true;
         }
-        if (result == XR_SESSION_LOSS_PENDING)
-        {
+        if (result == XR_SESSION_LOSS_PENDING) {
             log_xr->error("TODO Handle XR_SESSION_LOSS_PENDING");
             return false;
         }
@@ -764,8 +720,7 @@ auto Xr_session::wait_frame() -> XrFrameState*
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return nullptr;
     }
 
@@ -784,17 +739,12 @@ auto Xr_session::wait_frame() -> XrFrameState*
     {
         log_xr->trace("xrWaitFrame()");
         const auto result = xrWaitFrame(m_xr_session, &frame_wait_info, &m_xr_frame_state);
-        if (result == XR_SUCCESS)
-        {
+        if (result == XR_SUCCESS) {
             return &m_xr_frame_state;
-        }
-        else if (result == XR_SESSION_LOSS_PENDING)
-        {
+        } else if (result == XR_SESSION_LOSS_PENDING) {
             log_xr->error("TODO Handle XR_SESSION_LOSS_PENDING");
             return nullptr;
-        }
-        else
-        {
+        } else {
             log_xr->error("xrWaitFrame() returned error {}", c_str(result));
             return nullptr;
         }
@@ -805,8 +755,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
@@ -852,8 +801,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
     static constexpr std::string_view c_id_view{"HS view"};
 
     ERHE_PROFILE_GPU_SCOPE(c_id_views);
-    for (uint32_t i = 0; i < view_count_output; ++i)
-    {
+    for (uint32_t i = 0; i < view_count_output; ++i) {
         ERHE_PROFILE_SCOPE("view render");
         ERHE_PROFILE_GPU_SCOPE(c_id_view);
 
@@ -862,8 +810,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         if (
             !acquired_color_swapchain_image_opt.has_value() ||
             !swapchain.color_swapchain.wait()
-        )
-        {
+        ) {
             log_xr->warn("no swapchain color image for view {}", i);
             return false;
         }
@@ -872,8 +819,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         if (
             !acquired_depth_swapchain_image_opt.has_value() ||
             !swapchain.depth_swapchain.wait()
-        )
-        {
+        ) {
             log_xr->warn("no swapchain depth image for view {}", i);
             return false;
         }
@@ -886,8 +832,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         if (
             (color_texture == 0) ||
             (depth_texture == 0)
-        )
-        {
+        ) {
             log_xr->warn("invalid color / depth image for view {}", i);
             return false;
         }
@@ -912,8 +857,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
         };
         {
             const auto result = render_view_callback(render_view);
-            if (result == false)
-            {
+            if (result == false) {
                 log_xr->warn("render callback returned false for view {}", i);
                 return false;
             }
@@ -963,13 +907,11 @@ auto Xr_session::end_frame(const bool rendered) -> bool
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_xr_session == XR_NULL_HANDLE)
-    {
+    if (m_xr_session == XR_NULL_HANDLE) {
         return false;
     }
 
-    if (m_xr_composition_layer_projection_views.empty())
-    {
+    if (m_xr_composition_layer_projection_views.empty()) {
         log_xr->warn("no layer views");
     }
 
@@ -1002,8 +944,7 @@ auto Xr_session::end_frame(const bool rendered) -> bool
         .layers               = rendered ? layers : nullptr
     };
 
-    if (rendered)
-    {
+    if (rendered) {
         check_gl_context_in_current_in_this_thread();
     }
     log_xr->trace("xrEndFrame");

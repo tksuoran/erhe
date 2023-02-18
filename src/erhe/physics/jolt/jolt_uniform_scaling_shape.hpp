@@ -16,7 +16,7 @@ class Jolt_uniform_scaling_shape
     : public Jolt_collision_shape
 {
 public:
-    Jolt_uniform_scaling_shape(ICollision_shape* shape, const float scale)
+    Jolt_uniform_scaling_shape(ICollision_shape* shape, float scale)
     {
         m_shape_settings = new JPH::ScaledShapeSettings(
             &(reinterpret_cast<Jolt_collision_shape*>(shape)->get_shape_settings()),

@@ -52,15 +52,12 @@ private:
                 ImGuiTreeNodeFlags_SpanFullWidth
             };
 
-            if (!ImGui::TreeNodeEx(T::static_type_name(), parent_flags))
-            {
+            if (!ImGui::TreeNodeEx(T::static_type_name(), parent_flags)) {
                 return;
             }
 
-            for (const auto& entry : library.entries())
-            {
-                if (!entry->is_shown_in_ui())
-                {
+            for (const auto& entry : library.entries()) {
+                if (!entry->is_shown_in_ui()) {
                     continue;
                 }
                 bool selected = m_selected_entry == entry;
@@ -78,14 +75,10 @@ private:
                 const bool mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
                 const bool hovered        = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
 
-                if (hovered && mouse_released)
-                {
-                    if (selected)
-                    {
+                if (hovered && mouse_released) {
+                    if (selected) {
                         m_selected_entry.reset();
-                    }
-                    else
-                    {
+                    } else {
                         m_selected_entry = entry;
                     }
                 }

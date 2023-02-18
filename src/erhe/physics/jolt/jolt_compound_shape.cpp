@@ -26,8 +26,7 @@ auto make_static_compound_shape_settings(
 ) -> JPH::StaticCompoundShapeSettings
 {
     JPH::StaticCompoundShapeSettings shape_settings;
-    for (const auto& entry : create_info.children)
-    {
+    for (const auto& entry : create_info.children) {
         std::shared_ptr<ICollision_shape>     icollision_shape = entry.shape;
         std::shared_ptr<Jolt_collision_shape> jolt_shape       = std::static_pointer_cast<Jolt_collision_shape>(icollision_shape);
         JPH::ShapeRefC                        shape_ref        = jolt_shape->get_jolt_shape();

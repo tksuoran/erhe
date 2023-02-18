@@ -27,8 +27,7 @@ namespace editor
 
 [[nodiscard]] auto c_str(const Handle handle) -> const char*
 {
-    switch (handle)
-    {
+    switch (handle) {
         case Handle::e_handle_none        : return "None";
         case Handle::e_handle_translate_x : return "Translate X";
         case Handle::e_handle_translate_y : return "Translate Y";
@@ -54,8 +53,7 @@ void Handle_visualizations::update_scale(
 )
 {
     const auto root = m_root.lock();
-    if (!root)
-    {
+    if (!root) {
         return;
     }
 
@@ -65,8 +63,7 @@ void Handle_visualizations::update_scale(
 
 auto Handle_visualizations::get_handle_visibility(const Handle handle) const -> bool
 {
-    switch (m_trs_tool.get_handle_type(handle))
-    {
+    switch (m_trs_tool.get_handle_type(handle)) {
         case Handle_type::e_handle_type_translate_axis:  return m_show_translate;
         case Handle_type::e_handle_type_translate_plane: return m_show_translate;
         case Handle_type::e_handle_type_rotate:          return m_show_rotate;
@@ -156,8 +153,7 @@ auto Handle_visualizations::make_mesh(
     );
 
     node->attach(mesh);
-    if (part.raytrace_primitive)
-    {
+    if (part.raytrace_primitive) {
         auto node_raytrace = std::make_shared<Node_raytrace>(
             part.geometry,
             part.raytrace_primitive
@@ -279,8 +275,7 @@ auto Handle_visualizations::get_mode_material(
     const std::shared_ptr<erhe::primitive::Material>& normal
 ) -> std::shared_ptr<erhe::primitive::Material>
 {
-    switch (mode)
-    {
+    switch (mode) {
         case Mode::Normal: return normal;
         case Mode::Active: return active;
         case Mode::Hover:  return hover;
@@ -293,8 +288,7 @@ auto Handle_visualizations::get_handle_material(
     const Mode   mode
 ) -> std::shared_ptr<erhe::primitive::Material>
 {
-    switch (handle)
-    {
+    switch (handle) {
         case Handle::e_handle_translate_x : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
         case Handle::e_handle_translate_y : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
         case Handle::e_handle_translate_z : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
@@ -315,8 +309,7 @@ auto Handle_visualizations::get_handle_material(
 ) -> std::shared_ptr<erhe::primitive::Material>
 {
     auto& material_library = m_trs_tool.get_tool_scene_root()->content_library()->materials;
-    switch (mode)
-    {
+    switch (mode) {
         case Mode::Normal: return material_library.make(name, color);
         case Mode::Active: return material_library.make(name, glm::vec3(1.0f, 0.7f, 0.1f));
         case Mode::Hover:  return material_library.make(name, 2.0f * color);
@@ -422,8 +415,7 @@ void Handle_visualizations::initialize()
 auto Handle_visualizations::get_handle(erhe::scene::Mesh* mesh) const -> Handle
 {
     const auto i = m_handles.find(mesh);
-    if (i == m_handles.end())
-    {
+    if (i == m_handles.end()) {
         return Handle::e_handle_none;
     }
     return i->second;
@@ -434,8 +426,7 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
     ERHE_PROFILE_FUNCTION
 
     const auto root = m_root.lock();
-    if (!root)
-    {
+    if (!root) {
         return;
     }
 
@@ -454,10 +445,6 @@ void Handle_visualizations::set_target(
 )
 {
     m_root = node;
-    if (!node)
-    {
-        return;
-    }
 }
 
 void Handle_visualizations::set_translate(const bool enabled)
@@ -510,8 +497,7 @@ void Handle_visualizations::imgui()
                 : erhe::application::Item_mode::normal,
             button_size
         )
-    )
-    {
+    ) {
         set_local(true);
     }
     if (
@@ -522,8 +508,7 @@ void Handle_visualizations::imgui()
                 : erhe::application::Item_mode::normal,
             button_size
         )
-    )
-    {
+    ) {
         set_local(false);
     }
 
@@ -536,8 +521,7 @@ void Handle_visualizations::imgui()
     if (
         (show_translate != m_show_translate) ||
         (show_rotate    != m_show_rotate   )
-    )
-    {
+    ) {
         update_visibility(!m_root.expired());
     }
 #endif
@@ -555,13 +539,11 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
             ? erhe::application::Item_mode::active
             : erhe::application::Item_mode::normal
     );
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
         ImGui::SetTooltip("Transform in Local space");
     }
-    if (local_pressed)
-    {
+    if (local_pressed) {
         set_local(true);
     }
 
@@ -572,13 +554,11 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
             ? erhe::application::Item_mode::active
             : erhe::application::Item_mode::normal
     );
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
         ImGui::SetTooltip("Transform in World space");
     }
-    if (global_pressed)
-    {
+    if (global_pressed) {
         set_local(false);
     }
 
@@ -596,8 +576,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
             glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
         );
         erhe::application::end_button_style(mode);
-        if (ImGui::IsItemHovered())
-        {
+        if (ImGui::IsItemHovered()) {
             hovered = true;
             ImGui::SetTooltip(
                 m_show_translate
@@ -605,8 +584,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
                     : "Show Translate Tool"
             );
         }
-        if (translate_pressed)
-        {
+        if (translate_pressed) {
             m_show_translate = !m_show_translate;
             update_visibility(!m_root.expired());
         }
@@ -625,8 +603,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
             glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
         );
         erhe::application::end_button_style(mode);
-        if (ImGui::IsItemHovered())
-        {
+        if (ImGui::IsItemHovered()) {
             hovered = true;
             ImGui::SetTooltip(
                 m_show_rotate
@@ -634,8 +611,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
                     : "Show Rotate Tool"
             );
         }
-        if (rotate_pressed)
-        {
+        if (rotate_pressed) {
             m_show_rotate = !m_show_rotate;
             update_visibility(!m_root.expired());
         }

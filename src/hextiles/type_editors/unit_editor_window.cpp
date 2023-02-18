@@ -42,20 +42,17 @@ void Unit_editor_window::imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
-    if (ImGui::Button("Back to Menu", button_size))
-    {
+    if (ImGui::Button("Back to Menu", button_size)) {
         g_menu_window->show_menu();
     }
     ImGui::SameLine();
 
-    if (ImGui::Button("Load", button_size))
-    {
+    if (ImGui::Button("Load", button_size)) {
         g_tiles->load_unit_defs();
     }
     ImGui::SameLine();
 
-    if (ImGui::Button("Save", button_size))
-    {
+    if (ImGui::Button("Save", button_size)) {
         g_tiles->save_unit_defs();
     }
 

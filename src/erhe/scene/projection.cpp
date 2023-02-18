@@ -23,11 +23,9 @@ auto Projection::get_projection_matrix(
 {
     const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
 
-    switch (projection_type)
-    {
+    switch (projection_type) {
         //using enum Projection::Type;
-        case Projection::Type::perspective:
-        {
+        case Projection::Type::perspective: {
             return erhe::toolkit::create_perspective(
                 fov_x,
                 fov_y,
@@ -36,8 +34,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::perspective_xr:
-        {
+        case Projection::Type::perspective_xr: {
             return erhe::toolkit::create_perspective_xr(
                 fov_left,
                 fov_right,
@@ -48,8 +45,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::perspective_horizontal:
-        {
+        case Projection::Type::perspective_horizontal: {
             return erhe::toolkit::create_perspective_horizontal(
                 fov_x,
                 aspect_ratio,
@@ -58,8 +54,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::perspective_vertical:
-        {
+        case Projection::Type::perspective_vertical: {
             return erhe::toolkit::create_perspective_vertical(
                 fov_y,
                 aspect_ratio,
@@ -68,8 +63,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::orthogonal_horizontal:
-        {
+        case Projection::Type::orthogonal_horizontal: {
             return erhe::toolkit::create_orthographic(
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
@@ -80,8 +74,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::orthogonal_vertical:
-        {
+        case Projection::Type::orthogonal_vertical: {
             return erhe::toolkit::create_orthographic(
                 -0.5f * ortho_height / aspect_ratio,
                  0.5f * ortho_height / aspect_ratio,
@@ -92,8 +85,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::orthogonal:
-        {
+        case Projection::Type::orthogonal: {
             return erhe::toolkit::create_orthographic(
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
@@ -104,8 +96,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::orthogonal_rectangle:
-        {
+        case Projection::Type::orthogonal_rectangle: {
             return erhe::toolkit::create_orthographic(
                 ortho_left,
                 ortho_left + ortho_width,
@@ -116,8 +107,7 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::generic_frustum:
-        {
+        case Projection::Type::generic_frustum: {
             return erhe::toolkit::create_frustum(
                 frustum_left,
                 frustum_right,
@@ -128,14 +118,12 @@ auto Projection::get_projection_matrix(
             );
         }
 
-        case Projection::Type::other:
-        {
+        case Projection::Type::other: {
             // TODO(tksuoran@gmail.com): Implement
             return glm::mat4{1.0f};
         }
 
-        default:
-        {
+        default: {
             // TODO(tksuoran@gmail.com): Implement
             return glm::mat4{1.0f};
         }
@@ -144,11 +132,9 @@ auto Projection::get_projection_matrix(
 
 auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
 {
-    switch (projection_type)
-    {
+    switch (projection_type) {
         //using enum Projection::Type;
-        case Projection::Type::perspective:
-        {
+        case Projection::Type::perspective: {
             return Fov_sides{
                 -0.5f * fov_x,
                  0.5f * fov_x,
@@ -157,8 +143,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::perspective_xr:
-        {
+        case Projection::Type::perspective_xr: {
             return Fov_sides{
                 fov_left,
                 fov_right,
@@ -167,8 +152,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::perspective_horizontal:
-        {
+        case Projection::Type::perspective_horizontal: {
             return Fov_sides{
                 -0.5f * fov_x,
                  0.5f * fov_x,
@@ -177,8 +161,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::perspective_vertical:
-        {
+        case Projection::Type::perspective_vertical: {
             return Fov_sides{
                 -0.5f * fov_y * viewport.aspect_ratio(),
                  0.5f * fov_y * viewport.aspect_ratio(),
@@ -187,8 +170,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::orthogonal_horizontal:
-        {
+        case Projection::Type::orthogonal_horizontal: {
             return Fov_sides{
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
@@ -197,8 +179,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::orthogonal_vertical:
-        {
+        case Projection::Type::orthogonal_vertical: {
             return Fov_sides{
                 -0.5f * ortho_height / viewport.aspect_ratio(),
                  0.5f * ortho_height / viewport.aspect_ratio(),
@@ -207,8 +188,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::orthogonal:
-        {
+        case Projection::Type::orthogonal: {
             return Fov_sides{
                 -0.5f * ortho_width,
                  0.5f * ortho_width,
@@ -217,8 +197,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::orthogonal_rectangle:
-        {
+        case Projection::Type::orthogonal_rectangle: {
             return Fov_sides{
                 ortho_left,
                 ortho_left   + ortho_width,
@@ -227,8 +206,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::generic_frustum:
-        {
+        case Projection::Type::generic_frustum: {
             return Fov_sides{
                 frustum_left,
                 frustum_right,
@@ -237,8 +215,7 @@ auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
             };
         }
 
-        case Projection::Type::other:
-        {
+        case Projection::Type::other: {
             // The projection is externally updated - do nothing here.
             break;
         }

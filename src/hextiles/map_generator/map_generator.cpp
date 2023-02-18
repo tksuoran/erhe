@@ -51,8 +51,7 @@ void Map_generator::update_elevation_terrains()
     int max_temperature = std::numeric_limits<int>::lowest();
     int min_humidity    = std::numeric_limits<int>::max();
     int max_humidity    = std::numeric_limits<int>::lowest();
-    for (terrain_t t = 0; t < terrain_count; ++t)
-    {
+    for (terrain_t t = 0; t < terrain_count; ++t) {
         const Terrain_type terrain = g_tiles->get_terrain_type(t);
 
         min_temperature = std::min(terrain.generate_min_temperature, min_temperature);
@@ -76,12 +75,10 @@ void Map_generator::update_elevation_terrains()
     );
     m_biomes.clear();
 
-    for (terrain_t t = 0; t < terrain_count; ++t)
-    {
+    for (terrain_t t = 0; t < terrain_count; ++t) {
         const Terrain_type terrain = g_tiles->get_terrain_type(t);
 
-        if (terrain.generate_elevation != 0)
-        {
+        if (terrain.generate_elevation != 0) {
             new_elevation_terrains.push_back(
                 m_elevation_generator.make(
                     terrain.generate_elevation,
@@ -89,19 +86,15 @@ void Map_generator::update_elevation_terrains()
                     terrain.generate_ratio
                 )
             );
-        }
-        else if (terrain.generate_base != 0)
-        {
+        } else if (terrain.generate_base != 0) {
             if (
                 (terrain.generate_min_temperature != 0) ||
                 (terrain.generate_max_temperature != 0) ||
                 (terrain.generate_min_humidity    != 0) ||
                 (terrain.generate_max_humidity    != 0)
-            )
-            {
+            ) {
                 m_biomes.push_back(
-                    Biome
-                    {
+                    Biome{
                         .base_terrain    = terrain.generate_base,
                         .variation       = t,
                         .priority        = terrain.generate_priority,
@@ -111,9 +104,7 @@ void Map_generator::update_elevation_terrains()
                         .max_humidity    = static_cast<float>(terrain.generate_max_humidity    - min_humidity   ) / humidity_extent,
                     }
                 );
-            }
-            else
-            {
+            } else {
                 const int id = static_cast<int>(new_variation_terrains.size());
                 new_variation_terrains.push_back(
                     m_variation_generator.make(
@@ -147,32 +138,28 @@ void Map_generator::update_elevation_terrains()
         [](const Biome& lhs, const Biome& rhs)
         {
             // Sort first by priority
-            if (lhs.priority != rhs.priority)
-            {
+            if (lhs.priority != rhs.priority) {
                 return lhs.priority > rhs.priority;
             }
 
             // then by average temperature
             const auto lhs_temperature = lhs.min_temperature + lhs.max_temperature;
             const auto rhs_temperature = rhs.min_temperature + rhs.max_temperature;
-            if (lhs_temperature != rhs_temperature)
-            {
+            if (lhs_temperature != rhs_temperature) {
                 return lhs_temperature < rhs_temperature;
             }
 
             // then by average humidity
             const auto lhs_humidity = lhs.min_humidity + lhs.max_humidity;
             const auto rhs_humidity = rhs.min_humidity + rhs.max_humidity;
-            if (lhs_humidity != rhs_humidity)
-            {
+            if (lhs_humidity != rhs_humidity) {
                 return lhs_humidity < rhs_humidity;
             }
             return false;
         }
     );
 
-    //for (const Biome& biome : m_biomes)
-    //{
+    //for (const Biome& biome : m_biomes) {
     //    const Terrain_type base_terrain = m_tiles->get_terrain_type(biome.base_terrain);
     //    const Terrain_type variation    = m_tiles->get_terrain_type(biome.variation);
     //    log_map_generator.trace(
@@ -204,12 +191,10 @@ void Map_generator::generate_noise_pass(Map& map)
     const glm::vec4 temperature_seed{27865.9f, 24387.6f, 28726.5f, 28271.4f};
     const glm::vec4 humidity_seed   {38760.8f, 39732.0f, 39785.6f, 32317.8f};
     const glm::vec4 variation_seed  {41902.6f, 41986.3f, 42098.7f, 43260.9f};
-    for (coordinate_t tx = 0; tx < width; ++tx)
-    {
+    for (coordinate_t tx = 0; tx < width; ++tx) {
         const float x        = static_cast<float>(tx) / static_cast<float>(width);
         const float y_offset = (tx & 1) == 1 ? -0.5f : 0.0f;
-        for (coordinate_t ty = 0; ty < height; ++ty)
-        {
+        for (coordinate_t ty = 0; ty < height; ++ty) {
             const float y = (static_cast<float>(ty) + y_offset) / static_cast<float>(height);
             const float elevation   = m_noise.generate(x, y, elevation_seed  );
             const float temperature = m_noise.generate(x, y, temperature_seed);
@@ -246,10 +231,8 @@ void Map_generator::generate_base_terrain_pass(Map& map)
     const int h = map.height();
 
     size_t index = 0;
-    for (coordinate_t tx = 0; tx < w; ++tx)
-    {
-        for (coordinate_t ty = 0; ty < h; ++ty)
-        {
+    for (coordinate_t tx = 0; tx < w; ++tx) {
+        for (coordinate_t ty = 0; ty < h; ++ty) {
             const Terrain_variation terrain_variation = m_elevation_generator.get(index);
             const terrain_tile_t    terrain_tile      = g_tiles->get_terrain_tile_from_terrain(terrain_variation.base_terrain);
             map.set_terrain_tile(Tile_coordinate{tx, ty}, terrain_tile);
@@ -259,31 +242,25 @@ void Map_generator::generate_base_terrain_pass(Map& map)
 }
 
 auto Map_generator::get_variation(
-    terrain_t base_terrain,
-    float     temperature,
-    float     humidity
+    const terrain_t base_terrain,
+    const float     temperature,
+    const float     humidity
 ) const -> terrain_t
 {
-    for (const Biome& biome : m_biomes)
-    {
-        if (base_terrain != biome.base_terrain)
-        {
+    for (const Biome& biome : m_biomes) {
+        if (base_terrain != biome.base_terrain) {
             continue;
         }
-        if (temperature < biome.min_temperature)
-        {
+        if (temperature < biome.min_temperature) {
             continue;
         }
-        if (humidity < biome.min_humidity)
-        {
+        if (humidity < biome.min_humidity) {
             continue;
         }
-        if (temperature > biome.max_temperature)
-        {
+        if (temperature > biome.max_temperature) {
             continue;
         }
-        if (humidity > biome.max_humidity)
-        {
+        if (humidity > biome.max_humidity) {
             continue;
         }
         return biome.variation;
@@ -301,10 +278,8 @@ void Map_generator::generate_variation_pass(Map& map)
     const int height = map.height();
 
     size_t index = 0;
-    for (coordinate_t tx = 0; tx < width; ++tx)
-    {
-        for (coordinate_t ty = 0; ty < height; ++ty)
-        {
+    for (coordinate_t tx = 0; tx < width; ++tx) {
+        for (coordinate_t ty = 0; ty < height; ++ty) {
             const Tile_coordinate position{tx, ty};
             const terrain_tile_t  terrain_tile   = map.get_terrain_tile(position);
             const terrain_t       terrain        = g_tiles->get_terrain_from_tile(terrain_tile);
@@ -329,8 +304,7 @@ void Map_generator::apply_rule(
     {
         const terrain_tile_t primary_terrain_tile = map.get_terrain_tile(tile_position);
         const terrain_t      primary_terrain      = g_tiles->get_terrain_from_tile(primary_terrain_tile);
-        if (primary_terrain != rule.primary)
-        {
+        if (primary_terrain != rule.primary) {
             return;
         }
         std::function<void(Tile_coordinate)> replace =
@@ -345,8 +319,7 @@ void Map_generator::apply_rule(
             ) != rule.secondary.end();
             const bool apply = rule.equal ? found : !found;
 
-            if (apply)
-            {
+            if (apply) {
                 const terrain_tile_t replacement_terrain_tile = g_tiles->get_terrain_tile_from_terrain(rule.replacement);
                 map.set_terrain_tile(position, replacement_terrain_tile);
             }
@@ -362,11 +335,9 @@ void Map_generator::generate_apply_rules_pass(Map& map)
     // tiles based on a few rules.
 
     const size_t rule_count = g_tiles->get_terrain_replacement_rule_count();
-    for (size_t i = 0; i < rule_count; ++i)
-    {
+    for (size_t i = 0; i < rule_count; ++i) {
         const Terrain_replacement_rule rule = g_tiles->get_terrain_replacement_rule(i);
-        if (!rule.enabled)
-        {
+        if (!rule.enabled) {
             continue;
         }
         apply_rule(map, rule);
@@ -399,16 +370,13 @@ void Map_generator::imgui()
             "Generate",
             ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen
         )
-    )
-    {
+    ) {
         return;
     }
 
-    if (ImGui::TreeNodeEx("Elevation", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
-    {
+    if (ImGui::TreeNodeEx("Elevation", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
         int slot = 0;
-        for (Terrain_variation& elevation_terrain : m_elevation_generator.m_terrains)
-        {
+        for (Terrain_variation& elevation_terrain : m_elevation_generator.m_terrains) {
             Terrain_type& terrain_type = g_tiles->get_terrain_type(elevation_terrain.base_terrain);
 
             const auto label = fmt::format("{}##elevation-{}", terrain_type.name.c_str(), ++slot);
@@ -423,14 +391,12 @@ void Map_generator::imgui()
     }
     update_elevation_terrains();
 
-    if (ImGui::TreeNodeEx("Noise", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen))
-    {
+    if (ImGui::TreeNodeEx("Noise", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)     {
         m_noise.imgui();
         ImGui::TreePop();
     }
 
-    if (ImGui::Button("Generate", button_size))
-    {
+    if (ImGui::Button("Generate", button_size)) {
         m_noise.prepare();
 
         Map& map = *g_map_editor->get_map();

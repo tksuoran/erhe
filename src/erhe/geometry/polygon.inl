@@ -45,8 +45,7 @@ void Polygon::smooth_normalize(
         end = first_polygon_corner_id + corner_count;
         polygon_corner_id < end;
         ++polygon_corner_id
-    )
-    {
+    ) {
         const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
         const Corner&   corner    = geometry.corners[corner_id];
         corner.smooth_normalize(
@@ -76,8 +75,7 @@ void Polygon::smooth_average(
         end = first_polygon_corner_id + corner_count;
         polygon_corner_id < end;
         ++polygon_corner_id
-    )
-    {
+    ) {
         const Corner_id corner_id = geometry.polygon_corners[polygon_corner_id];
         const Corner&   corner    = geometry.corners[corner_id];
         corner.smooth_average(

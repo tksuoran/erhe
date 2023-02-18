@@ -184,20 +184,13 @@ public:
     {
         ERHE_PROFILE_FUNCTION
 
-        if ((stack == 0) && bottom_singular)
-        {
+        if ((stack == 0) && bottom_singular) {
             return bottom_point_id;
-        }
-        else if ((stack == stack_count) && top_singular)
-        {
+        } else if ((stack == stack_count) && top_singular) {
             return top_point_id;
-        }
-        else if (slice == slice_count)
-        {
+        } else if (slice == slice_count) {
             return points[std::make_pair(0, stack)];
-        }
-        else
-        {
+        } else {
             return points[std::make_pair(slice, stack)];
         }
     }
@@ -235,29 +228,22 @@ public:
             base
         );
 #endif
-        if (is_top && (top_radius == 0.0))
-        {
+        if (is_top && (top_radius == 0.0)) {
             point_id = top_point_id;
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("{:2} (top)        ", point_id);
 #endif
-        }
-        else if (is_bottom && (bottom_radius == 0.0))
-        {
+        } else if (is_bottom && (bottom_radius == 0.0)) {
             point_id = bottom_point_id;
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("{:2} (bottom)     ", point_id);
 #endif
-        }
-        else if (slice == slice_count)
-        {
+        } else if (slice == slice_count) {
             point_id = points[std::make_pair(0, stack)];
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("{:2} (slice seam) ", point_id);
 #endif
-        }
-        else
-        {
+        } else {
             point_id = points[std::make_pair(slice, stack)];
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format("{:2}              ", point_id);
@@ -269,11 +255,9 @@ public:
         ss << fmt::format("corner = {:2}", corner_id);
 #endif
 
-        if (is_uv_discontinuity)
-        {
+        if (is_uv_discontinuity) {
             float s, t;
-            if (base)
-            {
+            if (base) {
                 const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
                 const double sin_phi             = std::sin(phi);
                 const double cos_phi             = std::cos(phi);
@@ -284,9 +268,7 @@ public:
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
                 ss << fmt::format(" base");
 #endif
-            }
-            else
-            {
+            } else {
                 s = static_cast<float>(rel_slice);
                 t = static_cast<float>(rel_stack);
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
@@ -299,10 +281,8 @@ public:
 #endif
         }
 
-        if (is_top || is_bottom)
-        {
-            if (base && is_bottom && (bottom_radius != 0.0) && use_bottom)
-            {
+        if (is_top || is_bottom) {
+            if (base && is_bottom && (bottom_radius != 0.0) && use_bottom) {
                 corner_normals->put(corner_id, vec3{-1.0f, 0.0f, 0.0f});
                 corner_tangents->put(
                     corner_id,
@@ -321,8 +301,7 @@ public:
 #endif
             }
 
-            if (base && is_top && (top_radius != 0.0) && use_top)
-            {
+            if (base && is_top && (top_radius != 0.0) && use_top) {
                 corner_normals->put(corner_id, vec3{1.0f, 0.0f, 0.0f});
                 corner_tangents->put(
                     corner_id,
@@ -408,11 +387,9 @@ public:
             int stack = stack_non_singular_bottom;
             stack <= stack_non_singular_top;
             ++stack
-        )
-        {
+        ) {
             const auto rel_stack = static_cast<double>(stack) / static_cast<double>(stack_count);
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 const auto rel_slice = static_cast<double>(slice) / static_cast<double>(slice_count);
 
                 SPDLOG_LOGGER_TRACE(log_cone, "slice {:2} stack {: 2}: ", slice, stack);
@@ -421,12 +398,10 @@ public:
         }
 
         // Bottom parts
-        if (bottom_singular)
-        {
+        if (bottom_singular) {
             SPDLOG_LOGGER_TRACE(log_cone, "Bottom - point / triangle fan");
             bottom_point_id = geometry.make_point(min_x, 0.0, 0.0); // Apex
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 const int  stack              = stack_non_singular_bottom;
                 const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
                 const auto rel_stack_centroid = (static_cast<double>(stack) - 0.5) / static_cast<double>(slice_count);
@@ -458,11 +433,8 @@ public:
                 polygon_normals  ->put(polygon_id, centroid_data.normal);
                 polygon_colors   ->put(polygon_id, anisotropic_no_texcoord);
             }
-        }
-        else
-        {
-            if (use_bottom)
-            {
+        } else {
+            if (use_bottom) {
                 SPDLOG_LOGGER_TRACE(log_cone, "Bottom - flat polygon");
                 const Polygon_id polygon_id = geometry.make_polygon();
 
@@ -470,8 +442,7 @@ public:
                 polygon_normals  ->put(polygon_id, vec3{-1.0f, 0.0f, 0.0f});
                 polygon_colors   ->put(polygon_id, anisotropic_with_texcoord);
 
-                for (int slice = 0; slice < slice_count; ++slice)
-                {
+                for (int slice = 0; slice < slice_count; ++slice) {
                     make_corner(polygon_id, slice, 0, true);
                 }
 
@@ -484,9 +455,7 @@ public:
                     *point_locations,
                     false
                 );
-            }
-            else
-            {
+            } else {
                 SPDLOG_LOGGER_TRACE(log_cone, "Bottom - none");
             }
         }
@@ -497,13 +466,11 @@ public:
             int stack = stack_non_singular_bottom;
             stack < stack_non_singular_top;
             ++stack
-        )
-        {
+        ) {
             const double rel_stack_centroid =
                 (static_cast<double>(stack) + 0.5) / static_cast<double>(stack_count);
 
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 const auto rel_slice_centroid =
                     (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
 
@@ -528,13 +495,11 @@ public:
         }
 
         // Top parts
-        if (top_singular)
-        {
+        if (top_singular) {
             SPDLOG_LOGGER_TRACE(log_cone, "Top - point / triangle fan");
             top_point_id = geometry.make_point(max_x, 0.0, 0.0); //  apex
 
-            for (int slice = 0; slice < slice_count; ++slice)
-            {
+            for (int slice = 0; slice < slice_count; ++slice) {
                 const int  stack              = stack_non_singular_top;
                 const auto rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
                 const auto rel_stack_centroid = (static_cast<double>(stack) + 0.5) / static_cast<double>(stack_count);
@@ -581,11 +546,8 @@ public:
                 polygon_normals  ->put(polygon_id, centroid_data.normal);
                 polygon_colors   ->put(polygon_id, anisotropic_no_texcoord);
             }
-        }
-        else
-        {
-            if (use_top)
-            {
+        } else {
+            if (use_top) {
                 SPDLOG_LOGGER_TRACE(log_cone, "Top - flat polygon");
                 const Polygon_id polygon_id = geometry.make_polygon();
 
@@ -593,8 +555,7 @@ public:
                 polygon_normals  ->put(polygon_id, vec3{1.0f, 0.0f, 0.0f});
                 polygon_colors   ->put(polygon_id, anisotropic_with_texcoord);
 
-                for (int slice = 0; slice < slice_count; ++slice)
-                {
+                for (int slice = 0; slice < slice_count; ++slice) {
                     const int reverse_slice = slice_count - 1 - slice;
                     make_corner(polygon_id, reverse_slice, stack_top, true);
                 }
@@ -608,9 +569,7 @@ public:
                     *point_locations,
                     false
                 );
-            }
-            else
-            {
+            } else {
                 SPDLOG_LOGGER_TRACE(log_cone, "Top - none");
             }
         }

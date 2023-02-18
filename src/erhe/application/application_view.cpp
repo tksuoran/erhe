@@ -60,12 +60,10 @@ void View::set_client(View_client* view_client)
 
 void View::on_refresh()
 {
-    if (!g_configuration->window.show)
-    {
+    if (!g_configuration->window.show) {
         return;
     }
-    if (!m_ready)
-    {
+    if (!m_ready) {
         gl::clear_color(0.3f, 0.3f, 0.3f, 0.4f);
         gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
         g_window->get_context_window()->swap_buffers();
@@ -75,10 +73,8 @@ void View::on_refresh()
     if (
         (m_view_client != nullptr) &&
         g_configuration->window.show
-    )
-    {
-        if (g_time != nullptr)
-        {
+    ) {
+        if (g_time != nullptr) {
             g_time->update(); // Does not do once per frame updates - moving to next slot in renderers
         }
         m_view_client->update(); // Should call once per frame updates
@@ -94,12 +90,10 @@ static constexpr std::string_view c_swap_buffers{"swap_buffers"};
 void View::run()
 {
     //m_imgui_windows->make_imgui_context_current();
-    for (;;)
-    {
+    for (;;) {
         SPDLOG_LOGGER_TRACE(log_frame, "\n-------- new frame --------\n");
 
-        if (m_close_requested)
-        {
+        if (m_close_requested) {
             log_frame->info("close was requested, exiting loop");
             break;
         }
@@ -110,8 +104,7 @@ void View::run()
             SPDLOG_LOGGER_TRACE(log_frame, "> after poll events()");
         }
 
-        if (m_close_requested)
-        {
+        if (m_close_requested) {
             log_frame->info("close was requested, exiting loop");
             break;
         }
@@ -133,22 +126,17 @@ void View::update()
 
     SPDLOG_LOGGER_TRACE(log_frame, "update()");
 
-    if (g_time != nullptr)
-    {
+    if (g_time != nullptr) {
         g_time->update();
     }
 
-    if (m_view_client != nullptr)
-    {
+    if (m_view_client != nullptr) {
         m_view_client->update();
-    }
-    else if (g_time != nullptr)
-    {
+    } else if (g_time != nullptr) {
         g_time->update_once_per_frame();
     }
 
-    if (g_configuration->window.show)
-    {
+    if (g_configuration->window.show) {
         ERHE_PROFILE_SCOPE(c_swap_buffers.data());
 
         erhe::graphics::Gpu_timer::end_frame();
@@ -169,24 +157,21 @@ void View::update()
 
 void View::on_enter()
 {
-    if (g_time != nullptr)
-    {
+    if (g_time != nullptr) {
         g_time->start_time();
     }
 }
 
 void View::on_focus(int focused)
 {
-    if (g_imgui_windows != nullptr)
-    {
+    if (g_imgui_windows != nullptr) {
        g_imgui_windows->on_focus(focused);
     }
 }
 
 void View::on_cursor_enter(int entered)
 {
-    if (g_imgui_windows != nullptr)
-    {
+    if (g_imgui_windows != nullptr) {
         g_imgui_windows->on_cursor_enter(entered);
     }
 }
@@ -201,8 +186,7 @@ void View::on_key(
     m_alt     = (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) == erhe::toolkit::Key_modifier_bit_menu;
     m_control = (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) == erhe::toolkit::Key_modifier_bit_ctrl;
 
-    if (g_imgui_windows != nullptr)
-    {
+    if (g_imgui_windows != nullptr) {
         g_imgui_windows->on_key(
             static_cast<signed int>(code),
             modifier_mask,
@@ -210,13 +194,11 @@ void View::on_key(
         );
     }
 
-    if (g_commands == nullptr)
-    {
+    if (g_commands == nullptr) {
         return;
     }
 
-    if (get_imgui_capture_keyboard())
-    {
+    if (get_imgui_capture_keyboard()) {
         return;
     }
 
@@ -228,8 +210,7 @@ void View::on_char(
 )
 {
     log_input_event->trace("char input codepoint = {}", codepoint);
-    if (g_imgui_windows != nullptr)
-    {
+    if (g_imgui_windows != nullptr) {
         g_imgui_windows->on_char(codepoint);
     }
 }
@@ -240,13 +221,11 @@ auto View::get_imgui_capture_keyboard() const -> bool
         g_configuration->window.show &&
         g_configuration->imgui.window_viewport;
 
-    if (!viewports_hosted_in_imgui)
-    {
+    if (!viewports_hosted_in_imgui) {
         return false;
     }
 
-    if (g_imgui_windows == nullptr)
-    {
+    if (g_imgui_windows == nullptr) {
         return false;
     }
 
@@ -259,13 +238,11 @@ auto View::get_imgui_capture_mouse() const -> bool
         g_configuration->window.show &&
         g_configuration->imgui.window_viewport;
 
-    if (!viewports_hosted_in_imgui)
-    {
+    if (!viewports_hosted_in_imgui) {
         return false;
     }
 
-    if (g_imgui_windows == nullptr)
-    {
+    if (g_imgui_windows == nullptr) {
         return false;
     }
 
@@ -279,18 +256,15 @@ void View::on_mouse_button(
 {
     ERHE_VERIFY(button < erhe::toolkit::Mouse_button_count);
     m_mouse_button[button] = pressed;
-    if (g_imgui_windows != nullptr)
-    {
+    if (g_imgui_windows != nullptr) {
         g_imgui_windows->on_mouse_button(static_cast<uint32_t>(button), pressed);
     }
 
-    if (g_commands == nullptr)
-    {
+    if (g_commands == nullptr) {
         return;
     }
 
-    if (get_imgui_capture_mouse())
-    {
+    if (get_imgui_capture_mouse()) {
         return;
     }
 
@@ -305,18 +279,15 @@ void View::on_mouse_button(
 
 void View::on_mouse_wheel(const float x, const float y)
 {
-    if (g_imgui_windows != nullptr)
-    {
+    if (g_imgui_windows != nullptr) {
         g_imgui_windows->on_mouse_wheel(x, y);
     }
 
-    if (g_commands == nullptr)
-    {
+    if (g_commands == nullptr) {
         return;
     }
 
-    if (get_imgui_capture_mouse())
-    {
+    if (get_imgui_capture_mouse()) {
         return;
     }
 
@@ -328,18 +299,15 @@ void View::on_mouse_wheel(const float x, const float y)
 void View::on_mouse_move(const float x, const float y)
 {
     m_mouse_position = glm::vec2{x, y};
-    if (g_imgui_windows != nullptr)
-    {
+    if (g_imgui_windows != nullptr) {
         g_imgui_windows->on_mouse_move(x, y);
     }
 
-    if (g_commands == nullptr)
-    {
+    if (g_commands == nullptr) {
         return;
     }
 
-    if (get_imgui_capture_mouse())
-    {
+    if (get_imgui_capture_mouse()) {
         return;
     }
 

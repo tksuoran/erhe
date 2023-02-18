@@ -90,8 +90,7 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
         (h < 1) ||
         !visible ||
         iconified
-    )
-    {
+    ) {
         return false;
     }
 
@@ -110,8 +109,7 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
 
     // ImGui_ImplGlfw_UpdateMousePosAndButtons();
     io.MousePos = ImVec2{-FLT_MAX, -FLT_MAX};
-    if (m_has_cursor)
-    {
+    if (m_has_cursor) {
         double mouse_x{0.0};
         double mouse_y{0.0};
         glfwGetCursorPos(glfw_window, &mouse_x, &mouse_y);

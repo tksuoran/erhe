@@ -102,13 +102,10 @@ void Shadow_renderer::initialize_component()
     ini->get("shadow_map_resolution",      config.shadow_map_resolution);
     ini->get("shadow_map_max_light_count", config.shadow_map_max_light_count);
 
-    if (!config.enabled)
-    {
+    if (!config.enabled) {
         log_render->info("Shadow renderer disabled due to erhe.ini setting");
         return;
-    }
-    else
-    {
+    } else {
         log_render->info(
             "Shadow renderer using shadow map resolution {0}x{0}, max {1} lights",
             config.shadow_map_resolution,
@@ -195,8 +192,7 @@ void Shadow_renderer::handle_graphics_settings_changed()
     const int  light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
     const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
-    for (const auto& node : m_nodes)
-    {
+    for (const auto& node : m_nodes) {
         node->reconfigure(resolution, light_count, reverse_depth);
     }
 }
@@ -205,20 +201,17 @@ auto Shadow_renderer::get_node_for_view(
     const Scene_view* scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         return {};
     }
     auto i = std::find_if(
         m_nodes.begin(),
         m_nodes.end(),
-        [scene_view](const auto& entry)
-        {
+        [scene_view](const auto& entry) {
             return &entry->get_scene_view() == scene_view;
         }
     );
-    if (i == m_nodes.end())
-    {
+    if (i == m_nodes.end()) {
         return {};
     }
     return *i;
@@ -231,8 +224,7 @@ auto Shadow_renderer::get_nodes() const -> const std::vector<std::shared_ptr<Sha
 
 void Shadow_renderer::next_frame()
 {
-    if (!config.enabled)
-    {
+    if (!config.enabled) {
         return;
     }
 
@@ -255,11 +247,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         )
     };
 
-    if (
-        !config.enabled ||
-        !parameters.scene_root
-    )
-    {
+    if (!config.enabled || !parameters.scene_root) {
         return false;
     }
 
@@ -297,36 +285,30 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     );
     m_light_buffers->bind_light_buffer();
 
-    for (const auto& meshes : mesh_spans)
-    {
+    for (const auto& meshes : mesh_spans) {
         m_primitive_buffers->update(meshes, shadow_filter);
         const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
             meshes,
             erhe::primitive::Primitive_mode::polygon_fill,
             shadow_filter
         );
-        if (draw_indirect_buffer_range.draw_indirect_count > 0)
-        {
+        if (draw_indirect_buffer_range.draw_indirect_count > 0) {
             m_primitive_buffers->bind();
             m_draw_indirect_buffers->bind();
         }
 
-        for (const auto& light : lights)
-        {
-            if (!light->cast_shadow)
-            {
+        for (const auto& light : lights) {
+            if (!light->cast_shadow) {
                 continue;
             }
 
             auto* light_projection_transform = parameters.light_projections.get_light_projection_transforms_for_light(light.get());
-            if (light_projection_transform == nullptr)
-            {
+            if (light_projection_transform == nullptr) {
                 //// log_render->warn("Light {} has no light projection transforms", light->name());
                 continue;
             }
             const std::size_t light_index = light_projection_transform->index;
-            if (light_index >= parameters.framebuffers.size())
-            {
+            if (light_index >= parameters.framebuffers.size()) {
                 continue;
             }
 
@@ -340,10 +322,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
             {
                 ERHE_PROFILE_SCOPE("bind fbo");
-                gl::bind_framebuffer(
-                    gl::Framebuffer_target::draw_framebuffer,
-                    parameters.framebuffers[light_index]->gl_name()
-                );
+                gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, parameters.framebuffers[light_index]->gl_name());
             }
 
             {
@@ -355,8 +334,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 gl::clear_buffer_fv(gl::Buffer::depth, 0, erhe::application::g_configuration->depth_clear_value_pointer());
             }
 
-            if (draw_indirect_buffer_range.draw_indirect_count == 0)
-            {
+            if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 continue;
             }
 

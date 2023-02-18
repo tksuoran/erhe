@@ -8,8 +8,7 @@ namespace erhe::components
 
 auto c_str(const Component_state state) -> const char*
 {
-    switch (state)
-    {
+    switch (state) {
         // using enum Component_state;
         case Component_state::Constructed:                           return "Constructed";
         case Component_state::Declaring_initialization_requirements: return "Declaring_initialization_requirements";
@@ -69,8 +68,7 @@ void Component::depends_on(Component* dependency)
 {
     ERHE_VERIFY(dependency);
 
-    if (!dependency->is_registered())
-    {
+    if (!dependency->is_registered()) {
         log_components->error(
             "Component {} dependency {} has not been registered as a Component",
             name(),
@@ -95,59 +93,49 @@ auto Component::get_depended_by() const -> const Component_vector&
 
 void Component::set_state(Component_state state)
 {
-    switch (m_state)
-    {
-        case Component_state::Constructed:
-        {
+    switch (m_state) {
+        case Component_state::Constructed: {
             ERHE_VERIFY(state == Component_state::Declaring_initialization_requirements);
             m_state = state;
             break;
         }
-        case Component_state::Declaring_initialization_requirements:
-        {
+        case Component_state::Declaring_initialization_requirements: {
             ERHE_VERIFY(state == Component_state::Initialization_requirements_declared);
             m_state = state;
             break;
         }
-        case Component_state::Initialization_requirements_declared:
-        {
+        case Component_state::Initialization_requirements_declared: {
             ERHE_VERIFY(state == Component_state::Initializing);
             m_state = state;
             break;
         }
-        case Component_state::Initializing:
-        {
+        case Component_state::Initializing: {
             ERHE_VERIFY(state == Component_state::Initialized);
             m_state = state;
             break;
         }
-        case Component_state::Initialized:
-        {
+        case Component_state::Initialized: {
             ERHE_VERIFY(state == Component_state::Post_initializing);
             m_state = state;
             break;
         }
-        case Component_state::Post_initializing:
-        {
+        case Component_state::Post_initializing: {
             ERHE_VERIFY(state == Component_state::Ready);
             m_state = state;
             break;
         }
-        case Component_state::Ready:
-        {
+        case Component_state::Ready: {
             ERHE_VERIFY(state == Component_state::Deinitializing);
             m_state = state;
             break;
         }
-        case Component_state::Deinitializing:
-        {
+        case Component_state::Deinitializing: {
             ERHE_VERIFY(state == Component_state::Deinitialized);
             m_state = state;
             m_initialized_dependencies.clear();
             break;
         }
-        default:
-        {
+        default: {
             ERHE_FATAL("invalid state transition");
             break;
         }
@@ -164,8 +152,7 @@ auto Component::is_ready_to_initialize(
     const bool parallel
 ) const -> bool
 {
-    if (m_state != Component_state::Initialization_requirements_declared)
-    {
+    if (m_state != Component_state::Initialization_requirements_declared) {
         log_components->trace(
             "{} is not ready to initialize: state {} is not Connected",
             name(),
@@ -182,16 +169,14 @@ auto Component::is_ready_to_initialize(
             //!requires_main ||
             (in_worker_thread != requires_main)
         );
-    if (!is_ready && !m_dependencies.empty())
-    {
+    if (!is_ready && !m_dependencies.empty()) {
         log_components->trace(
             "dependencies:",
             name(),
             requires_main,
             in_worker_thread ? "worker-thread" : "main-thread"
         );
-        for (const auto& component : m_dependencies)
-        {
+        for (const auto& component : m_dependencies) {
             log_components->trace(
                 "    {}: {}",
                 component->name(),
@@ -211,8 +196,7 @@ auto Component::is_ready_to_initialize(
 
 auto Component::is_ready_to_deinitialize() const -> bool
 {
-    if (m_state != Component_state::Ready)
-    {
+    if (m_state != Component_state::Ready) {
         log_components->trace(
             "{} is not ready to initialize: state {} is not Ready",
             name(),
@@ -227,16 +211,13 @@ auto Component::is_ready_to_deinitialize() const -> bool
 void Component::component_initialized(Component* component)
 {
     Component* dependency = nullptr;
-    for (const auto& i : m_dependencies)
-    {
-        if (i == component)
-        {
+    for (const auto& i : m_dependencies) {
+        if (i == component) {
             dependency = i;
             break;
         }
     }
-    if (dependency == nullptr)
-    {
+    if (dependency == nullptr) {
         return;
     }
 

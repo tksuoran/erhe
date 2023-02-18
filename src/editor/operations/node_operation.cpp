@@ -17,14 +17,10 @@ auto Node_operation::describe() const -> std::string
 {
     std::stringstream ss;
     bool first = true;
-    for (const auto& entry : m_entries)
-    {
-        if (first)
-        {
+    for (const auto& entry : m_entries) {
+        if (first) {
             first = false;
-        }
-        else
-        {
+        } else {
             ss << ", ";
         }
         ss << entry.node->get_name();
@@ -42,8 +38,7 @@ void Node_operation::execute()
 {
     log_operations->trace("Op Execute {}", describe());
 
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries) {
         entry.node->node_data = entry.after;
     }
 }
@@ -52,8 +47,7 @@ void Node_operation::undo()
 {
     log_operations->trace("Op Undo {}", describe());
 
-    for (const auto& entry : m_entries)
-    {
+    for (const auto& entry : m_entries) {
         entry.node->node_data = entry.before;
     }
 }
@@ -96,13 +90,11 @@ void Attach_operation::execute()
         (node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
         : std::shared_ptr<erhe::scene::Node>{};
-    if (m_host_node_before)
-    {
+    if (m_host_node_before) {
         m_host_node_before->detach(m_attachment.get());
     }
 
-    if (m_host_node_after)
-    {
+    if (m_host_node_after) {
         m_host_node_after->attach(m_attachment);
     }
 
@@ -121,13 +113,11 @@ void Attach_operation::undo()
         (node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
         : std::shared_ptr<erhe::scene::Node>{};
-    if (m_host_node_after)
-    {
+    if (m_host_node_after) {
         m_host_node_after->detach(m_attachment.get());
     }
 
-    if (m_host_node_before)
-    {
+    if (m_host_node_before) {
         m_host_node_before->attach(m_attachment);
     }
 
@@ -174,8 +164,7 @@ void Node_attach_operation::execute()
     ERHE_VERIFY(m_child_node->parent().lock() == m_parent_before);
 
     m_parent_before_index = m_child_node->get_index_in_parent();
-    if (m_parent_after)
-    {
+    if (m_parent_after) {
         m_parent_after_index = m_place_before_node
             ? m_place_before_node->get_index_in_parent()
             : m_place_after_node
@@ -183,14 +172,11 @@ void Node_attach_operation::execute()
                 : m_parent_after->child_count();
 
         m_child_node->set_parent(m_parent_after, m_parent_after_index);
-    }
-    else
-    {
+    } else {
         m_child_node->set_parent({});
     }
 
-    if (g_selection_tool != nullptr)
-    {
+    if (g_selection_tool != nullptr) {
         g_selection_tool->sanity_check();
     }
 }
@@ -201,17 +187,13 @@ void Node_attach_operation::undo()
 
     ERHE_VERIFY(m_child_node->parent().lock() == m_parent_after);
 
-    if (m_parent_before)
-    {
+    if (m_parent_before) {
         m_child_node->set_parent(m_parent_before, m_parent_before_index);
-    }
-    else if (m_parent_after)
-    {
+    } else if (m_parent_after) {
         m_child_node->set_parent({});
     }
 
-    if (g_selection_tool != nullptr)
-    {
+    if (g_selection_tool != nullptr) {
         g_selection_tool->sanity_check();
     }
 }
@@ -265,8 +247,7 @@ void Node_reposition_in_parent_operation::execute()
 
     parent_children.insert(parent_children.begin() + after_index, m_child_node);
 
-    if (g_selection_tool != nullptr)
-    {
+    if (g_selection_tool != nullptr) {
         g_selection_tool->sanity_check();
     }
 }
@@ -288,8 +269,7 @@ void Node_reposition_in_parent_operation::undo()
     parent_children.erase(parent_children.begin() + after_index);
     parent_children.insert(parent_children.begin() + m_before_index, m_child_node);
 
-    if (g_selection_tool != nullptr)
-    {
+    if (g_selection_tool != nullptr) {
         g_selection_tool->sanity_check();
     }
 }

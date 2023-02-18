@@ -53,14 +53,12 @@ Physics_tool_drag_command::Physics_tool_drag_command()
 
 void Physics_tool_drag_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive)
-    {
+    if (get_command_state() != erhe::application::State::Inactive) {
         log_physics->trace("PT state not inactive");
         return;
     }
 
-    if (g_physics_tool->on_drag_ready())
-    {
+    if (g_physics_tool->on_drag_ready()) {
         log_physics->trace("PT set ready");
         set_ready();
     }
@@ -68,16 +66,14 @@ void Physics_tool_drag_command::try_ready()
 
 auto Physics_tool_drag_command::try_call() -> bool
 {
-    if (get_command_state() == erhe::application::State::Inactive)
-    {
+    if (get_command_state() == erhe::application::State::Inactive) {
         return false;
     }
 
     if (
         g_physics_tool->on_drag() &&
         (get_command_state() == erhe::application::State::Ready)
-    )
-    {
+    ) {
         set_active();
     }
 
@@ -90,8 +86,7 @@ void Physics_tool_drag_command::on_inactive()
     if (
         (get_command_state() == erhe::application::State::Ready ) ||
         (get_command_state() == erhe::application::State::Active)
-    )
-    {
+    ) {
         g_physics_tool->release_target();
     }
 }
@@ -122,11 +117,9 @@ void Physics_tool::deinitialize_component()
     m_drag_enable_command.set_host(nullptr);
 #endif
 
-    if (m_target_constraint)
-    {
+    if (m_target_constraint) {
         auto* world = get_physics_world();
-        if (world != nullptr)
-        {
+        if (world != nullptr) {
             world->remove_constraint(m_target_constraint.get());
         }
         m_target_constraint.reset();
@@ -168,8 +161,7 @@ void Physics_tool::initialize_component()
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
-    if (headset != nullptr)
-    {
+    if (headset != nullptr) {
         auto& xr_right = headset->get_actions_right();
         //commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click);
         //commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.a_click);
@@ -180,15 +172,13 @@ void Physics_tool::initialize_component()
 #endif
 
     erhe::physics::IWorld* world = get_physics_world();
-    if (world == nullptr)
-    {
+    if (world == nullptr) {
         log_physics->error("No physics world");
         return;
     }
 
     // TODO store world and use stored world for these removes.
-    if (m_target_constraint)
-    {
+    if (m_target_constraint) {
         world->remove_constraint(m_target_constraint.get());
         m_target_constraint.reset();
     }
@@ -226,13 +216,10 @@ void Physics_tool::on_message(Editor_message& message)
 
 [[nodiscard]] auto Physics_tool::get_scene_root() const -> Scene_root*
 {
-    if (!m_target_mesh)
-    {
-        if (g_scene_builder != nullptr)
-        {
+    if (!m_target_mesh) {
+        if (g_scene_builder != nullptr) {
             const auto scene_root = g_scene_builder->get_scene_root();
-            if (scene_root)
-            {
+            if (scene_root) {
                 return scene_root.get();
             }
         }
@@ -246,8 +233,7 @@ void Physics_tool::on_message(Editor_message& message)
 [[nodiscard]] auto Physics_tool::get_raytrace_scene() const -> erhe::raytrace::IScene*
 {
     auto* scene_root = get_scene_root();
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return nullptr;
     }
     auto& raytrace_scene = scene_root->raytrace_scene();
@@ -257,8 +243,7 @@ void Physics_tool::on_message(Editor_message& message)
 [[nodiscard]] auto Physics_tool::get_physics_world() const -> erhe::physics::IWorld*
 {
     auto* scene_root = get_scene_root();
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return nullptr;
     }
     auto& world = scene_root->physics_world();
@@ -311,15 +296,13 @@ auto Physics_tool::acquire_target() -> bool
     log_physics->trace("acquire_target() ...");
 
     erhe::physics::IWorld* world = get_physics_world();
-    if (world == nullptr)
-    {
+    if (world == nullptr) {
         log_physics->error("No physics world");
         return false;
     }
 
     Scene_view* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         log_physics->warn("Cant target: No scene_view");
         return false;
     }
@@ -328,15 +311,13 @@ auto Physics_tool::acquire_target() -> bool
     if (
         !content.valid ||
         !content.position.has_value()
-    )
-    {
+    ) {
         log_physics->warn("Cant target: No content");
         return false;
     }
 
     const auto p0_opt = scene_view->get_control_ray_origin_in_world();
-    if (!p0_opt.has_value())
-    {
+    if (!p0_opt.has_value()) {
         log_physics->warn("Cant target: No ray origin");
         return false;
     }
@@ -354,22 +335,19 @@ auto Physics_tool::acquire_target() -> bool
         target_position
     );
     m_target_node_physics = get_node_physics(m_target_mesh->get_node());
-    if (!m_target_node_physics)
-    {
+    if (!m_target_node_physics) {
         log_physics->warn("Cant target: No physics mesh");
         m_target_mesh.reset();
         return false;
     }
 
     erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
-    if (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static)
-    {
+    if (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static) {
         log_physics->warn("Cant target: Static mesh");
         return false;
     }
 
-    if (m_target_constraint)
-    {
+    if (m_target_constraint) {
         world->remove_constraint(m_target_constraint.get());
         m_target_constraint.reset();
     }
@@ -444,14 +422,12 @@ void Physics_tool::release_target()
 {
     log_physics->trace("PT Target released");
 
-    if (m_target_constraint)
-    {
+    if (m_target_constraint) {
         get_physics_world()->remove_constraint(m_target_constraint.get());
         m_target_constraint.reset();
     }
 
-    if (m_target_node_physics)
-    {
+    if (m_target_node_physics) {
         erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
         //rigid_body->set_damping(
         //    m_original_linear_damping,
@@ -477,8 +453,7 @@ void Physics_tool::release_target()
 
 auto Physics_tool::on_drag_ready() -> bool
 {
-    if (!acquire_target())
-    {
+    if (!acquire_target()) {
         return false;
     }
 
@@ -506,8 +481,7 @@ auto Physics_tool::on_force_ready() -> bool
 
 void Physics_tool::tool_hover(Scene_view* scene_view)
 {
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         return;
     }
 
@@ -518,48 +492,38 @@ void Physics_tool::tool_hover(Scene_view* scene_view)
 auto Physics_tool::on_drag() -> bool
 {
     auto* world = get_physics_world();
-    if (world == nullptr)
-    {
+    if (world == nullptr) {
         return false;
     }
-    if (!world->is_physics_updates_enabled())
-    {
+    if (!world->is_physics_updates_enabled()) {
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         return false;
     }
-    if (!m_target_mesh)
-    {
+    if (!m_target_mesh) {
         return false;
     }
-    if (!m_target_constraint)
-    {
+    if (!m_target_constraint) {
         return false;
     }
 
     const auto end = m_mode == Physics_tool_mode::Drag
         ? scene_view->get_control_position_in_world_at_distance(m_target_distance)
         : scene_view->get_control_ray_origin_in_world();
-    if (!end.has_value())
-    {
+    if (!end.has_value()) {
         return false;
     }
 
-    if (m_mode == Physics_tool_mode::Drag)
-    {
+    if (m_mode == Physics_tool_mode::Drag) {
         m_target_position_start = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
         m_target_position_end   = end.value();
-    }
-    else
-    {
+    } else {
         m_target_position_start = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_target_position_in_mesh, 1.0f}};
 
         float max_radius = 0.0f;
-        for (const auto& primitive : m_target_mesh->mesh_data.primitives)
-        {
+        for (const auto& primitive : m_target_mesh->mesh_data.primitives) {
             max_radius = std::max(
                 max_radius,
                 primitive.gl_primitive_geometry.bounding_sphere.radius
@@ -569,12 +533,9 @@ auto Physics_tool::on_drag() -> bool
         m_to_end_direction   = glm::normalize(end.value() - m_target_position_start);
         m_to_start_direction = glm::normalize(m_target_position_start - end.value());
         const float distance = glm::distance(end.value(), m_target_position_start);
-        if (distance > max_radius * 4.0f)
-        {
+        if (distance > max_radius * 4.0f) {
             m_target_position_end = m_target_position_start + m_force_distance * distance * m_to_end_direction;
-        }
-        else
-        {
+        } else {
             m_target_position_end = end.value() + m_force_distance * distance * m_to_start_direction;
         }
         m_target_distance = distance;
@@ -582,8 +543,7 @@ auto Physics_tool::on_drag() -> bool
 
     move_drag_point_kinematic(m_target_position_end);
 
-    if (m_target_node_physics)
-    {
+    if (m_target_node_physics) {
         // TODO investigate jolt damping
         erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
         glm::vec3 angular_velocity = rigid_body->get_angular_velocity();
@@ -598,8 +558,7 @@ auto Physics_tool::on_drag() -> bool
 
 void Physics_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    if (new_priority < old_priority)
-    {
+    if (new_priority < old_priority) {
         release_target();
     }
 }
@@ -611,11 +570,9 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
     erhe::application::Line_renderer& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
 #if 0 // This is currently too slow, at least in debug build
-    if (m_target_mesh)
-    {
+    if (m_target_mesh) {
         auto* raytrace_scene = get_raytrace_scene();
-        if (raytrace_scene != nullptr)
-        {
+        if (raytrace_scene != nullptr) {
             erhe::raytrace::Ray ray{
                 .origin    = m_target_mesh->get_node()->position_in_world(),
                 .t_near    = 0.0f,
@@ -628,16 +585,14 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
             };
 
             erhe::raytrace::Hit hit;
-            if (project_ray(raytrace_scene, m_target_mesh.get(), ray, hit))
-            {
+            if (project_ray(raytrace_scene, m_target_mesh.get(), ray, hit)) {
                 draw_ray_hit(line_renderer, ray, hit, m_ray_hit_style);
             }
         }
     }
 #endif
 
-    if (m_target_constraint)
-    {
+    if (m_target_constraint) {
         constexpr glm::vec4 white{1.0f, 1.0f, 1.0f, 1.0f};
         line_renderer.set_thickness(4.0f);
         line_renderer.add_lines(
@@ -673,8 +628,7 @@ void Physics_tool::tool_render(const Render_context& /*context*/)
     //    );
     //}
 
-    if (m_show_drag_body)
-    {
+    if (m_show_drag_body) {
         const erhe::physics::Transform transform = m_constraint_world_point_rigid_body->get_world_transform();
         {
             const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
@@ -723,13 +677,11 @@ void Physics_tool::tool_properties()
     //{
     //    ImGui::Text("Hover mesh: %s", m_hover_mesh->get_name().c_str());
     //}
-    if (m_target_mesh)
-    {
+    if (m_target_mesh) {
         m_last_target_mesh = m_target_mesh;
     }
 
-    if (!m_last_target_mesh)
-    {
+    if (!m_last_target_mesh) {
         return;
     }
 
@@ -765,8 +717,7 @@ void Physics_tool::tool_properties()
     ImGui::Text("Info:");
     ImGui::Text("Distance: %f",    m_target_distance);
     ImGui::Text("Target Size: %f", m_target_mesh_size);
-    if (m_target_constraint)
-    {
+    if (m_target_constraint) {
         std::string object_position = fmt::format("{}", m_target_position_in_mesh);
         std::string world_position  = fmt::format("{}", m_target_position_end);
         const erhe::physics::Transform transform = m_constraint_world_point_rigid_body->get_world_transform();

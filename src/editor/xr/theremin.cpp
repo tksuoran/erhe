@@ -57,8 +57,7 @@ auto from_midi(const int midi_note) -> Note_and_octave
     const int note   = midi_note % 12;
     const int octave = (midi_note / 12) - 1;
 
-    switch (note)
-    {
+    switch (note) {
         //using enum Note;
         case  0: return { Note::c,       octave };
         case  1: return { Note::c_sharp, octave };
@@ -80,8 +79,7 @@ auto get_note_color(const int midi_note) -> uint32_t
 {
     const int note = midi_note % 12;
 
-    switch (note)
-    {
+    switch (note) {
         case  0: return 0xff4b19e6; // C  Red
         case  1: return 0xff000080; // C# Maroon
         case  2: return 0xff3182f5; // D  Orange
@@ -101,8 +99,7 @@ auto get_note_color(const int midi_note) -> uint32_t
 
 auto c_str(const Note note) -> const char*
 {
-    switch (note)
-    {
+    switch (note) {
         //using enum Note;
         case Note::c:       return "C";
         case Note::c_sharp: return "C#";
@@ -140,11 +137,9 @@ auto frequency_to_midi_note(const float f) -> int
 ////     void*       pOutput,
 ////     const void* pInput,
 ////     ma_uint32   frameCount
-//// )
-//// {
+//// ) {
 ////     auto* theremin = reinterpret_cast<Theremin*>(pDevice->pUserData);
-////     if (theremin != nullptr)
-////     {
+////     if (theremin != nullptr) {
 ////         theremin->audio_data_callback(pDevice, pOutput, pInput, frameCount);
 ////     }
 //// }
@@ -185,13 +180,11 @@ void Theremin::initialize_component()
     //// m_audio_config.dataCallback      = miniaudio_data_callback;
     //// m_audio_config.pUserData         = this;
     ////
-    //// if (ma_device_init(nullptr, &m_audio_config, &m_audio_device) == MA_SUCCESS)
-    //// {
+    //// if (ma_device_init(nullptr, &m_audio_config, &m_audio_device) == MA_SUCCESS) {
     ////     m_audio_ok = true;
     //// }
     ////
-    //// if (m_enable_audio && m_audio_ok)
-    //// {
+    //// if (m_enable_audio && m_audio_ok) {
     ////     ma_device_start(&m_audio_device);
     //// }
 
@@ -234,20 +227,17 @@ void Theremin::set_antenna_distance(const float distance)
 
 auto Theremin::normalized_finger_distance() const -> float
 {
-    if (!m_left_finger_distance.has_value())
-    {
+    if (!m_left_finger_distance.has_value()) {
         return 1.0f; // max distance
     }
 
     const float t  = m_left_finger_distance.value(); // m to cm
     const float t0 = m_finger_distance_min; // cm
     const float t1 = m_finger_distance_max; // cm
-    if (t < t0)
-    {
+    if (t < t0) {
         return 0.0f;
     }
-    if (t > t1)
-    {
+    if (t > t1) {
         return 1.0f;
     }
     const float result = (t - t0) / (t1 - t0);
@@ -262,8 +252,7 @@ void Theremin::generate(
 )
 {
     const float volume = m_volume * (1.0f - normalized_finger_distance());
-    for (uint32_t sample = 0; sample < sample_count; ++sample)
-    {
+    for (uint32_t sample = 0; sample < sample_count; ++sample) {
         const float rel  = phase + static_cast<float>(sample) / waveform_length_in_samples;
         const float t    = glm::two_pi<float>() * rel;
         const float sine = std::sin(t);
@@ -275,20 +264,17 @@ void Theremin::tool_render(const Render_context& context)
 {
     static_cast<void>(context);
 
-    if (!g_headset_view || !m_enable_audio)
-    {
+    if (!g_headset_view || !m_enable_audio) {
         return;
     }
 
     auto&      line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
     //const auto camera        = m_headset_view->get_camera();
-    //if (!camera)
-    //{
+    //if (!camera) {
     //    return;
     //}
     const auto& root_node = g_headset_view->get_root_node();
-    if (!root_node)
-    {
+    if (!root_node) {
         return;
     }
 
@@ -311,8 +297,7 @@ void Theremin::tool_render(const Render_context& context)
     );
 
     // From m to cm
-    if (m_left_finger_distance.has_value())
-    {
+    if (m_left_finger_distance.has_value()) {
         m_left_finger_distance = m_left_finger_distance.value() * 100.0f;
     }
 
@@ -334,47 +319,35 @@ void Theremin::tool_render(const Render_context& context)
     );
 
     // From m to cm
-    if (m_right_finger_distance.has_value())
-    {
+    if (m_right_finger_distance.has_value()) {
         m_right_finger_distance = m_right_finger_distance.value() * 100.0f;
-        if (m_right_finger_distance < 1.3f)
-        {
-            if (!m_right_hold_start_time.has_value())
-            {
+        if (m_right_finger_distance < 1.3f) {
+            if (!m_right_hold_start_time.has_value()) {
                 m_right_hold_start_time = std::chrono::steady_clock::now();
-            }
-            else if (!m_right_click)
-            {
+            } else if (!m_right_click) {
                 const auto duration = std::chrono::steady_clock::now() - m_right_hold_start_time.value();
-                if (duration > std::chrono::milliseconds(50))
-                {
+                if (duration > std::chrono::milliseconds(50)) {
                     m_right_click = true;
 
                     m_snap_to_note = !m_snap_to_note;
                 }
             }
-        }
-        else if (m_right_click)
-        {
+        } else if (m_right_click) {
             m_right_click = false;
             m_right_hold_start_time.reset();
         }
-    }
-    else
-    {
+    } else {
         m_right_click = false;
         m_right_hold_start_time.reset();
     }
 
-    if (right_hand.is_active())
-    {
+    if (right_hand.is_active()) {
         const auto right_closest_finger_opt = right_hand.get_closest_point_to_line(
             transform,
             antenna_p0,
             antenna_p1
         );
-        if (right_closest_finger_opt.has_value())
-        {
+        if (right_closest_finger_opt.has_value()) {
             const auto  closest = right_closest_finger_opt.value();
             const auto  finger  = closest.finger;
             const auto  P       = closest.finger_point;
@@ -388,8 +361,7 @@ void Theremin::tool_render(const Render_context& context)
                 std::size_t i = Finger_name::thumb;
                 i <= Finger_name::little;
                 ++i
-            )
-            {
+            ) {
                 g_hand_tracker->set_color(
                     Hand_name::Right,
                     i,
@@ -409,18 +381,14 @@ void Theremin::tool_render(const Render_context& context)
 
 void Theremin::imgui()
 {
-    if (m_audio_ok)
-    {
+    if (m_audio_ok) {
         const bool enable_changed = ImGui::Checkbox("Enable", &m_enable_audio);
-        if (m_left_finger_distance.has_value())
-        {
+        if (m_left_finger_distance.has_value()) {
             ImGui::Text(
                 "Left Finger Tip Distance: %.1f cm",
                 m_left_finger_distance.value()
             );
-        }
-        else
-        {
+        } else {
             ImGui::TextColored(
                 ImVec4{1.0f, 0.3f, 0.2f, 1.0f},
                 "Left Finger Tip Distance: Not tracked"
@@ -428,14 +396,10 @@ void Theremin::imgui()
         }
         ImGui::SliderFloat("Min Finger Tip Distance", &m_finger_distance_min, 0.5f, 30.0f, "%.1f cm");
         ImGui::SliderFloat("Max Finger Tip Distance", &m_finger_distance_max, 0.5f, 30.0f, "%.1f cm");
-        if (enable_changed)
-        {
-            if (m_enable_audio && m_audio_ok)
-            {
+        if (enable_changed) {
+            if (m_enable_audio && m_audio_ok) {
                 //// ma_device_start(&m_audio_device);
-            }
-            else
-            {
+            } else {
                 //// ma_device_stop(&m_audio_device);
             }
         }
@@ -477,8 +441,7 @@ void Theremin::imgui()
             const auto sample_count               = static_cast<uint32_t>(m_wavetable.size());
             generate(m_wavetable.data(), sample_count, waveform_length_in_samples, 0.0f);
         }
-        if (!m_wavetable.empty())
-        {
+        if (!m_wavetable.empty()) {
             ImGui::PlotLines(
                 "Waveform",
                 m_wavetable.data(),

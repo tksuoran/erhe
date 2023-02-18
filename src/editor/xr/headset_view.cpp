@@ -135,13 +135,11 @@ void Headset_view::initialize_component()
 
     setup_root_camera();
 
-    if (!config.openxr)
-    {
+    if (!config.openxr) {
         return;
     }
 
-    const erhe::xr::Xr_configuration configuration
-    {
+    const erhe::xr::Xr_configuration configuration{
         .debug             = config.debug,
         .quad_view         = config.quad_view,
         .depth             = config.depth,
@@ -157,8 +155,7 @@ void Headset_view::initialize_component()
             erhe::application::g_window->get_context_window(),
             configuration
         );
-        if (!m_headset->is_valid())
-        {
+        if (!m_headset->is_valid()) {
             log_headset->info("Headset not initialized");
             m_headset.reset();
             return;
@@ -194,13 +191,10 @@ void Headset_view::post_initialize()
     // Move all imgui windows that have window viewport to hud viewport
     const auto viewport = g_hud->get_rendertarget_imgui_viewport();
     const auto window_viewport = erhe::application::g_imgui_windows->get_window_viewport();
-    if (viewport)
-    {
+    if (viewport) {
         auto& windows = erhe::application::g_imgui_windows->get_windows();
-        for (auto window : windows)
-        {
-            if (window->get_viewport() == window_viewport.get())
-            {
+        for (auto window : windows) {
+            if (window->get_viewport() == window_viewport.get()) {
                 window->set_viewport(viewport.get());
             }
         }
@@ -222,11 +216,8 @@ void Headset_view::tool_render(const Render_context& context)
     constexpr glm::vec4 orange{1.0f, 0.8f, 0.5f, 0.5f};
 
     line_renderer.set_thickness(4.0f);
-    for (const auto& finger_input : m_finger_inputs)
-    {
-        const glm::vec4 color = m_mouse_down
-            ? green
-            : red;
+    for (const auto& finger_input : m_finger_inputs) {
+        const glm::vec4 color = m_mouse_down ? green : red;
         line_renderer.set_line_color(color);
         line_renderer.add_lines({{finger_input.finger_point, finger_input.point}});
     }
@@ -237,8 +228,7 @@ void Headset_view::tool_render(const Render_context& context)
                 ? m_headset->get_actions_right().aim_pose
                 : m_headset->get_actions_left().aim_pose;
 
-        if (pose != nullptr)
-        {
+        if (pose != nullptr) {
             const auto* trigger_value_action = use_right
                     ? m_headset->get_actions_right().trigger_value
                     : m_headset->get_actions_left().trigger_value;
@@ -258,8 +248,7 @@ void Headset_view::tool_render(const Render_context& context)
                     }
                 }
             );
-            if (trigger_value < 1.0f)
-            {
+            if (trigger_value < 1.0f) {
                 line_renderer.add_lines(
                     orange,
                     {
@@ -291,8 +280,7 @@ auto Headset_view::get_headset_view_resources(
         match_color_texture
     );
 
-    if (i == m_view_resources.end())
-    {
+    if (i == m_view_resources.end()) {
         auto resource = std::make_shared<Headset_view_resources>(
             render_view,                               // erhe::xr::Render_view& render_view,
             *this,                                     // Headset_view&          headset_view,
@@ -331,8 +319,7 @@ void Headset_view::update_pointer_context_from_controller()
             ? right_aim_pose
             : left_aim_pose;
 
-    if (pose == nullptr)
-    {
+    if (pose == nullptr) {
         return;
     }
 
@@ -350,29 +337,24 @@ void Headset_view::render_headset()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_headset == nullptr)
-    {
+    if (m_headset == nullptr) {
         return;
     }
 
     auto frame_timing = m_headset->begin_frame();
-    if (!frame_timing.begin_ok)
-    {
+    if (!frame_timing.begin_ok) {
         return;
     }
 
-    if (frame_timing.should_render)
-    {
+    if (frame_timing.should_render) {
         auto callback = [this](erhe::xr::Render_view& render_view) -> bool
         {
             const auto& view_resources = get_headset_view_resources(render_view);
-            if (!view_resources->is_valid)
-            {
+            if (!view_resources->is_valid) {
                 return false;
             }
 
-            if (m_head_tracking_enabled)
-            {
+            if (m_head_tracking_enabled) {
                 view_resources->update(render_view);
             }
 
@@ -380,8 +362,7 @@ void Headset_view::render_headset()
             gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, framebuffer->gl_name());
 
             auto status = gl::check_named_framebuffer_status(framebuffer->gl_name(), gl::Framebuffer_target::draw_framebuffer);
-            if (status != gl::Framebuffer_status::framebuffer_complete)
-            {
+            if (status != gl::Framebuffer_status::framebuffer_complete) {
                 log_headset->error("view framebuffer status = {}", gl::c_str(status));
             }
 
@@ -448,8 +429,7 @@ void Headset_view::render_headset()
                 // Transparent
                 g_editor_rendering->render_rendertarget_meshes(render_context);
 
-                if (erhe::application::g_line_renderer_set != nullptr) // && m_headset->trigger_value() > 0.0f)
-                {
+                if (erhe::application::g_line_renderer_set != nullptr) { // && m_headset->trigger_value() > 0.0f)
                     ERHE_PROFILE_GPU_SCOPE(c_id_headset_render_content)
                     erhe::application::g_line_renderer_set->begin();
                     g_tools->render_tools(render_context);
@@ -544,8 +524,7 @@ void Headset_view::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_headset)
-    {
+    if (!m_headset) {
         return;
     }
 
@@ -563,33 +542,26 @@ void Headset_view::begin_frame()
     auto& commands = *erhe::application::g_commands;
     auto& instance = m_headset->get_xr_instance();
     const XrSession xr_session = m_headset->get_xr_session().get_xr_session();
-    for (auto& action : instance.get_boolean_actions())
-    {
+    for (auto& action : instance.get_boolean_actions()) {
         action.get(xr_session);
-        if (action.state.changedSinceLastSync == XR_TRUE)
-        {
+        if (action.state.changedSinceLastSync == XR_TRUE) {
             commands.on_xr_action(action);
         }
     }
-    for (auto& action : instance.get_float_actions())
-    {
+    for (auto& action : instance.get_float_actions()) {
         action.get(xr_session);
-        if (action.state.changedSinceLastSync == XR_TRUE)
-        {
+        if (action.state.changedSinceLastSync == XR_TRUE) {
             commands.on_xr_action(action);
         }
     }
-    for (auto& action : instance.get_vector2f_actions())
-    {
+    for (auto& action : instance.get_vector2f_actions()) {
         action.get(xr_session);
-        if (action.state.changedSinceLastSync == XR_TRUE)
-        {
+        if (action.state.changedSinceLastSync == XR_TRUE) {
             commands.on_xr_action(action);
         }
     }
 
-    if (m_controller_visualization)
-    {
+    if (m_controller_visualization) {
         // TODO both controllers
         auto* left_aim_pose  = m_headset->get_actions_left().aim_pose;
         auto* right_aim_pose = m_headset->get_actions_right().aim_pose;
@@ -600,8 +572,7 @@ void Headset_view::begin_frame()
             )
                 ? right_aim_pose
                 : left_aim_pose;
-        if (pose != nullptr)
-        {
+        if (pose != nullptr) {
             m_controller_visualization->update(pose);
         }
     }
@@ -613,16 +584,14 @@ void Headset_view::begin_frame()
     const glm::mat4 world_from_view = m_headset->get_view_in_world();
     get_camera()->get_node()->set_world_from_node(world_from_view);
 
-    if (!m_scene_root)
-    {
+    if (!m_scene_root) {
         return;
     }
 }
 
 void Headset_view::end_frame()
 {
-    if (!m_headset)
-    {
+    if (!m_headset) {
         return;
     }
 
@@ -630,16 +599,13 @@ void Headset_view::end_frame()
 
     // TODO These should be done when session state changes so that polling no longer happens
     auto& instance = m_headset->get_xr_instance();
-    for (auto& action : instance.get_boolean_actions())
-    {
+    for (auto& action : instance.get_boolean_actions()) {
         action.state.changedSinceLastSync = XR_FALSE;
     }
-    for (auto& action : instance.get_float_actions())
-    {
+    for (auto& action : instance.get_float_actions()) {
         action.state.changedSinceLastSync = XR_FALSE;
     }
-    for (auto& action : instance.get_vector2f_actions())
-    {
+    for (auto& action : instance.get_vector2f_actions()) {
         action.state.changedSinceLastSync = XR_FALSE;
     }
 }

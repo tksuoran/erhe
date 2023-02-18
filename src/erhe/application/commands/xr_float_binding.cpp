@@ -30,8 +30,7 @@ auto Xr_float_binding::on_value_changed(
 {
     auto* const command = get_command();
 
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         return false;
     }
 

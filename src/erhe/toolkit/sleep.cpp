@@ -32,30 +32,26 @@ std::chrono::duration<long long, std::ratio<1, 10000000>> resolution;
 auto sleep_initialize() -> bool
 {
     HMODULE ntdll_module = GetModuleHandleA("ntdll.dll");
-    if (ntdll_module == nullptr)
-    {
+    if (ntdll_module == nullptr) {
         log_sleep->warn("Could not open ntdll.dll");
         return false;
     }
 
     NtDelayExecution = (NTSTATUS(__stdcall*)(BOOL, PLARGE_INTEGER)  ) GetProcAddress(ntdll_module, "NtDelayExecution");
-    if (NtDelayExecution == nullptr)
-    {
+    if (NtDelayExecution == nullptr) {
         log_sleep->warn("NtDelayExecution() not found in ntdll.dll");
         return false;
     }
 
     ZwSetTimerResolution = (NTSTATUS(__stdcall*)(ULONG, BOOLEAN, PULONG)) GetProcAddress(ntdll_module, "ZwSetTimerResolution");
-    if (ZwSetTimerResolution == nullptr)
-    {
+    if (ZwSetTimerResolution == nullptr) {
         log_sleep->warn("ZwSetTimerResolution() not found in ntdll.dll");
         return false;
     }
 
     ULONG resolution_in_hundred_nanoseconds{};
     NTSTATUS status = ZwSetTimerResolution(1, true, &resolution_in_hundred_nanoseconds);
-    if (!NT_SUCCESS(status))
-    {
+    if (!NT_SUCCESS(status)) {
         log_sleep->warn("ZwSetTimerResolution() failed.");
         return false;
     }
@@ -72,14 +68,11 @@ void sleep_for(std::chrono::duration<float, std::milli> time_to_sleep)
     //const auto now      = std::chrono::system_clock::now();
     //const auto end_time = now + time_to_sleep;
 
-    if (is_initialized)
-    {
+    if (is_initialized) {
         LARGE_INTEGER duration;
         duration.QuadPart = -1 * static_cast<int>(time_to_sleep.count() * 10000.0f);
         NtDelayExecution(FALSE, &duration);
-    }
-    else
-    {
+    } else {
         int int_count = static_cast<int>(time_to_sleep.count());
         Sleep(int_count);
     }

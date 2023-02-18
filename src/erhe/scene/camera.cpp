@@ -45,14 +45,12 @@ void Camera::handle_node_scene_host_update(
     Scene_host* new_scene_host
 )
 {
-    if (old_scene_host)
-    {
+    if (old_scene_host) {
         old_scene_host->unregister_camera(
             std::static_pointer_cast<Camera>(shared_from_this())
         );
     }
-    if (new_scene_host)
-    {
+    if (new_scene_host) {
         new_scene_host->register_camera(
             std::static_pointer_cast<Camera>(shared_from_this())
         );
@@ -103,13 +101,13 @@ auto Camera::projection() const -> const Projection*
     return &m_projection;
 }
 
+using namespace erhe::toolkit;
+
 auto is_camera(const Item* const item) -> bool
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return false;
     }
-    using namespace erhe::toolkit;
     return test_all_rhs_bits_set(item->get_type(), Item_type::camera);
 }
 
@@ -120,45 +118,34 @@ auto is_camera(const std::shared_ptr<Item>& item) -> bool
 
 auto as_camera(Item* const item) -> Camera*
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return nullptr;
     }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::camera))
-    {
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::camera)) {
         return nullptr;
     }
-    return reinterpret_cast<Camera*>(item);
+    return static_cast<Camera*>(item);
 }
 
 auto as_camera(const std::shared_ptr<Item>& item) -> std::shared_ptr<Camera>
 {
-    if (!item)
-    {
+    if (!item) {
         return {};
     }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::camera))
-    {
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::camera)) {
         return {};
     }
     return std::static_pointer_cast<Camera>(item);
 }
 
-auto get_camera(
-    const erhe::scene::Node* const node
-) -> std::shared_ptr<Camera>
+auto get_camera(const erhe::scene::Node* const node) -> std::shared_ptr<Camera>
 {
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return {};
     }
-    for (const auto& attachment : node->attachments())
-    {
+    for (const auto& attachment : node->attachments()) {
         auto camera = as_camera(attachment);
-        if (camera)
-        {
+        if (camera) {
             return camera;
         }
     }

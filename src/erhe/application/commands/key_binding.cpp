@@ -42,8 +42,7 @@ auto Key_binding::on_key(
     if (
         (m_code    != code   ) ||
         (m_pressed != pressed)
-    )
-    {
+    ) {
         return false;
     }
 
@@ -52,8 +51,7 @@ auto Key_binding::on_key(
     if (
         m_modifier_mask.has_value() &&
         m_modifier_mask.value() != modifier_mask
-    )
-    {
+    ) {
         log_input_event_filtered->trace(
             "{} rejected key {} due to modifier mask mismatch",
             command->get_name(),
@@ -63,14 +61,12 @@ auto Key_binding::on_key(
         return false;
     }
 
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         return false;
     }
 
     const bool consumed = command->try_call_with_input(input);
-    if (consumed)
-    {
+    if (consumed) {
         log_input_event_consumed->trace(
             "{} consumed key {} {}",
             command->get_name(),

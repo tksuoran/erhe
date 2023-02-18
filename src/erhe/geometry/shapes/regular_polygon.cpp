@@ -83,13 +83,11 @@ auto make_rectangle(
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
             geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
 
-            if (front_face)
-            {
+            if (front_face) {
                 geometry.make_polygon( {0, 1, 2, 3} );
             }
 
-            if (back_face)
-            {
+            if (back_face) {
                 geometry.make_polygon( {4, 5, 6, 7} );
             }
 

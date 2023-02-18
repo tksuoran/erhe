@@ -20,8 +20,7 @@ auto Primitive_geometry::base_index() const -> uint32_t
 
 auto Primitive_geometry::index_range(const Primitive_mode primitive_mode) const -> Index_range
 {
-    switch (primitive_mode)
-    {
+    switch (primitive_mode) {
         //using enum Primitive_mode;
         case Primitive_mode::not_set          : return {};
         case Primitive_mode::polygon_fill     : return triangle_fill_indices;
@@ -37,8 +36,7 @@ auto primitive_type(
     const Primitive_mode primitive_mode
 ) -> std::optional<gl::Primitive_type>
 {
-    switch (primitive_mode)
-    {
+    switch (primitive_mode) {
         //using enum Primitive_mode;
         case Primitive_mode::not_set          : return {};
         case Primitive_mode::polygon_fill     : return gl::Primitive_type::triangles;

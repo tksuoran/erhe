@@ -50,8 +50,7 @@ Reference_frame::Reference_frame(
     ERHE_VERIFY(point_locations != nullptr);
 
     const auto& polygon = geometry.polygons[polygon_id];
-    if (polygon.corner_count == 0)
-    {
+    if (polygon.corner_count == 0) {
         log_brush->warn("Polygon with 0 corners");
         return;
     }
@@ -109,8 +108,7 @@ auto Reference_frame::transform() const -> mat4
 Brush::Brush(const Brush_data& create_info)
     : data{create_info}
 {
-    if (data.name.empty() && data.geometry)
-    {
+    if (data.name.empty() && data.geometry) {
         data.name = data.geometry->name;
     }
     label = fmt::format("{}##Node{}", data.name, id.get_id());
@@ -129,8 +127,7 @@ auto Brush::is_shown_in_ui() const -> bool
 void Brush::late_initialize()
 {
     const auto geometry = get_geometry();
-    if (!gl_primitive_geometry)
-    {
+    if (!gl_primitive_geometry) {
         ERHE_PROFILE_SCOPE("gl primitive");
 
         gl_primitive_geometry = std::make_unique<erhe::primitive::Primitive_geometry>(
@@ -142,8 +139,7 @@ void Brush::late_initialize()
         );
     }
 
-    if (!rt_primitive)
-    {
+    if (!rt_primitive) {
         ERHE_PROFILE_SCOPE("rt primitive");
         rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
     }
@@ -152,8 +148,7 @@ void Brush::late_initialize()
         g_physics_window->config.static_enable &&
         !data.collision_shape &&
         !data.collision_shape_generator
-    )
-    {
+    ) {
         ERHE_PROFILE_SCOPE("make brush convex hull collision shape");
 
         data.collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
@@ -165,8 +160,7 @@ void Brush::late_initialize()
         );
     }
 
-    if ((data.volume == 0.0f) && data.collision_volume_calculator)
-    {
+    if ((data.volume == 0.0f) && data.collision_volume_calculator) {
         ERHE_PROFILE_SCOPE("calculate brush volume");
 
         data.volume = data.collision_volume_calculator(1.0f);
@@ -181,14 +175,12 @@ auto Brush::get_reference_frame(
     const uint32_t corner_offset
 ) -> Reference_frame
 {
-    for (const auto& reference_frame : reference_frames)
-    {
+    for (const auto& reference_frame : reference_frames) {
         if (
             (reference_frame.corner_count  == corner_count  ) &&
             (reference_frame.face_offset   == in_face_offset) &&
             (reference_frame.corner_offset == corner_offset )
-        )
-        {
+        ) {
             return reference_frame;
         }
     }
@@ -201,18 +193,15 @@ auto Brush::get_reference_frame(
         Polygon_id polygon_id = 0, end = geometry->get_polygon_count();
         polygon_id < end;
         ++polygon_id
-    )
-    {
+    ) {
         const auto& polygon = geometry->polygons[polygon_id];
         if (
             (corner_count == 0) ||
             (polygon.corner_count == corner_count) ||
             (polygon_id + 1 == end)
-        )
-        {
+        ) {
             selected_polygon = polygon_id;
-            if (face_offset == in_face_offset)
-            {
+            if (face_offset == in_face_offset) {
                 break;
             }
             ++face_offset;
@@ -226,14 +215,12 @@ auto Brush::get_reference_frame(
     const uint32_t corner_offset
 ) -> Reference_frame
 {
-    //for (const auto& reference_frame : reference_frames)
-    //{
+    //for (const auto& reference_frame : reference_frames) {
     //    if (
     //        (reference_frame.corner_count  == 0            ) &&
     //        (reference_frame.face_offset   == face_offset  ) &&
     //        (reference_frame.corner_offset == corner_offset)
-    //    )
-    //    {
+    //    ) {
     //        return reference_frame;
     //    }
     //}
@@ -258,10 +245,8 @@ auto Brush::get_scaled(const float scale) -> const Scaled&
 {
     late_initialize();
     const int scale_key = static_cast<int>(scale * c_scale_factor);
-    for (const auto& scaled : scaled_entries)
-    {
-        if (scaled.scale_key == scale_key)
-        {
+    for (const auto& scaled : scaled_entries) {
+        if (scaled.scale_key == scale_key) {
             return scaled;
         }
     }
@@ -274,11 +259,9 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 
     const float scale    = static_cast<float>(scale_key) / c_scale_factor;
     const auto  geometry = get_geometry();
-    if (scale == 1.0f)
-    {
+    if (scale == 1.0f) {
         glm::mat4 local_inertia{0.0f};
-        if (data.collision_shape)
-        {
+        if (data.collision_shape) {
             ERHE_VERIFY(data.collision_shape->is_convex());
             const auto mass = data.density * data.volume;
             data.collision_shape->calculate_local_inertia(mass, local_inertia);
@@ -291,9 +274,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
                 .volume                = data.volume,
                 .local_inertia         = local_inertia
             };
-        }
-        else if (data.collision_shape_generator)
-        {
+        } else if (data.collision_shape_generator) {
             const auto generated_collision_shape = data.collision_shape_generator(scale);
             const auto mass = data.density * data.volume;
             generated_collision_shape->calculate_local_inertia(mass, local_inertia);
@@ -306,9 +287,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
                 .volume                = data.volume,
                 .local_inertia         = local_inertia
             };
-        }
-        else
-        {
+        } else {
             return Scaled{
                 .scale_key             = scale_key,
                 .geometry              = geometry,
@@ -344,8 +323,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
     auto scaled_rt_primitive = std::make_shared<Raytrace_primitive>(scaled_geometry);
 
     glm::mat4 local_inertia{0.0f};
-    if (data.collision_shape)
-    {
+    if (data.collision_shape) {
         ERHE_VERIFY(data.collision_shape->is_convex());
         const auto scaled_volume          = data.volume * scale * scale * scale;
         const auto mass                   = data.density * scaled_volume;
@@ -363,9 +341,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
             .volume                = scaled_volume,
             .local_inertia         = local_inertia
         };
-    }
-    else if (data.collision_shape_generator)
-    {
+    } else if (data.collision_shape_generator) {
         auto       scaled_collision_shape = data.collision_shape_generator(scale);
         const auto scaled_volume          = data.collision_volume_calculator
             ? data.collision_volume_calculator(scale)
@@ -381,9 +357,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
             .volume                = scaled_volume,
             .local_inertia         = local_inertia
         };
-    }
-    else
-    {
+    } else {
         return Scaled{
             .scale_key             = scale_key,
             .geometry              = scaled_geometry,
@@ -410,8 +384,7 @@ auto Brush::get_label() const -> const std::string&
 
 auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
 {
-    if (!data.geometry)
-    {
+    if (!data.geometry) {
         data.geometry = data.geometry_generator();
         data.geometry_generator = {};
     }
@@ -465,8 +438,7 @@ auto Brush::make_instance(
     node->attach             (mesh);
     node->enable_flag_bits   (instance_create_info.node_flags);
 
-    if (data.collision_shape || data.collision_shape_generator)
-    {
+    if (data.collision_shape || data.collision_shape_generator) {
         ERHE_PROFILE_SCOPE("make brush node physics");
 
         const erhe::physics::IRigid_body_create_info rigid_body_create_info{
@@ -480,8 +452,7 @@ auto Brush::make_instance(
         node->attach(node_physics);
     }
 
-    if (scaled.rt_primitive)
-    {
+    if (scaled.rt_primitive) {
         auto node_raytrace = std::make_shared<Node_raytrace>( // TODO use content library?
             scaled.geometry,
             scaled.rt_primitive
@@ -494,8 +465,7 @@ auto Brush::make_instance(
 
 [[nodiscard]] auto Brush::get_bounding_box() -> erhe::toolkit::Bounding_box
 {
-    if (!gl_primitive_geometry)
-    {
+    if (!gl_primitive_geometry) {
         ERHE_PROFILE_SCOPE("gl primitive");
 
         gl_primitive_geometry = std::make_unique<erhe::primitive::Primitive_geometry>(

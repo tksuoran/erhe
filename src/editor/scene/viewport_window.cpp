@@ -96,16 +96,14 @@ Viewport_window::Viewport_window(
 
 Viewport_window::~Viewport_window()
 {
-    if (g_viewport_windows != nullptr)
-    {
+    if (g_viewport_windows != nullptr) {
         g_viewport_windows->erase(this);
     }
 }
 
 auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shader_stages*
 {
-    switch (m_shader_stages_variant)
-    {
+    switch (m_shader_stages_variant) {
         case Shader_stages_variant::standard:                 return g_programs->standard.get();
         case Shader_stages_variant::anisotropic_slope:        return g_programs->anisotropic_slope.get();
         case Shader_stages_variant::anisotropic_engine_ready: return g_programs->anisotropic_engine_ready.get();
@@ -145,14 +143,12 @@ void Viewport_window::execute_rendergraph_node()
     if (
         (output_viewport.width < 1) ||
         (output_viewport.height < 1)
-    )
-    {
+    ) {
         return;
     }
 
     auto scene_root = m_scene_root.lock();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return;
     }
 
@@ -173,16 +169,13 @@ void Viewport_window::execute_rendergraph_node()
         .override_shader_stages = get_override_shader_stages()
     };
 
-    if (m_is_hovered && g_id_renderer->config.enabled)
-    {
+    if (m_is_hovered && g_id_renderer->config.enabled) {
         g_editor_rendering->render_id(context);
     }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, output_framebuffer_name);
-    if (output_framebuffer)
-    {
-        if (!output_framebuffer->check_status())
-        {
+    if (output_framebuffer) {
+        if (!output_framebuffer->check_status()) {
             return;
         }
     }
@@ -193,8 +186,7 @@ void Viewport_window::execute_rendergraph_node()
 void Viewport_window::reconfigure(const int sample_count)
 {
     const auto resolve_node = m_multisample_resolve_node.lock();
-    if (resolve_node)
-    {
+    if (resolve_node) {
         resolve_node->reconfigure(sample_count);
     }
 }
@@ -274,10 +266,7 @@ auto Viewport_window::viewport_from_window(
     const float content_x      = static_cast<float>(window_position.x) - m_window_viewport.x;
     const float content_y      = static_cast<float>(window_position.y) - m_window_viewport.y;
     const float content_flip_y = m_window_viewport.height - content_y;
-    return {
-        content_x,
-        content_flip_y
-    };
+    return glm::vec2{content_x, content_flip_y};
 }
 
 auto Viewport_window::project_to_viewport(
@@ -285,8 +274,7 @@ auto Viewport_window::project_to_viewport(
 ) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
-    if (!camera)
-    {
+    if (!camera) {
         return {};
     }
     const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
@@ -309,8 +297,7 @@ auto Viewport_window::unproject_to_world(
 ) const -> std::optional<glm::vec3>
 {
     const auto camera = m_camera.lock();
-    if (!camera)
-    {
+    if (!camera) {
         return {};
     }
     const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
@@ -349,8 +336,7 @@ void Viewport_window::update_hover()
         !far_position_in_world.has_value() ||
         !camera ||
         !m_is_hovered
-    )
-    {
+    ) {
         reset_control_transform();
         reset_hover_slots();
         return;
@@ -362,17 +348,13 @@ void Viewport_window::update_hover()
     );
 
     const auto scene_root = m_scene_root.lock();
-    if (scene_root)
-    {
+    if (scene_root) {
         scene_root->update_pointer_for_rendertarget_meshes(this);
     }
 
-    if (g_id_renderer->config.enabled)
-    {
+    if (g_id_renderer->config.enabled) {
         update_hover_with_id_render();
-    }
-    else
-    {
+    } else {
         update_hover_with_raytrace();
     }
 
@@ -382,8 +364,7 @@ void Viewport_window::update_hover()
 
 void Viewport_window::update_hover_with_id_render()
 {
-    if (!m_position_in_viewport.has_value())
-    {
+    if (!m_position_in_viewport.has_value()) {
         reset_hover_slots();
         return;
     }
@@ -392,8 +373,7 @@ void Viewport_window::update_hover_with_id_render()
         static_cast<int>(position_in_viewport.x),
         static_cast<int>(position_in_viewport.y)
     );
-    if (!id_query.valid)
-    {
+    if (!id_query.valid) {
         SPDLOG_LOGGER_TRACE(log_controller_ray, "pointer context hover not valid");
         return;
     }
@@ -409,18 +389,14 @@ void Viewport_window::update_hover_with_id_render()
 
     SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
 
-    if (entry.mesh)
-    {
+    if (entry.mesh) {
         const erhe::scene::Node* node = entry.mesh->get_node();
-        if (node != nullptr)
-        {
+        if (node != nullptr) {
             const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
             entry.geometry = primitive.source_geometry;
-            if (entry.geometry != nullptr)
-            {
+            if (entry.geometry != nullptr) {
                 const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(entry.local_index);
-                if (polygon_id < entry.geometry->get_polygon_count())
-                {
+                if (polygon_id < entry.geometry->get_polygon_count()) {
                     SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
                     auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(
                         erhe::geometry::c_polygon_normals
@@ -428,8 +404,7 @@ void Viewport_window::update_hover_with_id_render()
                     if (
                         (polygon_normals != nullptr) &&
                         polygon_normals->has(polygon_id)
-                    )
-                    {
+                    ) {
                         const auto local_normal    = polygon_normals->get(polygon_id);
                         const auto world_from_node = node->world_from_node();
                         entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
@@ -478,8 +453,7 @@ auto Viewport_window::position_in_world_viewport_depth(
     if (
         !m_position_in_viewport.has_value() ||
         !camera
-    )
-    {
+    ) {
         return {};
     }
 
@@ -526,27 +500,22 @@ auto Viewport_window::get_config() -> Viewport_config*
 auto Viewport_window::viewport_toolbar() -> bool
 {
     bool hovered = false;
-    if (g_viewport_windows != nullptr)
-    {
+    if (g_viewport_windows != nullptr) {
         g_viewport_windows->viewport_toolbar(*this, hovered);
     }
     //// TODO Tool_flags::viewport_toolbar
-    if (g_selection_tool != nullptr)
-    {
+    if (g_selection_tool != nullptr) {
         g_selection_tool->viewport_toolbar(hovered);
     }
-    if (g_trs_tool != nullptr)
-    {
+    if (g_trs_tool != nullptr) {
         g_trs_tool->viewport_toolbar(hovered);
     }
 
-    if (g_grid_tool != nullptr)
-    {
+    if (g_grid_tool != nullptr) {
         g_grid_tool->viewport_toolbar(hovered);
     }
 
-    if (g_physics_window != nullptr)
-    {
+    if (g_physics_window != nullptr) {
         g_physics_window->viewport_toolbar(hovered);
     }
 
@@ -556,8 +525,7 @@ auto Viewport_window::viewport_toolbar() -> bool
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     erhe::application::make_text_with_background("Scene:", rounding, background_color);
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
     }
     ImGui::SameLine();
@@ -565,29 +533,22 @@ auto Viewport_window::viewport_toolbar() -> bool
     auto       scene_root     = get_scene_root();
     ImGui::SetNextItemWidth(110.0f);
     const bool combo_used     = g_editor_scenes->scene_combo("##Scene", scene_root, false);
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
     }
-    if (combo_used)
-    {
+    if (combo_used) {
         m_scene_root = scene_root;
-        if (old_scene_root.lock() != scene_root)
-        {
-            if (scene_root)
-            {
+        if (old_scene_root.lock() != scene_root) {
+            if (scene_root) {
                 const auto& cameras = scene_root->get_hosted_scene()->get_cameras();
                 m_camera = cameras.empty() ? std::weak_ptr<erhe::scene::Camera>{} : cameras.front();
-            }
-            else
-            {
+            } else {
                 m_camera.reset();
             }
         }
     }
     scene_root = get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return hovered;
     }
 
@@ -596,15 +557,13 @@ auto Viewport_window::viewport_toolbar() -> bool
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     erhe::application::make_text_with_background("Camera:", rounding, background_color);
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
     }
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     get_scene_root()->camera_combo("##Camera", m_camera);
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
     }
 
@@ -613,8 +572,7 @@ auto Viewport_window::viewport_toolbar() -> bool
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
     erhe::application::make_text_with_background("Shader:", rounding, background_color);
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
     }
     ImGui::SameLine();
@@ -625,8 +583,7 @@ auto Viewport_window::viewport_toolbar() -> bool
         IM_ARRAYSIZE(c_shader_stages_variant_strings),
         IM_ARRAYSIZE(c_shader_stages_variant_strings)
     );
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
     }
 

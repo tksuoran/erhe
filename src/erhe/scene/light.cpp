@@ -51,14 +51,12 @@ void Light::handle_node_scene_host_update(
     Scene_host* new_scene_host
 )
 {
-    if (old_scene_host)
-    {
+    if (old_scene_host) {
         old_scene_host->unregister_light(
             std::static_pointer_cast<Light>(shared_from_this())
         );
     }
-    if (new_scene_host)
-    {
+    if (new_scene_host) {
         new_scene_host->register_light(
             std::static_pointer_cast<Light>(shared_from_this())
         );
@@ -67,8 +65,7 @@ void Light::handle_node_scene_host_update(
 
 auto Light::projection(const Light_projection_parameters& parameters) const -> Projection
 {
-    switch (type)
-    {
+    switch (type) {
         case Light_type::directional: return stable_directional_light_projection(parameters);
         case Light_type::spot:        return spot_light_projection              (parameters);
         default: return {};
@@ -89,8 +86,7 @@ auto Light::stable_directional_light_projection(
     const float r = parameters.view_camera->get_shadow_range();
 
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
-    return Projection
-    {
+    return Projection{
         .projection_type = Projection::Type::orthogonal,
         .z_near          = 0.0f,
         .z_far           = 2.0f * r,
@@ -104,8 +100,7 @@ auto Light::spot_light_projection(
 ) const -> Projection
 {
     static_cast<void>(parameters); // TODO ignored for now
-    return Projection
-    {
+    return Projection{
         .projection_type = Projection::Type::perspective,
         .z_near          =   1.0f, // TODO
         .z_far           = 100.0f, // TODO
@@ -118,23 +113,19 @@ auto Light::projection_transforms(
     const Light_projection_parameters& parameters
 ) const -> Light_projection_transforms
 {
-    switch (type)
-    {
-        case Light_type::directional:
-        {
+    switch (type) {
+        case Light_type::directional: {
             return stable_directional_light_projection_transforms(parameters);
             //return this->tight_frustum_fit
             //    ? tight_directional_light_projection_transforms (parameters)
             //    : stable_directional_light_projection_transforms(parameters);
         }
 
-        case Light_type::spot:
-        {
+        case Light_type::spot: {
             return spot_light_projection_transforms(parameters);
         }
 
-        default:
-        {
+        default: {
             return {};
         };
     }
@@ -341,14 +332,13 @@ auto Light::stable_directional_light_projection_transforms(
     const vec3 view_frustum_size_in_light   = max_corner_point - min_corner_point;
     const vec3 view_frustum_center_in_light = min_corner_point + 0.5f * (view_frustum_size_in_light);
 
-    const Projection light_projection =
-        {
-            .projection_type = Projection::Type::orthogonal,
-            .z_near          = view_frustum_center_in_light.z - 0.5f * std::abs(view_frustum_size_in_light.z),
-            .z_far           = view_frustum_center_in_light.z + 0.5f * std::abs(view_frustum_size_in_light.z),
-            .ortho_width     = view_frustum_size_in_light.x,
-            .ortho_height    = view_frustum_size_in_light.y
-        };
+    const Projection light_projection{
+        .projection_type = Projection::Type::orthogonal,
+        .z_near          = view_frustum_center_in_light.z - 0.5f * std::abs(view_frustum_size_in_light.z),
+        .z_far           = view_frustum_center_in_light.z + 0.5f * std::abs(view_frustum_size_in_light.z),
+        .ortho_width     = view_frustum_size_in_light.x,
+        .ortho_height    = view_frustum_size_in_light.y
+    };
     const vec2 texel_size{
         view_frustum_size_in_light.x / static_cast<float>(parameters.shadow_map_viewport.width),
         view_frustum_size_in_light.y / static_cast<float>(parameters.shadow_map_viewport.height)
@@ -380,8 +370,7 @@ auto Light::stable_directional_light_projection_transforms(
     //  - clip from node   (for light as node)
     //  - clip from world
     const auto clip_from_light = light_projection.clip_from_node_transform(parameters.shadow_map_viewport);
-    const Transform world_from_light_camera
-    {
+    const Transform world_from_light_camera{
         snapped_world_from_light,
         snapped_light_from_world
     };
@@ -431,13 +420,13 @@ auto Light::stable_directional_light_projection_transforms(
     };
 }
 
+using namespace erhe::toolkit;
+
 auto is_light(const Item* const item) -> bool
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return false;
     }
-    using namespace erhe::toolkit;
     return test_all_rhs_bits_set(item->get_type(), Item_type::light);
 }
 
@@ -448,41 +437,31 @@ auto is_light(const std::shared_ptr<Item>& item) -> bool
 
 auto as_light(Item* const item) -> Light*
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return nullptr;
     }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::light))
-    {
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::light)) {
         return nullptr;
     }
-    return reinterpret_cast<Light*>(item);
+    return static_cast<Light*>(item);
 }
 
 auto as_light(const std::shared_ptr<Item>& item) -> std::shared_ptr<Light>
 {
-    if (!item)
-    {
+    if (!item) {
         return {};
     }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::light))
-    {
+    if (!test_all_rhs_bits_set(item->get_type(), Item_type::light)) {
         return {};
     }
     return std::static_pointer_cast<Light>(item);
 }
 
-auto get_light(
-    const erhe::scene::Node* const node
-) -> std::shared_ptr<Light>
+auto get_light(const erhe::scene::Node* const node) -> std::shared_ptr<Light>
 {
-    for (const auto& attachment : node->attachments())
-    {
+    for (const auto& attachment : node->attachments()) {
         auto light = as_light(attachment);
-        if (light)
-        {
+        if (light) {
             return light;
         }
     }

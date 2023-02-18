@@ -46,22 +46,19 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
             const Point_id src_next_point_id = j.next_corner.point_id;
 
             const auto edge_opt = source.find_edge(src_point_id, src_next_point_id);
-            if (!edge_opt.has_value())
-            {
+            if (!edge_opt.has_value()) {
                 return;
             }
             const auto& edge = edge_opt.value();
             Polygon_id opposite_polygon_id = i.polygon_id;
             edge.for_each_polygon_const(source, [&](auto& k)
             {
-                if (k.polygon_id != i.polygon_id)
-                {
+                if (k.polygon_id != i.polygon_id) {
                     opposite_polygon_id = k.polygon_id;
                     return k.break_iteration();
                 }
             });
-            if (opposite_polygon_id == i.polygon_id)
-            {
+            if (opposite_polygon_id == i.polygon_id) {
                 return;
             }
             const Polygon_id new_polygon_id = make_new_polygon_from_polygon(i.polygon_id);

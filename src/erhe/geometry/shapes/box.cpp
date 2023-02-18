@@ -169,8 +169,7 @@ public:
             z;
 
         const auto i = points.find(key);
-        if (i != points.end())
-        {
+        if (i != points.end()) {
             return i->second;
         }
 
@@ -230,8 +229,7 @@ public:
             (x == -div.x) || (x == div.x) ||
             (y == -div.y) || (y == div.y) ||
             (z == -div.z) || (z == div.z);
-        if (is_discontinuity)
-        {
+        if (is_discontinuity) {
             corner_normals->put(corner_id, n);
             corner_texcoords->put(corner_id, vec2{s, t});
             vec4 B;
@@ -278,17 +276,14 @@ public:
         constexpr vec3 unit_x(1.0f, 0.0f, 0.0f);
         constexpr vec3 unit_y(0.0f, 1.0f, 0.0f);
         constexpr vec3 unit_z(0.0f, 0.0f, 1.0f);
-        for (x = -div.x; x <= div.x; x++)
-        {
+        for (x = -div.x; x <= div.x; x++) {
             const float rel_x = 0.5f + static_cast<float>(x) / size.x;
-            for (z = -div.z; z <= div.z; z++)
-            {
+            for (z = -div.z; z <= div.z; z++) {
                 const float rel_z = 0.5f + static_cast<float>(z) / size.z;
                 make_point(x,  div.y, z,  unit_y, rel_x, rel_z);
                 make_point(x, -div.y, z, -unit_y, rel_x, rel_z);
             }
-            for (y = -div.y; y <= div.y; y++)
-            {
+            for (y = -div.y; y <= div.y; y++) {
                 const float rel_y = 0.5f + static_cast<float>(y) / size.y;
                 make_point(x, y,  div.z,  unit_z, rel_x, rel_y);
                 make_point(x, y, -div.z, -unit_z, rel_x, rel_y);
@@ -296,11 +291,9 @@ public:
         }
 
         // Left and right
-        for (z = -div.z; z <= div.z; z++)
-        {
+        for (z = -div.z; z <= div.z; z++) {
             const float rel_z = 0.5f + static_cast<float>(z) / size.z;
-            for (y = -div.y; y <= div.y; y++)
-            {
+            for (y = -div.y; y <= div.y; y++) {
                 const float rel_y = 0.5f + static_cast<float>(y) / size.y;
                 make_point( div.x, y, z,  unit_x, rel_y, rel_z);
                 make_point(-div.x, y, z, -unit_x, rel_y, rel_z);
@@ -308,12 +301,10 @@ public:
         }
 
         // Generate quads
-        for (x = -div.x; x < div.x; x++)
-        {
+        for (x = -div.x; x < div.x; x++) {
             const float rel_x1 = 0.5f + static_cast<float>(x) / size.x;
             const float rel_x2 = 0.5f + static_cast<float>(x + 1) / size.x;
-            for (z = -div.z; z < div.z; z++)
-            {
+            for (z = -div.z; z < div.z; z++) {
                 const float rel_z1 = 0.5f + static_cast<float>(z) / size.z;
                 const float rel_z2 = 0.5f + static_cast<float>(z + 1) / size.z;
 
@@ -332,8 +323,7 @@ public:
                 polygon_normals->put(top_id, unit_y);
                 polygon_normals->put(bottom_id, -unit_y);
             }
-            for (y = -div.y; y < div.y; y++)
-            {
+            for (y = -div.y; y < div.y; y++) {
                 const float rel_y1 = 0.5f + static_cast<float>(y    ) / size.y;
                 const float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
 
@@ -354,13 +344,11 @@ public:
             }
         }
 
-        for (z = -div.z; z < div.z; z++)
-        {
+        for (z = -div.z; z < div.z; z++) {
             const float rel_z1 = 0.5f + static_cast<float>(z    ) / size.z;
             const float rel_z2 = 0.5f + static_cast<float>(z + 1) / size.z;
 
-            for (y = -div.y; y < div.y; y++)
-            {
+            for (y = -div.y; y < div.y; y++) {
                 const float rel_y1 = 0.5f + static_cast<float>(y    ) / size.y;
                 const float rel_y2 = 0.5f + static_cast<float>(y + 1) / size.y;
 

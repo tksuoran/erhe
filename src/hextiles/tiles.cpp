@@ -89,10 +89,8 @@ auto Tiles::get_unit_type(unit_t unit) -> Unit_type&
 
 auto Tiles::get_city_unit_type(int city_size) const -> unit_t
 {
-    for (unit_t t = 1; t < m_unit_types.size(); ++t)
-    {
-        if (m_unit_types[t].city_size == city_size)
-        {
+    for (unit_t t = 1; t < m_unit_types.size(); ++t) {
+        if (m_unit_types[t].city_size == city_size) {
             return t;
         }
     }
@@ -125,8 +123,7 @@ auto Tiles::get_terrain_replacement_rule(size_t replacement_rule) -> Terrain_rep
 
 auto Tiles::get_terrain_from_tile(terrain_tile_t terrain_tile) const -> terrain_t
 {
-    if (terrain_tile < Base_tiles::count)
-    {
+    if (terrain_tile < Base_tiles::count) {
         return static_cast<terrain_t>(terrain_tile);
     }
 
@@ -138,8 +135,7 @@ auto Tiles::get_terrain_from_tile(terrain_tile_t terrain_tile) const -> terrain_
     const terrain_t base_terrain       = terrain_group.base_terrain_type;
     const auto&     base_terrain_type  = m_terrain_types[base_terrain];
     const int       base_terrain_group = base_terrain_type.group;
-    if (base_terrain_group != group_id)
-    {
+    if (base_terrain_group != group_id) {
         log_tiles->error("base terrain group != group");
         //Expects(m_terrain_types[multishape.base_terrain_type].group == group);
     }
@@ -165,10 +161,9 @@ auto Tiles::get_terrain_group_tile(int group, unsigned int neighbor_mask) const 
 #pragma region Terrain type IO
 namespace {
 
-auto convert_city_size(int csize) -> int
+auto convert_city_size(const int csize) -> int
 {
-    switch (csize)
-    {
+    switch (csize) {
         case 16: return 4;
         case 14: return 3;
         case 12: return 2;
@@ -199,8 +194,7 @@ void Tiles::save_terrain_defs_v5()
 {
     json j;
     auto json_terrain_types = json::array();
-    for (auto& terrain_type : m_terrain_types)
-    {
+    for (auto& terrain_type : m_terrain_types) {
         json json_terrain_type;
         json_terrain_type["move_type_allow_mask"    ] = terrain_type.move_type_allow_mask;
         json_terrain_type["move_cost"               ] = terrain_type.move_cost;
@@ -232,15 +226,13 @@ void Tiles::save_terrain_defs_v5()
 void Tiles::load_terrain_defs_v5()
 {
     const std::string def_data = read_file_string("res/hextiles/terrain_types_v5.json");
-    if (def_data.empty())
-    {
+    if (def_data.empty()) {
         return;
     }
     const auto  j = json::parse(def_data);
     const auto& json_terrain_types = j["terrain_types"];
     m_terrain_types.clear();
-    for (const auto& json_terrain_type : json_terrain_types)
-    {
+    for (const auto& json_terrain_type : json_terrain_types) {
         Terrain_type terrain_type;
         terrain_type.move_type_allow_mask     = json_terrain_type["move_type_allow_mask"    ];
         terrain_type.move_cost                = json_terrain_type["move_cost"               ];
@@ -270,12 +262,10 @@ void Tiles::load_terrain_defs_v5()
 #pragma region Terrain group IO
 void Tiles::update_terrain_groups()
 {
-    for (auto& terrain_type : m_terrain_types)
-    {
+    for (auto& terrain_type : m_terrain_types) {
         terrain_type.group = -1;
     }
-    for (int group_id = 0; group_id < m_terrain_groups.size(); ++group_id)
-    {
+    for (int group_id = 0; group_id < m_terrain_groups.size(); ++group_id) {
         Terrain_group& group = m_terrain_groups[group_id];
         Expects(group.base_terrain_type < Base_tiles::count);
         m_terrain_types[group.base_terrain_type].group = group_id;
@@ -305,8 +295,7 @@ void Tiles::load_terrain_group_defs()
 
     m_terrain_groups.clear();
     m_terrain_groups.push_back(
-        Terrain_group
-        {
+        Terrain_group{
             .shape_group       = 0,
             .base_terrain_type = Terrain_road,
             .link_first        = { t11, t0, t0 },
@@ -317,8 +306,7 @@ void Tiles::load_terrain_group_defs()
         }
     );
     m_terrain_groups.push_back(
-        Terrain_group
-        {
+        Terrain_group{
             .shape_group       = 1,
             .base_terrain_type = Terrain_peak,
             .link_first        = { Terrain_peak, t0, t0 },
@@ -329,8 +317,7 @@ void Tiles::load_terrain_group_defs()
         }
     );
     m_terrain_groups.push_back(
-        Terrain_group
-        {
+        Terrain_group{
             .shape_group       = 2,
             .base_terrain_type = Terrain_forest,
             .link_first        = { Terrain_forest, t0, t0 },
@@ -341,8 +328,7 @@ void Tiles::load_terrain_group_defs()
         }
     );
     m_terrain_groups.push_back(
-        Terrain_group
-        {
+        Terrain_group{
             .shape_group       = 3,
             .base_terrain_type = Terrain_mountain,
             .link_first        = { Terrain_mountain, Terrain_peak, t0 },
@@ -353,8 +339,7 @@ void Tiles::load_terrain_group_defs()
         }
     );
     m_terrain_groups.push_back(
-        Terrain_group
-        {
+        Terrain_group{
             .shape_group       = 4,
             .base_terrain_type = Terrain_water_low_plain,
             .link_first        = { Terrain_water_low, t0, t0 },
@@ -365,8 +350,7 @@ void Tiles::load_terrain_group_defs()
         }
     );
     m_terrain_groups.push_back(
-        Terrain_group
-        {
+        Terrain_group{
             .shape_group       = 5,
             .base_terrain_type = Terrain_water_medium_low,
             .link_first        = { Terrain_water_medium,     t0, t0 },
@@ -377,8 +361,7 @@ void Tiles::load_terrain_group_defs()
         }
     );
     m_terrain_groups.push_back(
-        Terrain_group
-        {
+        Terrain_group{
             .shape_group       = 6,
             .base_terrain_type = Terrain_water_deep_medium,
             .link_first        = { Terrain_water_deep,        t0, t0 },
@@ -413,15 +396,13 @@ void Tiles::save_terrain_group_defs()
 void Tiles::load_terrain_group_defs_v1()
 {
     const std::string def_data = read_file_string("res/hextiles/terrain_groups_v1.json");
-    if (def_data.empty())
-    {
+    if (def_data.empty()) {
         return;
     }
     const auto  j = json::parse(def_data);
     const auto& json_terrain_groups = j["terrain_groups"];
     m_terrain_groups.clear();
-    for (const auto& json_terrain_group : json_terrain_groups)
-    {
+    for (const auto& json_terrain_group : json_terrain_groups) {
         Terrain_group terrain_group;
         terrain_group.enabled           = true;
         terrain_group.shape_group       = json_terrain_group["shape_group"      ];
@@ -445,8 +426,7 @@ void Tiles::save_terrain_group_defs_v1()
 {
     json j;
     auto json_terrain_groups = json::array();
-    for (auto& terrain_group : m_terrain_groups)
-    {
+    for (auto& terrain_group : m_terrain_groups) {
         json json_terrain_group;
         json_terrain_group["shape_group"      ]    = terrain_group.shape_group;
         json_terrain_group["base_terrain_type"]    = terrain_group.base_terrain_type;
@@ -484,8 +464,7 @@ void Tiles::load_terrain_replacement_rule_defs()
     constexpr terrain_t Terrain_plain             = 31u;
 
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_medium,
             .secondary   = { Terrain_plain },
@@ -493,8 +472,7 @@ void Tiles::load_terrain_replacement_rule_defs()
         }
     );
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_deep,
             .secondary   = { Terrain_plain },
@@ -503,8 +481,7 @@ void Tiles::load_terrain_replacement_rule_defs()
     );
 
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_low,
             .secondary   = { Terrain_plain },
@@ -514,8 +491,7 @@ void Tiles::load_terrain_replacement_rule_defs()
 
     // Replace non-low water next to plain with coast
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_plain,
             .secondary   = { Terrain_water_deep, Terrain_water_medium  },
@@ -524,8 +500,7 @@ void Tiles::load_terrain_replacement_rule_defs()
     );
 
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_plain,
             .secondary   = { Terrain_water_deep, Terrain_water_medium },
@@ -535,8 +510,7 @@ void Tiles::load_terrain_replacement_rule_defs()
 
     // Replace deep water next to low water with medium water
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_low,
             .secondary   = { Terrain_water_deep },
@@ -546,8 +520,7 @@ void Tiles::load_terrain_replacement_rule_defs()
 
     // Replace non-ground next to plain with coast
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = false,
             .primary     = Terrain_plain,
             .secondary   = { Terrain_plain, Terrain_mountain, Terrain_peak },
@@ -557,8 +530,7 @@ void Tiles::load_terrain_replacement_rule_defs()
 
     // Replace low water next to medium water with medium low water
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_medium,
             .secondary   = { Terrain_water_low },
@@ -568,8 +540,7 @@ void Tiles::load_terrain_replacement_rule_defs()
 
     // Replace deep water next to medium water with deep medium water
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_medium,
             .secondary   = { Terrain_water_deep },
@@ -578,8 +549,7 @@ void Tiles::load_terrain_replacement_rule_defs()
     );
 
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_low_plain,
             .secondary   = { Terrain_water_medium },
@@ -588,8 +558,7 @@ void Tiles::load_terrain_replacement_rule_defs()
     );
 
     m_terrain_replacement_rules.push_back(
-        Terrain_replacement_rule
-        {
+        Terrain_replacement_rule{
             .equal       = true,
             .primary     = Terrain_water_deep,
             .secondary   = { Terrain_water_low_plain },
@@ -601,14 +570,11 @@ void Tiles::load_terrain_replacement_rule_defs()
 #endif
     load_terrain_replacement_rule_defs_v1();
 
-    for (auto& rule : m_terrain_replacement_rules)
-    {
-        if (rule.secondary.size() > 3)
-        {
+    for (auto& rule : m_terrain_replacement_rules) {
+        if (rule.secondary.size() > 3) {
             rule.secondary.erase(rule.secondary.begin() + 3, rule.secondary.end());
         }
-        while (rule.secondary.size() < 3)
-        {
+        while (rule.secondary.size() < 3) {
             rule.secondary.push_back(terrain_t{0});
         }
     }
@@ -622,15 +588,13 @@ void Tiles::save_terrain_replacement_rule_defs()
 void Tiles::load_terrain_replacement_rule_defs_v1()
 {
     const std::string def_data = read_file_string("res/hextiles/terrain_replacement_rules_v1.json");
-    if (def_data.empty())
-    {
+    if (def_data.empty()) {
         return;
     }
     const auto  j = json::parse(def_data);
     const auto& json_rules = j["terrain_replacement_rules"];
     m_terrain_replacement_rules.clear();
-    for (const auto& json_rule : json_rules)
-    {
+    for (const auto& json_rule : json_rules) {
         Terrain_replacement_rule rule;
         rule.enabled     = json_rule["enabled"   ];
         rule.equal       = json_rule["equal"     ];
@@ -649,8 +613,7 @@ void Tiles::save_terrain_replacement_rule_defs_v1()
 {
     json j;
     auto json_rules = json::array();
-    for (auto& rule : m_terrain_replacement_rules)
-    {
+    for (auto& rule : m_terrain_replacement_rules) {
         json json_rule;
         json_rule["enabled"    ] = rule.enabled;
         json_rule["equal"      ] = rule.equal;
@@ -668,10 +631,9 @@ void Tiles::save_terrain_replacement_rule_defs_v1()
 #pragma region Unit type IO
 namespace {
 
-auto convert_btype(int value) -> uint32_t
+auto convert_btype(const int value) -> uint32_t
 {
-    switch (value)
-    {
+    switch (value) {
         case 1:  return Battle_type::bit_air;
         case 2:  return Battle_type::bit_ground;
         case 3:  return Battle_type::bit_sea;
@@ -698,15 +660,13 @@ void Tiles::save_unit_defs()
 void Tiles::load_unit_defs_v1()
 {
     const std::string def_data = read_file_string("res/hextiles/unit_types_v1.json");
-    if (def_data.empty())
-    {
+    if (def_data.empty()) {
         return;
     }
     const auto  j = json::parse(def_data);
     const auto& json_unit_types = j["unit_types"];
     m_unit_types.reserve(json_unit_types.size());
-    for (const auto& json_unit_type : json_unit_types)
-    {
+    for (const auto& json_unit_type : json_unit_types) {
         Unit_type unit_type;
         unit_type.name            = json_unit_type["Name"    ];
 
@@ -729,45 +689,35 @@ void Tiles::load_unit_defs_v1()
         static constexpr int SA_NCITY_LOAD    = 128;
         static constexpr int SA_NPRCH_UNLOAD  = 256;
 
-        if (specials & SA_HAS_PARACH)
-        {
+        if (specials & SA_HAS_PARACH) {
             unit_type.flags |= (1u << Unit_flags::bit_has_parachute);
         }
-        if (specials & SA_DO_PLAIN)
-        {
+        if (specials & SA_DO_PLAIN) {
             unit_type.flags |= (1u << Unit_flags::bit_can_build_plain);
         }
-        if (specials & SA_DO_FIELD)
-        {
+        if (specials & SA_DO_FIELD) {
             unit_type.flags |= (1u << Unit_flags::bit_can_build_field);
         }
-        if (specials & SA_DO_ROAD)
-        {
+        if (specials & SA_DO_ROAD) {
             unit_type.flags |= (1u << Unit_flags::bit_can_build_road);
         }
-        if (specials & SA_DO_BRIDGE)
-        {
+        if (specials & SA_DO_BRIDGE) {
             unit_type.flags |= (1u << Unit_flags::bit_can_build_bridge);
         }
-        if (specials & SA_DO_FORTRESS)
-        {
+        if (specials & SA_DO_FORTRESS) {
             unit_type.flags |= (1u << Unit_flags::bit_can_build_fortress);
         }
-        if ((specials & SA_DO_NOT_CDEF) == 0)
-        {
+        if ((specials & SA_DO_NOT_CDEF) == 0) {
             unit_type.flags |= (1u << Unit_flags::bit_city_defense);
         }
-        if ((specials & SA_NCITY_LOAD) == 0)
-        {
+        if ((specials & SA_NCITY_LOAD) == 0) {
             unit_type.flags |= (1u << Unit_flags::bit_city_load);
         }
-        if ((specials & SA_NPRCH_UNLOAD) == 0)
-        {
+        if ((specials & SA_NPRCH_UNLOAD) == 0) {
             unit_type.flags |= (1u << Unit_flags::bit_airdrop_unload);
         }
 
-        if (levels > 0)
-        {
+        if (levels > 0) {
             unit_type.flags |= (1u << Unit_flags::bit_has_stealth_mode);
         }
 
@@ -809,14 +759,12 @@ void Tiles::load_unit_defs_v1()
         m_unit_types.push_back(unit_type);
     }
 
-    while (m_unit_types.size() < 63)
-    {
+    while (m_unit_types.size() < 63) {
         Unit_type placeholder;
         m_unit_types.push_back(placeholder);
     }
 
-    if (m_unit_types.size() > 64)
-    {
+    if (m_unit_types.size() > 64) {
         m_unit_types.erase(m_unit_types.begin() + 64);
     }
 }
@@ -825,8 +773,7 @@ void Tiles::save_unit_defs_v2()
 {
     json j;
     auto json_unit_types = json::array();
-    for (auto& unit_type : m_unit_types)
-    {
+    for (auto& unit_type : m_unit_types) {
         json json_unit_type;
 
         json_unit_type["name"                        ]    = unit_type.name;
@@ -880,14 +827,13 @@ void Tiles::load_unit_defs_v2()
 {
     const std::string def_data = read_file_string("res/hextiles/unit_types_v2.json");
     if (def_data.empty())
-    {
+{
         return;
     }
     const auto  j = json::parse(def_data);
     const auto& json_unit_types = j["unit_types"];
     m_unit_types.clear();
-    for (const auto& json_unit_type : json_unit_types)
-    {
+    for (const auto& json_unit_type : json_unit_types) {
         Unit_type unit_type;
         std::string name                       = json_unit_type["name"                        ];
         unit_type.name.clear();
@@ -933,8 +879,7 @@ void Tiles::load_unit_defs_v2()
         m_unit_types.push_back(unit_type);
     }
 
-    if (m_unit_types.size() > 56)
-    {
+    if (m_unit_types.size() > 56) {
         m_unit_types.erase(m_unit_types.begin() + 56, m_unit_types.end());
     }
 }
@@ -945,8 +890,7 @@ auto Tiles::remove_terrain_group(int group_id) -> bool
     if (
         (group_id < 0) ||
         (group_id >= m_terrain_groups.size())
-    )
-    {
+    ) {
         return false;
     }
 
@@ -959,8 +903,7 @@ auto Tiles::remove_terrain_replacement_rule(int rule_id) -> bool
     if (
         (rule_id < 0) ||
         (rule_id >= m_terrain_replacement_rules.size())
-    )
-    {
+    ) {
         return false;
     }
 

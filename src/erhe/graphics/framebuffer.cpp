@@ -26,8 +26,7 @@ void dump_fbo_attachment(
         gl::Framebuffer_attachment_parameter_name::framebuffer_attachment_object_type,
         &type
     );
-    if (type != GL_NONE)
-    {
+    if (type != GL_NONE) {
         int name{0};
         gl::get_named_framebuffer_attachment_parameter_iv(
             fbo_name,
@@ -39,15 +38,13 @@ void dump_fbo_attachment(
         int width          {0};
         int height         {0};
         int internal_format{0};
-        if (type == GL_RENDERBUFFER)
-        {
+        if (type == GL_RENDERBUFFER) {
             gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_samples,         &samples);
             gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_width,           &width);
             gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_height,          &height);
             gl::get_named_renderbuffer_parameter_iv(name, gl::Renderbuffer_parameter_name::renderbuffer_internal_format, &internal_format);
         }
-        if (type == GL_TEXTURE)
-        {
+        if (type == GL_TEXTURE) {
             int level{0};
             gl::get_named_framebuffer_attachment_parameter_iv(
                 fbo_name, attachment,
@@ -148,10 +145,8 @@ void Framebuffer::on_thread_enter()
 {
     const std::lock_guard lock{s_mutex};
 
-    for (auto* framebuffer : s_all_framebuffers)
-    {
-        if (framebuffer->m_owner_thread == std::thread::id{})
-        {
+    for (auto* framebuffer : s_all_framebuffers) {
+        if (framebuffer->m_owner_thread == std::thread::id{}) {
             framebuffer->create();
         }
     }
@@ -164,10 +159,8 @@ void Framebuffer::on_thread_exit()
     gl::bind_framebuffer(gl::Framebuffer_target::read_framebuffer, 0);
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     auto this_thread_id = std::this_thread::get_id();
-    for (auto* framebuffer : s_all_framebuffers)
-    {
-        if (framebuffer->m_owner_thread == this_thread_id)
-        {
+    for (auto* framebuffer : s_all_framebuffers) {
+        if (framebuffer->m_owner_thread == this_thread_id) {
             framebuffer->reset();
         }
     }
@@ -181,22 +174,18 @@ void Framebuffer::reset()
 
 void Framebuffer::create()
 {
-    if (m_gl_framebuffer.has_value())
-    {
+    if (m_gl_framebuffer.has_value()) {
         ERHE_VERIFY(m_owner_thread == std::this_thread::get_id());
         return;
     }
 
     m_owner_thread = std::this_thread::get_id();
     m_gl_framebuffer.emplace(Gl_framebuffer{});
-    for (auto& attachment : m_attachments)
-    {
-        if (attachment.texture != nullptr)
-        {
+    for (auto& attachment : m_attachments) {
+        if (attachment.texture != nullptr) {
             ERHE_VERIFY(attachment.texture->width() >= 1);
             ERHE_VERIFY(attachment.texture->height() >= 1);
-            if (attachment.texture->is_layered())
-            {
+            if (attachment.texture->is_layered()) {
                 gl::named_framebuffer_texture_layer(
                     gl_name(),
                     attachment.attachment_point,
@@ -204,9 +193,7 @@ void Framebuffer::create()
                     attachment.texture_level,
                     attachment.texture_layer
                 );
-            }
-            else
-            {
+            } else {
                 gl::named_framebuffer_texture(
                     gl_name(),
                     attachment.attachment_point,
@@ -214,9 +201,7 @@ void Framebuffer::create()
                     attachment.texture_level
                 );
             }
-        }
-        else if (attachment.renderbuffer != nullptr)
-        {
+        } else if (attachment.renderbuffer != nullptr) {
             ERHE_VERIFY(attachment.renderbuffer->width() >= 1);
             ERHE_VERIFY(attachment.renderbuffer->height() >= 1);
             gl::named_framebuffer_renderbuffer(
@@ -238,8 +223,7 @@ auto Framebuffer::check_status() const -> bool
         gl_name(),
         gl::Framebuffer_target::draw_framebuffer
     );
-    if (status != gl::Framebuffer_status::framebuffer_complete)
-    {
+    if (status != gl::Framebuffer_status::framebuffer_complete) {
         log_framebuffer->warn(
             "Framebuffer {} not complete: {}",
             gl_name(),

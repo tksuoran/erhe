@@ -32,8 +32,7 @@ public:
         Expects(size <= std::numeric_limits<uint32_t>::max());
         const uint32_t size_u32 = static_cast<uint32_t>(size);
         op(size_u32);
-        for (const auto& element : v)
-        {
+        for (const auto& element : v) {
             op(v);
         }
     }
@@ -62,8 +61,7 @@ public:
         op(size_u32);
         v.resize(size_u32);
         v.shrink_to_fit();
-        for (auto& element : v)
-        {
+        for (auto& element : v) {
             op(v);
         }
     }

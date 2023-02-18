@@ -133,8 +133,7 @@ public:
             (hit_position.y < m_min.y) ||
             (hit_position.x > m_max.x) ||
             (hit_position.y > m_max.y)
-        )
-        {
+        ) {
             return false;
         }
         return true;
@@ -147,8 +146,7 @@ public:
             (hit_position.y < m_min.y) ||
             (hit_position.x > m_max.x) ||
             (hit_position.y > m_max.y)
-        )
-        {
+        ) {
             return false;
         }
         return true;

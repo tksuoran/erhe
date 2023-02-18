@@ -3,10 +3,9 @@
 namespace hextiles
 {
 
-auto Terrain_flags::c_char(uint32_t value) -> char
+auto Terrain_flags::c_char(const uint32_t value) -> char
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_can_place_coastal_city: return 'c';
         case bit_can_place_land_city   : return 'C';
         case bit_can_place_fortress    : return 'F';
@@ -19,10 +18,9 @@ auto Terrain_flags::c_char(uint32_t value) -> char
     }
 }
 
-auto Terrain_flags::c_str(uint32_t value) -> const char*
+auto Terrain_flags::c_str(const uint32_t value) -> const char*
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_can_place_coastal_city: return "Can place coastal city";
         case bit_can_place_land_city   : return "Can place land city";
         case bit_can_place_fortress    : return "Can place fortress";

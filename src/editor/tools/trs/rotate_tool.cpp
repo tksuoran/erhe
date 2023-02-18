@@ -46,8 +46,7 @@ void Rotate_tool::initialize_component()
 
 void Rotate_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    if (g_trs_tool != nullptr)
-    {
+    if (g_trs_tool != nullptr) {
         g_trs_tool->set_rotate(new_priority > old_priority);
     }
 }

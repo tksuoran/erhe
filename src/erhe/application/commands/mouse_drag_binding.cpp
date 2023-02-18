@@ -33,13 +33,11 @@ auto Mouse_drag_binding::on_button(
 ) -> bool
 {
     auto* const command = get_command();
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         return false;
     }
 
-    if (!g_commands->accept_mouse_command(command))
-    {
+    if (!g_commands->accept_mouse_command(command)) {
         ERHE_VERIFY(command->get_command_state() == State::Inactive);
         log_input_event_filtered->trace(
             "{} not active so button event ignored",
@@ -49,28 +47,21 @@ auto Mouse_drag_binding::on_button(
     }
 
     // Mouse button down when in Inactive state -> transition to Ready state
-    if (input.button_pressed)
-    {
-        if (command->get_command_state() == State::Inactive)
-        {
+    if (input.button_pressed) {
+        if (command->get_command_state() == State::Inactive) {
             command->try_ready();
         }
-        if (m_call_on_button_down_without_motion)
-        {
+        if (m_call_on_button_down_without_motion) {
             const bool active = command->get_command_state() == State::Ready;
-            if (active)
-            {
+            if (active) {
                 command->try_call_with_input(input);
             }
             return active; // Consumes event if command transitioned directly to active
         }
         return false;
-    }
-    else
-    {
+    } else {
         bool consumed = false;
-        if (command->get_command_state() != State::Inactive)
-        {
+        if (command->get_command_state() != State::Inactive) {
             // Drag binding consumes button release event only
             // if command was ini active state.
             consumed = command->get_command_state() == State::Active;
@@ -88,28 +79,23 @@ auto Mouse_drag_binding::on_button(
 auto Mouse_drag_binding::on_motion(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         return false;
     }
 
-    if (command->get_command_state() == State::Ready)
-    {
+    if (command->get_command_state() == State::Ready) {
         const auto value = input.vector2.relative_value;
-        if ((value.x != 0.0f) || (value.y != 0.0f))
-        {
+        if ((value.x != 0.0f) || (value.y != 0.0f)) {
             command->set_active();
         }
     }
 
-    if (command->get_command_state() != State::Active)
-    {
+    if (command->get_command_state() != State::Active) {
         return false;
     }
 
     const bool consumed = command->try_call_with_input(input);
-    if (consumed)
-    {
+    if (consumed) {
         log_input_event_consumed->trace(
             "{} consumed mouse drag motion",
             command->get_name()

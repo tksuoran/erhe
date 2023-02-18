@@ -40,6 +40,15 @@ public:
     auto try_call () -> bool override;
 };
 
+class Selection_tool_select_toggle_command
+    : public erhe::application::Command
+{
+public:
+    Selection_tool_select_toggle_command();
+    void try_ready() override;
+    auto try_call () -> bool override;
+};
+
 class Range_selection
 {
 public:
@@ -57,11 +66,6 @@ private:
     bool                                            m_edited{false};
     std::vector<std::shared_ptr<erhe::scene::Item>> m_entries;
 };
-
-///class ISelection_tool
-///{
-///public:
-///};
 
 class Selection_tool
     : public erhe::application::Imgui_window
@@ -106,6 +110,7 @@ public:
     // Commands
     auto on_select_try_ready() -> bool;
     auto on_select          () -> bool;
+    auto on_select_toggle   () -> bool;
 
     auto delete_selection() -> bool;
 
@@ -117,8 +122,9 @@ private:
         bool                                      clear_others
     );
 
-    Selection_tool_select_command m_select_command;
-    Selection_tool_delete_command m_delete_command;
+    Selection_tool_select_command        m_select_command;
+    Selection_tool_select_toggle_command m_select_toggle_command;
+    Selection_tool_delete_command        m_delete_command;
 
     std::vector<std::shared_ptr<erhe::scene::Item>> m_selection;
     Range_selection                                 m_range_selection;

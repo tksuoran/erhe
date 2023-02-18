@@ -84,21 +84,17 @@ void Light_mesh::initialize_component()
 
 auto Light_mesh::get_light_transform(const erhe::scene::Light& light) -> glm::mat4
 {
-    switch (light.type)
-    {
+    switch (light.type) {
         //using enum erhe::scene::Light_type;
-        case erhe::scene::Light_type::directional:
-        {
+        case erhe::scene::Light_type::directional: {
             return mat4{1.0f};
         }
 
-        case erhe::scene::Light_type::point:
-        {
+        case erhe::scene::Light_type::point: {
             return mat4{1.0f};
         }
 
-        case erhe::scene::Light_type::spot:
-        {
+        case erhe::scene::Light_type::spot: {
             //           Side:                     Bottom:              .
             //             .                    ______________          .
             //            /|\                  /       |    / \         .
@@ -121,8 +117,7 @@ auto Light_mesh::get_light_transform(const erhe::scene::Light& light) -> glm::ma
             return erhe::toolkit::create_scale(radius, radius, length);
         }
 
-        default:
-        {
+        default: {
             return mat4{1.0f};
         }
     }
@@ -133,14 +128,12 @@ auto Light_mesh::point_in_light(
     const erhe::scene::Light& light
 ) -> bool
 {
-    if (light.type != erhe::scene::Light::Type::spot)
-    {
+    if (light.type != erhe::scene::Light::Type::spot) {
         return true;
     }
 
     const auto* node = light.get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return false;
     }
 
@@ -155,12 +148,9 @@ auto Light_mesh::point_in_light(
     const float cos_angle          = glm::dot(view_in_light, vec3{0.0f, 0.0f, -1.0f});
     const bool  outside_cone_angle = (cos_angle < spot_cutoff);
     const bool  outside_cone_range = (distance < 0.0f) || (distance > range);
-    if (outside_cone_angle || outside_cone_range)
-    {
+    if (outside_cone_angle || outside_cone_range) {
         return false;
-    }
-    else
-    {
+    } else {
         return true;
     }
 }
@@ -169,26 +159,21 @@ auto Light_mesh::get_light_mesh(
     const erhe::scene::Light& light
 ) -> erhe::primitive::Primitive_geometry*
 {
-    switch (light.type)
-    {
+    switch (light.type) {
         //using enum erhe::scene::Light_type;
-        case erhe::scene::Light_type::directional:
-        {
+        case erhe::scene::Light_type::directional: {
             return &m_quad_mesh;
         }
 
-        case erhe::scene::Light_type::point:
-        {
+        case erhe::scene::Light_type::point: {
             return nullptr;
         }
 
-        case erhe::scene::Light_type::spot:
-        {
+        case erhe::scene::Light_type::spot: {
             return &m_cone_mesh;
         }
 
-        default:
-        {
+        default: {
             return nullptr;
         }
     }

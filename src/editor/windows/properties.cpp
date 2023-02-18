@@ -96,8 +96,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
             "Projection",
             ImGuiTreeNodeFlags_DefaultOpen
         )
-    )
-    {
+    ) {
         ImGui::Indent(indent);
         ImGui::SetNextItemWidth(200);
         erhe::application::make_combo(
@@ -106,11 +105,9 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
             erhe::scene::Projection::c_type_strings,
             IM_ARRAYSIZE(erhe::scene::Projection::c_type_strings)
         );
-        switch (projection->projection_type)
-        {
+        switch (projection->projection_type) {
             //using enum erhe::scene::Projection::Type;
-            case erhe::scene::Projection::Type::perspective:
-            {
+            case erhe::scene::Projection::Type::perspective: {
                 ImGui::SliderFloat("Fov X",  &projection->fov_x,  0.0f, glm::pi<float>());
                 ImGui::SliderFloat("Fov Y",  &projection->fov_y,  0.0f, glm::pi<float>());
                 ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
@@ -118,8 +115,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::perspective_xr:
-            {
+            case erhe::scene::Projection::Type::perspective_xr:{
                 ImGui::SliderFloat("Fov Left",  &projection->fov_left,  -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
                 ImGui::SliderFloat("Fov Right", &projection->fov_right, -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
                 ImGui::SliderFloat("Fov Up",    &projection->fov_up,    -glm::pi<float>() / 2.0f, glm::pi<float>() / 2.0f);
@@ -129,40 +125,35 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::perspective_horizontal:
-            {
+            case erhe::scene::Projection::Type::perspective_horizontal: {
                 ImGui::SliderFloat("Fov X",  &projection->fov_x,  0.0f, glm::pi<float>());
                 ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Far",  &projection->z_far,  0.0f, 1000.0f, "%.3f", logarithmic);
                 break;
             }
 
-            case erhe::scene::Projection::Type::perspective_vertical:
-            {
+            case erhe::scene::Projection::Type::perspective_vertical: {
                 ImGui::SliderFloat("Fov Y",  &projection->fov_y,  0.0f, glm::pi<float>());
                 ImGui::SliderFloat("Z Near", &projection->z_near, 0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Far",  &projection->z_far,  0.0f, 1000.0f, "%.3f", logarithmic);
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal_horizontal:
-            {
+            case erhe::scene::Projection::Type::orthogonal_horizontal: {
                 ImGui::SliderFloat("Width",  &projection->ortho_width, 0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Near", &projection->z_near,      0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Far",  &projection->z_far,       0.0f, 1000.0f, "%.3f", logarithmic);
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal_vertical:
-            {
+            case erhe::scene::Projection::Type::orthogonal_vertical: {
                 ImGui::SliderFloat("Height", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Near", &projection->z_near,       0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Far",  &projection->z_far,        0.0f, 1000.0f, "%.3f", logarithmic);
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal:
-            {
+            case erhe::scene::Projection::Type::orthogonal: {
                 ImGui::SliderFloat("Width",  &projection->ortho_width,  0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Height", &projection->ortho_height, 0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Z Near", &projection->z_near,       0.0f, 1000.0f, "%.3f", logarithmic);
@@ -170,8 +161,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::orthogonal_rectangle:
-            {
+            case erhe::scene::Projection::Type::orthogonal_rectangle: {
                 ImGui::SliderFloat("Left",   &projection->ortho_left,   0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Width",  &projection->ortho_width,  0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Bottom", &projection->ortho_bottom, 0.0f, 1000.0f, "%.3f", logarithmic);
@@ -181,8 +171,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::generic_frustum:
-            {
+            case erhe::scene::Projection::Type::generic_frustum: {
                 ImGui::SliderFloat("Left",   &projection->frustum_left,   0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Right",  &projection->frustum_right,  0.0f, 1000.0f, "%.3f", logarithmic);
                 ImGui::SliderFloat("Bottom", &projection->frustum_bottom, 0.0f, 1000.0f, "%.3f", logarithmic);
@@ -192,8 +181,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
                 break;
             }
 
-            case erhe::scene::Projection::Type::other:
-            {
+            case erhe::scene::Projection::Type::other: {
                 // TODO(tksuoran@gmail.com): Implement
                 break;
             }
@@ -211,16 +199,14 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
     const auto width = avail - label_size;
     {
         ImGui::SetNextItemWidth(width);
-        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic))
-        {
+        if (ImGui::SliderFloat("Exposure", &exposure, 0.0f, 2000.0f, "%.3f", logarithmic)) {
             camera.set_exposure(exposure);
         }
     }
     float shadow_range = camera.get_shadow_range();
     {
         ImGui::SetNextItemWidth(width);
-        if (ImGui::SliderFloat("Shadow Range", &shadow_range, 1.00f, 1000.0f, "%.3f", logarithmic))
-        {
+        if (ImGui::SliderFloat("Shadow Range", &shadow_range, 1.00f, 1000.0f, "%.3f", logarithmic)) {
             camera.set_shadow_range(shadow_range);
         }
     }
@@ -238,8 +224,7 @@ void Properties::light_properties(erhe::scene::Light& light) const
         erhe::scene::Light::c_type_strings,
         IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
     );
-    if (light.type == erhe::scene::Light::Type::spot)
-    {
+    if (light.type == erhe::scene::Light::Type::spot) {
         ImGui::SliderFloat("Inner Spot", &light.inner_spot_angle, 0.0f, glm::pi<float>());
         ImGui::SliderFloat("Outer Spot", &light.outer_spot_angle, 0.0f, glm::pi<float>());
     }
@@ -248,11 +233,9 @@ void Properties::light_properties(erhe::scene::Light& light) const
     ImGui::ColorEdit3 ("Color",     &light.color.x,   ImGuiColorEditFlags_Float);
 
     const auto* node = light.get_node();
-    if (node != nullptr)
-    {
+    if (node != nullptr) {
         auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
-        if (scene_root != nullptr)
-        {
+        if (scene_root != nullptr) {
             const auto& layers = scene_root->layers();
             ImGui::ColorEdit3(
                 "Ambient",
@@ -272,16 +255,14 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
     auto& mesh_data  = mesh.mesh_data;
     const auto* node = mesh.get_node();
     auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         ImGui::Text("Mesh host not set");
         return;
     }
     auto& material_library = scene_root->content_library()->materials;
 
     int primitive_index = 0;
-    for (auto& primitive : mesh_data.primitives)
-    {
+    for (auto& primitive : mesh_data.primitives) {
         const auto& geometry = primitive.source_geometry;
 
         ++primitive_index;
@@ -289,37 +270,26 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
             ? fmt::format("Primitive: {}", geometry->name)
             : fmt::format("Primitive: {}", primitive_index);
 
-        if (ImGui::TreeNodeEx(label.c_str()))
-        {
+        if (ImGui::TreeNodeEx(label.c_str())) {
             ImGui::Indent(indent);
             material_library.combo("Material", primitive.material, false);
-            if (primitive.material)
-            {
+            if (primitive.material) {
                 ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
-            }
-            else
-            {
+            } else {
                 ImGui::Text("Null material");
             }
             if (
                 geometry &&
                 ImGui::TreeNodeEx("Statistics")
-            )
-            {
+            ) {
                 ImGui::Indent(indent);
                 material_library.combo("Material", primitive.material, false);
-                if (primitive.material)
-                {
+                if (primitive.material) {
                     ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
-                }
-                else
-                {
+                } else {
                     ImGui::Text("Null material");
                 }
-                if (
-                    ImGui::TreeNodeEx("Statistics")
-                )
-                {
+                if (ImGui::TreeNodeEx("Statistics")) {
                     ImGui::Indent(indent);
                     int point_count   = geometry->get_point_count();
                     int polygon_count = geometry->get_polygon_count();
@@ -339,10 +309,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 ImGui::Unindent(indent);
                 ImGui::TreePop();
             }
-            if (
-                ImGui::TreeNodeEx("Debug")
-            )
-            {
+            if (ImGui::TreeNodeEx("Debug")) {
                 float bbox_volume    = primitive.gl_primitive_geometry.bounding_box.volume();
                 float bsphere_volume = primitive.gl_primitive_geometry.bounding_sphere.volume();
                 ImGui::Indent(indent);
@@ -405,8 +372,7 @@ auto custom_drag_scalar(
     Custom_drag_result result;
 
     ImGuiWindow* window = ImGui::GetCurrentWindow();
-    if (window->SkipItems)
-    {
+    if (window->SkipItems) {
         return result;
     }
 
@@ -421,14 +387,12 @@ auto custom_drag_scalar(
 
     const bool temp_input_allowed = (flags & ImGuiSliderFlags_NoInput) == 0;
     ImGui::ItemSize(total_bb, style.FramePadding.y);
-    if (!ImGui::ItemAdd(total_bb, id, &frame_bb, temp_input_allowed ? ImGuiItemFlags_Inputable : 0))
-    {
+    if (!ImGui::ItemAdd(total_bb, id, &frame_bb, temp_input_allowed ? ImGuiItemFlags_Inputable : 0)) {
         return result;
     }
 
     // Default format string when passing NULL
-    if (format == NULL)
-    {
+    if (format == NULL) {
         format = ImGui::DataTypeGetInfo(data_type)->PrintFmt;
     }
     //else if (data_type == ImGuiDataType_S32 && strcmp(format, "%d") != 0) // (FIXME-LEGACY: Patch old "%.0f" format string to use "%d", read function more details.)
@@ -437,31 +401,25 @@ auto custom_drag_scalar(
     // Tabbing or CTRL-clicking on Drag turns it into an InputText
     const bool hovered = ImGui::ItemHoverable(frame_bb, id);
     bool temp_input_is_active = temp_input_allowed && ImGui::TempInputIsActive(id);
-    if (!temp_input_is_active)
-    {
+    if (!temp_input_is_active) {
         const bool input_requested_by_tabbing = temp_input_allowed && (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_FocusedByTabbing) != 0;
         const bool clicked = (hovered && g.IO.MouseClicked[0]);
         const bool double_clicked = (hovered && g.IO.MouseClickedCount[0] == 2);
-        if (input_requested_by_tabbing || clicked || double_clicked || g.NavActivateId == id || g.NavActivateInputId == id)
-        {
+        if (input_requested_by_tabbing || clicked || double_clicked || g.NavActivateId == id || g.NavActivateInputId == id) {
             ImGui::SetActiveID(id, window);
             ImGui::SetFocusID(id, window);
             ImGui::FocusWindow(window);
             g.ActiveIdUsingNavDirMask = (1 << ImGuiDir_Left) | (1 << ImGuiDir_Right);
-            if (temp_input_allowed)
-            {
-                if (input_requested_by_tabbing || (clicked && g.IO.KeyCtrl) || double_clicked || g.NavActivateInputId == id)
-                {
+            if (temp_input_allowed) {
+                if (input_requested_by_tabbing || (clicked && g.IO.KeyCtrl) || double_clicked || g.NavActivateInputId == id) {
                     temp_input_is_active = true;
                 }
             }
         }
 
         // Experimental: simple click (without moving) turns Drag into an InputText
-        if (g.IO.ConfigDragClickToInputText && temp_input_allowed && !temp_input_is_active)
-        {
-            if (g.ActiveId == id && hovered && g.IO.MouseReleased[0] && !ImGui::IsMouseDragPastThreshold(0, g.IO.MouseDragThreshold * DRAG_MOUSE_THRESHOLD_FACTOR))
-            {
+        if (g.IO.ConfigDragClickToInputText && temp_input_allowed && !temp_input_is_active) {
+            if (g.ActiveId == id && hovered && g.IO.MouseReleased[0] && !ImGui::IsMouseDragPastThreshold(0, g.IO.MouseDragThreshold * DRAG_MOUSE_THRESHOLD_FACTOR)) {
                 g.NavActivateId = g.NavActivateInputId = id;
                 g.NavActivateFlags = ImGuiActivateFlags_PreferInput;
                 temp_input_is_active = true;
@@ -469,8 +427,7 @@ auto custom_drag_scalar(
         }
     }
 
-    if (temp_input_is_active)
-    {
+    if (temp_input_is_active) {
         // Only clamp CTRL+Click input when ImGuiSliderFlags_AlwaysClamp is set
         const bool is_clamp_input = (flags & ImGuiSliderFlags_AlwaysClamp) != 0 && (p_min == NULL || p_max == NULL || ImGui::DataTypeCompare(data_type, p_min, p_max) < 0);
         result.text_edited = ImGui::TempInputScalar(frame_bb, id, label, data_type, p_data, format, is_clamp_input ? p_min : NULL, is_clamp_input ? p_max : NULL);
@@ -484,22 +441,19 @@ auto custom_drag_scalar(
 
     // Drag behavior
     result.drag_edited = ImGui::DragBehavior(id, data_type, p_data, v_speed, p_min, p_max, format, flags);
-    if (result.drag_edited)
-    {
+    if (result.drag_edited) {
         ImGui::MarkItemEdited(id);
     }
 
     // Display value using user-provided display format so user can add prefix/suffix/decorations to the value.
     char value_buf[64];
     const char* value_buf_end = value_buf + ImGui::DataTypeFormatString(value_buf, IM_ARRAYSIZE(value_buf), data_type, p_data, format);
-    if (g.LogEnabled)
-    {
+    if (g.LogEnabled) {
         ImGui::LogSetNextTextDecoration("{", "}");
     }
     ImGui::RenderTextClipped(frame_bb.Min, frame_bb.Max, value_buf, value_buf_end, NULL, ImVec2(0.5f, 0.5f));
 
-    if (label_size.x > 0.0f)
-    {
+    if (label_size.x > 0.0f) {
         ImGui::RenderText(ImVec2(frame_bb.Max.x + style.ItemInnerSpacing.x, frame_bb.Min.y + style.FramePadding.y), label);
     }
 
@@ -533,20 +487,16 @@ auto Properties::make_scalar_button(
     const bool edit_ended    = ImGui::IsItemDeactivatedAfterEdit();
     //const bool item_edited   = ImGui::IsItemEdited();
     //const bool item_active   = ImGui::IsItemActive();
-    //if (value_changed.drag_edited)
-    //{
+    //if (value_changed.drag_edited) {
     //    log_node_properties->trace("drag edited for {}", label);
     //}
-    //if (value_changed.text_edited)
-    //{
+    //if (value_changed.text_edited) {
     //    log_node_properties->trace("text edited for {}", label);
     //}
-    //if (item_edited)
-    //{
+    //if (item_edited) {
     //    log_node_properties->trace("item_edited for {}", label);
     //}
-    //if (edit_ended)
-    //{
+    //if (edit_ended) {
     //    log_node_properties->trace("edit_ended for {}", label);
     //}
     return Value_edit_state{
@@ -590,8 +540,7 @@ auto Properties::make_angle_button(
     );
     const bool edit_ended    = ImGui::IsItemDeactivatedAfterEdit();
     const bool value_changed = drag_result.drag_edited || (drag_result.text_edited && edit_ended);
-    if (value_changed)
-    {
+    if (value_changed) {
         radians_value = glm::radians<float>(degrees_value);
     }
     return Value_edit_state{
@@ -611,10 +560,8 @@ Properties::Node_state::Node_state(erhe::scene::Node& node)
 
 auto Properties::get_node_state(erhe::scene::Node& node) -> Node_state&
 {
-    for (auto& entry : m_node_states)
-    {
-        if (entry.node == &node)
-        {
+    for (auto& entry : m_node_states) {
+        if (entry.node == &node) {
             return entry;
         }
     }
@@ -641,10 +588,7 @@ void Properties::transform_properties(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (
-        !ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)
-    )
-    {
+    if (!ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
@@ -665,24 +609,21 @@ void Properties::transform_properties(erhe::scene::Node& node)
     glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
 
     Value_edit_state edit_state;
-    if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen))
-    {
+    if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen)) {
         edit_state.combine(make_scalar_button(&translation.x, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
         edit_state.combine(make_scalar_button(&translation.y, 0xff88ff88u, 0xff226622u, "Y", "##T.Y"));
         edit_state.combine(make_scalar_button(&translation.z, 0xffff8888u, 0xff662222u, "Z", "##T.Z"));
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen))
-    {
+    if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen)) {
         edit_state.combine(make_angle_button(euler_angles.x, 0xff8888ffu, 0xff222266u, "X", "##R.X"));
         edit_state.combine(make_angle_button(euler_angles.y, 0xff88ff88u, 0xff226622u, "Y", "##R.Y"));
         edit_state.combine(make_angle_button(euler_angles.z, 0xffff8888u, 0xff662222u, "Z", "##R.Z"));
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNode("Scale"))
-    {
+    if (ImGui::TreeNode("Scale")) {
         edit_state.combine(make_scalar_button(&scale.x, 0xff8888ffu, 0xff222266u, "X", "##S.X"));
         edit_state.combine(make_scalar_button(&scale.y, 0xff88ff88u, 0xff226622u, "Y", "##S.Y"));
         edit_state.combine(make_scalar_button(&scale.z, 0xffff8888u, 0xff662222u, "Z", "##S.Z"));
@@ -693,30 +634,24 @@ void Properties::transform_properties(erhe::scene::Node& node)
     if (
         edit_state.value_changed ||
         edit_state.edit_ended
-    )
-    {
+    ) {
         node_state.touched = true;
         const glm::mat4 new_translation     = erhe::toolkit::create_translation<float>(translation);
         const glm::mat4 new_rotation        = glm::eulerAngleZYX(euler_angles.x, euler_angles.y, euler_angles.z);
         const glm::mat4 new_scale           = erhe::toolkit::create_scale<float>(scale);
         const glm::mat4 new_world_from_node = new_translation * new_rotation * new_scale;
         const auto current_parent = node.parent().lock();
-        if (!current_parent)
-        {
+        if (!current_parent) {
             new_parent_from_node = erhe::scene::Transform{new_world_from_node};
-        }
-        else
-        {
+        } else {
             new_parent_from_node = current_parent->node_from_world_transform() * erhe::scene::Transform{new_world_from_node};
         }
-        if (!edit_state.edit_ended)
-        {
+        if (!edit_state.edit_ended) {
             node.set_parent_from_node(new_parent_from_node);
         }
     }
 
-    if (edit_state.edit_ended && node_state.touched)
-    {
+    if (edit_state.edit_ended && node_state.touched) {
         g_operation_stack->push(
             std::make_shared<Node_transform_operation>(
                 Node_transform_operation::Parameters{
@@ -729,8 +664,7 @@ void Properties::transform_properties(erhe::scene::Node& node)
         node_state.touched = false;
     }
 
-    if (!node_state.touched)
-    {
+    if (!node_state.touched) {
         drop_node_state(node);
     }
 
@@ -766,8 +700,7 @@ namespace {
 void Properties::node_physics_properties(Node_physics& node_physics) const
 {
     erhe::physics::IRigid_body* rigid_body = node_physics.rigid_body();
-    if (rigid_body == nullptr)
-    {
+    if (rigid_body == nullptr) {
         return;
     }
 
@@ -787,15 +720,13 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
     }
 
     // Static bodies don't have access to these properties, at least in Jolt
-    if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_static)
-    {
+    if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_static) {
         float angular_damping = rigid_body->get_angular_damping();
         float linear_damping = rigid_body->get_linear_damping();
         if (
             ImGui::SliderFloat("Angular Dampening", &angular_damping, 0.0f, 1.0f) ||
             ImGui::SliderFloat("Linear Dampening", &linear_damping, 0.0f, 1.0f)
-        )
-        {
+        ) {
             rigid_body->set_damping(linear_damping, angular_damping);
         }
 
@@ -815,16 +746,14 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
             erhe::physics::c_motion_mode_strings,
             IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
         )
-    )
-    {
+    ) {
         rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
     }
 }
 
 void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
 {
-    if (!ImGui::TreeNodeEx("Flags"))
-    {
+    if (!ImGui::TreeNodeEx("Flags")) {
         return;
     }
 
@@ -834,25 +763,17 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
     using Item_flags = erhe::scene::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();
-    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position)
-    {
+    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
         const uint64_t bit_mask = uint64_t{1} << bit_position;
         bool           value    = test_all_rhs_bits_set(flags, bit_mask);
-        if (ImGui::Checkbox(Item_flags::c_bit_labels[bit_position], &value))
-        {
-            if (bit_mask == Item_flags::selected)
-            {
-                if (value)
-                {
+        if (ImGui::Checkbox(Item_flags::c_bit_labels[bit_position], &value)) {
+            if (bit_mask == Item_flags::selected) {
+                if (value) {
                     g_selection_tool->add_to_selection(item);
-                }
-                else
-                {
+                } else {
                     g_selection_tool->remove_from_selection(item);
                 }
-            }
-            else
-            {
+            } else {
                 item->set_flag_bits(bit_mask, value);
             }
         }
@@ -874,8 +795,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
 
 void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
 {
-    if (is_raytrace(item)) // currently nothing to show, so hidden from user
-    {
+    if (is_raytrace(item)) { // currently nothing to show, so hidden from user
         return;
     }
 
@@ -885,28 +805,23 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
             ImGuiTreeNodeFlags_Framed |
             ImGuiTreeNodeFlags_DefaultOpen
         )
-    )
-    {
+    ) {
         return;
     }
 
     ImGui::PushID(item->get_label().c_str());
 
-    if (show_item_details(item.get()))
-    {
+    if (show_item_details(item.get())) {
         std::string name = item->get_name();
-        if (ImGui::InputText("Name", &name, ImGuiInputTextFlags_EnterReturnsTrue))
-        {
-            if (name != item->get_name())
-            {
+        if (ImGui::InputText("Name", &name, ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (name != item->get_name()) {
                 item->set_name(name);
             }
         }
 
         item_flags(item);
 
-        if (!is_light(item)) // light uses light color, so hide item color
-        {
+        if (!is_light(item)) { // light uses light color, so hide item color
             glm::vec4 color = item->get_wireframe_color();
             if (
                 ImGui::ColorEdit4(
@@ -915,46 +830,39 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
                     ImGuiColorEditFlags_Float |
                     ImGuiColorEditFlags_NoInputs
                 )
-            )
-            {
+            ) {
                 item->set_wireframe_color(color);
             }
         }
     }
 
     auto node_physics = as_physics(item);
-    if (node_physics)
-    {
+    if (node_physics) {
         node_physics_properties(*node_physics);
     }
 
     auto camera = as_camera(item);
-    if (camera)
-    {
+    if (camera) {
         camera_properties(*camera);
     }
 
     auto light = as_light(item);
-    if (light)
-    {
+    if (light) {
         light_properties(*light);
     }
 
     auto mesh = as_mesh(item);
-    if (mesh)
-    {
+    if (mesh) {
         mesh_properties(*mesh);
     }
 
     auto rendertarget = as_rendertarget(item);
-    if (rendertarget)
-    {
+    if (rendertarget) {
         rendertarget_properties(*rendertarget);
     }
 
     const auto node = as_node(item);
-    if (node)
-    {
+    if (node){
         transform_properties(*node.get());
     }
 
@@ -969,19 +877,16 @@ void Properties::imgui()
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto selected_material = g_content_library_window->selected_material();
-    if (selected_material)
-    {
+    if (selected_material) {
         if (
             ImGui::TreeNodeEx(
                 "Material",
                 ImGuiTreeNodeFlags_Framed |
                 ImGuiTreeNodeFlags_DefaultOpen
             )
-        )
-        {
+        ) {
             std::string name = selected_material->get_name();
-            if (ImGui::InputText("Name", &name))
-            {
+            if (ImGui::InputText("Name", &name)) {
                 selected_material->set_name(name);
             }
             g_material_preview->render_preview(selected_material);
@@ -997,14 +902,12 @@ void Properties::imgui()
     }
 #endif
 
-    if (g_selection_tool == nullptr)
-    {
+    if (g_selection_tool == nullptr) {
         return;
     }
 
     const auto& selection = g_selection_tool->selection();
-    for (const auto& item : selection)
-    {
+    for (const auto& item : selection) {
         ERHE_VERIFY(item);
         item_properties(item);
     }

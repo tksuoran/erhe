@@ -39,16 +39,13 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
         source.for_each_point_const([&](auto& i)
         {
             const auto n = static_cast<float>(i.point.corner_count);
-            if (i.point.corner_count >= 3)
-            {
+            if (i.point.corner_count >= 3) {
                 // n = 0   -> centroid points, safe to skip
                 // n = 1,2 -> ?
                 // n = 3   -> ?
                 const float weight = (n - 3.0f) / n;
                 make_new_point_from_point(weight, i.point_id);
-            }
-            else
-            {
+            } else {
                 make_new_point_from_point(1.0f, i.point_id);
             }
         });

@@ -16,8 +16,7 @@ auto Mouse_motion_binding::on_motion(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
 
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         return false;
     }
 

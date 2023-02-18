@@ -12,27 +12,23 @@
 namespace hextiles
 {
 
-[[nodiscard]] auto clamp(float x, float lowerlimit, float upperlimit) -> float
+[[nodiscard]] auto clamp(float x, const float lowerlimit, const float upperlimit) -> float
 {
-    if (x < lowerlimit)
-    {
+    if (x < lowerlimit) {
         x = lowerlimit;
     }
-    if (x > upperlimit)
-    {
+    if (x > upperlimit) {
         x = upperlimit;
     }
     return x;
 }
 
-[[nodiscard]] auto smoothstep(float edge0, float edge1, float x) -> float
+[[nodiscard]] auto smoothstep(const float edge0, const float edge1, const float x) -> float
 {
-    if (x == 0.0f)
-    {
+    if (x == 0.0f) {
         return 0.0f;
     }
-    if (x == 1.0f)
-    {
+    if (x == 1.0f) {
         return 1.0f;
     }
 
@@ -43,14 +39,12 @@ namespace hextiles
     return x * x * (3.0f - 2.0f * x);
 }
 
-[[nodiscard]] auto smootherstep(float edge0, float edge1, float x) -> float
+[[nodiscard]] auto smootherstep(const float edge0, const float edge1, const float x) -> float
 {
-    if (x == 0.0f)
-    {
+    if (x == 0.0f) {
         return 0.0f;
     }
-    if (x == 1.0f)
-    {
+    if (x == 1.0f) {
         return 1.0f;
     }
 
@@ -115,13 +109,11 @@ void Player::animate_current_unit()
 
 void Player::update()
 {
-    if (m_current_unit < cities.size())
-    {
+    if (m_current_unit < cities.size()) {
         return; // TODO
     }
 
-    if (m_move.has_value())
-    {
+    if (m_move.has_value()) {
         const Move&           move         = m_move.value();
         const size_t          unit_index   = m_current_unit - cities.size();
         Unit& unit = units.at(unit_index);
@@ -141,8 +133,7 @@ void Player::update()
 void Player::move_unit(direction_t direction)
 {
     // Cities can not be moved
-    if (m_current_unit < cities.size())
-    {
+    if (m_current_unit < cities.size()) {
         return;
     }
 
@@ -169,29 +160,21 @@ void Player::move_unit(direction_t direction)
 
 void Player::select_unit(int direction)
 {
-    if (m_current_unit >= cities.size())
-    {
+    if (m_current_unit >= cities.size()) {
         const size_t unit_index = m_current_unit - cities.size();
         Unit& unit = units.at(unit_index);
         g_game->reveal(map, unit.location, 0);
     }
 
-    if (direction > 0)
-    {
+    if (direction > 0) {
         ++m_current_unit;
-        if (m_current_unit >= (cities.size() + units.size()))
-        {
+        if (m_current_unit >= (cities.size() + units.size())) {
             m_current_unit = 0;
         }
-    }
-    else
-    {
-        if (m_current_unit > 0)
-        {
+    } else {
+        if (m_current_unit > 0) {
             --m_current_unit;
-        }
-        else
-        {
+        } else {
             m_current_unit = cities.size() + units.size() - 1;
         }
     }
@@ -201,22 +184,17 @@ void Player::imgui()
 {
     constexpr ImVec2 button_size{110.0f, 0.0f};
 
-    if (ImGui::Button("Next Unit", button_size))
-    {
+    if (ImGui::Button("Next Unit", button_size)) {
         select_unit(1);
     }
 
-    if (ImGui::Button("Previous Unit", button_size))
-    {
+    if (ImGui::Button("Previous Unit", button_size)) {
         select_unit(-1);
     }
 
-    if (m_current_unit < cities.size())
-    {
+    if (m_current_unit < cities.size()) {
         city_imgui();
-    }
-    else
-    {
+    } else {
         unit_imgui();
     }
 }
@@ -228,14 +206,11 @@ void Player::fog_of_war()
     const coordinate_t height     = static_cast<coordinate_t>(map.height());
     const unit_tile_t  fog_of_war = g_tile_renderer->get_special_unit_tile(Special_unit_tiles::fog_of_war);
     const unit_tile_t  half_fog   = g_tile_renderer->get_special_unit_tile(Special_unit_tiles::half_fog_of_war);
-    for (coordinate_t y = 0; y < height; ++y)
-    {
-        for (coordinate_t x = 0; x < width; ++x)
-        {
+    for (coordinate_t y = 0; y < height; ++y) {
+        for (coordinate_t x = 0; x < width; ++x) {
             const Tile_coordinate position{x, y};
             const unit_tile_t     old_unit_tile = map.get_unit_tile(position);
-            if (old_unit_tile != fog_of_war)
-            {
+            if (old_unit_tile != fog_of_war) {
                 map.set_unit_tile(
                     Tile_coordinate{x, y},
                     half_fog
@@ -245,13 +220,11 @@ void Player::fog_of_war()
     }
 
     // Step 2: Reveal map cells that can be seen
-    for (Unit& city : cities)
-    {
+    for (Unit& city : cities) {
         const Unit_type& unit_type = g_tiles->get_unit_type(city.type);
         g_game->reveal(map, city.location, unit_type.vision_range[0]);
     }
-    for (Unit& unit : units)
-    {
+    for (Unit& unit : units) {
         const Unit_type& unit_type = g_tiles->get_unit_type(unit.type);
         g_game->reveal(map, unit.location, unit_type.vision_range[0]);
     }
@@ -259,8 +232,7 @@ void Player::fog_of_war()
 
 void Player::update_units()
 {
-    for (Unit& unit : units)
-    {
+    for (Unit& unit : units) {
         const Unit_type& unit_type = g_tiles->get_unit_type(unit.type);
         unit.move_points = unit_type.move_points[0];
         // TODO repair and refuel if in city or carrier
@@ -270,16 +242,13 @@ void Player::update_units()
 void Player::update_cities()
 {
     // Progress production
-    for (Unit& city : cities)
-    {
-        if (city.production == unit_t{0})
-        {
+    for (Unit& city : cities) {
+        if (city.production == unit_t{0}) {
             continue;
         }
         //Unit_type& product = context.tiles.get_unit_type(city.production);
         ++city.production_progress;
-        if (city.production_progress >= 1) //product.production_time)
-        {
+        if (city.production_progress >= 1) { //product.production_time)
             Unit unit = g_game->make_unit(city.production, city.location);
             units.push_back(unit);
             city.production_progress = 0;

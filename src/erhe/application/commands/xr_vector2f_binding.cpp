@@ -29,15 +29,13 @@ auto Xr_vector2f_binding::on_value_changed(
 ) -> bool
 {
     auto* const command = get_command();
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         return false;
     }
 
     command->try_ready();
     const bool consumed = command->try_call_with_input(input);
-    if (consumed)
-    {
+    if (consumed) {
         log_input_event_consumed->info(
             "{} consumed controller OpenXR vector2f input event",
             command->get_name()

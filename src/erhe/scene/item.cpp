@@ -8,7 +8,7 @@
 namespace erhe::scene
 {
 
-[[nodiscard]] auto Item_flags::to_string(uint64_t flags) -> std::string
+[[nodiscard]] auto Item_flags::to_string(const uint64_t flags) -> std::string
 {
     std::stringstream ss;
 
@@ -16,14 +16,11 @@ namespace erhe::scene
     using Item_flags = erhe::scene::Item_flags;
 
     bool first = true;
-    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position)
-    {
+    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
         const bool     value    = test_all_rhs_bits_set(flags, bit_mask);
-        if (value)
-        {
-            if (!first)
-            {
+        if (value) {
+            if (!first) {
                 ss << " | ";
             }
             ss << Item_flags::c_bit_labels[bit_position];
@@ -35,25 +32,19 @@ namespace erhe::scene
 
 auto Item_filter::operator()(const uint64_t visibility_mask) const -> bool
 {
-    if ((visibility_mask & require_all_bits_set) != require_all_bits_set)
-    {
+    if ((visibility_mask & require_all_bits_set) != require_all_bits_set) {
         return false;
     }
-    if (require_at_least_one_bit_set != 0u)
-    {
-        if ((visibility_mask & require_at_least_one_bit_set) == 0u)
-        {
+    if (require_at_least_one_bit_set != 0u) {
+        if ((visibility_mask & require_at_least_one_bit_set) == 0u) {
             return false;
         }
     }
-    if ((visibility_mask & require_all_bits_clear) != 0u)
-    {
+    if ((visibility_mask & require_all_bits_clear) != 0u) {
         return false;
     }
-    if (require_at_least_one_bit_clear != 0u)
-    {
-        if ((visibility_mask & require_at_least_one_bit_clear) == require_at_least_one_bit_clear)
-        {
+    if (require_at_least_one_bit_clear != 0u) {
+        if ((visibility_mask & require_at_least_one_bit_clear) == require_at_least_one_bit_clear) {
             return false;
         }
     }
@@ -114,17 +105,13 @@ auto Item::get_flag_bits() const -> uint64_t
 void Item::set_flag_bits(const uint64_t mask, const bool value)
 {
     const auto old_flag_bits = m_flag_bits;
-    if (value)
-    {
+    if (value) {
         m_flag_bits = m_flag_bits | mask;
-    }
-    else
-    {
+    } else {
         m_flag_bits = m_flag_bits & ~mask;
     }
 
-    if (m_flag_bits != old_flag_bits)
-    {
+    if (m_flag_bits != old_flag_bits) {
         handle_flag_bits_update(old_flag_bits, m_flag_bits);
     }
 }

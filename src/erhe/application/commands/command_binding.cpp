@@ -19,13 +19,11 @@ auto Command_binding::get_command() const -> Command*
 
 auto Command_binding::is_command_host_enabled() const -> bool
 {
-    if (m_command == nullptr)
-    {
+    if (m_command == nullptr) {
         return false;
     }
     auto* const host = m_command->get_host();
-    if (host == nullptr)
-    {
+    if (host == nullptr) {
         return true;
     }
     return host->is_enabled();
@@ -33,13 +31,11 @@ auto Command_binding::is_command_host_enabled() const -> bool
 
 auto Command_binding::get_command_host_description() const -> const char*
 {
-    if (m_command == nullptr)
-    {
+    if (m_command == nullptr) {
         return "(no command)";
     }
     auto* const host = m_command->get_host();
-    if (host == nullptr)
-    {
+    if (host == nullptr) {
         return "(no host)";
     }
     return host->get_description();

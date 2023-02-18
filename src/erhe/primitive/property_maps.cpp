@@ -42,19 +42,16 @@ Property_maps::Property_maps(
     point_texcoords      = geometry.point_attributes  ().find<vec2>(erhe::geometry::c_point_texcoords     );
     point_colors         = geometry.point_attributes  ().find<vec4>(erhe::geometry::c_point_colors        );
 
-    if (point_locations == nullptr)
-    {
+    if (point_locations == nullptr) {
         log_primitive_builder->error("geometry has no point locations");
         return;
     }
 
-    if (format_info.features.id)
-    {
+    if (format_info.features.id) {
         polygon_ids_vector3 = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_ids_vec3);
         log_primitive_builder->trace("created polygon_ids_vec3");
 
-        if (erhe::graphics::Instance::info.use_integer_polygon_ids)
-        {
+        if (erhe::graphics::Instance::info.use_integer_polygon_ids) {
             polygon_ids_uint32 = polygon_attributes.create<unsigned int>(erhe::geometry::c_polygon_ids_uint);
             log_primitive_builder->trace("created polygon_ids_uint");
         }
@@ -62,33 +59,27 @@ Property_maps::Property_maps(
 
     // TODO This should be done externally before calling primitive builder
 #if 1
-    if (format_info.features.normal)
-    {
-        if (polygon_normals == nullptr)
-        {
+    if (format_info.features.normal) {
+        if (polygon_normals == nullptr) {
             polygon_normals = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_normals);
         }
-        if (!geometry.has_polygon_normals())
-        {
+        if (!geometry.has_polygon_normals()) {
             geometry.for_each_polygon_const(
                 [this, &geometry](auto& i)
                 {
-                    if (!polygon_normals->has(i.polygon_id))
-                    {
+                    if (!polygon_normals->has(i.polygon_id)) {
                         i.polygon.compute_normal(i.polygon_id, geometry, *polygon_normals, *point_locations);
                     }
                 }
             );
         }
-        if ((corner_normals == nullptr) && (point_normals == nullptr) && (point_normals_smooth == nullptr))
-        {
+        if ((corner_normals == nullptr) && (point_normals == nullptr) && (point_normals_smooth == nullptr)) {
             corner_normals = corner_attributes.create<vec3>(erhe::geometry::c_corner_normals);
             geometry.smooth_normalize(*corner_normals, *polygon_normals, *polygon_normals, 0.0f);
         }
     }
 
-    if (format_info.features.normal_smooth && (point_normals_smooth == nullptr))
-    {
+    if (format_info.features.normal_smooth && (point_normals_smooth == nullptr)) {
         log_primitive_builder->trace("computing point_normals_smooth");
         point_normals_smooth = point_attributes.create<vec3>(erhe::geometry::c_point_normals_smooth);
         geometry.for_each_point_const(
@@ -100,12 +91,9 @@ Property_maps::Property_maps(
                     [this, &geometry, &normal_sum](auto& j)
                     {
                         const erhe::geometry::Polygon_id polygon_id = j.corner.polygon_id;
-                        if (polygon_normals->has(polygon_id))
-                        {
+                        if (polygon_normals->has(polygon_id)) {
                             normal_sum += polygon_normals->get(polygon_id);
-                        }
-                        else
-                        {
+                        } else {
                             //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons", __func__);
                             const auto& polygon = geometry.polygons[polygon_id];
                             const vec3  normal  = polygon.compute_normal(geometry, *point_locations);
@@ -118,19 +106,15 @@ Property_maps::Property_maps(
         );
     }
 
-    if (format_info.features.centroid_points)
-    {
-        if (polygon_centroids == nullptr)
-        {
+    if (format_info.features.centroid_points) {
+        if (polygon_centroids == nullptr) {
             polygon_centroids = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_centroids);
         }
-        if (!geometry.has_polygon_centroids())
-        {
+        if (!geometry.has_polygon_centroids()) {
             geometry.for_each_polygon_const(
                 [this, &geometry](auto& i)
                 {
-                    if (!polygon_centroids->has(i.polygon_id))
-                    {
+                    if (!polygon_centroids->has(i.polygon_id)) {
                         i.polygon.compute_centroid(i.polygon_id, geometry, *polygon_centroids, *point_locations);
                     }
                 }

@@ -22,8 +22,7 @@ Json_library::Json_library(const std::filesystem::path& path)
     ERHE_PROFILE_FUNCTION
 
     const auto opt_text = erhe::toolkit::read(path);
-    if (!opt_text.has_value())
-    {
+    if (!opt_text.has_value()) {
         return;
     }
 
@@ -36,28 +35,22 @@ Json_library::Json_library(const std::filesystem::path& path)
 
     {
         ERHE_PROFILE_SCOPE("collect categories");
-        for (auto i = m_json.MemberBegin(), end = m_json.MemberEnd(); i != end; ++i)
-        {
+        for (auto i = m_json.MemberBegin(), end = m_json.MemberEnd(); i != end; ++i) {
             const std::string key_name       = (*i).name.GetString();
             const auto&       category_names = (*i).value["category"].GetArray();
 
-            for (auto& category_name_object : category_names)
-            {
+            for (auto& category_name_object : category_names) {
                 std::string category_name = category_name_object.GetString();
                 const auto j = std::find_if(
                     categories.begin(),
                     categories.end(),
-                    [category_name](const Category& category)
-                    {
+                    [category_name](const Category& category) {
                         return category.category_name == category_name;
                     }
                 );
-                if (j != categories.end())
-                {
+                if (j != categories.end()) {
                     j->key_names.emplace_back(key_name);
-                }
-                else
-                {
+                } else {
                     auto& category = categories.emplace_back(std::move(category_name));
                     category.key_names.emplace_back(key_name);
                 }
@@ -74,8 +67,7 @@ auto Json_library::make_geometry(
     ERHE_PROFILE_FUNCTION
 
     const auto mesh = m_json.FindMember(key_name.c_str());
-    if (mesh == m_json.MemberEnd())
-    {
+    if (mesh == m_json.MemberEnd()) {
         return {};
     }
 
@@ -85,8 +77,7 @@ auto Json_library::make_geometry(
     const auto& points = (*mesh).value["vertex"];
     {
         ERHE_PROFILE_SCOPE("points");
-        for (auto& i : points.GetArray())
-        {
+        for (auto& i : points.GetArray()) {
             assert(i.IsArray());
             const float x = i[0].GetFloat();
             const float y = i[1].GetFloat();
@@ -98,15 +89,12 @@ auto Json_library::make_geometry(
     const auto& polygons = (*mesh).value["face"];
     {
         ERHE_PROFILE_SCOPE("faces");
-        for (auto& polygon : polygons.GetArray())
-        {
+        for (auto& polygon : polygons.GetArray()) {
             assert(polygon.IsArray());
             auto g_polygon = geometry.make_polygon();
-            for (auto& corner : polygon.GetArray())
-            {
+            for (auto& corner : polygon.GetArray()) {
                 const int index = corner.GetInt();
-                if (index < (int)geometry.get_point_count())
-                {
+                if (index < (int)geometry.get_point_count()) {
                     geometry.make_polygon_corner(g_polygon, index);
                 }
             }

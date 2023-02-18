@@ -47,13 +47,11 @@ void Map::read(File_read_stream& stream)
     Expects(m_height > 0);
     m_map.resize(static_cast<size_t>(m_width) * static_cast<size_t>(m_height));
     //m_map.shrink_to_fit();
-    for (auto& cell : m_map)
-    {
+    for (auto& cell : m_map) {
         stream.op(cell.terrain_tile);
         stream.op(cell.unit_tile);
         /// XXX TODO FIXME
-        if (cell.terrain_tile > 55)
-        {
+        if (cell.terrain_tile > 55) {
             ++cell.terrain_tile;
         }
     }
@@ -63,8 +61,7 @@ void Map::write(File_write_stream& stream)
 {
     stream.op(m_width);
     stream.op(m_height);
-    for (auto& cell : m_map)
-    {
+    for (auto& cell : m_map) {
         stream.op(cell.terrain_tile);
         stream.op(cell.unit_tile);
     }
@@ -135,20 +132,16 @@ void Map::set(Tile_coordinate tile_coordinate, terrain_tile_t terrain_tile, unit
 auto Map::wrap(Tile_coordinate in) const -> Tile_coordinate
 {
     Tile_coordinate ret = in;
-    while (ret.x >= m_width)
-    {
+    while (ret.x >= m_width) {
         ret.x -= static_cast<coordinate_t>(m_width);
     }
-    while (ret.x < coordinate_t{0})
-    {
+    while (ret.x < coordinate_t{0}) {
         ret.x += static_cast<coordinate_t>(m_width);
     }
-    while (ret.y >= m_height)
-    {
+    while (ret.y >= m_height) {
         ret.y -= static_cast<coordinate_t>(m_height);
     }
-    while (ret.y < coordinate_t{0})
-    {
+    while (ret.y < coordinate_t{0}) {
         ret.y += static_cast<coordinate_t>(m_height);
     }
     Expects(ret.x >= coordinate_t{0});
@@ -162,20 +155,16 @@ auto Map::wrap(Tile_coordinate in) const -> Tile_coordinate
 auto Map::wrap_center(Tile_coordinate in) const -> Tile_coordinate
 {
     Tile_coordinate ret = in;
-    while (ret.x >= m_width / 2)
-    {
+    while (ret.x >= m_width / 2) {
         ret.x -= static_cast<coordinate_t>(m_width);
     }
-    while (ret.x < -m_width / 2)
-    {
+    while (ret.x < -m_width / 2) {
         ret.x += static_cast<coordinate_t>(m_width);
     }
-    while (ret.y >= m_height / 2)
-    {
+    while (ret.y >= m_height / 2) {
         ret.y -= static_cast<coordinate_t>(m_height);
     }
-    while (ret.y < -m_height / 2)
-    {
+    while (ret.y < -m_height / 2) {
         ret.y += static_cast<coordinate_t>(m_height);
     }
     return ret;
@@ -191,10 +180,8 @@ auto Map::neighbor(
 
 void Map::for_each_tile(const std::function<void(Tile_coordinate position)>& op)
 {
-    for (coordinate_t ty = 0; ty < m_height; ++ty)
-    {
-        for (coordinate_t tx = 0; tx < m_width; ++tx)
-        {
+    for (coordinate_t ty = 0; ty < m_height; ++ty) {
+        for (coordinate_t tx = 0; tx < m_width; ++tx) {
             const Tile_coordinate tile_position{tx, ty};
             op(tile_position);
         }
@@ -202,34 +189,29 @@ void Map::for_each_tile(const std::function<void(Tile_coordinate position)>& op)
 }
 
 void Map::hex_circle(
-    Tile_coordinate                                            center_position,
+    const Tile_coordinate                                      center_position,
     int                                                        r0,
-    int                                                        r1,
+    const int                                                  r1,
     const std::function<void(const Tile_coordinate position)>& op
 )
 {
     Expects(r0 >= 0);
     Expects(r1 >= r0);
 
-    if (r0 == 0)
-    {
+    if (r0 == 0) {
         op(center_position);
         r0 = 1;
     }
 
     constexpr direction_t offset{2};
 
-    for (int radius = r0; radius <= r1; ++radius)
-    {
+    for (int radius = r0; radius <= r1; ++radius) {
         auto position = center_position;
-        for (int s = 0; s < radius; ++s)
-        {
+        for (int s = 0; s < radius; ++s) {
             position = wrap(position.neighbor(direction_north));
         }
-        for (auto direction = direction_first; direction < direction_count; ++direction)
-        {
-            for (int s = 0; s < radius; ++s)
-            {
+        for (auto direction = direction_first; direction < direction_count; ++direction) {
+            for (int s = 0; s < radius; ++s) {
                 position = wrap(position.neighbor((direction + offset) % direction_count));
                 op(position);
             }
@@ -244,9 +226,7 @@ auto Map::distance(
 {
     const auto d = wrap_center(lhs - rhs);
 
-    int yl = lhs.is_odd()
-        ? 2
-        : 0;
+    int yl = lhs.is_odd() ? 2 : 0;
 
     int dy = d.is_odd()
         ? std::abs(2 * d.y - 1 + yl) / 2
@@ -265,8 +245,7 @@ void Map::update_group_terrain(Tile_coordinate position)
     const terrain_t      terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
     const auto&          terrain_type = g_tiles->get_terrain_type(terrain);
     int                  group        = terrain_type.group;
-    if (group < 0)
-    {
+    if (group < 0) {
         return;
     }
 
@@ -274,8 +253,7 @@ void Map::update_group_terrain(Tile_coordinate position)
     bool promote;
     bool demote;
     size_t counter = 0u;
-    do
-    {
+    do {
         promote = false;
         demote  = false;
         const Terrain_group& terrain_group = g_tiles->get_terrain_group(group);
@@ -285,8 +263,7 @@ void Map::update_group_terrain(Tile_coordinate position)
             direction_t direction = direction_first;
             direction <= direction_last;
             ++direction
-        )
-        {
+        ) {
             const Tile_coordinate neighbor_position     = neighbor(position, direction);
             const terrain_tile_t  neighbor_terrain_tile = get_terrain_tile(neighbor_position);
             const terrain_t       neighbor_terrain      = g_tiles->get_terrain_from_tile(neighbor_terrain_tile);
@@ -313,30 +290,25 @@ void Map::update_group_terrain(Tile_coordinate position)
                     (neighbor_terrain >= terrain_group.link_first[1]) &&
                     (neighbor_terrain <= terrain_group.link_last [1])
                 )
-            )
-            {
+            ) {
                 neighbor_mask = neighbor_mask | (1u << direction);
             }
             if (
                 (terrain_group.demoted >= 0) &&
                 (neighbor_group != group) &&
-                (neighbor_group != terrain_group.demoted))
-            {
+                (neighbor_group != terrain_group.demoted)
+            ) {
                 demote = true;
             }
         }
         promote = (neighbor_mask == direction_mask_all) && (terrain_group.promoted > 0);
         Expects((promote && demote) == false);
-        if (promote)
-        {
+        if (promote) {
             group = terrain_group.promoted;
-        }
-        else if (demote)
-        {
+        } else if (demote) {
             group = terrain_group.demoted;
         }
-    }
-    while (
+    } while (
         (promote || demote) &&
         (++counter < 2U)
     );

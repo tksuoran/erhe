@@ -50,8 +50,7 @@ void add_default_materials(Library<erhe::primitive::Material>& library)
     // Mercury   = e5e4e4 (229, 228, 228)
     // Palladium = ded9d3 (222, 217, 211)
 
-    for (size_t i = 0, end = 10; i < end; ++i)
-    {
+    for (size_t i = 0, end = 10; i < end; ++i) {
         const float rel        = static_cast<float>(i + 1) / static_cast<float>(end + 1);
         const float hue        = rel * 360.0f;
         const float saturation = 0.8f;

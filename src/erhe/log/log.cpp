@@ -49,8 +49,7 @@ auto store_log_sink::get_log() const -> const std::deque<Entry>&
 
 void store_log_sink::trim(size_t trim_size)
 {
-    if (m_entries.size() > trim_size)
-    {
+    if (m_entries.size() > trim_size) {
         const auto trim_count = m_entries.size() - trim_size;
         m_entries.erase(
             m_entries.begin(),
@@ -72,8 +71,7 @@ auto store_log_sink::is_paused() const -> bool
 
 void store_log_sink::sink_it_(const spdlog::details::log_msg& msg)
 {
-    if (m_is_paused)
-    {
+    if (m_is_paused) {
         return;
     }
     m_entries.push_back(

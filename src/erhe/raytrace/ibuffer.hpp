@@ -14,7 +14,7 @@ public:
     virtual ~IBuffer() noexcept {};
 
     [[nodiscard]] virtual auto capacity_byte_count() const noexcept -> std::size_t = 0;
-    [[nodiscard]] virtual auto allocate_bytes     (const std::size_t byte_count, const std::size_t alignment = 64) noexcept -> std::size_t = 0;
+    [[nodiscard]] virtual auto allocate_bytes     (std::size_t byte_count, std::size_t alignment = 64) noexcept -> std::size_t = 0;
     [[nodiscard]] virtual auto span               () noexcept -> gsl::span<std::byte> = 0;
     [[nodiscard]] virtual auto debug_label        () const -> std::string_view = 0;
 

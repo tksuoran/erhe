@@ -26,8 +26,8 @@ class Font final
 public:
     Font(
         const std::filesystem::path& path,
-        const unsigned int           size,
-        const float                  outline_thickness = 0.0f
+        unsigned int                 size,
+        float                        outline_thickness = 0.0f
     );
 
     ~Font() noexcept;

@@ -109,22 +109,18 @@ auto Library<T>::combo(
     std::vector<const char*> names;
     std::vector<std::shared_ptr<T>> entries;
     const bool empty_entry = empty_option || (!in_out_selected_entry);
-    if (empty_entry)
-    {
+    if (empty_entry) {
         names.push_back("(none)");
         entries.push_back({});
         ++index;
     }
-    for (const auto& entry : m_entries)
-    {
-        if (!entry->is_shown_in_ui())
-        {
+    for (const auto& entry : m_entries) {
+        if (!entry->is_shown_in_ui()) {
             continue;
         }
         names.push_back(entry->get_name().c_str());
         entries.push_back(entry);
-        if (in_out_selected_entry == entry)
-        {
+        if (in_out_selected_entry == entry) {
             selection_index = index;
         }
         ++index;
@@ -139,8 +135,7 @@ auto Library<T>::combo(
             static_cast<int>(names.size())
         ) &&
         (in_out_selected_entry != entries.at(selection_index));
-    if (selection_changed)
-    {
+    if (selection_changed) {
         in_out_selected_entry = entries.at(selection_index);
     }
     return selection_changed;
@@ -158,8 +153,7 @@ auto Library<T>::remove(const std::shared_ptr<T>& entry) -> bool
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
     const auto i = std::remove(m_entries.begin(), m_entries.end(), entry);
-    if (i == m_entries.end())
-    {
+    if (i == m_entries.end()) {
         return false;
     }
     m_entries.erase(i, m_entries.end());

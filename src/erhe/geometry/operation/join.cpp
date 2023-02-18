@@ -20,8 +20,7 @@ Join::Join(Geometry& src, Geometry& destination)
 
     source.for_each_edge_const([&](const auto& i)
     {
-        if (i.edge.polygon_count != 2)
-        {
+        if (i.edge.polygon_count != 2) {
             return;
         }
         const Polygon_id new_polygon_id = destination.make_polygon();
@@ -39,17 +38,14 @@ Join::Join(Geometry& src, Geometry& destination)
         polygon_l.for_each_corner_neighborhood_const(src, [&](auto& j)
         {
             l_ss << j.corner.point_id << " ";
-            if (j.corner.point_id == point_id_a)
-            {
-                if (j.prev_corner.point_id == point_id_b)
-                {
+            if (j.corner.point_id == point_id_a) {
+                if (j.prev_corner.point_id == point_id_b) {
                     l_backward = true;
                     //j.break_ = true;
                     //return;
                     ERHE_VERIFY(l_forward != l_backward);
                 }
-                if (j.next_corner.point_id == point_id_b)
-                {
+                if (j.next_corner.point_id == point_id_b) {
                     l_forward = true;
                     //j.break_ = true;
                     //return;
@@ -63,17 +59,14 @@ Join::Join(Geometry& src, Geometry& destination)
         polygon_r.for_each_corner_neighborhood_const(src, [&](auto& j)
         {
             r_ss << j.corner.point_id << " ";
-            if (j.corner.point_id == point_id_a)
-            {
-                if (j.prev_corner.point_id == point_id_b)
-                {
+            if (j.corner.point_id == point_id_a) {
+                if (j.prev_corner.point_id == point_id_b) {
                     r_backward = true;
                     //j.break_ = true;
                     //return;
                     ERHE_VERIFY(r_forward != r_backward);
                 }
-                if (j.next_corner.point_id == point_id_b)
-                {
+                if (j.next_corner.point_id == point_id_b) {
                     r_forward = true;
                     //j.break_ = true;
                     //return;
@@ -85,15 +78,12 @@ Join::Join(Geometry& src, Geometry& destination)
         ERHE_VERIFY(r_forward != r_backward);
         ERHE_VERIFY(l_forward != r_forward);
 
-        if (l_forward)
-        {
+        if (l_forward) {
             make_new_corner_from_point           (new_polygon_id, point_id_a  );
             make_new_corner_from_polygon_centroid(new_polygon_id, polygon_id_r);
             make_new_corner_from_point           (new_polygon_id, point_id_b  );
             make_new_corner_from_polygon_centroid(new_polygon_id, polygon_id_l);
-        }
-        else
-        {
+        } else {
             make_new_corner_from_point           (new_polygon_id, point_id_a  );
             make_new_corner_from_polygon_centroid(new_polygon_id, polygon_id_l);
             make_new_corner_from_point           (new_polygon_id, point_id_b  );

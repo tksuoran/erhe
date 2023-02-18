@@ -27,8 +27,7 @@ Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
         });
     });
 
-    if (post_process)
-    {
+    if (post_process) {
         post_processing();
     }
 }

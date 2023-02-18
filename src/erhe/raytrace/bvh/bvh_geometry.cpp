@@ -41,18 +41,15 @@ auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
 {
     std::string file_name = fmt::format("cache/bvh/{}", hash_code);
     std::ofstream out{file_name, std::ofstream::binary};
-    if (!out)
-    {
+    if (!out) {
         return false;
     }
-    try
-    {
+
+    try {
         bvh::v2::StdOutputStream stream{out};
         bvh.serialize(stream);
         return true;
-    }
-    catch (...)
-    {
+    } catch (...) {
         return false;
     }
 }
@@ -61,18 +58,14 @@ auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
 {
     std::string file_name = fmt::format("cache/bvh/{}", hash_code);
     std::ifstream in{file_name, std::ofstream::binary};
-    if (!in)
-    {
+    if (!in) {
         return false;
     }
-    try
-    {
+    try {
         bvh::v2::StdInputStream stream{in};
         bvh = Bvh::deserialize(stream);
         return true;
-    }
-    catch (...)
-    {
+    } catch (...) {
         return false;
     }
 }
@@ -133,15 +126,12 @@ void Bvh_geometry::commit()
     {
         const Buffer_info* index_buffer_info{nullptr};
         const Buffer_info* vertex_buffer_info{nullptr};
-        for (const auto& buffer : m_buffer_infos)
-        {
-            if (buffer.type == erhe::raytrace::Buffer_type::BUFFER_TYPE_INDEX)
-            {
+        for (const auto& buffer : m_buffer_infos) {
+            if (buffer.type == erhe::raytrace::Buffer_type::BUFFER_TYPE_INDEX) {
                 index_buffer_info = &buffer;
                 continue;
             }
-            if (buffer.type == erhe::raytrace::Buffer_type::BUFFER_TYPE_VERTEX)
-            {
+            if (buffer.type == erhe::raytrace::Buffer_type::BUFFER_TYPE_VERTEX) {
                 vertex_buffer_info = &buffer;
                 continue;
             }
@@ -149,18 +139,15 @@ void Bvh_geometry::commit()
         if (
             (index_buffer_info == nullptr) ||
             (vertex_buffer_info == nullptr)
-        )
-        {
+        ) {
             return;
         }
 
-        if (vertex_buffer_info->format != erhe::raytrace::Format::FORMAT_FLOAT3)
-        {
+        if (vertex_buffer_info->format != erhe::raytrace::Format::FORMAT_FLOAT3) {
             return;
         }
 
-        if (index_buffer_info->format != erhe::raytrace::Format::FORMAT_UINT3)
-        {
+        if (index_buffer_info->format != erhe::raytrace::Format::FORMAT_UINT3) {
             return;
         }
 
@@ -169,8 +156,7 @@ void Bvh_geometry::commit()
         if (
             (index_buffer == nullptr) ||
             (vertex_buffer == nullptr)
-        )
-        {
+        ) {
             return;
         }
 
@@ -186,8 +172,7 @@ void Bvh_geometry::commit()
         {
             ERHE_PROFILE_SCOPE("collect");
 
-            for (std::size_t i = 0; i < triangle_count; ++i)
-            {
+            for (std::size_t i = 0; i < triangle_count; ++i) {
                 const uint32_t i0 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 0 * sizeof(uint32_t));
                 const uint32_t i1 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 1 * sizeof(uint32_t));
                 const uint32_t i2 = *reinterpret_cast<const uint32_t*>(raw_index_ptr + i * index_buffer_info->byte_stride + 2 * sizeof(uint32_t));
@@ -221,8 +206,7 @@ void Bvh_geometry::commit()
         }
 
         const bool load_ok = load_bvh(m_bvh, hash_code);
-        if (!load_ok)
-        {
+        if (!load_ok) {
             typename bvh::v2::DefaultBuilder<Node>::Config config;
             //config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High;
             config.quality = bvh::v2::DefaultBuilder<Node>::Quality::Low;
@@ -259,8 +243,7 @@ void Bvh_geometry::commit()
                 tris.size(),
                 [&] (const size_t begin, const size_t end)
                 {
-                    for (size_t i = begin; i < end; ++i)
-                    {
+                    for (size_t i = begin; i < end; ++i) {
                         auto j = should_permute ? m_bvh.prim_ids[i] : i;
                         m_precomputed_triangles[i] = tris[j];
                     }
@@ -320,12 +303,10 @@ void Bvh_geometry::set_user_data(void* ptr)
 
 auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool
 {
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return false;
     }
-    if ((ray.mask & m_mask) == 0)
-    {
+    if ((ray.mask & m_mask) == 0) {
         return false;
     }
 
@@ -355,11 +336,9 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         stack,
         [&] (const size_t begin, const size_t end)
         {
-            for (size_t i = begin; i < end; ++i)
-            {
+            for (size_t i = begin; i < end; ++i) {
                 size_t j = should_permute ? i : m_bvh.prim_ids[i];
-                if (auto hit = m_precomputed_triangles[j].intersect(bvh_ray))
-                {
+                if (auto hit = m_precomputed_triangles[j].intersect(bvh_ray)) {
                     prim_id = i;
                     std::tie(u, v) = *hit;
                 }
@@ -368,8 +347,7 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         }
     );
 
-    if (prim_id != invalid_id)
-    {
+    if (prim_id != invalid_id) {
         const auto triangle_index = should_permute ? prim_id : m_bvh.prim_ids[prim_id];
         const auto& triangle = m_precomputed_triangles.at(triangle_index);
 

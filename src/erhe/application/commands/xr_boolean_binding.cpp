@@ -28,8 +28,7 @@ Xr_boolean_binding::~Xr_boolean_binding() noexcept = default;
 
 auto c_str(const Button_trigger value) -> const char*
 {
-    switch (value)
-    {
+    switch (value) {
         case Button_trigger::Button_pressed:  return "button pressed";
         case Button_trigger::Button_released: return "button released";
         case Button_trigger::Any:             return "any";
@@ -39,8 +38,7 @@ auto c_str(const Button_trigger value) -> const char*
 
 auto Xr_boolean_binding::test_trigger(Input_arguments& input) const -> bool
 {
-    switch (m_trigger)
-    {
+    switch (m_trigger) {
         case Button_trigger::Button_pressed:  return  input.button_pressed;
         case Button_trigger::Button_released: return !input.button_pressed;
         case Button_trigger::Any:             return true;
@@ -51,15 +49,13 @@ auto Xr_boolean_binding::test_trigger(Input_arguments& input) const -> bool
 auto Xr_boolean_binding::on_value_changed(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
-    if (command->get_command_state() == State::Disabled)
-    {
+    if (command->get_command_state() == State::Disabled) {
         log_input->trace("  binding command {} is disabled", command->get_name());
         return false;
     }
 
     const bool triggered = test_trigger(input);
-    if (!triggered)
-    {
+    if (!triggered) {
         log_input->trace(
             "  binding trigger condition {} not met with value = {} for {}",
             c_str(m_trigger),
@@ -69,8 +65,7 @@ auto Xr_boolean_binding::on_value_changed(Input_arguments& input) -> bool
         return false;
     }
 
-    if (command->get_command_state() == State::Inactive)
-    {
+    if (command->get_command_state() == State::Inactive) {
         log_input->trace("  {}->try_ready()", command->get_name());
         command->try_ready();
     }
@@ -81,8 +76,7 @@ auto Xr_boolean_binding::on_value_changed(Input_arguments& input) -> bool
     if (
         (command_state == State::Ready) ||
         (command_state == State::Active)
-    )
-    {
+    ) {
         log_input->trace("  {}->try_call()", command->get_name());
         consumed = command->try_call_with_input(input);
         log_input_event_consumed->trace(
@@ -91,9 +85,7 @@ auto Xr_boolean_binding::on_value_changed(Input_arguments& input) -> bool
             consumed ? "consumed" : "did not consume",
             input.button_pressed ? "pressed" : "released"
         );
-    }
-    else
-    {
+    } else {
         log_input->trace(
             "  command {} is not in ready state, state = {}",
             command->get_name(),

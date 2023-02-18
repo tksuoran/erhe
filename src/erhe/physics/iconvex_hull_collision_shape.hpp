@@ -10,7 +10,7 @@ namespace erhe::physics
 class ICollision_shape
 {
 public:
-    virtual void calculate_local_inertia(const float mass, glm::vec3& inertia) const = 0;
+    virtual void calculate_local_inertia(float mass, glm::vec3& inertia) const = 0;
 };
 
 } // namespace erhe::physics

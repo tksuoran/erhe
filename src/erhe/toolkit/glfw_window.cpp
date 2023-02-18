@@ -11,9 +11,9 @@
 #include <GLFW/glfw3.h>
 
 #if defined(_WIN32)
-#define GLFW_EXPOSE_NATIVE_WIN32 1
-#define GLFW_EXPOSE_NATIVE_WGL 1
-#include <GLFW/glfw3native.h>
+#   define GLFW_EXPOSE_NATIVE_WIN32 1
+#   define GLFW_EXPOSE_NATIVE_WGL 1
+#   include <GLFW/glfw3native.h>
 #endif
 
 #include <gsl/assert>
@@ -43,8 +43,7 @@ namespace
 
 auto glfw_key_to_erhe(const int glfw_key) -> Keycode
 {
-    switch (glfw_key)
-    {
+    switch (glfw_key) {
         case GLFW_KEY_SPACE              : return Key_space;
         case GLFW_KEY_APOSTROPHE         : return Key_apostrophe;
         case GLFW_KEY_COMMA              : return Key_comma;
@@ -166,8 +165,7 @@ auto glfw_key_to_erhe(const int glfw_key) -> Keycode
         case GLFW_KEY_RIGHT_SUPER        : return Key_right_super;
         case GLFW_KEY_MENU               : return Key_menu;
         case GLFW_KEY_UNKNOWN            : return Key_unknown;
-        default:
-            return Key_unknown;
+        default:                           return Key_unknown;
     }
 }
 
@@ -185,8 +183,7 @@ auto glfw_modifiers_to_erhe(const int glfw_modifiers) -> Key_modifier_mask
 
 auto glfw_mouse_button_to_erhe(const int glfw_mouse_button) -> Mouse_button
 {
-    switch (glfw_mouse_button)
-    {
+    switch (glfw_mouse_button) {
         case GLFW_MOUSE_BUTTON_LEFT:   return Mouse_button_left;
         case GLFW_MOUSE_BUTTON_MIDDLE: return Mouse_button_middle;
         case GLFW_MOUSE_BUTTON_RIGHT:  return Mouse_button_right;
@@ -202,8 +199,7 @@ auto glfw_mouse_button_to_erhe(const int glfw_mouse_button) -> Mouse_button
 //  wheel = signed int with direction and amount
 auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> bool
 {
-    switch (glfw_mouse_button_action)
-    {
+    switch (glfw_mouse_button_action) {
         case GLFW_PRESS:   return true;
         case GLFW_RELEASE: return false;
         default: return false; // TODO
@@ -213,8 +209,7 @@ auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> boo
 auto get_event_handler(GLFWwindow* glfw_window) -> Event_handler*
 {
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
-    if (window != nullptr)
-    {
+    if (window != nullptr) {
         return &window->get_root_view();
     }
     return nullptr;
@@ -222,20 +217,16 @@ auto get_event_handler(GLFWwindow* glfw_window) -> Event_handler*
 
 [[nodiscard]] auto glfw_key_to_modifier(int key) -> int
 {
-    if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL)
-    {
+    if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL) {
         return GLFW_MOD_CONTROL;
     }
-    if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT)
-    {
+    if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT) {
         return GLFW_MOD_SHIFT;
     }
-    if (key == GLFW_KEY_LEFT_ALT || key == GLFW_KEY_RIGHT_ALT)
-    {
+    if (key == GLFW_KEY_LEFT_ALT || key == GLFW_KEY_RIGHT_ALT) {
         return GLFW_MOD_ALT;
     }
-    if (key == GLFW_KEY_LEFT_SUPER || key == GLFW_KEY_RIGHT_SUPER)
-    {
+    if (key == GLFW_KEY_LEFT_SUPER || key == GLFW_KEY_RIGHT_SUPER) {
         return GLFW_MOD_SUPER;
     }
     return 0;
@@ -252,17 +243,13 @@ void key_event_callback(
     static_cast<void>(scancode);
 
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
-        switch (action)
-        {
+    if (event_handler) {
+        switch (action) {
             case GLFW_PRESS:
-            case GLFW_RELEASE:
-            {
+            case GLFW_RELEASE: {
                 // Workaround: X11 does not include current pressed/released modifier key
                 // in 'mods' flags. https://github.com/glfw/glfw/issues/1630
-                if (int modifier_from_key = glfw_key_to_modifier(key))
-                {
+                if (int modifier_from_key = glfw_key_to_modifier(key)) {
                     glfw_modifiers = (action == GLFW_PRESS)
                         ? (glfw_modifiers | modifier_from_key)
                         : (glfw_modifiers & ~modifier_from_key);
@@ -289,8 +276,7 @@ void char_event_callback(
 )
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_char(codepoint);
     }
 }
@@ -298,8 +284,7 @@ void char_event_callback(
 void mouse_position_event_callback(GLFWwindow* glfw_window, double x, double y)
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_mouse_move(static_cast<float>(x), static_cast<float>(y));
     }
 }
@@ -309,8 +294,7 @@ void mouse_button_event_callback(GLFWwindow* glfw_window, const int button, cons
     static_cast<void>(mods);
 
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_mouse_button(
             glfw_mouse_button_to_erhe(button),
             glfw_mouse_button_action_to_erhe(action)
@@ -321,8 +305,7 @@ void mouse_button_event_callback(GLFWwindow* glfw_window, const int button, cons
 void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const double y)
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_mouse_wheel(static_cast<float>(x), static_cast<float>(y));
     }
 }
@@ -330,8 +313,7 @@ void mouse_wheel_event_callback(GLFWwindow* glfw_window, const double x, const d
 void window_resize_event_callback(GLFWwindow* glfw_window, const int width, const int height)
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_resize(width, height);
     }
 }
@@ -339,8 +321,7 @@ void window_resize_event_callback(GLFWwindow* glfw_window, const int width, cons
 void window_refresh_callback(GLFWwindow* glfw_window)
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_refresh();
     }
 }
@@ -348,8 +329,7 @@ void window_refresh_callback(GLFWwindow* glfw_window)
 void window_close_event_callback(GLFWwindow* glfw_window)
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_close();
     }
 }
@@ -357,8 +337,7 @@ void window_close_event_callback(GLFWwindow* glfw_window)
 void window_focus_event_callback(GLFWwindow* glfw_window, int focused)
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_focus(focused);
     }
 }
@@ -366,8 +345,7 @@ void window_focus_event_callback(GLFWwindow* glfw_window, int focused)
 void window_cursor_enter_callback(GLFWwindow* glfw_window, int entered)
 {
     auto* const event_handler = get_event_handler(glfw_window);
-    if (event_handler)
-    {
+    if (event_handler) {
         event_handler->on_cursor_enter(entered);
     }
 }
@@ -416,10 +394,8 @@ auto Context_window::open(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (s_window_count == 0)
-    {
-        if (glfwInit() != GLFW_TRUE)
-        {
+    if (s_window_count == 0) {
+        if (glfwInit() != GLFW_TRUE) {
             fputs("Failed to initialize GLFW\n", stderr);
             return false;
         }
@@ -438,8 +414,7 @@ auto Context_window::open(
     glfwWindowHint(GLFW_SRGB_CAPABLE,     GLFW_TRUE);
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
     glfwWindowHint(GLFW_CENTER_CURSOR,    GLFW_TRUE); // Fullscreen only
-    if (configuration.msaa_sample_count > 0)
-    {
+    if (configuration.msaa_sample_count > 0) {
         glfwWindowHint(GLFW_SAMPLES, configuration.msaa_sample_count);
     }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -466,8 +441,7 @@ auto Context_window::open(
     if (
         configuration.fullscreen &&
         (monitor != nullptr)
-    )
-    {
+    ) {
         ERHE_PROFILE_SCOPE("window (fullscreen)");
 
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
@@ -478,9 +452,7 @@ auto Context_window::open(
             monitor,
             share_window
         );
-    }
-    else
-    {
+    } else {
         ERHE_PROFILE_SCOPE("window");
 
         m_glfw_window = glfwCreateWindow(
@@ -492,11 +464,9 @@ auto Context_window::open(
         );
     }
 
-    if (m_glfw_window == nullptr)
-    {
+    if (m_glfw_window == nullptr) {
         printf("Failed to open GLFW window for GL 4.6\n");
-        if (s_window_count == 0)
-        {
+        if (s_window_count == 0) {
             glfwTerminate();
         }
         return false;
@@ -519,8 +489,7 @@ auto Context_window::open(
     glfwSetWindowFocusCallback  (window, window_focus_event_callback);
     glfwSetCursorEnterCallback  (window, window_cursor_enter_callback);
 
-    if (primary)
-    {
+    if (primary) {
         GLFWerrorfun prev_error_callback = glfwSetErrorCallback(nullptr);
         m_mouse_cursor[Mouse_cursor_Arrow     ] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
         m_mouse_cursor[Mouse_cursor_TextInput ] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
@@ -551,15 +520,11 @@ auto Context_window::open(
         glfwMakeContextCurrent(window);
         log_window->info("Setting swap interval to {}", configuration.swap_interval);
         glfwSwapInterval(configuration.swap_interval);
-        if (s_window_count == 1)
-        {
+        if (s_window_count == 1) {
             get_extensions();
         }
-    }
-    else
-    {
-        for (Mouse_cursor cursor_n = 0; cursor_n < Mouse_cursor_COUNT; cursor_n++)
-        {
+    } else {
+        for (Mouse_cursor cursor_n = 0; cursor_n < Mouse_cursor_COUNT; cursor_n++) {
             m_mouse_cursor[cursor_n] = nullptr;
         }
     }
@@ -572,17 +537,14 @@ auto Context_window::open(
 Context_window::~Context_window() noexcept
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
-        for (Mouse_cursor cursor_n = 0; cursor_n < Mouse_cursor_COUNT; cursor_n++)
-        {
+    if (window != nullptr) {
+        for (Mouse_cursor cursor_n = 0; cursor_n < Mouse_cursor_COUNT; cursor_n++) {
             glfwDestroyCursor(m_mouse_cursor[cursor_n]);
         }
 
         glfwDestroyWindow(window);
         --s_window_count;
-        if (s_window_count == 0)
-        {
+        if (s_window_count == 0) {
             glfwTerminate();
         }
     }
@@ -597,18 +559,14 @@ void Context_window::poll_events()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_configuration.sleep_time > 0.0f)
-    {
+    if (m_configuration.sleep_time > 0.0f) {
         ERHE_PROFILE_SCOPE("sleep")
         sleep_for(std::chrono::duration<float, std::milli>(m_configuration.sleep_time * 1000.0f));
     }
-    if (m_configuration.wait_time > 0.0f)
-    {
+    if (m_configuration.wait_time > 0.0f) {
         ERHE_PROFILE_SCOPE("wait")
         glfwWaitEventsTimeout(m_configuration.wait_time);
-    }
-    else
-    {
+    } else {
         ERHE_PROFILE_SCOPE("poll")
 
         glfwPollEvents();
@@ -618,17 +576,14 @@ void Context_window::poll_events()
 void Context_window::enter_event_loop()
 {
     m_is_event_loop_running = true;
-    for (;;)
-    {
-        if (!m_is_event_loop_running)
-        {
+    for (;;) {
+        if (!m_is_event_loop_running) {
             break;
         }
 
         poll_events();
 
-        if (!m_is_event_loop_running)
-        {
+        if (!m_is_event_loop_running) {
             break;
         }
 
@@ -639,8 +594,7 @@ void Context_window::enter_event_loop()
 void Context_window::get_cursor_position(float& xpos, float& ypos)
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
+    if (window != nullptr) {
         double xpos_double{0.0};
         double ypos_double{0.0};
         glfwGetCursorPos(window, &xpos_double, &ypos_double);
@@ -652,17 +606,12 @@ void Context_window::get_cursor_position(float& xpos, float& ypos)
 void Context_window::set_visible(const bool visible)
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
-        if (m_is_window_visible != visible)
-        {
+    if (window != nullptr) {
+        if (m_is_window_visible != visible) {
             m_is_window_visible = visible;
-            if (m_is_window_visible)
-            {
+            if (m_is_window_visible) {
                 glfwShowWindow(window);
-            }
-            else
-            {
+            } else {
                 glfwHideWindow(window);
             }
         }
@@ -672,12 +621,10 @@ void Context_window::set_visible(const bool visible)
 void Context_window::set_cursor(const Mouse_cursor cursor)
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window == nullptr)
-    {
+    if (window == nullptr) {
         return;
     }
-    if (m_current_mouse_cursor == cursor)
-    {
+    if (m_current_mouse_cursor == cursor) {
         return;
     }
 
@@ -688,8 +635,7 @@ void Context_window::set_cursor(const Mouse_cursor cursor)
             : m_mouse_cursor[Mouse_cursor_Arrow]
     );
     m_current_mouse_cursor = cursor;
-    if (!m_is_mouse_captured)
-    {
+    if (!m_is_mouse_captured) {
         glfwSetInputMode(
             window, GLFW_CURSOR,
             m_is_mouse_captured
@@ -705,10 +651,8 @@ void Context_window::set_cursor(const Mouse_cursor cursor)
 void Context_window::capture_mouse(const bool capture)
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
-        if (m_is_mouse_captured != capture)
-        {
+    if (window != nullptr) {
+        if (m_is_mouse_captured != capture) {
             m_is_mouse_captured = capture;
             glfwSetInputMode(
                 window,
@@ -726,15 +670,12 @@ void Context_window::capture_mouse(const bool capture)
 auto Context_window::is_mouse_captured() const -> bool
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
+    if (window != nullptr) {
         const int mode = glfwGetInputMode(window, GLFW_CURSOR);
-        if (mode == GLFW_CURSOR_DISABLED)
-        {
+        if (mode == GLFW_CURSOR_DISABLED) {
             return true;
         }
-        if (mode == GLFW_CURSOR_NORMAL)
-        {
+        if (mode == GLFW_CURSOR_NORMAL) {
             return false;
         }
         ERHE_FATAL("unexpected GLFW_CURSOR_MODE");
@@ -747,8 +688,7 @@ auto Context_window::get_width() const -> int
     int width {0};
     int height{0};
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
+    if (window != nullptr) {
         glfwGetWindowSize(window, &width, &height);
     }
     return width;
@@ -759,8 +699,7 @@ auto Context_window::get_height() const -> int
     int width {0};
     int height{0};
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
+    if (window != nullptr) {
         glfwGetWindowSize(window, &width, &height);
     }
     return height;
@@ -779,11 +718,9 @@ void Context_window::get_extensions()
 void Context_window::make_current() const
 {
     auto* window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
+    if (window != nullptr) {
         const auto* const already_current_context = glfwGetCurrentContext();
-        if (already_current_context != nullptr)
-        {
+        if (already_current_context != nullptr) {
             log_window->error("context is already current");
         }
         glfwMakeContextCurrent(window);
@@ -798,8 +735,7 @@ void Context_window::clear_current() const
 void Context_window::swap_buffers() const
 {
     auto* const window = reinterpret_cast<GLFWwindow*>(m_glfw_window);
-    if (window != nullptr)
-    {
+    if (window != nullptr) {
         glfwSwapBuffers(window);
     }
 }

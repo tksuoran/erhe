@@ -30,8 +30,7 @@ public:
         , m_height    {height}
         , m_components{components}
     {
-        if ((width < 0) || (height < 0) || (components < 1) || (components > 4))
-        {
+        if ((width < 0) || (height < 0) || (components < 1) || (components > 4)) {
             ERHE_FATAL("bad dimension");
         }
 
@@ -61,12 +60,9 @@ public:
 
     void fill(value_t value)
     {
-        for (int y = 0; y < height(); ++y)
-        {
-            for (int x = 0; x < width(); ++x)
-            {
-                for (component_t c = 0; c < m_components; ++c)
-                {
+        for (int y = 0; y < height(); ++y) {
+            for (int x = 0; x < width(); ++x) {
+                for (component_t c = 0; c < m_components; ++c) {
                     put(x, y, c, value);
                 }
             }
@@ -78,10 +74,8 @@ public:
     void post_process(Bitmap& destination, const float gamma)
     {
         static_cast<void>(gamma);
-        for (int y = 0; y < height(); ++y)
-        {
-            for (int x = 0; x < width(); ++x)
-            {
+        for (int y = 0; y < height(); ++y) {
+            for (int x = 0; x < width(); ++x) {
                 const auto ic      = get(x, y, 0);
                 const auto oc      = get(x, y, 1);
                 const auto inside  = static_cast<float>(ic) / 255.0f;
@@ -106,8 +100,7 @@ public:
             (x >= m_width) ||
             (y >= m_height) ||
             (c >= m_components)
-        )
-        {
+        ) {
             ERHE_FATAL("invalid index");
         }
 
@@ -128,8 +121,7 @@ public:
             (x >= m_width) ||
             (y >= m_height) ||
             (c >= m_components)
-        )
-        {
+        ) {
             ERHE_FATAL("invalid index");
         }
 #endif
@@ -168,42 +160,33 @@ public:
             (dst_y >= this->height())        ||
             (dst_x + width  > this->width()) ||
             (dst_y + height > this->height())
-        )
-        {
+        ) {
             ERHE_FATAL("invalid input");
         }
 #endif
 
-        for (int iy = 0; iy < height; ++iy)
-        {
+        for (int iy = 0; iy < height; ++iy) {
             const int ly = dst_y + iy;
-            if (ly < 0)
-            {
+            if (ly < 0) {
                 continue;
             }
-            if (ly >= this->height())
-            {
+            if (ly >= this->height()) {
                 continue;
             }
             const int dst_y_ = ly;
-            for (int ix = 0; ix < width; ++ix)
-            {
+            for (int ix = 0; ix < width; ++ix) {
                 const int lx = dst_x + ix;
-                if (lx < 0)
-                {
+                if (lx < 0) {
                     continue;
                 }
-                if (lx >= this->width())
-                {
+                if (lx >= this->width()) {
                     continue;
                 }
                 const int dst_x_ = lx;
 
-                for (component_t c = 0; c < src_components; ++c)
-                {
+                for (component_t c = 0; c < src_components; ++c) {
                     auto value = src->get(src_x + ix, src_y + iy, c);
-                    if (Max)
-                    {
+                    if (Max) {
                         value = std::max(value, get(dst_x_, dst_y_, c + dst_component_offset));
                     }
                     put(dst_x_, dst_y_, c + dst_component_offset, value);
@@ -226,12 +209,9 @@ public:
         const bool                  rotated
     )
     {
-        if (rotated)
-        {
+        if (rotated) {
             blit_rotated<Max>(width, height, dst_x, dst_y, src_buffer, src_pitch, src_byte_width, src_components, dst_component_offset);
-        }
-        else
-        {
+        } else {
             blit<Max>(width, height, dst_x, dst_y, src_buffer, src_pitch, src_byte_width, src_components, dst_component_offset);
         }
     }
@@ -239,17 +219,13 @@ public:
     void dump_data()
     {
         std::size_t counter{0};
-        for (component_t c = 0; c < m_components; ++c)
-        {
-            for (int iy = 0; iy < m_height; ++iy)
-            {
-                for (int ix = 0; ix < m_width; ++ix)
-                {
+        for (component_t c = 0; c < m_components; ++c) {
+            for (int iy = 0; iy < m_height; ++iy) {
+                for (int ix = 0; ix < m_width; ++ix) {
                     const auto value = get(ix, iy, c);
                     fmt::print("{}, ", value);
                     ++counter;
-                    if (counter > 15u)
-                    {
+                    if (counter > 15u) {
                         fmt::print("\n");
                         counter = 0;
                     }
@@ -261,12 +237,9 @@ public:
     void load_data(gsl::span<value_t> source)
     {
         std::size_t read_offset{0};
-        for (component_t c = 0; c < m_components; ++c)
-        {
-            for (int iy = 0; iy < m_height; ++iy)
-            {
-                for (int ix = 0; ix < m_width; ++ix)
-                {
+        for (component_t c = 0; c < m_components; ++c) {
+            for (int iy = 0; iy < m_height; ++iy) {
+                for (int ix = 0; ix < m_width; ++ix) {
                     put(ix, iy, c, source[read_offset]);
                     ++read_offset;
                 }
@@ -278,13 +251,10 @@ public:
     {
 #if 0
         const char* shades = " -+#";
-        for (component_t c = 0; c < m_components; ++c)
-        {
+        for (component_t c = 0; c < m_components; ++c) {
             fmt::print("\nbitmap dump w = {} h = {} c = {}\n", m_width, m_height, c);
-            for (int iy = 0; iy < m_height; ++iy)
-            {
-                for (int ix = 0; ix < m_width; ++ix)
-                {
+            for (int iy = 0; iy < m_height; ++iy) {
+                for (int ix = 0; ix < m_width; ++ix) {
                     auto value = get(ix, iy, c);
                     fmt::print("{}", shades[value / 64]);
                 }
@@ -295,22 +265,17 @@ public:
         constexpr const char* shades = " /\\X???????";
         fmt::print("\nbitmap dump w = {} h = {}\n", m_width, m_height);
         fmt::print("|");
-        for (int ix = 0; ix < m_width; ++ix)
-        {
+        for (int ix = 0; ix < m_width; ++ix) {
             fmt::print("-");
         }
         fmt::print("|\n");
-        for (int iy = m_height - 1; iy >= 0; --iy)
-        {
+        for (int iy = m_height - 1; iy >= 0; --iy) {
             fmt::print("|");
-            for (int ix = 0; ix < m_width; ++ix)
-            {
+            for (int ix = 0; ix < m_width; ++ix) {
                 unsigned int bits{0};
-                for (component_t c = 0; c < m_components; ++c)
-                {
+                for (component_t c = 0; c < m_components; ++c) {
                     const auto value = get(ix, iy, c);
-                    if (value > 127)
-                    {
+                    if (value > 127) {
                         bits |= 1 << (c);
                     }
                 }
@@ -319,8 +284,7 @@ public:
             fmt::print("|\n");
         }
         fmt::print("|");
-        for (int ix = 0; ix < m_width; ++ix)
-        {
+        for (int ix = 0; ix < m_width; ++ix) {
             fmt::print("-");
         }
         fmt::print("|\n");
@@ -344,8 +308,7 @@ public:
             (width < 0) ||
             (height < 0) ||
             (src_components < 0)
-        )
-        {
+        ) {
             ERHE_FATAL("invalid index");
         }
 #endif
@@ -361,27 +324,21 @@ public:
 
         // char* shades = " -+#";
 
-        for (int iy = 0; iy < dst_height; ++iy)
-        {
+        for (int iy = 0; iy < dst_height; ++iy) {
             const int ly = dst_y + iy;
-            if (ly < 0)
-            {
+            if (ly < 0) {
                 continue;
             }
-            if (ly >= this->height())
-            {
+            if (ly >= this->height()) {
                 continue;
             }
             const int dst_y_ = ly;
-            for (int ix = 0; ix < dst_width; ++ix)
-            {
+            for (int ix = 0; ix < dst_width; ++ix) {
                 const int lx = dst_x + ix;
-                if (lx < 0)
-                {
+                if (lx < 0) {
                     continue;
                 }
-                if (lx >= this->width())
-                {
+                if (lx >= this->width()) {
                     continue;
                 }
                 const int dst_x_ = lx;
@@ -389,23 +346,18 @@ public:
                 //unsigned int src_x = ix;
                 const int src_y_ = height - 1 - iy;
 
-                for (component_t c = 0; c < src_components; ++c)
-                {
+                for (component_t c = 0; c < src_components; ++c) {
                     const int src_byte_x = (ix * src_components) + c;
                     uint8_t   value{0};
-                    if (src_byte_x < src_byte_width)
-                    {
+                    if (src_byte_x < src_byte_width) {
                         auto offset = static_cast<std::size_t>(src_byte_x + (src_y_ * src_pitch));
                         value       = src_buffer[offset];
-                    }
-                    else
-                    {
+                    } else {
                         continue; // TODO(tksuoran@gmail.com) Or value = 0; ?
                     }
                     //if (value > 128)
                     //put(dst_x_, dst_y_, c + dst_component_offset, value);
-                    if (Max)
-                    {
+                    if (Max) {
                         value = std::max(value, get(dst_x_, dst_y_, c + dst_component_offset));
                     }
                     put(dst_x_, dst_y_, c + dst_component_offset, value);
@@ -435,8 +387,7 @@ public:
             (width < 0) ||
             (height < 0) ||
             (src_components < 0)
-        )
-        {
+        ) {
             ERHE_FATAL("invalid index");
         }
 #endif
@@ -452,27 +403,21 @@ public:
 
         // char* shades = " -+#";
 
-        for (int iy = 0; iy < dst_height; ++iy)
-        {
+        for (int iy = 0; iy < dst_height; ++iy) {
             const int ly = dst_y + iy;
-            if (ly < 0)
-            {
+            if (ly < 0) {
                 continue;
             }
-            if (ly >= this->height())
-            {
+            if (ly >= this->height()) {
                 continue;
             }
             const int dst_y_ = ly;
-            for (int ix = 0; ix < dst_width; ++ix)
-            {
+            for (int ix = 0; ix < dst_width; ++ix) {
                 const int lx = dst_x + ix;
-                if (lx < 0)
-                {
+                if (lx < 0) {
                     continue;
                 }
-                if (lx >= this->width())
-                {
+                if (lx >= this->width()) {
                     continue;
                 }
                 const int dst_x_ = lx;
@@ -480,22 +425,17 @@ public:
                 const int src_x = iy;
                 const int src_y = /* height - 1 - */ ix;
 
-                for (component_t c = 0; c < src_components; ++c)
-                {
+                for (component_t c = 0; c < src_components; ++c) {
                     const int src_byte_x = (src_x * src_components) + c;
                     uint8_t   value {0};
-                    if (src_byte_x < src_byte_width)
-                    {
+                    if (src_byte_x < src_byte_width) {
                         const std::size_t offset = src_byte_x + (src_y * src_pitch);
                         value = src_buffer[offset];
-                    }
-                    else
-                    {
+                    } else {
                         continue; // TODO(tksuoran@gmail.com) Or value = 0; ?
                     }
                     // fmt::print("%c", shades[value / 64]);
-                    if (Max)
-                    {
+                    if (Max) {
                         value = std::max(
                             value,
                             get(dst_x_, dst_y_, c + dst_component_offset)

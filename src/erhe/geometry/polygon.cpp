@@ -20,8 +20,7 @@ auto Polygon::compute_normal(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (corner_count < 3)
-    {
+    if (corner_count < 3) {
         return {};
     }
 
@@ -51,8 +50,7 @@ void Polygon::compute_normal(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (corner_count < 3)
-    {
+    if (corner_count < 3) {
         return;
     }
 
@@ -88,8 +86,7 @@ auto Polygon::compute_edge_midpoint(
     const uint32_t                           corner_offset
 ) const -> glm::vec3
 {
-    if (corner_count >= 2)
-    {
+    if (corner_count >= 2) {
         const auto      polygon_corner_id_a = first_polygon_corner_id + (corner_offset     % corner_count);
         const auto      polygon_corner_id_b = first_polygon_corner_id + (corner_offset + 1 % corner_count);
         const Corner_id corner0_id          = geometry.polygon_corners[polygon_corner_id_a];
@@ -98,8 +95,7 @@ auto Polygon::compute_edge_midpoint(
         const Corner&   corner1             = geometry.corners[corner1_id];
         const Point_id  a                   = corner0.point_id;
         const Point_id  b                   = corner1.point_id;
-        if (point_locations.has(a) && point_locations.has(b))
-        {
+        if (point_locations.has(a) && point_locations.has(b)) {
             const glm::vec3 pos_a    = point_locations.get(a);
             const glm::vec3 pos_b    = point_locations.get(b);
             const glm::vec3 midpoint = (pos_a + pos_b) / 2.0f;
@@ -117,8 +113,7 @@ void Polygon::compute_centroid(
     const Property_map<Point_id, vec3>& point_locations
 ) const
 {
-    if (corner_count < 1)
-    {
+    if (corner_count < 1) {
         return;
     }
 
@@ -131,14 +126,12 @@ auto Polygon::corner(const Geometry& geometry, const Point_id point) const -> Co
     std::optional<Corner_id> result;
     for_each_corner_const(geometry, [&](auto& i)
     {
-        if (point == i.corner.point_id)
-        {
+        if (point == i.corner.point_id) {
             result = i.corner_id;
             return i.break_iteration();
         }
     });
-    if (result.has_value())
-    {
+    if (result.has_value()) {
         return result.value();
     }
     ERHE_FATAL("corner not found");
@@ -147,12 +140,10 @@ auto Polygon::corner(const Geometry& geometry, const Point_id point) const -> Co
 
 auto Polygon::next_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id
 {
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
         const Corner_id         corner_id         = geometry.polygon_corners[polygon_corner_id];
-        if (corner_id == anchor_corner_id)
-        {
+        if (corner_id == anchor_corner_id) {
             const Polygon_corner_id next_polygon_corner_id = first_polygon_corner_id + (i + 1) % corner_count;
             const Corner_id         next_corner_id         = geometry.polygon_corners[next_polygon_corner_id];
             return next_corner_id;
@@ -164,12 +155,10 @@ auto Polygon::next_corner(const Geometry& geometry, const Corner_id anchor_corne
 
 auto Polygon::prev_corner(const Geometry& geometry, const Corner_id anchor_corner_id) const -> Corner_id
 {
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
         const Corner_id         corner_id         = geometry.polygon_corners[polygon_corner_id];
-        if (corner_id == anchor_corner_id)
-        {
+        if (corner_id == anchor_corner_id) {
             const Polygon_corner_id prev_polygon_corner_id = first_polygon_corner_id + (corner_count + i - 1) % corner_count;
             const Corner_id         prev_corner_id         = geometry.polygon_corners[prev_polygon_corner_id];
             return prev_corner_id;
@@ -191,8 +180,7 @@ void Polygon::reverse(Geometry& geometry)
 auto Polygon::format_points(const Geometry& geometry) const -> std::string
 {
     std::stringstream ss;
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
         const Corner_id         corner_id         = geometry.polygon_corners[polygon_corner_id];
         const Corner&           corner            = geometry.corners[corner_id];
@@ -204,8 +192,7 @@ auto Polygon::format_points(const Geometry& geometry) const -> std::string
 auto Polygon::format_corners(const Geometry& geometry) const -> std::string
 {
     std::stringstream ss;
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
         const Corner_id         corner_id         = geometry.polygon_corners[polygon_corner_id];
         ss << fmt::format("{} ", corner_id);
@@ -226,7 +213,7 @@ void Polygon::compute_planar_texture_coordinates(
     ERHE_PROFILE_FUNCTION
 
     if (corner_count < 3)
-    {
+{
         return;
     }
 
@@ -269,8 +256,7 @@ void Polygon::compute_planar_texture_coordinates(
     // First pass - for scale
     float max_distance = 0.0f;
     std::vector<std::pair<Corner_id, glm::vec2>> unscaled_uvs;
-    for (uint32_t i = 0; i < corner_count; ++i)
-    {
+    for (uint32_t i = 0; i < corner_count; ++i) {
         const Polygon_corner_id polygon_corner_id = first_polygon_corner_id + i;
         const Corner_id         corner_id         = geometry.polygon_corners[polygon_corner_id];
         const Corner&           corner            = geometry.corners[corner_id];
@@ -293,10 +279,8 @@ void Polygon::compute_planar_texture_coordinates(
     }
 
     // Second pass - generate texture coordinates
-    for (const auto& unscaled_uv : unscaled_uvs)
-    {
-        if (overwrite || !corner_texcoords.has(unscaled_uv.first))
-        {
+    for (const auto& unscaled_uv : unscaled_uvs) {
+        if (overwrite || !corner_texcoords.has(unscaled_uv.first)) {
             corner_texcoords.put(unscaled_uv.first, unscaled_uv.second);
         }
     }

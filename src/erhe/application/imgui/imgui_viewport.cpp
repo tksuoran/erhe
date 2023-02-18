@@ -16,8 +16,7 @@ namespace {
 
 auto from_erhe(const erhe::toolkit::Keycode keycode) -> ImGuiKey
 {
-    switch (keycode)
-    {
+    switch (keycode) {
         case erhe::toolkit::Key_tab          : return ImGuiKey_Tab           ;
         case erhe::toolkit::Key_left         : return ImGuiKey_LeftArrow     ;
         case erhe::toolkit::Key_right        : return ImGuiKey_RightArrow    ;
@@ -339,30 +338,25 @@ void Imgui_viewport::menu()
 {
     ERHE_VERIFY(g_imgui_windows != nullptr);
 
-    if (ImGui::BeginMainMenuBar())
-    {
+    if (ImGui::BeginMainMenuBar()) {
         g_imgui_windows->window_menu(this);
         ImGui::EndMainMenuBar();
     }
-    if (m_imgui_builtin_windows.demo)
-    {
+    if (m_imgui_builtin_windows.demo) {
         ImGui::ShowDemoWindow(&m_imgui_builtin_windows.demo);
     }
 
-    if (m_imgui_builtin_windows.style_editor)
-    {
+    if (m_imgui_builtin_windows.style_editor) {
         ImGui::Begin("Dear ImGui Style Editor", &m_imgui_builtin_windows.style_editor);
         ImGui::ShowStyleEditor();
         ImGui::End();
     }
 
-    if (m_imgui_builtin_windows.metrics)
-    {
+    if (m_imgui_builtin_windows.metrics) {
         ImGui::ShowMetricsWindow(&m_imgui_builtin_windows.metrics);
     }
 
-    if (m_imgui_builtin_windows.stack_tool)
-    {
+    if (m_imgui_builtin_windows.stack_tool) {
         ImGui::ShowStackToolWindow(&m_imgui_builtin_windows.stack_tool);
     }
 }

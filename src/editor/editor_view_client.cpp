@@ -57,8 +57,7 @@ void Editor_view_client::update_fixed_step(const erhe::components::Time_context&
 {
     const auto& test_scene_root = g_scene_builder->get_scene_root();
 
-    if (g_physics_window->config.static_enable)
-    {
+    if (g_physics_window->config.static_enable) {
         test_scene_root->physics_world().update_fixed_step(time_context.dt);
     }
 }

@@ -47,8 +47,7 @@ Renderbuffer::Renderbuffer(
     Expects(m_width  > 0);
     Expects(m_height > 0);
 
-    if (sample_count > 0)
-    {
+    if (sample_count > 0) {
         // int num_sample_counts = 0;
         // gl::get_internalformat_iv(
         //     gl::Texture_target::texture_2d_multisample,
@@ -75,16 +74,13 @@ Renderbuffer::Renderbuffer(
         // else
         {
             m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_samples));
-            if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format))
-            {
+            if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format)) {
                 m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_color_texture_samples));
             }
-            if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format))
-            {
+            if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format)) {
                 m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_depth_texture_samples));
             }
-            if (gl_helpers::is_integer(m_internal_format))
-            {
+            if (gl_helpers::is_integer(m_internal_format)) {
                 m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_integer_samples));
             }
         }
@@ -107,15 +103,13 @@ Renderbuffer::Renderbuffer(
     //constexpr int support_full   = 0x82B7u;
     constexpr int support_caveat = 0x82B8u;
 
-    if (framebuffer_renderable_support == support_caveat)
-    {
+    if (framebuffer_renderable_support == support_caveat) {
         log_texture->warn(
             "Format {} has framebuffer renderable support caveat",
             c_str(internal_format)
         );
     }
-    if (framebuffer_renderable_support == support_none)
-    {
+    if (framebuffer_renderable_support == support_none) {
         log_texture->warn(
             "Format {} has framebuffer renderable support none",
             c_str(internal_format)

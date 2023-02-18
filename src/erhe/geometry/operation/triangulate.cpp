@@ -19,8 +19,7 @@ Triangulate::Triangulate(Geometry& src, Geometry& destination)
 
     source.for_each_polygon_const([&](auto& i)
     {
-        if (i.polygon.corner_count == 3)
-        {
+        if (i.polygon.corner_count == 3) {
             const Polygon_id new_polygon_id = make_new_polygon_from_polygon(i.polygon_id);
             add_polygon_corners(new_polygon_id, i.polygon_id);
             return;

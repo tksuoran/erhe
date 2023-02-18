@@ -28,7 +28,7 @@ public:
     void set_node(Node* node, std::size_t position = 0);
 
     virtual void handle_node_update           (Node* old_node, Node* new_node);
-    virtual void handle_node_flag_bits_update (const uint64_t old_node_flag_bits, const uint64_t new_node_flag_bits);
+    virtual void handle_node_flag_bits_update (uint64_t old_node_flag_bits, uint64_t new_node_flag_bits);
     virtual void handle_node_transform_update () {};
     virtual void handle_node_scene_host_update(
         Scene_host* old_scene_host,
@@ -39,8 +39,8 @@ public:
         static_cast<void>(new_scene_host);
     }
 
-    [[nodiscard]] auto get_node      () -> Node*;
-    [[nodiscard]] auto get_node      () const -> const Node*;
+    [[nodiscard]] auto get_node     () -> Node*;
+    [[nodiscard]] auto get_node     () const -> const Node*;
     [[nodiscard]] auto get_item_host() const -> Scene_host* override;
 
 protected:

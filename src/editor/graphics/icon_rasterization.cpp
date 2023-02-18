@@ -64,22 +64,17 @@ void Icon_rasterization::rasterize(
     };
     const auto read_stride  = bitmap_ss.stride();
     const auto write_stride = bitmap.stride();
-    for (int y = 0; y < m_icon_height; ++y)
-    {
-        for (int x = 0; x < m_icon_width; ++x)
-        {
+    for (int y = 0; y < m_icon_height; ++y) {
+        for (int x = 0; x < m_icon_width; ++x) {
             float data[4] = { 0, 0, 0, 0};
-            for (int ys = 0; ys < 4; ++ys)
-            {
-                for (int xs = 0; xs < 4; ++xs)
-                {
+            for (int ys = 0; ys < 4; ++ys) {
+                for (int xs = 0; xs < 4; ++xs) {
                     const int offset =
                         (
                             (y * 4 + ys) * read_stride +
                             (x * 4 + xs) * 4
                         );
-                    for (int c = 0; c < 4; ++c)
-                    {
+                    for (int c = 0; c < 4; ++c) {
                         uint8_t v = bitmap_ss.data()[offset + c];
                         data[c] += static_cast<float>(v);
                     }

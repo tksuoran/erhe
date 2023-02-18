@@ -34,27 +34,20 @@ auto Variations::normalize()
     float extent = m_max_value - m_min_value;
 
     // normalize values to 0..1
-    for (auto& value : m_values)
-    {
+    for (auto& value : m_values) {
         value = (value - m_min_value) / extent;
     }
 
     float sum = 0.0f;
-    for (const auto& entry : m_terrains)
-    {
+    for (const auto& entry : m_terrains) {
         sum += entry.ratio;
     }
-    if (sum > 0.0f)
-    {
-        for (auto& entry : m_terrains)
-        {
+    if (sum > 0.0f) {
+        for (auto& entry : m_terrains) {
             entry.normalized_ratio = entry.ratio / sum;
         }
-    }
-    else
-    {
-        for (auto& entry : m_terrains)
-        {
+    } else {
+        for (auto& entry : m_terrains) {
             entry.normalized_ratio = entry.ratio;
         }
     }
@@ -77,8 +70,7 @@ void Variations::compute_threshold_values()
     // Locate threshold values
     float offset{0.0f};
     size_t count = m_values.size();
-    for (auto& terrain : m_terrains)
-    {
+    for (auto& terrain : m_terrains) {
         const float  normalized_ratio = std::min(1.0f, offset + terrain.normalized_ratio);
         const size_t terrain_index    = static_cast<size_t>(static_cast<float>(count - 1) * normalized_ratio);
         terrain.threshold = sorted_values[terrain_index];
@@ -89,10 +81,8 @@ void Variations::compute_threshold_values()
 auto Variations::get(size_t index) const -> Terrain_variation
 {
     const float noise_value = get_noise_value(index);
-    for (const auto& terrain : m_terrains)
-    {
-        if (noise_value < terrain.threshold)
-        {
+    for (const auto& terrain : m_terrains) {
+        if (noise_value < terrain.threshold) {
             return terrain;
         }
     }
@@ -134,8 +124,7 @@ auto Variations::make(
                 (entry.variation_terrain == variation_terrain);
         }
     );
-    if (i != m_terrains.end())
-    {
+    if (i != m_terrains.end()) {
         Terrain_variation result = *i;
         result.id    = id;
         result.ratio = ratio;

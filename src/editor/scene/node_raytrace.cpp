@@ -183,12 +183,9 @@ void Node_raytrace::initialize()
     m_instance->set_user_data(this);
 
     const bool visible = is_visible();
-    if (visible)
-    {
+    if (visible) {
         m_instance->enable();
-    }
-    else
-    {
+    } else {
         m_instance->disable();
     }
 }
@@ -237,16 +234,14 @@ void Node_raytrace::handle_node_scene_host_update(
 {
     ERHE_VERIFY(old_scene_host != new_scene_host);
 
-    if (old_scene_host != nullptr)
-    {
+    if (old_scene_host != nullptr) {
         log_raytrace->trace("detaching {} from raytrace world", m_instance->debug_label());
         Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
         ERHE_VERIFY(old_scene_root != nullptr);
         auto& raytrace_scene = old_scene_root->raytrace_scene();
         raytrace_scene.detach(raytrace_instance());
     }
-    if (new_scene_host != nullptr)
-    {
+    if (new_scene_host != nullptr) {
         log_raytrace->trace("attaching {} to raytrace world", m_instance->debug_label());
         ERHE_VERIFY(m_node);
         Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
@@ -254,8 +249,7 @@ void Node_raytrace::handle_node_scene_host_update(
         auto& raytrace_scene = new_scene_root->raytrace_scene();
         raytrace_scene.attach(raytrace_instance());
         uint32_t mask = 0;
-        for (const auto& node_attachment : m_node->attachments())
-        {
+        for (const auto& node_attachment : m_node->attachments()) {
             mask = mask | raytrace_node_mask(*node_attachment.get());
         }
         m_instance->set_mask(mask);
@@ -275,21 +269,17 @@ void Node_raytrace::handle_flag_bits_update(const uint64_t old_flag_bits, const 
     const bool visibility_changed = (
         (old_flag_bits ^ new_flag_bits) & erhe::scene::Item_flags::visible
     ) == erhe::scene::Item_flags::visible;
-    if (!visibility_changed)
-    {
+    if (!visibility_changed) {
         return;
     }
 
     ERHE_VERIFY(m_instance);
 
     const bool visible = (new_flag_bits & erhe::scene::Item_flags::visible) == erhe::scene::Item_flags::visible;
-    if (visible && !m_instance->is_enabled())
-    {
+    if (visible && !m_instance->is_enabled()) {
         SPDLOG_LOGGER_TRACE(log_raytrace, "enabling {} node raytrace", get_node()->name());
         m_instance->enable();
-    }
-    else if (!visible && m_instance->is_enabled())
-    {
+    } else if (!visible && m_instance->is_enabled()) {
         SPDLOG_LOGGER_TRACE(log_raytrace, "disable {} node raytrace", get_node()->name());
         m_instance->disable();
     }
@@ -347,22 +337,19 @@ auto Node_raytrace::raytrace_instance() const -> const IInstance*
         !m_primitive       ||
         !m_source_geometry ||
         hit.primitive_id > m_primitive->primitive_geometry.primitive_id_to_polygon_id.size()
-    )
-    {
+    ) {
         return {};
     }
 
     const auto polygon_id = m_primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
-    if (polygon_id < m_source_geometry->get_polygon_count())
-    {
+    if (polygon_id < m_source_geometry->get_polygon_count()) {
         auto* const polygon_normals = m_source_geometry->polygon_attributes().find<glm::vec3>(
             erhe::geometry::c_polygon_normals
         );
         if (
             (polygon_normals != nullptr) &&
             polygon_normals->has(polygon_id)
-        )
-        {
+        ) {
             return polygon_normals->get(polygon_id);
         }
     }
@@ -371,8 +358,7 @@ auto Node_raytrace::raytrace_instance() const -> const IInstance*
 
 auto is_raytrace(const erhe::scene::Item* const scene_item) -> bool
 {
-    if (scene_item == nullptr)
-    {
+    if (scene_item == nullptr) {
         return false;
     }
     using namespace erhe::toolkit;
@@ -389,8 +375,7 @@ auto is_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
 
 auto as_raytrace(erhe::scene::Item* scene_item) -> Node_raytrace*
 {
-    if (scene_item == nullptr)
-    {
+    if (scene_item == nullptr) {
         return nullptr;
     }
     using namespace erhe::toolkit;
@@ -399,19 +384,17 @@ auto as_raytrace(erhe::scene::Item* scene_item) -> Node_raytrace*
             scene_item->get_type(),
             erhe::scene::Item_type::raytrace
         )
-    )
-    {
+    ) {
         return nullptr;
     }
-    return reinterpret_cast<Node_raytrace*>(scene_item);
+    return static_cast<Node_raytrace*>(scene_item);
 }
 
 auto as_raytrace(
     const std::shared_ptr<erhe::scene::Item>& scene_item
 ) -> std::shared_ptr<Node_raytrace>
 {
-    if (!scene_item)
-    {
+    if (!scene_item) {
         return {};
     }
     using namespace erhe::toolkit;
@@ -420,8 +403,7 @@ auto as_raytrace(
             scene_item->get_type(),
             erhe::scene::Item_type::raytrace
         )
-    )
-    {
+    ) {
         return {};
     }
     return std::static_pointer_cast<Node_raytrace>(scene_item);
@@ -429,11 +411,9 @@ auto as_raytrace(
 
 auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
 {
-    for (const auto& attachment : node->attachments())
-    {
+    for (const auto& attachment : node->attachments()) {
         auto node_raytrace = as_raytrace(attachment);
-        if (node_raytrace)
-        {
+        if (node_raytrace) {
             return node_raytrace;
         }
     }
@@ -449,14 +429,12 @@ void draw_ray_hit(
 {
     void* user_data     = hit.instance->get_user_data();
     auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
-    if (raytrace_node == nullptr)
-    {
+    if (raytrace_node == nullptr) {
         return;
     }
 
     const auto local_normal_opt = raytrace_node->get_hit_normal(hit);
-    if (!local_normal_opt.has_value())
-    {
+    if (!local_normal_opt.has_value()) {
         return;
     }
 
@@ -505,31 +483,25 @@ void draw_ray_hit(
 ) -> bool
 {
     std::size_t count{0};
-    for (;;)
-    {
+    for (;;) {
         raytrace_scene->intersect(ray, hit);
-        if (hit.instance == nullptr)
-        {
+        if (hit.instance == nullptr) {
             return false;
         }
         void* user_data     = hit.instance->get_user_data();
         auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
-        if (raytrace_node == nullptr)
-        {
+        if (raytrace_node == nullptr) {
             return false;
         }
         auto* node = raytrace_node->get_node(); // TODO get_mesh() ?
-        if (node == nullptr)
-        {
+        if (node == nullptr) {
             return false;
         }
         const auto& mesh = get_mesh(node);
-        if (mesh.get() == ignore_mesh)
-        {
+        if (mesh.get() == ignore_mesh) {
             ray.origin = ray.origin + ray.t_far * ray.direction + 0.001f * ray.direction;
             ++count;
-            if (count > 100)
-            {
+            if (count > 100) {
                 return false;
             }
             continue;

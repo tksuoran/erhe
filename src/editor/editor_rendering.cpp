@@ -574,8 +574,7 @@ void Editor_rendering_impl::begin_frame()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_trigger_capture)
-    {
+    if (m_trigger_capture) {
         erhe::application::g_window->begin_renderdoc_capture();
     }
 
@@ -584,8 +583,7 @@ void Editor_rendering_impl::begin_frame()
     g_viewport_windows->update_hover(imgui_viewport);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (g_headset_view != nullptr)
-    {
+    if (g_headset_view != nullptr) {
         g_headset_view->begin_frame();
     }
 #endif
@@ -594,14 +592,12 @@ void Editor_rendering_impl::begin_frame()
 void Editor_rendering_impl::end_frame()
 {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (g_headset_view != nullptr)
-    {
+    if (g_headset_view != nullptr) {
         g_headset_view->end_frame();
     }
 #endif
 
-    if (g_post_processing != nullptr)
-    {
+    if (g_post_processing != nullptr) {
         g_post_processing->next_frame();
     }
 
@@ -613,8 +609,7 @@ void Editor_rendering_impl::end_frame()
     if (g_post_processing  != nullptr) g_post_processing  ->next_frame();
     if (g_shadow_renderer  != nullptr) g_shadow_renderer  ->next_frame();
 
-    if (m_trigger_capture)
-    {
+    if (m_trigger_capture) {
         erhe::application::g_window->end_renderdoc_capture();
         m_trigger_capture = false;
     }
@@ -658,8 +653,7 @@ void Editor_rendering_impl::render_viewport_main(
         gl::Clear_buffer_mask::stencil_buffer_bit
     );
 
-    if (g_forward_renderer)
-    {
+    if (g_forward_renderer) {
         static constexpr std::string_view c_id_main{"Main"};
         ERHE_PROFILE_GPU_SCOPE(c_id_main);
         erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
@@ -683,16 +677,14 @@ void Editor_rendering_impl::render_viewport_main(
     if (
         (erhe::application::g_line_renderer_set != nullptr) &&
         (context.camera != nullptr)
-    )
-    {
+    ) {
         erhe::application::g_line_renderer_set->begin();
         g_tools->render_tools(context);
         erhe::application::g_line_renderer_set->end();
         erhe::application::g_line_renderer_set->render(context.viewport, *context.camera);
     }
 
-    if (erhe::application::g_text_renderer != nullptr)
-    {
+    if (erhe::application::g_text_renderer != nullptr) {
         erhe::application::g_text_renderer->render(context.viewport);
     }
 
@@ -720,8 +712,7 @@ void Editor_rendering_impl::render_id(const Render_context& context)
         (g_id_renderer      == nullptr) ||
         (context.scene_view == nullptr) ||
         (context.camera     == nullptr)
-    )
-    {
+    ) {
         return;
     }
 
@@ -732,16 +723,14 @@ void Editor_rendering_impl::render_id(const Render_context& context)
     }
 
     const auto position_opt = context.viewport_window->get_position_in_viewport();
-    if (!position_opt.has_value())
-    {
+    if (!position_opt.has_value()) {
         return;
     }
     const auto position = position_opt.value();
 
     const auto& layers          = scene_root->layers();
     const auto& tool_scene_root = g_tools->get_tool_scene_root();
-    if (!tool_scene_root)
-    {
+    if (!tool_scene_root) {
         return;
     }
 
@@ -769,15 +758,13 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
         (context.scene_view      == nullptr) ||
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
-    )
-    {
+    ) {
         log_render->error("Missing forward renderer / scene viewport / camera / viewport config - cannot render");
         return;
     }
 
     const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         log_render->error("Missing scene root - cannot render");
         return;
     }
@@ -798,18 +785,15 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
         .require_all_bits_clear       = Item_flags::selected
     };
 
-    if (polygon_fill && render_style.polygon_fill)
-    {
-        //if (render_style.polygon_offset_enable)
-        //{
+    if (polygon_fill && render_style.polygon_fill) {
+        //if (render_style.polygon_offset_enable) {
         //    gl::enable(gl::Enable_cap::polygon_offset_fill);
         //    gl::polygon_offset_clamp(render_style.polygon_offset_factor,
         //                             render_style.polygon_offset_units,
         //                             render_style.polygon_offset_clamp);
         //}
         Renderpass renderpass = m_rp_polygon_fill_standard;
-        if (context.override_shader_stages != nullptr)
-        {
+        if (context.override_shader_stages != nullptr) {
             renderpass.pipeline.data.shader_stages = context.override_shader_stages;
         }
         g_forward_renderer->render(
@@ -832,8 +816,7 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
 
     auto& primitive_settings = g_forward_renderer->primitive_settings();
 
-    if (render_style.edge_lines)
-    {
+    if (render_style.edge_lines) {
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
         primitive_settings.color_source   = render_style.edge_lines_color_source;// Base_renderer::Primitive_color_source::constant_color;
         primitive_settings.constant_color = render_style.line_color;
@@ -852,8 +835,7 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
     }
 
-    if (render_style.polygon_centroids)
-    {
+    if (render_style.polygon_centroids) {
         primitive_settings.color_source   = render_style.polygon_centroids_color_source; // Base_renderer::Primitive_color_source::constant_color;
         primitive_settings.constant_color = render_style.centroid_color;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
@@ -870,8 +852,7 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
         );
     }
 
-    if (render_style.corner_points)
-    {
+    if (render_style.corner_points) {
         primitive_settings.color_source   = render_style.corner_points_color_source; // Base_renderer::Primitive_color_source::constant_color;
         primitive_settings.constant_color = render_style.corner_color;
         primitive_settings.size_source    = Primitive_size_source::constant_size;
@@ -917,14 +898,12 @@ void Editor_rendering_impl::render_rendertarget_meshes(
         (context.scene_view      == nullptr) ||
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr)
-    )
-    {
+    ) {
         return;
     }
 
     const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return;
     }
 
@@ -958,14 +937,12 @@ void Editor_rendering_impl::render_selection(const Render_context& context, bool
         (context.camera          == nullptr) ||
         (context.viewport_config == nullptr) ||
         (context.scene_view      == nullptr)
-    )
-    {
+    ) {
         return;
     }
 
     const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return;
     }
 
@@ -981,10 +958,8 @@ void Editor_rendering_impl::render_selection(const Render_context& context, bool
             erhe::scene::Item_flags::selected
     };
 
-    if (polygon_fill && render_style.polygon_fill)
-    {
-        //if (render_style.polygon_offset_enable)
-        //{
+    if (polygon_fill && render_style.polygon_fill) {
+        //if (render_style.polygon_offset_enable) {
         //    gl::enable(gl::Enable_cap::polygon_offset_fill);
         //    gl::polygon_offset_clamp(render_style.polygon_offset_factor,
         //                             render_style.polygon_offset_units,
@@ -994,8 +969,7 @@ void Editor_rendering_impl::render_selection(const Render_context& context, bool
         //m_forward_renderer->primitive_constant_color = render_style.line_color;
 
         Renderpass renderpass = m_rp_polygon_fill_standard;
-        if (context.override_shader_stages != nullptr)
-        {
+        if (context.override_shader_stages != nullptr) {
             renderpass.pipeline.data.shader_stages = context.override_shader_stages;
         }
 
@@ -1019,8 +993,7 @@ void Editor_rendering_impl::render_selection(const Render_context& context, bool
 
     auto& primitive_settings = g_forward_renderer->primitive_settings();
 
-    if (render_style.edge_lines)
-    {
+    if (render_style.edge_lines) {
         ERHE_PROFILE_SCOPE("selection edge lines");
 
         gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -1042,8 +1015,7 @@ void Editor_rendering_impl::render_selection(const Render_context& context, bool
     }
 
     gl::enable(gl::Enable_cap::program_point_size);
-    if (render_style.polygon_centroids)
-    {
+    if (render_style.polygon_centroids) {
         ERHE_PROFILE_SCOPE("selection polygon centroids");
 
         primitive_settings.color_source   = render_style.polygon_centroids_color_source;
@@ -1061,8 +1033,7 @@ void Editor_rendering_impl::render_selection(const Render_context& context, bool
             }
         );
     }
-    if (render_style.corner_points)
-    {
+    if (render_style.corner_points) {
         ERHE_PROFILE_SCOPE("selection corner points");
 
         primitive_settings.color_source   = render_style.corner_points_color_source;
@@ -1090,14 +1061,12 @@ void Editor_rendering_impl::render_tool_meshes(const Render_context& context)
     if (
         (context.camera     == nullptr) ||
         (context.scene_view == nullptr)
-    )
-    {
+    ) {
         return;
     }
 
     const auto& scene_root = g_tools->get_tool_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return;
     }
 
@@ -1105,8 +1074,7 @@ void Editor_rendering_impl::render_tool_meshes(const Render_context& context)
     const auto& material_library = scene_root->content_library()->materials;
     const auto& materials        = material_library.entries();
 
-    if (layers.tool()->meshes.empty())
-    {
+    if (layers.tool()->meshes.empty()) {
         return;
     }
 
@@ -1143,14 +1111,12 @@ void Editor_rendering_impl::render_brush(const Render_context& context)
     if (
         (context.camera     == nullptr) ||
         (context.scene_view == nullptr)
-    )
-    {
+    ) {
         return;
     }
 
     const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root)
-    {
+    if (!scene_root) {
         return;
     }
 
@@ -1158,8 +1124,7 @@ void Editor_rendering_impl::render_brush(const Render_context& context)
     const auto& material_library = scene_root->content_library()->materials;
     const auto& materials        = material_library.entries();
 
-    if (layers.brush()->meshes.empty())
-    {
+    if (layers.brush()->meshes.empty()) {
         return;
     }
 

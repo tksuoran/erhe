@@ -57,8 +57,7 @@ void Range_selection::set_terminator(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
-    if (!m_primary_terminator)
-    {
+    if (!m_primary_terminator) {
         log_selection->trace(
             "setting primary terminator to {} {}",
             item->type_name(),
@@ -69,8 +68,7 @@ void Range_selection::set_terminator(
         m_edited = true;
         return;
     }
-    if (item == m_primary_terminator)
-    {
+    if (item == m_primary_terminator) {
         log_selection->trace(
             "ignoring setting terminator to {} - {} because it is already the primary terminator",
             item->type_name(),
@@ -78,8 +76,7 @@ void Range_selection::set_terminator(
         );
         return;
     }
-    if (item == m_secondary_terminator)
-    {
+    if (item == m_secondary_terminator) {
         log_selection->trace(
             "ignoring setting terminator to {} - {} because it is already the secondary terminator",
             item->type_name(),
@@ -99,13 +96,10 @@ void Range_selection::entry(
 )
 {
     m_entries.push_back(item);
-    if (!attachments_expanded)
-    {
+    if (!attachments_expanded) {
         const auto& node = as_node(item);
-        if (node && !attachments_expanded)
-        {
-            for (const auto& attachment : node->attachments())
-            {
+        if (node && !attachments_expanded) {
+            for (const auto& attachment : node->attachments()) {
                 m_entries.push_back(attachment);
             }
         }
@@ -120,8 +114,7 @@ void Range_selection::begin()
 
 void Range_selection::end(const bool attachments_expanded)
 {
-    if (m_entries.empty() || !m_edited || !m_primary_terminator || !m_secondary_terminator)
-    {
+    if (m_entries.empty() || !m_edited || !m_primary_terminator || !m_secondary_terminator) {
         m_entries.clear();
         return;
     }
@@ -135,45 +128,34 @@ void Range_selection::end(const bool attachments_expanded)
     auto primary_node         = as_node(m_primary_terminator);
     auto secondary_node       = as_node(m_secondary_terminator);
 
-    for (const auto& item : m_entries)
-    {
+    for (const auto& item : m_entries) {
         const bool match_primary   = item == primary_terminator;
         const bool match_secondary = item == secondary_terminator;
-        if (match_primary || match_secondary)
-        {
+        if (match_primary || match_secondary) {
             log_selection->trace("   T. {} {} {}", item->type_name(), item->get_name(), item->get_id());
             selection.push_back(item);
             between_terminators = !between_terminators;
-            if (!attachments_expanded && between_terminators)
-            {
-                if (match_secondary && primary_node && !primary_node->attachments().empty())
-                {
+            if (!attachments_expanded && between_terminators) {
+                if (match_secondary && primary_node && !primary_node->attachments().empty()) {
                     primary_terminator = primary_node->attachments().back();
                 }
-                if (match_primary && secondary_node && !secondary_node->attachments().empty())
-                {
+                if (match_primary && secondary_node && !secondary_node->attachments().empty()) {
                     secondary_terminator = secondary_node->attachments().back();
                 }
-            }
-            else
-            {
+            } else {
                 primary_terminator   = m_primary_terminator;
                 secondary_terminator = m_secondary_terminator;
             }
             continue;
         }
-        if (between_terminators)
-        {
+        if (between_terminators) {
             log_selection->trace("    + {} {} {}", item->type_name(), item->get_name(), item->get_id());
             selection.push_back(item);
-        }
-        else
-        {
+        } else {
             log_selection->trace("    - {} {} {}", item->type_name(), item->get_name(), item->get_id());
         }
     }
-    if (selection.empty())
-    {
+    if (selection.empty()) {
         m_entries.clear();
         return;
     }
@@ -185,8 +167,7 @@ void Range_selection::end(const bool attachments_expanded)
 void Range_selection::reset()
 {
     log_selection->trace("resetting range selection");
-    if (m_primary_terminator && m_secondary_terminator)
-    {
+    if (m_primary_terminator && m_secondary_terminator) {
         g_selection_tool->clear_selection();
     }
     m_primary_terminator.reset();
@@ -202,16 +183,14 @@ Selection_tool_select_command::Selection_tool_select_command()
 
 void Selection_tool_select_command::try_ready()
 {
-    if (g_selection_tool->on_select_try_ready())
-    {
+    if (g_selection_tool->on_select_try_ready()) {
         set_ready();
     }
 }
 
 auto Selection_tool_select_command::try_call() -> bool
 {
-    if (get_command_state() != erhe::application::State::Ready)
-    {
+    if (get_command_state() != erhe::application::State::Ready) {
         log_selection->trace("selection tool not in ready state");
         return false;
     }
@@ -220,6 +199,34 @@ auto Selection_tool_select_command::try_call() -> bool
     set_inactive();
     return consumed;
 }
+
+//
+
+Selection_tool_select_toggle_command::Selection_tool_select_toggle_command()
+    : Command{"Selection_tool.select_toggle"}
+{
+}
+
+void Selection_tool_select_toggle_command::try_ready()
+{
+    if (g_selection_tool->on_select_try_ready()) {
+        set_ready();
+    }
+}
+
+auto Selection_tool_select_toggle_command::try_call() -> bool
+{
+    if (get_command_state() != erhe::application::State::Ready) {
+        log_selection->trace("selection tool not in ready state");
+        return false;
+    }
+
+    const bool consumed = g_selection_tool->on_select_toggle();
+    set_inactive();
+    return consumed;
+}
+
+//
 
 Selection_tool_delete_command::Selection_tool_delete_command()
     : Command{"Selection_tool.delete"}
@@ -290,11 +297,12 @@ void Selection_tool::initialize_component()
     commands.bind_command_to_key         (&m_delete_command, erhe::toolkit::Key_delete,        true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = g_headset_view->get_headset();
-    if (headset != nullptr)
-    {
+    if (headset != nullptr) {
+        auto& xr_left  = headset->get_actions_left();
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_select_command, xr_right.trigger_click, erhe::application::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_boolean_action(&m_select_command, xr_right.a_click,       erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_select_command,        xr_right.trigger_click, erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_select_command,        xr_left .x_click,       erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_select_toggle_command, xr_right.a_click,       erhe::application::Button_trigger::Button_pressed);
     }
 #endif
 
@@ -313,8 +321,7 @@ void Selection_tool::initialize_component()
 
 void Selection_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    if (new_priority < old_priority)
-    {
+    if (new_priority < old_priority) {
         clear_selection();
     }
 }
@@ -326,18 +333,15 @@ auto Selection_tool::selection() const -> const std::vector<std::shared_ptr<erhe
 
 auto Selection_tool::delete_selection() -> bool
 {
-    if (m_selection.empty())
-    {
+    if (m_selection.empty()) {
         return false;
     }
 
     //const auto& scene_root = m_editor_scenes->get_scene_root();
     Compound_operation::Parameters compound_parameters;
-    for (auto& item : m_selection)
-    {
+    for (auto& item : m_selection) {
         auto node = as_node(item);
-        if (!node)
-        {
+        if (!node) {
             // TODO
             continue;
         }
@@ -351,8 +355,7 @@ auto Selection_tool::delete_selection() -> bool
             )
         );
     }
-    if (compound_parameters.operations.empty())
-    {
+    if (compound_parameters.operations.empty()) {
         return false;
     }
 
@@ -368,10 +371,8 @@ auto Selection_tool::range_selection() -> Range_selection&
 
 auto Selection_tool::get_first_selected_node() -> std::shared_ptr<erhe::scene::Node>
 {
-    for (const auto& i : m_selection)
-    {
-        if (is_node(i))
-        {
+    for (const auto& i : m_selection) {
+        if (is_node(i)) {
             return as_node(i);
         }
     }
@@ -380,10 +381,8 @@ auto Selection_tool::get_first_selected_node() -> std::shared_ptr<erhe::scene::N
 
 auto Selection_tool::get_first_selected_scene() -> std::shared_ptr<erhe::scene::Scene>
 {
-    for (const auto& i : m_selection)
-    {
-        if (is_scene(i))
-        {
+    for (const auto& i : m_selection) {
+        if (is_scene(i)) {
             return as_scene(i);
         }
     }
@@ -405,18 +404,15 @@ template <typename T>
 
 void Selection_tool::set_selection(const std::vector<std::shared_ptr<erhe::scene::Item>>& selection)
 {
-    for (auto& item : m_selection)
-    {
+    for (auto& item : m_selection) {
         if (
             item->is_selected() &&
             !is_in(item, selection)
-        )
-        {
+        ) {
             item->set_selected(false);
         }
     }
-    for (auto& item : selection)
-    {
+    for (auto& item : selection) {
         item->set_selected(true);
     }
     m_selection = selection;
@@ -426,8 +422,7 @@ void Selection_tool::set_selection(const std::vector<std::shared_ptr<erhe::scene
 auto Selection_tool::on_select_try_ready() -> bool
 {
     auto* scene_view = get_hover_scene_view();
-    if (!scene_view)
-    {
+    if (!scene_view) {
         return false;
     }
 
@@ -438,23 +433,17 @@ auto Selection_tool::on_select_try_ready() -> bool
     m_hover_content = content.valid;
     m_hover_tool    = tool.valid;
 
-    if (m_hover_content && !m_hover_tool && !rendertarget.valid)
-    {
+    if (m_hover_content && !m_hover_tool && !rendertarget.valid) {
         log_selection->trace("Can select");
         return true;
-    }
-    else
-    {
-        if (!m_hover_content)
-        {
+    } else {
+        if (!m_hover_content) {
             log_selection->trace("Cannot select: Not hovering over content");
         }
-        if (!m_hover_tool)
-        {
+        if (!m_hover_tool) {
             log_selection->trace("Cannot select: Hovering over tool");
         }
-        if (rendertarget.valid)
-        {
+        if (rendertarget.valid) {
             log_selection->trace("Cannot select: Hovering over rendertarget");
         }
     }
@@ -463,43 +452,43 @@ auto Selection_tool::on_select_try_ready() -> bool
 
 auto Selection_tool::on_select() -> bool
 {
-    log_selection->trace("on select");
-
     const bool was_selected = is_in_selection(m_hover_mesh);
-    if (erhe::application::g_view->control_key_down())
-    {
-        if (m_hover_content)
-        {
+    if (erhe::application::g_view->control_key_down()) {
+        if (m_hover_content) {
             toggle_mesh_selection(m_hover_mesh, was_selected, false);
             return true;
         }
         return false;
     }
 
-    if (!m_hover_content)
-    {
+    if (!m_hover_content) {
         clear_selection();
-    }
-    else
-    {
+    } else {
         m_range_selection.reset();
         toggle_mesh_selection(m_hover_mesh, was_selected, true);
     }
     return true;
 }
 
+auto Selection_tool::on_select_toggle() -> bool
+{
+    if (m_hover_content) {
+        const bool was_selected = is_in_selection(m_hover_mesh);
+        toggle_mesh_selection(m_hover_mesh, was_selected, false);
+        return true;
+    }
+    return false;
+}
+
 auto Selection_tool::clear_selection() -> bool
 {
-    if (m_selection.empty())
-    {
+    if (m_selection.empty()) {
         return false;
     }
 
-    for (const auto& item : m_selection)
-    {
+    for (const auto& item : m_selection) {
         ERHE_VERIFY(item);
-        if (!item)
-        {
+        if (!item) {
             continue;
         }
         item->set_selected(false);
@@ -521,62 +510,44 @@ void Selection_tool::toggle_mesh_selection(
 {
     bool add{false};
     bool remove{false};
-    if (clear_others)
-    {
+    if (clear_others) {
         clear_selection();
-        if (!was_selected && mesh)
-        {
+        if (!was_selected && mesh) {
             add = true;
         }
-    }
-    else if (mesh)
-    {
-        if (was_selected)
-        {
+    } else if (mesh) {
+        if (was_selected) {
             remove = true;
-        }
-        else
-        {
+        } else {
             add = true;
         }
     }
 
     ERHE_VERIFY(!add || !remove);
 
-    if (add)
-    {
-        if (g_node_tree_window->expand_attachments())
-        {
+    if (add) {
+        if (g_node_tree_window->expand_attachments()) {
             add_to_selection(mesh);
             m_range_selection.set_terminator(mesh);
-        }
-        else
-        {
+        } else {
             erhe::scene::Node* const node = mesh->get_node();
             const auto node_item = node->shared_from_this();
             add_to_selection(node_item);
             m_range_selection.set_terminator(node_item);
-            for (auto& attachment : node->attachments())
-            {
+            for (auto& attachment : node->attachments()) {
                 add_to_selection(attachment);
                 m_range_selection.set_terminator(attachment);
             }
         }
-    }
-    else if (remove)
-    {
-        if (g_node_tree_window->expand_attachments())
-        {
+    } else if (remove) {
+        if (g_node_tree_window->expand_attachments()) {
             remove_from_selection(mesh);
-        }
-        else
-        {
+        } else {
             erhe::scene::Node* const node = mesh->get_node();
             const auto node_item = node->shared_from_this();
             remove_from_selection(node_item);
             m_range_selection.set_terminator(node_item);
-            for (auto& attachment : node->attachments())
-            {
+            for (auto& attachment : node->attachments()) {
                 remove_from_selection(attachment);
             }
         }
@@ -589,8 +560,7 @@ auto Selection_tool::is_in_selection(
     const std::shared_ptr<erhe::scene::Item>& item
 ) const -> bool
 {
-    if (!item)
-    {
+    if (!item) {
         return false;
     }
 
@@ -605,16 +575,14 @@ auto Selection_tool::is_in_selection(
     const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
-    if (!item)
-    {
+    if (!item) {
         log_selection->warn("Trying to add empty item to selection");
         return false;
     }
 
     item->set_selected(true);
 
-    if (!is_in_selection(item))
-    {
+    if (!is_in_selection(item)) {
         log_selection->trace("Adding {} to selection", item->get_name());
         m_selection.push_back(item);
         send_selection_change_message();
@@ -629,8 +597,7 @@ auto Selection_tool::remove_from_selection(
     const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
-    if (!item)
-    {
+    if (!item) {
         log_selection->warn("Trying to remove empty item from selection");
         return false;
     }
@@ -642,8 +609,7 @@ auto Selection_tool::remove_from_selection(
         m_selection.end(),
         item
     );
-    if (i != m_selection.end())
-    {
+    if (i != m_selection.end()) {
         log_selection->trace("Removing item {} from selection", item->get_name());
         m_selection.erase(i, m_selection.end());
         send_selection_change_message();
@@ -659,25 +625,19 @@ void Selection_tool::update_selection_from_scene_item(
     const bool                                added
 )
 {
-    if (item->is_selected() && added)
-    {
-        if (!is_in(item, m_selection))
-        {
+    if (item->is_selected() && added) {
+        if (!is_in(item, m_selection)) {
             m_selection.push_back(item);
             send_selection_change_message();
         }
-    }
-    else
-    {
-        if (is_in(item, m_selection))
-        {
+    } else {
+        if (is_in(item, m_selection)) {
             const auto i = std::remove(
                 m_selection.begin(),
                 m_selection.end(),
                 item
             );
-            if (i != m_selection.end())
-            {
+            if (i != m_selection.end()) {
                 m_selection.erase(i, m_selection.end());
                 send_selection_change_message();
             }
@@ -691,34 +651,28 @@ void Selection_tool::sanity_check()
     std::size_t error_count{0};
 
     const auto& scene_roots = g_editor_scenes->get_scene_roots();
-    for (const auto& scene_root : scene_roots)
-    {
+    for (const auto& scene_root : scene_roots) {
         const auto& scene = scene_root->scene();
         const auto& flat_nodes = scene.get_flat_nodes();
-        for (const auto& node : flat_nodes)
-        {
+        for (const auto& node : flat_nodes) {
             const auto item = std::static_pointer_cast<erhe::scene::Item>(node);
             if (
                 node->is_selected() &&
                 !is_in(item, m_selection)
-            )
-            {
+            ) {
                 log_selection->error("Node has selection flag set without being in selection");
                 ++error_count;
-            }
-            else if (
+            } else if (
                 !node->is_selected() &&
                 is_in(item, m_selection)
-            )
-            {
+            ) {
                 log_selection->error("Node does not have selection flag set while being in selection");
                 ++error_count;
             }
         }
     }
 
-    if (error_count > 0)
-    {
+    if (error_count > 0) {
         log_selection->error("Selection errors: {}", error_count);
     }
 #endif
@@ -736,14 +690,10 @@ void Selection_tool::send_selection_change_message() const
 void Selection_tool::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    for (const auto& item : m_selection)
-    {
-        if (!item)
-        {
+    for (const auto& item : m_selection) {
+        if (!item) {
             ImGui::BulletText("(empty)");
-        }
-        else
-        {
+        } else {
             ImGui::BulletText(
                 "%s %s %s",
                 item->type_name(),
@@ -774,8 +724,7 @@ void Selection_tool::viewport_toolbar(bool& hovered)
         false
     );
     erhe::application::end_button_style(mode);
-    if (ImGui::IsItemHovered())
-    {
+    if (ImGui::IsItemHovered()) {
         hovered = true;
         ImGui::SetTooltip(
             boost > 0

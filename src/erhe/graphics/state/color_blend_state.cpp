@@ -152,8 +152,7 @@ void Color_blend_state_tracker::reset()
 void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
 {
 #if DISABLE_CACHE
-    if (state.enabled)
-    {
+    if (state.enabled) {
         gl::enable(gl::Enable_cap::blend);
         gl::blend_color(
             state.constant[0],
@@ -168,9 +167,7 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
             state.alpha.source_factor,
             state.alpha.destination_factor
         );
-    }
-    else
-    {
+    } else {
         gl::disable(gl::Enable_cap::blend);
     }
 
@@ -181,10 +178,8 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
         state.write_mask.alpha ? GL_TRUE : GL_FALSE
     );
 #else
-    if (state.enabled)
-    {
-        if (!m_cache.enabled)
-        {
+    if (state.enabled) {
+        if (!m_cache.enabled) {
             gl::enable(gl::Enable_cap::blend);
             m_cache.enabled = true;
         }
@@ -193,8 +188,7 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
             (m_cache.constant[1] != state.constant[1]) ||
             (m_cache.constant[2] != state.constant[2]) ||
             (m_cache.constant[3] != state.constant[3])
-        )
-        {
+        ) {
             gl::blend_color(
                 state.constant[0],
                 state.constant[1],
@@ -209,8 +203,7 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
         if (
             (m_cache.rgb.equation_mode   != state.rgb.equation_mode) ||
             (m_cache.alpha.equation_mode != state.alpha.equation_mode)
-        )
-        {
+        ) {
             gl::blend_equation_separate(state.rgb.equation_mode, state.alpha.equation_mode);
             m_cache.rgb.equation_mode   = state.rgb.equation_mode;
             m_cache.alpha.equation_mode = state.alpha.equation_mode;
@@ -220,8 +213,7 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
             (m_cache.rgb.destination_factor   != state.rgb.destination_factor  ) ||
             (m_cache.alpha.source_factor      != state.alpha.source_factor     ) ||
             (m_cache.alpha.destination_factor != state.alpha.destination_factor)
-        )
-        {
+        ) {
             gl::blend_func_separate(
                 state.rgb.source_factor,
                 state.rgb.destination_factor,
@@ -233,11 +225,8 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
             m_cache.alpha.source_factor      = state.alpha.source_factor;
             m_cache.alpha.destination_factor = state.alpha.destination_factor;
         }
-    }
-    else
-    {
-        if (m_cache.enabled)
-        {
+    } else {
+        if (m_cache.enabled) {
             gl::disable(gl::Enable_cap::blend);
             m_cache.enabled = false;
         }
@@ -248,8 +237,7 @@ void Color_blend_state_tracker::execute(const Color_blend_state& state) noexcept
         (m_cache.write_mask.green != state.write_mask.green) ||
         (m_cache.write_mask.blue  != state.write_mask.blue ) ||
         (m_cache.write_mask.alpha != state.write_mask.alpha)
-    )
-    {
+    ) {
         gl::color_mask(
             state.write_mask.red   ? GL_TRUE : GL_FALSE,
             state.write_mask.green ? GL_TRUE : GL_FALSE,

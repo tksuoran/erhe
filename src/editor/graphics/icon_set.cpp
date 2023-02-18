@@ -112,8 +112,7 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
 
     //const auto  current_path = std::filesystem::current_path();
     const auto document = lunasvg::Document::loadFromFile(path.string());
-    if (!document)
-    {
+    if (!document) {
         log_svg->error("Unable to load {}", path.string());
         return glm::vec2{0.0f, 0.0f};
     }
@@ -126,8 +125,7 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
     m_hotbar->rasterize(*document.get(), m_column, m_row);
 
     ++m_column;
-    if (m_column >= m_column_count)
-    {
+    if (m_column >= m_column_count) {
         m_column = 0;
         ++m_row;
     }
@@ -141,8 +139,7 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
 
 auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::vec2
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum erhe::scene::Light_type;
         case erhe::scene::Light_type::spot:        return icons.spot_light;
         case erhe::scene::Light_type::directional: return icons.directional_light;

@@ -16,8 +16,7 @@ Gl_texture::Gl_texture(gl::Texture_target target, GLuint wrap_name)
     : m_gl_name{wrap_name}
     , m_owned  {wrap_name == 0}
 {
-    if (m_owned)
-    {
+    if (m_owned) {
         gl::create_textures(target, 1, &m_gl_name);
     }
     Ensures((wrap_name == 0) || (m_gl_name != 0));
@@ -43,8 +42,7 @@ auto Gl_texture::operator=(Gl_texture&& other) noexcept -> Gl_texture&
 
 Gl_texture::~Gl_texture() noexcept
 {
-    if (m_owned && (m_gl_name != 0))
-    {
+    if (m_owned && (m_gl_name != 0)) {
         gl::delete_textures(1, &m_gl_name);
     }
 }
@@ -76,8 +74,7 @@ auto Gl_program::operator=(Gl_program&& other) noexcept -> Gl_program&
 
 Gl_program::~Gl_program() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_program(m_gl_name);
         m_gl_name = 0;
     }
@@ -96,8 +93,7 @@ Gl_shader::Gl_shader(gl::Shader_type shader_type)
 
 Gl_shader::~Gl_shader() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_shader(m_gl_name);
         m_gl_name = 0;
     }
@@ -129,8 +125,7 @@ Gl_sampler::Gl_sampler()
 
 Gl_sampler::~Gl_sampler() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_samplers(1, &m_gl_name);
         m_gl_name = 0;
     }
@@ -162,8 +157,7 @@ Gl_framebuffer::Gl_framebuffer()
 
 Gl_framebuffer::~Gl_framebuffer() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_framebuffers(1, &m_gl_name);
         m_gl_name = 0;
     }
@@ -195,8 +189,7 @@ Gl_renderbuffer::Gl_renderbuffer()
 
 Gl_renderbuffer::~Gl_renderbuffer() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_renderbuffers(1, &m_gl_name);
         m_gl_name = 0;
     }
@@ -228,8 +221,7 @@ Gl_buffer::Gl_buffer()
 
 Gl_buffer::~Gl_buffer() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_buffers(1, &m_gl_name);
         m_gl_name = 0;
     }
@@ -262,8 +254,7 @@ Gl_transform_feedback::Gl_transform_feedback()
 
 Gl_transform_feedback::~Gl_transform_feedback() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_transform_feedbacks(1, &m_gl_name);
         m_gl_name = 0;
     }
@@ -295,8 +286,7 @@ Gl_query::Gl_query(gl::Query_target target)
 
 Gl_query::~Gl_query() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_queries(1, &m_gl_name);
         m_gl_name = 0;
     }
@@ -328,8 +318,7 @@ Gl_vertex_array::Gl_vertex_array()
 
 Gl_vertex_array::~Gl_vertex_array() noexcept
 {
-    if (m_gl_name != 0)
-    {
+    if (m_gl_name != 0) {
         gl::delete_vertex_arrays(1, &m_gl_name);
         m_gl_name = 0;
     }

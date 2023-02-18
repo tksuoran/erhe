@@ -224,8 +224,7 @@ void register_empty_shape()
 // See: ShapeSettings
 JPH::ShapeSettings::ShapeResult EmptyShapeSettings::Create() const
 {
-    if (mCachedResult.IsEmpty())
-    {
+    if (mCachedResult.IsEmpty()) {
         static_cast<void>(
             new EmptyShape(*this, mCachedResult)
         );

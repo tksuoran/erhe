@@ -255,8 +255,7 @@ auto create_look_at(const vec3 eye, const vec3 center, const vec3 up0) -> mat4
     // This does NOT? give the same result
     return glm::lookAt(eye, center, up0);
 #else
-    if (eye == center)
-    {
+    if (eye == center) {
         return mat4{1};
     }
 
@@ -293,16 +292,12 @@ void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b)
     // cppcheck-suppress variableScope
     int   i;
 
-    if (s == 0.0f)
-    {
+    if (s == 0.0f) {
         r = v;
         g = v;
         b = v;
-    }
-    else
-    {
-        if (h == 360.0f)
-        {
+    } else {
+        if (h == 360.0f) {
             h = 0.0f;
         }
 
@@ -313,52 +308,50 @@ void hsv_to_rgb(float h, float s, float v, float& r, float& g, float& b)
         q = v * (1.0f - (s * f));
         t = v * (1.0f - (s * (1.0f - f)));
 
-        switch (i)
-        {
-            case 0:
-            {
+        switch (i) {
+            case 0: {
                 r = v;
                 g = t;
                 b = p;
                 break;
             }
-            case 1:
-            {
+
+            case 1: {
                 r = q;
                 g = v;
                 b = p;
                 break;
             }
-            case 2:
-            {
+
+            case 2: {
                 r = p;
                 g = v;
                 b = t;
                 break;
             }
-            case 3:
-            {
+
+            case 3: {
                 r = p;
                 g = q;
                 b = v;
                 break;
             }
-            case 4:
-            {
+
+            case 4: {
                 r = t;
                 g = p;
                 b = v;
                 break;
             }
-            case 5:
-            {
+
+            case 5: {
                 r = v;
                 g = p;
                 b = q;
                 break;
             }
-            default:
-            {
+
+            default: {
                 r = 1.0f;
                 g = 1.0f;
                 b = 1.0f;
@@ -377,70 +370,50 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
     float max;
     float min;
 
-    if (r > g)
-    {
+    if (r > g) {
         max = r;
-    }
-    else
-    {
+    } else {
         max = g;
     }
 
-    if (b > max)
-    {
+    if (b > max) {
         max = b;
     }
 
-    if (r < g)
-    {
+    if (r < g) {
         min = r;
-    }
-    else
-    {
+    } else {
         min = g;
     }
 
-    if (b < min)
-    {
+    if (b < min) {
         min = b;
     }
 
     float diff = max - min;
     v    = max;
 
-    if (max < 0.0001f)
-    {
+    if (max < 0.0001f) {
         s = 0;
-    }
-    else
-    {
+    } else {
         s = diff / max;
     }
 
-    if (s == 0)
-    {
+    if (s == 0) {
         h = 0.0f;
-    }
-    else
-    {
+    } else {
         float r_dist = (max - r) / diff;
         float g_dist = (max - g) / diff;
         float b_dist = (max - b) / diff;
-        if (r == max)
-        {
+        if (r == max) {
             h = b_dist - g_dist;
-        }
-        else if (g == max)
-        {
+        } else if (g == max) {
             h = 2.0f + r_dist - b_dist;
-        }
-        else if (b == max)
-        {
+        } else if (b == max) {
             h = 4.0f + g_dist - r_dist;
         }
         h = h * 60.0f;
-        if (h < 0)
-        {
+        if (h < 0) {
             h += 360.0f;
         }
     }
@@ -461,20 +434,13 @@ auto srgb_to_linear(const float cs) -> float
 auto linear_rgb_to_srgb(const float cl) -> float
 {
     float res;
-    if (cl > 1.0f)
-    {
+    if (cl > 1.0f) {
         res = 1.0f;
-    }
-    else if (cl < 0.0)
-    {
+    } else if (cl < 0.0) {
         res = 0.0f;
-    }
-    else if (cl < 0.0031308f)
-    {
+    } else if (cl < 0.0031308f) {
         res = 12.92f * cl;
-    }
-    else
-    {
+    } else {
         res = 1.055f * std::pow(cl, 0.41666f) - 0.055f;
     }
     return res;
@@ -482,22 +448,20 @@ auto linear_rgb_to_srgb(const float cl) -> float
 
 auto srgb_to_linear_rgb(const vec3 srgb) -> vec3
 {
-    return
-        vec3{
-            srgb_to_linear(srgb.x),
-            srgb_to_linear(srgb.y),
-            srgb_to_linear(srgb.z)
-        };
+    return vec3{
+        srgb_to_linear(srgb.x),
+        srgb_to_linear(srgb.y),
+        srgb_to_linear(srgb.z)
+    };
 }
 
 auto linear_rgb_to_srgb(const vec3 linear_rgb) -> vec3
 {
-    return
-        vec3{
-            linear_rgb_to_srgb(linear_rgb.x),
-            linear_rgb_to_srgb(linear_rgb.y),
-            linear_rgb_to_srgb(linear_rgb.z)
-        };
+    return vec3{
+        linear_rgb_to_srgb(linear_rgb.x),
+        linear_rgb_to_srgb(linear_rgb.y),
+        linear_rgb_to_srgb(linear_rgb.z)
+    };
 }
 
 void cartesian_to_heading_elevation(const vec3 v, float& out_elevation, float& out_heading)
@@ -514,12 +478,11 @@ void cartesian_to_spherical_iso(const vec3 v, float& out_theta, float& out_phi)
 
 auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
 {
-    return
-        vec3{
-            std::sin(theta) * std::cos(phi),
-            std::sin(theta) * std::sin(phi),
-            std::cos(theta)
-        };
+    return vec3{
+        std::sin(theta) * std::cos(phi),
+        std::sin(theta) * std::sin(phi),
+        std::cos(theta)
+    };
 }
 
 void calculate_bounding_volume(
@@ -542,20 +505,16 @@ void calculate_bounding_volume(
     glm::vec3 y_max{std::numeric_limits<float>::lowest()};
     glm::vec3 z_max{std::numeric_limits<float>::lowest()};
 
-    if (source.get_element_count() == 0)
-    {
+    if (source.get_element_count() == 0) {
         bounding_box.min = vec3{0.0f};
         bounding_box.max = vec3{0.0f};
         return;
     }
 
-    for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i)
-    {
-        for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j)
-        {
+    for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i) {
+        for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j) {
             const auto point = source.get_point(i, j);
-            if (point.has_value())
-            {
+            if (point.has_value()) {
                 const vec3 position = point.value();
                 bounding_box.min = glm::min(bounding_box.min, position);
                 bounding_box.max = glm::max(bounding_box.max, position);
@@ -571,13 +530,10 @@ void calculate_bounding_volume(
     }
 
     std::vector<math::vec> points;
-    for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i)
-    {
-        for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j)
-        {
+    for (size_t i = 0, i_end = source.get_element_count(); i < i_end; ++i) {
+        for (size_t j = 0, j_end = source.get_element_point_count(i); j < j_end; ++j) {
             const auto point = source.get_point(i, j);
-            if (point.has_value())
-            {
+            if (point.has_value()) {
                 const auto p = point.value();
                 points.push_back(math::vec{p.x, p.y, p.z});
             }

@@ -64,8 +64,7 @@ public:
 
     static constexpr std::array<const char*, 3> c_primitive_color_source_strings_data{
         std::apply(
-            [](auto&&... s)
-            {
+            [](auto&&... s) {
                 return std::array{s.data()...};
             },
             c_primitive_color_source_strings

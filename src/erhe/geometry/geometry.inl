@@ -25,17 +25,14 @@ void Geometry::smooth_normalize(
     for_each_polygon_const(
         [&](auto& i)
         {
-            if (max_smoothing_angle_radians == 0.0f)
-            {
+            if (max_smoothing_angle_radians == 0.0f) {
                 i.polygon.copy_to_corners(
                     i.polygon_id,
                     *this,
                     corner_attribute,
                     polygon_attribute
                 );
-            }
-            else
-            {
+            } else {
                 i.polygon.smooth_normalize(
                     *this,
                     corner_attribute,

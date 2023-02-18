@@ -58,13 +58,11 @@ Map_mouse_scroll_command::Map_mouse_scroll_command()
 
 auto Map_mouse_scroll_command::try_call_with_input(erhe::application::Input_arguments& input) -> bool
 {
-    if (get_command_state() == erhe::application::State::Ready)
-    {
+    if (get_command_state() == erhe::application::State::Ready) {
         set_active();
     }
 
-    if (get_command_state() != erhe::application::State::Active)
-    {
+    if (get_command_state() != erhe::application::State::Active) {
         return false;
     }
 
@@ -78,8 +76,7 @@ auto Map_mouse_scroll_command::try_call_with_input(erhe::application::Input_argu
 
 void Map_mouse_scroll_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive)
-    {
+    if (get_command_state() != erhe::application::State::Inactive) {
         return;
     }
 
@@ -230,26 +227,22 @@ void Map_window::scroll(glm::vec2 delta)
     m_pixel_offset.x += delta.x; //* m_zoom;
     m_pixel_offset.y += delta.y; //* m_zoom;
 
-    while (m_pixel_offset.x < 0.0f)
-    {
+    while (m_pixel_offset.x < 0.0f) {
         m_pixel_offset.x += Tile_shape::interleave_width * 2.0f * m_zoom;
         m_center_tile.x -= 2;
     }
 
-    while (m_pixel_offset.y < 0.0f)
-    {
+    while (m_pixel_offset.y < 0.0f) {
         m_pixel_offset.y += Tile_shape::height * m_zoom;
         --m_center_tile.y;
     }
 
-    while (m_pixel_offset.x >= Tile_shape::interleave_width * 2.0f * m_zoom)
-    {
+    while (m_pixel_offset.x >= Tile_shape::interleave_width * 2.0f * m_zoom) {
         m_pixel_offset.x -= Tile_shape::interleave_width * 2.0f * m_zoom;
         m_center_tile.x += 2;
     }
 
-    while (m_pixel_offset.y >= Tile_shape::height * m_zoom)
-    {
+    while (m_pixel_offset.y >= Tile_shape::height * m_zoom) {
         m_pixel_offset.y -= Tile_shape::height * m_zoom;
         ++m_center_tile.y;
     }
@@ -268,8 +261,7 @@ void Map_window::scroll_tiles(glm::vec2 delta)
 void Map_window::grid_cycle()
 {
     m_grid = m_grid + 1;
-    if (m_grid > 2)
-    {
+    if (m_grid > 2) {
         m_grid = 0;
     }
 }
@@ -310,8 +302,7 @@ pixel_t pixel_round(float a)
 
 auto Map_window::normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate
 {
-    if (!m_texture)
-    {
+    if (!m_texture) {
         return {};
     }
     const float extent_x       = static_cast<float>(m_texture->width ());
@@ -329,8 +320,7 @@ auto Map_window::normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coo
 
 auto Map_window::pixel_to_tile(Pixel_coordinate pixel_coordinate) const -> Tile_coordinate
 {
-    if (!m_map)
-    {
+    if (m_map == nullptr) {
         return Tile_coordinate{0, 0};
     }
 
@@ -343,8 +333,7 @@ void Map_window::scale_zoom(float scale)
 {
     m_pixel_offset /= m_zoom;
     m_zoom *= scale;
-    if (m_zoom < 1.0f)
-    {
+    if (m_zoom < 1.0f) {
         m_zoom = 1.0f;
     }
     m_pixel_offset *= m_zoom;
@@ -355,14 +344,12 @@ void Map_window::scale_zoom(float scale)
 void Map_window::set_zoom(float scale)
 {
     m_zoom = scale;
-    if (m_zoom < 1.0f)
-    {
+    if (m_zoom < 1.0f) {
         m_zoom = 1.0f;
     }
 }
 
-// static constexpr const char* c_grid_mode_strings[] =
-// {
+// static constexpr const char* c_grid_mode_strings[] = {
 //     "Off",
 //     "Grid 1",
 //     "Grid 2"
@@ -371,8 +358,7 @@ void Map_window::set_zoom(float scale)
 auto Map_window::tile_image(terrain_tile_t terrain_tile, const int scale) -> bool
 {
     const auto& terrain_shapes = g_tile_renderer->get_terrain_shapes();
-    if (terrain_tile >= terrain_shapes.size())
-    {
+    if (terrain_tile >= terrain_shapes.size()) {
         return false;
     }
 
@@ -434,16 +420,14 @@ auto Map_window::tile_position(const Tile_coordinate absolute_tile) const -> glm
 
 void Map_window::render()
 {
-    if (!m_texture)
-    {
+    if (!m_texture) {
         return;
     }
 
     const float extent_x = static_cast<float>(m_texture->width ());
     const float extent_y = static_cast<float>(m_texture->height());
 
-    if ((extent_x < 1.0f) || (extent_y < 1.0f))
-    {
+    if ((extent_x < 1.0f) || (extent_y < 1.0f)) {
         return;
     }
 
@@ -461,10 +445,8 @@ void Map_window::render()
     g_tile_renderer->begin();
     coordinate_t half_width_in_tiles  = 2 + static_cast<coordinate_t>(std::ceil(extent_x / (Tile_shape::interleave_width * m_zoom)));
     coordinate_t half_height_in_tiles = 2 + static_cast<coordinate_t>(std::ceil(extent_y / (Tile_shape::height           * m_zoom)));
-    for (coordinate_t vx = -half_width_in_tiles; vx < half_width_in_tiles; ++vx)
-    {
-        for (coordinate_t vy = -half_height_in_tiles; vy < half_height_in_tiles; ++vy)
-        {
+    for (coordinate_t vx = -half_width_in_tiles; vx < half_width_in_tiles; ++vx) {
+        for (coordinate_t vy = -half_height_in_tiles; vy < half_height_in_tiles; ++vy) {
             const auto  absolute_tile        = wrap(m_center_tile + Tile_coordinate{vx, vy});
             const auto  center_relative_tile = Tile_coordinate{vx, vy};
             const bool  x_odd                = absolute_tile.is_odd();
@@ -508,8 +490,7 @@ void Map_window::render()
                 color
             );
 
-            if (unit_tile != 0)
-            {
+            if (unit_tile != 0) {
                 const Pixel_coordinate& unit_shape = unit_shapes[unit_tile];
                 //int player = unit_id / (Unit_group::width * Unit_group::height);
                 g_tile_renderer->blit(
@@ -525,8 +506,7 @@ void Map_window::render()
                 );
             }
 
-            if (m_grid > 0)
-            {
+            if (m_grid > 0) {
                 g_tile_renderer->blit(
                     grid_shape.x,
                     grid_shape.y,
@@ -547,8 +527,7 @@ void Map_window::render()
                 (vx <  5) &&
                 (vy > -5) &&
                 (vy <  5)
-            )
-            {
+            ) {
                 std::string text = fmt::format("{}, {}", absolute_tile.x, absolute_tile.y);
                 static const float z = -0.5f;
                 const auto bounds = m_text_renderer->measure(text);

@@ -20,22 +20,18 @@ Palette::Palette(const char* name, const std::initializer_list<Stop> stops)
 
 auto Palette::get(const float t) const -> glm::vec3
 {
-    if (t < 0.0f)
-    {
+    if (t < 0.0f) {
         return glm::vec3{1.0f, 0.0f, 0.0f};
     }
-    if (t > 1.0f)
-    {
+    if (t > 1.0f) {
         return glm::vec3{1.0f, 0.0f, 1.0f};
     }
-    for (size_t i = 0; i < stops.size() - 1; ++i)
-    {
+    for (size_t i = 0; i < stops.size() - 1; ++i) {
         const auto& stop0 = stops[i    ];
         const auto& stop1 = stops[i + 1];
         const float t0    = stop0.t;
         const float t1    = stop1.t;
-        if ((t >= t0) && (t <= t1))
-        {
+        if ((t >= t0) && (t <= t1)) {
             const float t_length     = t1 - t0;
             const float normalized_t = (t - t0) / t_length;
             const auto  color0       = stop0.color;

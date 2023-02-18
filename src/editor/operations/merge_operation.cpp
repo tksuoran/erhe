@@ -25,14 +25,10 @@ auto Merge_operation::describe() const -> std::string
     std::stringstream ss;
     ss << "Merge ";
     bool first = true;
-    for (const auto& entry : m_sources)
-    {
-        if (first)
-        {
+    for (const auto& entry : m_sources) {
+        if (first) {
             first = false;
-        }
-        else
-        {
+        } else {
             ss << ", ";
         }
         ss << entry.mesh->get_name();
@@ -44,8 +40,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
     // TODO count meshes in selection
-    if (g_selection_tool->selection().size() < 2)
-    {
+    if (g_selection_tool->selection().size() < 2) {
         return;
     }
 
@@ -64,17 +59,14 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
     m_selection_before = g_selection_tool->selection();
 
-    for (const auto& item : g_selection_tool->selection())
-    {
+    for (const auto& item : g_selection_tool->selection()) {
         const auto& mesh = as_mesh(item);
-        if (!mesh)
-        {
+        if (!mesh) {
             continue;
         }
 
         auto* node = mesh->get_node();
-        if (node == nullptr)
-        {
+        if (node == nullptr) {
             continue;
         }
 
@@ -93,25 +85,20 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
         ERHE_VERIFY(source_entry.before_parent);
 
-        if (first_mesh)
-        {
+        if (first_mesh) {
             scene_root                = reinterpret_cast<Scene_root*>(node->node_data.host);
             reference_node_from_world = node->node_from_world();
             transform                 = mat4{1};
             first_mesh                = false;
             m_selection_after.push_back(mesh);
             m_combined.mesh = mesh;
-        }
-        else
-        {
+        } else {
             transform = reference_node_from_world * node->world_from_node();
         }
 
-        if (node_physics)
-        {
+        if (node_physics) {
             auto* rigid_body = node_physics->rigid_body();
-            if (rigid_body != nullptr)
-            {
+            if (rigid_body != nullptr) {
                 auto collision_shape = rigid_body->get_collision_shape();
 
                 erhe::physics::Compound_child child{
@@ -122,21 +109,17 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             }
         }
 
-        for (auto& primitive : mesh->mesh_data.primitives)
-        {
+        for (auto& primitive : mesh->mesh_data.primitives) {
             const auto& geometry = primitive.source_geometry;
-            if (!geometry)
-            {
+            if (!geometry) {
                 continue;
             }
             combined_geometry.merge(*geometry, transform);
             source_entry.primitives.push_back(primitive);
-            if (normal_style == Normal_style::none)
-            {
+            if (normal_style == Normal_style::none) {
                 normal_style = primitive.normal_style;
             }
-            if (!material)
-            {
+            if (!material) {
                 material = primitive.material;
             }
         }
@@ -144,14 +127,12 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         m_sources.emplace_back(source_entry);
     }
 
-    if (m_sources.size() < 2)
-    {
+    if (m_sources.size() < 2) {
         m_sources.clear();
         return;
     }
 
-    if (!compound_shape_create_info.children.empty())
-    {
+    if (!compound_shape_create_info.children.empty()) {
         ERHE_VERIFY(scene_root != nullptr);
         const auto& combined_collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(
             compound_shape_create_info
@@ -195,14 +176,12 @@ void Merge_operation::execute()
 {
     log_operations->trace("begin Op Execute {}", describe());
 
-    if (m_sources.empty())
-    {
+    if (m_sources.empty()) {
         return;
     }
 
     auto* const scene_root = reinterpret_cast<Scene_root*>(m_sources.front().node->node_data.host);
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return;
     }
     auto& scene = scene_root->scene();
@@ -210,56 +189,45 @@ void Merge_operation::execute()
     scene.sanity_check();
 
     bool first_entry = true;
-    for (const auto& entry : m_sources)
-    {
+    for (const auto& entry : m_sources) {
         const auto& mesh = entry.mesh;
 
-        if (entry.node == nullptr)
-        {
+        if (entry.node == nullptr) {
             continue;
         }
 
         erhe::scene::Node* node = entry.node.get();
 
-        if (first_entry)
-        {
+        if (first_entry) {
             // For first mesh: Replace mesh primitives
             mesh->mesh_data.primitives = m_combined.primitives;
 
             auto old_mesh = erhe::scene::get_mesh(node);
-            if (old_mesh)
-            {
+            if (old_mesh) {
                 node->detach(old_mesh.get());
             }
-            if (entry.mesh)
-            {
+            if (entry.mesh) {
                 node->attach(m_combined.mesh);
             }
 
             auto old_node_physics = get_node_physics(node);
-            if (old_node_physics)
-            {
+            if (old_node_physics) {
                 node->detach(old_node_physics.get());
             }
-            if (m_combined.node_physics)
-            {
+            if (m_combined.node_physics) {
                 node->attach(m_combined.node_physics);
             }
 
             auto old_node_raytrace = get_raytrace(node);
-            if (old_node_raytrace)
-            {
+            if (old_node_raytrace) {
                 node->detach(old_node_raytrace.get());
             }
-            if (m_combined.node_raytrace)
-            {
+            if (m_combined.node_raytrace) {
                 node->attach(m_combined.node_raytrace);
             }
 
             first_entry = false;
-        }
-        else
-        {
+        } else {
             entry.node->set_parent({});
         }
     }
@@ -273,14 +241,12 @@ void Merge_operation::undo()
 {
     log_operations->trace("Op Undo {}", describe());
 
-    if (m_sources.empty())
-    {
+    if (m_sources.empty()) {
         return;
     }
 
     auto* const scene_root = reinterpret_cast<Scene_root*>(m_sources.front().node->node_data.host);
-    if (scene_root == nullptr)
-    {
+    if (scene_root == nullptr) {
         return;
     }
 
@@ -288,50 +254,40 @@ void Merge_operation::undo()
     scene.sanity_check();
 
     bool first_entry = true;
-    for (const auto& entry : m_sources)
-    {
+    for (const auto& entry : m_sources) {
         // For all entries:
         auto& mesh = entry.mesh;
         mesh->mesh_data.primitives = entry.primitives;
 
         erhe::scene::Node* node = entry.node.get();
 
-        if (first_entry)
-        {
+        if (first_entry) {
             first_entry = false;
 
             auto old_mesh = erhe::scene::get_mesh(node);
-            if (old_mesh)
-            {
+            if (old_mesh) {
                 node->detach(old_mesh.get());
             }
-            if (entry.mesh)
-            {
+            if (entry.mesh) {
                 node->attach(entry.mesh);
             }
 
             auto old_node_physics = get_node_physics(node);
-            if (old_node_physics)
-            {
+            if (old_node_physics) {
                 node->detach(old_node_physics.get());
             }
-            if (entry.node_physics)
-            {
+            if (entry.node_physics) {
                 node->attach(entry.node_physics);
             }
 
             auto old_node_raytrace = get_raytrace(node);
-            if (old_node_raytrace)
-            {
+            if (old_node_raytrace) {
                 node->detach(old_node_physics.get());
             }
-            if (entry.node_raytrace)
-            {
+            if (entry.node_raytrace) {
                 node->attach(entry.node_raytrace);
             }
-        }
-        else
-        {
+        } else {
             node->set_parent(entry.before_parent);
         }
     }

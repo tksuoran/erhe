@@ -13,8 +13,7 @@ namespace erhe::graphics
 
 auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
 {
-    switch (depth_function)
-    {
+    switch (depth_function) {
         //using enum gl::Depth_function;
         case gl::Depth_function::always  : return gl::Depth_function::always  ;
         case gl::Depth_function::equal   : return gl::Depth_function::equal   ;
@@ -24,8 +23,7 @@ auto reverse(const gl::Depth_function depth_function) -> gl::Depth_function
         case gl::Depth_function::less    : return gl::Depth_function::greater ;
         case gl::Depth_function::never   : return gl::Depth_function::never   ;
         case gl::Depth_function::notequal: return gl::Depth_function::notequal;
-        default:
-        {
+        default: {
             ERHE_FATAL("bad gl::Depth_function");
         }
     }
@@ -171,15 +169,13 @@ void Depth_stencil_state_tracker::execute_component(
         (cache.stencil_fail_op != state.stencil_fail_op) ||
         (cache.z_fail_op       != state.z_fail_op) ||
         (cache.z_pass_op       != state.z_pass_op)
-    )
-    {
+    ) {
         gl::stencil_op_separate(face, state.stencil_fail_op, state.z_fail_op, state.z_pass_op);
         cache.stencil_fail_op = state.stencil_fail_op;
         cache.z_fail_op       = state.z_fail_op;
         cache.z_pass_op       = state.z_pass_op;
     }
-    if (cache.write_mask != state.write_mask)
-    {
+    if (cache.write_mask != state.write_mask) {
         gl::stencil_mask_separate(face, state.write_mask);
         cache.write_mask = state.write_mask;
     }
@@ -188,8 +184,7 @@ void Depth_stencil_state_tracker::execute_component(
         (cache.function  != state.function) ||
         (cache.reference != state.reference) ||
         (cache.test_mask != state.test_mask)
-    )
-    {
+    ) {
         gl::stencil_func_separate(face, state.function, state.reference, state.test_mask);
         cache.function  = state.function;
         cache.reference = state.reference;
@@ -216,8 +211,7 @@ void Depth_stencil_state_tracker::execute_shared(
         (cache.stencil_back.stencil_fail_op  != state.stencil_fail_op) ||
         (cache.stencil_back.z_fail_op        != state.z_fail_op)       ||
         (cache.stencil_back.z_pass_op        != state.z_pass_op)
-    )
-    {
+    ) {
         gl::stencil_op(state.stencil_fail_op, state.z_fail_op, state.z_pass_op);
         cache.stencil_front.stencil_fail_op = state.stencil_fail_op;
         cache.stencil_front.z_fail_op       = state.z_fail_op;
@@ -230,8 +224,7 @@ void Depth_stencil_state_tracker::execute_shared(
     if (
         (cache.stencil_front.write_mask != state.write_mask) ||
         (cache.stencil_back.write_mask  != state.write_mask)
-    )
-    {
+    ) {
         gl::stencil_mask(state.write_mask);
         cache.stencil_front.write_mask = state.write_mask;
         cache.stencil_back.write_mask  = state.write_mask;
@@ -244,8 +237,7 @@ void Depth_stencil_state_tracker::execute_shared(
         (cache.stencil_back.function   != state.function)  ||
         (cache.stencil_back.reference  != state.reference) ||
         (cache.stencil_back.test_mask  != state.test_mask)
-    )
-    {
+    ) {
         gl::stencil_func(state.function, state.reference, state.test_mask);
         cache.stencil_front.function  = state.function;
         cache.stencil_front.reference = state.reference;
@@ -264,71 +256,54 @@ void Depth_stencil_state_tracker::execute(const Depth_stencil_state& state)
     {
         gl::enable(gl::Enable_cap::depth_test);
         gl::depth_func(state.depth_compare_op);
-    }
-    else
-    {
+    } else {
         gl::disable(gl::Enable_cap::depth_test);
         gl::depth_func(state.depth_compare_op);
     }
 
     gl::depth_mask(state.depth_write_enable ? GL_TRUE : GL_FALSE);
 
-    if (state.stencil_test_enable)
-    {
+    if (state.stencil_test_enable) {
         gl::enable(gl::Enable_cap::stencil_test);
         execute_component(gl::Stencil_face_direction::front, state.stencil_front, m_cache.stencil_front);
         execute_component(gl::Stencil_face_direction::back,  state.stencil_back,  m_cache.stencil_back);
-    }
-    else
-    {
+    } else {
         gl::disable(gl::Enable_cap::stencil_test);
         execute_component(gl::Stencil_face_direction::front, state.stencil_front, m_cache.stencil_front);
         execute_component(gl::Stencil_face_direction::back,  state.stencil_back,  m_cache.stencil_back);
     }
 #else
-    if (state.depth_test_enable)
-    {
-        if (!m_cache.depth_test_enable)
-        {
+    if (state.depth_test_enable) {
+        if (!m_cache.depth_test_enable) {
             gl::enable(gl::Enable_cap::depth_test);
             m_cache.depth_test_enable = true;
         }
 
-        if (m_cache.depth_compare_op != state.depth_compare_op)
-        {
+        if (m_cache.depth_compare_op != state.depth_compare_op) {
             gl::depth_func(state.depth_compare_op);
             m_cache.depth_compare_op = state.depth_compare_op;
         }
-    }
-    else
-    {
-        if (m_cache.depth_test_enable)
-        {
+    } else {
+        if (m_cache.depth_test_enable) {
             gl::disable(gl::Enable_cap::depth_test);
             m_cache.depth_test_enable = false;
         }
     }
 
-    if (m_cache.depth_write_enable != state.depth_write_enable)
-    {
+    if (m_cache.depth_write_enable != state.depth_write_enable) {
         gl::depth_mask(state.depth_write_enable ? GL_TRUE : GL_FALSE);
         m_cache.depth_write_enable = state.depth_write_enable;
     }
 
-    if (state.stencil_test_enable)
-    {
-        if (!m_cache.stencil_test_enable)
-        {
+    if (state.stencil_test_enable) {
+        if (!m_cache.stencil_test_enable) {
             gl::enable(gl::Enable_cap::stencil_test);
             m_cache.stencil_test_enable = true;
         }
         execute_component(gl::Stencil_face_direction::front, state.stencil_front, m_cache.stencil_front);
         execute_component(gl::Stencil_face_direction::back,  state.stencil_back,  m_cache.stencil_back);
-    }
-    else
-    {
-        if (m_cache.stencil_test_enable)
-        {
+    } else {
+        if (m_cache.stencil_test_enable) {
             gl::disable(gl::Enable_cap::stencil_test);
             m_cache.stencil_test_enable = false;
         }

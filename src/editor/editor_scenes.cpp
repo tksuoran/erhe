@@ -75,8 +75,7 @@ void Editor_scenes_impl::register_scene_root(
 
 void Editor_scenes_impl::update_node_transforms()
 {
-    for (const auto& scene_root : m_scene_roots)
-    {
+    for (const auto& scene_root : m_scene_roots) {
         scene_root->scene().update_node_transforms();
     }
 }
@@ -89,8 +88,7 @@ void Editor_scenes_impl::update_node_transforms()
 void Editor_scenes_impl::sanity_check()
 {
 #if !defined(NDEBUG)
-    for (const auto& scene_root : m_scene_roots)
-    {
+    for (const auto& scene_root : m_scene_roots) {
         scene_root->sanity_check();
     }
 #endif
@@ -107,18 +105,15 @@ auto Editor_scenes_impl::scene_combo(
     std::vector<const char*> names;
     std::vector<std::shared_ptr<Scene_root>> entries;
     const bool empty_entry = empty_option || (!in_out_selected_entry);
-    if (empty_entry)
-    {
+    if (empty_entry) {
         names.push_back("(none)");
         entries.push_back({});
         ++index;
     }
-    for (const auto& entry : m_scene_roots)
-    {
+    for (const auto& entry : m_scene_roots) {
         names.push_back(entry->get_name().c_str());
         entries.push_back(entry);
-        if (in_out_selected_entry == entry)
-        {
+        if (in_out_selected_entry == entry) {
             selection_index = index;
         }
         ++index;
@@ -133,8 +128,7 @@ auto Editor_scenes_impl::scene_combo(
             static_cast<int>(names.size())
         ) &&
         (in_out_selected_entry != entries.at(selection_index));
-    if (selection_changed)
-    {
+    if (selection_changed) {
         in_out_selected_entry = entries.at(selection_index);
     }
     return selection_changed;

@@ -57,13 +57,11 @@ auto Vertex_attribute::desc(
     const Usage_type usage
 ) -> const char*
 {
-    if (usage == (Usage_type::position | Usage_type::tex_coord))
-    {
+    if (usage == (Usage_type::position | Usage_type::tex_coord)) {
         return "position | tex_coord";
     }
 
-    switch (usage)
-    {
+    switch (usage) {
         //using enum Usage_type;
         case Usage_type::none:           return "none";
         case Usage_type::position:       return "position";
@@ -76,8 +74,7 @@ auto Vertex_attribute::desc(
         case Usage_type::tex_coord:      return "tex_coord";
         case Usage_type::id:             return "id";
         case Usage_type::custom:         return "custom";
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad vertex attribute usage");
         }
     }

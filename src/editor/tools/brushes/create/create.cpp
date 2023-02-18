@@ -157,8 +157,7 @@ auto Create_impl::find_parent() -> std::shared_ptr<erhe::scene::Node>
                 : (scene_view != nullptr)
                     ? scene_view->get_scene_root().get()
                     : nullptr;
-    if (scene_host == nullptr)
-    {
+    if (scene_host == nullptr) {
         return {};
     }
     auto* scene_root = reinterpret_cast<Scene_root*>(scene_host);
@@ -174,8 +173,7 @@ void Create_impl::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto parent = find_parent();
-    if (!parent)
-    {
+    if (!parent) {
         return;
     }
 
@@ -185,20 +183,16 @@ void Create_impl::imgui()
     const glm::mat4 world_from_node = parent->world_from_node();
 
     ImGui::Text("Nodes");
-    if (ImGui::Button("Empty Node", button_size))
-    {
+    if (ImGui::Button("Empty Node", button_size)) {
         g_scene_commands->create_new_empty_node(parent.get());
     }
-    if (ImGui::Button("Camera", button_size))
-    {
+    if (ImGui::Button("Camera", button_size)) {
         g_scene_commands->create_new_camera(parent.get());
     }
-    if (ImGui::Button("Light", button_size))
-    {
+    if (ImGui::Button("Light", button_size)) {
         g_scene_commands->create_new_light(parent.get());
     }
-    if (ImGui::Button("Rendertarget", button_size))
-    {
+    if (ImGui::Button("Rendertarget", button_size)) {
         g_scene_commands->create_new_rendertarget(parent.get());
     }
 
@@ -211,8 +205,7 @@ void Create_impl::imgui()
     brush_create_button("Torus",     &m_create_torus);
     brush_create_button("Box",       &m_create_box);
 
-    if (m_brush_create != nullptr)
-    {
+    if (m_brush_create != nullptr) {
         m_brush_create->imgui();
         erhe::application::make_combo(
             "Normal Style",
@@ -223,8 +216,7 @@ void Create_impl::imgui()
         const bool create_instance = ImGui::Button("Create Instance", button_size);
         ImGui::InputText("Brush Name", &m_brush_name);
         const bool create_brush    = ImGui::Button("Create Brush", button_size);
-        if (create_instance || create_brush)
-        {
+        if (create_instance || create_brush) {
             Brush_data brush_create_info{
                 .name            = m_brush_name,
                 .build_info      = g_mesh_memory->build_info,
@@ -233,8 +225,7 @@ void Create_impl::imgui()
             };
 
             m_brush = m_brush_create->create(brush_create_info);
-            if (m_brush && create_instance)
-            {
+            if (m_brush && create_instance) {
                 using Item_flags = erhe::scene::Item_flags;
                 const uint64_t node_flags =
                     Item_flags::visible     |
@@ -269,8 +260,7 @@ void Create_impl::imgui()
             }
             m_brush_create = nullptr;
         }
-        if (m_brush && create_brush)
-        {
+        if (m_brush && create_brush) {
             content_library->brushes.add(m_brush);
             m_brush.reset();
         }
@@ -278,32 +268,24 @@ void Create_impl::imgui()
 
     {
         const auto& selection = g_selection_tool->selection();
-        if (!selection.empty())
-        {
+        if (!selection.empty()) {
             std::shared_ptr<erhe::geometry::Geometry> source_geometry;
-            for (const auto& node : selection)
-            {
+            for (const auto& node : selection) {
                 const auto& mesh = as_mesh(node);
-                if (mesh)
-                {
-                    for (const auto& primitive : mesh->mesh_data.primitives)
-                    {
-                        if (primitive.source_geometry)
-                        {
+                if (mesh) {
+                    for (const auto& primitive : mesh->mesh_data.primitives) {
+                        if (primitive.source_geometry) {
                             source_geometry = primitive.source_geometry;
                             break;
                         }
                     }
-                    if (source_geometry)
-                    {
+                    if (source_geometry) {
                         break;
                     }
                 }
             }
-            if (source_geometry)
-            {
-                if (m_brush_create == nullptr)
-                {
+            if (source_geometry) {
+                if (m_brush_create == nullptr) {
                     erhe::application::make_combo(
                         "Normal Style",
                         m_normal_style,
@@ -314,8 +296,7 @@ void Create_impl::imgui()
                 }
 
                 ImGui::Text("Selected Primitive: %s", source_geometry->name.c_str());
-                if (ImGui::Button("Selected Mesh to Brush"))
-                {
+                if (ImGui::Button("Selected Mesh to Brush")) {
                     Brush_data brush_create_info{
                         .name         = m_brush_name,
                         .build_info   = g_mesh_memory->build_info,
@@ -340,24 +321,20 @@ void Create_impl::imgui()
 void Create_impl::tool_render(const Render_context& context)
 {
     const auto parent = find_parent();
-    if (!parent)
-    {
+    if (!parent) {
         return;
     }
 
     Scene_root* scene_root = reinterpret_cast<Scene_root*>(parent->get_item_host());
-    if (context.get_scene() != scene_root->get_hosted_scene())
-    {
+    if (context.get_scene() != scene_root->get_hosted_scene()) {
         return;
     }
 
     const erhe::scene::Transform transform = parent
         ? parent->world_from_node_transform()
         : erhe::scene::Transform{};
-    if (m_brush_create != nullptr)
-    {
-        if (m_preview_ideal_shape)
-        {
+    if (m_brush_create != nullptr) {
+        if (m_preview_ideal_shape) {
             const Create_preview_settings preview_settings
             {
                 .render_context = context,
@@ -368,8 +345,7 @@ void Create_impl::tool_render(const Render_context& context)
             };
             m_brush_create->render_preview(preview_settings);
         }
-        if (m_preview_shape)
-        {
+        if (m_preview_shape) {
             const Create_preview_settings preview_settings
             {
                 .render_context = context,

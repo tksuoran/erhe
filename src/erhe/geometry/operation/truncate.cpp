@@ -50,13 +50,10 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
             const Point_id edge_midpoint = get_edge_new_point(j.corner.point_id, j.next_corner.point_id);
             const Point_id point_a       = edge_midpoint;
             const Point_id point_b       = edge_midpoint + 1;
-            if (j.next_corner.point_id > j.corner.point_id)
-            {
+            if (j.next_corner.point_id > j.corner.point_id) {
                 make_new_corner_from_point(new_polygon_id, point_b);
                 make_new_corner_from_point(new_polygon_id, point_a);
-            }
-            else
-            {
+            } else {
                 make_new_corner_from_point(new_polygon_id, point_a);
                 make_new_corner_from_point(new_polygon_id, point_b);
             }

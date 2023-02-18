@@ -107,29 +107,24 @@ void Rendering::make_terrain_type_combo(const char* label, terrain_t& value)
     const char* preview_value   = preview_terrain.name.c_str();
 
     ImGui::SetNextItemWidth(100.0f);
-    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
-    {
+    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge)) {
         const terrain_t end = static_cast<unit_t>(g_tiles->get_terrain_type_count());
-        for (terrain_t i = 0; i < end; i++)
-        {
+        for (terrain_t i = 0; i < end; i++) {
             terrain_tile_t terrain_tile = g_tiles->get_terrain_tile_from_terrain(i);
             auto&          terrain_type = g_tiles->get_terrain_type(i);
             const auto     id           = fmt::format("##{}-{}", label, i);
             ImGui::PushID(id.c_str());
             bool is_selected = (value == i);
-            if (terrain_image(terrain_tile, 1))
-            {
+            if (terrain_image(terrain_tile, 1)) {
                 value = i;
             }
             ImGui::SameLine();
-            if (ImGui::Selectable(terrain_type.name.c_str(), is_selected))
-            {
+            if (ImGui::Selectable(terrain_type.name.c_str(), is_selected)) {
                 value = i;
             }
 
             // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-            if (is_selected)
-            {
+            if (is_selected) {
                 ImGui::SetItemDefaultFocus();
             }
             ImGui::PopID();
@@ -148,29 +143,24 @@ void Rendering::make_unit_type_combo(
     const char* preview_value = preview_unit.name.c_str();
 
     ImGui::SetNextItemWidth(100.0f);
-    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge))
-    {
+    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge)) {
         const unit_t end = static_cast<unit_t>(g_tiles->get_unit_type_count());
-        for (unit_t i = 0; i < end; i++)
-        {
+        for (unit_t i = 0; i < end; i++) {
             unit_tile_t unit_tile = g_tile_renderer->get_single_unit_tile(player, i);
             Unit_type&  unit_type = g_tiles->get_unit_type(i);
             const auto  id        = fmt::format("##{}-{}", label, i);
             ImGui::PushID(id.c_str());
             bool is_selected = (value == i);
-            if (unit_image(unit_tile, 1))
-            {
+            if (unit_image(unit_tile, 1)) {
                 value = i;
             }
             ImGui::SameLine();
-            if (ImGui::Selectable(unit_type.name.c_str(), is_selected))
-            {
+            if (ImGui::Selectable(unit_type.name.c_str(), is_selected)) {
                 value = i;
             }
 
             // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-            if (is_selected)
-            {
+            if (is_selected) {
                 ImGui::SetItemDefaultFocus();
             }
             ImGui::PopID();

@@ -56,10 +56,8 @@ auto Operations::count_selected_meshes() const -> size_t
 {
     const auto& selection = g_selection_tool->selection();
     std::size_t count = 0;
-    for (const auto& node : selection)
-    {
-        if (is_mesh(node))
-        {
+    for (const auto& node : selection) {
+        if (is_mesh(node)) {
             ++count;
         }
     }
@@ -72,15 +70,13 @@ void Operations::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION
 
-    if (g_selection_tool == nullptr)
-    {
+    if (g_selection_tool == nullptr) {
         return;
     }
 
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
 
-    //// for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i)
-    //// {
+    //// for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i) {
     ////     auto* tool = m_active_tools.at(i);
     ////     const bool button_pressed = erhe::application::make_button(
     ////         tool->description(),
@@ -89,8 +85,7 @@ void Operations::imgui()
     ////             : erhe::application::Item_mode::normal,
     ////         button_size
     ////     );
-    ////     if (button_pressed)
-    ////     {
+    ////     if (button_pressed) {
     ////         if (get_active_tool() != tool) {
     ////             set_active_tool(tool);
     ////         } else {
@@ -108,16 +103,14 @@ void Operations::imgui()
     const auto undo_mode = g_operation_stack->can_undo()
         ? erhe::application::Item_mode::normal
         : erhe::application::Item_mode::disabled;
-    if (erhe::application::make_button("Undo", undo_mode, button_size))
-    {
+    if (erhe::application::make_button("Undo", undo_mode, button_size)) {
         g_operation_stack->undo();
     }
 
     const auto redo_mode = g_operation_stack->can_redo()
         ? erhe::application::Item_mode::normal
         : erhe::application::Item_mode::disabled;
-    if (erhe::application::make_button("Redo", redo_mode, button_size))
-    {
+    if (erhe::application::make_button("Redo", redo_mode, button_size)) {
         g_operation_stack->redo();
     }
 
@@ -126,12 +119,10 @@ void Operations::imgui()
     const auto multi_select_mode = (selected_mesh_count >= 2)
         ? erhe::application::Item_mode::normal
         : erhe::application::Item_mode::disabled;
-    if (erhe::application::make_button("Attach", multi_select_mode, button_size))
-    {
+    if (erhe::application::make_button("Attach", multi_select_mode, button_size)) {
         const auto& node0 = as_node(g_selection_tool->selection().at(0));
         const auto& node1 = as_node(g_selection_tool->selection().at(1));
-        if (node0 && node1)
-        {
+        if (node0 && node1) {
             g_operation_stack->push(
                 std::make_shared<Node_attach_operation>(
                     node1,
@@ -147,8 +138,7 @@ void Operations::imgui()
         ? erhe::application::Item_mode::normal
         : erhe::application::Item_mode::disabled;
 
-    if (make_button("Unparent", has_selection_mode, button_size))
-    {
+    if (make_button("Unparent", has_selection_mode, button_size)) {
         const auto& node0 = as_node(g_selection_tool->selection().at(0));
         if (node0)
         {
@@ -163,8 +153,7 @@ void Operations::imgui()
         }
     }
 
-    if (make_button("Merge", multi_select_mode, button_size))
-    {
+    if (make_button("Merge", multi_select_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Merge_operation>(
                 Merge_operation::Parameters{
@@ -174,112 +163,98 @@ void Operations::imgui()
         );
     }
 
-    if (make_button("Catmull-Clark", has_selection_mode, button_size))
-    {
+    if (make_button("Catmull-Clark", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Catmull_clark_subdivision_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Sqrt3", has_selection_mode, button_size))
-    {
+    if (make_button("Sqrt3", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Sqrt3_subdivision_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Triangulate", has_selection_mode, button_size))
-    {
+    if (make_button("Triangulate", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Triangulate_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Join", has_selection_mode, button_size))
-    {
+    if (make_button("Join", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Join_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Kis", has_selection_mode, button_size))
-    {
+    if (make_button("Kis", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Kis_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Meta", has_selection_mode, button_size))
-    {
+    if (make_button("Meta", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Meta_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Ortho", has_selection_mode, button_size))
-    {
+    if (make_button("Ortho", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Subdivide_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Gyro", has_selection_mode, button_size))
-    {
+    if (make_button("Gyro", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Gyro_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Dual", has_selection_mode, button_size))
-    {
+    if (make_button("Dual", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Dual_operator>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Ambo", has_selection_mode, button_size))
-    {
+    if (make_button("Ambo", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Ambo_operator>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Truncate", has_selection_mode, button_size))
-    {
+    if (make_button("Truncate", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Truncate_operator>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Normalize", has_selection_mode, button_size))
-    {
+    if (make_button("Normalize", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Normalize_operation>(
                 mesh_context()
             )
         );
     }
-    if (make_button("Reverse", has_selection_mode, button_size))
-    {
+    if (make_button("Reverse", has_selection_mode, button_size)) {
         g_operation_stack->push(
             std::make_shared<Reverse_operation>(
                 mesh_context()
             )
         );
     }
-    //// if (make_button("GUI Quad", erhe::application::Item_mode::normal, button_size))
-    //// {
+    //// if (make_button("GUI Quad", erhe::application::Item_mode::normal, button_size)) {
     ////     Scene_builder* scene_builder = get<Scene_builder>().get();
     ////
     ////     m_imgui_renderer->at_end_of_frame(

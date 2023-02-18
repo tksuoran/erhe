@@ -68,15 +68,13 @@ void erhe_opengl_callback(
         (id == 0x020092) ||
         (id == 0x000008) ||
         (id == 0x000002)
-    )
-    {
+    ) {
         return;
     }
     const auto severity = static_cast<gl::Debug_severity>(gl_severity);
     const auto type     = static_cast<gl::Debug_type    >(gl_type);
     const auto source   = static_cast<gl::Debug_source  >(gl_source);
-    if (source == gl::Debug_source::debug_source_application)
-    {
+    if (source == gl::Debug_source::debug_source_application) {
         return;
     }
 
@@ -96,8 +94,7 @@ void erhe_opengl_callback(
             : ""
     );
 
-    if (severity == gl::Debug_severity::debug_severity_high)
-    {
+    if (severity == gl::Debug_severity::debug_severity_high) {
 #if defined(WIN32)
         DebugBreak();
 #else

@@ -71,12 +71,10 @@ void Bvh_instance::set_user_data(void* ptr)
 
 void Bvh_instance::intersect(Ray& ray, Hit& hit)
 {
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return;
     }
-    if ((ray.mask & m_mask) == 0)
-    {
+    if ((ray.mask & m_mask) == 0) {
         return;
     }
 

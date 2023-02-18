@@ -46,21 +46,18 @@ Hud_drag_command::Hud_drag_command()
 
 void Hud_drag_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive)
-    {
+    if (get_command_state() != erhe::application::State::Inactive) {
         return;
     }
 
-    if (g_hud->try_begin_drag())
-    {
+    if (g_hud->try_begin_drag()) {
         set_active();
     }
 }
 
 auto Hud_drag_command::try_call() -> bool
 {
-    if (get_command_state() != erhe::application::State::Active)
-    {
+    if (get_command_state() != erhe::application::State::Active) {
         return false;
     }
 
@@ -74,8 +71,7 @@ void Hud_drag_command::on_inactive()
     if (
         (get_command_state() == erhe::application::State::Ready ) ||
         (get_command_state() == erhe::application::State::Active)
-    )
-    {
+    ) {
         g_hud->end_drag();
     }
 }
@@ -164,8 +160,7 @@ void Hud::initialize_component()
     m_y          = config.y;
     m_z          = config.z;
 
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return;
     }
 
@@ -218,8 +213,7 @@ void Hud::initialize_component()
         erhe::scene::Item_flags::show_in_ui
     );
     auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
-    if (node_raytrace)
-    {
+    if (node_raytrace) {
         m_rendertarget_node->attach(node_raytrace);
     }
 
@@ -271,8 +265,7 @@ auto Hud::intersect_ray(
         ray_origin_in_grid,
         ray_direction_in_grid
     );
-    if (!intersection.has_value())
-    {
+    if (!intersection.has_value()) {
         return {};
     }
     const glm::vec3 position_in_node = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
@@ -285,8 +278,7 @@ auto Hud::intersect_ray(
         (position_in_node.x >  half_width ) ||
         (position_in_node.z < -half_height) ||
         (position_in_node.z >  half_height)
-    )
-    {
+    ) {
         return {};
     }
 
@@ -300,14 +292,12 @@ auto Hud::try_begin_drag() -> bool
     m_node_from_control.reset();
 
     Scene_view* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         return false;
     }
 
     const auto world_from_control_opt = scene_view->get_world_from_control();
-    if (!world_from_control_opt.has_value())
-    {
+    if (!world_from_control_opt.has_value()) {
         return false;
     }
 
@@ -316,19 +306,16 @@ auto Hud::try_begin_drag() -> bool
         Hover_entry::rendertarget_bit
         //Hover_entry::grid_bit
     );
-    if (!drag_entry.valid || !drag_entry.mesh)
-    {
+    if (!drag_entry.valid || !drag_entry.mesh) {
         return false;
     }
     auto* node = drag_entry.mesh->get_node();
-    if (node == nullptr)
-    {
+    if (node == nullptr) {
         return false;
     }
     m_drag_node = as_node(node->shared_from_this());
     auto drag_node = m_drag_node.lock();
-    if (!drag_node)
-    {
+    if (!drag_node) {
         return false;
     }
     const glm::mat4 world_from_control = world_from_control_opt.value();
@@ -341,20 +328,17 @@ auto Hud::try_begin_drag() -> bool
 void Hud::on_drag()
 {
     Scene_view* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         return;
     }
 
     const auto control_from_world_opt = scene_view->get_control_from_world();
-    if (!control_from_world_opt.has_value() || !m_node_from_control.has_value())
-    {
+    if (!control_from_world_opt.has_value() || !m_node_from_control.has_value()) {
         return;
     }
 
     auto drag_node = m_drag_node.lock();
-    if (!drag_node)
-    {
+    if (!drag_node) {
         return;
     }
 
@@ -374,17 +358,13 @@ void Hud::on_message(Editor_message& message)
 {
     Tool::on_message(message);
 
-    if (m_locked_to_head)
-    {
+    if (m_locked_to_head) {
         using namespace erhe::toolkit;
-        if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view))
-        {
+        if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
             const auto& camera = message.scene_view->get_camera();
-            if (camera)
-            {
+            if (camera) {
                 const auto* camera_node = camera->get_node();
-                if (camera_node != nullptr)
-                {
+                if (camera_node != nullptr) {
                     const auto& world_from_camera = camera_node->world_from_node();
                     update_node_transform(world_from_camera);
                 }
@@ -395,8 +375,7 @@ void Hud::on_message(Editor_message& message)
 
 void Hud::update_node_transform(const glm::mat4& world_from_camera)
 {
-    if (!m_rendertarget_node)
-    {
+    if (!m_rendertarget_node) {
         return;
     }
 
@@ -427,16 +406,14 @@ void Hud::imgui()
     const bool x_changed = ImGui::DragFloat("X", &m_x, 0.0001f);
     const bool y_changed = ImGui::DragFloat("Y", &m_y, 0.0001f);
     const bool z_changed = ImGui::DragFloat("Z", &m_z, 0.0001f);
-    if (x_changed || y_changed || z_changed)
-    {
+    if (x_changed || y_changed || z_changed) {
         update_node_transform(m_world_from_camera);
     }
 }
 
 auto Hud::toggle_visibility() -> bool
 {
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return false;
     }
 
@@ -446,27 +423,22 @@ auto Hud::toggle_visibility() -> bool
 
 void Hud::set_visibility(const bool value)
 {
-    if (!m_enabled)
-    {
+    if (!m_enabled) {
         return;
     }
 
     m_is_visible = value;
 
-    if (!m_rendertarget_mesh)
-    {
+    if (!m_rendertarget_mesh) {
         return;
     }
 
     Scene_view* hover_scene_view = get_hover_scene_view();
-    if (hover_scene_view != nullptr)
-    {
+    if (hover_scene_view != nullptr) {
         const auto& camera = get_hover_scene_view()->get_camera();
-        if (camera)
-        {
+        if (camera) {
             const auto* camera_node = camera->get_node();
-            if (camera_node != nullptr)
-            {
+            if (camera_node != nullptr) {
                 const auto& world_from_camera = camera_node->world_from_node();
                 update_node_transform(world_from_camera);
             }

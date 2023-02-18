@@ -12,8 +12,7 @@ namespace
 
 auto glsl_token(const gl::Uniform_type type) -> const char*
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum gl::Uniform_type;
         case gl::Uniform_type::int_:               return "int      ";
         case gl::Uniform_type::int_vec2:           return "ivec2    ";
@@ -76,8 +75,7 @@ auto glsl_token(const gl::Uniform_type type) -> const char*
         case gl::Uniform_type::int_sampler_2d_multisample_array:            return "intSampler2DMultisampleArray";
         case gl::Uniform_type::unsigned_int_sampler_2d_multisample_array:   return "unsignedIntSampler2DMultisampleArray";
 
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad uniform type");
         }
     }
@@ -136,8 +134,7 @@ public:
 
 auto get_type_details(const gl::Uniform_type type) -> Type_details
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum gl::Uniform_type;
         case gl::Uniform_type::int_:                                        return Type_details(type, gl::Uniform_type::int_,               1);
         case gl::Uniform_type::int_vec2:                                    return Type_details(type, gl::Uniform_type::int_,               2);
@@ -216,19 +213,16 @@ auto get_type_details(const gl::Uniform_type type) -> Type_details
 
 auto get_type_size(const gl::Uniform_type type) -> std::size_t
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum gl::Uniform_type;
         case gl::Uniform_type::int_:               return 4;
         case gl::Uniform_type::unsigned_int:       return 4;
         case gl::Uniform_type::unsigned_int64_arb: return 8;
         case gl::Uniform_type::float_:             return 4;
         case gl::Uniform_type::double_:            return 8;
-        default:
-        {
+        default: {
             auto type_details = get_type_details(type);
-            if (type_details.is_sampler())
-            {
+            if (type_details.is_sampler()) {
                 return 0; // samplers are opaque types and as such do not have size
             }
             return type_details.component_count * get_type_size(type_details.basic_type);
@@ -239,8 +233,7 @@ auto get_type_size(const gl::Uniform_type type) -> std::size_t
 auto get_pack_size(const gl::Uniform_type type) -> std::size_t
 {
     const auto type_details = get_type_details(type);
-    if (type_details.is_sampler())
-    {
+    if (type_details.is_sampler()) {
         return 0; // samplers are opaque types and as such do not have size
     }
 
@@ -251,8 +244,7 @@ auto get_pack_size(const gl::Uniform_type type) -> std::size_t
 
 auto Shader_resource::is_basic(const Type type) -> bool
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum Type;
         case Type::basic                : return true;
         case Type::sampler              : return true;
@@ -261,8 +253,7 @@ auto Shader_resource::is_basic(const Type type) -> bool
         case Type::default_uniform_block: return false;
         case Type::uniform_block        : return false;
         case Type::shader_storage_block : return false;
-        default:
-        {
+        default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
     }
@@ -270,8 +261,7 @@ auto Shader_resource::is_basic(const Type type) -> bool
 
 auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum Type;
         case Type::basic                : return false;
         case Type::sampler              : return false;
@@ -280,8 +270,7 @@ auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
         case Type::default_uniform_block: return true;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
-        default:
-        {
+        default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
     }
@@ -289,8 +278,7 @@ auto Shader_resource::is_aggregate(const Shader_resource::Type type) -> bool
 
 auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> bool
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum Type;
         case Type::basic                : return false;
         case Type::sampler              : return false;
@@ -299,8 +287,7 @@ auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> b
         case Type::default_uniform_block: return true;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
-        default:
-        {
+        default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
     }
@@ -308,8 +295,7 @@ auto Shader_resource::should_emit_members(const Shader_resource::Type type) -> b
 
 auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum Type;
         case Type::basic                : return false;
         case Type::sampler              : return false;
@@ -318,8 +304,7 @@ auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
         case Type::default_uniform_block: return true;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
-        default:
-        {
+        default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
     }
@@ -327,8 +312,7 @@ auto Shader_resource::is_block(const Shader_resource::Type type) -> bool
 
 auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> bool
 {
-    switch (type)
-    {
+    switch (type) {
         //using enum Type;
         case Type::basic                : return false;
         case Type::sampler              : return false;
@@ -337,8 +321,7 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
         case Type::default_uniform_block: return false;
         case Type::uniform_block        : return true;
         case Type::shader_storage_block : return true;
-        default:
-        {
+        default: {
             ERHE_FATAL("bad Shader_resource::Type");
         }
     }
@@ -346,15 +329,13 @@ auto Shader_resource::uses_binding_points(const Shader_resource::Type type) -> b
 
 auto Shader_resource::c_str(const Shader_resource::Precision precision) -> const char*
 {
-    switch (precision)
-    {
+    switch (precision) {
         //using enum Shader_resource::Precision;
         case Shader_resource::Precision::lowp:    return "lowp";
         case Shader_resource::Precision::mediump: return "mediump";
         case Shader_resource::Precision::highp:   return "highp";
         case Shader_resource::Precision::superp:  return "superp";
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad uniform precision");
         }
     }
@@ -405,16 +386,13 @@ Shader_resource::Shader_resource(
     //// Would be nice to be able to verify this at the time of construction,
     //// but Instance might not be ready yet.
     ////
-    //// if (type == Type::uniform_block)
-    //// {
+    //// if (type == Type::uniform_block) {
     ////     ERHE_VERIFY(binding_point < Instance::limits.max_uniform_buffer_bindings);
     //// }
-    //// if (type == Type::shader_storage_block)
-    //// {
+    //// if (type == Type::shader_storage_block) {
     ////     ERHE_VERIFY(binding_point < Instance::limits.max_shader_storage_buffer_bindings);
     //// }
-    //// if (type == Type::sampler)
-    //// {
+    //// if (type == Type::sampler) {
     ////     // TODO Which limit to use?
     ////     ERHE_VERIFY(binding_point < Instance::limits.max_combined_texture_image_units);
     //// }
@@ -537,10 +515,8 @@ auto Shader_resource::member_count() const -> std::size_t
 
 auto Shader_resource::member(const std::string_view name) const -> Shader_resource*
 {
-    for (const auto& member : m_members)
-    {
-        if (member->name() == name)
-        {
+    for (const auto& member : m_members) {
+        if (member->name() == name) {
             return member.get();
         }
     }
@@ -557,25 +533,20 @@ auto Shader_resource::binding_point() const -> unsigned int
 
 auto Shader_resource::size_bytes() const -> std::size_t
 {
-    if (m_type == Type::struct_type)
-    {
+    if (m_type == Type::struct_type) {
         // Assume all members have been added
         return m_offset;
     }
 
-    if (m_type == Type::struct_member)
-    {
+    if (m_type == Type::struct_member) {
         std::size_t struct_size = m_struct_type->size_bytes();
         std::size_t array_multiplier{1};
-        if (m_array_size.has_value() && (m_array_size.value() > 0))
-        {
+        if (m_array_size.has_value() && (m_array_size.value() > 0)) {
             array_multiplier = m_array_size.value();
 
             // arrays in uniform block are packed with std140
-            if ((m_parent != nullptr) && (m_parent->type() == Type::uniform_block))
-            {
-                while ((struct_size % 16) != 0)
-                {
+            if ((m_parent != nullptr) && (m_parent->type() == Type::uniform_block)) {
+                while ((struct_size % 16) != 0) {
                     ++struct_size;
                 }
             }
@@ -585,29 +556,22 @@ auto Shader_resource::size_bytes() const -> std::size_t
     }
 
     // TODO Shader storage buffer alignment?
-    if (is_block(m_type))
-    {
+    if (is_block(m_type)) {
         std::size_t padded_size = m_offset;
-        while ((padded_size % Instance::implementation_defined.uniform_buffer_offset_alignment) != 0)
-        {
+        while ((padded_size % Instance::implementation_defined.uniform_buffer_offset_alignment) != 0) {
             ++padded_size;
         }
 
         return padded_size;
-    }
-    else
-    {
+    } else {
         std::size_t element_size = get_pack_size(m_basic_type);
         std::size_t array_multiplier{1};
-        if (m_array_size.has_value() && (m_array_size.value() > 0))
-        {
+        if (m_array_size.has_value() && (m_array_size.value() > 0)) {
             array_multiplier = m_array_size.value();
 
             // arrays in uniform block are packed with std140
-            if ((m_parent != nullptr) && (m_parent->type() == Type::uniform_block))
-            {
-                while ((element_size % 16) != 0)
-                {
+            if ((m_parent != nullptr) && (m_parent->type() == Type::uniform_block)) {
+                while ((element_size % 16) != 0) {
                     ++element_size;
                 }
             }
@@ -637,49 +601,40 @@ auto Shader_resource::type_string() const -> std::string
         return "uniform ";
     }
 
-    switch (m_type)
-    {
+    switch (m_type) {
         //using enum Type;
-        case Type::basic:
-        {
+        case Type::basic: {
             return " ";
         }
 
-        case Type::struct_type:
-        {
+        case Type::struct_type: {
             return "struct ";
         }
 
-        case Type::struct_member:
-        {
+        case Type::struct_member: {
             return m_struct_type->name() + " ";
         }
 
-        case Type::default_uniform_block:
-        {
+        case Type::default_uniform_block: {
             Expects(m_parent == nullptr);
             return "";
         }
 
-        case Type::uniform_block:
-        {
+        case Type::uniform_block: {
             Expects(m_parent == nullptr);
             return "uniform ";
         }
 
-        case Type::shader_storage_block:
-        {
+        case Type::shader_storage_block: {
             Expects(m_parent == nullptr);
             return "buffer ";
         }
 
-        case Type::sampler:
-        {
+        case Type::sampler: {
             ERHE_FATAL("Samplers are only allowed in default uniform block");
         }
 
-        default:
-        {
+        default: {
             ERHE_FATAL("Bad Shader_resource::Type");
         }
     }
@@ -689,8 +644,8 @@ auto Shader_resource::layout_string() const -> std::string
 {
     if (
         (m_location      == -1) &&
-        (m_binding_point == -1))
-    {
+        (m_binding_point == -1)
+    ) {
         return {};
     }
 
@@ -698,36 +653,28 @@ auto Shader_resource::layout_string() const -> std::string
     bool first{true};
 
     ss << "layout(";
-    if (m_type == Type::uniform_block)
-    {
+    if (m_type == Type::uniform_block) {
         ss << "std140";
         first = false;
-    }
-    else if (m_type == Type::shader_storage_block)
-    {
+    } else if (m_type == Type::shader_storage_block) {
         ss << "std430";
         first = false;
     }
-    if (m_location != -1)
-    {
-        if (!first)
-        {
+    if (m_location != -1) {
+        if (!first) {
             ss << ", ";
         }
         ss << "location = " << m_location;
         first = false;
     }
-    if ((m_parent != nullptr) && (m_parent->type() == Type::struct_type))
-    {
-        if (!first)
-        {
+    if ((m_parent != nullptr) && (m_parent->type() == Type::struct_type)) {
+        if (!first) {
             ss << ", ";
         }
         ss << "offset = " << m_offset_in_parent;
         first = false;
     }
-    if (m_binding_point != -1)
-    {
+    if (m_binding_point != -1) {
         if (!first)
         {
             ss << ", ";
@@ -747,65 +694,51 @@ auto Shader_resource::source(
 
     indent(ss, indent_level);
 
-    if (m_type != Type::default_uniform_block)
-    {
+    if (m_type != Type::default_uniform_block) {
         ss << layout_string();
         ss << type_string();
     }
 
-    if (should_emit_members(m_type))
-    {
-        if (m_type != Type::default_uniform_block)
-        {
+    if (should_emit_members(m_type)) {
+        if (m_type != Type::default_uniform_block) {
             ss << name();
             if (
                 (m_type == Type::uniform_block       ) ||
                 (m_type == Type::shader_storage_block)
-            )
-            {
+            ) {
                 ss << "_block";
             }
             ss << " {\n";
         }
-        for (const auto& member : m_members)
-        {
+        for (const auto& member : m_members) {
             const int extra_indent = (m_type == Type::default_uniform_block) ? 0 : 1;
             ss << member->source(indent_level + extra_indent);
         }
-        if (m_type != Type::default_uniform_block)
-        {
+        if (m_type != Type::default_uniform_block) {
             indent(ss, indent_level);
             ss << "}";
         }
-    }
-    else if (m_type == Type::struct_member)
-    {
+    } else if (m_type == Type::struct_member) {
         // nada ss << m_struct_type->name();
-    }
-    else
-    {
+    } else {
         ss << glsl_token(basic_type());
     }
 
     if (
         (m_type != Type::default_uniform_block) &&
         (m_type != Type::struct_type)
-    )
-    {
+    ) {
         ss << " " << name();
-        if (array_size().has_value())
-        {
+        if (array_size().has_value()) {
             ss << "[";
-            if (array_size() != 0)
-            {
+            if (array_size() != 0) {
                 ss << array_size().value();
             }
             ss << "]";
         }
     }
 
-    if (m_type != Type::default_uniform_block)
-    {
+    if (m_type != Type::default_uniform_block) {
         // default uniform block only lists members
         ss << ";\n";
     }
@@ -846,8 +779,7 @@ auto Shader_resource::add_sampler(
         )
     ).get();
     const int count = array_size.has_value() ? static_cast<int>(array_size.value()) : 1;
-    if (!dedicated_texture_unit.has_value())
-    {
+    if (!dedicated_texture_unit.has_value()) {
         m_location += count;
     }
     return new_member;
@@ -1064,8 +996,7 @@ auto Shader_resource::add_uint64(
 
 void Shader_resource::align_offset_to(const unsigned int alignment)
 {
-    while ((m_offset % alignment) != 0)
-    {
+    while ((m_offset % alignment) != 0) {
         ++m_offset;
     }
 }
@@ -1075,8 +1006,7 @@ void Shader_resource::indent(
     const int indent_level
 ) const
 {
-    for (int i = 0; i < indent_level; ++i)
-    {
+    for (int i = 0; i < indent_level; ++i) {
         ss << "    ";
     }
 }

@@ -70,8 +70,8 @@ public:
     Type  projection_type{Type::perspective_vertical};
     float z_near         {  0.03f};
     float z_far          {64.0};
-    float fov_x          {glm::pi<float>() / 4.0f};
-    float fov_y          {glm::pi<float>() / 4.0f};
+    float fov_x          { glm::pi<float>() / 4.0f};
+    float fov_y          { glm::pi<float>() / 4.0f};
     float fov_left       {-glm::pi<float>() / 4.0f};
     float fov_right      { glm::pi<float>() / 4.0f};
     float fov_up         { glm::pi<float>() / 4.0f};

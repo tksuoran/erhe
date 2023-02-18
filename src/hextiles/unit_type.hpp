@@ -17,11 +17,10 @@ constexpr int Category_sea    = 3;
 constexpr int Category_sub    = 4;
 constexpr int Category_city   = 5;
 
-[[nodiscard]] inline auto get_bit_position(uint32_t value) -> uint32_t
+[[nodiscard]] inline auto get_bit_position(const uint32_t value) -> uint32_t
 {
     //Expects(std::popcount(value) <= 1);
-    switch (value)
-    {
+    switch (value) {
         case     0u: return  0u;
         case     1u: return  0u;
         case     2u: return  1u;
@@ -40,8 +39,7 @@ constexpr int Category_city   = 5;
         case 16384u: return 14u;
         case 32768u: return 15u;
         case 65536u: return 16u;
-        default:
-        {
+        default: {
             return get_bit_position(value >> 16u) + 16u;
         }
     }

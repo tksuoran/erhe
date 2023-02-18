@@ -27,9 +27,7 @@ public:
     Json_library();
     explicit Json_library(const std::filesystem::path& path);
 
-    [[nodiscard]] auto make_geometry(
-        const std::string& key_name
-    ) const -> erhe::geometry::Geometry;
+    [[nodiscard]] auto make_geometry(const std::string& key_name) const -> erhe::geometry::Geometry;
 
     std::vector<std::string> names;       // all meshes
     std::vector<Category>    categories;  // categories

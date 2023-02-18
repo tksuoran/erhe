@@ -31,21 +31,18 @@ void Vertex_attribute_mappings::collect_attributes(
         erhe::graphics::Instance::limits.max_vertex_attribs
     );
 
-    if (vertex_buffer == nullptr)
-    {
+    if (vertex_buffer == nullptr) {
         log_vertex_attribute_mappings->error("error: vertex buffer == nullptr");
         return;
     }
 
-    for (const auto& mapping : mappings)
-    {
+    for (const auto& mapping : mappings) {
         if (
             vertex_format.has_attribute(
                 mapping.src_usage.type,
                 static_cast<unsigned int>(mapping.src_usage.index)
             )
-        )
-        {
+        ) {
             const auto& attribute = vertex_format.find_attribute(
                 mapping.src_usage.type,
                 static_cast<unsigned int>(mapping.src_usage.index)
@@ -60,13 +57,11 @@ void Vertex_attribute_mappings::collect_attributes(
                 attribute->usage.index
             );
 
-            if (attribute == nullptr)
-            {
+            if (attribute == nullptr) {
                 log_vertex_attribute_mappings->error("bad vertex input state: attribute == nullptr");
                 continue;
             }
-            if (mapping.layout_location >= max_attribute_count)
-            {
+            if (mapping.layout_location >= max_attribute_count) {
                 log_vertex_attribute_mappings->error("bad vertex input state: layout location >= max attribute count");
                 continue;
             }

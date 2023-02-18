@@ -216,8 +216,7 @@ void Text_renderer::initialize_component()
     ini->get("enabled",   config.enabled);
     ini->get("font_size", config.font_size);
 
-    if (!config.enabled)
-    {
+    if (!config.enabled) {
         log_startup->info("Text renderer disabled due to erhe.ini setting");
         return;
     }
@@ -252,8 +251,7 @@ void Text_renderer::initialize_component()
     const auto& gpu_index_data = index_buffer_map.span();
     std::size_t offset      {0};
     uint16_t    vertex_index{0};
-    for (unsigned int i = 0; i < max_quad_count; ++i)
-    {
+    for (unsigned int i = 0; i < max_quad_count; ++i) {
         gpu_index_data[offset + 0] = vertex_index;
         gpu_index_data[offset + 1] = vertex_index + 1;
         gpu_index_data[offset + 2] = vertex_index + 2;
@@ -298,13 +296,10 @@ void Text_renderer::initialize_component()
             }
         };
 
-        if (erhe::graphics::Instance::info.use_bindless_texture)
-        {
+        if (erhe::graphics::Instance::info.use_bindless_texture) {
             create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
             create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        }
-        else
-        {
+        } else {
             m_default_uniform_block.add_sampler(
                 "s_texture",
                 gl::Uniform_type::sampler_2d,
@@ -318,15 +313,13 @@ void Text_renderer::initialize_component()
             !prototype.is_valid()
             //prototype.m_handle.gl_name() == 0 ||
             //prototype.m_attached_shaders.empty()
-        )
-        {
+        ) {
             log_startup->error("Text renderer shader compilation failed");
             return;
         }
 
         m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-        if (g_shader_monitor)
-        {
+        if (g_shader_monitor) {
             g_shader_monitor->add(create_info, m_shader_stages.get());
         }
     }
@@ -342,8 +335,7 @@ void Text_renderer::create_frame_resources()
 
     constexpr std::size_t vertex_count{65536 * 8};
     const bool reverse_depth = g_configuration->graphics.reverse_depth;
-    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot)
-    {
+    for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_frame_resources.emplace_back(
             reverse_depth,
             vertex_count,
@@ -379,8 +371,7 @@ void Text_renderer::print(
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_font)
-    {
+    if (!m_font) {
         return;
     }
 
@@ -427,8 +418,7 @@ auto Text_renderer::measure(const std::string_view text) const -> erhe::ui::Rect
 static constexpr std::string_view c_text_renderer_render{"Text_renderer::render()"};
 void Text_renderer::render(erhe::scene::Viewport viewport)
 {
-    if (m_index_count == 0)
-    {
+    if (m_index_count == 0) {
         return;
     }
 
@@ -489,12 +479,9 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
         static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
     );
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
-    }
-    else
-    {
+    } else {
         gl::bind_texture_unit(0, m_font->texture()->gl_name());
         gl::bind_sampler(0, m_nearest_sampler->gl_name());
     }
@@ -506,8 +493,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
         reinterpret_cast<const void*>(m_index_range_first * 2)
     );
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         gl::make_texture_handle_non_resident_arb(handle);
     }
 

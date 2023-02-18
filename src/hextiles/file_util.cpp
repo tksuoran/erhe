@@ -7,15 +7,13 @@ namespace hextiles
 
 auto read_file(const char* const path) -> std::vector<unsigned char>
 {
-    if (path == nullptr)
-    {
+    if (path == nullptr) {
         log_file->error("read_file(): path = nullptr");
         return {};
     }
 
     FILE* const file = std::fopen(path, "rb");
-    if (file == nullptr)
-    {
+    if (file == nullptr) {
         log_file->error("Failed to open '{}'", path);
         return {};
     }
@@ -31,15 +29,13 @@ auto read_file(const char* const path) -> std::vector<unsigned char>
 
 auto read_file_string(const char* const path) -> std::string
 {
-    if (path == nullptr)
-    {
+    if (path == nullptr) {
         log_file->error("read_file(): path = nullptr");
         return {};
     }
 
     FILE* const file = std::fopen(path, "rb");
-    if (file == nullptr)
-    {
+    if (file == nullptr) {
         log_file->error("Failed to open '{}' for reading", path);
         return {};
     }
@@ -58,21 +54,18 @@ auto write_file(
     const size_t         length
 ) -> bool
 {
-    if (path == nullptr)
-    {
+    if (path == nullptr) {
         log_file->error("write_file(): path = nullptr");
         return false;
     }
 
     FILE* const file = std::fopen(path, "wb");
-    if (file == nullptr)
-    {
+    if (file == nullptr) {
         log_file->error("Failed to open '{}' for writing", path);
         return false;
     }
     const size_t res = std::fwrite(buffer, 1, length, file);
-    if (res != length)
-    {
+    if (res != length) {
         log_file->error("Failed to write '{}'", path);
         return false;
     }
@@ -85,21 +78,18 @@ auto write_file(
     const std::string& text
 ) -> bool
 {
-    if (path == nullptr)
-    {
+    if (path == nullptr) {
         log_file->error("write_file(): path = nullptr");
         return false;
     }
 
     FILE* const file = std::fopen(path, "wb");
-    if (file == nullptr)
-    {
+    if (file == nullptr) {
         log_file->error("Failed to open '{}' for writing", path);
         return false;
     }
     const size_t res = std::fwrite(text.data(), 1, text.size(), file);
-    if (res != text.size())
-    {
+    if (res != text.size()) {
         log_file->error("Failed to write '{}'", path);
         return false;
     }
@@ -114,8 +104,7 @@ auto get_string(
 ) -> std::string
 {
     std::string result(length, 0);
-    for (size_t pos = 0U; pos < length; pos++)
-    {
+    for (size_t pos = 0U; pos < length; pos++) {
         result[pos] = static_cast<char>(data[offset + pos]);
     }
     return result;

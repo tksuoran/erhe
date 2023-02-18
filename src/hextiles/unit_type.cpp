@@ -3,10 +3,9 @@
 namespace hextiles
 {
 
-auto Unit_flags::c_char(uint32_t value) -> char
+auto Unit_flags::c_char(const uint32_t value) -> char
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_has_parachute      : return '^';
         case bit_can_build_plain    : return 'p';
         case bit_can_build_field    : return 'f';
@@ -22,10 +21,9 @@ auto Unit_flags::c_char(uint32_t value) -> char
     }
 }
 
-auto Unit_flags::c_str(uint32_t value) -> const char*
+auto Unit_flags::c_str(const uint32_t value) -> const char*
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_has_parachute      : return "Has parachute";
         case bit_can_build_plain    : return "Can build Plain";
         case bit_can_build_field    : return "Can build Field";
@@ -41,10 +39,9 @@ auto Unit_flags::c_str(uint32_t value) -> const char*
     }
 }
 
-auto Battle_type::c_char(uint32_t value) -> char
+auto Battle_type::c_char(const uint32_t value) -> char
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_air        : return 'a';
         case bit_ground     : return 'g';
         case bit_sea        : return 's';
@@ -55,10 +52,9 @@ auto Battle_type::c_char(uint32_t value) -> char
     }
 }
 
-auto Battle_type::c_str(uint32_t value) -> const char*
+auto Battle_type::c_str(const uint32_t value) -> const char*
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_air        : return "Air";
         case bit_ground     : return "Ground";
         case bit_sea        : return "Sea";
@@ -69,10 +65,9 @@ auto Battle_type::c_str(uint32_t value) -> const char*
     }
 }
 
-auto Movement_type::c_char(uint32_t value) -> char
+auto Movement_type::c_char(const uint32_t value) -> char
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_air         : return 'a';
         case bit_advanced_air: return 'A';
         case bit_light_ground: return 'g';
@@ -85,10 +80,9 @@ auto Movement_type::c_char(uint32_t value) -> char
     }
 }
 
-auto Movement_type::c_str(uint32_t value) -> const char*
+auto Movement_type::c_str(const uint32_t value) -> const char*
 {
-    switch (value)
-    {
+    switch (value) {
         case bit_air         : return "Air";
         case bit_advanced_air: return "Advanced Air";
         case bit_light_ground: return "Light Ground";

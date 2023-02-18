@@ -45,8 +45,7 @@ auto split(
     std::stringstream        ss{s};
     std::string              item;
 
-    while (std::getline(ss, item, delimeter))
-    {
+    while (std::getline(ss, item, delimeter)) {
         result.push_back(item);
     }
 
@@ -59,8 +58,7 @@ auto trim(
 ) -> std::string
 {
     const auto strBegin = str.find_first_not_of(whitespace);
-    if (strBegin == std::string::npos)
-    {
+    if (strBegin == std::string::npos) {
         return ""; // no content
     }
 
@@ -76,8 +74,7 @@ void ini_get(
     int&                             destination
 )
 {
-    if (ini.has(key))
-    {
+    if (ini.has(key)) {
         destination = std::stoi(ini.get(key));
     }
 }
@@ -88,8 +85,7 @@ void ini_get(
     float&                           destination
 )
 {
-    if (ini.has(key))
-    {
+    if (ini.has(key)) {
         destination = std::stof(ini.get(key));
     }
 }
@@ -100,16 +96,13 @@ void ini_get(
     glm::vec2&                       destination
 )
 {
-    if (ini.has(key))
-    {
+    if (ini.has(key)) {
         std::string value = ini.get(key);
         const auto values = split(value, ',');
-        if (values.size() > 0)
-        {
+        if (values.size() > 0) {
             destination.x = std::stof(trim(values.at(0)));
         }
-        if (values.size() > 1)
-        {
+        if (values.size() > 1) {
             destination.y = std::stof(trim(values.at(1)));
         }
     }
@@ -121,20 +114,16 @@ void ini_get(
     glm::vec3&                       destination
 )
 {
-    if (ini.has(key))
-    {
+    if (ini.has(key)) {
         std::string value = ini.get(key);
         const auto values = split(value, ',');
-        if (values.size() > 0)
-        {
+        if (values.size() > 0) {
             destination.x = std::stof(trim(values.at(0)));
         }
-        if (values.size() > 1)
-        {
+        if (values.size() > 1) {
             destination.y = std::stof(trim(values.at(1)));
         }
-        if (values.size() > 2)
-        {
+        if (values.size() > 2) {
             destination.z = std::stof(trim(values.at(2)));
         }
     }
@@ -146,19 +135,16 @@ void ini_get(
     glm::vec4&                       destination
 )
 {
-    if (ini.has(key))
-    {
+    if (ini.has(key)) {
         std::string value = ini.get(key);
         const auto values = split(value, ',');
         destination.w = 1.0f;
-        if (values.size() >= 3)
-        {
+        if (values.size() >= 3) {
             destination.x = std::stof(trim(values.at(0)));
             destination.y = std::stof(trim(values.at(1)));
             destination.z = std::stof(trim(values.at(2)));
         }
-        if (values.size() >= 4)
-        {
+        if (values.size() >= 4) {
             destination.w = std::stof(trim(values.at(3)));
         }
     }
@@ -170,8 +156,7 @@ void ini_get(
     std::string&                     destination
 )
 {
-    if (ini.has(key))
-    {
+    if (ini.has(key)) {
         destination = ini.get(key);
     }
 }
@@ -182,15 +167,12 @@ void ini_get(
     bool&                            destination
 )
 {
-    if (ini.has(key))
-    {
+    if (ini.has(key)) {
         const std::string value = to_lower(ini.get(key));
-        if (value == "1" || value == "yes" || value == "true" || value == "on")
-        {
+        if (value == "1" || value == "yes" || value == "true" || value == "on") {
             destination = true;
         }
-        else if (value == "0" || value == "no" || value == "false" || value == "off")
-        {
+        else if (value == "0" || value == "no" || value == "false" || value == "off") {
             destination = false;
         }
     }
@@ -205,8 +187,7 @@ public:
     Ini_impl(const char* path, const char* section_name)
     {
         mINI::INIFile file{path};
-        if (!file.read(ini))
-        {
+        if (!file.read(ini)) {
             log_startup->warn("Unable to read ini file '{}'", path);
         }
         section = ini.get(section_name);
@@ -274,10 +255,8 @@ void Configuration::parse_args(int argc, char** argv)
 {
     mINI::INIFile file{"erhe.ini"};
     mINI::INIStructure ini;
-    if (file.read(ini))
-    {
-        if (ini.has("imgui"))
-        {
+    if (file.read(ini)) {
+        if (ini.has("imgui")) {
             const auto& section = ini["imgui"];
             ini_get(section, "window_viewport",  imgui.window_viewport);
             ini_get(section, "primary_font",     imgui.primary_font);
@@ -287,13 +266,11 @@ void Configuration::parse_args(int argc, char** argv)
             ini_get(section, "padding",          imgui.padding);
             ini_get(section, "rounding",         imgui.rounding);
         }
-        if (ini.has("threading"))
-        {
+        if (ini.has("threading")) {
             const auto& section = ini["threading"];
             ini_get(section, "parallel_init", threading.parallel_initialization);
         }
-        if (ini.has("graphics"))
-        {
+        if (ini.has("graphics")) {
             const auto& section = ini["graphics"];
             ini_get(section, "reverse_depth",     graphics.reverse_depth);
             ini_get(section, "simpler_shaders",   graphics.simpler_shaders);
@@ -302,8 +279,7 @@ void Configuration::parse_args(int argc, char** argv)
             ini_get(section, "force_no_bindless", graphics.force_no_bindless);
             ini_get(section, "msaa_sample_count", graphics.msaa_sample_count);
         }
-        if (ini.has("window"))
-        {
+        if (ini.has("window")) {
             const auto& section = ini["window"];
             ini_get(section, "show",          window.show);
             ini_get(section, "fullscreen",    window.fullscreen);
@@ -328,17 +304,14 @@ void Configuration::parse_args(int argc, char** argv)
         ("reverse-depth",              "Enable reverse depth",                  cxxopts::value<bool>()->default_value(str( graphics.reverse_depth)))
         ("no-reverse-depth",           "Disable reverse depth",                 cxxopts::value<bool>()->default_value(str(!graphics.reverse_depth)));
 
-    try
-    {
+    try {
         auto arguments = options.parse(argc, argv);
 
         imgui.window_viewport             = arguments["window-imgui-viewport"  ].as<bool>() && !arguments["no-window-imgui-viewport"  ].as<bool>();
         //headset.openxr                    = arguments["openxr"                 ].as<bool>() && !arguments["no-openxr"                 ].as<bool>();
         threading.parallel_initialization = arguments["parallel-initialization"].as<bool>() && !arguments["no-parallel-initialization"].as<bool>();
         graphics.reverse_depth            = arguments["reverse-depth"          ].as<bool>() && !arguments["no-reverse-depth"          ].as<bool>();
-    }
-    catch (const std::exception& e)
-    {
+    } catch (const std::exception& e) {
         log_startup->error(
             "Error parsing command line argumenst: {}",
             e.what()

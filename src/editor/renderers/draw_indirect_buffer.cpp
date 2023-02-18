@@ -51,37 +51,30 @@ auto Draw_indirect_buffer::update(
     uint32_t          base_instance      {0};
     std::size_t       draw_indirect_count{0};
     m_writer.begin(buffer.target());
-    for (const auto& mesh : meshes)
-    {
-        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
-        {
+    for (const auto& mesh : meshes) {
+        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
             log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("draw indirect buffer capacity exceeded");
             break;
         }
 
-        if (!filter(mesh->get_flag_bits()))
-        {
+        if (!filter(mesh->get_flag_bits())) {
             continue;
         }
-        for (auto& primitive : mesh->mesh_data.primitives)
-        {
-            if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count())
-            {
+        for (auto& primitive : mesh->mesh_data.primitives) {
+            if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
                 log_render->critical("draw indirect buffer capacity {} exceeded", buffer.capacity_byte_count());
                 ERHE_FATAL("draw indirect buffer capacity exceeded");
                 break;
             }
             const auto& primitive_geometry = primitive.gl_primitive_geometry;
             const auto  index_range        = primitive_geometry.index_range(primitive_mode);
-            if (index_range.index_count == 0)
-            {
+            if (index_range.index_count == 0) {
                 continue;
             }
 
             uint32_t index_count = static_cast<uint32_t>(index_range.index_count);
-            if (m_max_index_count_enable)
-            {
+            if (m_max_index_count_enable) {
                 index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
             }
 

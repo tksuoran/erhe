@@ -18,8 +18,7 @@ void Fbm_noise::prepare()
     const float gain  = std::abs(m_gain);
     float amp         = gain;
     float amp_fractal = 1.0f;
-    for (int i = 1; i < m_octaves; i++)
-    {
+    for (int i = 1; i < m_octaves; i++) {
         amp_fractal += amp;
         amp *= gain;
     }
@@ -35,23 +34,22 @@ void Fbm_noise::imgui()
     ImGui::DragFloat2("Location",   &m_location[0], 0.1f, -1000.0f,   1000.0f);
 }
 
-auto Fbm_noise::generate(float s, float t, glm::vec4 seed) -> float
+auto Fbm_noise::generate(const float s, const float t, const glm::vec4 seed) -> float
 {
-    float x = m_location[0] + std::cos(s * glm::two_pi<float>()) * m_frequency;
-    float y = m_location[1] + std::cos(t * glm::two_pi<float>()) * m_frequency;
-    float z = m_location[0] + std::sin(s * glm::two_pi<float>()) * m_frequency;
-    float w = m_location[1] + std::sin(t * glm::two_pi<float>()) * m_frequency;
+    const float x = m_location[0] + std::cos(s * glm::two_pi<float>()) * m_frequency;
+    const float y = m_location[1] + std::cos(t * glm::two_pi<float>()) * m_frequency;
+    const float z = m_location[0] + std::sin(s * glm::two_pi<float>()) * m_frequency;
+    const float w = m_location[1] + std::sin(t * glm::two_pi<float>()) * m_frequency;
 
     return generate(x, y, z, w, seed);
 }
 
-auto Fbm_noise::generate(float x, float y, float z, float w, glm::vec4 seed) -> float
+auto Fbm_noise::generate(float x, float y, float z, float w, const glm::vec4 seed) -> float
 {
     float sum = 0;
     float amp = m_bounding;
 
-    for (int i = 0; i < m_octaves; i++)
-    {
+    for (int i = 0; i < m_octaves; i++) {
         float noise = glm::simplex(seed + glm::vec4{x, y, z, w});
         sum += noise * amp;
 

@@ -66,11 +66,9 @@ auto random_coordinate(coordinate_t w, coordinate_t h) -> Tile_coordinate
 auto New_game_window::is_too_close_to_city(Tile_coordinate location) const -> bool
 {
     auto map = g_map_editor->get_map();
-    for (auto& city : m_cities)
-    {
+    for (auto& city : m_cities) {
         auto distance = map->distance(city, location);
-        if (distance < m_create_parameters.minimum_city_distance)
-        {
+        if (distance < m_create_parameters.minimum_city_distance) {
             return true;
         }
     }
@@ -89,18 +87,15 @@ auto New_game_window::try_create_city(uint32_t flags_match) -> bool
     const terrain_t       terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
     const Terrain_type    terrain_type = g_tiles->get_terrain_type(terrain);
 
-    //if (terrain.city_size == terrain_city_size_match)
-    //{
+    //if (terrain.city_size == terrain_city_size_match) {
     //    log_new_game.info("{}, {} {}: {}\n", position.x, position.y, terrain.name, terrain.city_size);
     //}
 
-    if ((terrain_type.flags & flags_match) != flags_match)
-    {
+    if ((terrain_type.flags & flags_match) != flags_match) {
         return false;
     }
 
-    if (is_too_close_to_city(position))
-    {
+    if (is_too_close_to_city(position)) {
         return false;
     }
 
@@ -110,8 +105,7 @@ auto New_game_window::try_create_city(uint32_t flags_match) -> bool
 
 void New_game_window::select_player_start_cities()
 {
-    if (m_cities.empty())
-    {
+    if (m_cities.empty()) {
         return;
     }
 
@@ -120,23 +114,19 @@ void New_game_window::select_player_start_cities()
 
     etl::vector<size_t, max_player_count> player_start_cities;
     int minimum_distance = 99999999;
-    for (size_t player = 0; player < m_player_names.size(); ++player)
-    {
+    for (size_t player = 0; player < m_player_names.size(); ++player) {
         size_t city_id = rand() % m_cities.size();
         player_start_cities.push_back(city_id);
     }
-    for (size_t player_a = 0; player_a < m_player_names.size() - 1; ++player_a)
-    {
+    for (size_t player_a = 0; player_a < m_player_names.size() - 1; ++player_a) {
         const auto& player_a_city = m_cities[player_start_cities[player_a]];
-        for (size_t player_b = player_a + 1; player_b < m_player_names.size(); ++player_b)
-        {
+        for (size_t player_b = player_a + 1; player_b < m_player_names.size(); ++player_b) {
             const auto& player_b_city = m_cities[player_start_cities[player_b]];
             int distance = map->distance(player_a_city, player_b_city);
             minimum_distance = std::min(minimum_distance, distance);
         }
     }
-    if (minimum_distance > m_minimum_player_start_city_distance)
-    {
+    if (minimum_distance > m_minimum_player_start_city_distance) {
         m_minimum_player_start_city_distance = minimum_distance;
         m_player_start_cities = player_start_cities;
     }
@@ -149,8 +139,7 @@ void New_game_window::create()
     place_cities();
 
     g_game->new_game(
-        Game_create_parameters
-        {
+        Game_create_parameters{
             .map                    = map,
             .player_names           = m_player_names,
             .player_starting_cities = m_player_start_cities,
@@ -166,11 +155,9 @@ void New_game_window::place_cities()
     std::vector<terrain_tile_t> city_tiles;
 
     const auto end = g_tiles->get_terrain_type_count();
-    for (terrain_t i = 0; i < end; ++i)
-    {
+    for (terrain_t i = 0; i < end; ++i) {
         const auto& terrain = g_tiles->get_terrain_type(i);
-        if (terrain.city_size > 0)
-        {
+        if (terrain.city_size > 0) {
             const terrain_tile_t city_terrain_tile = g_tiles->get_terrain_tile_from_terrain(i);
             city_tiles.push_back(city_terrain_tile);
         }
@@ -178,8 +165,7 @@ void New_game_window::place_cities()
 
     ERHE_VERIFY(!city_tiles.empty());
 
-    for (auto& city_location : m_cities)
-    {
+    for (auto& city_location : m_cities) {
         int city_tile = rand() % city_tiles.size();
         map->set_terrain_tile(city_location, city_tiles.at(city_tile));
 
@@ -194,16 +180,14 @@ void New_game_window::place_cities()
             4,
             [&map, &field_count](const Tile_coordinate position)
             {
-                if (field_count == 0)
-                {
+                if (field_count == 0) {
                     return;
                 }
 
                 const terrain_tile_t terrain_tile = map->get_terrain_tile(position);
                 const terrain_t      terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
                 const Terrain_type&  terrain_type = g_tiles->get_terrain_type(terrain);
-                if ((terrain_type.flags & Terrain_flags::bit_can_place_field) == Terrain_flags::bit_can_place_field)
-                {
+                if ((terrain_type.flags & Terrain_flags::bit_can_place_field) == Terrain_flags::bit_can_place_field) {
                     map->set_terrain_tile(position, g_tiles->get_terrain_tile_from_terrain(Terrain_field));
                     --field_count;
                 }
@@ -227,34 +211,28 @@ void New_game_window::imgui()
 
     int player_number    = 1;
     int player_to_remove = 0;
-    for (auto& player_name : m_player_names)
-    {
+    for (auto& player_name : m_player_names) {
         g_rendering->unit_image(g_tile_renderer->get_single_unit_tile(player_number - 1, 2), 2);
         ImGui::SameLine();
 
         auto label = fmt::format("Name of player {}", player_number);
         ImGui::InputText(label.c_str(), player_name.data(), player_name.max_size() - 1);
-        if (m_player_names.size() > 2)
-        {
+        if (m_player_names.size() > 2) {
             ImGui::SameLine();
             auto remove_button_label = fmt::format("Remove##remove-player-{}", player_number);
-            if (ImGui::SmallButton(remove_button_label.c_str()))
-            {
+            if (ImGui::SmallButton(remove_button_label.c_str())) {
                 player_to_remove = player_number;
             }
         }
         ++player_number;
     }
-    if (player_to_remove > 0)
-    {
+    if (player_to_remove > 0) {
         m_player_names.erase(m_player_names.begin() + player_to_remove - 1);
         m_player_start_cities.clear();
         m_minimum_player_start_city_distance = 0;
     }
-    if (m_player_names.size() < max_player_count)
-    {
-        if (ImGui::SmallButton("Add Player"))
-        {
+    if (m_player_names.size() < max_player_count) {
+        if (ImGui::SmallButton("Add Player")) {
             m_player_names.push_back("Mr. Smith");
             m_player_start_cities.clear();
             m_minimum_player_start_city_distance = 0;
@@ -280,8 +258,7 @@ void New_game_window::imgui()
     if (
         (m_number_of_coastal_cities > m_create_parameters.number_of_coastal_cities) ||
         (m_number_of_land_cities > m_create_parameters.number_of_land_cities)
-    )
-    {
+    ) {
         m_cities.clear();
         m_number_of_coastal_cities = 0;
         m_number_of_land_cities = 0;
@@ -289,38 +266,31 @@ void New_game_window::imgui()
         m_minimum_player_start_city_distance = 0;
     }
 
-    if (m_number_of_coastal_cities < m_create_parameters.number_of_coastal_cities)
-    {
+    if (m_number_of_coastal_cities < m_create_parameters.number_of_coastal_cities) {
         for (
             int i = 0;
             (m_number_of_coastal_cities < m_create_parameters.number_of_coastal_cities) && (i < 1000);
             ++i
-        )
-        {
-            if (try_create_city(1u << Terrain_flags::bit_can_place_coastal_city))
-            {
+        ) {
+            if (try_create_city(1u << Terrain_flags::bit_can_place_coastal_city)) {
                 ++m_number_of_coastal_cities;
             }
         }
     }
 
-    if (m_number_of_land_cities < m_create_parameters.number_of_land_cities)
-    {
+    if (m_number_of_land_cities < m_create_parameters.number_of_land_cities) {
         for (
             int i = 0;
             (m_number_of_land_cities < m_create_parameters.number_of_land_cities) && (i < 1000);
             ++i
-            )
-        {
-            if (try_create_city(1u << Terrain_flags::bit_can_place_land_city))
-            {
+        ) {
+            if (try_create_city(1u << Terrain_flags::bit_can_place_land_city)) {
                 ++m_number_of_land_cities;
             }
         }
     }
 
-    for (int i = 0; i < 1000; ++i)
-    {
+    for (int i = 0; i < 1000; ++i) {
         select_player_start_cities();
     }
 
@@ -336,16 +306,14 @@ void New_game_window::imgui()
     ImGui::Separator();
     ImGui::Spacing();
 
-    if (ImGui::Button("Start", button_size))
-    {
+    if (ImGui::Button("Start", button_size)) {
         create();
         hide();
         g_map_window ->show();
         g_game_window->show();
     }
 
-    if (ImGui::Button("Back to Menu", button_size))
-    {
+    if (ImGui::Button("Back to Menu", button_size)) {
         g_menu_window->show_menu();
     }
 

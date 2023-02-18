@@ -114,8 +114,7 @@ public:
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         const auto* headset = g_headset_view->get_headset();
-        if (headset != nullptr)
-        {
+        if (headset != nullptr) {
             auto& xr_right = headset->get_actions_right();
             commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.trigger_click, erhe::application::Button_trigger::Button_pressed);
             commands.bind_command_to_xr_boolean_action(&m_insert_command, xr_right.a_click,       erhe::application::Button_trigger::Button_pressed);
@@ -184,8 +183,7 @@ auto Brush_tool_preview_command::try_call() -> bool
     if (
         (get_command_state() != erhe::application::State::Active) ||
         !s_brush_tool_impl->is_enabled()
-    )
-    {
+    ) {
         return false;
     }
     s_brush_tool_impl->on_motion();
@@ -199,16 +197,14 @@ Brush_tool_insert_command::Brush_tool_insert_command()
 
 void Brush_tool_insert_command::try_ready()
 {
-    if (s_brush_tool_impl->try_insert_ready())
-    {
+    if (s_brush_tool_impl->try_insert_ready()) {
         set_ready();
     }
 }
 
 auto Brush_tool_insert_command::try_call() -> bool
 {
-    if (get_command_state() != erhe::application::State::Ready)
-    {
+    if (get_command_state() != erhe::application::State::Ready) {
         return false;
     }
     const bool consumed = s_brush_tool_impl->try_insert();
@@ -261,23 +257,20 @@ void Brush_tool_impl::on_message(Editor_message& message)
 {
     Tool::on_message(message);
     using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh))
-    {
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         on_motion();
     }
 }
 
 void Brush_tool_impl::handle_priority_update(int old_priority, int new_priority)
 {
-    if (new_priority < old_priority)
-    {
+    if (new_priority < old_priority) {
         disable();
         m_preview_command.set_inactive();
         m_hover = Hover_entry{};
         remove_brush_mesh();
     }
-    if (new_priority > old_priority)
-    {
+    if (new_priority > old_priority) {
         enable();
         m_preview_command.set_active();
         on_motion();
@@ -287,12 +280,10 @@ void Brush_tool_impl::handle_priority_update(int old_priority, int new_priority)
 void Brush_tool_impl::remove_brush_mesh()
 {
     // Remove mesh attachment *before* removing node
-    if (m_brush_mesh)
-    {
+    if (m_brush_mesh) {
         m_brush_mesh.reset();
     }
-    if (m_brush_node)
-    {
+    if (m_brush_node) {
         // Do not remove this. It is not possible to rely on reset calling destructor,
         // because parent will have shared_ptr to the child.
         m_brush_node->set_parent({});
@@ -314,8 +305,7 @@ auto Brush_tool_impl::try_insert() -> bool
         !m_brush_mesh ||
         !m_hover.position.has_value() ||
         !brush
-    )
-    {
+    ) {
         return false;
     }
 
@@ -335,8 +325,7 @@ auto Brush_tool_impl::try_insert() -> bool
 void Brush_tool_impl::on_motion()
 {
     auto* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr)
-    {
+    if (scene_view == nullptr) {
         return;
     }
 
@@ -348,8 +337,7 @@ void Brush_tool_impl::on_motion()
     if (
         (m_hover.geometry != nullptr) &&
         (m_hover.local_index > m_hover.geometry->get_polygon_count())
-    )
-    {
+    ) {
         m_hover.local_index = 0;
         m_hover.geometry    = nullptr;
     }
@@ -358,8 +346,7 @@ void Brush_tool_impl::on_motion()
         m_hover.mesh &&
         (m_hover.mesh->get_node() != nullptr) &&
         m_hover.position.has_value()
-    )
-    {
+    ) {
         m_hover.position = m_hover.mesh->get_node()->transform_direction_from_world_to_local(m_hover.position.value());
     }
 
@@ -375,8 +362,7 @@ auto Brush_tool_impl::get_hover_mesh_transform() -> mat4
         (m_hover.mesh == nullptr) ||
         (m_hover.geometry == nullptr) ||
         (m_hover.local_index >= m_hover.geometry->get_polygon_count())
-    )
-    {
+    ) {
         return mat4{1};
     }
 
@@ -399,8 +385,7 @@ auto Brush_tool_impl::get_hover_mesh_transform() -> mat4
     const float scale       = hover_scale / brush_scale;
 
     m_transform_scale = m_scale * scale;
-    if (m_transform_scale != 1.0f)
-    {
+    if (m_transform_scale != 1.0f) {
         const mat4 scale_transform = erhe::toolkit::create_scale(m_transform_scale);
         brush_frame.transform_by(scale_transform);
     }
@@ -408,8 +393,7 @@ auto Brush_tool_impl::get_hover_mesh_transform() -> mat4
     if (
         !m_snap_to_hover_polygon &&
         m_hover.position.has_value()
-    )
-    {
+    ) {
         hover_frame.centroid = m_hover.position.value();
     }
 
@@ -422,8 +406,7 @@ auto Brush_tool_impl::get_hover_mesh_transform() -> mat4
 
 auto Brush_tool_impl::get_hover_grid_transform() -> mat4
 {
-    if (m_hover.grid == nullptr)
-    {
+    if (m_hover.grid == nullptr) {
         return mat4{1};
     }
 
@@ -458,8 +441,7 @@ void Brush_tool_impl::update_mesh_node_transform()
         !m_brush_mesh ||
         !m_brush_node ||
         (!m_hover.mesh && (m_hover.grid == nullptr))
-    )
-    {
+    ) {
         return;
     }
 
@@ -467,13 +449,10 @@ void Brush_tool_impl::update_mesh_node_transform()
         ? get_hover_mesh_transform()
         : get_hover_grid_transform();
     const auto& brush_scaled = brush->get_scaled(m_transform_scale);
-    if (m_hover.mesh)
-    {
+    if (m_hover.mesh) {
         m_brush_node->set_parent(m_hover.mesh->get_node());
         m_brush_node->set_parent_from_node(transform);
-    }
-    else if (m_hover.grid)
-    {
+    } else if (m_hover.grid) {
         auto* scene_view = get_hover_scene_view();
         ERHE_VERIFY(scene_view != nullptr);
         const auto& scene_root = scene_view->get_scene_root();
@@ -495,8 +474,7 @@ void Brush_tool_impl::do_insert_operation()
     if (
         !m_hover.position.has_value() ||
         !brush
-    )
-    {
+    ) {
         return;
     }
 
@@ -543,8 +521,7 @@ void Brush_tool_impl::do_insert_operation()
         ? std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this())
         : scene_root->get_hosted_scene()->get_root_node();
     const auto& first_selected_node = g_selection_tool->get_first_selected_node();
-    if (first_selected_node)
-    {
+    if (first_selected_node) {
         parent = first_selected_node;
     }
 
@@ -567,14 +544,12 @@ void Brush_tool_impl::add_brush_mesh()
         !m_hover.position.has_value() ||
         (!m_hover.mesh && (m_hover.grid == nullptr)) ||
         (scene_view == nullptr)
-    )
-    {
+    ) {
         return;
     }
 
     const auto& material = g_content_library_window->selected_material();
-    if (!material)
-    {
+    if (!material) {
         log_brush->warn("No material selected");
         return;
     }
@@ -620,14 +595,12 @@ void Brush_tool_impl::add_brush_mesh()
 void Brush_tool_impl::update_mesh()
 {
     auto brush = g_content_library_window->selected_brush();
-    if (!m_brush_mesh && is_enabled())
-    {
+    if (!m_brush_mesh && is_enabled()) {
         if (
             !brush ||
             !m_hover.position.has_value() ||
             (!m_hover.mesh && (m_hover.grid == nullptr))
-        )
-        {
+        ) {
             return;
         }
 
@@ -640,8 +613,7 @@ void Brush_tool_impl::update_mesh()
         !brush ||
         !m_hover.position.has_value() ||
         (!m_hover.mesh && (m_hover.grid == nullptr))
-    )
-    {
+    ) {
         remove_brush_mesh();
     }
 
@@ -676,8 +648,7 @@ void Brush_tool_impl::tool_render(
         (context.scene_view == nullptr) ||
         !m_brush_mesh ||
         !m_brush_node
-    )
-    {
+    ) {
         return;
     }
 

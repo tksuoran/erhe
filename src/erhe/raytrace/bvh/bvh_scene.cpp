@@ -46,11 +46,9 @@ void Bvh_scene::attach(IGeometry* geometry)
 
 #ifndef NDEBUG
     const auto i = std::find(m_geometries.begin(), m_geometries.end(), bvh_geometry);
-    if (i != m_geometries.end())
-    {
+    if (i != m_geometries.end()) {
         log_scene->error("raytrace geometry already in scene");
-    }
-    else
+    } else
 #endif
     {
         m_geometries.push_back(bvh_geometry);
@@ -63,11 +61,9 @@ void Bvh_scene::attach(IInstance* instance)
 
 #ifndef NDEBUG
     const auto i = std::find(m_instances.begin(), m_instances.end(), bvh_instance);
-    if (i != m_instances.end())
-    {
+    if (i != m_instances.end()) {
         log_scene->error("raytrace instance already in scene");
-    }
-    else
+    } else
 #endif
     {
         m_instances.push_back(bvh_instance);
@@ -79,12 +75,9 @@ void Bvh_scene::detach(IGeometry* geometry)
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
     const auto i = std::remove(m_geometries.begin(), m_geometries.end(), bvh_geometry);
-    if (i == m_geometries.end())
-    {
+    if (i == m_geometries.end()) {
         log_scene->error("raytrace geometry not in scene");
-    }
-    else
-    {
+    } else {
         m_geometries.erase(i, m_geometries.end());
     }
 }
@@ -94,12 +87,9 @@ void Bvh_scene::detach(IInstance* instance)
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
     const auto i = std::remove(m_instances.begin(), m_instances.end(), bvh_instance);
-    if (i == m_instances.end())
-    {
+    if (i == m_instances.end()) {
         log_scene->error("raytrace instance not in scene");
-    }
-    else
-    {
+    } else {
         m_instances.erase(i, m_instances.end());
     }
 }
@@ -135,29 +125,22 @@ void Bvh_scene::commit()
 
 void Bvh_scene::intersect(Ray& ray, Hit& hit)
 {
-    for (const auto& instance : m_instances)
-    {
+    for (const auto& instance : m_instances) {
         instance->intersect(ray, hit);
     }
-    for (const auto& geometry : m_geometries)
-    {
+    for (const auto& geometry : m_geometries) {
         geometry->intersect_instance(ray, hit, nullptr);
     }
 }
 
 void Bvh_scene::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* in_instance)
 {
-    if (in_instance == nullptr)
-    {
-        for (const auto& instance : m_instances)
-        {
+    if (in_instance == nullptr) {
+        for (const auto& instance : m_instances) {
             instance->intersect(ray, hit);
         }
-    }
-    else
-    {
-        for (const auto& geometry : m_geometries)
-        {
+    } else {
+        for (const auto& geometry : m_geometries) {
             geometry->intersect_instance(ray, hit, in_instance);
         }
     }
@@ -171,18 +154,13 @@ void Bvh_scene::collect_spheres(
     Bvh_instance*                    in_instance
 )
 {
-    if (in_instance == nullptr)
-    {
-        for (const auto& instance : m_instances)
-        {
+    if (in_instance == nullptr) {
+        for (const auto& instance : m_instances) {
             instance->collect_spheres(spheres, instances);
         }
-    }
-    else
-    {
+    } else {
         const auto transform = in_instance->get_transform();
-        for (const auto& geometry : m_geometries)
-        {
+        for (const auto& geometry : m_geometries) {
             const auto& geometry_sphere = geometry->get_sphere();
             const auto  origin          = glm::vec3{transform * glm::vec4{geometry_sphere.center, 1.0f}};
             spheres.emplace_back(

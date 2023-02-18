@@ -25,20 +25,14 @@ public:
         }
         void swap(T lhs, T rhs)
         {
-            if (primary == lhs)
-            {
+            if (primary == lhs) {
                 primary = rhs;
-            }
-            else if (primary == rhs)
-            {
+            } else if (primary == rhs) {
                 primary = lhs;
             }
-            if (secondary == lhs)
-            {
+            if (secondary == lhs) {
                 secondary = rhs;
-            }
-            else if (secondary == rhs)
-            {
+            } else if (secondary == rhs) {
                 secondary = lhs;
             }
         }
@@ -49,10 +43,8 @@ public:
 
     auto find_primary(const T primary) const -> Entry*
     {
-        for (auto& i : entries)
-        {
-            if (i.primary == primary)
-            {
+        for (auto& i : entries) {
+            if (i.primary == primary) {
                 return &i;
             }
         }
@@ -60,10 +52,8 @@ public:
     }
     auto find_secondary(const T secondary) -> Entry*
     {
-        for (auto& i : entries)
-        {
-            if (i.secondary == secondary)
-            {
+        for (auto& i : entries) {
+            if (i.secondary == secondary) {
                 return &i;
             }
         }
@@ -82,8 +72,7 @@ public:
 
     void swap(T lhs, T rhs)
     {
-        for (auto& entry : entries)
-        {
+        for (auto& entry : entries) {
             entry.swap(lhs, rhs);
         }
     }
@@ -103,8 +92,7 @@ public:
         new_from_old.resize(size);
         old_used.resize(size);
 
-        for (T new_id = 0; new_id < size; ++new_id)
-        {
+        for (T new_id = 0; new_id < size; ++new_id) {
             old_from_new[new_id] = new_id;
         }
 
@@ -113,8 +101,7 @@ public:
 
     void create_new_from_old_mapping()
     {
-        for (T new_id = 0; new_id < new_size; ++new_id)
-        {
+        for (T new_id = 0; new_id < new_size; ++new_id) {
             const T old_id = old_from_new[new_id];
             new_from_old[old_id] = new_id;
         }
@@ -125,23 +112,18 @@ public:
         bool error = false;
         {
             std::stringstream ss;
-            for (T old_id = 0; old_id < old_size; ++old_id)
-            {
+            for (T old_id = 0; old_id < old_size; ++old_id) {
                 const T new_id = new_from_old[old_id];
                 ss << fmt::format("{:2}", new_id);
-                if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (old_from_new[new_id] != old_id))
-                {
+                if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (old_from_new[new_id] != old_id)) {
                     error = true;
                     ss << "!";
-                }
-                else
-                {
+                } else {
                     ss << " ";
                 }
             }
             ss << "  < new from old\n";
-            for (T old_id = 0; old_id < old_size; ++old_id)
-            {
+            for (T old_id = 0; old_id < old_size; ++old_id) {
                 ss << fmt::format("{:2} ", old_id);
             }
             ss << "  < old\n";
@@ -150,37 +132,30 @@ public:
             ss << "    /\\  /\\  /\\  /\\  /\\  /\\  /\\  /\\\n";
             ss << "\n";
 
-            for (T new_id = 0; new_id < old_size; ++new_id)
-            {
+            for (T new_id = 0; new_id < old_size; ++new_id) {
                 ss << fmt::format("{:2} ", new_id);
             }
             ss << "  < new\n";
-            for (T new_id = 0; new_id < new_size; ++new_id)
-            {
+            for (T new_id = 0; new_id < new_size; ++new_id) {
                 const T old_id = old_from_new[new_id];
                 ss << fmt::format("{:2}", old_id);
-                if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (new_from_old[old_id] != new_id))
-                {
+                if (is_bijection && (old_id != std::numeric_limits<T>::max()) && (new_from_old[old_id] != new_id)) {
                     error = true;
                     ss << "!";
-                }
-                else
-                {
+                } else {
                     ss << " ";
                 }
             }
             ss << "  < old from new";
             log_weld->trace("---------------------------------\n{}", ss.str());
-            if (error)
-            {
+            if (error) {
                 log_weld->error("Errors detected");
             }
         }
 
         {
             std::stringstream ss;
-            for (T id : eliminate)
-            {
+            for (T id : eliminate) {
                 ss << fmt::format(" {}", id);
             }
             log_weld->trace("Eliminate list: {}", ss.str());
@@ -188,8 +163,7 @@ public:
 
         {
             std::stringstream ss;
-            for (T new_id = new_end; new_id < old_size; ++new_id)
-            {
+            for (T new_id = new_end; new_id < old_size; ++new_id) {
                 const T old = old_id(new_id);
                 ss << fmt::format(" new {} old {}", new_id, old);
             }
@@ -227,18 +201,13 @@ public:
             new_from_old[keep_old_id]
         );
 
-        for (size_t i = 0; i < merge.size(); ++i)
-        {
+        for (size_t i = 0; i < merge.size(); ++i) {
             merge.entries[i].swap(keep_new_id, secondary_new_id);
         }
-        for (size_t i = 0; i < eliminate.size(); ++i)
-        {
-            if (eliminate[i] == keep_new_id)
-            {
+        for (size_t i = 0; i < eliminate.size(); ++i) {
+            if (eliminate[i] == keep_new_id) {
                 eliminate[i] = secondary_new_id;
-            }
-            else if (eliminate[i] == secondary_new_id)
-            {
+            } else if (eliminate[i] == secondary_new_id) {
                 eliminate[i] = keep_new_id;
             }
         }
@@ -246,12 +215,10 @@ public:
 
     auto get_next_end(const bool check_used = false) -> T
     {
-        for (;;)
-        {
+        for (;;) {
             ERHE_VERIFY(new_end > 0);
             --new_end;
-            if (check_used && !old_used[old_from_new[new_end]])
-            {
+            if (check_used && !old_used[old_from_new[new_end]]) {
                 continue;
             }
             return new_end;
@@ -263,8 +230,7 @@ public:
         {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             std::stringstream ss;
-            for (auto entry : merge.entries)
-            {
+            for (auto entry : merge.entries) {
                 ss << fmt::format(" {}->{}", entry.secondary, entry.primary);
             }
             SPDLOG_LOGGER_TRACE(log_weld, "Merge list:\n{}", ss.str());
@@ -275,20 +241,17 @@ public:
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             std::stringstream ss;
 #endif
-            for (size_t i = 0, end = merge.size(); i < end; ++i)
-            {
+            for (size_t i = 0, end = merge.size(); i < end; ++i) {
                 const auto& entry = merge.entries[i];
                 const T secondary_new_id = entry.secondary;
-                if (secondary_new_id >= new_end)
-                {
+                if (secondary_new_id >= new_end) {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
                     ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
 #endif
                     continue;
                 }
                 const T keep_new_id = get_next_end();
-                if (secondary_new_id == keep_new_id)
-                {
+                if (secondary_new_id == keep_new_id) {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
                     ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
 #endif
@@ -306,19 +269,16 @@ public:
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             std::stringstream ss;
 #endif
-            for (size_t i = 0, end = eliminate.size(); i < end; ++i)
-            {
+            for (size_t i = 0, end = eliminate.size(); i < end; ++i) {
                 T secondary_new_id = eliminate[i];
-                if (secondary_new_id >= new_end)
-                {
+                if (secondary_new_id >= new_end) {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
                     ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
 #endif
                     continue;
                 }
                 T keep_new_id = get_next_end();
-                if (secondary_new_id == keep_new_id)
-                {
+                if (secondary_new_id == keep_new_id) {
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
                     ss << fmt::format(" {:2} -> {:2} ", secondary_new_id, secondary_new_id);
 #endif
@@ -339,8 +299,7 @@ public:
         std::stringstream ss;
 #endif
         new_end = 0;
-        for (T new_id = 0, end = new_size; new_id < end; ++new_id)
-        {
+        for (T new_id = 0, end = new_size; new_id < end; ++new_id) {
             const T old_id = old_from_new[new_id];
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
             ss << fmt::format(
@@ -354,27 +313,22 @@ public:
                 )
             );
 #endif
-            if (old_used[old_id])
-            {
+            if (old_used[old_id]) {
                 new_end = new_id + 1;
             }
         }
         SPDLOG_LOGGER_TRACE(log_weld, "Usage:\n{}", ss.str());
 
-        for (T new_id = 0, end = new_size; new_id < end; ++new_id)
-        {
+        for (T new_id = 0, end = new_size; new_id < end; ++new_id) {
             const T old_id = old_from_new[new_id];
-            if (!old_used[old_id])
-            {
+            if (!old_used[old_id]) {
                 T secondary_new_id = new_id;
-                if (secondary_new_id >= new_end)
-                {
+                if (secondary_new_id >= new_end) {
                     SPDLOG_LOGGER_TRACE(log_weld, "Dropping unused, end {:2} new {:2} old {:2}", new_end, secondary_new_id, old_id);
                     continue;
                 }
                 T keep_new_id = get_next_end(true);
-                if (secondary_new_id == keep_new_id)
-                {
+                if (secondary_new_id == keep_new_id) {
                     SPDLOG_LOGGER_TRACE(log_weld, "Dropping unused, end {:2} new {:2} old {:2}", new_end, secondary_new_id, old_id);
                     continue;
                 }
@@ -405,15 +359,12 @@ public:
         > callback
     )
     {
-        if (!callback)
-        {
+        if (!callback) {
             return;
         }
-        for (std::size_t i = 0, end = merge.size(); i < end; ++i)
-        {
+        for (std::size_t i = 0, end = merge.size(); i < end; ++i) {
             const auto& entry = merge.entries[i];
-            if (entry.primary != primary_new_id)
-            {
+            if (entry.primary != primary_new_id) {
                 continue;
             }
             ERHE_VERIFY(primary_new_id == entry.primary);
@@ -435,12 +386,10 @@ public:
         > swap_callback
     )
     {
-        if (!swap_callback)
-        {
+        if (!swap_callback) {
             return;
         }
-        for (std::size_t i = 0, end = merge.size(); i < end; ++i)
-        {
+        for (std::size_t i = 0, end = merge.size(); i < end; ++i) {
             const auto& entry = merge.entries[i];
             const T primary_new_id   = entry.primary;
             const T primary_old_id   = old_from_new[primary_new_id];
@@ -452,8 +401,7 @@ public:
 
     void update_secondary_new_from_old()
     {
-        for (std::size_t i = 0, end = merge.size(); i < end; ++i)
-        {
+        for (std::size_t i = 0, end = merge.size(); i < end; ++i) {
             const auto& entry = merge.entries[i];
             const T primary_new_id   = entry.primary;
             const T secondary_new_id = entry.secondary;
@@ -467,41 +415,32 @@ public:
     {
         dump();
 
-        if (remove_callback)
-        {
+        if (remove_callback) {
             std::vector<T> failed;
-            for (T new_id = new_end; new_id < old_size; ++new_id)
-            {
+            for (T new_id = new_end; new_id < old_size; ++new_id) {
                 const T old = old_id(new_id);
                 log_weld->trace("Removing new {} old {}", new_id, old);
                 bool ok{true};
-                for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
-                {
-                    if (keep_id >= new_end)
-                    {
+                for (T keep_id : new_from_old) { // old may may not be mapped to new which is being deleted
+                    if (keep_id >= new_end) {
                         continue; // removed -> ok
                     }
-                    if (new_id == keep_id)
-                    {
+                    if (new_id == keep_id) {
                         failed.push_back(new_id);
                         ok = false;
                     }
                 }
-                if (ok)
-                {
+                if (ok) {
                     remove_callback(new_id, old_id(new_id));
                 }
             }
-            if (!failed.empty())
-            {
+            if (!failed.empty()) {
                 std::stringstream ss;
                 ss << "Failed: ";
                 bool empty{true};
 
-                for (T fail : failed)
-                {
-                    if (!empty)
-                    {
+                for (T fail : failed) {
+                    if (!empty) {
                         ss << ", ";
                     }
                     ss << fail;
@@ -516,11 +455,9 @@ public:
 
     void trim()
     {
-        //for (T new_id = merge_end; new_id < old_size; ++new_id)
-        //{
+        //for (T new_id = merge_end; new_id < old_size; ++new_id) {
         //    SPDLOG_LOGGER_TRACE(log_weld, "Removing new {} old {}", new_id, old_id(new_id));
-        //    for (T keep_id : new_from_old) // old may may not be mapped to new which is being deleted
-        //    {
+        //    for (T keep_id : new_from_old) { // old may may not be mapped to new which is being deleted
         //        ERHE_VERIFY(new_id != keep_id);
         //    }
         //}

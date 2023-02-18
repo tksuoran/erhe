@@ -48,11 +48,9 @@ public:
 
     [[nodiscard]] static auto get_next_serial() -> size_t
     {
-        do
-        {
+        do {
             s_serial++;
-        }
-        while (s_serial == 0);
+        } while (s_serial == 0);
 
         return s_serial;
     }

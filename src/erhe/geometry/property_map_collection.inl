@@ -79,11 +79,9 @@ Property_map_collection<Key_type>::contains(const std::string& name) const
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& entry : m_entries)
-    {
+    for (const auto& entry : m_entries) {
         const bool match = entry.key == name;
-        if (match)
-        {
+        if (match) {
             return true;
         }
     }
@@ -99,10 +97,8 @@ Property_map_collection<Key_type>::find_base(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& entry : m_entries)
-    {
-        if (entry.key == descriptor.name)
-        {
+    for (const auto& entry : m_entries) {
+        if (entry.key == descriptor.name) {
             return entry.value.get();
         }
     }
@@ -139,14 +135,11 @@ Property_map_collection<Key_type>::find(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& entry : m_entries)
-    {
-        if (entry.key == descriptor.name)
-        {
+    for (const auto& entry : m_entries) {
+        if (entry.key == descriptor.name) {
             const auto p       = entry.value.get();
             const auto typed_p = dynamic_cast<Property_map<Key_type, Value_type>*>(p);
-            if (typed_p != nullptr)
-            {
+            if (typed_p != nullptr) {
                 return typed_p;
             }
         }
@@ -163,14 +156,11 @@ Property_map_collection<Key_type>::find_or_create(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (const auto& entry : m_entries)
-    {
-        if (entry.key == descriptor.name)
-        {
+    for (const auto& entry : m_entries) {
+        if (entry.key == descriptor.name) {
             const auto p       = entry.value.get();
             const auto typed_p = dynamic_cast<Property_map<Key_type, Value_type>*>(p);
-            if (typed_p != nullptr)
-            {
+            if (typed_p != nullptr) {
                 return typed_p;
             }
         }
@@ -189,8 +179,7 @@ Property_map_collection<Key_type>::trim(size_t size)
 {
     ERHE_PROFILE_FUNCTION
 
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries) {
         entry.value->trim(size);
     }
 }
@@ -201,8 +190,7 @@ Property_map_collection<Key_type>::remap_keys(const std::vector<Key_type>& key_n
 {
     ERHE_PROFILE_FUNCTION
 
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries){
         entry.value->remap_keys(key_new_to_old);
     }
 }
@@ -215,12 +203,10 @@ Property_map_collection<Key_type>::interpolate(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries) {
         Property_map_base<Key_type>* src_map    = entry.value.get();
         const auto&                  descriptor = src_map->descriptor();
-        if (descriptor.interpolation_mode == Interpolation_mode::none)
-        {
+        if (descriptor.interpolation_mode == Interpolation_mode::none) {
             continue;
         }
         Property_map_base<Key_type>* destination_map = src_map->constructor(descriptor);
@@ -241,13 +227,11 @@ Property_map_collection<Key_type>::merge_to(
 {
     ERHE_PROFILE_FUNCTION
 
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries) {
         Property_map_base<Key_type>* this_map   = entry.value.get();
         const auto&                  descriptor = this_map->descriptor();
         Property_map_base<Key_type>* target_map = destination.find_base(descriptor);
-        if (target_map == nullptr)
-        {
+        if (target_map == nullptr) {
             target_map = this_map->constructor(descriptor);
             destination.insert(target_map);
         }
@@ -260,8 +244,7 @@ inline auto
 Property_map_collection<Key_type>::clone() -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries) {
         Property_map_base<Key_type>* this_map   = entry.value.get();
         const auto&                  descriptor = this_map->descriptor();
         Property_map_base<Key_type>* target_map = this_map->constructor(descriptor);
@@ -278,8 +261,7 @@ Property_map_collection<Key_type>::transform(
 )
 {
     Property_map_collection<Key_type> result;
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries) {
         Property_map_base<Key_type>* property_map = entry.value.get();
         property_map->transform(matrix);
     }
@@ -292,8 +274,7 @@ Property_map_collection<Key_type>::clone_with_transform(
 ) -> Property_map_collection<Key_type>
 {
     Property_map_collection<Key_type> result;
-    for (auto& entry : m_entries)
-    {
+    for (auto& entry : m_entries) {
         Property_map_base<Key_type>* this_map   = entry.value.get();
         const auto&                  descriptor = this_map->descriptor();
         Property_map_base<Key_type>* target_map = this_map->constructor(descriptor);

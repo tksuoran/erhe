@@ -58,10 +58,7 @@ auto Framebuffer_window::to_content(const glm::vec2 position_in_root) const -> g
     const float content_x = static_cast<float>(position_in_root.x) - m_content_rect_x;
     const float content_y = static_cast<float>(position_in_root.y) - m_content_rect_y;
     //const float content_flip_y = m_content_rect_height - content_y;
-    return {
-        content_x,
-        content_y
-    };
+    return glm::vec2{content_x, content_y};
 }
 
 void Framebuffer_window::bind_framebuffer()
@@ -88,8 +85,7 @@ void Framebuffer_window::update_framebuffer()
     if (
         (imgui_available_size.x < 1) ||
         (imgui_available_size.y < 1)
-    )
-    {
+    ) {
         return;
     }
 
@@ -102,8 +98,7 @@ void Framebuffer_window::update_framebuffer()
     if (
         (source_size.x == 0) ||
         (source_size.y == 0)
-    )
-    {
+    ) {
         return;
     }
 
@@ -118,8 +113,7 @@ void Framebuffer_window::update_framebuffer()
         m_texture &&
         (m_texture->width()  == size.x) &&
         (m_texture->height() == size.y)
-    )
-    {
+    ) {
         return;
     }
 
@@ -161,8 +155,7 @@ void Framebuffer_window::imgui()
         m_texture &&
         (m_texture->width() > 0) &&
         (m_texture->height() > 0)
-    )
-    {
+    ) {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
         image(
             m_texture,

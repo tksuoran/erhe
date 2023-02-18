@@ -55,8 +55,7 @@ namespace Layers {
 
 [[nodiscard]] auto get_layer(const Motion_mode motion_mode) -> uint8_t
 {
-    switch (motion_mode)
-    {
+    switch (motion_mode) {
         case Motion_mode::e_static:                 return Layers::NON_MOVING;
         case Motion_mode::e_kinematic_non_physical: return Layers::MOVING;
         case Motion_mode::e_kinematic_physical:     return Layers::MOVING;
@@ -112,8 +111,7 @@ public:
         const JPH::BroadPhaseLayer inLayer
     ) const -> const char* override
     {
-        switch ((JPH::BroadPhaseLayer::Type)inLayer)
-        {
+        switch ((JPH::BroadPhaseLayer::Type)inLayer) {
             case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING:    return "NON_MOVING";
             case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:        return "MOVING";
             case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::NON_COLLIDING: return "NON_COLLIDING";
@@ -131,13 +129,11 @@ bool Jolt_collision_filter::ShouldCollide(
     JPH::BroadPhaseLayer inLayer2
 ) const
 {
-    switch (inLayer1)
-    {
+    switch (inLayer1) {
         case Layers::NON_MOVING:    return inLayer2 == BroadPhaseLayers::MOVING;
         case Layers::MOVING:        return inLayer2 != BroadPhaseLayers::NON_COLLIDING;
         case Layers::NON_COLLIDING: return false;
-        default:
-        {
+        default: {
             return false;
         }
     }
@@ -148,8 +144,7 @@ bool Jolt_collision_filter::ShouldCollide(
     JPH::ObjectLayer inLayer2
 ) const
 {
-    switch (inLayer1)
-    {
+    switch (inLayer1) {
         case Layers::NON_MOVING:    return inLayer2 == Layers::MOVING;        // Non moving only collides with moving
         case Layers::MOVING:        return inLayer2 != Layers::NON_COLLIDING;
         case Layers::NON_COLLIDING: return false; // Does not collide with anything
@@ -197,7 +192,7 @@ Jolt_world::Initialize_first::Initialize_first()
 
 Jolt_world::Jolt_world()
     : m_temp_allocator{10 * 1024 * 1024}
-    , m_job_system{JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10}
+    , m_job_system    {JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 10}
 {
     //m_debug_renderer              = std::make_unique<Jolt_debug_renderer             >();
     m_broad_phase_layer_interface = std::make_unique<Broad_phase_layer_interface_impl>();
@@ -236,8 +231,7 @@ auto Jolt_world::is_physics_updates_enabled() const -> bool
 
 void Jolt_world::update_fixed_step(const double dt)
 {
-    if (!m_physics_enabled)
-    {
+    if (!m_physics_enabled) {
         //log_physics_frame.info("Physics is disabled\n");
         return;
     }
@@ -259,8 +253,7 @@ void Jolt_world::update_fixed_step(const double dt)
         &m_job_system
     );
 
-    for (auto* rigid_body : m_rigid_bodies)
-    {
+    for (auto* rigid_body : m_rigid_bodies) {
         rigid_body->update_motion_state();
     }
 
@@ -286,8 +279,7 @@ void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 
     auto* jolt_body = jolt_rigid_body->get_jolt_body();
     ERHE_VERIFY(jolt_body != nullptr);
-    if (jolt_body == &JPH::Body::sFixedToWorld)
-    {
+    if (jolt_body == &JPH::Body::sFixedToWorld) {
         return;
     }
 
@@ -295,11 +287,9 @@ void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 
 #ifndef NDEBUG
     const auto i = std::find(m_rigid_bodies.begin(), m_rigid_bodies.end(), jolt_rigid_body);
-    if (i != m_rigid_bodies.end())
-    {
+    if (i != m_rigid_bodies.end()) {
         log_physics->error("rigid body {} already in world", rigid_body->get_debug_label());
-    }
-    else
+    } else
 #endif
     {
         body_interface.AddBody(
@@ -319,8 +309,7 @@ void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
 
     auto* jolt_body = jolt_rigid_body->get_jolt_body();
     ERHE_VERIFY(jolt_body != nullptr);
-    if (jolt_body == &JPH::Body::sFixedToWorld)
-    {
+    if (jolt_body == &JPH::Body::sFixedToWorld) {
         return;
     }
 
@@ -331,12 +320,9 @@ void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
         m_rigid_bodies.end(),
         jolt_rigid_body
     );
-    if (i == m_rigid_bodies.end())
-    {
+    if (i == m_rigid_bodies.end()) {
         log_physics->error("rigid body {} not in world", rigid_body->get_debug_label());
-    }
-    else
-    {
+    } else {
         body_interface.RemoveBody(jolt_body->GetID());
         m_rigid_bodies.erase(i, m_rigid_bodies.end());
     }
@@ -349,11 +335,9 @@ void Jolt_world::add_constraint(IConstraint* constraint)
 
 #ifndef NDEBUG
     const auto i = std::find(m_constraints.begin(), m_constraints.end(), jolt_constraint);
-    if (i != m_constraints.end())
-    {
+    if (i != m_constraints.end()) {
         log_physics->error("constraint is already in world");
-    }
-    else
+    } else
 #endif
     {
         m_physics_system.AddConstraint(jolt_constraint->get_jolt_constraint());
@@ -370,13 +354,10 @@ void Jolt_world::remove_constraint(IConstraint* constraint)
         m_constraints.end(),
         jolt_constraint
     );
-    if (i != m_constraints.end())
-    {
+    if (i != m_constraints.end()) {
         m_physics_system.RemoveConstraint(jolt_constraint->get_jolt_constraint());
         m_constraints.erase(i, m_constraints.end());
-    }
-    else
-    {
+    } else {
         log_physics->error("constraint is not in world");
     }
 }

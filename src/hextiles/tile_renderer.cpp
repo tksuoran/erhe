@@ -283,13 +283,10 @@ void Tile_renderer::initialize_component()
         }
     };
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-    }
-    else
-    {
+    } else {
         m_default_uniform_block.add_sampler(
             "s_texture",
             gl::Uniform_type::sampler_2d,
@@ -300,8 +297,7 @@ void Tile_renderer::initialize_component()
 
     Shader_stages::Prototype prototype{create_info};
     m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-    if (erhe::application::g_shader_monitor != nullptr)
-    {
+    if (erhe::application::g_shader_monitor != nullptr) {
         erhe::application::g_shader_monitor->add(create_info, m_shader_stages.get());
     }
 
@@ -338,10 +334,8 @@ void Tile_renderer::compose_tileset_texture()
 
     // Basetiles
     //int ty0_base_terrain = ty_offset;
-    for (int ty = 0; ty < Base_tiles::height; ++ty)
-    {
-        for (int tx = 0; tx < Base_tiles::width; ++tx)
-        {
+    for (int ty = 0; ty < Base_tiles::height; ++ty) {
+        for (int tx = 0; tx < Base_tiles::width; ++tx) {
             m_terrain_shapes.emplace_back(
                 tx * Tile_shape::full_width,
                 (ty + ty_offset) * Tile_shape::height
@@ -352,10 +346,8 @@ void Tile_renderer::compose_tileset_texture()
 
     // Terrain groups
     //int ty0_terrain_groups = ty_offset;
-    for (int ty = 0; ty < Tile_group::count * Tile_group::height; ++ty)
-    {
-        for (int tx = 0; tx < Tile_group::width; ++tx)
-        {
+    for (int ty = 0; ty < Tile_group::count * Tile_group::height; ++ty) {
+        for (int tx = 0; tx < Tile_group::width; ++tx) {
             m_terrain_shapes.emplace_back(
                 tx * Tile_shape::full_width,
                 (ty + ty_offset) * Tile_shape::height
@@ -366,10 +358,8 @@ void Tile_renderer::compose_tileset_texture()
 
     // Extra tiles
     //const int ty0_extra_tiles = ty_offset;
-    for (int ty = 0; ty < Extra_tiles::height; ++ty)
-    {
-        for (int tx = 0; tx < Extra_tiles::width; ++tx)
-        {
+    for (int ty = 0; ty < Extra_tiles::height; ++ty) {
+        for (int tx = 0; tx < Extra_tiles::width; ++tx) {
             m_extra_shapes.emplace_back(
                 tx * Tile_shape::full_width,
                 (ty + ty_offset) * Tile_shape::height
@@ -380,10 +370,8 @@ void Tile_renderer::compose_tileset_texture()
 
     // Explosions
     //const int ty0_explosion = ty_offset;
-    for (int ty = 0; ty < Explosion_tiles::height; ++ty)
-    {
-        for (int tx = 0; tx < Base_tiles::width; ++tx)
-        {
+    for (int ty = 0; ty < Explosion_tiles::height; ++ty) {
+        for (int tx = 0; tx < Base_tiles::width; ++tx) {
             m_explosion_shapes.emplace_back(
                 (tx * 2) * Tile_shape::full_width,
                 (ty * 2 + ty_offset) * Tile_shape::height
@@ -394,10 +382,8 @@ void Tile_renderer::compose_tileset_texture()
 
     // Y offsets in tiles
     const int ty0_special_unit_tiles = ty_offset;
-    for (int ty = 0; ty < 1; ++ty)
-    {
-        for (int tx = 0; tx < Base_tiles::width; ++tx)
-        {
+    for (int ty = 0; ty < 1; ++ty) {
+        for (int tx = 0; tx < Base_tiles::width; ++tx) {
             m_unit_shapes.emplace_back(
                 tx * Tile_shape::full_width,
                 (ty + ty_offset) * Tile_shape::height
@@ -407,12 +393,9 @@ void Tile_renderer::compose_tileset_texture()
     ty_offset += 1;
 
     const int ty0_single_unit_tiles = ty_offset;
-    for (int player = 0; player < max_player_count; ++player)
-    {
-        for (int ty = 0; ty < Unit_group::height; ++ty)
-        {
-            for (int tx = 0; tx < Unit_group::width; ++tx)
-            {
+    for (int player = 0; player < max_player_count; ++player) {
+        for (int ty = 0; ty < Unit_group::height; ++ty) {
+            for (int tx = 0; tx < Unit_group::width; ++tx) {
                 m_unit_shapes.emplace_back(
                     tx * Tile_shape::full_width,
                     (ty + ty_offset) * Tile_shape::height
@@ -428,22 +411,17 @@ void Tile_renderer::compose_tileset_texture()
         int tx = 0;
         int ty = ty_offset;
 
-        for (players[0] = 0; players[0] < max_player_count + 1; ++players[0])
-        {
-            for (players[1] = 0; players[1] < max_player_count + 1; ++players[1])
-            {
-                for (players[2] = 0; players[2] < max_player_count + 1; ++players[2])
-                {
-                    for (players[3] = 0; players[3] < max_player_count + 1; ++players[3])
-                    {
+        for (players[0] = 0; players[0] < max_player_count + 1; ++players[0]) {
+            for (players[1] = 0; players[1] < max_player_count + 1; ++players[1]) {
+                for (players[2] = 0; players[2] < max_player_count + 1; ++players[2]) {
+                    for (players[3] = 0; players[3] < max_player_count + 1; ++players[3]) {
                         m_unit_shapes.emplace_back(
                             tx * Tile_shape::full_width,
                             ty * Tile_shape::height
                         );
 
                         ++tx;
-                        if (tx == 8)
-                        {
+                        if (tx == 8) {
                             tx = 0;
                             ++ty;
                         }
@@ -489,11 +467,9 @@ void Tile_renderer::compose_tileset_texture()
     {
         int x0 = 0;
         int y0 = ty0_special_unit_tiles * Tile_shape::height;
-        for (int i = 0; i < max_player_count; ++i)
-        {
+        for (int i = 0; i < max_player_count; ++i) {
             Player_unit_colors player_colors;
-            for (size_t s = 0; s < player_color_shade_count; ++s)
-            {
+            for (size_t s = 0; s < player_color_shade_count; ++s) {
                 const glm::vec4 color = m_tileset_image.get_pixel(x0 + s, y0 + i);
                 player_colors.shades[s] = color;
                 log_tiles->info(
@@ -508,10 +484,8 @@ void Tile_renderer::compose_tileset_texture()
 
     // Create per player colored variants of unit tiles
     {
-        Image scratch
-        {
-            .info =
-            {
+        Image scratch{
+            .info = {
                 .width       = Unit_group::width * Tile_shape::full_width,
                 .height      = Unit_group::height * Tile_shape::height,
                 .depth       = 1,
@@ -524,13 +498,10 @@ void Tile_renderer::compose_tileset_texture()
         scratch.data.resize(scratch.info.height * scratch.info.row_stride);
 
         int y0 = ty0_single_unit_tiles * Tile_shape::height;
-        for (int i = 0; i < max_player_count; ++i)
-        {
+        for (int i = 0; i < max_player_count; ++i) {
             const Player_unit_colors& player_colors = players_colors[i];
-            for (int y = 0; y < scratch.info.height; ++y)
-            {
-                for (int x = 0; x < scratch.info.width; ++x)
-                {
+            for (int y = 0; y < scratch.info.height; ++y) {
+                for (int x = 0; x < scratch.info.width; ++x) {
                     const auto      original_color = m_tileset_image.get_pixel(x, y0 + y);
                     const glm::vec4 player_color   =
                         original_color.b * player_colors.shades[1] +
@@ -556,10 +527,8 @@ void Tile_renderer::compose_tileset_texture()
     {
         std::array<int, Battle_type::bit_count> players;
         players.fill(0);
-        Image scratch
-        {
-            .info =
-            {
+        Image scratch {
+            .info = {
                 .width       = Tile_shape::full_width,
                 .height      = Tile_shape::height,
                 .depth       = 1,
@@ -572,14 +541,10 @@ void Tile_renderer::compose_tileset_texture()
         scratch.data.resize(scratch.info.height * scratch.info.row_stride);
         int tx = 0;
         int ty = ty0_multiple_unit_tiles;
-        for (players[0] = 0; players[0] < max_player_count + 1; ++players[0])
-        {
-            for (players[1] = 0; players[1] < max_player_count + 1; ++players[1])
-            {
-                for (players[2] = 0; players[2] < max_player_count + 1; ++players[2])
-                {
-                    for (players[3] = 0; players[3] < max_player_count + 1; ++players[3])
-                    {
+        for (players[0] = 0; players[0] < max_player_count + 1; ++players[0]) {
+            for (players[1] = 0; players[1] < max_player_count + 1; ++players[1]) {
+                for (players[2] = 0; players[2] < max_player_count + 1; ++players[2]) {
+                    for (players[3] = 0; players[3] < max_player_count + 1; ++players[3]) {
                         compose_multiple_unit_tile(
                             scratch,
                             players_colors,
@@ -598,8 +563,7 @@ void Tile_renderer::compose_tileset_texture()
                         );
 
                         ++tx;
-                        if (tx == 8)
-                        {
+                        if (tx == 8) {
                             tx = 0;
                             ++ty;
                         }
@@ -615,15 +579,12 @@ auto Tile_renderer::get_multi_unit_tile(
 ) const -> unit_tile_t
 {
     int tile = s_multiple_unit_tile_offset;
-    for (unsigned int battle_type = 0; battle_type < battle_type_players.size(); ++battle_type)
-    {
-        if (battle_type == Battle_type::bit_city)
-        {
+    for (unsigned int battle_type = 0; battle_type < battle_type_players.size(); ++battle_type) {
+        if (battle_type == Battle_type::bit_city) {
             continue;
         }
         int player_id = battle_type_players[battle_type];
-        if (player_id == 0)
-        {
+        if (player_id == 0) {
             continue;
         }
         tile += s_multiple_unit_battle_type_multiplier[battle_type] * player_id;
@@ -653,33 +614,27 @@ void Tile_renderer::compose_multiple_unit_tile
     int                                     y0
 )
 {
-    for (int y = 0; y < scratch.info.height; ++y)
-    {
-        for (int x = 0; x < scratch.info.width; ++x)
-        {
+    for (int y = 0; y < scratch.info.height; ++y) {
+        for (int x = 0; x < scratch.info.width; ++x) {
             // Initialize tile pixel to transparant (black)
             scratch.put_pixel(x, y, glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
             // Add contributions from each player
             int contribution_count = 0;
-            for (int i = 0; i < players.size(); ++i)
-            {
-                if (i == Battle_type::bit_city)
-                {
+            for (int i = 0; i < players.size(); ++i) {
+                if (i == Battle_type::bit_city) {
                     continue;
                 }
 
                 const int player = players[i];
-                if (player == 0)
-                {
+                if (player == 0) {
                     continue;
                 }
                 const auto original_color = m_tileset_image.get_pixel(
                     i * Tile_shape::full_width + x,
                     y0 + y
                 );
-                if (original_color.a == 0)
-                {
+                if (original_color.a == 0) {
                     continue;
                 }
                 const glm::vec4 player_color =
@@ -745,8 +700,7 @@ auto Tile_renderer::get_grid_tile(const int grid_mode) const -> tile_t
 
 void Tile_renderer::create_frame_resources(size_t vertex_count)
 {
-    for (size_t slot = 0; slot < s_frame_resources_count; ++slot)
-    {
+    for (size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_frame_resources.emplace_back(
             vertex_count,
             m_shader_stages.get(),
@@ -815,15 +769,15 @@ void Tile_renderer::blit(
 {
     Expects(m_can_blit == true);
 
-    const float    u0    = static_cast<float>(src_x         ) / static_cast<float>(m_tileset_texture->width());
-    const float    v0    = static_cast<float>(src_y         ) / static_cast<float>(m_tileset_texture->height());
-    const float    u1    = static_cast<float>(src_x + width ) / static_cast<float>(m_tileset_texture->width());
-    const float    v1    = static_cast<float>(src_y + height) / static_cast<float>(m_tileset_texture->height());
+    const float u0 = static_cast<float>(src_x         ) / static_cast<float>(m_tileset_texture->width());
+    const float v0 = static_cast<float>(src_y         ) / static_cast<float>(m_tileset_texture->height());
+    const float u1 = static_cast<float>(src_x + width ) / static_cast<float>(m_tileset_texture->width());
+    const float v1 = static_cast<float>(src_y + height) / static_cast<float>(m_tileset_texture->height());
 
-    const float&   x0    = dst_x0;
-    const float&   y0    = dst_y0;
-    const float&   x1    = dst_x1;
-    const float&   y1    = dst_y1;
+    const float& x0= dst_x0;
+    const float& y0= dst_y0;
+    const float& x1= dst_x1;
+    const float& y1= dst_y1;
 
     m_gpu_float_data[m_word_offset++] = x0;
     m_gpu_float_data[m_word_offset++] = y0;
@@ -866,8 +820,7 @@ static constexpr std::string_view c_tile_renderer_render{"Tile_renderer::render(
 
 void Tile_renderer::render(erhe::scene::Viewport viewport)
 {
-    if (m_index_count == 0)
-    {
+    if (m_index_count == 0) {
         return;
     }
 
@@ -929,12 +882,9 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
         static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
     );
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
-    }
-    else
-    {
+    } else {
         gl::bind_texture_unit(0, m_tileset_texture->gl_name());
         gl::bind_sampler     (0, m_nearest_sampler->gl_name());
     }
@@ -946,8 +896,7 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
         reinterpret_cast<const void*>(m_index_range_first * 4)
     );
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         gl::make_texture_handle_non_resident_arb(handle);
     }
 
@@ -1034,8 +983,7 @@ void Tile_renderer::blit_tile(
     m_terrain_tile_offset = 0;
     const auto& terrain_shapes = m_tiles->get_terrain_shapes();
     tile_t tile{0};
-    for (terrain_t i = 0; i < terrain_tile_count; ++i)
-    {
+    for (terrain_t i = 0; i < terrain_tile_count; ++i) {
         auto&                   terrain_type = m_tiles->get_terrain_type(i);
         const Pixel_coordinate& shape        = terrain_shapes[i];
         terrain_type.tile = tile;
@@ -1072,11 +1020,9 @@ void Tile_renderer::blit_tile(
         int tx_offset = Unit_group::width;
         int x0 = tx_offset * Tile_shape::full_width;
         int y0 = ty_offset * Tile_shape::height;
-        for (int i = 0; i < max_player_count; ++i)
-        {
+        for (int i = 0; i < max_player_count; ++i) {
             Player_unit_colors player_colors;
-            for (size_t s = 0; s < player_color_shade_count; ++s)
-            {
+            for (size_t s = 0; s < player_color_shade_count; ++s) {
                 const glm::vec4 color = m_tileset_image.get_pixel(x0 + s, y0 + i);
                 player_colors.shades[s] = color;
                 log_tiles.info(
@@ -1089,10 +1035,8 @@ void Tile_renderer::blit_tile(
         }
     }
 
-    Image scratch
-    {
-        .info =
-        {
+    Image scratch{
+        .info = {
             .width       = Unit_group::width * Tile_shape::full_width,
             .height      = Unit_group::height * Tile_shape::height,
             .depth       = 1,
@@ -1105,18 +1049,14 @@ void Tile_renderer::blit_tile(
 
     //m_unit_tile_offset = tile;
     const auto& unit_shapes = m_tiles->get_unit_shapes();
-    for (unit_t i = 0; i < unit_type_count; ++i)
-    {
+    for (unit_t i = 0; i < unit_type_count; ++i) {
         auto&                   unit_type = m_tiles->get_unit_type(i);
         const Pixel_coordinate& shape     = unit_shapes[i];
         unit_type.tile = tile;
-        for (int j = 0; j < max_player_count; ++j)
-        {
+        for (int j = 0; j < max_player_count; ++j) {
             const Player_unit_colors& player_colors = players_colors[j];
-            for (int y = 0; y < Tile_shape::height; ++y)
-            {
-                for (int x = 0; x < Tile_shape::full_width; ++x)
-                {
+            for (int y = 0; y < Tile_shape::height; ++y) {
+                for (int x = 0; x < Tile_shape::full_width; ++x) {
                     const auto      original_color = m_tileset_image.get_pixel(x, y);
                     const glm::vec4 player_color   =
                         original_color.b * player_colors.shades[1] +

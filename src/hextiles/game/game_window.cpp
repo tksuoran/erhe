@@ -54,12 +54,10 @@ void Game_window::imgui()
 
     Player& player = g_game->get_current_player();
     ImGui::Text("Player: %s", player.name.c_str());
-    if (ImGui::Button("End Turn", button_size))
-    {
+    if (ImGui::Button("End Turn", button_size)) {
         g_game->next_turn();
     }
-    if (ImGui::Button("Back to Menu", button_size))
-    {
+    if (ImGui::Button("Back to Menu", button_size)) {
         hide();
         g_map_window ->hide();
         g_menu_window->show();

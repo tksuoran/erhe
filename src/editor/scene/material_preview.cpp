@@ -157,8 +157,7 @@ void Material_preview::make_rendertarget()
     gl::named_framebuffer_draw_buffers(m_framebuffer->gl_name(), 1, &draw_buffers[0]);
     gl::named_framebuffer_read_buffer(m_framebuffer->gl_name(), gl::Color_buffer::color_attachment0);
 
-    if (!m_framebuffer->check_status())
-    {
+    if (!m_framebuffer->check_status()) {
         m_framebuffer.reset();
     }
 

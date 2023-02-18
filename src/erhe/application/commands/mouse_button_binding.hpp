@@ -1,4 +1,4 @@
-#pragma once
+ #pragma once
 
 #include "erhe/application/commands/mouse_binding.hpp"
 

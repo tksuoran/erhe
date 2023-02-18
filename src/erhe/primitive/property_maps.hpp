@@ -42,8 +42,7 @@ public:
         ERHE_PROFILE_FUNCTION
 
         auto map = geometry_attributes.template find<Value_type>(name);
-        if (map == nullptr)
-        {
+        if (map == nullptr) {
             map = attributes.template create<Value_type>(name);
         }
         return map;

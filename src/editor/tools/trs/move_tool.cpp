@@ -49,8 +49,7 @@ void Move_tool::initialize_component()
 
 void Move_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    if (g_trs_tool)
-    {
+    if (g_trs_tool) {
         g_trs_tool->set_translate(new_priority > old_priority);
     }
 }

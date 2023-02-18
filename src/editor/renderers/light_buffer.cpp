@@ -88,8 +88,7 @@ Light_projections::Light_projections(
 {
     light_projection_transforms.clear();
 
-    for (const auto& light : lights)
-    {
+    for (const auto& light : lights) {
         const std::size_t light_index = light_projection_transforms.size();
         auto transforms = light->projection_transforms(parameters);
         transforms.index = light_index;
@@ -108,10 +107,8 @@ Light_projections::Light_projections(
     const erhe::scene::Light* light
 ) -> erhe::scene::Light_projection_transforms*
 {
-    for (auto& i : light_projection_transforms)
-    {
-        if (i.light == light)
-        {
+    for (auto& i : light_projection_transforms) {
+        if (i.light == light) {
             return &i;
         }
     }
@@ -122,10 +119,8 @@ Light_projections::Light_projections(
     const erhe::scene::Light* light
 ) const -> const erhe::scene::Light_projection_transforms*
 {
-    for (auto& i : light_projection_transforms)
-    {
-        if (i.light == light)
-        {
+    for (auto& i : light_projection_transforms) {
+        if (i.light == light) {
             return &i;
         }
     }
@@ -172,8 +167,7 @@ auto Light_buffer::update(
     const std::size_t light_array_offset = writer.write_offset;
     std::size_t max_light_index{0};
 
-    for (const auto& light : lights)
-    {
+    for (const auto& light : lights) {
         //if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
         //{
         //    log_render->critical("light buffer capacity {} exceeded", buffer.capacity_byte_count());
@@ -185,8 +179,7 @@ auto Light_buffer::update(
         erhe::scene::Node* node = light->get_node();
         ERHE_VERIFY(node != nullptr);
 
-        switch (light->type)
-        {
+        switch (light->type) {
             //using enum erhe::scene::Light_type;
             case erhe::scene::Light_type::directional: ++directional_light_count; break;
             case erhe::scene::Light_type::point:       ++point_light_count; break;
@@ -203,8 +196,7 @@ auto Light_buffer::update(
         auto* light_projection_transforms = (light_projections != nullptr)
             ? light_projections->get_light_projection_transforms_for_light(light.get())
             : nullptr;
-        if (light_projection_transforms == nullptr)
-        {
+        if (light_projection_transforms == nullptr) {
             continue;
         }
 

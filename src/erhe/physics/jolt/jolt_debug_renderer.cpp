@@ -38,8 +38,7 @@ void Jolt_debug_renderer::DrawLine(
     JPH::ColorArg      inColor
 )
 {
-    if (m_debug_draw == nullptr)
-    {
+    if (m_debug_draw == nullptr) {
         return;
     }
     m_debug_draw->draw_line(
@@ -56,8 +55,7 @@ void Jolt_debug_renderer::DrawTriangle(
     JPH::ColorArg inColor
 )
 {
-    if (m_debug_draw == nullptr)
-    {
+    if (m_debug_draw == nullptr) {
         return;
     }
     m_debug_draw->draw_line(from_jolt(inV1), from_jolt(inV2), from_jolt(inColor));
@@ -72,13 +70,11 @@ auto Jolt_debug_renderer::CreateTriangleBatch(
 {
     static_cast<void>(inTriangles);
     static_cast<void>(inTriangleCount);
-    //if (m_debug_draw == nullptr)
-    //{
+    //if (m_debug_draw == nullptr) {
     //    return;
     //}
     //
-    //for (int i = 0; i < inTriangleCount; ++i)
-    //{
+    //for (int i = 0; i < inTriangleCount; ++i) {
     //    const Triangle& t = inTriangles[i];
     //    m_debug_draw->draw_line(from_jolt(t.mV[0].mPosition), from_jolt(t.mV[1].mPosition), from_jolt(t.mV[0].mColor));
     //    m_debug_draw->draw_line(from_jolt(t.mV[1].mPosition), from_jolt(t.mV[2].mPosition), from_jolt(t.mV[1].mColor));
@@ -130,8 +126,7 @@ void Jolt_debug_renderer::DrawText3D(
     float              inHeight
 )
 {
-    if (m_debug_draw == nullptr)
-    {
+    if (m_debug_draw == nullptr) {
         return;
     }
     const auto p = from_jolt(inPosition);

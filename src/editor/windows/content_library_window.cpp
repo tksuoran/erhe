@@ -72,21 +72,17 @@ void Content_library_window::initialize_component()
 void Content_library_window::post_initialize()
 {
     const auto& scene_roots = g_editor_scenes->get_scene_roots();
-    for (const auto& scene_root : scene_roots)
-    {
+    for (const auto& scene_root : scene_roots) {
         const auto& content_library = scene_root->content_library();
-        if (!content_library)
-        {
+        if (!content_library) {
             continue;
         }
-        if (!content_library->is_shown_in_ui)
-        {
+        if (!content_library->is_shown_in_ui) {
             continue;
         }
 
         const auto& materials = content_library->materials.entries();
-        if (materials.empty())
-        {
+        if (materials.empty()) {
             continue;
         }
 
@@ -110,20 +106,16 @@ void Content_library_window::imgui()
     ERHE_PROFILE_FUNCTION
 
     const auto& scene_roots = g_editor_scenes->get_scene_roots();
-    for (const auto& scene_root : scene_roots)
-    {
+    for (const auto& scene_root : scene_roots) {
         const auto& content_library = scene_root->content_library();
-        if (!content_library)
-        {
+        if (!content_library) {
             continue;
         }
-        if (!content_library->is_shown_in_ui)
-        {
+        if (!content_library->is_shown_in_ui) {
             continue;
         }
 
-        if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags))
-        {
+        if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags)) {
             m_brushes  .imgui(content_library->brushes);
             m_cameras  .imgui(content_library->cameras);
             m_lights   .imgui(content_library->lights);

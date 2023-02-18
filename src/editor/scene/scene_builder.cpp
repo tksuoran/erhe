@@ -190,8 +190,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto& test_scene_root = get_scene_root();
 
-    if (count >= 1)
-    {
+    if (count >= 1) {
         auto rendertarget_node_1 = std::make_shared<erhe::scene::Node>("RT Node 1");
         auto rendertarget_mesh_1 = std::make_shared<Rendertarget_mesh>(
             1920,  // width
@@ -228,8 +227,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
 #endif
     }
 
-    if (count >= 2)
-    {
+    if (count >= 2) {
         const auto camera_b = make_camera(
             "Camera B",
             glm::vec3{-7.0f, 1.0f, 0.0f},
@@ -327,8 +325,7 @@ void Scene_builder::setup_cameras()
     //);
     //camera_b->node_data.wireframe_color = glm::vec4{0.3f, 0.6f, 1.00f, 1.0f};
 
-    if (!erhe::application::g_configuration->window.show)
-    {
+    if (!erhe::application::g_configuration->window.show) {
         return;
     }
 
@@ -343,15 +340,12 @@ void Scene_builder::setup_cameras()
         erhe::application::g_configuration->graphics.post_processing
     );
 
-    if (erhe::application::g_configuration->imgui.window_viewport)
-    {
+    if (erhe::application::g_configuration->imgui.window_viewport) {
         //auto primary_imgui_viewport_window =
         g_viewport_windows->create_imgui_viewport_window(
             m_primary_viewport_window
         );
-    }
-    else
-    {
+    } else {
         g_viewport_windows->create_basic_viewport_window(
             m_primary_viewport_window
         );
@@ -370,8 +364,7 @@ auto Scene_builder::make_brush(
 {
     auto content_library = m_scene_root->content_library();
     const auto brush = content_library->brushes.make(brush_create_info);
-    if (instantiate_to_scene)
-    {
+    if (instantiate_to_scene) {
         const std::lock_guard<std::mutex> lock{m_scene_brushes_mutex};
 
         m_scene_brushes.push_back(brush);
@@ -421,22 +414,18 @@ void Scene_builder::make_brushes()
 
     const auto& configuration = *erhe::application::g_configuration;
 
-    if (configuration.threading.parallel_initialization)
-    {
+    if (configuration.threading.parallel_initialization) {
         const std::size_t thread_count = std::min(
             8U,
             std::max(std::thread::hardware_concurrency() - 0, 1U)
         );
         execution_queue = std::make_unique<Parallel_task_queue>("scene builder", thread_count);
-    }
-    else
-    {
+    } else {
         execution_queue = std::make_unique<Serial_task_queue>();
     }
 
     // Floor
-    if (config.floor)
-    {
+    if (config.floor) {
         auto floor_box_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
             0.5f * vec3{config.floor_size, 1.0f, config.floor_size}
         );
@@ -471,8 +460,7 @@ void Scene_builder::make_brushes()
 
     constexpr bool anisotropic_test_object = false;
 
-    if (config.gltf_files)
-    {
+    if (config.gltf_files) {
 #if !defined(ERHE_GLTF_LIBRARY_NONE)
         //execution_queue->enqueue(
         //    [this]()
@@ -489,8 +477,7 @@ void Scene_builder::make_brushes()
                     //"res/models/test.gltf"
                     //"res/models/Suzanne.gltf"
                 };
-                for (auto* path : files_names)
-                {
+                for (auto* path : files_names) {
                     parse_gltf(m_scene_root, build_info(), path);
                 }
             }
@@ -498,8 +485,7 @@ void Scene_builder::make_brushes()
 #endif
     }
 
-    if (config.obj_files)
-    {
+    if (config.obj_files) {
         execution_queue->enqueue(
             [this, &configuration]()
             {
@@ -513,12 +499,10 @@ void Scene_builder::make_brushes()
                     //"res/models/teacup.obj",
                     //"res/models/spoon.obj"
                 };
-                for (auto* path : obj_files_names)
-                {
+                for (auto* path : obj_files_names) {
                     auto geometries = parse_obj_geometry(path);
 
-                    for (auto& geometry : geometries)
-                    {
+                    for (auto& geometry : geometries) {
                         geometry->compute_polygon_normals();
                         // The real teapot is ~33% taller (ratio 4:3)
                         //const mat4 scale_t = erhe::toolkit::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
@@ -543,8 +527,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if (config.platonic_solids)
-    {
+    if (config.platonic_solids) {
         execution_queue->enqueue(
             [this, &configuration]()
             {
@@ -574,8 +557,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if (config.sphere)
-    {
+    if (config.sphere) {
         execution_queue->enqueue(
             [this, &configuration]()
             {
@@ -604,8 +586,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if (config.torus)
-    {
+    if (config.torus) {
         execution_queue->enqueue(
             [this, &configuration]()
             {
@@ -641,8 +622,7 @@ void Scene_builder::make_brushes()
                         static_cast<float>(scaled_minor_radius),
                         static_cast<float>(capsule_length)
                     );
-                    for (int i = 0; i < static_cast<int>(subdivisions); i++)
-                    {
+                    for (int i = 0; i < static_cast<int>(subdivisions); i++) {
                         const double     rel      = static_cast<double>(i) / subdivisions;
                         const double     theta    = rel * glm::two_pi<double>();
                         const glm::dvec3 position = glm::rotate(side, theta, forward);
@@ -690,8 +670,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if (config.cylinder)
-    {
+    if (config.cylinder) {
         execution_queue->enqueue(
             [this, &configuration]()
             {
@@ -729,8 +708,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if (config.cone)
-    {
+    if (config.cone) {
         execution_queue->enqueue(
             [this, &configuration]()
             {
@@ -768,8 +746,7 @@ void Scene_builder::make_brushes()
         );
     }
 
-    if constexpr (anisotropic_test_object)
-    {
+    if constexpr (anisotropic_test_object) {
         ERHE_PROFILE_SCOPE("test scene for anisotropic debugging");
 
         auto&       material_library  = m_scene_root->content_library()->materials;
@@ -831,20 +808,17 @@ void Scene_builder::make_brushes()
     }
 
     Json_library library;//("res/polyhedra/johnson.json");
-    if (config.johnson_solids)
-    {
+    if (config.johnson_solids) {
         // TODO When tasks can have dependencies we could queue this as well
         ERHE_PROFILE_SCOPE("Johnson solids");
 
         library = Json_library("res/polyhedra/johnson.json");
-        for (const auto& key_name : library.names)
-        {
+        for (const auto& key_name : library.names) {
             execution_queue->enqueue(
                 [this, &library, &key_name, &configuration]()
                 {
                     auto geometry = library.make_geometry(key_name);
-                    if (geometry.get_polygon_count() == 0)
-                    {
+                    if (geometry.get_polygon_count() == 0) {
                         return;
                     }
                     geometry.compute_polygon_normals();
@@ -884,8 +858,7 @@ void Scene_builder::add_room()
 {
     ERHE_PROFILE_FUNCTION
 
-    if (!m_floor_brush)
-    {
+    if (!m_floor_brush) {
         return;
     }
 
@@ -899,8 +872,7 @@ void Scene_builder::add_room()
     );
 
     // Notably shadow cast is not enabled for floor
-    Instance_create_info floor_brush_instance_create_info
-    {
+    Instance_create_info floor_brush_instance_create_info{
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui,
         .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::show_in_ui,
         .scene_root      = m_scene_root.get(),
@@ -959,10 +931,8 @@ void Scene_builder::make_mesh_nodes()
     {
         ERHE_PROFILE_SCOPE("emplace pack");
 
-        for (const auto& brush : m_scene_brushes)
-        {
-            for (int i = 0; i < config.instance_count; ++i)
-            {
+        for (const auto& brush : m_scene_brushes) {
+            for (int i = 0; i < config.instance_count; ++i) {
                 pack_entries.emplace_back(brush.get());
             }
         }
@@ -977,15 +947,13 @@ void Scene_builder::make_mesh_nodes()
         int group_width = 2;
         int group_depth = 2;
         ERHE_PROFILE_SCOPE("pack");
-        for (;;)
-        {
+        for (;;) {
             ERHE_PROFILE_SCOPE("iteration");
             max_corner = glm::ivec2{0, 0};
             packer.Init(group_width, group_depth, false);
 
             bool pack_failed = false;
-            for (auto& entry : pack_entries)
-            {
+            for (auto& entry : pack_entries) {
                 auto*      brush = entry.brush;
                 const vec3 size  = brush->get_bounding_box().diagonal();
                 const int  width = static_cast<int>(256.0f * (size.x + gap));
@@ -998,8 +966,7 @@ void Scene_builder::make_mesh_nodes()
                 if (
                     (entry.rectangle.width  == 0) ||
                     (entry.rectangle.height == 0)
-                )
-                {
+                ) {
                     pack_failed = true;
                     break;
                 }
@@ -1007,17 +974,13 @@ void Scene_builder::make_mesh_nodes()
                 max_corner.y = std::max(max_corner.y, entry.rectangle.y + entry.rectangle.height);
             }
 
-            if (!pack_failed)
-            {
+            if (!pack_failed) {
                 break;
             }
 
-            if (group_width <= group_depth)
-            {
+            if (group_width <= group_depth) {
                 group_width *= 2;
-            }
-            else
-            {
+            } else {
                 group_depth *= 2;
             }
 
@@ -1034,11 +997,9 @@ void Scene_builder::make_mesh_nodes()
 
         ERHE_VERIFY(!materials.empty());
 
-        for (auto& entry : pack_entries)
-        {
+        for (auto& entry : pack_entries) {
             // TODO this will lock up if there are no visible materials
-            do
-            {
+            do {
                 material_index = (material_index + 1) % materials.size();
             }
             while (!materials.at(material_index)->is_shown_in_ui());
@@ -1099,23 +1060,17 @@ void Scene_builder::make_cube_benchmark()
         .material              = material,
         .gl_primitive_geometry = cube_pg
     };
-    for (int i = 0; i < x_count; ++i)
-    {
+    for (int i = 0; i < x_count; ++i) {
         const float x_rel = static_cast<float>(i) - static_cast<float>(x_count) * 0.5f;
-        for (int j = 0; j < y_count; ++j)
-        {
+        for (int j = 0; j < y_count; ++j) {
             const float y_rel = static_cast<float>(j);
-            for (int k = 0; k < z_count; ++k)
-            {
+            for (int k = 0; k < z_count; ++k) {
                 const float z_rel = static_cast<float>(k) - static_cast<float>(z_count) * 0.5f;
                 const vec3 pos{scale * x_rel, 1.0f + scale * y_rel, scale * z_rel};
                 auto node = std::make_shared<erhe::scene::Node>();
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
                 mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
-                mesh->enable_flag_bits(
-                    Item_flags::content |
-                    Item_flags::shadow_cast
-                );
+                mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast);
                 node->attach(mesh);
                 node->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
                 node->set_parent(m_scene_root->scene().get_root_node());
@@ -1213,8 +1168,7 @@ void Scene_builder::setup_lights()
     //    }
     //);
 
-    for (int i = 0; i < config.directional_light_count; ++i)
-    {
+    for (int i = 0; i < config.directional_light_count; ++i) {
         const float rel = static_cast<float>(i) / static_cast<float>(config.directional_light_count);
         const float R   = config.directional_light_radius;
         const float h   = rel * 360.0f;
@@ -1233,8 +1187,7 @@ void Scene_builder::setup_lights()
         make_directional_light(name, position, color, intensity);
     }
 
-    for (int i = 0; i < config.spot_light_count; ++i)
-    {
+    for (int i = 0; i < config.spot_light_count; ++i) {
         const float rel   = static_cast<float>(i) / static_cast<float>(config.spot_light_count);
         const float theta = rel * glm::two_pi<float>();
         const float R     = config.spot_light_radius;
@@ -1262,10 +1215,9 @@ void Scene_builder::setup_lights()
 
 void Scene_builder::animate_lights(const double time_d)
 {
-    if (time_d >= 0.0)
-    {
-        return;
-    }
+    //if (time_d >= 0.0) {
+    //    return;
+    //}
     const float time        = static_cast<float>(time_d);
     const auto& layers      = m_scene_root->layers();
     const auto& light_layer = *layers.light();
@@ -1273,11 +1225,9 @@ void Scene_builder::animate_lights(const double time_d)
     const int   n_lights    = static_cast<int>(lights.size());
     int         light_index = 0;
 
-    for (auto i = lights.begin(); i != lights.end(); ++i)
-    {
+    for (auto i = lights.begin(); i != lights.end(); ++i) {
         const auto& l = *i;
-        if (l->type == Light::Type::directional)
-        {
+        if (l->type == Light::Type::directional) {
             continue;
         }
 

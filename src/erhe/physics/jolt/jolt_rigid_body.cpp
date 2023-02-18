@@ -25,14 +25,12 @@ namespace erhe::physics
 
 [[nodiscard]] auto to_jolt(Motion_mode motion_mode) -> JPH::EMotionType
 {
-    switch (motion_mode)
-    {
+    switch (motion_mode) {
         case Motion_mode::e_static:                 return JPH::EMotionType::Static;
         case Motion_mode::e_kinematic_non_physical: return JPH::EMotionType::Kinematic;
         case Motion_mode::e_kinematic_physical:     return JPH::EMotionType::Kinematic;
         case Motion_mode::e_dynamic:                return JPH::EMotionType::Dynamic;
-        default:
-        {
+        default: {
             abort();
         }
     }
@@ -73,8 +71,7 @@ Jolt_rigid_body::Jolt_rigid_body(
     , m_collision_shape{std::static_pointer_cast<Jolt_collision_shape>(create_info.collision_shape)}
     , m_motion_mode    {motion_state->get_motion_mode()}
 {
-    if (!m_collision_shape)
-    {
+    if (!m_collision_shape) {
         return;
     }
 
@@ -103,38 +100,28 @@ Jolt_rigid_body::Jolt_rigid_body(
     };
 
     m_mass_properties = jolt_shape->GetMassProperties();
-    if (create_info.inertia_override.has_value())
-    {
+    if (create_info.inertia_override.has_value()) {
         m_mass_properties.mInertia = to_jolt(create_info.inertia_override.value());
-        if (create_info.mass.has_value())
-        {
+        if (create_info.mass.has_value()) {
             m_mass_properties.mMass = create_info.mass.value();
-        }
-        else if (create_info.density.has_value())
-        {
+        } else if (create_info.density.has_value()) {
             m_mass_properties.ScaleToMass(
                 m_mass_properties.mMass * create_info.density.value()
             );
         }
-    }
-    else
-    {
-        if (create_info.mass.has_value())
-        {
+    } else {
+        if (create_info.mass.has_value()) {
             m_mass_properties.ScaleToMass(
                 create_info.mass.value()
             );
-        }
-        else if (create_info.density.has_value())
-        {
+        } else if (create_info.density.has_value()) {
             m_mass_properties.ScaleToMass(
                 m_mass_properties.mMass * create_info.density.value()
             );
         }
     }
 
-    if (m_mass_properties.mMass == 0.0f)
-    {
+    if (m_mass_properties.mMass == 0.0f) {
         m_mass_properties.mMass = 1.0f;
     }
 
@@ -173,8 +160,7 @@ auto Jolt_rigid_body::get_friction() const -> float
 
 void Jolt_rigid_body::set_friction(const float friction)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -197,8 +183,7 @@ auto Jolt_rigid_body::get_gravity_factor() const -> float
 
 void Jolt_rigid_body::set_gravity_factor(const float gravity_factor)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -218,8 +203,7 @@ auto Jolt_rigid_body::get_restitution() const -> float
 
 void Jolt_rigid_body::set_restitution(float restitution)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -228,8 +212,7 @@ void Jolt_rigid_body::set_restitution(float restitution)
 
 void Jolt_rigid_body::begin_move()
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -240,8 +223,7 @@ void Jolt_rigid_body::begin_move()
 
 void Jolt_rigid_body::end_move()
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -255,8 +237,7 @@ namespace {
 
 auto c_str(const Motion_mode motion_mode) -> const char*
 {
-    switch (motion_mode)
-    {
+    switch (motion_mode) {
         case Motion_mode::e_static:                 return "Static";
         case Motion_mode::e_kinematic_non_physical: return "Kinematic Non-Physical";
         case Motion_mode::e_kinematic_physical:     return "Kinematic Physical";
@@ -271,26 +252,22 @@ void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 {
     log_physics->info("{} set_motion_mode({})", get_debug_label(), c_str(motion_mode));
 
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
-    if (m_motion_mode == motion_mode)
-    {
+    if (m_motion_mode == motion_mode) {
         return;
     }
     SPDLOG_LOGGER_TRACE(log_physics, "{} set motion mode = {}", m_debug_label, c_str(motion_mode));
-    if (m_body->IsActive() && (motion_mode == Motion_mode::e_static))
-    {
+    if (m_body->IsActive() && (motion_mode == Motion_mode::e_static)) {
         m_body_interface.DeactivateBody(m_body->GetID());
     }
 
     m_motion_mode = motion_mode;
     m_body->SetMotionType(to_jolt(motion_mode));
 
-    if (motion_mode == Motion_mode::e_dynamic)
-    {
+    if (motion_mode == Motion_mode::e_dynamic) {
         m_body_interface.ActivateBody(m_body->GetID());
     }
 }
@@ -307,8 +284,7 @@ auto Jolt_rigid_body::get_center_of_mass_transform() const -> Transform
 
 void Jolt_rigid_body::set_center_of_mass_transform(const Transform& transform)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -321,8 +297,7 @@ void Jolt_rigid_body::set_center_of_mass_transform(const Transform& transform)
 
 void Jolt_rigid_body::move_world_transform(const Transform& transform, const float delta_time)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -348,8 +323,7 @@ void Jolt_rigid_body::move_world_transform(const Transform& transform, const flo
 
 auto Jolt_rigid_body::get_world_transform() const -> Transform
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         return erhe::physics::Transform{};
     }
 
@@ -368,21 +342,18 @@ auto Jolt_rigid_body::get_world_transform() const -> Transform
 
 void Jolt_rigid_body::set_world_transform(const Transform& transform)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
 
-    switch (m_motion_mode)
-    {
+    switch (m_motion_mode) {
         //case Motion_mode::e_static:
         //{
         //    log_physics->info("{} cannot move static", m_debug_label);
         //    break;
         //}
-        case Motion_mode::e_kinematic_non_physical:
-        {
+        case Motion_mode::e_kinematic_non_physical: {
             //// SPDLOG_LOGGER_TRACE(log_physics, "{} KNP SetPositionAndRotation {}", m_debug_label, transform.origin);
             m_body_interface.SetPositionAndRotation(
                 m_body->GetID(),
@@ -395,8 +366,8 @@ void Jolt_rigid_body::set_world_transform(const Transform& transform)
             );
             break;
         }
-        case Motion_mode::e_kinematic_physical:
-        {
+
+        case Motion_mode::e_kinematic_physical: {
             //// SPDLOG_LOGGER_TRACE(log_physics, "{} KP MoveKinematic {}", m_debug_label, transform.origin);
             m_body_interface.MoveKinematic(
                 m_body->GetID(),
@@ -406,9 +377,9 @@ void Jolt_rigid_body::set_world_transform(const Transform& transform)
             );
             break;
         }
+
         case Motion_mode::e_static:
-        case Motion_mode::e_dynamic:
-        {
+        case Motion_mode::e_dynamic: {
             //// SPDLOG_LOGGER_TRACE(log_physics, "{} S/D SetPositionAndRotation {}", m_debug_label, transform.origin);
             m_body_interface.SetPositionAndRotation(
                 m_body->GetID(),
@@ -421,8 +392,8 @@ void Jolt_rigid_body::set_world_transform(const Transform& transform)
             );
             break;
         }
-        default:
-        {
+
+        default: {
             break;
         }
     }
@@ -430,8 +401,7 @@ void Jolt_rigid_body::set_world_transform(const Transform& transform)
 
 auto Jolt_rigid_body::get_linear_velocity() const -> glm::vec3
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         return {};
     }
 
@@ -440,8 +410,7 @@ auto Jolt_rigid_body::get_linear_velocity() const -> glm::vec3
 
 void Jolt_rigid_body::set_linear_velocity(const glm::vec3& velocity)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -453,8 +422,7 @@ void Jolt_rigid_body::set_linear_velocity(const glm::vec3& velocity)
 
 auto Jolt_rigid_body::get_angular_velocity() const -> glm::vec3
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         return {};
     }
 
@@ -463,8 +431,7 @@ auto Jolt_rigid_body::get_angular_velocity() const -> glm::vec3
 
 void Jolt_rigid_body::set_angular_velocity(const glm::vec3& velocity)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -476,13 +443,11 @@ void Jolt_rigid_body::set_angular_velocity(const glm::vec3& velocity)
 
 auto Jolt_rigid_body::get_linear_damping() const -> float
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         return 0.0f;
     }
     auto* motion_properties = m_body->GetMotionProperties();
-    if (motion_properties == nullptr)
-    {
+    if (motion_properties == nullptr) {
         return 0.0f;
     }
     return motion_properties->GetLinearDamping();
@@ -490,8 +455,7 @@ auto Jolt_rigid_body::get_linear_damping() const -> float
 
 void Jolt_rigid_body::set_damping(const float linear_damping, const float angular_damping)
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -499,8 +463,7 @@ void Jolt_rigid_body::set_damping(const float linear_damping, const float angula
     SPDLOG_LOGGER_INFO(log_physics, "{} set damping linear = {}, angular = {}", m_debug_label, linear_damping, angular_damping);
 
     auto* motion_properties = m_body->GetMotionProperties();
-    if (motion_properties == nullptr)
-    {
+    if (motion_properties == nullptr) {
         log_physics->warn("{} no motion properties");
         return;
     }
@@ -510,14 +473,12 @@ void Jolt_rigid_body::set_damping(const float linear_damping, const float angula
 
 auto Jolt_rigid_body::get_angular_damping() const -> float
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         return 0.0f;
     }
 
     auto* motion_properties = m_body->GetMotionProperties();
-    if (motion_properties == nullptr)
-    {
+    if (motion_properties == nullptr) {
         return 0.0f;
     }
     return motion_properties->GetAngularDamping();
@@ -541,8 +502,7 @@ void Jolt_rigid_body::set_mass_properties(
     m_mass_properties.mMass    = mass;
     m_mass_properties.mInertia = to_jolt(inertia_tensor);
 
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         log_physics->error("Fixed world body cannot be modified");
         return;
     }
@@ -550,8 +510,7 @@ void Jolt_rigid_body::set_mass_properties(
     SPDLOG_LOGGER_TRACE(log_physics, "{} set mass = {}", m_debug_label, mass);
 
     auto* motion_properties = m_body->GetMotionProperties();
-    if (motion_properties == nullptr)
-    {
+    if (motion_properties == nullptr) {
         return;
     }
     motion_properties->SetMassProperties(m_mass_properties);
@@ -571,18 +530,15 @@ auto Jolt_rigid_body::get_jolt_body() const -> JPH::Body*
 
 void Jolt_rigid_body::update_motion_state() const
 {
-    if (m_body == nullptr)
-    {
+    if (m_body == nullptr) {
         return;
     }
 
-    if (m_motion_mode != Motion_mode::e_dynamic)
-    {
+    if (m_motion_mode != Motion_mode::e_dynamic) {
         return;
     }
 
-    if (!m_body->IsActive())
-    {
+    if (!m_body->IsActive()) {
         return;
     }
 

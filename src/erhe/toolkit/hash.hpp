@@ -19,8 +19,7 @@ static const uint64_t c_seed  = 0xcbf29ce484222325;
 {
     const uint8_t* u8_data = reinterpret_cast<const uint8_t*>(data);
 
-    for (std::size_t i = 0; i < byte_count; ++i)
-    {
+    for (std::size_t i = 0; i < byte_count; ++i) {
         seed = (seed ^ u8_data[i]) * c_prime;
     }
 

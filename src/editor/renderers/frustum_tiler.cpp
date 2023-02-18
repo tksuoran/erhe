@@ -38,8 +38,7 @@ auto orientation(glm::vec2 p1, glm::vec2 p2, glm::vec2 p3) -> int
 {
     const float s = sign(p1, p2, p3);
 
-    if (s == 0.0f)
-    {
+    if (s == 0.0f) {
         return 0; // colinear
     }
 
@@ -74,33 +73,28 @@ auto line_line_intersection(
     int o4 = orientation(p2, q2, q1);
 
     // General case
-    if ((o1 != o2) && (o3 != o4))
-    {
+    if ((o1 != o2) && (o3 != o4)) {
         return true;
     }
 
     // Special Cases
     // p1, q1 and p2 are collinear and p2 lies on segment p1q1
-    if ((o1 == 0) && on_segment(p1, p2, q1))
-    {
+    if ((o1 == 0) && on_segment(p1, p2, q1)) {
         return true;
     }
 
     // p1, q1 and q2 are collinear and q2 lies on segment p1q1
-    if ((o2 == 0) && on_segment(p1, q2, q1))
-    {
+    if ((o2 == 0) && on_segment(p1, q2, q1)) {
         return true;
     }
 
     // p2, q2 and p1 are collinear and p1 lies on segment p2q2
-    if ((o3 == 0) && on_segment(p2, p1, q2))
-    {
+    if ((o3 == 0) && on_segment(p2, p1, q2)) {
         return true;
     }
 
     // p2, q2 and q1 are collinear and q1 lies on segment p2q2
-    if ((o4 == 0) && on_segment(p2, q1, q2))
-    {
+    if ((o4 == 0) && on_segment(p2, q1, q2)) {
         return true;
     }
 
@@ -115,17 +109,14 @@ auto polygon_polygon_intersection(
     const std::size_t polygon1_size = polygon1.size();
     const std::size_t polygon2_size = polygon2.size();
 
-    for (size_t i = 0; i < polygon1_size; ++i)
-    {
+    for (size_t i = 0; i < polygon1_size; ++i) {
         const glm::vec2 a = polygon1[i];
         const glm::vec2 b = polygon1[(i + 1) % polygon1_size];
-        for (size_t j = 0; j < polygon2_size; ++j)
-        {
+        for (size_t j = 0; j < polygon2_size; ++j) {
             const glm::vec2 c = polygon2[j];
             const glm::vec2 d = polygon2[(j + 1) % polygon2_size];
             const bool intersection = line_line_intersection(a, b, c, d);
-            if (intersection)
-            {
+            if (intersection) {
                 return true;
             }
         }
@@ -141,16 +132,14 @@ auto ccw(const glm::vec2 a, const glm::vec2 b, const glm::vec2 c) -> bool
 
 auto convex_hull(std::array<glm::vec2, 8>& p) -> std::vector<glm::vec2>
 {
-    if (p.size() == 0)
-    {
+    if (p.size() == 0) {
         return {};
     }
 
     std::sort(
         p.begin(),
         p.end(),
-        [](glm::vec2& lhs, glm::vec2& rhs)
-        {
+        [](glm::vec2& lhs, glm::vec2& rhs) {
             return lhs.x < rhs.x;
         }
     );
@@ -158,8 +147,7 @@ auto convex_hull(std::array<glm::vec2, 8>& p) -> std::vector<glm::vec2>
     std::vector<glm::vec2> hull;
 
     // lower hull
-    for (const glm::vec2& pt : p)
-    {
+    for (const glm::vec2& pt : p) {
         while (
             (hull.size() >= 2) &&
             !ccw(
@@ -167,8 +155,7 @@ auto convex_hull(std::array<glm::vec2, 8>& p) -> std::vector<glm::vec2>
                 hull.at(hull.size() - 1),
                 pt
             )
-        )
-        {
+        ) {
             hull.pop_back();
         }
         hull.push_back(pt);
@@ -180,8 +167,7 @@ auto convex_hull(std::array<glm::vec2, 8>& p) -> std::vector<glm::vec2>
         auto it = p.crbegin();
         it != p.crend();
         it = std::next(it)
-    )
-    {
+    ) {
         glm::vec2 pt = *it;
         while (
             (hull.size() >= t) &&
@@ -190,8 +176,7 @@ auto convex_hull(std::array<glm::vec2, 8>& p) -> std::vector<glm::vec2>
                 hull.at(hull.size() - 1),
                 pt
             )
-        )
-        {
+        ) {
             hull.pop_back();
         }
         hull.push_back(pt);
@@ -251,8 +236,7 @@ auto convex_hull(std::array<glm::vec2, 8>& p) -> std::vector<glm::vec2>
 int point_inside_polygon(const std::vector<glm::vec2>& points, glm::vec2 p)
 {
     bool result{false};
-    for (std::size_t i = 0, j = points.size() - 1; i < points.size(); j = i++)
-    {
+    for (std::size_t i = 0, j = points.size() - 1; i < points.size(); j = i++) {
         if (
             (
                 (points[i].y > p.y) != (points[j].y > p.y)
@@ -262,8 +246,7 @@ int point_inside_polygon(const std::vector<glm::vec2>& points, glm::vec2 p)
                     points[j].x - points[i].x
                 ) * (p.y - points[i].y) / (points[j].y - points[i].y) + points[i].x
             )
-        )
-        {
+        ) {
             result = !result;
         }
     }
@@ -298,8 +281,7 @@ auto Frustum_tiler::point_to_tile(glm::vec2 p) const -> Tile
 
 auto Frustum_tiler::clamp(Tile tile) const -> Tile
 {
-    return Tile
-    {
+    return Tile {
         .x = std::min(std::max(tile.x, 0), m_tile_count_x - 1),
         .y = std::min(std::max(tile.y, 0), m_tile_count_y - 1)
     };
@@ -308,8 +290,7 @@ auto Frustum_tiler::clamp(Tile tile) const -> Tile
 auto Frustum_tiler::get_center(const std::vector<glm::vec2>& points) -> glm::vec2
 {
     glm::vec2 center{0.0f, 0.0f};
-    for (const glm::vec2 p : points)
-    {
+    for (const glm::vec2 p : points) {
         center += p;
     }
     return center / static_cast<float>(points.size());
@@ -352,8 +333,7 @@ void Frustum_tiler::get_frustum_hull(
 
     {
         std::stringstream ss;
-        for (const glm::vec2 p : window_space_points)
-        {
+        for (const glm::vec2 p : window_space_points) {
             ss << fmt::format("{}, {}; ", p.x, p.y);
         }
         SPDLOG_LOGGER_TRACE(
@@ -368,8 +348,7 @@ void Frustum_tiler::get_frustum_hull(
 
     {
         std::stringstream ss;
-        for (const glm::vec2 p : m_frustum_hull_points)
-        {
+        for (const glm::vec2 p : m_frustum_hull_points) {
             ss << fmt::format("{} ", p);
         }
         SPDLOG_LOGGER_TRACE(
@@ -440,27 +419,22 @@ auto Frustum_tiler::frustum_tile_intersection(Tile tile) const -> bool
 
     // Test tile center inside frustum - rule out case 3
     const bool tile_center_in_frustum = point_inside_polygon(m_frustum_hull_points, tile_center);
-    if (tile_center_in_frustum)
-    {
+    if (tile_center_in_frustum) {
         SPDLOG_LOGGER_TRACE(log_render, "    tile center is in frustum");
         return true;
     }
 
     // Test frustum center inside tile - rule out case 4
     const bool frustum_center_in_tile = point_inside_polygon(tile_hull, m_frustum_hull_center);
-    if (frustum_center_in_tile)
-    {
+    if (frustum_center_in_tile) {
         SPDLOG_LOGGER_TRACE(log_render, "    frustum center is in tile");
         return true;
     }
 
     const bool has_edge_intersection = polygon_polygon_intersection(tile_hull, m_frustum_hull_points);
-    if (has_edge_intersection)
-    {
+    if (has_edge_intersection) {
         SPDLOG_LOGGER_TRACE(log_render, "    there is edge intersection");
-    }
-    else
-    {
+    } else {
         SPDLOG_LOGGER_TRACE(log_render, "    there is no edge intersection");
     }
 
@@ -477,8 +451,7 @@ void Frustum_tiler::update(
     if (
         (m_tile_size.x == 0) ||
         (m_tile_size.y == 0)
-    )
-    {
+    ) {
         SPDLOG_LOGGER_TRACE(log_render, "sparse texture not enabled");
         return;
     }
@@ -504,8 +477,7 @@ void Frustum_tiler::update(
 
     glm::vec2 min_corner_point = m_frustum_hull_points.front();
     glm::vec2 max_corner_point = m_frustum_hull_points.front();
-    for (const glm::vec2 p : m_frustum_hull_points)
-    {
+    for (const glm::vec2 p : m_frustum_hull_points) {
         min_corner_point.x = std::min(min_corner_point.x, p.x);
         min_corner_point.y = std::min(min_corner_point.y, p.y);
         max_corner_point.x = std::max(max_corner_point.x, p.x);
@@ -531,68 +503,52 @@ void Frustum_tiler::update(
 
     // Scan tile from left to right
     int tile_count = 0;
-    for (int x = min_corner_tile.x; x <= max_corner_tile.x; ++x)
-    {
+    for (int x = min_corner_tile.x; x <= max_corner_tile.x; ++x) {
         // Scan top
-        if (top_going_up)
-        {
-            if (!frustum_tile_intersection(Tile{x, top_tile_y}))
-            {
+        if (top_going_up) {
+            if (!frustum_tile_intersection(Tile{x, top_tile_y})) {
                 top_going_up = false;
-            }
-            else
-            {
+            } else {
                 while (
                     ((top_tile_y + 1) <= max_corner_tile.y) &&
                     frustum_tile_intersection(Tile{x, top_tile_y + 1})
-                )
-                {
+                ) {
                     ++top_tile_y;
                 }
             }
         }
-        if (!top_going_up)
-        {
+        if (!top_going_up) {
             while (
                 ((top_tile_y - 1) >= min_corner_tile.y) &&
                 !frustum_tile_intersection(Tile{x, top_tile_y - 1})
-            )
-            {
+            ) {
                 --top_tile_y;
             }
         }
 
         // Scan bottom
-        if (bottom_going_down)
-        {
-            if (!frustum_tile_intersection(Tile{x, bottom_tile_y}))
-            {
+        if (bottom_going_down) {
+            if (!frustum_tile_intersection(Tile{x, bottom_tile_y})) {
                 bottom_going_down = false;
-            }
-            else
-            {
+            } else {
                 while (
                     ((bottom_tile_y - 1) >= min_corner_tile.y) &&
                     frustum_tile_intersection(Tile{x, bottom_tile_y - 1})
-                )
-                {
+                ) {
                     --bottom_tile_y;
                 }
             }
         }
-        if (!bottom_going_down)
-        {
+        if (!bottom_going_down) {
             while (
                 ((bottom_tile_y + 1) <= max_corner_tile.y) &&
                 !frustum_tile_intersection(Tile{x, bottom_tile_y + 1})
-            )
-            {
+            ) {
                 ++bottom_tile_y;
             }
         }
 
-        if (bottom_tile_y <= top_tile_y)
-        {
+        if (bottom_tile_y <= top_tile_y) {
             const GLint   x_offset        = x * m_tile_size.x;
             const GLint   y_offset        = bottom_tile_y * m_tile_size.y;
             const GLsizei width           = m_tile_size.x;
