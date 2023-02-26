@@ -298,6 +298,7 @@ target_link_libraries(
     erhe::gl
     erhe::graphics
     erhe::log
+    erhe::net
     erhe::physics
     erhe::primitive
     erhe::scene

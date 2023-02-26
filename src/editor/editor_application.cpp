@@ -106,6 +106,7 @@
 #include "erhe/geometry/geometry_log.hpp"
 #include "erhe/gl/gl_log.hpp"
 #include "erhe/graphics/graphics_log.hpp"
+#include "erhe/net/net_log.hpp"
 #include "erhe/log/log.hpp"
 #include "erhe/physics/physics_log.hpp"
 #include "erhe/primitive/primitive_log.hpp"
@@ -221,6 +222,7 @@ void init_logs()
     gl::initialize_logging();
     erhe::geometry::initialize_logging();
     erhe::graphics::initialize_logging();
+    erhe::net::initialize_logging();
     erhe::physics::initialize_logging();
     erhe::primitive::initialize_logging();
     erhe::raytrace::initialize_logging();

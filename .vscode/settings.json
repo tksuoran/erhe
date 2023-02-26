@@ -115,7 +115,10 @@
         "hash_set": "cpp",
         "source_location": "cpp",
         "numbers": "cpp",
-        "semaphore": "cpp"
+        "semaphore": "cpp",
+        "coroutine": "cpp",
+        "resumable": "cpp",
+        "ranges": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled",
     "C_Cpp.dimInactiveRegions": false,

@@ -15,6 +15,7 @@ std::shared_ptr<spdlog::logger> log_headset;
 std::shared_ptr<spdlog::logger> log_hud;
 std::shared_ptr<spdlog::logger> log_id_render;
 std::shared_ptr<spdlog::logger> log_materials;
+std::shared_ptr<spdlog::logger> log_net;
 std::shared_ptr<spdlog::logger> log_node_properties;
 std::shared_ptr<spdlog::logger> log_operations;
 std::shared_ptr<spdlog::logger> log_parsers;
@@ -48,6 +49,7 @@ void initialize_logging()
     log_hud                        = erhe::log::make_logger("editor::hud"                       , spdlog::level::info);
     log_id_render                  = erhe::log::make_logger("editor::id_render"                 , spdlog::level::info);
     log_materials                  = erhe::log::make_logger("editor::materials"                 , spdlog::level::info);
+    log_net                        = erhe::log::make_logger("editor::net"                       , spdlog::level::info);
     log_node_properties            = erhe::log::make_logger("editor::node_properties"           , spdlog::level::info);
     log_operations                 = erhe::log::make_logger("editor::operations"                , spdlog::level::info);
     log_parsers                    = erhe::log::make_logger("editor::parsers"                   , spdlog::level::info);

@@ -22,8 +22,9 @@ public:
     virtual void register_scene_root   (const std::shared_ptr<Scene_root>& scene_root) = 0;
     virtual void sanity_check          () = 0;
     virtual void update_node_transforms() = 0;
+    virtual void update_network        () = 0;
 
-    [[nodiscard]] virtual auto get_scene_roots       () -> const std::vector<std::shared_ptr<Scene_root>>& = 0;;
+    [[nodiscard]] virtual auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>& = 0;;
     [[nodiscard]] virtual auto scene_combo(
         const char*                  label,
         std::shared_ptr<Scene_root>& in_out_selected_entry,

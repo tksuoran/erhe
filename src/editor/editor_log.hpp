@@ -15,6 +15,7 @@ extern std::shared_ptr<spdlog::logger> log_gl;
 extern std::shared_ptr<spdlog::logger> log_headset;
 extern std::shared_ptr<spdlog::logger> log_id_render;
 extern std::shared_ptr<spdlog::logger> log_materials;
+extern std::shared_ptr<spdlog::logger> log_net;
 extern std::shared_ptr<spdlog::logger> log_node_properties;
 extern std::shared_ptr<spdlog::logger> log_operations;
 extern std::shared_ptr<spdlog::logger> log_parsers;
