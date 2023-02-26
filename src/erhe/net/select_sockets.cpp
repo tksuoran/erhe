@@ -58,7 +58,7 @@ void Select_sockets::set_except(const SOCKET socket)
 
 auto Select_sockets::select(const int timeout_ms) -> int
 {
-    const timeval timeout{
+    timeval timeout{
         .tv_sec  = 0,
         .tv_usec = timeout_ms * 1000
     };

@@ -57,6 +57,7 @@ auto read(const std::filesystem::path& path) -> std::optional<std::string>
     return {};
 }
 
+#if defined(ERHE_OS_WINDOWS)
 auto select_file() -> std::optional<std::filesystem::path>
 {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -105,5 +106,12 @@ auto select_file() -> std::optional<std::filesystem::path>
 
     return std::filesystem::path(path);
 }
+#else
+auto select_file() -> std::optional<std::filesystem::path>
+{
+    // TODO
+    return {};
+}
+#endif
 
 } // namespace erhe::toolkit

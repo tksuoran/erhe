@@ -42,7 +42,7 @@ auto Client::poll(const int timeout_ms) -> bool
             break;
         }
         default: {
-            log_client->info("client socket is not connecting nor connected");
+            //log_client->info("client socket is not connecting nor connected");
         }
     }
 

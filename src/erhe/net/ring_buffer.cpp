@@ -1,5 +1,8 @@
 #include "erhe/net/ring_buffer.hpp"
 
+#include <cstddef>
+#include <cstring>
+
 namespace erhe::net
 {
 

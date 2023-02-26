@@ -57,7 +57,12 @@ Socket::Socket(
 {
     set_connected();
     char ipv4_address_string[INET_ADDRSTRLEN]{0};
-    const PCSTR res = inet_ntop(AF_INET, &address_in.sin_addr, ipv4_address_string, INET_ADDRSTRLEN);
+    PCSTR res = inet_ntop(
+        AF_INET,
+        (const void*)(&address_in.sin_addr),
+        ipv4_address_string,
+        INET_ADDRSTRLEN
+    );
     if (res == nullptr) {
         log_net->warn("inet_ntop() failed to get address");
         return;
@@ -127,9 +132,8 @@ bool Socket::connect(const char* const address, const int port)
     }
 
     // Set socket to non-blocking mode
-    u_long non_block = 1;
-    const int non_block_res = ioctlsocket(m_socket, FIONBIO, &non_block);
-    if (non_block_res == SOCKET_ERROR) {
+    const bool non_block_ok = set_socket_blocking_enabled(m_socket, false);
+    if (!non_block_ok) {
         const int  error_code = WSAGetLastError();
         const auto message    = get_net_error_string(error_code);
         log_net->error("ioctlsocket() failed with error {} - {}", error_code, message);
@@ -195,9 +199,8 @@ auto Socket::bind(const char* const address, const int port) -> bool
         return false;
     }
 
-    u_long non_block = 1;
-    const int non_block_res = ioctlsocket(m_socket, FIONBIO, &non_block);
-    if (non_block_res == SOCKET_ERROR) {
+    const bool non_block_ok = set_socket_blocking_enabled(m_socket, false);
+    if (!non_block_ok) {
         const int  error_code = WSAGetLastError();
         const auto message    = get_net_error_string(error_code);
         log_net->error("ioctlsocket() failed with error {} - {}", error_code, message);
@@ -503,7 +506,7 @@ auto Socket::post_select_listen(Select_sockets& select_sockets) -> std::optional
         log_net->info("post_select_listen() has readable socket");
 
         sockaddr_in address{};
-        int len = sizeof(address);
+        socklen_t len = sizeof(address);
         const SOCKET accept_res = ::accept(m_socket, reinterpret_cast<sockaddr*>(&address), &len);
         if (accept_res == INVALID_SOCKET) {
             const int error_code = WSAGetLastError();
@@ -516,7 +519,7 @@ auto Socket::post_select_listen(Select_sockets& select_sockets) -> std::optional
             // TODO check if already added
             // TODO set buffer sizes
             log_net->info("accept(): new connection");
-            return std::move(Socket{accept_res, address});
+            return Socket{accept_res, address};
         }
     }
     return {};

@@ -9,7 +9,6 @@ erhe_target_sources_grouped(
     net_log.cpp
     net_log.hpp
     net_os.hpp
-    net_windows.cpp
     ring_buffer.cpp
     ring_buffer.hpp
     select_sockets.cpp
