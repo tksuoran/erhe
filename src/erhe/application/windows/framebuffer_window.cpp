@@ -39,8 +39,6 @@ void Framebuffer_window::initialize()
     using erhe::graphics::Color_blend_state;
     const Scoped_gl_context gl_context;
 
-    //// g_imgui_windows->register_imgui_window(this);
-
     m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
         erhe::graphics::Vertex_input_state_data{}
     );

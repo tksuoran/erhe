@@ -1,5 +1,11 @@
 #include "erhe/toolkit/file.hpp"
+#include "erhe/toolkit/defer.hpp"
 #include "erhe/toolkit/toolkit_log.hpp"
+
+#if defined(ERHE_OS_WINDOWS)
+#   include <Windows.h>
+#   include <shobjidl.h>
+#endif
 
 #include <filesystem>
 #include <fstream>
@@ -49,6 +55,55 @@ auto read(const std::filesystem::path& path) -> std::optional<std::string>
         log_file->error("Error reading file '{}'", path.string());
     }
     return {};
+}
+
+auto select_file() -> std::optional<std::filesystem::path>
+{
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (!SUCCEEDED(hr)) {
+        return {};
+    }
+    ERHE_DEFER( CoUninitialize(); );
+
+    IFileOpenDialog* file_open_dialog{nullptr};
+    hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&file_open_dialog));
+    if (!SUCCEEDED(hr) || (file_open_dialog == nullptr)) {
+        return {};
+    }
+    ERHE_DEFER( file_open_dialog->Release(); );
+
+    FILEOPENDIALOGOPTIONS options{0};
+    hr = file_open_dialog->GetOptions(&options);
+    if (!SUCCEEDED(hr)) {
+        return {};
+    }
+    options = options | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM;
+
+    hr = file_open_dialog->SetOptions(options);
+    if (!SUCCEEDED(hr)) {
+        return {};
+    }
+
+    hr = file_open_dialog->Show(nullptr);
+    if (!SUCCEEDED(hr)) {
+        return {};
+    }
+
+    IShellItem* item{nullptr};
+    hr = file_open_dialog->GetResult(&item);
+    if (!SUCCEEDED(hr) || (item == nullptr)) {
+        return {};
+    }
+    ERHE_DEFER( item->Release(); );
+
+    PWSTR path{nullptr};
+    hr = item->GetDisplayName(SIGDN_FILESYSPATH, &path);
+    if (!SUCCEEDED(hr) || (path == nullptr)) {
+        return {};
+    }
+    ERHE_DEFER( CoTaskMemFree(path); );
+
+    return std::filesystem::path(path);
 }
 
 } // namespace erhe::toolkit

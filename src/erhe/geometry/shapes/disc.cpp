@@ -38,8 +38,7 @@ public:
         return points[std::make_pair(slice, stack)];
     }
 
-    // relStackIn is in range -1..1
-    // relStack is in range 0..1
+    // rel_stack is in range 0..1
     auto make_point(const double rel_slice, const double rel_stack) -> Point_id
     {
         const double phi                 = glm::pi<double>() * 2.0 * rel_slice;
@@ -66,8 +65,8 @@ public:
 
     auto make_corner(
         const Polygon_id polygon_id,
-        const int       slice,
-        const int       stack
+        const int        slice,
+        const int        stack
     ) -> Corner_id
     {
         const double rel_slice           = static_cast<double>(slice) / static_cast<double>(slice_count);

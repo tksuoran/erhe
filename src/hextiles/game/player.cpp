@@ -23,7 +23,7 @@ namespace hextiles
     return x;
 }
 
-[[nodiscard]] auto smoothstep(const float edge0, const float edge1, const float x) -> float
+[[nodiscard]] auto smoothstep(const float edge0, const float edge1, float x) -> float
 {
     if (x == 0.0f) {
         return 0.0f;
@@ -39,7 +39,7 @@ namespace hextiles
     return x * x * (3.0f - 2.0f * x);
 }
 
-[[nodiscard]] auto smootherstep(const float edge0, const float edge1, const float x) -> float
+[[nodiscard]] auto smootherstep(const float edge0, const float edge1, float x) -> float
 {
     if (x == 0.0f) {
         return 0.0f;

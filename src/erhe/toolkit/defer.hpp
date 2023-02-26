@@ -1,50 +1,49 @@
 #pragma once
 
-#include <type_traits>
+#include <functional>
 
 namespace erhe::toolkit
 {
 
-template<typename Callable>
-class Deferral
+class Defer
 {
 public:
-    template<typename Parameter_callable>
-    explicit Deferral(Parameter_callable&& callable)
-        : m_callable(static_cast<Parameter_callable&&>(callable))
+    Defer(Defer&& rvalue)
+    {
+        m_callback = std::move(rvalue.m_callback);
+        rvalue.m_callback = nullptr;
+    }
+
+    Defer() noexcept
     {
     }
 
-    Deferral(const Deferral&) = delete;
-    Deferral& operator=(const Deferral&) = delete;
-
-    ~Deferral()
+    Defer(const std::function<void()>& func) noexcept
     {
-        m_callable();
+        m_callback = func;
+    }
+
+    ~Defer()
+    {
+        m_callback();
+    }
+
+    Defer(const Defer& rvalue)          = delete;
+    void operator=(const Defer& rvalue) = delete;
+
+    void bind(const std::function<void()>& callback)
+    {
+        m_callback = callback;
     }
 
 private:
-    Callable m_callable;
-};
-
-class Deferral_helper
-{
-public:
-    template<typename Callable>
-    Deferral<
-        typename std::remove_cv<
-            typename std::remove_reference<Callable>::type
-        >::type
-    > operator->*(Callable&& callable)
-    {
-        return static_cast<Callable&&>(callable);
-    }
+    std::function<void()> m_callback;
 };
 
 } // namespace erhe::toolkit
 
-#define ERHE_CAT_(a, b) a ## b
-#define ERHE_CAT(a, b) ERHE_CAT_(a, b)
+#define ERHE_DEFER_2(fun, count) erhe::toolkit::Defer defer_ ## count(fun)
+#define ERHE_DEFER_1(fun, count) ERHE_DEFER_2(fun, count)
+#define ERHE_DEFER_FUN(fun) ERHE_DEFER_1(fun, __COUNTER__)
+#define ERHE_DEFER(statements) ERHE_DEFER_FUN( [&]() { statements } )
 
-#define ERHE_DEFER \
-    auto const ERHE_CAT(ERHE_DEFER_,__COUNTER__) = erhe::toolkit::Deferral_helper{} ->* [&]() -> void

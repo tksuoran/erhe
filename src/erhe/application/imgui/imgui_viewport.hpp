@@ -27,6 +27,81 @@ public:
     bool stack_tool  {false};
 };
 
+enum class Imgui_event_type : unsigned int
+{
+    no_event           = 0,
+    key_event          = 1,
+    char_event         = 2,
+    focus_event        = 3,
+    cursor_enter_event = 4,
+    mouse_move_event   = 5,
+    mouse_button_event = 6,
+    mouse_wheel_event  = 7
+};
+
+class Key_event
+{
+public:
+    signed int keycode;
+    uint32_t   modifier_mask;
+    bool       pressed;
+};
+
+class Char_event
+{
+public:
+    unsigned int codepoint;
+};
+
+class Focus_event
+{
+public:
+    int focused;
+};
+
+class Cursor_enter_event
+{
+public:
+    int entered;
+};
+
+class Mouse_move_event
+{
+public:
+    float x;
+    float y;
+};
+
+class Mouse_button_event
+{
+public:
+    uint32_t button;
+    bool     pressed;
+};
+
+class Mouse_wheel_event
+{
+public:
+    float x;
+    float y;
+};
+
+class Imgui_event
+{
+public:
+    Imgui_event_type type;
+    union Imgui_event_union
+    {
+        Key_event          key_event;
+        Char_event         char_event;
+        Focus_event        focus_event;
+        Cursor_enter_event cursor_enter_event;
+        Mouse_move_event   mouse_move_event;
+        Mouse_button_event mouse_button_event;
+        Mouse_wheel_event  mouse_wheel_event;
+    } u;
+};
+
 /// <summary>
 /// Base class for derived Imgui_viewport classes - where ImGui windows can be hosted.
 /// </summary>
@@ -71,22 +146,34 @@ public:
     void on_mouse_button(uint32_t button, bool pressed);
     void on_mouse_wheel (float x, float y);
 
+    void on_event(const Key_event&          key_event);
+    void on_event(const Char_event&         char_event);
+    void on_event(const Focus_event&        focus_event);
+    void on_event(const Cursor_enter_event& cursor_enter_event);
+    void on_event(const Mouse_move_event&   mouse_move_event);
+    void on_event(const Mouse_button_event& mouse_button_event);
+    void on_event(const Mouse_wheel_event&  mouse_wheel_event);
+
     auto get_mouse_position() const -> glm::vec2;
 
 protected:
-    std::string           m_name;
-    std::string           m_imgui_ini_path;
-    bool                  m_show_menu       {false};
-    double                m_time            {0.0};
-    bool                  m_has_cursor      {false};
-    bool                  m_request_keyboard{false}; // hovered window requests keyboard events
-    bool                  m_request_mouse   {false}; // hovered winodw requests mouse events
-    Imgui_builtin_windows m_imgui_builtin_windows;
+    void flush_queud_events();
+
+    std::string              m_name;
+    std::string              m_imgui_ini_path;
+    bool                     m_show_menu       {false};
+    double                   m_time            {0.0};
+    bool                     m_has_cursor      {false};
+    bool                     m_request_keyboard{false}; // hovered window requests keyboard events
+    bool                     m_request_mouse   {false}; // hovered winodw requests mouse events
+    Imgui_builtin_windows    m_imgui_builtin_windows;
+
+    std::mutex               m_event_mutex;
+    std::vector<Imgui_event> m_events;
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGuiContext* m_imgui_context{nullptr};
 #endif
-
 };
 
 } // namespace erhe::application

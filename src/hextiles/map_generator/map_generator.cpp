@@ -391,7 +391,7 @@ void Map_generator::imgui()
     }
     update_elevation_terrains();
 
-    if (ImGui::TreeNodeEx("Noise", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)     {
+    if (ImGui::TreeNodeEx("Noise", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
         m_noise.imgui();
         ImGui::TreePop();
     }

@@ -102,6 +102,7 @@ target_link_libraries(
     erhe::gl
     erhe::graphics
     erhe::log
+    erhe::net
     erhe::toolkit
     erhe::ui
     imgui

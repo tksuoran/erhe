@@ -298,8 +298,6 @@ void Imgui_windows::on_focus(int focused)
         return;
     }
 
-    Scoped_imgui_context scoped_imgui_context{*m_window_imgui_viewport.get()};
-
     m_window_imgui_viewport->on_focus(focused);
 }
 
@@ -308,8 +306,6 @@ void Imgui_windows::on_cursor_enter(int entered)
     if (!m_window_imgui_viewport) {
         return;
     }
-
-    Scoped_imgui_context scoped_imgui_context{*m_window_imgui_viewport.get()};
 
     m_window_imgui_viewport->on_cursor_enter(entered);
 }
@@ -330,8 +326,6 @@ void Imgui_windows::on_mouse_move(
     //     }
     // }
 
-    Scoped_imgui_context scoped_imgui_context{*m_window_imgui_viewport.get()};
-
     m_window_imgui_viewport->on_mouse_move(x, y);
 }
 
@@ -341,7 +335,6 @@ void Imgui_windows::on_mouse_button(
 )
 {
     for (const auto& viewport : m_imgui_viewports) {
-        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_mouse_button(button, pressed);
     }
 }
@@ -352,7 +345,6 @@ void Imgui_windows::on_mouse_wheel(
 )
 {
     for (const auto& viewport : m_imgui_viewports) {
-        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_mouse_wheel(x, y);
     }
 }
@@ -364,7 +356,6 @@ void Imgui_windows::on_key(
 )
 {
     for (const auto& viewport : m_imgui_viewports) {
-        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_key(keycode, modifier_mask, pressed);
     }
 }
@@ -374,7 +365,6 @@ void Imgui_windows::on_char(
 )
 {
     for (const auto& viewport : m_imgui_viewports) {
-        Scoped_imgui_context scoped_imgui_context{*viewport.get()};
         viewport->on_char(codepoint);
     }
 }

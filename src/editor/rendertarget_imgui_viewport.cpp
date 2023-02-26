@@ -111,7 +111,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
     {
         if (pointer.has_value()) {
             if (!has_cursor()) {
-                on_cursor_enter(1);
+                on_event(erhe::application::Cursor_enter_event{.entered = true});
             }
             const auto position = pointer.value();
             if (
@@ -120,14 +120,25 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
             ) {
                 m_last_mouse_x = position.x;
                 m_last_mouse_y = position.y;
-                on_mouse_move(position.x, position.y);
+                on_event(
+                    erhe::application::Mouse_move_event{
+                        .x = position.x,
+                        .y = position.y
+                    }
+                );
+
             }
         } else {
             if (has_cursor()) {
-                on_cursor_enter(0);
+                on_event(erhe::application::Cursor_enter_event{.entered = false});
                 m_last_mouse_x = -FLT_MAX;
                 m_last_mouse_y = -FLT_MAX;
-                on_mouse_move(-FLT_MAX, -FLT_MAX);
+                on_event(
+                    erhe::application::Mouse_move_event{
+                        .x = -FLT_MAX,
+                        .y = -FLT_MAX
+                    }
+                );
             }
         }
     }
@@ -163,7 +174,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
                 const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
-                        on_cursor_enter(1);
+                        on_event(erhe::application::Cursor_enter_event{.entered = true});
                     }
                     mouse_has_position = true;
                     const auto position = window_position_opt.value();
@@ -173,16 +184,26 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
                     ) {
                         m_last_mouse_x = position.x;
                         m_last_mouse_y = position.y;
-                        on_mouse_move(position.x, position.y);
+                        on_event(
+                            erhe::application::Mouse_move_event{
+                                .x = position.x,
+                                .y = position.y
+                            }
+                        );
                     }
                 }
             }
             if (!mouse_has_position) {
                 if (has_cursor()) {
-                    on_cursor_enter(0);
+                    on_event(erhe::application::Cursor_enter_event{.entered = false});
                     m_last_mouse_x = -FLT_MAX;
                     m_last_mouse_y = -FLT_MAX;
-                    on_mouse_move(-FLT_MAX, -FLT_MAX);
+                    on_event(
+                        erhe::application::Mouse_move_event{
+                            .x = -FLT_MAX,
+                            .y = -FLT_MAX
+                        }
+                    );
                 }
             }
 

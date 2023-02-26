@@ -1,9 +1,9 @@
 #include "operations/operation_stack.hpp"
 #include "operations/ioperation.hpp"
 #include "tools/tool.hpp"
+
 #include "erhe/application/commands/command.hpp"
 #include "erhe/application/imgui/imgui_window.hpp"
-
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/commands/commands.hpp"
 #include "erhe/toolkit/profile.hpp"

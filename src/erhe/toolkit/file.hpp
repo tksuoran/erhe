@@ -11,4 +11,7 @@ namespace erhe::toolkit
 [[nodiscard]]
 auto read(const std::filesystem::path& path) -> std::optional<std::string>;
 
+// TODO open, save, ...
+auto select_file() -> std::optional<std::filesystem::path>;
+
 } // namespace erhe::toolkit

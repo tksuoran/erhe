@@ -64,13 +64,13 @@ auto Mouse_button_binding::on_button(
         if (command_state == State::Ready) {
             log_input->trace("  {}->try_call()", command->get_name());
             consumed = command->try_call_with_input(input);
-            log_input_event_consumed->info(
+            log_input_event_consumed->trace(
                 "{} consumed mouse button {} {}",
                 command->get_name(),
                 erhe::toolkit::c_str(m_button),
                 input.button_pressed ? "pressed" : "released"
             );
-            log_input_event_consumed->info(
+            log_input_event_consumed->trace(
                 "  {} {} mouse button {}",
                 command->get_name(),
                 consumed ? "consumed" : "did not consume",

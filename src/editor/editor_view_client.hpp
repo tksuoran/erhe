@@ -6,6 +6,7 @@
 namespace editor
 {
 
+
 class Editor_view_client
     : public erhe::application::View_client
     , public erhe::components::Component

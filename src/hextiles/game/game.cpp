@@ -247,6 +247,7 @@ void Game::add_player(
 void Game::new_game(const Game_create_parameters& parameters)
 {
     m_players.clear();
+    m_map            = parameters.map;
     m_current_player = 0;
     m_turn           = 0;
     m_cities         = parameters.city_positions;

@@ -11,6 +11,7 @@
 namespace erhe::scene
 {
     class Camera;
+    class Mesh;
     class Node;
 }
 
@@ -92,10 +93,12 @@ private:
     erhe::application::Xr_vector2f_click_command m_trackpad_click_command;
 #endif
 
-    std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
-    std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
-    std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
-    Scene_view*                                  m_hover_scene_view{nullptr};
+    std::shared_ptr<erhe::scene::Node>              m_rendertarget_node;
+    std::shared_ptr<Rendertarget_mesh>              m_rendertarget_mesh;
+    std::shared_ptr<erhe::scene::Mesh>              m_circular_menu_background;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_circular_menu_icons;
+    std::shared_ptr<Rendertarget_imgui_viewport>    m_rendertarget_imgui_viewport;
+    Scene_view*                                     m_hover_scene_view{nullptr};
 
     bool  m_enabled{true};
     bool  m_show   {true};

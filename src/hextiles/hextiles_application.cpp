@@ -105,12 +105,7 @@ void init_logs()
     erhe::application::initialize_logging();
     erhe::components::initialize_logging();
     gl::initialize_logging();
-    //erhe::geometry::initialize_logging();
     erhe::graphics::initialize_logging();
-    //erhe::physics::initialize_logging();
-    //erhe::primitive::initialize_logging();
-    //erhe::raytrace::initialize_logging();
-    //erhe::scene::initialize_logging();
     erhe::toolkit::initialize_logging();
     erhe::ui::initialize_logging();
 
@@ -173,7 +168,7 @@ auto Application_impl::initialize_components(
 
     erhe::application::log_startup->info("Initializing early components");
     configuration.initialize_component();
-    //renderdoc_capture_support.initialize_component();
+    renderdoc_capture_support.initialize_component();
 
     erhe::application::log_startup->info("Creating window");
     if (!window.create_gl_window()) {

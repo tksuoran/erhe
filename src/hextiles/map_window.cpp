@@ -14,6 +14,7 @@
 #include "erhe/application/commands/command_context.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -159,6 +160,8 @@ void Map_window::initialize_component()
     ERHE_VERIFY(g_map_window == nullptr);
 
     Framebuffer_window::initialize();
+
+    erhe::application::g_imgui_windows->register_imgui_window(this, "map_editor");
 
     m_pixel_lookup = std::make_unique<Pixel_lookup>();
 

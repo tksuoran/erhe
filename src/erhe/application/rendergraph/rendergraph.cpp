@@ -352,7 +352,7 @@ auto Rendergraph::connect(
         return false;
     }
 
-    log_rendergraph->info("Rendergraph: Connected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
+    log_rendergraph->trace("Rendergraph: Connected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
     //// automatic_layout();
     return true;
 }
@@ -378,7 +378,7 @@ auto Rendergraph::disconnect(
     /*const bool sink_disconnected   =*/ sink  ->disconnect_input(key, source_node);
     /*const bool source_disconnected =*/ source->disconnect_output(key, sink_node);
 
-    log_rendergraph->info("Rendergraph: disconnected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
+    log_rendergraph->trace("Rendergraph: disconnected key: {} from: {} to: {}", key, source->get_name(), sink->get_name());
 
     return true;
 }

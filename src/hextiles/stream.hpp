@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <limits>
 #include <vector>
 
@@ -15,6 +16,7 @@ namespace hextiles
 class File_write_stream
 {
 public:
+    explicit File_write_stream(const std::filesystem::path& path);
     explicit File_write_stream(const char* path);
     ~File_write_stream() noexcept;
 
@@ -44,6 +46,7 @@ private:
 class File_read_stream
 {
 public:
+    explicit File_read_stream(const std::filesystem::path& path);
     explicit File_read_stream(const char* path);
     ~File_read_stream() noexcept;
 

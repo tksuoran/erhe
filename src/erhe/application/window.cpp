@@ -142,6 +142,8 @@ auto Window::create_gl_window() -> bool
 
     erhe::graphics::Instance::initialize();
 
+    ERHE_VERIFY(erhe::application::g_renderdoc_capture_support != nullptr);
+
     if (
         g_configuration->graphics.force_no_bindless ||
         erhe::application::g_renderdoc_capture_support->config.capture_support

@@ -5,6 +5,7 @@ add_library(erhe::toolkit ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     defer.cpp
+    defer.hpp
     file.cpp
     file.hpp
     hash.cpp

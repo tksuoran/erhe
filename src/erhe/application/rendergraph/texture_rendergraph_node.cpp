@@ -141,7 +141,7 @@ void Texture_rendergraph_node::execute_rendergraph_node()
         (m_color_texture->width () != output_viewport.width ) ||
         (m_color_texture->height() != output_viewport.height)
     ) {
-        log_rendergraph->info(
+        log_rendergraph->trace(
             "Resizing Texture_rendergraph_node '{}' to {} x {}",
             get_name(),
             output_viewport.width,

@@ -27,7 +27,11 @@
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
+#include "erhe/geometry/shapes/disc.hpp"
+#include "erhe/primitive/primitive_builder.hpp"
+#include "erhe/primitive/material.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -42,6 +46,26 @@
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
 #endif
+
+// https://math.stackexchange.com/questions/1662616/calculate-the-diameter-of-an-inscribed-circle-inside-a-sector-of-circle
+//
+//                                                                               .
+//    |---___                                          r = (R-r) * sin(theta/2)  .
+//   |    ___---___                                                              .
+//  |   _/         ---___                                                        .
+//  | _/              \_ ---___                            R * sin(theta/2)      .
+// | /                  \      ---___                  r = ----------------      .
+// ||                    |           ---___                1 + sin(theta/2)      .
+// ||   r                |    R-r          ---___                                .
+// +----------X----------+--------------------------                             .
+// ||          \         |                 ___---                                .
+// ||           \        |           ___---                                      .
+// | \           \r     /      ___---                                            .
+//  | \_          \    / ___---                                                  .
+//  |   \_         \__---                                                        .
+//   |    \_____---                                                              .
+//    |___---                                                                    .
+//                                                                               .
 
 namespace editor
 {
@@ -194,6 +218,34 @@ void Hotbar::initialize_component()
     this->set_viewport(m_rendertarget_imgui_viewport.get());
 
     set_visibility(m_show);
+
+#if 0
+    const float outer_radius = 1.0f;
+    const float inner_radius = 0.5f;
+    const int   slice_count  = 40;
+    const int   stack_count  = 1;
+
+    auto disc_material = std::make_shared<erhe::primitive::Material>(
+        "Circular Menu Disc",
+        glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
+    );
+
+    const auto disc_geometry_shared = std::make_shared<erhe::geometry::Geometry>(
+        erhe::geometry::shapes::make_disc(outer_radius, inner_radius, slice_count, stack_count);
+    );
+
+    auto primitive_geometry = erhe::primitive::make_primitive(*disc_geometry_shared.get(), g_mesh_memory->build_info);
+    auto raytrace_primitive = std::make_shared<Raytrace_primitive>(disc_geometry_shared);
+
+    m_circular_menu_background = std::make_shared<erhe::scene::Mesh>(
+        "Circular Menu Mesh",
+        erhe::primitive::Primitive{
+            .material              = disc_material,
+            .gl_primitive_geometry = primitive_geometry,
+            .rt_primitive_geometry = raytrace_primitive->primitive_geometry
+        }
+    );
+#endif
 
     g_editor_message_bus->add_receiver(
         [&](Editor_message& message)

@@ -1,5 +1,6 @@
 #include "map_editor/map_tool_window.hpp"
 
+#include "hextiles_log.hpp"
 #include "map_editor/map_editor.hpp"
 #include "map_editor/terrain_palette_window.hpp"
 #include "map_generator/map_generator.hpp"
@@ -11,6 +12,7 @@
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
@@ -56,6 +58,20 @@ void Map_tool_window::imgui()
     }
     if (ImGui::Button("Generator", button_size)) {
         g_map_generator->show();
+    }
+    if (ImGui::Button("Load Map")) {
+        const auto path_opt = erhe::toolkit::select_file();
+        if (path_opt.has_value()) {
+            File_read_stream file{path_opt.value()};
+            g_map_editor->get_map()->read(file);
+        }
+    }
+    if (ImGui::Button("Save Map")) {
+        const auto path_opt = erhe::toolkit::select_file();
+        if (path_opt.has_value()) {
+            File_write_stream file{path_opt.value()};
+            g_map_editor->get_map()->write(file);
+        }
     }
 
     const auto hover_pos_opt = g_map_editor->get_hover_tile_position();
