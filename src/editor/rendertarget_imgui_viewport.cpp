@@ -234,6 +234,8 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
         menu();
     }
 
+    flush_queud_events();
+
     return true;
 }
 

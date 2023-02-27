@@ -41,7 +41,7 @@ auto get_net_error_string(const int error_code) -> std::string;
 auto is_error_fatal(int value) -> bool;
 
 
-inline bool set_socket_blocking_enabled(int fd, bool blocking)
+inline bool set_socket_blocking_enabled(SOCKET fd, bool blocking)
 {
 #ifdef _WIN32
     unsigned long mode = blocking ? 0 : 1;
