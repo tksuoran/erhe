@@ -322,6 +322,24 @@ void Node::handle_add_child(
     node_data.children.insert(node_data.children.begin() + position, child_node);
 }
 
+void Node::trace()
+{
+    std::stringstream ss;
+    for (int i = 0; i < node_data.depth; ++i) {
+        ss << "  ";
+    }
+    log->trace(
+        "{}{} '{}' id = {}",
+        ss.str(),
+        type_name(),
+        get_name(),
+        get_id()
+    );
+    for (const auto& child : node_data.children) {
+        child->trace();
+    }
+}
+
 void Node::handle_add_attachment(
     const std::shared_ptr<Node_attachment>& attachment,
     std::size_t                             position

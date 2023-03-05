@@ -10,6 +10,7 @@
 #include <sstream>
 
 // Warning: This code is highly experimental
+//          This code is currently not in use
 
 namespace editor
 {

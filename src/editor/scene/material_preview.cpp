@@ -210,7 +210,7 @@ void Material_preview::make_preview_scene()
 
     using Item_flags = erhe::scene::Item_flags;
     m_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
-    m_mesh->enable_flag_bits(Item_flags::content | Item_flags::visible);
+    m_mesh->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::opaque);
     m_node->attach          (m_mesh);
     m_node->enable_flag_bits(Item_flags::content | Item_flags::visible);
 
@@ -317,7 +317,10 @@ void Material_preview::render_preview(
         gl::Clear_buffer_mask::color_buffer_bit |
         gl::Clear_buffer_mask::depth_buffer_bit
     );
-    g_editor_rendering->render_content(context, true);
+    using Fill_mode      = IEditor_rendering::Fill_mode;
+    using Blend_mode     = IEditor_rendering::Blend_mode;
+    using Selection_mode = IEditor_rendering::Selection_mode;
+    g_editor_rendering->render_content(context, Fill_mode::fill, Blend_mode::opaque, Selection_mode::not_selected);
     gl::disable(gl::Enable_cap::scissor_test);
 }
 

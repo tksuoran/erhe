@@ -27,15 +27,17 @@ public:
     static constexpr uint64_t shadow_cast               = (1u <<  3);
     static constexpr uint64_t selected                  = (1u <<  4);
     static constexpr uint64_t visible                   = (1u <<  5);
-    static constexpr uint64_t render_wireframe          = (1u <<  6); // TODO
-    static constexpr uint64_t render_bounding_volume    = (1u <<  7); // TODO
-    static constexpr uint64_t content                   = (1u <<  8);
-    static constexpr uint64_t id                        = (1u <<  9);
-    static constexpr uint64_t tool                      = (1u << 10);
-    static constexpr uint64_t brush                     = (1u << 11);
-    static constexpr uint64_t controller                = (1u << 12);
-    static constexpr uint64_t rendertarget              = (1u << 13);
-    static constexpr uint64_t count                     = 14;
+    static constexpr uint64_t opaque                    = (1u <<  6);
+    static constexpr uint64_t translucent               = (1u <<  7);
+    static constexpr uint64_t render_wireframe          = (1u <<  8); // TODO
+    static constexpr uint64_t render_bounding_volume    = (1u <<  9); // TODO
+    static constexpr uint64_t content                   = (1u << 10);
+    static constexpr uint64_t id                        = (1u << 11);
+    static constexpr uint64_t tool                      = (1u << 12);
+    static constexpr uint64_t brush                     = (1u << 13);
+    static constexpr uint64_t controller                = (1u << 14);
+    static constexpr uint64_t rendertarget              = (1u << 15);
+    static constexpr uint64_t count                     = 16;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -45,6 +47,8 @@ public:
         "Shadow Cast",
         "Selected",
         "Visible",
+        "Opaque",
+        "Translucent",
         "Render Wireframe",
         "Render Bounding Volume",
         "Content",

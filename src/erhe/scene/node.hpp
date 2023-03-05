@@ -162,6 +162,8 @@ public:
 
     void recursive_remove();
 
+    void trace();
+
     Node_data node_data;
 };
 

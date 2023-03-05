@@ -29,7 +29,7 @@ RUN git clone https://github.com/Kitware/CMake.git && \
     cd CMake && \
     git checkout ${CHECKOUT_COMMIT} && \
     ./bootstrap --prefix=/usr && \
-    make && \
+    make -j 8 && \
     make install
 
 # Set locale

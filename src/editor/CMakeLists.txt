@@ -221,6 +221,8 @@ erhe_target_sources_grouped(
     res/icons/rotate.svg
     res/icons/spot_light.svg
 
+    res/shaders/brdf_slice.vert
+    res/shaders/brdf_slice.frag
     res/shaders/brush.vert
     res/shaders/brush.frag
     res/shaders/anisotropic_slope.vert
@@ -247,6 +249,8 @@ erhe_target_sources_grouped(
     res/shaders/standard.vert
     res/shaders/standard.frag
     res/shaders/standard_debug.frag
+    res/shaders/sky.vert
+    res/shaders/sky.frag
     res/shaders/text.vert
     res/shaders/text.frag
     res/shaders/textured.vert

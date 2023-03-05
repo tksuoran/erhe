@@ -24,7 +24,7 @@ Material_interface::Material_interface(std::size_t max_material_count)
         .base_color   = material_struct.add_vec4 ("base_color"  )->offset_in_parent(),
         .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent(),
         .base_texture = material_struct.add_uvec2("base_texture")->offset_in_parent(),
-        .transparency = material_struct.add_float("transparency")->offset_in_parent(),
+        .opacity      = material_struct.add_float("opacity"     )->offset_in_parent(),
         .reserved     = material_struct.add_float("reserved"    )->offset_in_parent()
     },
     max_material_count{max_material_count}
@@ -93,12 +93,12 @@ auto Material_buffer::update(
 
         material->material_buffer_index = material_index;
 
-        write(gpu_data, m_writer.write_offset + offsets.metallic    , as_span(material->metallic    ));
-        write(gpu_data, m_writer.write_offset + offsets.roughness   , as_span(material->roughness   ));
-        write(gpu_data, m_writer.write_offset + offsets.reflectance , as_span(material->reflectance ));
-        write(gpu_data, m_writer.write_offset + offsets.base_color  , as_span(material->base_color  ));
-        write(gpu_data, m_writer.write_offset + offsets.emissive    , as_span(material->emissive    ));
-        write(gpu_data, m_writer.write_offset + offsets.transparency, as_span(material->transparency));
+        write(gpu_data, m_writer.write_offset + offsets.metallic   , as_span(material->metallic   ));
+        write(gpu_data, m_writer.write_offset + offsets.roughness  , as_span(material->roughness  ));
+        write(gpu_data, m_writer.write_offset + offsets.reflectance, as_span(material->reflectance));
+        write(gpu_data, m_writer.write_offset + offsets.base_color , as_span(material->base_color ));
+        write(gpu_data, m_writer.write_offset + offsets.emissive   , as_span(material->emissive   ));
+        write(gpu_data, m_writer.write_offset + offsets.opacity    , as_span(material->opacity    ));
 
         if (erhe::graphics::Instance::info.use_bindless_texture) {
             write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(handle));

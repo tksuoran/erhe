@@ -199,8 +199,9 @@ void Hud::initialize_component()
     const auto& scene_root = g_scene_builder->get_scene_root();
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::visible      |
         erhe::scene::Item_flags::rendertarget |
+        erhe::scene::Item_flags::visible      |
+        erhe::scene::Item_flags::translucent  |
         erhe::scene::Item_flags::show_in_ui
     );
 
@@ -208,8 +209,8 @@ void Hud::initialize_component()
     m_rendertarget_node->set_parent(scene_root->scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
     m_rendertarget_node->enable_flag_bits(
-        erhe::scene::Item_flags::visible      |
         erhe::scene::Item_flags::rendertarget |
+        erhe::scene::Item_flags::visible      |
         erhe::scene::Item_flags::show_in_ui
     );
     auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
@@ -381,8 +382,8 @@ void Hud::update_node_transform(const glm::mat4& world_from_camera)
 
     m_world_from_camera = world_from_camera;
     const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, m_y, 0.0, 1.0}};
-    const glm::vec3 eye_position{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
-    const glm::vec3 up_direction{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
+    const glm::vec3 eye_position   {world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
+    const glm::vec3 up_direction   {world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
 
     const glm::mat4 m = erhe::toolkit::create_look_at(
         eye_position,

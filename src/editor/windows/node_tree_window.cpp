@@ -999,9 +999,9 @@ void Node_tree_window::imgui()
         camera_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
         camera_node->set_world_from_node(
             erhe::toolkit::create_look_at(
-                glm::vec3{0.0f, 1.0f,  1.0f},
-                glm::vec3{0.0f, 1.0f,  0.0f},
-                glm::vec3{0.0f, 1.0f,  0.0f}
+                glm::vec3{0.0f, 1.0f, 1.0f},
+                glm::vec3{0.0f, 1.0f, 0.0f},
+                glm::vec3{0.0f, 1.0f, 0.0f}
             )
         );
 
@@ -1014,9 +1014,9 @@ void Node_tree_window::imgui()
         light_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
         light_node->set_world_from_node(
             erhe::toolkit::create_look_at(
-                glm::vec3{0.0f, 3.0f,  0.0f},
-                glm::vec3{0.0f, 0.0f,  0.0f},
-                glm::vec3{0.0f, 0.0f,  1.0f}
+                glm::vec3{0.0f, 3.0f, 0.0f},
+                glm::vec3{0.0f, 0.0f, 0.0f},
+                glm::vec3{0.0f, 0.0f, 1.0f}
             )
         );
 

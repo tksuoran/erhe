@@ -419,14 +419,20 @@ void Headset_view::render_headset()
                     .viewport        = viewport
                 };
 
+                using Fill_mode      = IEditor_rendering::Fill_mode;
+                using Blend_mode     = IEditor_rendering::Blend_mode;
+                using Selection_mode = IEditor_rendering::Selection_mode;
+
                 // Opaque
-                g_editor_rendering->render_content  (render_context, true);
-                g_editor_rendering->render_selection(render_context, true);
-                g_editor_rendering->render_content  (render_context, false);
-                g_editor_rendering->render_selection(render_context, false);
-                g_editor_rendering->render_sky      (render_context);
+                g_editor_rendering->render_content(render_context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::not_selected);
+                g_editor_rendering->render_content(render_context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::selected);
+                g_editor_rendering->render_content(render_context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::not_selected);
+                g_editor_rendering->render_content(render_context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::selected);
+                g_editor_rendering->render_sky    (render_context);
 
                 // Transparent
+                g_editor_rendering->render_content            (render_context, Fill_mode::fill,    Blend_mode::translucent, Selection_mode::any);
+                g_editor_rendering->render_content            (render_context, Fill_mode::outline, Blend_mode::translucent, Selection_mode::any);
                 g_editor_rendering->render_rendertarget_meshes(render_context);
 
                 if (erhe::application::g_line_renderer_set != nullptr) { // && m_headset->trigger_value() > 0.0f)

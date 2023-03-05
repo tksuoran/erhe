@@ -1,7 +1,8 @@
 out vec3 v_normal;
 out vec4 v_color;
 
-out gl_PerVertex {
+out gl_PerVertex
+{
     vec4  gl_Position;
     float gl_PointSize;
 };

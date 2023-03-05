@@ -71,18 +71,15 @@ void main(void)
     {
         float t0 = start.z - start.w;
         float t1 = end.z   - end.w;
-        if (t0 > 0) // start.z > start.w
-        {
-            if (t1 > 0) // end.w > end.w
-            {
+        if (t0 > 0) {// start.z > start.w
+            if (t1 > 0) { // end.w > end.w
                 return;
             }
             //  mix(x, y, a) = (1 - a)x + ay
             // t0 = Az - Aw; t1 = Bz - Bw; t = t0 / (t0 - t1)
             start = mix(start, end, t0 / (t0 - t1));
         }
-        if (t1 > 0.0)
-        {
+        if (t1 > 0.0) {
             end = mix(start, end, t0 / (t0 - t1));
         }
     }

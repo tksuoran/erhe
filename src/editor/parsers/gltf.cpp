@@ -1055,17 +1055,17 @@ private:
 
         auto erhe_node = m_nodes.at(node_index);
         auto erhe_mesh = m_scene_root->content_library()->meshes.make(mesh->name);
-        erhe_mesh->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui | Item_flags::shadow_cast);
+        erhe_mesh->enable_flag_bits(
+            Item_flags::content     |
+            Item_flags::visible     |
+            Item_flags::show_in_ui  |
+            Item_flags::shadow_cast |
+            Item_flags::opaque      |
+            Item_flags::id
+        );
         for (cgltf_size i = 0; i < mesh->primitives_count; ++i) {
             parse_primitive(erhe_node, erhe_mesh, mesh, &mesh->primitives[i]);
         }
-
-        erhe_mesh->enable_flag_bits(
-            erhe::scene::Item_flags::visible     |
-            erhe::scene::Item_flags::content     |
-            erhe::scene::Item_flags::shadow_cast |
-            erhe::scene::Item_flags::id
-        );
 
         erhe_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
         erhe_node->attach(erhe_mesh);
@@ -1081,7 +1081,11 @@ private:
             (node->name != nullptr) ? node->name : ""
         );
         erhe_node->set_parent(erhe_parent);
-        erhe_node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
+        erhe_node->enable_flag_bits(
+            Item_flags::content |
+            Item_flags::visible |
+            Item_flags::show_in_ui
+        );
         m_nodes[node_index] = erhe_node;
         parse_node_transform(node, erhe_node);
 

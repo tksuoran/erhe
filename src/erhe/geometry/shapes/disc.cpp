@@ -21,7 +21,11 @@ public:
     double outer_radius;
     int    slice_count;
     int    stack_count;
-
+    int    slice_begin;
+    int    slice_end;
+    int    stack_begin;
+    int    stack_end;
+ 
     std::map<std::pair<int, int>, Point_id> points;
     Point_id center_point_id;
 
@@ -103,13 +107,21 @@ public:
         const double inner_radius,
         const double outer_radius,
         const int    slice_count,
-        const int    stack_count
+        const int    stack_count,
+        const int    slice_begin,
+        const int    slice_end,
+        const int    stack_begin,
+        const int    stack_end
     )
         : geometry    {geometry}
         , inner_radius{inner_radius}
         , outer_radius{outer_radius}
         , slice_count {slice_count}
         , stack_count {stack_count}
+        , slice_begin {slice_begin}
+        , slice_end   {slice_end}
+        , stack_begin {stack_begin}
+        , stack_end   {stack_end}
     {
         point_locations   = geometry.point_attributes()  .create<vec3>(c_point_locations  );
         point_normals     = geometry.point_attributes()  .create<vec3>(c_point_normals    );
@@ -153,10 +165,10 @@ public:
         }
 
         // Quads/triangles
-        for (int stack = 0; stack < stack_count - 1; ++stack) {
-            const double rel_stack_centroid = (stack_count == 1) ? 0.5 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
+        for (int stack = stack_begin; stack < stack_end - 1; ++stack) {
+            const double rel_stack_centroid = (stack_end == 1) ? 0.5 : static_cast<double>(stack) / (static_cast<double>(stack_count) - 1);
 
-            for (int slice = 0; slice < slice_count; ++slice) {
+            for (int slice = slice_begin; slice < slice_end; ++slice) {
                 const double     rel_slice_centroid = (static_cast<double>(slice) + 0.5) / static_cast<double>(slice_count);
                 const Point_id   centroid_id        = make_point(rel_slice_centroid, rel_stack_centroid);
                 const Polygon_id polygon_id         = geometry.make_polygon();
@@ -199,7 +211,30 @@ auto make_disc(
         "disc",
         [=](auto& geometry)
         {
-            Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count};
+            Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count, 0, slice_count, 0, stack_count};
+            builder.build();
+        }
+    };
+}
+
+auto make_disc(
+    const double outer_radius,
+    const double inner_radius,
+    const int    slice_count,
+    const int    stack_count,
+    const int    slice_begin,
+    const int    slice_end,
+    const int    stack_begin,
+    const int    stack_end
+) -> Geometry
+{
+    ERHE_PROFILE_FUNCTION
+
+    return Geometry{
+        "disc",
+        [=](auto& geometry)
+        {
+            Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count, slice_begin, slice_end, stack_begin, stack_end};
             builder.build();
         }
     };

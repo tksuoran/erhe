@@ -234,6 +234,7 @@ void Create_impl::imgui()
                 const uint64_t mesh_flags =
                     Item_flags::visible     |
                     Item_flags::content     |
+                    Item_flags::opaque      |
                     Item_flags::shadow_cast |
                     Item_flags::id          |
                     Item_flags::show_in_ui;

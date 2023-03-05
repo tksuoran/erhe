@@ -97,8 +97,7 @@ public:
     void render                    () override;
     void render_viewport_main      (const Render_context& context, bool has_pointer) override;
     void render_viewport_overlay   (const Render_context& context, bool has_pointer) override;
-    void render_content            (const Render_context& context, bool polygon_fill) override;
-    void render_selection          (const Render_context& context, bool polygon_fill) override;
+    void render_content            (const Render_context& context, Fill_mode fill_mode, Blend_mode blend_mode, Selection_mode selection_mode) override;
     void render_tool_meshes        (const Render_context& context) override;
     void render_rendertarget_meshes(const Render_context& context) override;
     void render_brush              (const Render_context& context) override;
@@ -107,9 +106,11 @@ public:
     void begin_frame               () override;
     void end_frame                 () override;
 
+    void apply_filter(erhe::scene::Item_filter& filter, Blend_mode     blend_mode) const;
+    void apply_filter(erhe::scene::Item_filter& filter, Selection_mode selection_mode) const;
+
 private:
     void setup_renderpasses();
-
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
@@ -118,7 +119,8 @@ private:
 
     bool       m_trigger_capture{false};
 
-    Renderpass m_rp_polygon_fill_standard;
+    Renderpass m_rp_polygon_fill_standard_opaque;
+    Renderpass m_rp_polygon_fill_standard_translucent;
     Renderpass m_rp_tool1_hidden_stencil;
     Renderpass m_rp_tool2_visible_stencil;
     Renderpass m_rp_tool3_depth_clear;
@@ -200,14 +202,24 @@ void Editor_rendering_impl::setup_renderpasses()
     using erhe::graphics::Depth_stencil_state;
     using erhe::graphics::Color_blend_state;
 
-    m_rp_polygon_fill_standard.pipeline.data = {
-        .name           = "Polygon Fill",
+    m_rp_polygon_fill_standard_opaque.pipeline.data = {
+        .name           = "Polygon Fill Opaque",
         .shader_stages  = g_programs->circular_brushed_metal.get(),
         .vertex_input   = vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
+    };
+
+    m_rp_polygon_fill_standard_translucent.pipeline.data = {
+        .name           = "Polygon Fill Translucent",
+        .shader_stages  = g_programs->circular_brushed_metal.get(),
+        .vertex_input   = vertex_input,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_none,
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
     m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
@@ -555,6 +567,53 @@ void Editor_rendering_impl::setup_renderpasses()
     //m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 }
 
+void Editor_rendering_impl::apply_filter(
+    erhe::scene::Item_filter& filter,
+    const Blend_mode          blend_mode
+) const
+{
+    using namespace erhe::scene;
+    switch (blend_mode) {
+        case Blend_mode::opaque: {
+            filter.require_all_bits_set   |= Item_flags::opaque;
+            filter.require_all_bits_clear |= Item_flags::translucent;
+            break;
+        }
+
+        case Blend_mode::translucent: {
+            filter.require_all_bits_set   |= Item_flags::translucent;
+            filter.require_all_bits_clear |= Item_flags::opaque;
+            break;
+        }
+
+        default:
+            return;
+    }
+}
+
+void Editor_rendering_impl::apply_filter(
+    erhe::scene::Item_filter& filter,
+    const Selection_mode      selection_mode
+) const
+{
+    using namespace erhe::scene;
+    switch (selection_mode) {
+        case Selection_mode::not_selected: {
+            filter.require_all_bits_clear |= Item_flags::selected;
+            break;
+        }
+
+        case Selection_mode::selected: {
+            filter.require_all_bits_set   |= Item_flags::selected;
+            break;
+        }
+
+        case Selection_mode::any:
+        default:
+            return;
+    }
+}
+
 void Editor_rendering_impl::trigger_capture()
 {
     m_trigger_capture = true;
@@ -660,13 +719,14 @@ void Editor_rendering_impl::render_viewport_main(
         erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
 
         // Opaque
-        render_sky      (context);
-        render_content  (context, true);
-        render_selection(context, true);
-        render_content  (context, false);
-        render_selection(context, false);
+        render_content(context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::not_selected);
+        render_content(context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::selected);
+        render_content(context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::not_selected);
+        render_content(context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::selected);
+        render_sky    (context);
 
-        // Transparent
+        // Translucent
+        render_content            (context, Fill_mode::fill, Blend_mode::translucent, Selection_mode::any);
         render_brush              (context);
         render_rendertarget_meshes(context);
         render_tool_meshes        (context);
@@ -749,7 +809,12 @@ void Editor_rendering_impl::render_id(const Render_context& context)
     );
 }
 
-void Editor_rendering_impl::render_content(const Render_context& context, bool polygon_fill)
+void Editor_rendering_impl::render_content(
+    const Render_context& context,
+    const Fill_mode       fill_mode,
+    const Blend_mode      blend_mode,
+    const Selection_mode  selection_mode
+)
 {
     ERHE_PROFILE_FUNCTION
 
@@ -771,7 +836,9 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
 
     erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport content"};
 
-    auto& render_style = context.viewport_config->render_style_not_selected;
+    auto& render_style = (selection_mode == Selection_mode::selected)
+        ? context.viewport_config->render_style_selected
+        : context.viewport_config->render_style_not_selected;
 
     const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->content_library()->materials;
@@ -779,20 +846,29 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
 
     using Item_filter = erhe::scene::Item_filter;
     using Item_flags  = erhe::scene::Item_flags;
-    constexpr Item_filter content_not_selected_filter{
+    Item_filter filter{
         .require_all_bits_set         = Item_flags::visible,
         .require_at_least_one_bit_set = Item_flags::content | Item_flags::controller,
-        .require_all_bits_clear       = Item_flags::selected
+        .require_all_bits_clear       = 0
     };
+    apply_filter(filter, blend_mode);
+    apply_filter(filter, selection_mode);
 
-    if (polygon_fill && render_style.polygon_fill) {
+    if ((fill_mode == Fill_mode::fill) && render_style.polygon_fill) {
         //if (render_style.polygon_offset_enable) {
         //    gl::enable(gl::Enable_cap::polygon_offset_fill);
         //    gl::polygon_offset_clamp(render_style.polygon_offset_factor,
         //                             render_style.polygon_offset_units,
         //                             render_style.polygon_offset_clamp);
         //}
-        Renderpass renderpass = m_rp_polygon_fill_standard;
+
+        Renderpass renderpass = [this, blend_mode]() {
+            switch (blend_mode) {
+                case Blend_mode::opaque:      return m_rp_polygon_fill_standard_opaque;
+                case Blend_mode::translucent: return m_rp_polygon_fill_standard_translucent;
+                default:                      return Renderpass{};
+            }
+        }();
         if (context.override_shader_stages != nullptr) {
             renderpass.pipeline.data.shader_stages = context.override_shader_stages;
         }
@@ -807,7 +883,7 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
                 .passes            = { &renderpass },
                 .shadow_texture    = context.scene_view->get_shadow_texture(),
                 .viewport          = context.viewport,
-                .filter            = content_not_selected_filter,
+                .filter            = filter,
             }
         );
         //gl::disable(gl::Enable_cap::polygon_offset_line);
@@ -829,7 +905,7 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
                 .mesh_spans = { layers.content()->meshes },
                 .passes     = { &m_rp_edge_lines },
                 .viewport   = context.viewport,
-                .filter     = content_not_selected_filter
+                .filter     = filter
             }
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -847,7 +923,7 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
                 .mesh_spans = { layers.content()->meshes },
                 .passes     = { &m_rp_polygon_centroids },
                 .viewport   = context.viewport,
-                .filter     = content_not_selected_filter
+                .filter     = filter
             }
         );
     }
@@ -864,7 +940,7 @@ void Editor_rendering_impl::render_content(const Render_context& context, bool p
                 .mesh_spans = { layers.content()->meshes },
                 .passes     = { &m_rp_corner_points },
                 .viewport   = context.viewport,
-                .filter     = content_not_selected_filter
+                .filter     = filter
             }
         );
     }
@@ -929,129 +1005,6 @@ void Editor_rendering_impl::render_rendertarget_meshes(
             }
         }
     );
-}
-
-void Editor_rendering_impl::render_selection(const Render_context& context, bool polygon_fill)
-{
-    if (
-        (context.camera          == nullptr) ||
-        (context.viewport_config == nullptr) ||
-        (context.scene_view      == nullptr)
-    ) {
-        return;
-    }
-
-    const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
-    const auto& render_style     = context.viewport_config->render_style_selected;
-    const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->content_library()->materials;
-    const auto& materials        = material_library.entries();
-
-    constexpr erhe::scene::Item_filter content_selected_filter{
-        .require_all_bits_set =
-            erhe::scene::Item_flags::visible |
-            erhe::scene::Item_flags::content |
-            erhe::scene::Item_flags::selected
-    };
-
-    if (polygon_fill && render_style.polygon_fill) {
-        //if (render_style.polygon_offset_enable) {
-        //    gl::enable(gl::Enable_cap::polygon_offset_fill);
-        //    gl::polygon_offset_clamp(render_style.polygon_offset_factor,
-        //                             render_style.polygon_offset_units,
-        //                             render_style.polygon_offset_clamp);
-        //}
-        //m_forward_renderer->primitive_color_source   = Base_renderer::Primitive_color_source::constant_color;
-        //m_forward_renderer->primitive_constant_color = render_style.line_color;
-
-        Renderpass renderpass = m_rp_polygon_fill_standard;
-        if (context.override_shader_stages != nullptr) {
-            renderpass.pipeline.data.shader_stages = context.override_shader_stages;
-        }
-
-        g_forward_renderer->render(
-            {
-                .ambient_light     = layers.light()->ambient_light,
-                .camera            = context.camera,
-                .light_projections = context.scene_view->get_light_projections(),
-                .lights            = layers.light()->lights,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes },
-                .passes            = { &renderpass },
-                .shadow_texture    = context.scene_view->get_shadow_texture(),
-                .viewport          = context.viewport,
-                .filter            = content_selected_filter
-            }
-        );
-        //gl::disable(gl::Enable_cap::polygon_offset_line);
-        return;
-    }
-
-    auto& primitive_settings = g_forward_renderer->primitive_settings();
-
-    if (render_style.edge_lines) {
-        ERHE_PROFILE_SCOPE("selection edge lines");
-
-        gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
-        primitive_settings.color_source   = render_style.edge_lines_color_source;;
-        primitive_settings.constant_color = render_style.line_color;
-        primitive_settings.size_source    = Primitive_size_source::constant_size;
-        primitive_settings.constant_size  = render_style.line_width;
-        g_forward_renderer->render(
-            {
-                .camera     = context.camera,
-                .materials  = materials,
-                .mesh_spans = { layers.content()->meshes },
-                .passes     = { &m_rp_edge_lines, &m_rp_line_hidden_blend },
-                .viewport   = context.viewport,
-                .filter     = content_selected_filter
-            }
-        );
-        gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
-    }
-
-    gl::enable(gl::Enable_cap::program_point_size);
-    if (render_style.polygon_centroids) {
-        ERHE_PROFILE_SCOPE("selection polygon centroids");
-
-        primitive_settings.color_source   = render_style.polygon_centroids_color_source;
-        primitive_settings.size_source    = Primitive_size_source::constant_size;
-        primitive_settings.constant_color = render_style.centroid_color;
-        primitive_settings.constant_size  = render_style.point_size;
-        g_forward_renderer->render(
-            {
-                .camera     = context.camera,
-                .materials  = materials,
-                .mesh_spans = { layers.content()->meshes },
-                .passes     = { &m_rp_polygon_centroids },
-                .viewport   = context.viewport,
-                .filter     = content_selected_filter
-            }
-        );
-    }
-    if (render_style.corner_points) {
-        ERHE_PROFILE_SCOPE("selection corner points");
-
-        primitive_settings.color_source   = render_style.corner_points_color_source;
-        primitive_settings.size_source    = Primitive_size_source::constant_size;
-        primitive_settings.constant_color = render_style.corner_color;
-        primitive_settings.constant_size  = render_style.point_size;
-        g_forward_renderer->render(
-            {
-                .camera     = context.camera,
-                .materials  = materials,
-                .mesh_spans = { layers.content()->meshes },
-                .passes     = { &m_rp_corner_points },
-                .viewport   = context.viewport,
-                .filter     = content_selected_filter
-            }
-        );
-    }
-    gl::disable(gl::Enable_cap::program_point_size);
 }
 
 void Editor_rendering_impl::render_tool_meshes(const Render_context& context)
@@ -1139,9 +1092,7 @@ void Editor_rendering_impl::render_brush(const Render_context& context)
             .viewport      = context.viewport,
             .filter        =
             {
-                .require_all_bits_set =
-                    erhe::scene::Item_flags::visible |
-                    erhe::scene::Item_flags::brush
+                .require_all_bits_set = erhe::scene::Item_flags::visible | erhe::scene::Item_flags::brush
             }
         }
     );

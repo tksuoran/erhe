@@ -53,7 +53,7 @@ Rendertarget_mesh::Rendertarget_mesh(
     : erhe::scene::Mesh {"Rendertarget Node"}
     , m_pixels_per_meter{pixels_per_meter}
 {
-    enable_flag_bits(erhe::scene::Item_flags::rendertarget);
+    enable_flag_bits(erhe::scene::Item_flags::rendertarget | erhe::scene::Item_flags::translucent);
 
     init_rendertarget(width, height);
     add_primitive();
@@ -160,8 +160,9 @@ void Rendertarget_mesh::add_primitive()
     g_mesh_memory->gl_buffer_transfer_queue->flush();
 
     enable_flag_bits(
-        erhe::scene::Item_flags::visible |
-        erhe::scene::Item_flags::id      |
+        erhe::scene::Item_flags::visible      |
+        erhe::scene::Item_flags::translucent  |
+        erhe::scene::Item_flags::id           |
         erhe::scene::Item_flags::rendertarget
     );
 

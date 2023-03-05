@@ -25,6 +25,8 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/../cache")
 set(ERHE_INCLUDE_ROOT "${PROJECT_SOURCE_DIR}/src")
 
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON CACHE BOOL "Do not update everytime I run cmake, please")
+
 # Split parts to cmake/
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 

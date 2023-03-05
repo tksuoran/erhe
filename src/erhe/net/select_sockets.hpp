@@ -26,6 +26,7 @@ public:
     auto select    (int timeout_ms) -> int;
 
     unsigned int flags{0};
+    int          nfds{0};
     FD_SET       read_fds;
     FD_SET       write_fds;
     FD_SET       except_fds;

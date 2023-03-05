@@ -792,7 +792,8 @@ void Scene_builder::make_brushes()
             );
             mesh->enable_flag_bits(
                 Item_flags::visible |
-                Item_flags::content
+                Item_flags::content |
+                Item_flags::opaque
             );
             mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
 
@@ -874,7 +875,7 @@ void Scene_builder::add_room()
     // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info{
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui,
-        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::id | Item_flags::show_in_ui,
+        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui,
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
         .material        = floor_material,
@@ -1024,6 +1025,7 @@ void Scene_builder::make_mesh_nodes()
                 .mesh_flags =
                     Item_flags::show_in_ui |
                     Item_flags::visible    |
+                    Item_flags::opaque     |
                     Item_flags::content    |
                     Item_flags::id         |
                     Item_flags::shadow_cast,
@@ -1070,7 +1072,7 @@ void Scene_builder::make_cube_benchmark()
                 auto node = std::make_shared<erhe::scene::Node>();
                 auto mesh = std::make_shared<erhe::scene::Mesh>("", primitive);
                 mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
-                mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast);
+                mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
                 node->attach(mesh);
                 node->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
                 node->set_parent(m_scene_root->scene().get_root_node());

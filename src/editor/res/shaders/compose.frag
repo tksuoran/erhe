@@ -108,8 +108,7 @@ void main()
     vec4 base_color = texture(s_source_textures[0], v_texcoord);
 #endif
     vec3 sum = base_color.rgb;
-    for (uint i = 1; i < post_processing.texture_count; ++i)
-    {
+    for (uint i = 1; i < post_processing.texture_count; ++i) {
         float scale = 0.02 / float(i + 1);
 #if defined(ERHE_BINDLESS_TEXTURE)
         vec3 source = texture(sampler2D(post_processing.source_texture[i]), v_texcoord).rgb;

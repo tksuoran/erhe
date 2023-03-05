@@ -72,6 +72,18 @@ namespace editor
 
 using glm::vec3;
 
+#pragma region Commmands
+Toggle_menu_visibility_command::Toggle_menu_visibility_command()
+    : Command{"Hotbar.toggle_visibility"}
+{
+}
+
+auto Toggle_menu_visibility_command::try_call() -> bool
+{
+    g_hotbar->toggle_visibility();
+    return true;
+}
+
 Hotbar_trackpad_command::Hotbar_trackpad_command()
     : Command{"Hotbar.trackpad"}
 {
@@ -83,6 +95,7 @@ auto Hotbar_trackpad_command::try_call_with_input(
 {
     return g_hotbar->try_call(input);
 }
+#pragma endregion Commands
 
 Hotbar* g_hotbar{nullptr};
 
@@ -114,7 +127,6 @@ void Hotbar::deinitialize_component()
     m_rendertarget_node.reset();
 
     m_rendertarget_imgui_viewport.reset();
-    m_hover_scene_view = nullptr;
     m_slots.clear();
     g_hotbar = nullptr;
 }
@@ -142,24 +154,22 @@ void Hotbar::initialize_component()
     ERHE_VERIFY(g_hotbar == nullptr);
 
     auto ini = erhe::application::get_ini("erhe.ini", "hotbar");
-    ini->get("enabled", config.enabled);
-    ini->get("show",    config.show);
-    ini->get("x",       config.x);
-    ini->get("y",       config.y);
-    ini->get("z",       config.z);
-
-    m_enabled = config.enabled;
-    m_show    = config.show;
-    m_x       = config.x;
-    m_y       = config.y;
-    m_z       = config.z;
+    ini->get("enabled",    m_enabled);
+    ini->get("show",       m_show);
+    ini->get("use_radial", m_use_radial);
+    ini->get("x",          m_x);
+    ini->get("y",          m_y);
+    ini->get("z",          m_z);
 
     if (!m_enabled) {
         return;
     }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
     auto& commands = *erhe::application::g_commands;
+    commands.register_command   (&m_toggle_visibility_command);
+    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_space, true);
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);
     const auto* headset = g_headset_view->get_headset();
     if (headset != nullptr)
@@ -178,9 +188,28 @@ void Hotbar::initialize_component()
     set_flags      (Tool_flags::background);
     g_tools->register_tool(this);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this, nullptr);
-    this->Imgui_window::m_show_in_menu = false;
+    set_visibility(m_show);
 
+    if (m_use_radial) {
+        init_radial_menu();
+    } else {
+        erhe::application::g_imgui_windows->register_imgui_window(this, nullptr);
+        this->Imgui_window::m_show_in_menu = false;
+        init_hotbar();
+    }
+
+    g_editor_message_bus->add_receiver(
+        [&](Editor_message& message)
+        {
+            on_message(message);
+        }
+    );
+
+    g_hotbar = this;
+}
+
+void Hotbar::init_hotbar()
+{
     const auto& scene_root         = g_scene_builder->get_scene_root();
     const auto& icon_rasterization = g_icon_set->get_hotbar_rasterization();
     const int   icon_size          = icon_rasterization.get_size();
@@ -193,7 +222,8 @@ void Hotbar::initialize_component()
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
 
     m_rendertarget_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::visible
+        erhe::scene::Item_flags::visible     |
+        erhe::scene::Item_flags::translucent
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
@@ -216,45 +246,74 @@ void Hotbar::initialize_component()
     erhe::application::g_imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
 
     this->set_viewport(m_rendertarget_imgui_viewport.get());
+}
 
-    set_visibility(m_show);
-
-#if 0
+void Hotbar::init_radial_menu()
+{
     const float outer_radius = 1.0f;
-    const float inner_radius = 0.5f;
-    const int   slice_count  = 40;
-    const int   stack_count  = 1;
+    const float inner_radius = 0.125f;
+    const int   slice_count  = 100;
+    const int   stack_count  = 2;
 
     auto disc_material = std::make_shared<erhe::primitive::Material>(
         "Circular Menu Disc",
-        glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
+        glm::vec4{0.1f, 0.2f, 0.3f, 1.0f}
     );
+    disc_material->opacity = 0.5f;
 
     const auto disc_geometry_shared = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::shapes::make_disc(outer_radius, inner_radius, slice_count, stack_count);
+        erhe::geometry::shapes::make_disc(
+            outer_radius,
+            inner_radius,
+            slice_count,
+            stack_count,
+            20,
+            30,
+            0,
+            2
+        )
     );
 
     auto primitive_geometry = erhe::primitive::make_primitive(*disc_geometry_shared.get(), g_mesh_memory->build_info);
     auto raytrace_primitive = std::make_shared<Raytrace_primitive>(disc_geometry_shared);
 
-    m_circular_menu_background = std::make_shared<erhe::scene::Mesh>(
-        "Circular Menu Mesh",
+    m_radial_menu_background_mesh = std::make_shared<erhe::scene::Mesh>(
+        "Radiaul Menu Mesh",
         erhe::primitive::Primitive{
             .material              = disc_material,
             .gl_primitive_geometry = primitive_geometry,
-            .rt_primitive_geometry = raytrace_primitive->primitive_geometry
-        }
-    );
-#endif
-
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
-            on_message(message);
+            .rt_primitive_geometry = raytrace_primitive->primitive_geometry,
+            .source_geometry       = disc_geometry_shared
         }
     );
 
-    g_hotbar = this;
+    const auto& scene_root = g_scene_builder->get_scene_root();
+    auto*       scene      = scene_root->get_hosted_scene();
+    const auto  root_node  = scene->get_root_node();
+    ERHE_VERIFY(scene != nullptr);
+    ERHE_VERIFY(root_node);
+    m_radial_menu_background_mesh->mesh_data.layer_id = scene_root->layers().content()->id;
+
+    m_radial_menu_background_mesh->enable_flag_bits(
+        erhe::scene::Item_flags::content     |
+        erhe::scene::Item_flags::visible     |
+        erhe::scene::Item_flags::translucent |
+        erhe::scene::Item_flags::show_in_ui
+    );
+
+    m_radial_menu_node = std::make_shared<erhe::scene::Node>("Radial menu node");
+    m_radial_menu_node->attach(m_radial_menu_background_mesh);
+    m_radial_menu_node->enable_flag_bits(
+        erhe::scene::Item_flags::content    |
+        erhe::scene::Item_flags::visible    |
+        erhe::scene::Item_flags::show_in_ui
+    );
+
+    // TODO auto node_raytrace = m_radial_menu_background_mesh->get_node_raytrace();
+    // if (node_raytrace) {
+    //     m_rendertarget_node->attach(node_raytracm_radial_menu_background_mesh);
+    //     m_rendertarget_node->show();
+    // }
 }
 
 void Hotbar::post_initialize()
@@ -276,6 +335,8 @@ void Hotbar::post_initialize()
 
 void Hotbar::on_message(Editor_message& message)
 {
+    Scene_view* const old_scene_view = get_hover_scene_view();
+
     Tool::on_message(message);
 
     if (!m_enabled || !m_show) {
@@ -284,51 +345,39 @@ void Hotbar::on_message(Editor_message& message)
 
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        Scene_view* const old_scene_view = m_hover_scene_view;
         if (message.scene_view != old_scene_view) {
-            using Rendergraph_node = erhe::application::Rendergraph_node;
-            auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
-            auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
-            if (old_node != new_node) {
-                if (old_node) {
-                    erhe::application::g_rendergraph->disconnect(
-                        erhe::application::Rendergraph_node_key::rendertarget_texture,
-                        m_rendertarget_imgui_viewport,
-                        old_node
-                    );
-                }
-                m_hover_scene_view = message.scene_view;
-                set_visibility(static_cast<bool>(new_node));
-                if (new_node) {
-                    erhe::application::g_rendergraph->connect(
-                        erhe::application::Rendergraph_node_key::rendertarget_texture,
-                        m_rendertarget_imgui_viewport,
-                        new_node
-                    );
+            if (m_use_radial) {
+                update_node_transform();
+            } else {
+                using Rendergraph_node = erhe::application::Rendergraph_node;
+                auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
+                auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
+                if (old_node != new_node) {
+                    if (old_node) {
+                        erhe::application::g_rendergraph->disconnect(
+                            erhe::application::Rendergraph_node_key::rendertarget_texture,
+                            m_rendertarget_imgui_viewport,
+                            old_node
+                        );
+                    }
+                    set_visibility(static_cast<bool>(new_node));
+                    if (new_node) {
+                        erhe::application::g_rendergraph->connect(
+                            erhe::application::Rendergraph_node_key::rendertarget_texture,
+                            m_rendertarget_imgui_viewport,
+                            new_node
+                        );
+                    }
                 }
             }
         }
     }
 
+    // Update rendertarget node transform to match render camera.
+    // This is used only for horizontal hotbar, not for radial menu.
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
-        if ((m_hover_scene_view != nullptr) && (m_hover_scene_view == message.scene_view)) {
-            if (message.scene_view != nullptr) {
-                const auto& camera = message.scene_view->get_camera();
-                if (camera) {
-                    const auto* camera_node = camera->get_node();
-                    if (camera_node != nullptr) {
-                        const auto& world_from_camera = camera_node->world_from_node();
-                        update_node_transform(world_from_camera);
-                        auto scene_root = message.scene_view->get_scene_root();
-                        if (scene_root) {
-                            auto* scene = scene_root->get_hosted_scene();
-                            if (scene != nullptr) {
-                                m_rendertarget_node->set_parent(scene->get_root_node());
-                            }
-                        }
-                    }
-                }
-            }
+        if (!m_use_radial && (get_hover_scene_view() == message.scene_view)) {
+            update_node_transform();
         }
     }
 }
@@ -350,24 +399,58 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return viewport_window->get_camera();
 }
 
-void Hotbar::update_node_transform(const glm::mat4& world_from_camera)
+void Hotbar::update_node_transform()
 {
-    if (!m_rendertarget_node || m_locked)
-    {
+    if (m_locked) {
         return;
     }
 
-    const glm::vec3 target_position{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}};
-    const glm::vec3 eye_position{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
-    const glm::vec3 up_direction{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
+    const erhe::scene::Node*           camera_node{nullptr};
+    std::shared_ptr<erhe::scene::Node> root_node;
+    glm::mat4                          world_from_node{1.0f};
+    [this, &camera_node, &root_node, &world_from_node]() {
+        const Scene_view* scene_view = get_hover_scene_view();
+        if (scene_view == nullptr) {
+            return;
+        }
+        const auto& camera = scene_view->get_camera();
+        if (!camera) {
+            return;
+        }
+        camera_node = camera->get_node();
+        if (camera_node == nullptr) {
+            return;
+        }
 
-    const glm::mat4 m = erhe::toolkit::create_look_at(
-        eye_position,
-        target_position,
-        up_direction
-    );
+        const auto& world_from_camera = camera_node->world_from_node();
+        world_from_node = erhe::toolkit::create_look_at(
+            glm::vec3{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}}, // eye
+            glm::vec3{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}}, // target
+            glm::vec3{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}}  // up
+        );
 
-    m_rendertarget_node->set_world_from_node(m);
+        auto scene_root = scene_view->get_scene_root();
+        if (!scene_root) {
+            return;
+        }
+        auto* scene = scene_root->get_hosted_scene();
+        if (scene == nullptr) {
+            return;
+        }
+        root_node = scene->get_root_node();
+    }();
+
+    if (m_rendertarget_node) {
+        m_rendertarget_node->set_parent         (root_node);
+        m_rendertarget_node->set_world_from_node(world_from_node);
+    }
+
+    if (m_radial_menu_node) {
+        if (root_node) {
+            m_radial_menu_node->set_parent         (root_node);
+        }
+        m_radial_menu_node->set_world_from_node(world_from_node);
+    }
 }
 
 void Hotbar::tool_render(
@@ -392,10 +475,12 @@ auto Hotbar::flags() -> ImGuiWindowFlags
 
 void Hotbar::on_begin()
 {
-    m_min_size[0] = static_cast<float>(m_rendertarget_mesh->width());
-    m_min_size[1] = static_cast<float>(m_rendertarget_mesh->height());
-    m_max_size[0] = m_min_size[0];
-    m_max_size[1] = m_min_size[1];
+    if (m_rendertarget_mesh) {
+        m_min_size[0] = static_cast<float>(m_rendertarget_mesh->width());
+        m_min_size[1] = static_cast<float>(m_rendertarget_mesh->height());
+        m_max_size[0] = m_min_size[0];
+        m_max_size[1] = m_min_size[1];
+    }
     ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f});
 }
 
@@ -524,16 +609,47 @@ void Hotbar::imgui()
 #endif
 }
 
+auto Hotbar::toggle_visibility() -> bool
+{
+    if (!m_enabled) {
+        return false;
+    }
+
+    update_node_transform();
+
+    set_visibility(!m_is_visible);
+    return m_is_visible;
+}
+
 void Hotbar::set_visibility(const bool value)
 {
     Imgui_window::set_visibility(value);
 
-    if (!m_rendertarget_mesh) {
-        return;
+    if (m_rendertarget_mesh) {
+        m_rendertarget_imgui_viewport->set_enabled(value);
+        m_rendertarget_mesh->set_visible(value);
+        log_hud->info("horizontal menu visibility set to {}", value);
     }
 
-    m_rendertarget_imgui_viewport->set_enabled(value);
-    m_rendertarget_mesh->set_visible(value);
+    if (m_radial_menu_background_mesh) {
+        m_radial_menu_background_mesh->set_visible(value);
+        log_hud->info("radial menu visibility set to {}", value);
+    }
+
+    const Scene_view* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return;
+    }
+    auto scene_root = scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    auto* scene = scene_root->get_hosted_scene();
+    const auto root_node = scene->get_root_node();
+    if (root_node) {
+        log_hud->info("root node trace:");
+        root_node->trace();
+    }
 }
 
 } // namespace editor

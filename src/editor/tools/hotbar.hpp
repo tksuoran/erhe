@@ -22,6 +22,14 @@ class Rendertarget_imgui_viewport;
 class Rendertarget_mesh;
 class Hotbar;
 
+class Toggle_menu_visibility_command
+    : public erhe::application::Command
+{
+public:
+    Toggle_menu_visibility_command();
+    auto try_call() -> bool override;
+};
+
 class Hotbar_trackpad_command
     : public erhe::application::Command
 {
@@ -36,18 +44,6 @@ class Hotbar
     , public Tool
 {
 public:
-    class Config
-    {
-    public:
-        bool  enabled  {true};
-        bool  show     {true};
-        int   icon_size{128};
-        float x        {0.0f};
-        float y        {0.0f};
-        float z        {0.0f};
-    };
-    Config config;
-
     static constexpr std::string_view c_type_name{"Hotbar"};
     static constexpr std::string_view c_title{"Hotbar"};
     static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
@@ -71,23 +67,28 @@ public:
     void imgui   () override;
 
     // Public API
-    auto try_call      (erhe::application::Input_arguments& input) -> bool;
-    auto get_color     (int color) -> glm::vec4&;
-    void set_visibility(bool value);
-    auto get_position  () const -> glm::vec3;
-    void set_position  (glm::vec3 position);
-    auto get_locked    () const -> bool;
-    void set_locked    (bool value);
+    auto try_call         (erhe::application::Input_arguments& input) -> bool;
+    auto get_color        (int color) -> glm::vec4&;
+    auto toggle_visibility() -> bool;
+    void set_visibility   (bool value);
+    auto get_position     () const -> glm::vec3;
+    void set_position     (glm::vec3 position);
+    auto get_locked       () const -> bool;
+    void set_locked       (bool value);
 
 private:
     void on_message           (Editor_message& message);
-    void update_node_transform(const glm::mat4& world_from_camera);
+    void update_node_transform();
     void tool_button          (uint32_t id, Tool* tool);
     void handle_slot_update   ();
+
+    void init_hotbar          ();
+    void init_radial_menu     ();
 
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 
     // Commands
+    Toggle_menu_visibility_command               m_toggle_visibility_command;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Hotbar_trackpad_command                      m_trackpad_command;
     erhe::application::Xr_vector2f_click_command m_trackpad_click_command;
@@ -95,17 +96,20 @@ private:
 
     std::shared_ptr<erhe::scene::Node>              m_rendertarget_node;
     std::shared_ptr<Rendertarget_mesh>              m_rendertarget_mesh;
-    std::shared_ptr<erhe::scene::Mesh>              m_circular_menu_background;
-    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_circular_menu_icons;
     std::shared_ptr<Rendertarget_imgui_viewport>    m_rendertarget_imgui_viewport;
-    Scene_view*                                     m_hover_scene_view{nullptr};
+    //Scene_view*                                     m_hover_scene_view{nullptr};
 
-    bool  m_enabled{true};
-    bool  m_show   {true};
-    bool  m_locked {false};
-    float m_x      { 0.0f};
-    float m_y      { 0.07f};
-    float m_z      {-0.4f};
+    std::shared_ptr<erhe::scene::Node>              m_radial_menu_node;
+    std::shared_ptr<erhe::scene::Mesh>              m_radial_menu_background_mesh;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_radial_menu_icons;
+
+    bool  m_enabled   {true};
+    bool  m_show      {true};
+    bool  m_use_radial{true};
+    bool  m_locked    {false};
+    float m_x         { 0.0f};
+    float m_y         { 0.07f};
+    float m_z         {-0.4f};
 
     std::size_t        m_slot      {0};
     std::size_t        m_slot_first{0};

@@ -8,12 +8,9 @@ in float     v_line_width;
 
 float srgb_to_linear(float x)
 {
-    if (x <= 0.04045)
-    {
+    if (x <= 0.04045) {
         return x / 12.92;
-    }
-    else
-    {
+    } else {
         return pow((x + 0.055) / 1.055, 2.4);
     }
 }

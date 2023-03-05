@@ -23,8 +23,7 @@ void main(void)
     float inv_clamped_d          = min(1.0, 8.0 * v_line_width / clamped_d);
     out_color = vec4(v_color.rgb * v_color.a * inv_clamped_d, v_color.a * inv_clamped_d);
 #else
-    if (alpha < 0.5)
-    {
+    if (alpha < 0.5) {
         discard;
     }
     out_color = vec4(v_color.rgb * v_color.a, v_color.a);

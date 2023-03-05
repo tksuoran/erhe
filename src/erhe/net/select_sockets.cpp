@@ -1,4 +1,5 @@
 #include "erhe/net/select_sockets.hpp"
+#include <algorithm>
 
 namespace erhe::net
 {
@@ -42,17 +43,22 @@ auto Select_sockets::has_except(const SOCKET socket) const -> bool
 
 void Select_sockets::set_read(const SOCKET socket)
 {
-    FD_SET(socket, &read_fds); flags = flags | flag_read;
+    FD_SET(socket, &read_fds);
+    nfds = std::max(nfds, static_cast<int>(socket + 1));
+    flags = flags | flag_read;
 }
 
 void Select_sockets::set_write(const SOCKET socket)
 {
-    FD_SET(socket, &write_fds ); flags = flags | flag_write;
+    FD_SET(socket, &write_fds );
+    nfds = std::max(nfds, static_cast<int>(socket + 1));
+    flags = flags | flag_write;
 }
 
 void Select_sockets::set_except(const SOCKET socket)
 {
     FD_SET(socket, &except_fds);
+    nfds = std::max(nfds, static_cast<int>(socket + 1));
     flags = flags | flag_except;
 }
 
@@ -63,11 +69,11 @@ auto Select_sockets::select(const int timeout_ms) -> int
         .tv_usec = timeout_ms * 1000
     };
     return ::select(
-        0,
+        nfds,
         has_read  () ? &read_fds   : nullptr,
         has_write () ? &write_fds  : nullptr,
         has_except() ? &except_fds : nullptr,
-        &timeout
+        &timeout // Using nullptr would block   
     );
 }
 

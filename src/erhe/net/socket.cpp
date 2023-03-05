@@ -85,9 +85,9 @@ void Socket::close()
     }
     m_send_buffer.reset();
     m_receive_buffer.reset();
-    if (m_socket != INVALID_SOCKET) {
+    if (is_socket_good(m_socket)) {
         log_net->info("Closing socket");
-        shutdown(m_socket, SD_BOTH);
+        shutdown   (m_socket, SD_BOTH);
         closesocket(m_socket);
         m_socket = INVALID_SOCKET;
     }
@@ -99,12 +99,7 @@ bool Socket::connect(const char* const address, const int port)
 {
     ERHE_VERIFY(m_state == State::CLOSED);
 
-    const addrinfo hints{
-        .ai_family   = AF_INET,
-        .ai_socktype = SOCK_STREAM,
-        .ai_protocol = IPPROTO_TCP
-    };
-
+    const addrinfo    hints       = get_net_hints(0, AF_INET, SOCK_STREAM, IPPROTO_TCP);
     const std::string port_string = fmt::format("{}", port);
     if (m_addr_info != nullptr) {
         freeaddrinfo(m_addr_info);
@@ -112,7 +107,7 @@ bool Socket::connect(const char* const address, const int port)
     m_addr_info = nullptr;
     const int getaddrinfo_res = getaddrinfo(address, port_string.c_str(), &hints, &m_addr_info);
     if (getaddrinfo_res != 0) {
-        const int  error_code = WSAGetLastError();
+        const int  error_code = get_net_last_error();
         const auto message    = get_net_error_string(error_code);
         log_net->error("getaddrinfo('{}', '{}') failed with error {} - {}", address, port_string, error_code, message);
         return false;
@@ -124,19 +119,15 @@ bool Socket::connect(const char* const address, const int port)
 
     // Create a SOCKET for connecting to server
     m_socket = socket(hints.ai_family, hints.ai_socktype, hints.ai_protocol);
-    if (m_socket == INVALID_SOCKET) {
-        const int  error_code = WSAGetLastError();
+    if (!is_socket_good(m_socket)) {
+        const int  error_code = get_net_last_error();
         const auto message    = get_net_error_string(error_code);
         log_net->error("socket() failed with error {} - {}", error_code, message);
         return false;
     }
 
-    // Set socket to non-blocking mode
-    const bool non_block_ok = set_socket_blocking_enabled(m_socket, false);
+    const bool non_block_ok = set_socket_option(m_socket, Socket_option::NonBlocking, true);
     if (!non_block_ok) {
-        const int  error_code = WSAGetLastError();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("ioctlsocket() failed with error {} - {}", error_code, message);
         return false;
     }
 
@@ -151,13 +142,7 @@ auto Socket::bind(const char* const address, const int port) -> bool
 {
     ERHE_VERIFY(m_state == State::CLOSED);
 
-    addrinfo hints{
-        .ai_flags    = AI_PASSIVE, // for server
-        .ai_family   = AF_INET,
-        .ai_socktype = SOCK_STREAM,
-        .ai_protocol = IPPROTO_TCP
-    };
-
+    const addrinfo    hints       = get_net_hints(AI_PASSIVE, AF_INET, SOCK_STREAM, IPPROTO_TCP);
     const std::string port_string = fmt::format("{}", port);
     if (m_addr_info != nullptr)
     {
@@ -166,17 +151,15 @@ auto Socket::bind(const char* const address, const int port) -> bool
     m_addr_info = nullptr;
     const int getaddrinfo_res = getaddrinfo(address, port_string.c_str(), &hints, &m_addr_info);
     if (getaddrinfo_res != 0) {
-        const int  error_code = WSAGetLastError();
+        const int  error_code = get_net_last_error();
         const auto message    = get_net_error_string(error_code);
         log_net->error("getaddrinfo('{}', '{}') failed with error {} - {}", address, port_string, error_code, message);
         return false;
     }
 
-    // setsockopt() options https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-setsockopt
-
     m_socket = socket(m_addr_info->ai_family, m_addr_info->ai_socktype, m_addr_info->ai_protocol);
-    if (m_socket == INVALID_SOCKET) {
-        const int  error_code = WSAGetLastError();
+    if (!is_socket_good(m_socket)) {
+        const int  error_code = get_net_last_error();
         const auto message    = get_net_error_string(error_code);
         log_net->error("socket() failed with error {} - {}", error_code, message);
         return false;
@@ -185,7 +168,7 @@ auto Socket::bind(const char* const address, const int port) -> bool
     const int enable = 1;
     const int reuse_res = setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (char*)&enable, sizeof(enable));
     if (reuse_res == SOCKET_ERROR) {
-        const int  error_code = WSAGetLastError();
+        const int  error_code = get_net_last_error();
         const auto message    = get_net_error_string(error_code);
         log_net->error("setsockopt(SO_REUSEADDR) failed with error {} - {}", error_code, message);
         return false;
@@ -193,24 +176,21 @@ auto Socket::bind(const char* const address, const int port) -> bool
 
     const int bind_res = ::bind(m_socket, m_addr_info->ai_addr, static_cast<int>(m_addr_info->ai_addrlen));
     if (bind_res == SOCKET_ERROR) {
-        const int  error_code = WSAGetLastError();
+        const int  error_code = get_net_last_error();
         const auto message    = get_net_error_string(error_code);
         log_net->error("::bind() failed with error {} - {}", error_code, message);
         return false;
     }
 
-    const bool non_block_ok = set_socket_blocking_enabled(m_socket, false);
+    const bool non_block_ok = set_socket_option(m_socket, Socket_option::NonBlocking, true);
     if (!non_block_ok) {
-        const int  error_code = WSAGetLastError();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("ioctlsocket() failed with error {} - {}", error_code, message);
         return false;
     }
 
     const int backlog = 8;
     const int listen_res = listen(m_socket, backlog);
     if (listen_res == SOCKET_ERROR) {
-        const int  error_code = WSAGetLastError();
+        const int  error_code = get_net_last_error();
         const auto message    = get_net_error_string(error_code);
         log_net->error("listen() failed with error {} - {}", error_code, message);
         return false;
@@ -248,7 +228,7 @@ auto Socket::send_pending() -> bool
         }
         if (send_result < 0) {
             m_send_buffer->end_consume(0);
-            const int error_code = WSAGetLastError();
+            const int error_code = get_net_last_error();
             if (is_error_fatal(error_code))
             {
                 const auto message = get_net_error_string(error_code);
@@ -340,7 +320,7 @@ auto Socket::recv() -> bool
         const int      received_byte_count = (std::max)(0, recv_result);
         if (recv_result < 0) {
             m_receive_buffer->end_produce(0);
-            const int error_code = WSAGetLastError();
+            const int error_code = get_net_last_error();
             if (is_error_fatal(error_code)) {
                 const auto message = get_net_error_string(error_code);
                 log_net->error("recv() failed with error {} - {}", error_code, message);
@@ -461,8 +441,14 @@ void Socket::set_connected()
 auto Socket::post_select_connect(Select_sockets& select_sockets) -> bool
 {
     if (select_sockets.has_except(m_socket)) {
-        const int  error_code = WSAGetLastError();
-        const auto message    = get_net_error_string(error_code);
+        const int  error_code = get_net_last_error();
+        if (error_code == 0) {
+            return false;
+        }
+        if (is_error_busy(error_code)) {
+            return false;
+        }
+        const auto message = get_net_error_string(error_code);
         log_net->error("Could not connect, error {} - {}", error_code, message);
         // close() ?
         return false;
@@ -470,17 +456,37 @@ auto Socket::post_select_connect(Select_sockets& select_sockets) -> bool
 
     const bool is_writable = select_sockets.has_write(m_socket);
     if (is_writable) {
-        log_net->info("Connected (fd is writable)");
-        set_connected();
+        // man connect:
+        // > After select(2) indicates writability, use getsockopt(2) to read the SO_ERROR option at
+        // > level SOL_SOCKET to determine whether connect() completed successfully (SO_ERROR is zero)
+        // > or unsuccessfully (SO_ERROR is one of the usual error codes listed here, explaining the
+        // > reason for the failure).
+        const auto error_opt = get_socket_option(m_socket, Socket_option::Error);
+        if (!error_opt.has_value()) {
+            log_net->error("select() returned writable socket, getting socket error failed");
+            close();
+            return false;
+        }
+        const int so_error = error_opt.value();
+        if (so_error == 0) {
+            log_net->info("Connected (fd is writable)");
+            set_connected();
+            return true;
+        } else {
+            const auto message = get_net_error_string(so_error);
+            log_net->error("select() returned writable socket with SO_ERROR {} - {}", so_error, message);
+            close();
+            return false;
+        }
     } else {
         const int connect_res = ::connect(m_socket, m_addr_info->ai_addr, static_cast<int>(m_addr_info->ai_addrlen));
         if (connect_res == SOCKET_ERROR) {
-            const int error_code = WSAGetLastError();
-            if (error_code == WSAEISCONN) {
+            const int error_code = get_net_last_error();
+            if (error_code == ERHE_NET_ERROR_CODE_CONNECTED) {
                 log_net->info("Connected (WASEISCONN)");
                 set_connected();
-            } else if (error_code== WSAEWOULDBLOCK) {
-                log_net->info("connect in progress");
+            } else if (is_error_busy(error_code)) {
+                log_net->trace("connect in progress");
                 return true;
             } else if (is_error_fatal(error_code)) {
                 const auto message = get_net_error_string(error_code);
@@ -508,9 +514,9 @@ auto Socket::post_select_listen(Select_sockets& select_sockets) -> std::optional
         sockaddr_in address{};
         socklen_t len = sizeof(address);
         const SOCKET accept_res = ::accept(m_socket, reinterpret_cast<sockaddr*>(&address), &len);
-        if (accept_res == INVALID_SOCKET) {
-            const int error_code = WSAGetLastError();
-            if (error_code != WSAEWOULDBLOCK) {
+        if (!is_socket_good(accept_res)) {
+            const int error_code = get_net_last_error();
+            if (!is_error_busy(error_code)) {
                 const auto message = get_net_error_string(error_code);
                 log_net->warn("accept() failed with error {} - {}", error_code, message);
                 return {};

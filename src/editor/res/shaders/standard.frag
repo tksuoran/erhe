@@ -182,7 +182,6 @@ void main()
     }
 
     float exposure = camera.cameras[0].exposure;
-    out_color.rgb = color * exposure;
-
-    out_color.a = 1.0;
+    out_color.rgb = color * exposure * material.transparency;
+    out_color.a = material.transparency;
 }

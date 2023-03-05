@@ -10,16 +10,34 @@ namespace editor
 class Editor_rendering;
 class Render_context;
 
+
+
 class IEditor_rendering
 {
 public:
+    enum class Fill_mode : int
+    {
+        fill    = 0,
+        outline = 1
+    };
+    enum class Blend_mode : int
+    {
+        opaque      = 0,
+        translucent = 1
+    };
+    enum class Selection_mode : int
+    {
+        not_selected = 0,
+        selected     = 1,
+        any          = 2
+    };
+
     virtual ~IEditor_rendering() noexcept;
     virtual void trigger_capture           () = 0;
     virtual void render                    () = 0;
     virtual void render_viewport_main      (const Render_context& context, bool has_pointer) = 0;
     virtual void render_viewport_overlay   (const Render_context& context, bool has_pointer) = 0;
-    virtual void render_content            (const Render_context& context, bool polygon_fill) = 0;
-    virtual void render_selection          (const Render_context& context, bool polygon_fill) = 0;
+    virtual void render_content            (const Render_context& context, Fill_mode fill_mode, Blend_mode blend_mode, Selection_mode selection_mode) = 0;
     virtual void render_tool_meshes        (const Render_context& context) = 0;
     virtual void render_rendertarget_meshes(const Render_context& context) = 0;
     virtual void render_brush              (const Render_context& context) = 0;

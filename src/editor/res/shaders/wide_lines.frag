@@ -14,8 +14,7 @@ void main(void)
     float k          = clamp(s - d2, 0.0, 1.0);
     float end_weight = step(abs(t * 2.0 - 1.0), 1);
     float alpha      = mix(k, 1.0, end_weight);
-    if (alpha < 0.5)
-    {
+    if (alpha < 0.5) {
         discard;
     }
     out_color = vec4(v_color.rgb * alpha, v_color.a);

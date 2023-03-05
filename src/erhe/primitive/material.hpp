@@ -46,7 +46,7 @@ public:
     float                                    metallic    {0.0f};
     float                                    reflectance {0.5f};
     glm::vec4                                emissive    {0.0f, 0.0f, 0.0f, 0.0f};
-    float                                    transparency{0.0f};
+    float                                    opacity     {1.0f};
     std::shared_ptr<erhe::graphics::Texture> texture;
     std::shared_ptr<erhe::graphics::Sampler> sampler;
     std::optional<uint32_t>                  preview_slot;

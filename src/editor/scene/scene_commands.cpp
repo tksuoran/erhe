@@ -231,6 +231,7 @@ auto Scene_commands::create_new_rendertarget(
     new_mesh->enable_flag_bits(
         erhe::scene::Item_flags::rendertarget |
         erhe::scene::Item_flags::visible      |
+        erhe::scene::Item_flags::translucent  |
         erhe::scene::Item_flags::show_in_ui
     );
 

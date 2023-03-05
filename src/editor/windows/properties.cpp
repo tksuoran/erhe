@@ -897,6 +897,7 @@ void Properties::imgui()
             ImGui::SliderFloat("Roughness Y", &selected_material->roughness.y,  0.1f,  0.8f);
             ImGui::ColorEdit4 ("Base Color",  &selected_material->base_color.x, ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4 ("Emissive",    &selected_material->emissive.x,   ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("Opacity",     &selected_material->opacity,      0.0f,  1.0f);
             ImGui::TreePop();
         }
     }

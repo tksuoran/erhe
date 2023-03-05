@@ -490,6 +490,7 @@ void Brush_tool_impl::do_insert_operation()
     const uint64_t mesh_flags =
         erhe::scene::Item_flags::visible     |
         erhe::scene::Item_flags::content     |
+        erhe::scene::Item_flags::opaque      |
         erhe::scene::Item_flags::shadow_cast |
         erhe::scene::Item_flags::id          |
         erhe::scene::Item_flags::show_in_ui;
@@ -574,13 +575,14 @@ void Brush_tool_impl::add_brush_mesh()
         }
     );
     m_brush_node->enable_flag_bits(
-        erhe::scene::Item_flags::visible |
-        erhe::scene::Item_flags::brush   |
+        erhe::scene::Item_flags::brush       |
+        erhe::scene::Item_flags::visible     |
         erhe::scene::Item_flags::no_message
     );
     m_brush_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::visible |
-        erhe::scene::Item_flags::brush   |
+        erhe::scene::Item_flags::brush       |
+        erhe::scene::Item_flags::visible     |
+        erhe::scene::Item_flags::translucent | // redundant
         erhe::scene::Item_flags::no_message
     );
 

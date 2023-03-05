@@ -69,7 +69,8 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
 
-float ggx_isotropic_ndf(float N_dot_H, float alpha) {
+float ggx_isotropic_ndf(float N_dot_H, float alpha)
+{
     float a = N_dot_H * alpha;
     float k = alpha / (1.0 - N_dot_H * N_dot_H + a * a);
     return k * k * m_i_pi;
@@ -81,7 +82,8 @@ float ggx_anisotropic_ndf(
     float T_dot_H,
     float B_dot_H,
     float N_dot_H
-) {
+)
+{
     vec3 v = vec3(
         alpha_b * T_dot_H,
         alpha_t * B_dot_H,
@@ -93,7 +95,8 @@ float ggx_anisotropic_ndf(
     return a2 * w2 * w2 * m_i_pi;
 }
 
-float ggx_isotropic_visibility(float N_dot_V, float N_dot_L, float alpha) {
+float ggx_isotropic_visibility(float N_dot_V, float N_dot_L, float alpha)
+{
     float a2 = alpha * alpha;
     float GV = N_dot_L * sqrt(N_dot_V * N_dot_V * (1.0 - a2) + a2);
     float GL = N_dot_V * sqrt(N_dot_L * N_dot_L * (1.0 - a2) + a2);
@@ -109,7 +112,8 @@ float ggx_anisotropic_visibility(
     float T_dot_L,
     float B_dot_L,
     float N_dot_L
-) {
+)
+{
     float lambda_V = N_dot_L * length(vec3(alpha_t * T_dot_V, alpha_b * B_dot_V, N_dot_V));
     float lambda_L = N_dot_V * length(vec3(alpha_t * T_dot_L, alpha_b * B_dot_L, N_dot_L));
     float v = 0.5 / (lambda_V + lambda_L);
@@ -121,7 +125,8 @@ vec3 fresnel_schlick(float cos_theta, vec3 f0)
     return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
 }
 
-float clamped_dot(vec3 x, vec3 y) {
+float clamped_dot(vec3 x, vec3 y)
+{
     return clamp(dot(x, y), 0.001, 1.0);
 }
 
@@ -162,7 +167,8 @@ vec3 brdf(
     return N_dot_L * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
-void main() {
+void main()
+{
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
@@ -233,8 +239,6 @@ void main() {
     }
 
     float exposure = camera.cameras[0].exposure;
-    out_color.rgb = color * exposure;
-
-    out_color.a = 1.0;
-    //out_color.b = 1.0;
+    out_color.rgb = color * exposure * material.opacity;
+    out_color.a = material.opacity;
 }

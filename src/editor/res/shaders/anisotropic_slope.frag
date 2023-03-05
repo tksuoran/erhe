@@ -81,7 +81,8 @@ float sin_phi    (vec3 w) {return (sin_theta(w) == 0.0) ? 0.0 : clamp(w.y / sin_
 float cos_2_phi  (vec3 w) {return cos_phi(w) * cos_phi(w); }
 float sin_2_phi  (vec3 w) {return sin_phi(w) * sin_phi(w); }
 
-float p22_ggx_isotropic(float x, float y, float alpha) {
+float p22_ggx_isotropic(float x, float y, float alpha)
+{
     float x_sqr     = x * x;
     float y_sqr     = y * y;
     float alpha_sqr = alpha * alpha;
@@ -89,7 +90,8 @@ float p22_ggx_isotropic(float x, float y, float alpha) {
     return 1.0 / ((m_pi * alpha_sqr) * (denom * denom));
 }
 
-float p22_ggx_anisotropic(float x, float y, float alpha_x, float alpha_y) {
+float p22_ggx_anisotropic(float x, float y, float alpha_x, float alpha_y)
+{
     float x_sqr       = x * x;
     float y_sqr       = y * y;
     float alpha_x_sqr = alpha_x * alpha_x;
@@ -99,7 +101,8 @@ float p22_ggx_anisotropic(float x, float y, float alpha_x, float alpha_y) {
     return 1.0 / ((m_pi * alpha_x * alpha_y) * denom_sqr);
 }
 
-float slope_ndf_ggx_isotropic(vec3 omega_h, float alpha) {
+float slope_ndf_ggx_isotropic(vec3 omega_h, float alpha)
+{
     float slope_x     = -(omega_h.x / omega_h.z);
     float slope_y     = -(omega_h.y / omega_h.z);
     float cos_theta   = cos_theta(omega_h);
@@ -109,7 +112,8 @@ float slope_ndf_ggx_isotropic(vec3 omega_h, float alpha) {
     return ggx_p22 / cos_4_theta;
 }
 
-float slope_ndf_ggx_anisotropic(vec3 omega_h, float alpha_x, float alpha_y) {
+float slope_ndf_ggx_anisotropic(vec3 omega_h, float alpha_x, float alpha_y)
+{
     float slope_x     = -(omega_h.x / omega_h.z);
     float slope_y     = -(omega_h.y / omega_h.z);
     float cos_theta   = cos_theta(omega_h);
@@ -119,13 +123,15 @@ float slope_ndf_ggx_anisotropic(vec3 omega_h, float alpha_x, float alpha_y) {
     return ggx_p22 / cos_4_theta;
 }
 
-float lambda_ggx_isotropic(vec3 omega, float alpha) {
+float lambda_ggx_isotropic(vec3 omega, float alpha)
+{
     float a = 1.0 / (alpha * tan_theta(omega));
     return ( (-1.0 + sqrt(1.0 + 1.0 / (a * a))) * 0.5);
     //return 0.5 * (-1.0 + sqrt(1.0 + 1.0 / (a * a)));
 }
 
-float lambda_ggx_anisotropic(vec3 omega, float alpha_x, float alpha_y) {
+float lambda_ggx_anisotropic(vec3 omega, float alpha_x, float alpha_y)
+{
     float cos_phi = cos_phi(omega);
     float sin_phi = sin_phi(omega);
     float alpha_o = sqrt(cos_phi * cos_phi * alpha_x * alpha_x + sin_phi * sin_phi * alpha_y * alpha_y);
@@ -133,7 +139,8 @@ float lambda_ggx_anisotropic(vec3 omega, float alpha_x, float alpha_y) {
     return 0.5 * (-1.0 + sqrt(1.0 + 1.0 / (a * a)));
 }
 
-float ggx_isotropic_ndf(float N_dot_H, float alpha) {
+float ggx_isotropic_ndf(float N_dot_H, float alpha)
+{
     float a = N_dot_H * alpha;
     float k = alpha / (1.0 - N_dot_H * N_dot_H + a * a);
     return k * k * m_i_pi;
@@ -145,7 +152,8 @@ float ggx_anisotropic_ndf(
     float T_dot_H,
     float B_dot_H,
     float N_dot_H
-) {
+)
+{
     vec3 v = vec3(
         alpha_b * T_dot_H,
         alpha_t * B_dot_H,
@@ -157,7 +165,8 @@ float ggx_anisotropic_ndf(
     return a2 * w2 * w2 * m_i_pi;
 }
 
-float ggx_isotropic_visibility(float N_dot_V, float N_dot_L, float alpha) {
+float ggx_isotropic_visibility(float N_dot_V, float N_dot_L, float alpha)
+{
     float a2 = alpha * alpha;
     float GV = N_dot_L * sqrt(N_dot_V * N_dot_V * (1.0 - a2) + a2);
     float GL = N_dot_V * sqrt(N_dot_L * N_dot_L * (1.0 - a2) + a2);
@@ -173,7 +182,8 @@ float ggx_anisotropic_visibility(
     float T_dot_L,
     float B_dot_L,
     float N_dot_L
-) {
+)
+{
     float lambda_V = N_dot_L * length(vec3(alpha_t * T_dot_V, alpha_b * B_dot_V, N_dot_V));
     float lambda_L = N_dot_V * length(vec3(alpha_t * T_dot_L, alpha_b * B_dot_L, N_dot_L));
     float v = 0.5 / (lambda_V + lambda_L);
@@ -232,7 +242,8 @@ vec3 slope_brdf(
     //return 0.5 * vec3(wo) + vec3(0.5);
 }
 
-void main() {
+void main()
+{
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],
         camera.cameras[0].world_from_node[3][1],
@@ -307,7 +318,6 @@ void main() {
     }
 
     float exposure = camera.cameras[0].exposure;
-    out_color.rgb = color * exposure;
-
-    out_color.a = 1.0;
+    out_color.rgb = color * exposure * material.opacity;
+    out_color.a = material.opacity;
 }
