@@ -8,6 +8,13 @@ namespace erhe::net
 class Client
 {
 public:
+    Client();
+    ~Client();
+    Client(Client&) = delete;
+    auto operator=(const Client&) = delete;
+    Client(Client&& other) noexcept;
+    auto operator=(Client&& other) noexcept -> Client&;
+
     auto connect            (const char* address, int port) -> bool;
     void disconnect         ();
     auto send               (const std::string& message) -> bool;

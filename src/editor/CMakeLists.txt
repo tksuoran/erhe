@@ -353,3 +353,40 @@ set_target_properties(
 
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
+
+########
+
+set(_target "net-test")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(${_target})
+erhe_target_sources_grouped(
+    ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    net_test.cpp
+)
+
+target_link_libraries(
+    ${_target}
+    PRIVATE
+    erhe::application
+    erhe::log
+    erhe::net
+    cpp-terminal
+    cxxopts
+    mINI
+    RectangleBinPack
+    rapidjson
+)
+
+target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+set_target_properties(
+    ${_target} PROPERTIES
+    CXX_STANDARD                  20
+    CXX_STANDARD_REQUIRED         YES
+    CXX_EXTENSIONS                NO
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+erhe_target_settings(${_target})
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
+

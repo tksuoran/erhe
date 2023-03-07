@@ -39,12 +39,15 @@ inline auto closesocket(const SOCKET s) -> int { return close(s); }
 namespace erhe::net
 {
 
-auto get_net_last_error  () -> int;
-auto get_net_error_string(const int error_code) -> std::string;
-auto get_net_hints       (int flags, int family, int socktype, int protocol) -> addrinfo;
-auto is_error_fatal      (int error_code) -> bool;
-auto is_error_busy       (int error_code) -> bool;
-auto is_socket_good      (SOCKET socket) -> bool;
+auto get_net_last_error          () -> int;
+auto get_net_error_code_string   (const int error_code) -> std::string;
+auto get_net_error_message_string(const int error_code) -> std::string;
+auto get_net_error_message       (const int error_code) -> std::string;
+auto get_net_last_error_message  () -> std::string;
+auto get_net_hints               (int flags, int family, int socktype, int protocol) -> addrinfo;
+auto is_error_fatal              (int error_code) -> bool;
+auto is_error_busy               (int error_code) -> bool;
+auto is_socket_good              (SOCKET socket) -> bool;
 
 enum class Socket_option : unsigned int
 {
@@ -61,5 +64,7 @@ enum class Socket_option : unsigned int
 auto c_str(Socket_option) -> const char*;
 auto set_socket_option(SOCKET socket, Socket_option option, int value) -> bool;
 auto get_socket_option(SOCKET socket, Socket_option option) -> std::optional<int>;
+
+auto initialize_net() -> bool;
 
 }

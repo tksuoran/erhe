@@ -10,6 +10,30 @@
 namespace erhe::net
 {
 
+Server::Server() = default;
+
+Server::~Server()
+{
+    log_server->trace("Server destructor");
+}
+
+Server::Server(Server&& other) noexcept
+    : m_listen_socket  {std::move(other.m_listen_socket)}
+    , m_receive_handler{std::move(other.m_receive_handler)}
+    , m_clients        {std::move(other.m_clients)}
+{
+    log_server->trace("Server move constructor");
+}
+
+auto Server::operator=(Server&& other) noexcept -> Server&
+{
+    log_server->trace("Server move assignment");
+    m_listen_socket   = std::move(other.m_listen_socket);
+    m_receive_handler = std::move(other.m_receive_handler);
+    m_clients         = std::move(other.m_clients);
+    return *this;
+}
+
 auto Server::listen(const char* address, const int port) -> bool
 {
     return m_listen_socket.bind(address, port);
@@ -17,6 +41,10 @@ auto Server::listen(const char* address, const int port) -> bool
 
 auto Server::poll(const int timeout_ms) -> bool
 {
+    if (m_listen_socket.get_state() == Socket::State::CLOSED) {
+        return true; // NOP
+    }
+
     Select_sockets select_sockets;
 
     // Collect fds for select
@@ -28,9 +56,7 @@ auto Server::poll(const int timeout_ms) -> bool
     // Call select() to find out if there is work to do
     const int select_res = select_sockets.select(timeout_ms);
     if (select_res == SOCKET_ERROR) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->trace("server select() returned error {} - {}", error_code, message);
+        log_net->trace("server select() returned error {}", get_net_last_error_message());
         return false; // TODO
     }
 

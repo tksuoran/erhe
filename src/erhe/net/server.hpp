@@ -8,6 +8,13 @@ namespace erhe::net
 class Server
 {
 public:
+    Server();
+    ~Server();
+    Server(Server&) = delete;
+    auto operator=(const Server&) = delete;
+    Server(Server&& other) noexcept;
+    auto operator=(Server&& other) noexcept -> Server&;
+
     auto broadcast          (const std::string& message) -> bool;
     void set_receive_handler(Receive_handler receive_handler);
     void disconnect         ();

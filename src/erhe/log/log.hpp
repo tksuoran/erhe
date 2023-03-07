@@ -12,6 +12,7 @@ namespace erhe::log
 
 void console_init();
 void initialize_log_sinks();
+void log_to_console();
 
 // creates and configures logger
 auto make_logger(

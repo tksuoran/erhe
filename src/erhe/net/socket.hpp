@@ -34,37 +34,8 @@ public:
     ~Socket();
     Socket(const Socket&) = delete;
     void operator=(const Socket&) = delete;
-    Socket(Socket&& other) noexcept
-        : m_socket         {other.m_socket}
-        , m_address_in     {other.m_address_in}
-        , m_addr_info      {other.m_addr_info}
-        , m_address        {std::move(other.m_address)}
-        , m_state          {other.m_state}
-        , m_send_buffer    {std::move(other.m_send_buffer)}
-        , m_receive_buffer {std::move(other.m_receive_buffer)}
-        , m_receive_handler{other.m_receive_handler}
-    {
-        other.m_socket    = INVALID_SOCKET;
-        other.m_addr_info = nullptr;
-        other.m_send_buffer   .reset();
-        other.m_receive_buffer.reset();
-    }
-    auto operator=(Socket&& other) noexcept -> Socket&
-    {
-        m_socket               = other.m_socket;
-        m_address_in           = other.m_address_in;
-        m_addr_info            = other.m_addr_info;
-        m_address              = std::move(other.m_address);
-        m_state                = other.m_state;
-        m_send_buffer          = std::move(other.m_send_buffer);
-        m_receive_buffer       = std::move(other.m_receive_buffer);
-        m_receive_handler      = other.m_receive_handler;
-        other.m_socket         = INVALID_SOCKET;
-        other.m_addr_info      = nullptr;
-        other.m_send_buffer   .reset();
-        other.m_receive_buffer.reset();
-        return *this;
-    }
+    Socket(Socket&& other) noexcept;
+    auto operator=(Socket&& other) noexcept -> Socket&;
 
     auto get_state           () const -> State                 { return m_state; }
     void set_receive_handler (Receive_handler receive_handler) { m_receive_handler = receive_handler; }
@@ -88,7 +59,9 @@ public:
     auto bind   (const char* address, int port) -> bool; // for server
 
 private:
-    void set_connected();
+    auto connect              () -> bool;
+    void set_state            (State state);
+    void on_state_changed     (State old_state, State new_state);
     auto receive_packet_length() -> uint32_t;
 
     SOCKET                       m_socket   {INVALID_SOCKET};

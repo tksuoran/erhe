@@ -7,6 +7,26 @@
 namespace erhe::net
 {
 
+Client::Client() = default;
+
+Client::~Client()
+{
+    log_client->trace("Client destructor");
+}
+
+Client::Client(Client&& other) noexcept
+    : m_socket{std::move(other.m_socket)}
+{
+    log_client->trace("Client move constructor");
+}
+
+auto Client::operator=(Client&& other) noexcept -> Client&
+{
+    log_client->trace("Client move assignment");
+    m_socket = std::move(other.m_socket);
+    return *this;
+}
+
 auto Client::connect(const char* address, const int port) -> bool
 {
     return m_socket.connect(address, port);
@@ -14,11 +34,15 @@ auto Client::connect(const char* address, const int port) -> bool
 
 void Client::disconnect()
 {
+    log_socket->trace("Socket move assignment");
     m_socket.close();
 }
 
 auto Client::poll(const int timeout_ms) -> bool
 {
+    if (m_socket.get_state() == Socket::State::CLOSED) {
+        return true; // NOP
+    }
     Select_sockets select_sockets;
 
     m_socket.pre_select(select_sockets);
@@ -26,10 +50,11 @@ auto Client::poll(const int timeout_ms) -> bool
     // Call select() to find out if there is work to do
     const int select_res = select_sockets.select(timeout_ms);
     if (select_res == SOCKET_ERROR) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_client->trace("client select() returned error {} - {}", error_code, message);
+        log_client->trace("client select() returned error {}", get_net_last_error_message());
         return false; // TODO
+    }
+    if (select_res == 0) {
+        return true; // NOP
     }
 
     switch (m_socket.get_state()) {

@@ -36,6 +36,14 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+    cpp-terminal
+    GIT_REPOSITORY https://github.com/jupyter-xeus/cpp-terminal.git
+    GIT_TAG        origin/master
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+FetchContent_Declare(
     cxxopts
     GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
     GIT_TAG        origin/master

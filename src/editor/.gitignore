@@ -1,6 +1,7 @@
 log.txt
 editor
 editor.exe
+net-test
 Debug
 Release
 RelWithDebInfo

@@ -46,6 +46,68 @@
             "program": "${file}",
             "args":    ["${workspaceFolder}/build/src/erhe/gl"],
             "console": "integratedTerminal"
+        },
+        {
+            "name":    "Client GDB",
+            "type":    "cppdbg",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/editor",
+            "program": "${workspaceFolder}/src/editor/net-test",
+            "args": [
+                "--client",
+                "--connect-address", "127.0.0.1",
+                "--connect-port",    "34567"
+            ],
+        },
+        {
+            "name":    "Client LLDB",
+            "type":    "lldb",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/editor",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/src/editor/net-test",
+            "args": [
+                "--client",
+                "--connect-address", "127.0.0.1",
+                "--connect-port",    "34567"
+            ],
+        },
+        {
+            "name":    "Server GDB",
+            "type":    "cppdbg",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/editor",
+            "program": "${workspaceFolder}/src/editor/net-test",
+            "args": [
+                "--server",
+                "--listen-address", "0.0.0.0",
+                "--listen-port",    "34567"
+            ],
+        },
+        {
+            "name":    "Server LLDB",
+            "type":    "lldb",
+            "request": "launch",
+            "cwd":     "${workspaceFolder}/src/editor",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/src/editor/net-test",
+            "args": [
+                "--server",
+                "--listen-address", "0.0.0.0",
+                "--listen-port",    "34567"
+            ],
+        }
+    ],
+    "compounds": [
+        {
+            "name":           "Server/Client GDB",
+            "configurations": [ "Server GDB", "Client GDB" ],
+            "stopAll":        true
+        },
+        {
+            "name":           "Server/Client LLDB",
+            "configurations": [ "Server LLDB", "Client LLDB" ],
+            "stopAll":        true
         }
     ]
 }

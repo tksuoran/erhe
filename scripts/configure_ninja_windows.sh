@@ -4,7 +4,6 @@
 #-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
 #-DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld \
 
-
 mkdir -p build/ninja
 cmake \
     -G "Ninja" \

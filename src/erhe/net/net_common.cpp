@@ -21,23 +21,19 @@ auto c_str(const Socket_option option) -> const char*
     }
 }
 
-auto get_net_hints(
-    const int flags,
-    const int family,
-    const int socktype,
-    const int protocol
-) -> addrinfo
+auto get_net_error_message(const int error_code) -> std::string
 {
-    return addrinfo{
-        .ai_flags     = flags,
-        .ai_family    = family,
-        .ai_socktype  = socktype,
-        .ai_protocol  = protocol,
-        .ai_addrlen   = 0,
-        .ai_canonname = nullptr,
-        .ai_addr      = nullptr,
-        .ai_next      = nullptr
-    };
+    return fmt::format(
+        "{} - {}",
+        get_net_error_code_string   (error_code),
+        get_net_error_message_string(error_code)
+    );
+}
+
+auto get_net_last_error_message() -> std::string
+{
+    const auto error_code = get_net_last_error();
+    return get_net_error_message(error_code);
 }
 
 }

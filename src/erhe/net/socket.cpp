@@ -46,6 +46,7 @@ Packet_header::Packet_header(const uint32_t length)
 
 Socket::Socket()
 {
+    log_socket->trace("Socket default constructor");
 }
 
 Socket::Socket(
@@ -55,7 +56,8 @@ Socket::Socket(
     : m_socket    {socket}
     , m_address_in{address_in}
 {
-    set_connected();
+    log_socket->trace("Socket (for client in server) constructor");
+    set_state(State::CONNECTED);
     char ipv4_address_string[INET_ADDRSTRLEN]{0};
     PCSTR res = inet_ntop(
         AF_INET,
@@ -64,21 +66,55 @@ Socket::Socket(
         INET_ADDRSTRLEN
     );
     if (res == nullptr) {
-        log_net->warn("inet_ntop() failed to get address");
+        log_socket->warn("inet_ntop() failed to get address");
         return;
     }
     m_address = std::string{ipv4_address_string};
-    log_net->info("socket address: {}", m_address);
+    log_socket->info("socket address: {}", m_address);
 }
 
 Socket::~Socket()
 {
+    log_socket->trace("Socket destructor");
     close();
+}
+
+Socket::Socket(Socket&& other) noexcept
+    : m_socket         {other.m_socket}
+    , m_address_in     {other.m_address_in}
+    , m_addr_info      {other.m_addr_info}
+    , m_address        {std::move(other.m_address)}
+    , m_state          {other.m_state}
+    , m_send_buffer    {std::move(other.m_send_buffer)}
+    , m_receive_buffer {std::move(other.m_receive_buffer)}
+    , m_receive_handler{std::move(other.m_receive_handler)}
+{
+    log_socket->trace("Socket move constructor");
+    other.m_socket    = INVALID_SOCKET;
+    other.m_state     = State::CLOSED;
+    other.m_addr_info = nullptr;
+}
+
+auto Socket::operator=(Socket&& other) noexcept -> Socket&
+{
+    log_socket->trace("Socket move assignment");
+    m_socket          = other.m_socket;
+    m_address_in      = other.m_address_in;
+    m_addr_info       = other.m_addr_info;
+    m_address         = std::move(other.m_address);
+    m_state           = other.m_state;
+    m_send_buffer     = std::move(other.m_send_buffer);
+    m_receive_buffer  = std::move(other.m_receive_buffer);
+    m_receive_handler = std::move(other.m_receive_handler);
+    other.m_socket    = INVALID_SOCKET;
+    other.m_state     = State::CLOSED;
+    other.m_addr_info = nullptr;
+    return *this;
 }
 
 void Socket::close()
 {
-    m_state = State::CLOSED;
+    set_state(State::CLOSED);
     if (m_addr_info != nullptr) {
         freeaddrinfo(m_addr_info);
         m_addr_info = nullptr;
@@ -86,7 +122,7 @@ void Socket::close()
     m_send_buffer.reset();
     m_receive_buffer.reset();
     if (is_socket_good(m_socket)) {
-        log_net->info("Closing socket");
+        log_socket->info("Closing socket");
         shutdown   (m_socket, SD_BOTH);
         closesocket(m_socket);
         m_socket = INVALID_SOCKET;
@@ -95,9 +131,9 @@ void Socket::close()
 
 // Initiate client connecting to server
 // Returns false in case of error, true in case of ok
-bool Socket::connect(const char* const address, const int port)
+auto Socket::connect(const char* const address, const int port) -> bool
 {
-    ERHE_VERIFY(m_state == State::CLOSED);
+    ERHE_VERIFY((m_state == State::CLOSED) || (m_state == State::CLIENT_CONNECTING));
 
     const addrinfo    hints       = get_net_hints(0, AF_INET, SOCK_STREAM, IPPROTO_TCP);
     const std::string port_string = fmt::format("{}", port);
@@ -107,22 +143,23 @@ bool Socket::connect(const char* const address, const int port)
     m_addr_info = nullptr;
     const int getaddrinfo_res = getaddrinfo(address, port_string.c_str(), &hints, &m_addr_info);
     if (getaddrinfo_res != 0) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("getaddrinfo('{}', '{}') failed with error {} - {}", address, port_string, error_code, message);
+        log_socket->error(
+            "getaddrinfo('{}', '{}') failed with error {}",
+            address,
+            port_string,
+            get_net_last_error_message()
+        );
         return false;
     }
     if (m_addr_info == nullptr) {
-        log_net->error("getaddrinfo('{}', '{}') returned nullptr", address, port_string);
+        log_socket->error("getaddrinfo('{}', '{}') returned nullptr", address, port_string);
         return false;
     }
 
     // Create a SOCKET for connecting to server
     m_socket = socket(hints.ai_family, hints.ai_socktype, hints.ai_protocol);
     if (!is_socket_good(m_socket)) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("socket() failed with error {} - {}", error_code, message);
+        log_socket->error("socket() failed with error {}", get_net_last_error_message());
         return false;
     }
 
@@ -131,8 +168,9 @@ bool Socket::connect(const char* const address, const int port)
         return false;
     }
 
-    log_net->info("Connecting to {} port {}", address, port);
-    m_state = State::CLIENT_CONNECTING;
+    log_socket->info("Connecting to {} port {}", address, port);
+    set_state(State::CLIENT_CONNECTING);
+    static_cast<void>(connect());
     return true;
 }
 
@@ -141,6 +179,10 @@ bool Socket::connect(const char* const address, const int port)
 auto Socket::bind(const char* const address, const int port) -> bool
 {
     ERHE_VERIFY(m_state == State::CLOSED);
+    if (address == nullptr) {
+        log_socket->error("nullptr address is rejected");
+        return false;
+    }
 
     const addrinfo    hints       = get_net_hints(AI_PASSIVE, AF_INET, SOCK_STREAM, IPPROTO_TCP);
     const std::string port_string = fmt::format("{}", port);
@@ -151,34 +193,31 @@ auto Socket::bind(const char* const address, const int port) -> bool
     m_addr_info = nullptr;
     const int getaddrinfo_res = getaddrinfo(address, port_string.c_str(), &hints, &m_addr_info);
     if (getaddrinfo_res != 0) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("getaddrinfo('{}', '{}') failed with error {} - {}", address, port_string, error_code, message);
+        log_socket->error(
+            "getaddrinfo('{}', '{}') failed with error {}",
+            address,
+            port_string,
+            get_net_last_error_message()
+        );
         return false;
     }
 
     m_socket = socket(m_addr_info->ai_family, m_addr_info->ai_socktype, m_addr_info->ai_protocol);
     if (!is_socket_good(m_socket)) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("socket() failed with error {} - {}", error_code, message);
+        log_socket->error("socket() failed with error {}", get_net_last_error_message());
         return false;
     }
 
     const int enable = 1;
     const int reuse_res = setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (char*)&enable, sizeof(enable));
     if (reuse_res == SOCKET_ERROR) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("setsockopt(SO_REUSEADDR) failed with error {} - {}", error_code, message);
+        log_socket->error("setsockopt(SO_REUSEADDR) failed with error {}", get_net_last_error_message());
         return false;
     }
 
     const int bind_res = ::bind(m_socket, m_addr_info->ai_addr, static_cast<int>(m_addr_info->ai_addrlen));
     if (bind_res == SOCKET_ERROR) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("::bind() failed with error {} - {}", error_code, message);
+        log_socket->error("bind() failed with error {}", get_net_last_error_message());
         return false;
     }
 
@@ -190,17 +229,15 @@ auto Socket::bind(const char* const address, const int port) -> bool
     const int backlog = 8;
     const int listen_res = listen(m_socket, backlog);
     if (listen_res == SOCKET_ERROR) {
-        const int  error_code = get_net_last_error();
-        const auto message    = get_net_error_string(error_code);
-        log_net->error("listen() failed with error {} - {}", error_code, message);
+        log_socket->error("listen() failed with error {}", get_net_last_error_message());
         return false;
     }
 
     m_send_buffer    = std::make_unique<Ring_buffer>(4 * 1024 * 1024);
     m_receive_buffer = std::make_unique<Ring_buffer>(4 * 1024 * 1024);
 
-    log_net->info("Listening at {} port {}", address, port);
-    m_state = State::SERVER_LISTENING;
+    log_socket->info("Listening at {} port {}", address, port);
+    set_state(State::SERVER_LISTENING);
     return true;
 }
 
@@ -224,15 +261,18 @@ auto Socket::send_pending() -> bool
         const int            send_result     = ::send(m_socket, reinterpret_cast<const char*>(read_pointer), static_cast<int>(can_send_byte_count_before_wrap), 0);
         const int            sent_byte_count = (std::max)(0, send_result);
         if (can_send_byte_count_after_wrap > 0) {
-            log_net->info("send() before wrap {} bytes, after wrap {} bytes", can_send_byte_count_before_wrap, can_send_byte_count_after_wrap);
+            log_socket->info("send() before wrap {} bytes, after wrap {} bytes", can_send_byte_count_before_wrap, can_send_byte_count_after_wrap);
         }
         if (send_result < 0) {
             m_send_buffer->end_consume(0);
             const int error_code = get_net_last_error();
             if (is_error_fatal(error_code))
             {
-                const auto message = get_net_error_string(error_code);
-                log_net->error("send({} bytes) failed with error {} - {}", can_send_byte_count_before_wrap, error_code, message);
+                log_socket->error(
+                    "send({} bytes) failed with error {}",
+                    can_send_byte_count_before_wrap,
+                    get_net_error_message(error_code)
+                );
                 close();
                 return false;
             }
@@ -266,7 +306,7 @@ auto Socket::send(const char* const data, const int length) -> bool
         can_write_count = m_send_buffer->size_available_for_write();
         if (can_write_count < sizeof(Packet_header) + length) {
             m_send_buffer->end_produce(0);
-            log_net->warn("message ({} bytes) does not fit to send queue ({} bytes free)", length, can_write_count);
+            log_socket->warn("message ({} bytes) does not fit to send queue ({} bytes free)", length, can_write_count);
             return false;
         }
     }
@@ -308,7 +348,7 @@ auto Socket::recv() -> bool
 
     for (;;) {
         if (m_receive_buffer->full()) {
-            log_net->warn("receive buffer is full, unable to call recv()");
+            log_socket->warn("receive buffer is full, unable to call recv()");
             return false;
         }
 
@@ -322,8 +362,7 @@ auto Socket::recv() -> bool
             m_receive_buffer->end_produce(0);
             const int error_code = get_net_last_error();
             if (is_error_fatal(error_code)) {
-                const auto message = get_net_error_string(error_code);
-                log_net->error("recv() failed with error {} - {}", error_code, message);
+                log_socket->error("recv() failed with error {}", get_net_error_message(error_code));
                 close();
                 return false;
             }
@@ -331,8 +370,8 @@ auto Socket::recv() -> bool
         }
         m_receive_buffer->end_produce(received_byte_count);
         if (recv_result == 0) {
-            //log_net->info("connection closed");
-            //close();
+            log_socket->info("connection close detected");
+            close();
             return true;
         }
 
@@ -351,11 +390,11 @@ auto Socket::recv() -> bool
                 break;
             }
 
-            log_net->trace("received message, length = {} bytes", next_packet_length);
+            log_socket->trace("received message, length = {} bytes", next_packet_length);
 
             // Ring buffer would wrap? Rotate so that it won't
             if (readable_byte_count_before_wrap < sizeof(Packet_header) + next_packet_length) {
-                log_net->trace("message ring buffer wrap - rotating ring buffer");
+                log_socket->trace("message ring buffer wrap - rotating ring buffer");
                 m_receive_buffer->end_consume(0);
                 m_receive_buffer->rotate();
                 readable_byte_count_before_wrap = 0;
@@ -364,10 +403,10 @@ auto Socket::recv() -> bool
             }
             ERHE_VERIFY(readable_byte_count_before_wrap >= sizeof(Packet_header) + next_packet_length);
             if (m_receive_handler) {
-                log_net->info("calling receive handler");
+                log_socket->info("calling receive handler");
                 m_receive_handler(read_pointer + header_byte_count, next_packet_length);
             } else {
-                log_net->warn("no receive handler set, message discarded");
+                log_socket->warn("no receive handler set, message discarded");
             }
             m_receive_buffer->end_consume(header_byte_count + next_packet_length);
         }
@@ -430,26 +469,67 @@ auto Socket::post_select_send_recv(Select_sockets& select_sockets) -> bool
     return true;
 }
 
-void Socket::set_connected()
+void Socket::set_state(const State new_state)
 {
-    m_state          = State::CONNECTED;
-    m_send_buffer    = std::make_unique<Ring_buffer>(4 * 1024 * 1024);
-    m_receive_buffer = std::make_unique<Ring_buffer>(4 * 1024 * 1024);
+    const State old_state = m_state;
+    if (m_state == new_state) {
+        return;
+    }
+    m_state = new_state;
+    on_state_changed(old_state, new_state);
+}
+
+void Socket::on_state_changed(const State old_state, const State new_state)
+{
+    log_socket->info("Socket state changed {} -> {}", c_str(old_state), c_str(new_state));
+    if (new_state == State::CONNECTED) {
+        m_send_buffer    = std::make_unique<Ring_buffer>(4 * 1024 * 1024);
+        m_receive_buffer = std::make_unique<Ring_buffer>(4 * 1024 * 1024);
+    }
+}
+
+auto Socket::connect() -> bool
+{
+    log_socket->info("Client calling connect()");
+    const int connect_res = ::connect(m_socket, m_addr_info->ai_addr, static_cast<int>(m_addr_info->ai_addrlen));
+    if (connect_res == SOCKET_ERROR) {
+        const int error_code = get_net_last_error();
+        if (error_code == ERHE_NET_ERROR_CODE_CONNECTED) {
+            log_socket->info("Client connected ({})", get_net_error_message(error_code));
+            set_state(State::CONNECTED);
+        } else if (is_error_busy(error_code)) {
+            log_socket->trace("Client connect - busy / connect in progress ({})", get_net_error_message(error_code));
+            return true;
+        } else if (is_error_fatal(error_code)) {
+            log_socket->error("Client could not connect, error {}", get_net_error_message(error_code));
+            close();
+            return false;
+        } else {
+            log_socket->warn("Client could not connect, error {}", get_net_error_message(error_code));
+            return false;
+        }
+    } else if (connect_res == 0) {
+        log_socket->info("Client connected (connect() returned 0)");
+        set_state(State::CONNECTED);
+    }
+    return true;
 }
 
 // returns false in case of error, true if ok
 auto Socket::post_select_connect(Select_sockets& select_sockets) -> bool
 {
     if (select_sockets.has_except(m_socket)) {
-        const int  error_code = get_net_last_error();
+        // connection attempt failed. retry
+        connect();
+
+        const int error_code = get_net_last_error();
         if (error_code == 0) {
-            return false;
+            return true; // no error
         }
         if (is_error_busy(error_code)) {
             return false;
         }
-        const auto message = get_net_error_string(error_code);
-        log_net->error("Could not connect, error {} - {}", error_code, message);
+        log_socket->error("Client could not connect to server, error {}", get_net_error_message(error_code));
         // close() ?
         return false;
     }
@@ -463,45 +543,24 @@ auto Socket::post_select_connect(Select_sockets& select_sockets) -> bool
         // > reason for the failure).
         const auto error_opt = get_socket_option(m_socket, Socket_option::Error);
         if (!error_opt.has_value()) {
-            log_net->error("select() returned writable socket, getting socket error failed");
+            log_socket->error("Client connect select() returned writable socket, getting socket error failed");
             close();
             return false;
         }
         const int so_error = error_opt.value();
         if (so_error == 0) {
-            log_net->info("Connected (fd is writable)");
-            set_connected();
+            log_socket->info("Client connected to server (fd is writable)");
+            set_state(State::CONNECTED);
             return true;
         } else {
-            const auto message = get_net_error_string(so_error);
-            log_net->error("select() returned writable socket with SO_ERROR {} - {}", so_error, message);
+            log_socket->error(
+                "Client connect select() returned writable socket with SO_ERROR {}",
+                get_net_error_message(so_error));
             close();
             return false;
         }
     } else {
-        const int connect_res = ::connect(m_socket, m_addr_info->ai_addr, static_cast<int>(m_addr_info->ai_addrlen));
-        if (connect_res == SOCKET_ERROR) {
-            const int error_code = get_net_last_error();
-            if (error_code == ERHE_NET_ERROR_CODE_CONNECTED) {
-                log_net->info("Connected (WASEISCONN)");
-                set_connected();
-            } else if (is_error_busy(error_code)) {
-                log_net->trace("connect in progress");
-                return true;
-            } else if (is_error_fatal(error_code)) {
-                const auto message = get_net_error_string(error_code);
-                log_net->error("Could not connect, error {} - {}", error_code, message);
-                close();
-                return false;
-            } else {
-                const auto message = get_net_error_string(error_code);
-                log_net->warn("Could not connect, error {} - {}", error_code, message);
-                return false;
-            }
-        } else if (connect_res == 0) {
-            log_net->info("Connected (connect() returned 0)");
-            set_connected();
-        }
+        connect();
     }
     return true;
 }
@@ -509,22 +568,21 @@ auto Socket::post_select_connect(Select_sockets& select_sockets) -> bool
 auto Socket::post_select_listen(Select_sockets& select_sockets) -> std::optional<Socket>
 {
     if (select_sockets.has_read(m_socket)) {
-        log_net->info("post_select_listen() has readable socket");
+        log_socket->info("Server post_select_listen() has readable socket");
 
-        sockaddr_in address{};
-        socklen_t len = sizeof(address);
+        sockaddr_in  address{};
+        socklen_t    len        = sizeof(address);
         const SOCKET accept_res = ::accept(m_socket, reinterpret_cast<sockaddr*>(&address), &len);
         if (!is_socket_good(accept_res)) {
             const int error_code = get_net_last_error();
             if (!is_error_busy(error_code)) {
-                const auto message = get_net_error_string(error_code);
-                log_net->warn("accept() failed with error {} - {}", error_code, message);
+                log_socket->warn("Server accept() failed with error {}", get_net_error_message(error_code));
                 return {};
             }
         } else {
             // TODO check if already added
             // TODO set buffer sizes
-            log_net->info("accept(): new connection");
+            log_socket->info("Server accept(): new connection");
             return Socket{accept_res, address};
         }
     }

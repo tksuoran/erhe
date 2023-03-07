@@ -131,8 +131,12 @@ void Editor_scenes_impl::update_node_transforms()
 
 void Editor_scenes_impl::update_network()
 {
-    m_server.poll(0);
-    m_client.poll(0);
+    if (m_server.get_state() != erhe::net::Socket::State::CLOSED) {
+        m_server.poll(0);
+    }
+    if (m_client.get_state() != erhe::net::Socket::State::CLOSED) {
+        m_client.poll(0);
+    }
 }
 
 void Editor_scenes_impl::imgui()
