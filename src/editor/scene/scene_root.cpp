@@ -160,6 +160,12 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
         m_rendertarget_meshes.push_back(as_rendertarget(mesh));
     }
+
+    // Make sure materials are in the material library
+    auto& material_library = content_library()->materials;
+    for (const auto& primitive : mesh->mesh_data.primitives) {
+        material_library.add(primitive.material);
+    }
 }
 
 void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
@@ -177,6 +183,10 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     if (m_scene) {
         m_scene->unregister_mesh(mesh);
     }
+
+    // TODO reference count? Remove materials from material library
+    // auto& material_library = content_library()->materials;
+    // material_library.remove(m_material);
 }
 
 void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light)

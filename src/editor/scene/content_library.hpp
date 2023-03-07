@@ -145,6 +145,10 @@ template <typename T>
 void Library<T>::add(const std::shared_ptr<T>& entry)
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
+    auto i = std::find(m_entries.begin(), m_entries.end(), entry);
+    if (i != m_entries.end()) {
+        return;
+    }
     m_entries.push_back(entry);
 }
 

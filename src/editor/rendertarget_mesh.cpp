@@ -179,25 +179,6 @@ auto Rendertarget_mesh::framebuffer() const -> std::shared_ptr<erhe::graphics::F
     return m_framebuffer;
 }
 
-void Rendertarget_mesh::handle_node_scene_host_update(
-    erhe::scene::Scene_host* old_scene_host,
-    erhe::scene::Scene_host* new_scene_host
-)
-{
-    Mesh::handle_node_scene_host_update(old_scene_host, new_scene_host);
-
-    auto* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
-    auto* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
-    if (old_scene_root != nullptr) {
-        auto& old_material_library = old_scene_root->content_library()->materials;
-        old_material_library.remove(m_material);
-    }
-    if (new_scene_root != nullptr) {
-        auto& new_material_library = new_scene_root->content_library()->materials;
-        new_material_library.add(m_material);
-    }
-}
-
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 void Rendertarget_mesh::update_headset()
 {

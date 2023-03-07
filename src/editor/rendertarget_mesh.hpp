@@ -62,12 +62,6 @@ public:
     [[nodiscard]] auto get_type () const -> uint64_t    override;
     [[nodiscard]] auto type_name() const -> const char* override;
 
-    // Overrides Mesh
-    void handle_node_scene_host_update(
-        erhe::scene::Scene_host* old_scene_host,
-        erhe::scene::Scene_host* new_scene_host
-    ) override;
-
     // Public API
     [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
     [[nodiscard]] auto framebuffer     () const -> std::shared_ptr<erhe::graphics::Framebuffer>;
