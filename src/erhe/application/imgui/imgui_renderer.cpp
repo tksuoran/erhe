@@ -6,6 +6,7 @@
 #include "erhe/application/application_log.hpp"
 #include "erhe/application/window.hpp"
 
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/draw_indirect.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
@@ -76,8 +77,8 @@ vec3 srgb_to_linear(vec3 v)
 
 void main()
 {
-    vec2 scale         = draw.scale;
-    vec2 translate     = draw.translate;
+    vec2 scale         = draw.scale.xy;
+    vec2 translate     = draw.translate.xy;
     vec4 clip_rect     = draw.draw_parameters[gl_DrawID].clip_rect;
     gl_Position        = vec4(a_position * scale + translate, 0, 1);
     gl_Position.y      = -gl_Position.y;
@@ -89,7 +90,7 @@ void main()
 #if defined(ERHE_BINDLESS_TEXTURE)
     v_texture          = draw.draw_parameters[gl_DrawID].texture;
 #else
-    v_texture_id       = draw.draw_parameters[gl_DrawID].texture_indices[0];
+    v_texture_id       = draw.draw_parameters[gl_DrawID].texture_indices.x;
 #endif
     v_color            = vec4(srgb_to_linear(a_color.rgb), a_color.a);
 }
@@ -196,8 +197,8 @@ void Multi_pipeline::allocate(
     const erhe::graphics::Vertex_attribute_mappings& attribute_mappings,
     const erhe::graphics::Vertex_format&             vertex_format,
     erhe::graphics::Shader_stages*                   shader_stages,
-    Multi_buffer&                 vertex_buffer,
-    Multi_buffer&                 index_buffer
+    Multi_buffer&                                    vertex_buffer,
+    Multi_buffer&                                    index_buffer
 )
 {
     std::vector<erhe::graphics::Buffer>& vertex_buffers = vertex_buffer.buffers();
@@ -244,14 +245,15 @@ Imgui_program_interface::Imgui_program_interface(
     }
     , draw_parameter_struct{"Draw_parameters"}
     , draw_parameter_struct_offsets{
-        .clip_rect       =                 draw_parameter_struct.add_vec4 ("clip_rect"         )->offset_in_parent(),
-        .texture         =  use_bindless ? draw_parameter_struct.add_uvec2("texture"           )->offset_in_parent() : 0, // bindless
-        .extra           =  use_bindless ? draw_parameter_struct.add_uvec2("extra"             )->offset_in_parent() : 0, // bindless
-        .texture_indices = !use_bindless ? draw_parameter_struct.add_uint ("texture_indices", 4)->offset_in_parent() : 0  // non-bindless
+        .clip_rect       =                 draw_parameter_struct.add_vec4 ("clip_rect"      )->offset_in_parent(),
+        .texture         =  use_bindless ? draw_parameter_struct.add_uvec2("texture"        )->offset_in_parent() : 0, // bindless
+        .extra           =  use_bindless ? draw_parameter_struct.add_uvec2("extra"          )->offset_in_parent() : 0, // bindless
+        //.texture_indices = !use_bindless ? draw_parameter_struct.add_uint ("texture_indices", 4)->offset_in_parent() : 0  // non-bindless
+        .texture_indices = !use_bindless ? draw_parameter_struct.add_uvec4("texture_indices")->offset_in_parent() : 0  // non-bindless
     }
     , block_offsets{
-        .scale                       = draw_parameter_block.add_vec2  ("scale"    )->offset_in_parent(),
-        .translate                   = draw_parameter_block.add_vec2  ("translate")->offset_in_parent(),
+        .scale                       = draw_parameter_block.add_vec4  ("scale"    )->offset_in_parent(),
+        .translate                   = draw_parameter_block.add_vec4  ("translate")->offset_in_parent(),
         .draw_parameter_struct_array = draw_parameter_block.add_struct("draw_parameters", &draw_parameter_struct, 0 /* unsized array*/ )->offset_in_parent()
     }
     , fragment_outputs{
@@ -338,13 +340,23 @@ Imgui_program_interface::Imgui_program_interface(
         }
     };
 
-    if (erhe::graphics::Instance::info.use_bindless_texture)
-    {
+    if (erhe::graphics::Instance::info.gl_version < 430) {
+        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
+        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+    }
+    if (erhe::graphics::Instance::info.gl_version < 460) {
+        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
+        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
+    }
+    //create_info.dump_final_source = true;
+    //create_info.dump_interface    = true;
+    //create_info.dump_reflection   = true;
+    if (erhe::graphics::Instance::info.use_bindless_texture) {
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
         create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-    }
-    else
-    {
+    } else {
         default_uniform_block.add_sampler(
             "s_textures",
             gl::Uniform_type::sampler_2d,
@@ -778,19 +790,14 @@ void Imgui_renderer::render_draw_data()
     erhe::graphics::Scoped_gpu_timer   timer     {*m_gpu_timer.get()};
 
     const auto& program               = m_imgui_program_interface;
-    const auto& draw_parameter_buffer = program->draw_parameter_buffer.current_buffer();
-    const auto& draw_indirect_buffer  = program->draw_indirect_buffer .current_buffer();
-    const auto& vertex_buffer         = program->vertex_buffer        .current_buffer();
-    const auto& index_buffer          = program->index_buffer         .current_buffer();
+    auto&       draw_parameter_buffer = program->draw_parameter_buffer.current_buffer();
+    auto&       draw_indirect_buffer  = program->draw_indirect_buffer .current_buffer();
+    auto&       vertex_buffer         = program->vertex_buffer        .current_buffer();
+    auto&       index_buffer          = program->index_buffer         .current_buffer();
     const auto& pipeline              = program->pipeline             .current_pipeline();
 
     const auto& draw_parameter_struct_offsets = program->draw_parameter_struct_offsets;
     const auto  draw_parameter_entry_size     = program->draw_parameter_struct.size_bytes();
-
-    auto draw_parameter_gpu_data = draw_parameter_buffer.map();
-    auto draw_indirect_gpu_data  = draw_indirect_buffer.map();
-    auto vertex_gpu_data         = vertex_buffer.map();
-    auto index_gpu_data          = index_buffer.map();
 
     auto& draw_parameter_writer = program->draw_parameter_buffer.writer();
     auto& draw_indirect_writer  = program->draw_indirect_buffer .writer();
@@ -808,10 +815,34 @@ void Imgui_renderer::render_draw_data()
         -1.0f - draw_data->DisplayPos.y * scale[1]
     };
 
-    draw_parameter_writer.begin(draw_parameter_buffer.target());
-    draw_indirect_writer .begin(draw_indirect_buffer .target());
-    vertex_writer        .begin(vertex_buffer        .target());
-    index_writer         .begin(index_buffer         .target());
+    // Pass 1: Count how much memory will be needed
+    std::size_t vertex_byte_count         = 0;
+    std::size_t index_byte_count          = 0;
+    std::size_t draw_parameter_byte_count = m_imgui_program_interface->block_offsets.draw_parameter_struct_array;
+    std::size_t draw_indirect_byte_count  = 0;
+    for (int n = 0; n < draw_data->CmdListsCount; n++) {
+        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        vertex_byte_count += static_cast<size_t>(cmd_list->VtxBuffer.size_in_bytes());
+        index_byte_count  += static_cast<size_t>(cmd_list->IdxBuffer.size_in_bytes());
+        for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
+            const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+            if (pcmd->UserCallback != nullptr) {
+                if (pcmd->UserCallback == ImDrawCallback_ResetRenderState) {
+                    ERHE_FATAL("not implemented");
+                } else {
+                    pcmd->UserCallback(cmd_list, pcmd);
+                }
+            } else {
+                draw_parameter_byte_count += draw_parameter_entry_size;
+                draw_indirect_byte_count  += sizeof(gl::Draw_elements_indirect_command);
+            }
+        }
+    }
+
+    auto draw_parameter_gpu_data = draw_parameter_writer.begin(&draw_parameter_buffer, draw_parameter_byte_count);
+    auto draw_indirect_gpu_data  = draw_indirect_writer .begin(&draw_indirect_buffer,  draw_indirect_byte_count);
+    auto vertex_gpu_data         = vertex_writer        .begin(&vertex_buffer,         vertex_byte_count);
+    auto index_gpu_data          = index_writer         .begin(&index_buffer,          index_byte_count);
 
     using erhe::graphics::write;
 
@@ -843,6 +874,7 @@ void Imgui_renderer::render_draw_data()
     const std::size_t vertex_stride = m_imgui_program_interface->vertex_format.stride();
     const std::size_t index_stride  = sizeof(uint16_t);
 
+    // Pass 2: fill buffers
     std::size_t list_vertex_offset{vertex_writer.range.first_byte_offset / vertex_stride};
     std::size_t list_index_offset {index_writer .range.first_byte_offset / index_stride};
     for (int n = 0; n < draw_data->CmdListsCount; n++) {
@@ -882,9 +914,9 @@ void Imgui_renderer::render_draw_data()
                 };
 
                 if (
-                    (clip_rect.x < fb_width)  &&
-                    (clip_rect.y < fb_height) &&
-                    (clip_rect.z >= 0.0f)     &&
+                    (clip_rect.x <  fb_width)  &&
+                    (clip_rect.y <  fb_height) &&
+                    (clip_rect.z >= 0.0f)      &&
                     (clip_rect.w >= 0.0f)
                 ) {
                     // Write clip rectangle

@@ -1,9 +1,10 @@
 #include "erhe/application/rendergraph/multisample_resolve.hpp"
 #include "erhe/application/application_log.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/gl/command_info.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
@@ -141,13 +142,17 @@ void Multisample_resolve_node::execute_rendergraph_node()
             fmt::format("{} Multisample_resolve_node color texture", get_name())
         );
         const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-        gl::clear_tex_image(
-            m_color_texture->gl_name(),
-            0,
-            gl::Pixel_format::rgba,
-            gl::Pixel_type::float_,
-            &clear_value[0]
-        );
+        if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+            gl::clear_tex_image(
+                m_color_texture->gl_name(),
+                0,
+                gl::Pixel_format::rgba,
+                gl::Pixel_type::float_,
+                &clear_value[0]
+            );
+        } else {
+            // TODO
+        }
 
         m_depth_stencil_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
             gl::Internal_format::depth24_stencil8,

@@ -19,9 +19,9 @@ public:
     {
     }
 
-    void reset();
+    void reset     ();
     void next_frame();
-    void bind();
+    void bind      (const erhe::application::Buffer_range& range);
 
     void allocate(
         gl::Buffer_target target,

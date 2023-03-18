@@ -11,6 +11,7 @@
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
+#include "erhe/gl/command_info.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -234,6 +235,19 @@ auto Programs_impl::make_prototype(
     create_info.struct_types.push_back(&shader_resources.light_interface.light_struct);
     create_info.struct_types.push_back(&shader_resources.camera_interface.camera_struct);
     create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
+
+    if (erhe::graphics::Instance::info.gl_version < 430) {
+        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
+        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+    }
+    if (erhe::graphics::Instance::info.gl_version < 460) {
+        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
+        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
+        create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
+    }
 
     const auto& config = *erhe::application::g_configuration;
     // TODO if (config->shadow_renderer.enabled)

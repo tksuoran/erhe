@@ -39,17 +39,35 @@ using glm::vec4;
 
 namespace {
 
-static constexpr gl::Buffer_storage_mask storage_mask{
+static constexpr gl::Buffer_storage_mask storage_mask_persistent{
     gl::Buffer_storage_mask::map_coherent_bit   |
     gl::Buffer_storage_mask::map_persistent_bit |
     gl::Buffer_storage_mask::map_write_bit
 };
+static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
+    gl::Buffer_storage_mask::map_write_bit
+};
+inline auto storage_mask() -> gl::Buffer_storage_mask
+{
+    return erhe::graphics::Instance::info.use_persistent_buffers
+        ? storage_mask_persistent
+        : storage_mask_not_persistent;
+}
 
-static constexpr gl::Map_buffer_access_mask access_mask{
+static constexpr gl::Map_buffer_access_mask access_mask_persistent{
     gl::Map_buffer_access_mask::map_coherent_bit   |
     gl::Map_buffer_access_mask::map_persistent_bit |
     gl::Map_buffer_access_mask::map_write_bit
 };
+static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
+    gl::Map_buffer_access_mask::map_write_bit
+};
+inline auto access_mask() -> gl::Map_buffer_access_mask
+{
+    return erhe::graphics::Instance::info.use_persistent_buffers
+        ? access_mask_persistent
+        : access_mask_not_persistent;
+}
 
 }
 
@@ -65,14 +83,14 @@ Text_renderer::Frame_resources::Frame_resources(
     : vertex_buffer{
         gl::Buffer_target::array_buffer,
         vertex_format.stride() * vertex_count,
-        storage_mask,
-        access_mask
+        storage_mask(),
+        access_mask()
     }
     , projection_buffer{
         gl::Buffer_target::uniform_buffer,
         1024, // TODO
-        storage_mask,
-        access_mask
+        storage_mask(),
+        access_mask()
     }
     , vertex_input{
         erhe::graphics::Vertex_input_state_data::make(
@@ -375,12 +393,13 @@ void Text_renderer::print(
         return;
     }
 
-    m_vertex_writer.begin(current_frame_resources().vertex_buffer.target());
-
-    const auto                vertex_gpu_data = current_frame_resources().vertex_buffer.map();
-    std::byte* const          start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
-    const std::size_t         byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
-    const std::size_t         word_count      = byte_count / sizeof(float);
+    auto* const               vertex_buffer     = &current_frame_resources().vertex_buffer;
+    const std::size_t         quad_count        = m_font->get_glyph_count(text);
+    const std::size_t         vertex_byte_count = quad_count * 4 * m_vertex_format.stride();
+    const auto                vertex_gpu_data   = m_vertex_writer.begin(vertex_buffer, vertex_byte_count);
+    std::byte* const          start             = vertex_gpu_data.data();
+    const std::size_t         byte_count        = vertex_gpu_data.size_bytes();
+    const std::size_t         word_count        = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
@@ -390,7 +409,7 @@ void Text_renderer::print(
         std::floor(text_position.y + 0.5f),
         text_position.z
     };
-    const std::size_t quad_count = m_font->print(
+    const std::size_t quad_count2 = m_font->print(
         gpu_float_data,
         gpu_uint_data,
         text,
@@ -398,7 +417,8 @@ void Text_renderer::print(
         text_color,
         bounding_box
     );
-    m_vertex_writer.write_offset += quad_count * 4 * m_vertex_format.stride();
+    ERHE_VERIFY(quad_count2 == quad_count);
+    m_vertex_writer.write_offset += vertex_byte_count; // quad_count * 4 * m_vertex_format.stride();
     m_vertex_writer.end();
     m_index_count += quad_count * 5;
 }
@@ -433,12 +453,10 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
 
     erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_render};
 
-    m_projection_writer.begin(current_frame_resources().projection_buffer.target());
-
     auto* const               projection_buffer   = &current_frame_resources().projection_buffer;
-    const auto                projection_gpu_data = projection_buffer->map();
-    std::byte* const          start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
-    const std::size_t         byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
+    const auto                projection_gpu_data = m_projection_writer.begin(projection_buffer, m_projection_block->size_bytes());
+    std::byte* const          start               = projection_gpu_data.data();
+    const std::size_t         byte_count          = projection_gpu_data.size_bytes();
     const std::size_t         word_count          = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};

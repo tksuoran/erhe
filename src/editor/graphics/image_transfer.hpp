@@ -19,7 +19,7 @@ public:
     public:
         Slot();
 
-        [[nodiscard]] auto span_for(
+        [[nodiscard]] auto begin_span_for(
             const int                 width,
             const int                 height,
             const gl::Internal_format internal_format
@@ -27,12 +27,24 @@ public:
 
         [[nodiscard]] auto gl_name() -> unsigned int
         {
-            return pbo.gl_name();
+            return m_pbo.gl_name();
         }
 
-        gsl::span<std::byte>      span;
-        std::size_t               capacity{0};
-        erhe::graphics::Gl_buffer pbo;
+        void end();
+
+        void begin_write();
+        void end_write  (std::size_t byte_offset, std::size_t byte_count);
+
+    private:
+        void map();
+        void unmap();
+
+        gl::Buffer_storage_mask    m_storage_mask;
+        gl::Map_buffer_access_mask m_access_mask;
+
+        gsl::span<std::byte>      m_span;
+        std::size_t               m_capacity{0};
+        erhe::graphics::Gl_buffer m_pbo;
     };
 
     static constexpr std::string_view c_type_name{"erhe::graphics::ImageTransfer"};

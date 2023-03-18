@@ -148,30 +148,30 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
     if (camera != nullptr) {
-        m_camera_buffers->update(
+        const auto range = m_camera_buffers->update(
             *camera->projection(),
             *camera->get_node(),
             viewport,
             camera->get_exposure()
         );
-        m_camera_buffers->bind();
+        m_camera_buffers->bind(range);
     }
 
     if (!erhe::graphics::Instance::info.use_bindless_texture) {
         erhe::graphics::s_texture_unit_cache.reset(g_programs->base_texture_unit);
     }
 
-    m_material_buffers->update(materials);
-    m_material_buffers->bind();
+    const auto naterial_range = m_material_buffers->update(materials);
+    m_material_buffers->bind(naterial_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    m_light_buffers->update(
+    const auto light_range = m_light_buffers->update(
         lights,
         parameters.light_projections,
         parameters.ambient_light
     );
-    m_light_buffers->bind_light_buffer();
+    m_light_buffers->bind_light_buffer(light_range);
 
     if (erhe::graphics::Instance::info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures resident");
@@ -213,14 +213,17 @@ void Forward_renderer::render(const Render_parameters& parameters)
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");
             ERHE_PROFILE_GPU_SCOPE(c_forward_renderer_render);
+            if (meshes.empty()) {
+                continue;
+            }
 
-            m_primitive_buffers->update(meshes, filter);
+            const auto primitive_range            = m_primitive_buffers->update(meshes, filter);
             const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(meshes, primitive_mode, filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 continue;
             }
-            m_primitive_buffers->bind();
-            m_draw_indirect_buffers->bind();
+            m_primitive_buffers->bind(primitive_range);
+            m_draw_indirect_buffers->bind(draw_indirect_buffer_range.range);
 
             {
                 ERHE_PROFILE_SCOPE("mdi");
@@ -281,32 +284,32 @@ void Forward_renderer::render_fullscreen(
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-    m_material_buffers->update(parameters.materials);
-    m_material_buffers->bind();
+    const auto material_range = m_material_buffers->update(parameters.materials);
+    m_material_buffers->bind(material_range);
 
     if (camera != nullptr) {
-        m_camera_buffers->update(
+        const auto camera_range = m_camera_buffers->update(
             *camera->projection(),
             *camera->get_node(),
             viewport,
             camera->get_exposure()
         );
-        m_camera_buffers->bind();
+        m_camera_buffers->bind(camera_range);
     }
 
     if (light != nullptr) {
         const auto* light_projection_transforms = parameters.light_projections->get_light_projection_transforms_for_light(light);
         if (light_projection_transforms != nullptr) {
-            m_light_buffers->update_control(light_projection_transforms->index);
-            m_light_buffers->bind_control_buffer();
+            const auto control_range = m_light_buffers->update_control(light_projection_transforms->index);
+            m_light_buffers->bind_control_buffer(control_range);
         } else {
             //// log_render->warn("Light {} has no light projection transforms", light->name());
         }
     }
 
     {
-        m_light_buffers->update(lights, parameters.light_projections, parameters.ambient_light);
-        m_light_buffers->bind_light_buffer();
+        const auto light_range = m_light_buffers->update(lights, parameters.light_projections, parameters.ambient_light);
+        m_light_buffers->bind_light_buffer(light_range);
     }
 
     if (enable_shadows) {

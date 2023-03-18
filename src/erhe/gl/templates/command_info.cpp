@@ -46,7 +46,7 @@ auto is_enabled(const Command command) -> bool
 
 void check_version(const Command command, const int min_version)
 {{
-    if (g_version >= min_version) {{
+    if (g_version >= min_version * 10) {{
         enable(command);
         return;
     }}

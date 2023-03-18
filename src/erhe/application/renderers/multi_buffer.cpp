@@ -21,17 +21,35 @@ auto Multi_buffer::writer() -> Buffer_writer&
 
 namespace {
 
-static constexpr gl::Buffer_storage_mask storage_mask{
+static constexpr gl::Buffer_storage_mask storage_mask_persistent{
     gl::Buffer_storage_mask::map_coherent_bit   |
     gl::Buffer_storage_mask::map_persistent_bit |
     gl::Buffer_storage_mask::map_write_bit
 };
+static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
+    gl::Buffer_storage_mask::map_write_bit
+};
+inline auto storage_mask() -> gl::Buffer_storage_mask
+{
+    return erhe::graphics::Instance::info.use_persistent_buffers
+        ? storage_mask_persistent
+        : storage_mask_not_persistent;
+}
 
-static constexpr gl::Map_buffer_access_mask access_mask{
+static constexpr gl::Map_buffer_access_mask access_mask_persistent{
     gl::Map_buffer_access_mask::map_coherent_bit   |
     gl::Map_buffer_access_mask::map_persistent_bit |
     gl::Map_buffer_access_mask::map_write_bit
 };
+static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
+    gl::Map_buffer_access_mask::map_write_bit
+};
+inline auto access_mask() -> gl::Map_buffer_access_mask
+{
+    return erhe::graphics::Instance::info.use_persistent_buffers
+        ? access_mask_persistent
+        : access_mask_not_persistent;
+}
 
 }
 
@@ -50,8 +68,8 @@ void Multi_buffer::allocate(
         m_buffers.emplace_back(
             target,
             size,
-            storage_mask,
-            access_mask,
+            storage_mask(),
+            access_mask(),
             fmt::format("{} {}", m_name, slot)
         );
     }
@@ -71,8 +89,8 @@ void Multi_buffer::allocate(
         m_buffers.emplace_back(
             target,
             size,
-            storage_mask,
-            access_mask,
+            storage_mask(),
+            access_mask(),
             fmt::format("{} {}", m_name, slot)
         );
     }
@@ -112,11 +130,11 @@ void Multi_buffer::next_frame()
     );
 }
 
-void Multi_buffer::bind()
+void Multi_buffer::bind(const erhe::application::Buffer_range& range)
 {
     ERHE_PROFILE_FUNCTION
 
-    if (m_writer.range.byte_count == 0) {
+    if (range.byte_count == 0) {
         return;
     }
 
@@ -129,16 +147,16 @@ void Multi_buffer::bind()
         gl::c_str(buffer.target()),
         m_binding_point.has_value() ? "uses binding point" : "non-indexed binding",
         m_binding_point.has_value() ? m_binding_point.value() : 0,
-        m_writer.range.first_byte_offset,
-        m_writer.range.byte_count
+        range.first_byte_offset,
+        range.byte_count
     );
 
     ERHE_VERIFY(
         (buffer.target() != gl::Buffer_target::uniform_buffer) ||
-        (m_writer.range.byte_count <= static_cast<std::size_t>(erhe::graphics::Instance::limits.max_uniform_block_size))
+        (range.byte_count <= static_cast<std::size_t>(erhe::graphics::Instance::limits.max_uniform_block_size))
     );
     ERHE_VERIFY(
-        m_writer.range.first_byte_offset + m_writer.range.byte_count <= buffer.capacity_byte_count()
+        range.first_byte_offset + range.byte_count <= buffer.capacity_byte_count()
     );
 
     if (gl_helpers::is_indexed(buffer.target())) {
@@ -146,8 +164,8 @@ void Multi_buffer::bind()
             buffer.target(),
             static_cast<GLuint>    (m_binding_point),
             static_cast<GLuint>    (buffer.gl_name()),
-            static_cast<GLintptr>  (m_writer.range.first_byte_offset),
-            static_cast<GLsizeiptr>(m_writer.range.byte_count)
+            static_cast<GLintptr>  (range.first_byte_offset),
+            static_cast<GLsizeiptr>(range.byte_count)
         );
     } else {
         gl::bind_buffer(buffer.target(), static_cast<GLuint>(buffer.gl_name()));

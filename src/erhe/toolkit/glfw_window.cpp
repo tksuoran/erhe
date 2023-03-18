@@ -417,8 +417,8 @@ auto Context_window::open(
     if (configuration.msaa_sample_count > 0) {
         glfwWindowHint(GLFW_SAMPLES, configuration.msaa_sample_count);
     }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, configuration.gl_major);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, configuration.gl_minor);
     glfwWindowHint(GLFW_OPENGL_PROFILE,        GLFW_OPENGL_CORE_PROFILE);
 #if !defined(NDEBUG)
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT,  GLFW_TRUE);
@@ -465,7 +465,7 @@ auto Context_window::open(
     }
 
     if (m_glfw_window == nullptr) {
-        printf("Failed to open GLFW window for GL 4.6\n");
+        printf("Failed to open GLFW window for GL %d.%d\n", configuration.gl_major, configuration.gl_minor);
         if (s_window_count == 0) {
             glfwTerminate();
         }

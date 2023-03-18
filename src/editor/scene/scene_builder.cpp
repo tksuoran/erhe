@@ -1146,18 +1146,26 @@ void Scene_builder::setup_lights()
     const auto& layers = m_scene_root->layers();
     layers.light()->ambient_light = vec4{0.042f, 0.044f, 0.049f, 0.0f};
 
-    //make_directional_light(
-    //    "Key",
-    //    vec3{10.0f, 10.0f, 10.0f},
-    //    vec3{1.0f, 0.9f, 0.8f},
-    //    2.0f
-    //);
-    //make_directional_light(
-    //    "Fill",
-    //    vec3{-10.0f, 5.0f, -10.0f},
-    //    vec3{0.8f, 0.9f, 1.0f},
-    //    1.0f
-    //);
+#if 0
+    make_directional_light(
+        "X",
+        vec3{1.0f, 0.0f, 0.0f},
+        vec3{1.0f, 0.0f, 0.0f},
+        2.0f
+    );
+    make_directional_light(
+        "Y",
+        vec3{0.0f, 1.0f, 0.0f},
+        vec3{0.0f, 1.0f, 0.0f},
+        2.0f
+    );
+    make_directional_light(
+        "Z",
+        vec3{0.0f, 0.0f, 1.0f},
+        vec3{0.0f, 0.0f, 1.0f},
+        2.0f
+    );
+#endif
     //make_spot_light(
     //    "Spot",
     //    vec3{0.0f, 1.0f, 0.0f}, // position

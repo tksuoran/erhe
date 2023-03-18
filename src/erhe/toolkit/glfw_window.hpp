@@ -32,6 +32,8 @@ public:
     bool            fullscreen              {false};
     bool            use_finish              {false};
     bool            framebuffer_transparency{false};
+    int             gl_major                {4};
+    int             gl_minor                {6};
     int             width                   {1920};
     int             height                  {1080};
     int             msaa_sample_count       {0};

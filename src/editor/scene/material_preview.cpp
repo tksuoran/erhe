@@ -16,8 +16,9 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -124,13 +125,17 @@ void Material_preview::make_rendertarget()
     );
     m_color_texture->set_debug_label("Material Preview Color Texture");
     const float clear_value[4] = { 1.0f, 0.0f, 0.5f, 0.0f };
-    gl::clear_tex_image(
-        m_color_texture->gl_name(),
-        0,
-        gl::Pixel_format::rgba,
-        gl::Pixel_type::float_,
-        &clear_value[0]
-    );
+    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+        gl::clear_tex_image(
+            m_color_texture->gl_name(),
+            0,
+            gl::Pixel_format::rgba,
+            gl::Pixel_type::float_,
+            &clear_value[0]
+        );
+    } else {
+        // TODO
+    }
 
     m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
         m_depth_format,
@@ -175,13 +180,17 @@ void Material_preview::make_rendertarget()
     const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
     m_shadow_texture->set_debug_label("Material Preview Shadowmap");
     float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
-    gl::clear_tex_image(
-        m_shadow_texture->gl_name(),
-        0,
-        gl::Pixel_format::depth_component,
-        gl::Pixel_type::float_,
-        &depth_clear_value
-    );
+    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+        gl::clear_tex_image(
+            m_shadow_texture->gl_name(),
+            0,
+            gl::Pixel_format::depth_component,
+            gl::Pixel_type::float_,
+            &depth_clear_value
+        );
+    } else {
+        // TODO
+    }
 }
 
 void Material_preview::make_preview_scene()

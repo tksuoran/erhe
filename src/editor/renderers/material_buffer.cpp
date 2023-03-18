@@ -60,15 +60,16 @@ auto Material_buffer::update(
         m_writer.write_offset
     );
 
-    auto&       buffer         = current_buffer();
-    const auto  entry_size     = m_material_interface->material_struct.size_bytes();
-    const auto& offsets        = m_material_interface->offsets;
-    const auto  gpu_data       = buffer.map();
-    m_writer.begin(buffer.target());
+    auto&             buffer         = current_buffer();
+    const auto        entry_size     = m_material_interface->material_struct.size_bytes();
+    const auto&       offsets        = m_material_interface->offsets;
+    const std::size_t max_byte_count = materials.size() * entry_size;
+    const auto        gpu_data       = m_writer.begin(&buffer, max_byte_count);
+    
     m_used_handles.clear();
     uint32_t material_index = 0;
     for (const auto& material : materials) {
-        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
+        if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
             log_render->critical("material buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("material buffer capacity exceeded");
             break;
@@ -111,7 +112,7 @@ auto Material_buffer::update(
         }
 
         m_writer.write_offset += entry_size;
-        ERHE_VERIFY(m_writer.write_offset <= buffer.capacity_byte_count());
+        ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);
         ++material_index;
     }
     m_writer.end();

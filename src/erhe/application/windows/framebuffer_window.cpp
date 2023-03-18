@@ -2,7 +2,7 @@
 
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
-
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
@@ -129,13 +129,17 @@ void Framebuffer_window::update_framebuffer()
     );
     m_texture->set_debug_label(m_debug_label);
     const float clear_value[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-    gl::clear_tex_image(
-        m_texture->gl_name(),
-        0,
-        gl::Pixel_format::rgba,
-        gl::Pixel_type::float_,
-        &clear_value[0]
-    );
+    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+        gl::clear_tex_image(
+            m_texture->gl_name(),
+            0,
+            gl::Pixel_format::rgba,
+            gl::Pixel_type::float_,
+            &clear_value[0]
+        );
+    } else {
+        // TODO
+    }
 
     Framebuffer::Create_info create_info;
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());

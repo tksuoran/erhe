@@ -48,6 +48,8 @@ public:
         Rectangle&          out_bounds
     ) const -> size_t;
 
+    auto get_glyph_count(const std::string_view text) const -> size_t;
+
     auto measure(const std::string_view text) const -> Rectangle;
 
     [[nodiscard]] auto texture() const -> gsl::not_null<erhe::graphics::Texture*>

@@ -70,7 +70,7 @@ void Light_debug_renderer::initialize_service()
     m_debug_light_render_states.blend.alpha.destination_factor = gl::blending_factor_dest::one;
 }
 
-void Light_debug_renderer::light_pass(const Light_collection &lights, const Camera &camera)
+void Light_debug_renderer::light_pass(const Light_collection& lights, const Camera &camera)
 {
     slog_trace("Base_renderer::light_pass(lights.size() = %u)\n", static_cast<unsigned int>(lights.size()));
 
@@ -110,10 +110,8 @@ void Light_debug_renderer::light_pass(const Light_collection &lights, const Came
 
     log_trace("for (auto l : lights)\n");
     std::size_t light_index = 0;
-    for (auto l : lights)
-    {
-        if (light_index == max_lights())
-        {
+    for (auto l : lights) {
+        if (light_index == max_lights()) {
             break;
         }
 
@@ -139,7 +137,8 @@ void Light_debug_renderer::light_pass(const Light_collection &lights, const Came
 
         assert(index_range.index_count > 0);
 
-        r.draw_elements_base_vertex(*vertex_stream,
+        r.draw_elements_base_vertex(
+            *vertex_stream,
             begin_mode,
             count,
             index_type,

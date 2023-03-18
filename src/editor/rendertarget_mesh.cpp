@@ -20,6 +20,7 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/application_view.hpp"
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
@@ -102,13 +103,17 @@ void Rendertarget_mesh::init_rendertarget(
     );
     m_texture->set_debug_label("Rendertarget Node");
     const float clear_value[4] = { 0.0f, 0.0f, 0.0f, 0.85f };
-    gl::clear_tex_image(
-        m_texture->gl_name(),
-        0,
-        gl::Pixel_format::rgba,
-        gl::Pixel_type::float_,
-        &clear_value[0]
-    );
+    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+        gl::clear_tex_image(
+            m_texture->gl_name(),
+            0,
+            gl::Pixel_format::rgba,
+            gl::Pixel_type::float_,
+            &clear_value[0]
+        );
+    } else {
+        // TODO
+    }
 
     m_sampler = std::make_shared<erhe::graphics::Sampler>(
         gl::Texture_min_filter::linear_mipmap_linear,

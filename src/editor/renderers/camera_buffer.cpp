@@ -70,17 +70,16 @@ auto Camera_buffer::update(
     const auto      entry_size       = m_camera_interface->camera_struct.size_bytes();
     const auto&     offsets          = m_camera_interface->offsets;
     const auto      clip_from_camera = camera_projection.clip_from_node_transform(viewport);
-    const auto      gpu_data         = buffer.map();
+    const auto      gpu_data         = m_writer.begin(&buffer, entry_size);
     const glm::mat4 world_from_node  = camera_node.world_from_node();
     const glm::mat4 world_from_clip  = world_from_node * clip_from_camera.inverse_matrix();
     const glm::mat4 clip_from_world  = clip_from_camera.matrix() * camera_node.node_from_world();
 
-    if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
+    if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
         log_render->critical("camera buffer capacity {} exceeded", buffer.capacity_byte_count());
         ERHE_FATAL("camera buffer capacity exceeded");
     }
-
-    m_writer.begin(buffer.target());
+    
     const float viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
@@ -109,7 +108,7 @@ auto Camera_buffer::update(
     write(gpu_data, m_writer.write_offset + offsets.view_depth_far,       as_span(view_depth_far      ));
     write(gpu_data, m_writer.write_offset + offsets.exposure,             as_span(exposure            ));
     m_writer.write_offset += entry_size;
-    ERHE_VERIFY(m_writer.write_offset <= buffer.capacity_byte_count());
+    ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);
     m_writer.end();
 
     return m_writer.range;

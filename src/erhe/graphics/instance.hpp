@@ -36,6 +36,7 @@ public:
         bool use_integer_polygon_ids{false};
         bool use_bindless_texture   {false};
         bool use_sparse_texture     {false};
+        bool use_persistent_buffers {false};
     };
 
     class Limits

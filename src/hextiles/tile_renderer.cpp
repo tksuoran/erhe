@@ -6,7 +6,7 @@
 
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
-
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
@@ -446,7 +446,11 @@ void Tile_renderer::compose_tileset_texture()
     m_tileset_texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
     m_tileset_texture->set_debug_label(texture_path.string());
     float clear_rgba[4] = { 1.0f, 0.0f, 1.0f, 1.0f};
-    gl::clear_tex_image(m_tileset_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_rgba);
+    if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+        gl::clear_tex_image(m_tileset_texture->gl_name(), 0, gl::Pixel_format::rgba, gl::Pixel_type::float_, &clear_rgba);
+    } else {
+        // TODO
+    }
 
     // Upload everything before single unit tiles
     m_tileset_texture->upload_subimage(
@@ -732,9 +736,8 @@ void Tile_renderer::begin()
 {
     Expects(m_can_blit == false);
 
-    m_vertex_writer.begin(current_frame_resources().vertex_buffer.target());
-
-    const auto       vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    // TODO byte_count?
+    const auto       vertex_gpu_data = m_vertex_writer.begin(&current_frame_resources().vertex_buffer, 0);
     std::byte* const start           = vertex_gpu_data.data()       + m_vertex_writer.write_offset;
     const size_t     byte_count      = vertex_gpu_data.size_bytes() - m_vertex_writer.write_offset;
     const size_t     word_count      = byte_count / sizeof(float);
@@ -832,10 +835,9 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
     );
     //m_tileset_texture->get_handle();
 
-    m_projection_writer.begin(current_frame_resources().projection_buffer.target());
-
+    // TODO byte_count
     auto* const               projection_buffer   = &current_frame_resources().projection_buffer;
-    const auto                projection_gpu_data = projection_buffer->map();
+    const auto                projection_gpu_data = m_projection_writer.begin(projection_buffer, 0);
     std::byte* const          start               = projection_gpu_data.data()       + m_projection_writer.write_offset;
     const size_t              byte_count          = projection_gpu_data.size_bytes() - m_projection_writer.write_offset;
     const size_t              word_count          = byte_count / sizeof(float);

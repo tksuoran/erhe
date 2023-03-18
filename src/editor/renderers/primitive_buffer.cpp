@@ -71,17 +71,32 @@ auto Primitive_buffer::update(
         m_writer.write_offset
     );
 
-    auto&       buffer             = current_buffer();
-    const auto  entry_size         = m_primitive_interface->primitive_struct.size_bytes();
-    const auto& offsets            = m_primitive_interface->offsets;
-    const auto  primitive_gpu_data = buffer.map();
-    m_writer.begin(buffer.target());
+    std::size_t primitive_count = 0;
+    std::size_t mesh_index = 0;
     for (const auto& mesh : meshes) {
-        if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
-            log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
-            ERHE_FATAL("primitive buffer capacity exceeded");
-            break;
+        ERHE_VERIFY(mesh);
+        ++mesh_index;
+        if (!filter(mesh->get_flag_bits())) {
+            continue;
         }
+
+        const auto* node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+
+        const auto& mesh_data = mesh->mesh_data;
+        primitive_count += mesh_data.primitives.size();
+    }
+
+    auto&             buffer             = current_buffer();
+    const auto        entry_size         = m_primitive_interface->primitive_struct.size_bytes();
+    const auto&       offsets            = m_primitive_interface->offsets;
+    const std::size_t max_byte_count     = primitive_count * entry_size;
+    const auto        primitive_gpu_data = m_writer.begin(&buffer, max_byte_count);
+    mesh_index = 0;
+    for (const auto& mesh : meshes) {
+        ++mesh_index;
 
         ERHE_VERIFY(mesh);
         if (!filter(mesh->get_flag_bits())) {
@@ -93,17 +108,31 @@ auto Primitive_buffer::update(
             continue;
         }
 
+        if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
+            log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
+            ERHE_FATAL("primitive buffer capacity exceeded");
+            break;
+        }
+
         //const auto& node_data = node->node_data;
         const auto& mesh_data = mesh->mesh_data;
         const glm::mat4 world_from_node = node->world_from_node();
 
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives) {
-            if ((m_writer.write_offset + entry_size) > buffer.capacity_byte_count()) {
+            if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
                 log_render->critical("primitive buffer capacity {} exceeded", buffer.capacity_byte_count());
                 ERHE_FATAL("primitive buffer capacity exceeded");
                 break;
             }
+
+            //// log_render->info(
+            ////     "writing mesh {} node {} primitive {} offset = {}",
+            ////     mesh_index - 1,
+            ////     node->describe(),
+            ////     mesh_primitive_index,
+            ////     m_writer.write_offset
+            //// );
 
             const auto&    primitive_geometry = primitive.gl_primitive_geometry;
             const uint32_t count              = static_cast<uint32_t>(primitive_geometry.triangle_fill_indices.index_count);
@@ -144,7 +173,7 @@ auto Primitive_buffer::update(
 
             }
             m_writer.write_offset += entry_size;
-            ERHE_VERIFY(m_writer.write_offset <= buffer.capacity_byte_count());
+            ERHE_VERIFY(m_writer.write_offset <= m_writer.write_end);
 
             if (use_id_ranges) {
                 m_id_ranges.push_back(

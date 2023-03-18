@@ -664,7 +664,7 @@ void Shader_stages::Prototype::dump_reflection() const
             continue;
 
         }
-        log_program->trace("{:<40} : {} resources", c_str(interface), active_resource_count);
+        log_program->info("{:<40} : {} resources", c_str(interface), active_resource_count);
 
         std::string name;
         for (int i = 0; i < active_resource_count; ++i) {
@@ -682,9 +682,9 @@ void Shader_stages::Prototype::dump_reflection() const
                 if (is_array_and_nonzero(name)) {
                     continue;
                 }
-                log_program->trace("\t{:<40} : {}", i, name);
+                log_program->info("\t{:<40} : {}", i, name);
             } else {
-                log_program->trace("\t{:<40} :", i);
+                log_program->info("\t{:<40} :", i);
             }
 
             gl::Program_resource_property property_num_active_variables = gl::Program_resource_property::num_active_variables;
@@ -705,7 +705,7 @@ void Shader_stages::Prototype::dump_reflection() const
                     &length,
                     &num_active_variables
                 );
-                log_program->trace(
+                log_program->info(
                     "\t\t{:<40} = {}",
                     c_str(property_num_active_variables),
                     num_active_variables
@@ -759,7 +759,7 @@ void Shader_stages::Prototype::dump_reflection() const
                         }
                     }
                     ss << " ]";
-                    log_program->trace("{}", ss.str());
+                    log_program->info("{}", ss.str());
                 }
             }
 
@@ -781,9 +781,9 @@ void Shader_stages::Prototype::dump_reflection() const
                     &param
                 );
                 if (property != gl::Program_resource_property::type) {
-                    log_program->trace("\t\t{:<40} = {}", c_str(property), param);
+                    log_program->info("\t\t{:<40} = {}", c_str(property), param);
                 } else {
-                    log_program->trace("\t\t{:<40} = {}", c_str(property), gl::enum_string(param));
+                    log_program->info("\t\t{:<40} = {}", c_str(property), gl::enum_string(param));
                 }
             }
         }

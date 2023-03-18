@@ -2,8 +2,14 @@
 
 #include "erhe/gl/wrapper_enums.hpp"
 
+#include <gsl/span>
+
 #include <cstddef>
 
+namespace erhe::graphics
+{
+    class Buffer;
+}
 namespace erhe::application
 {
 
@@ -17,12 +23,15 @@ public:
 class Buffer_writer
 {
 public:
-    Buffer_range range;
-    std::size_t  write_offset{0};
+    erhe::graphics::Buffer* m_buffer{nullptr};
+    Buffer_range            range;
+    std::size_t             map_offset  {0};
+    std::size_t             write_offset{0};
+    std::size_t             write_end   {0};
 
     void shader_storage_align();
     void uniform_align       ();
-    void begin               (gl::Buffer_target buffer_target);
+    auto begin               (erhe::graphics::Buffer* buffer, std::size_t byte_count) -> gsl::span<std::byte>;
     void end                 ();
     void reset               ();
 };

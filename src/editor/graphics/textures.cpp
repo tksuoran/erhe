@@ -80,7 +80,7 @@ auto Textures::load(
         .level_count     = image_info.level_count,
         .row_stride      = image_info.row_stride,
     };
-    gsl::span<std::byte> span = slot.span_for(
+    gsl::span<std::byte> span = slot.begin_span_for(
         image_info.width,
         image_info.height,
         texture_create_info.internal_format
@@ -89,6 +89,7 @@ auto Textures::load(
     const bool ok = loader.load(span);
     loader.close();
     if (!ok) {
+        slot.end();
         return {};
     }
 
@@ -101,6 +102,7 @@ auto Textures::load(
     texture->upload(texture_create_info.internal_format, texture_create_info.width, texture_create_info.height);
     gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
 
+    slot.end();
     return texture;
 }
 

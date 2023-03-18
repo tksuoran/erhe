@@ -272,23 +272,28 @@ void Configuration::parse_args(int argc, char** argv)
         }
         if (ini.has("graphics")) {
             const auto& section = ini["graphics"];
-            ini_get(section, "reverse_depth",     graphics.reverse_depth);
-            ini_get(section, "simpler_shaders",   graphics.simpler_shaders);
-            ini_get(section, "post_processing",   graphics.post_processing);
-            ini_get(section, "use_time_query",    graphics.use_time_query);
-            ini_get(section, "force_no_bindless", graphics.force_no_bindless);
-            ini_get(section, "msaa_sample_count", graphics.msaa_sample_count);
+            ini_get(section, "reverse_depth",               graphics.reverse_depth);
+            ini_get(section, "simpler_shaders",             graphics.simpler_shaders);
+            ini_get(section, "post_processing",             graphics.post_processing);
+            ini_get(section, "use_time_query",              graphics.use_time_query);
+            ini_get(section, "force_no_bindless",           graphics.force_no_bindless);
+            ini_get(section, "force_no_persistent_buffers", graphics.force_no_persistent_buffers);
+            ini_get(section, "initial_clear",               graphics.initial_clear);
+            ini_get(section, "msaa_sample_count",           graphics.msaa_sample_count);
         }
         if (ini.has("window")) {
             const auto& section = ini["window"];
-            ini_get(section, "show",          window.show);
-            ini_get(section, "fullscreen",    window.fullscreen);
-            ini_get(section, "use_finish",    window.use_finish);
-            ini_get(section, "sleep_time",    window.sleep_time);
-            ini_get(section, "wait_time",     window.wait_time);
-            ini_get(section, "swap_interval", window.swap_interval);
-            ini_get(section, "width",         window.width);
-            ini_get(section, "height",        window.height);
+            ini_get(section, "show",             window.show);
+            ini_get(section, "fullscreen",       window.fullscreen);
+            ini_get(section, "use_finish",       window.use_finish);
+            ini_get(section, "use_transparency", window.use_transparency);
+            ini_get(section, "gl_major",         window.gl_major);
+            ini_get(section, "gl_minor",         window.gl_minor);
+            ini_get(section, "sleep_time",       window.sleep_time);
+            ini_get(section, "wait_time",        window.wait_time);
+            ini_get(section, "swap_interval",    window.swap_interval);
+            ini_get(section, "width",            window.width);
+            ini_get(section, "height",           window.height);
         }
     }
 

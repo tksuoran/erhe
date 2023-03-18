@@ -101,13 +101,11 @@ public:
         const glm::vec3&                                            ambient_light
     ) -> erhe::application::Buffer_range;
 
-    auto update_control(
-        std::size_t light_index
-    ) -> erhe::application::Buffer_range;
+    auto update_control(std::size_t light_index) -> erhe::application::Buffer_range;
 
     void next_frame         ();
-    void bind_light_buffer  ();
-    void bind_control_buffer();
+    void bind_light_buffer  (const erhe::application::Buffer_range& range);
+    void bind_control_buffer(const erhe::application::Buffer_range& range);
 
 private:
     Light_interface* m_light_interface{nullptr};

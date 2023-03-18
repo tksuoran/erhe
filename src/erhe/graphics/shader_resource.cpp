@@ -657,7 +657,11 @@ auto Shader_resource::layout_string() const -> std::string
         ss << "std140";
         first = false;
     } else if (m_type == Type::shader_storage_block) {
-        ss << "std430";
+        if (Instance::info.glsl_version < 430) {
+            ss << "std140";
+        } else {
+            ss << "std430";
+        }
         first = false;
     }
     if (m_location != -1) {

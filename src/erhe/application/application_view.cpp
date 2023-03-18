@@ -64,9 +64,11 @@ void View::on_refresh()
         return;
     }
     if (!m_ready) {
-        gl::clear_color(0.3f, 0.3f, 0.3f, 0.4f);
-        gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
-        g_window->get_context_window()->swap_buffers();
+        if (g_configuration->graphics.initial_clear) {
+            gl::clear_color(0.3f, 0.3f, 0.3f, 0.4f);
+            gl::clear(gl::Clear_buffer_mask::color_buffer_bit);
+            g_window->get_context_window()->swap_buffers();
+        }
         return;
     }
 

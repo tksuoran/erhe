@@ -8,6 +8,7 @@
 #include "cpp-terminal/input.hpp"
 #include "cpp-terminal/terminal.hpp"
 #include "cpp-terminal/window.hpp"
+#include "cpp-terminal/tty.hpp"
 
 #include <cxxopts.hpp>
 #include <fmt/format.h>
@@ -447,7 +448,7 @@ auto main(int argc, char** argv) -> int
     Options                         options{argc, argv};
 
     erhe::log::console_init();
-    if (Term::stdin_connected() && options.terminal) {
+    if (Term::is_stdin_a_tty() && options.terminal) {
         try {
             terminal = std::make_unique<Term::Terminal>(true, true, true);
         } catch (...) {

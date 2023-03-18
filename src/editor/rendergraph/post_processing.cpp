@@ -555,11 +555,10 @@ void Post_processing::downsample(
     ERHE_PROFILE_FUNCTION
     ERHE_PROFILE_GPU_SCOPE(c_downsample)
 
-    auto& parameter_buffer   = m_parameter_buffer.current_buffer();
-    auto& parameter_writer   = m_parameter_buffer.writer();
-    auto  parameter_gpu_data = parameter_buffer.map();
-
-    parameter_writer.begin(parameter_buffer.target());
+    auto&             parameter_buffer   = m_parameter_buffer.current_buffer();
+    auto&             parameter_writer   = m_parameter_buffer.writer();
+    const std::size_t entry_size         = m_parameter_block.size_bytes();
+    auto              parameter_gpu_data = parameter_writer.begin(&parameter_buffer, entry_size);
 
     std::byte* const          start      = parameter_gpu_data.data();
     const std::size_t         byte_count = parameter_gpu_data.size_bytes();
@@ -639,11 +638,10 @@ void Post_processing::compose(Post_processing_node& node)
     ERHE_PROFILE_FUNCTION
     ERHE_PROFILE_GPU_SCOPE(c_compose)
 
-    auto& parameter_buffer   = m_parameter_buffer.current_buffer();
-    auto& parameter_writer   = m_parameter_buffer.writer();
-    auto  parameter_gpu_data = parameter_buffer.map();
-
-    parameter_writer.begin(parameter_buffer.target());
+    auto&             parameter_buffer   = m_parameter_buffer.current_buffer();
+    auto&             parameter_writer   = m_parameter_buffer.writer();
+    const std::size_t entry_size         = m_parameter_block.size_bytes();
+    auto              parameter_gpu_data = parameter_writer.begin(&parameter_buffer, entry_size);
 
     std::byte* const          start      = parameter_gpu_data.data();
     const std::size_t         byte_count = parameter_gpu_data.size_bytes();

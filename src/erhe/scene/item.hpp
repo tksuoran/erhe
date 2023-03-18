@@ -123,7 +123,7 @@ public:
     [[nodiscard]] auto is_visible         () const -> bool;
     [[nodiscard]] auto is_shown_in_ui     () const -> bool;
     [[nodiscard]] auto is_hidden          () const -> bool;
-    [[nodiscard]] auto describe           () -> std::string;
+    [[nodiscard]] auto describe           () const -> std::string;
     [[nodiscard]] auto get_wireframe_color() const -> glm::vec4;
 
     void set_name           (const std::string_view name);

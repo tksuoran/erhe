@@ -36,16 +36,35 @@ namespace erhe::application
 namespace
 {
 
-static constexpr gl::Buffer_storage_mask storage_mask{
+static constexpr gl::Buffer_storage_mask storage_mask_persistent{
     gl::Buffer_storage_mask::map_coherent_bit   |
     gl::Buffer_storage_mask::map_persistent_bit |
     gl::Buffer_storage_mask::map_write_bit
 };
-static constexpr gl::Map_buffer_access_mask access_mask{
+static constexpr gl::Buffer_storage_mask storage_mask_not_persistent{
+    gl::Buffer_storage_mask::map_write_bit
+};
+inline auto storage_mask() -> gl::Buffer_storage_mask
+{
+    return erhe::graphics::Instance::info.use_persistent_buffers
+        ? storage_mask_persistent
+        : storage_mask_not_persistent;
+}
+
+static constexpr gl::Map_buffer_access_mask access_mask_persistent{
     gl::Map_buffer_access_mask::map_coherent_bit   |
     gl::Map_buffer_access_mask::map_persistent_bit |
     gl::Map_buffer_access_mask::map_write_bit
 };
+static constexpr gl::Map_buffer_access_mask access_mask_not_persistent{
+    gl::Map_buffer_access_mask::map_write_bit
+};
+inline auto access_mask() -> gl::Map_buffer_access_mask
+{
+    return erhe::graphics::Instance::info.use_persistent_buffers
+        ? access_mask_persistent
+        : access_mask_not_persistent;
+}
 
 }
 
@@ -322,14 +341,14 @@ Line_renderer::Frame_resources::Frame_resources(
     : vertex_buffer{
         gl::Buffer_target::array_buffer,
         vertex_format.stride() * vertex_count,
-        storage_mask,
-        access_mask
+        storage_mask(),
+        access_mask()
     }
     , view_buffer{
         gl::Buffer_target::uniform_buffer,
         view_stride * view_count,
-        storage_mask,
-        access_mask
+        storage_mask(),
+        access_mask()
     }
     , vertex_input{
         erhe::graphics::Vertex_input_state_data::make(
@@ -383,6 +402,7 @@ auto Line_renderer::current_frame_resources() -> Frame_resources&
 
 void Line_renderer::next_frame()
 {
+    ERHE_VERIFY(!m_inside_begin_end);
     m_current_frame_resource_slot = (m_current_frame_resource_slot + 1) % s_frame_resources_count;
     m_view_writer  .reset();
     m_vertex_writer.reset();
@@ -393,9 +413,8 @@ void Line_renderer::begin()
 {
     ERHE_VERIFY(!m_inside_begin_end);
 
-    m_view_writer  .begin();
-    m_vertex_writer.begin();
-    m_line_count = 0;
+    m_vertex_writer.begin(&current_frame_resources().vertex_buffer);
+    m_line_count       = 0;
     m_inside_begin_end = true;
 }
 
@@ -404,6 +423,7 @@ void Line_renderer::end()
     ERHE_VERIFY(m_inside_begin_end);
 
     m_inside_begin_end = false;
+    //m_view_writer  .end();
     m_vertex_writer.end();
 }
 
@@ -432,12 +452,11 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
-
-    std::byte* const       start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const std::size_t      byte_count = vertex_gpu_data.size_bytes();
-    const std::size_t      word_count = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    auto                   vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    std::byte* const       start           = vertex_gpu_data.data();
+    const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count      = byte_count / sizeof(float);
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines) {
@@ -458,12 +477,11 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
-
-    std::byte* const       start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const std::size_t      byte_count = vertex_gpu_data.size_bytes();
-    const std::size_t      word_count = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    auto                   vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    std::byte* const       start           = vertex_gpu_data.data();
+    const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count      = byte_count / sizeof(float);
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line4& line : lines) {
@@ -518,12 +536,11 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto vertex_gpu_data = current_frame_resources().vertex_buffer.map();
-
-    std::byte* const       start      = vertex_gpu_data.data() + m_vertex_writer.write_offset;
-    const std::size_t      byte_count = vertex_gpu_data.size_bytes();
-    const std::size_t      word_count = byte_count / sizeof(float);
-    const gsl::span<float> gpu_float_data{reinterpret_cast<float*   >(start), word_count};
+    auto                   vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    std::byte* const       start           = vertex_gpu_data.data();
+    const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count      = byte_count / sizeof(float);
+    const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
     for (const Line& line : lines) {
@@ -1324,7 +1341,7 @@ void Line_renderer::render(
 
     erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_render};
 
-    m_view_writer.begin();
+    m_view_writer.begin(&current_frame_resources().view_buffer);
 
     const auto  projection_transforms  = camera.projection_transforms(viewport);
     const mat4  clip_from_world        = projection_transforms.clip_from_world.matrix();

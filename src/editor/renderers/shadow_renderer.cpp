@@ -278,23 +278,23 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         .require_at_least_one_bit_clear = 0u
     };
 
-    m_light_buffers->update(
+    const auto light_range = m_light_buffers->update(
         lights,
         &parameters.light_projections,
         glm::vec3{0.0f}
     );
-    m_light_buffers->bind_light_buffer();
+    m_light_buffers->bind_light_buffer(light_range);
 
     for (const auto& meshes : mesh_spans) {
-        m_primitive_buffers->update(meshes, shadow_filter);
+        const auto primitive_range = m_primitive_buffers->update(meshes, shadow_filter);
         const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
             meshes,
             erhe::primitive::Primitive_mode::polygon_fill,
             shadow_filter
         );
         if (draw_indirect_buffer_range.draw_indirect_count > 0) {
-            m_primitive_buffers->bind();
-            m_draw_indirect_buffers->bind();
+            m_primitive_buffers->bind(primitive_range);
+            m_draw_indirect_buffers->bind(draw_indirect_buffer_range.range);
         }
 
         for (const auto& light : lights) {
@@ -338,8 +338,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 continue;
             }
 
-            m_light_buffers->update_control(light_index);
-            m_light_buffers->bind_control_buffer();
+            const auto control_range = m_light_buffers->update_control(light_index);
+            m_light_buffers->bind_control_buffer(control_range);
 
             {
                 static constexpr std::string_view c_id_mdi{"mdi"};

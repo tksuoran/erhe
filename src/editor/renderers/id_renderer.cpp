@@ -7,6 +7,7 @@
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/draw_indirect.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
@@ -262,13 +263,17 @@ void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
             m_framebuffer = std::make_unique<Framebuffer>(create_info);
             m_framebuffer->set_debug_label("ID");
             constexpr float clear_value[4] = {1.0f, 0.0f, 0.0f, 1.0f };
-            gl::clear_tex_image(
-                m_color_texture->gl_name(),
-                0,
-                gl::Pixel_format::rgba,
-                gl::Pixel_type::float_,
-                &clear_value[0]
-            );
+            if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+                gl::clear_tex_image(
+                    m_color_texture->gl_name(),
+                    0,
+                    gl::Pixel_format::rgba,
+                    gl::Pixel_type::float_,
+                    &clear_value[0]
+                );
+            } else {
+                // TODO
+            }
         }
     }
 }
@@ -285,12 +290,8 @@ void Id_renderer::render(
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
     };
-    m_primitive_buffers->update(
-        meshes,
-        id_filter,
-        true
-    );
-    auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
+    const auto primitive_range            = m_primitive_buffers->update(meshes, id_filter, true);
+    const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
         meshes,
         erhe::primitive::Primitive_mode::polygon_fill,
         id_filter
@@ -299,8 +300,8 @@ void Id_renderer::render(
         return;
     }
 
-    m_primitive_buffers->bind();
-    m_draw_indirect_buffers->bind();
+    m_primitive_buffers    ->bind(primitive_range);
+    m_draw_indirect_buffers->bind(draw_indirect_buffer_range.range);
 
     {
         static constexpr std::string_view c_draw{"draw"};
@@ -362,13 +363,13 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     m_primitive_buffers->settings.color_source = Primitive_color_source::id_offset;
 
-    m_camera_buffers->update(
+    const auto camera_range = m_camera_buffers->update(
         *camera->projection(),
         *camera->get_node(),
         viewport,
         1.0f
     );
-    m_camera_buffers->bind();
+    m_camera_buffers->bind(camera_range);
 
     {
         ERHE_PROFILE_GPU_SCOPE(c_id_renderer_render_clear)

@@ -513,19 +513,19 @@ auto Font::print(
         return 0;
     }
 
-    //hb_buffer_t* buf = hb_buffer_create();
-    hb_buffer_clear_contents(m_harfbuzz_buffer);
-    hb_buffer_set_direction(m_harfbuzz_buffer, HB_DIRECTION_LTR);
-    hb_buffer_set_script   (m_harfbuzz_buffer, HB_SCRIPT_LATIN);
-    hb_buffer_set_language (m_harfbuzz_buffer, hb_language_from_string("en", -1));
-    hb_buffer_add_utf8(m_harfbuzz_buffer, text.data(), -1, 0, -1);
-
     hb_feature_t userfeatures[1]; // clig, dlig
     userfeatures[0].tag   = HB_TAG('l','i','g','a');
     userfeatures[0].value = 0;
     userfeatures[0].start = HB_FEATURE_GLOBAL_START;
     userfeatures[0].end   = HB_FEATURE_GLOBAL_END;
-    hb_shape               (m_harfbuzz_font, m_harfbuzz_buffer, &userfeatures[0], 1);
+
+    hb_buffer_clear_contents(m_harfbuzz_buffer);
+    hb_buffer_set_direction (m_harfbuzz_buffer, HB_DIRECTION_LTR);
+    hb_buffer_set_script    (m_harfbuzz_buffer, HB_SCRIPT_LATIN);
+    hb_buffer_set_language  (m_harfbuzz_buffer, hb_language_from_string("en", -1));
+    hb_buffer_add_utf8      (m_harfbuzz_buffer, text.data(), -1, 0, -1);
+    hb_shape                (m_harfbuzz_font, m_harfbuzz_buffer, &userfeatures[0], 1);
+
     unsigned int glyph_count{0};
     hb_glyph_info_t*     glyph_info = hb_buffer_get_glyph_infos    (m_harfbuzz_buffer, &glyph_count);
     hb_glyph_position_t* glyph_pos  = hb_buffer_get_glyph_positions(m_harfbuzz_buffer, &glyph_count);
@@ -587,6 +587,45 @@ auto Font::print(
         }
         text_position.x += x_advance;
         text_position.y += y_advance;
+    }
+
+    return chars_printed;
+}
+
+auto Font::get_glyph_count(const std::string_view text) const -> size_t
+{
+    if (text.empty()) {
+        return 0;
+    }
+
+    hb_feature_t userfeatures[1]; // clig, dlig
+    userfeatures[0].tag   = HB_TAG('l','i','g','a');
+    userfeatures[0].value = 0;
+    userfeatures[0].start = HB_FEATURE_GLOBAL_START;
+    userfeatures[0].end   = HB_FEATURE_GLOBAL_END;
+
+    hb_buffer_clear_contents(m_harfbuzz_buffer);
+    hb_buffer_set_direction (m_harfbuzz_buffer, HB_DIRECTION_LTR);
+    hb_buffer_set_script    (m_harfbuzz_buffer, HB_SCRIPT_LATIN);
+    hb_buffer_set_language  (m_harfbuzz_buffer, hb_language_from_string("en", -1));
+    hb_buffer_add_utf8      (m_harfbuzz_buffer, text.data(), -1, 0, -1);
+    hb_shape                (m_harfbuzz_font, m_harfbuzz_buffer, &userfeatures[0], 1);
+
+    unsigned int glyph_count{0};
+    hb_glyph_info_t* glyph_info = hb_buffer_get_glyph_infos(m_harfbuzz_buffer, &glyph_count);
+
+    std::size_t chars_printed{0};
+    for (unsigned int i = 0; i < glyph_count; ++i) {
+        const auto glyph_id = glyph_info[i].codepoint;
+        auto j = m_glyph_to_char.find(glyph_id);
+        if (j != m_glyph_to_char.end()) {
+            auto c = j->second;
+            auto uc = static_cast<unsigned char>(c);
+            const ft_char& font_char = m_chars_256[uc];
+            if (font_char.width != 0) {
+                ++chars_printed;
+            }
+        }
     }
 
     return chars_printed;

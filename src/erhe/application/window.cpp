@@ -86,17 +86,24 @@ auto Window::create_gl_window() -> bool
 
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(
         erhe::toolkit::Window_configuration{
-            .fullscreen        = g_configuration->window.fullscreen,
-            .use_finish        = g_configuration->window.use_finish,
-            .width             = g_configuration->window.width,
-            .height            = g_configuration->window.height,
-            .msaa_sample_count = (g_configuration->imgui.window_viewport || g_configuration->graphics.post_processing)
+            .fullscreen               = g_configuration->window.fullscreen,
+            .use_finish               = g_configuration->window.use_finish,
+            .framebuffer_transparency = g_configuration->window.use_transparency,
+            .gl_major                 = g_configuration->window.gl_major,
+            .gl_minor                 = g_configuration->window.gl_minor,
+            .width                    = g_configuration->window.width,
+            .height                   = g_configuration->window.height,
+            .msaa_sample_count        =
+                (
+                    g_configuration->imgui.window_viewport ||
+                    g_configuration->graphics.post_processing
+                )
                 ? 0
                 : g_configuration->graphics.msaa_sample_count,
-            .swap_interval     = g_configuration->window.swap_interval,
-            .sleep_time        = g_configuration->window.sleep_time,
-            .wait_time         = g_configuration->window.wait_time,
-            .title             = title.c_str()
+            .swap_interval            = g_configuration->window.swap_interval,
+            .sleep_time               = g_configuration->window.sleep_time,
+            .wait_time                = g_configuration->window.wait_time,
+            .title                    = title.c_str()
         }
     );
 
@@ -154,10 +161,19 @@ auto Window::create_gl_window() -> bool
         }
     }
 
-    for (size_t i = 0; i < 3; ++i) {
-        gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
-        gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
-        m_context_window->swap_buffers();
+    if (g_configuration->graphics.force_no_persistent_buffers) {
+        if (erhe::graphics::Instance::info.use_persistent_buffers) {
+            erhe::graphics::Instance::info.use_persistent_buffers = false;
+            log_startup->warn("Force disabled persistently mapped buffers due to erhe.ini setting");
+        }
+    }
+
+    if (g_configuration->graphics.initial_clear) {
+        for (size_t i = 0; i < 3; ++i) {
+            gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
+            gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
+            m_context_window->swap_buffers();
+        }
     }
 
     log_startup->info("Created OpenGL Window");

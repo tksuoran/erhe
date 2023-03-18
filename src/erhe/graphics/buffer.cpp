@@ -1,10 +1,12 @@
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/instance.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
@@ -18,6 +20,69 @@ namespace erhe::graphics
 auto Buffer::gl_name() const noexcept -> unsigned int
 {
     return m_handle.gl_name();
+}
+
+void Buffer::capability_check(const gl::Buffer_storage_mask storage_mask)
+{
+    if (
+        erhe::toolkit::test_any_rhs_bits_set(
+            storage_mask,
+            gl::Buffer_storage_mask::client_storage_bit  |
+            gl::Buffer_storage_mask::dynamic_storage_bit |
+            gl::Buffer_storage_mask::map_coherent_bit    |
+            gl::Buffer_storage_mask::map_persistent_bit
+        )
+    ) {
+        const bool in_core       = Instance::info.gl_version >= 440;
+        const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
+        ERHE_VERIFY(in_core || has_extension);
+    }
+}
+
+void Buffer::capability_check(const gl::Map_buffer_access_mask access_mask)
+{
+    if (
+        erhe::toolkit::test_any_rhs_bits_set(
+            access_mask,
+            gl::Map_buffer_access_mask::map_coherent_bit  |
+            gl::Map_buffer_access_mask::map_persistent_bit
+        )
+    ) {
+        const bool in_core       = Instance::info.gl_version >= 440;
+        const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
+        ERHE_VERIFY(in_core || has_extension);
+    }
+}
+
+void Buffer::allocate_storage()
+{
+    ERHE_VERIFY(m_capacity_byte_count > 0);
+
+    capability_check(m_storage_mask);
+    capability_check(m_access_mask);
+
+    gl::named_buffer_storage(
+        gl_name(),
+        static_cast<GLintptr>(m_capacity_byte_count),
+        nullptr,
+        m_storage_mask
+    );
+
+    if (
+        erhe::toolkit::test_all_rhs_bits_set(
+            m_storage_mask,
+            gl::Buffer_storage_mask::map_persistent_bit
+        )
+    ) {
+        map_bytes(0, m_capacity_byte_count, m_access_mask);
+    }
+
+    //// if (!Instance::info.use_persistent_buffers) {
+    ////     m_cpu_copy.resize(m_capacity_byte_count);
+    //// }
+
+    Ensures(gl_name() != 0);
+    Ensures(m_capacity_byte_count > 0);
 }
 
 Buffer::Buffer(
@@ -37,89 +102,56 @@ Buffer::Buffer(
         gl_name()
     );
 
-    ERHE_VERIFY(capacity_byte_count > 0);
-
-    gl::named_buffer_storage(
-        gl_name(),
-        static_cast<GLintptr>(m_capacity_byte_count),
-        nullptr,
-        storage_mask
-    );
-
-    Ensures(gl_name() != 0);
-    Ensures(m_capacity_byte_count > 0);
+    allocate_storage();
 }
 
 Buffer::Buffer(
     const gl::Buffer_target          target,
     const std::size_t                capacity_byte_count,
     const gl::Buffer_storage_mask    storage_mask,
-    const gl::Map_buffer_access_mask map_buffer_access_mask
+    const gl::Map_buffer_access_mask access_mask
 ) noexcept
     : m_target             {target}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
+    , m_access_mask        {access_mask}
 {
     log_buffer->trace(
-        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, map_buffer_access_mask = {}) name = {}",
+        "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {}",
         gl::c_str(target),
         capacity_byte_count,
         gl::to_string(storage_mask),
-        gl::to_string(map_buffer_access_mask),
+        gl::to_string(access_mask),
         gl_name()
     );
 
-    ERHE_VERIFY(capacity_byte_count > 0);
-
-    gl::named_buffer_storage(
-        gl_name(),
-        static_cast<GLintptr>(m_capacity_byte_count),
-        nullptr,
-        storage_mask
-    );
-
-    map_bytes(0, capacity_byte_count, map_buffer_access_mask);
-
-    Ensures(gl_name() != 0);
-    Ensures(m_capacity_byte_count > 0);
+    allocate_storage();
 }
 
 Buffer::Buffer(
     const gl::Buffer_target          target,
     const std::size_t                capacity_byte_count,
     const gl::Buffer_storage_mask    storage_mask,
-    const gl::Map_buffer_access_mask map_buffer_access_mask,
+    const gl::Map_buffer_access_mask access_mask,
     const std::string_view           debug_label
 ) noexcept
     : m_target             {target}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
+    , m_access_mask        {access_mask}
 {
     log_buffer->trace(
         "Buffer::Buffer(target = {}, capacity_byte_count = {}, storage_mask = {}, map_buffer_access_mask = {}) name = {} {}",
-        gl::c_str(target),
-        capacity_byte_count,
-        gl::to_string(storage_mask),
-        gl::to_string(map_buffer_access_mask),
+        gl::c_str(m_target),
+        m_capacity_byte_count,
+        gl::to_string(m_storage_mask),
+        gl::to_string(m_access_mask),
         gl_name(),
         debug_label
     );
 
     set_debug_label(debug_label);
-
-    ERHE_VERIFY(capacity_byte_count > 0);
-
-    gl::named_buffer_storage(
-        gl_name(),
-        static_cast<GLintptr>(m_capacity_byte_count),
-        nullptr,
-        storage_mask
-    );
-
-    map_bytes(0, capacity_byte_count, map_buffer_access_mask);
-
-    Ensures(gl_name() != 0);
-    Ensures(m_capacity_byte_count > 0);
+    allocate_storage();
 }
 
 Buffer::Buffer()
@@ -138,9 +170,11 @@ Buffer::Buffer(Buffer&& other) noexcept
     m_capacity_byte_count    = other.m_capacity_byte_count;
     m_next_free_byte         = other.m_next_free_byte;
     m_storage_mask           = other.m_storage_mask;
+    m_access_mask            = other.m_access_mask;
     m_map                    = other.m_map;
     m_map_byte_offset        = other.m_map_byte_offset;
     m_map_buffer_access_mask = other.m_map_buffer_access_mask;
+    //// m_cpu_copy               = std::move(other.m_cpu_copy);
 }
 
 auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
@@ -151,9 +185,11 @@ auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
     m_capacity_byte_count    = other.m_capacity_byte_count;
     m_next_free_byte         = other.m_next_free_byte;
     m_storage_mask           = other.m_storage_mask;
+    m_access_mask            = other.m_access_mask;
     m_map                    = other.m_map;
     m_map_byte_offset        = other.m_map_byte_offset;
     m_map_buffer_access_mask = other.m_map_buffer_access_mask;
+    //// m_cpu_copy               = std::move(other.m_cpu_copy);
     return *this;
 }
 
@@ -201,6 +237,68 @@ auto Buffer::allocate_bytes(
 
     log_buffer->trace("buffer {}: allocated {} bytes at offset {}", gl_name(), byte_count, offset);
     return offset;
+}
+
+auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) noexcept -> gsl::span<std::byte>
+{
+    Expects(gl_name() != 0);
+
+    if (!Instance::info.use_persistent_buffers) {
+        Expects(m_map.empty());
+        //// ERHE_VERIFY(m_capacity_byte_count == m_cpu_copy.size());
+        //auto* const map_pointer = reinterpret_cast<std::byte*>(m_cpu_copy.data());
+        //m_map = gsl::span<std::byte>(map_pointer, m_capacity_byte_count);
+        if (byte_count == 0) {
+            byte_count = m_capacity_byte_count - byte_offset;
+        } else {
+            byte_count = std::min(byte_count, m_capacity_byte_count - byte_offset);
+        }
+        m_map_byte_offset = byte_offset;
+        m_map_buffer_access_mask = 
+            gl::Map_buffer_access_mask::map_flush_explicit_bit   |
+            //gl::Map_buffer_access_mask::map_invalidate_range_bit |
+            gl::Map_buffer_access_mask::map_write_bit;
+
+        auto* const map_pointer = reinterpret_cast<std::byte*>(
+            gl::map_named_buffer_range(
+                gl_name(),
+                byte_offset,
+                byte_count,
+                m_map_buffer_access_mask
+            )
+        );
+        ERHE_VERIFY(map_pointer != nullptr);
+
+        log_buffer->trace(
+            ":m_map_byte_offset = {}, m_map_byte_count = {}, m_map_pointer = {} {}",
+            m_map_byte_offset,
+            byte_count,
+            fmt::ptr(map_pointer),
+            debug_label()
+        );
+
+        m_map = gsl::span<std::byte>(map_pointer, byte_count);
+
+        Ensures(!m_map.empty());
+    }
+
+    return m_map;
+}
+
+void Buffer::end_write(
+    const std::size_t byte_offset,
+    const std::size_t byte_count
+) noexcept
+{
+    Expects(!m_map.empty());
+    Expects(gl_name() != 0);
+
+    if (!Instance::info.use_persistent_buffers) {
+        if (byte_count > 0) {
+            flush_bytes(byte_offset, byte_count);
+        }
+        unmap();
+    }
 }
 
 auto Buffer::map_all_bytes(
@@ -341,12 +439,13 @@ void Buffer::unmap() noexcept
     Expects(gl_name() != 0);
 
     log_buffer->trace(
-        "Buffer::unmap() target = {}, byte_offset = {}, byte_count = {}, pointer = {}, name = {}",
+        "Buffer::unmap() target = {}, byte_offset = {}, byte_count = {}, pointer = {}, name = {} {}",
         gl::c_str(m_target),
         m_map_byte_offset,
         m_map.size(),
         reinterpret_cast<intptr_t>(m_map.data()),
-        gl_name()
+        gl_name(),
+        debug_label()
     );
     //const log::Indenter indented;
     //Log::set_text_color(erhe::log::Console_color::GREY);
@@ -372,18 +471,23 @@ void Buffer::flush_bytes(
     // unmap will do flush
     ERHE_VERIFY(byte_offset + byte_count <= m_capacity_byte_count);
 
+    if (byte_count == 0) {
+        return;
+    }
+
     log_buffer->trace(
-       "Buffer::flush(byte_offset = {}, byte_count = {}) target = {}, m_mapped_ptr = {} name = {}",
+       "Buffer::flush(byte_offset = {}, byte_count = {}) target = {}, m_mapped_ptr = {} name = {} {}",
         byte_offset,
         byte_count,
         gl::c_str(m_target),
         reinterpret_cast<intptr_t>(m_map.data()),
-        gl_name()
+        gl_name(),
+        debug_label()
     );
 
     gl::flush_mapped_named_buffer_range(
         gl_name(),
-        static_cast<GLintptr>(byte_offset),
+        static_cast<GLintptr>(byte_offset - m_map_byte_offset),
         static_cast<GLsizeiptr>(byte_count)
     );
 }

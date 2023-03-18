@@ -90,6 +90,7 @@ Light_projections::Light_projections(
 
     for (const auto& light : lights) {
         const std::size_t light_index = light_projection_transforms.size();
+        //log_render->info("update light projection for {} index {}", light->describe(), light_index);
         auto transforms = light->projection_transforms(parameters);
         transforms.index = light_index;
         light_projection_transforms.push_back(transforms);
@@ -146,7 +147,8 @@ auto Light_buffer::update(
     auto&          writer            = m_light_buffer.writer();
     const auto     light_struct_size = m_light_interface->light_struct.size_bytes();
     const auto&    offsets           = m_light_interface->offsets;
-    const auto     light_gpu_data    = buffer.map();
+    const size_t   max_byte_count    = offsets.light_struct + (lights.size() + 1) * light_struct_size;
+    const auto     light_gpu_data    = writer.begin(&buffer, max_byte_count);
     uint32_t       directional_light_count{0u};
     uint32_t       spot_light_count       {0u};
     uint32_t       point_light_count      {0u};
@@ -159,8 +161,6 @@ auto Light_buffer::update(
     using erhe::graphics::as_span;
     using erhe::graphics::write;
 
-    writer.begin(buffer.target());
-
     const std::size_t common_offset = writer.write_offset;
 
     writer.write_offset += offsets.light_struct;
@@ -168,7 +168,7 @@ auto Light_buffer::update(
     std::size_t max_light_index{0};
 
     for (const auto& light : lights) {
-        //if ((writer.write_offset + entry_size) > buffer.capacity_byte_count())
+        //if ((writer.write_offset + entry_size) > writer.write_end)
         //{
         //    log_render->critical("light buffer capacity {} exceeded", buffer.capacity_byte_count());
         //    ERHE_FATAL("light buffer capacity exceeded");
@@ -200,18 +200,18 @@ auto Light_buffer::update(
             continue;
         }
 
-        const mat4  texture_from_world   = light_projection_transforms->texture_from_world.matrix();
-        const vec3  direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-        const vec3  position             = vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
-        const vec4  radiance             = vec4{light->intensity * light->color, light->range};
-        const auto  inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
-        const auto  outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
-        const vec4  position_inner_spot  = vec4{position, inner_spot_cos};
-        const vec4  direction_outer_spot = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
-        const auto  light_index          = light_projection_transforms->index;
-        const auto  light_offset         = light_array_offset + light_index * light_struct_size;
+        const mat4 texture_from_world   = light_projection_transforms->texture_from_world.matrix();
+        const vec3 direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+        const vec3 position             = vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        const vec4 radiance             = vec4{light->intensity * light->color, light->range};
+        const auto inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
+        const auto outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
+        const vec4 position_inner_spot  = vec4{position, inner_spot_cos};
+        const vec4 direction_outer_spot = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
+        const auto light_index          = light_projection_transforms->index;
+        const auto light_offset         = light_array_offset + light_index * light_struct_size;
 
-        ERHE_VERIFY(light_offset < buffer.capacity_byte_count());
+        ERHE_VERIFY(light_offset < writer.write_end);
         max_light_index = std::max(max_light_index, light_index);
         write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
@@ -241,22 +241,20 @@ auto Light_buffer::update(
     return writer.range;
 }
 
-auto Light_buffer::update_control(std::size_t light_index) -> erhe::application::Buffer_range
+auto Light_buffer::update_control(const std::size_t light_index) -> erhe::application::Buffer_range
 {
     ERHE_PROFILE_FUNCTION
 
     auto&      buffer     = m_control_buffer.current_buffer();
     auto&      writer     = m_control_buffer.writer();
     const auto entry_size = m_light_interface->light_control_block.size_bytes();
-    const auto gpu_data   = buffer.map();
-
-    writer.begin(buffer.target());
+    const auto gpu_data   = writer.begin(&buffer, entry_size);
 
     using erhe::graphics::as_span;
     using erhe::graphics::write;
 
     const auto uint_light_index = static_cast<uint32_t>(light_index);
-    write(gpu_data, writer.range.first_byte_offset + 0, as_span(uint_light_index));
+    write(gpu_data, writer.write_offset + 0, as_span(uint_light_index));
     writer.write_offset += entry_size;
 
     writer.end();
@@ -270,14 +268,14 @@ void Light_buffer::next_frame()
     m_control_buffer.next_frame();
 }
 
-void Light_buffer::bind_light_buffer()
+void Light_buffer::bind_light_buffer(const erhe::application::Buffer_range& range)
 {
-    m_light_buffer.bind();
+    m_light_buffer.bind(range);
 }
 
-void Light_buffer::bind_control_buffer()
+void Light_buffer::bind_control_buffer(const erhe::application::Buffer_range& range)
 {
-    m_control_buffer.bind();
+    m_control_buffer.bind(range);
 }
 
 } // namespace editor

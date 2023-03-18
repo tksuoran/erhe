@@ -171,7 +171,7 @@ auto Item::is_hidden() const -> bool
     return !is_visible();
 }
 
-auto Item::describe() -> std::string
+auto Item::describe() const -> std::string
 {
     return fmt::format(
         "type = {}, name = {}, id = {}, flags = {}",

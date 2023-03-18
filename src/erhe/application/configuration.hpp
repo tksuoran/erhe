@@ -84,26 +84,31 @@ public:
     class Graphics
     {
     public:
-        bool reverse_depth    {true};  // TODO move to editor
-        bool simpler_shaders  {true};  // TODO move to editor
-        bool post_processing  {true};  // TODO move to editor
-        bool use_time_query   {true};
-        bool force_no_bindless{false}; // TODO move to erhe::graphics
-        int  msaa_sample_count{4};     // TODO move to editor
+        bool reverse_depth              {true};  // TODO move to editor
+        bool simpler_shaders            {true};  // TODO move to editor
+        bool post_processing            {true};  // TODO move to editor
+        bool use_time_query             {true};
+        bool force_no_bindless          {false}; // TODO move to erhe::graphics
+        bool force_no_persistent_buffers{false}; // TODO move to erhe::graphics
+        bool initial_clear              {true};
+        int  msaa_sample_count          {4};     // TODO move to editor
     };
     Graphics graphics;
 
     class Window
     {
     public:
-        bool  show         {true};
-        bool  fullscreen   {false};
-        bool  use_finish   {false};
-        float sleep_time   {0.004f};
-        float wait_time    {0.000f};
-        int   swap_interval{1};
-        int   width        {1920};
-        int   height       {1080};
+        bool  show            {true};
+        bool  fullscreen      {false};
+        bool  use_finish      {false};
+        bool  use_transparency{false};
+        int   gl_major        {4};
+        int   gl_minor        {6};
+        float sleep_time      {0.004f};
+        float wait_time       {0.000f};
+        int   swap_interval   {1};
+        int   width           {1920};
+        int   height          {1080};
     };
     Window window;
 };

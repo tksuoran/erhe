@@ -5,6 +5,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 
+#include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -71,7 +72,11 @@ void Shadow_render_node::reconfigure(
         }
         if (resolution == 1) {
             float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
-            gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
+            if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
+                gl::clear_tex_image(m_texture->gl_name(), 0, gl::Pixel_format::depth_component, gl::Pixel_type::float_, &depth_clear_value);
+            } else {
+                // TODO
+            }
         }
     }
 

@@ -7,6 +7,7 @@
 
 #include <string_view>
 #include <mutex>
+#include <vector>
 
 namespace erhe::graphics
 {
@@ -56,6 +57,9 @@ public:
     void set_debug_label      (const std::string_view label) noexcept;
     void dump                 () const noexcept;
 
+    auto begin_write(std::size_t byte_offset, std::size_t byte_count) noexcept -> gsl::span<std::byte>;
+    void end_write  (std::size_t byte_offset, std::size_t byte_count) noexcept;
+
     template <typename T>
     [[nodiscard]]
     auto map_elements(
@@ -87,18 +91,24 @@ public:
     friend class Texture;
 
 private:
-    Gl_buffer               m_handle;
-    std::string             m_debug_label;
-    gl::Buffer_target       m_target             {gl::Buffer_target::array_buffer};
-    std::size_t             m_capacity_byte_count{0};
-    std::size_t             m_next_free_byte     {0};
-    gl::Buffer_storage_mask m_storage_mask       {0};
-    std::mutex              m_allocate_mutex;
+    void allocate_storage();
+    void capability_check(gl::Buffer_storage_mask storage_mask);
+    void capability_check(gl::Map_buffer_access_mask access_mask);
+
+    Gl_buffer                  m_handle;
+    std::string                m_debug_label;
+    gl::Buffer_target          m_target             {gl::Buffer_target::array_buffer};
+    std::size_t                m_capacity_byte_count{0};
+    std::size_t                m_next_free_byte     {0};
+    gl::Buffer_storage_mask    m_storage_mask       {0};
+    gl::Map_buffer_access_mask m_access_mask        {0};
+    std::mutex                 m_allocate_mutex;
 
     // Last MapBuffer
-    gsl::span<std::byte>        m_map;
-    std::size_t                 m_map_byte_offset       {0};
-    gl::Map_buffer_access_mask  m_map_buffer_access_mask{0};
+    gsl::span<std::byte>       m_map;
+    std::size_t                m_map_byte_offset       {0};
+    gl::Map_buffer_access_mask m_map_buffer_access_mask{0};
+    //std::vector<uint8_t>       m_cpu_copy;
 };
 
 class Buffer_hash

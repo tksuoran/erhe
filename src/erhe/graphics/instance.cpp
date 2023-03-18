@@ -151,7 +151,9 @@ void Instance::initialize()
     gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples,          &limits.max_framebuffer_samples);
     gl::get_integer_v(gl::Get_p_name::max_integer_samples,              &limits.max_integer_samples);
 
-    log_configuration->info("max samples: {} color {} depth {} framebuffer {} integer {}",
+    log_configuration->info(
+        "max samples = {}, max color texture samples = {}, max depth texture samples = {}, "
+        "max framebuffer samples = {}, max integer samples = {}",
         limits.max_samples,
         limits.max_color_texture_samples,
         limits.max_depth_texture_samples,
@@ -329,6 +331,16 @@ void Instance::initialize()
         }
     }
     log_configuration->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
+
+    info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
+    log_configuration->info("GL_ARB_buffer_storage supported : {}", info.use_sparse_texture);
+
+    if (
+        !gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access) &&
+        (info.gl_version < 450)
+    ) {
+        log_configuration->info("Direct state access is not supported by OpenGL driver. This is a fatal error.");
+    }
 }
 
 } // namespace erhe::graphics

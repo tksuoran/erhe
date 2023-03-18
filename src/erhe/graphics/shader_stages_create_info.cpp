@@ -1,5 +1,6 @@
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/graphics_log.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/toolkit/file.hpp"
@@ -115,7 +116,7 @@ auto Shader_stages::Create_info::final_source(
 ) const -> std::string
 {
     std::stringstream sb;
-    sb << "#version 460 core\n\n";
+    sb << "#version " << Instance::info.glsl_version << " core\n\n";
 
     if (!pragmas.empty()) {
         sb << "// Pragmas\n";
