@@ -678,6 +678,13 @@ void Node_tree_window::item_popup_menu(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
+    const auto& node       = as_node(item);
+    Scene_root* scene_root = reinterpret_cast<Scene_root*>(item->get_item_host());
+    if (!node || (scene_root == nullptr))
+    {
+        return;
+    }
+
     if (
         ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
         ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
@@ -691,21 +698,22 @@ void Node_tree_window::item_popup_menu(
             ImGuiPopupFlags_MouseButtonRight
         );
     }
+
     if ((m_popup_item != item) || m_popup_id_string.empty()) {
         return;
     }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
     const bool begin_popup_context_item = ImGui::BeginPopupEx(
         m_popup_id,
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
     );
     if (begin_popup_context_item) {
-        const auto& node       = as_node(item);
-        Scene_root* scene_root = reinterpret_cast<Scene_root*>(item->get_item_host());
-        if (node && (scene_root != nullptr)) {
-            auto parent_node = node->parent().lock();
+        auto parent_node = node->parent().lock();
 
-            bool close{false};
-            if (ImGui::Button("Create New Empty Node")) {
+        bool close{false};
+        if (ImGui::BeginMenu("Create")) {
+            if (ImGui::MenuItem("Empty Node")) {
                 m_operations.push_back(
                     [this, scene_root, parent_node]
                     ()
@@ -715,7 +723,7 @@ void Node_tree_window::item_popup_menu(
                 );
                 close = true;
             }
-            if (ImGui::Button("Create New Camera")) {
+            if (ImGui::MenuItem("Camera")) {
                 m_operations.push_back(
                     [this, scene_root, parent_node]
                     ()
@@ -725,7 +733,7 @@ void Node_tree_window::item_popup_menu(
                 );
                 close = true;
             }
-            if (ImGui::Button("Create New Light")) {
+            if (ImGui::MenuItem("Light")) {
                 m_operations.push_back(
                     [this, scene_root, parent_node]
                     ()
@@ -735,18 +743,27 @@ void Node_tree_window::item_popup_menu(
                 );
                 close = true;
             }
-            ImGui::EndPopup();
-            if (close) {
-                m_popup_item.reset();
-                m_popup_id_string.clear();
-                m_popup_id = 0;
-            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        ImGui::MenuItem("Cut");
+        ImGui::MenuItem("Copy");
+        ImGui::MenuItem("Paste");
+        ImGui::MenuItem("Duplicate");
+        ImGui::MenuItem("Delete");
+
+        ImGui::EndPopup();
+        if (close) {
+            m_popup_item.reset();
+            m_popup_id_string.clear();
+            m_popup_id = 0;
         }
     } else {
         m_popup_item.reset();
         m_popup_id_string.clear();
         m_popup_id = 0;
     }
+    ImGui::PopStyleVar(1);
 }
 
 void Node_tree_window::item_icon(
