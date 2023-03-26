@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/renderpass.hpp"
+#include "renderers/pipeline_renderpass.hpp"
 
 #include "erhe/application/rendergraph/texture_rendergraph_node.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
@@ -40,7 +40,7 @@ private:
     void initialize_pipeline();
 
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
-    Renderpass                                          m_renderpass;
+    Pipeline_renderpass                                 m_renderpass;
     int                                                 m_light_index{};
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
 };

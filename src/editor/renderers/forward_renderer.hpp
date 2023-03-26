@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/renderpass.hpp"
+#include "renderers/pipeline_renderpass.hpp"
 #include "renderers/material_buffer.hpp"
 #include "renderers/light_buffer.hpp"
 #include "renderers/camera_buffer.hpp"
@@ -67,8 +67,9 @@ public:
         const std::initializer_list<
             const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
-        const std::initializer_list<Renderpass* const>                     passes;
-        const erhe::graphics::Texture*                                     shadow_texture   {nullptr};
+        const std::initializer_list<Pipeline_renderpass* const>            passes;
+        erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+        const erhe::graphics::Texture*                                     shadow_texture{nullptr};
         const erhe::scene::Viewport&                                       viewport;
         const erhe::scene::Item_filter                                     filter{};
     };

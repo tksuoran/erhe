@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/renderpass.hpp"
+#include "renderers/pipeline_renderpass.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
 #endif

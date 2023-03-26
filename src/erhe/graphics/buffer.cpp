@@ -254,7 +254,7 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
             byte_count = std::min(byte_count, m_capacity_byte_count - byte_offset);
         }
         m_map_byte_offset = byte_offset;
-        m_map_buffer_access_mask = 
+        m_map_buffer_access_mask =
             gl::Map_buffer_access_mask::map_flush_explicit_bit   |
             //gl::Map_buffer_access_mask::map_invalidate_range_bit |
             gl::Map_buffer_access_mask::map_write_bit;

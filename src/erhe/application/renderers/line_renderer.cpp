@@ -452,7 +452,7 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto                   vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    auto                   vertex_gpu_data = m_vertex_writer.writable_data();
     std::byte* const       start           = vertex_gpu_data.data();
     const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
     const std::size_t      word_count      = byte_count / sizeof(float);
@@ -477,7 +477,7 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto                   vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    auto                   vertex_gpu_data = m_vertex_writer.writable_data();
     std::byte* const       start           = vertex_gpu_data.data();
     const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
     const std::size_t      word_count      = byte_count / sizeof(float);
@@ -536,7 +536,7 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto                   vertex_gpu_data = current_frame_resources().vertex_buffer.map();
+    auto                   vertex_gpu_data = m_vertex_writer.writable_data();
     std::byte* const       start           = vertex_gpu_data.data();
     const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
     const std::size_t      word_count      = byte_count / sizeof(float);
@@ -1348,7 +1348,7 @@ void Line_renderer::render(
     const vec4  view_position_in_world = camera_node->position_in_world();
     const auto  fov_sides              = camera.projection()->get_fov_sides(viewport);
     auto* const view_buffer            = &current_frame_resources().view_buffer;
-    const auto  view_gpu_data          = view_buffer->map();
+    const auto  view_gpu_data          = m_view_writer.writable_data();
     const float viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),

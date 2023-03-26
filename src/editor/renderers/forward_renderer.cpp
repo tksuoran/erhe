@@ -122,13 +122,14 @@ void Forward_renderer::render(const Render_parameters& parameters)
 {
     ERHE_PROFILE_FUNCTION
 
-    const auto& viewport       = parameters.viewport;
-    const auto* camera         = parameters.camera;
-    const auto& mesh_spans     = parameters.mesh_spans;
-    const auto& lights         = parameters.lights;
-    const auto& materials      = parameters.materials;
-    const auto& passes         = parameters.passes;
-    const auto& filter         = parameters.filter;
+    const auto& viewport      = parameters.viewport;
+    const auto* camera        = parameters.camera;
+    const auto& mesh_spans    = parameters.mesh_spans;
+    const auto& lights        = parameters.lights;
+    const auto& materials     = parameters.materials;
+    const auto& passes        = parameters.passes;
+    const auto& filter        = parameters.filter;
+    const auto primitive_mode = parameters.primitive_mode;
     const bool  enable_shadows =
         (g_shadow_renderer != nullptr) &&
         (!lights.empty()) &&
@@ -198,8 +199,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
         if (!pipeline.data.shader_stages) {
             continue;
         }
-
-        const auto primitive_mode = pass->primitive_mode; //select_primitive_mode(pass);
 
         if (pass->begin) {
             ERHE_PROFILE_SCOPE("pass begin");

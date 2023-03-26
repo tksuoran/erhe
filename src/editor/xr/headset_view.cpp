@@ -156,7 +156,8 @@ void Headset_view::initialize_component()
             configuration
         );
         if (!m_headset->is_valid()) {
-            log_headset->info("Headset not initialized");
+            log_headset->info("Headset initialization failed. Disabling OpenXR.");
+            config.openxr = false;
             m_headset.reset();
             return;
         }

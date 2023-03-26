@@ -4,8 +4,8 @@
 #include "renderers/forward_renderer.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
+#include "renderers/pipeline_renderpass.hpp"
 #include "renderers/programs.hpp"
-#include "renderers/renderpass.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/shadow_renderer.hpp"
 #include "renderers/viewport_config.hpp"
@@ -119,22 +119,22 @@ private:
 
     bool       m_trigger_capture{false};
 
-    Renderpass m_rp_polygon_fill_standard_opaque;
-    Renderpass m_rp_polygon_fill_standard_translucent;
-    Renderpass m_rp_tool1_hidden_stencil;
-    Renderpass m_rp_tool2_visible_stencil;
-    Renderpass m_rp_tool3_depth_clear;
-    Renderpass m_rp_tool4_depth;
-    Renderpass m_rp_tool5_visible_color;
-    Renderpass m_rp_tool6_hidden_color;
-    Renderpass m_rp_line_hidden_blend;
-    Renderpass m_rp_brush_back;
-    Renderpass m_rp_brush_front;
-    Renderpass m_rp_edge_lines;
-    Renderpass m_rp_corner_points;
-    Renderpass m_rp_polygon_centroids;
-    Renderpass m_rp_rendertarget_meshes;
-    Renderpass m_rp_sky;
+    Pipeline_renderpass m_rp_polygon_fill_standard_opaque;
+    Pipeline_renderpass m_rp_polygon_fill_standard_translucent;
+    Pipeline_renderpass m_rp_tool1_hidden_stencil;
+    Pipeline_renderpass m_rp_tool2_visible_stencil;
+    Pipeline_renderpass m_rp_tool3_depth_clear;
+    Pipeline_renderpass m_rp_tool4_depth;
+    Pipeline_renderpass m_rp_tool5_visible_color;
+    Pipeline_renderpass m_rp_tool6_hidden_color;
+    Pipeline_renderpass m_rp_line_hidden_blend;
+    Pipeline_renderpass m_rp_brush_back;
+    Pipeline_renderpass m_rp_brush_front;
+    Pipeline_renderpass m_rp_edge_lines;
+    Pipeline_renderpass m_rp_corner_points;
+    Pipeline_renderpass m_rp_polygon_centroids;
+    Pipeline_renderpass m_rp_rendertarget_meshes;
+    Pipeline_renderpass m_rp_sky;
 
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
@@ -454,7 +454,6 @@ void Editor_rendering_impl::setup_renderpasses()
 
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
-    m_rp_edge_lines.primitive_mode = erhe::primitive::Primitive_mode::edge_lines;
 
     m_rp_corner_points.pipeline.data = {
         .name           = "Corner Points",
@@ -465,7 +464,6 @@ void Editor_rendering_impl::setup_renderpasses()
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     };
-    m_rp_corner_points.primitive_mode = erhe::primitive::Primitive_mode::corner_points;
 
     m_rp_polygon_centroids.pipeline.data = {
         .name           = "Polygon Centroids",
@@ -476,7 +474,6 @@ void Editor_rendering_impl::setup_renderpasses()
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
         .color_blend    = Color_blend_state::color_blend_disabled
     };
-    m_rp_polygon_centroids.primitive_mode = erhe::primitive::Primitive_mode::polygon_centroids;
 
     m_rp_line_hidden_blend.pipeline.data = {
         .name                       = "Hidden lines with blending",
@@ -524,7 +521,6 @@ void Editor_rendering_impl::setup_renderpasses()
             .constant = { 0.0f, 0.0f, 0.0f, 0.2f }
         }
     };
-    m_rp_line_hidden_blend.primitive_mode = erhe::primitive::Primitive_mode::edge_lines;
 
     m_rp_brush_back.pipeline.data = {
         .name           = "Brush back faces",
@@ -862,11 +858,11 @@ void Editor_rendering_impl::render_content(
         //                             render_style.polygon_offset_clamp);
         //}
 
-        Renderpass renderpass = [this, blend_mode]() {
+        Pipeline_renderpass renderpass = [this, blend_mode]() {
             switch (blend_mode) {
                 case Blend_mode::opaque:      return m_rp_polygon_fill_standard_opaque;
                 case Blend_mode::translucent: return m_rp_polygon_fill_standard_translucent;
-                default:                      return Renderpass{};
+                default:                      return Pipeline_renderpass{};
             }
         }();
         if (context.override_shader_stages != nullptr) {
@@ -900,12 +896,13 @@ void Editor_rendering_impl::render_content(
         primitive_settings.constant_size  = render_style.line_width;
         g_forward_renderer->render(
             {
-                .camera     = context.camera,
-                .materials  = materials,
-                .mesh_spans = { layers.content()->meshes },
-                .passes     = { &m_rp_edge_lines },
-                .viewport   = context.viewport,
-                .filter     = filter
+                .camera         = context.camera,
+                .materials      = materials,
+                .mesh_spans     = { layers.content()->meshes },
+                .passes         = { &m_rp_edge_lines },
+                .primitive_mode = erhe::primitive::Primitive_mode::edge_lines,
+                .viewport       = context.viewport,
+                .filter         = filter
             }
         );
         gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
@@ -918,12 +915,13 @@ void Editor_rendering_impl::render_content(
         primitive_settings.constant_size  = render_style.point_size;
         g_forward_renderer->render(
             {
-                .camera     = context.camera,
-                .materials  = materials,
-                .mesh_spans = { layers.content()->meshes },
-                .passes     = { &m_rp_polygon_centroids },
-                .viewport   = context.viewport,
-                .filter     = filter
+                .camera         = context.camera,
+                .materials      = materials,
+                .mesh_spans     = { layers.content()->meshes },
+                .passes         = { &m_rp_polygon_centroids },
+                .primitive_mode = erhe::primitive::Primitive_mode::polygon_centroids,
+                .viewport       = context.viewport,
+                .filter         = filter
             }
         );
     }
@@ -935,12 +933,13 @@ void Editor_rendering_impl::render_content(
         primitive_settings.constant_size  = render_style.point_size;
         g_forward_renderer->render(
             {
-                .camera     = context.camera,
-                .materials  = materials,
-                .mesh_spans = { layers.content()->meshes },
-                .passes     = { &m_rp_corner_points },
-                .viewport   = context.viewport,
-                .filter     = filter
+                .camera         = context.camera,
+                .materials      = materials,
+                .mesh_spans     = { layers.content()->meshes },
+                .passes         = { &m_rp_corner_points },
+                .primitive_mode = erhe::primitive::Primitive_mode::corner_points,
+                .viewport       = context.viewport,
+                .filter         = filter
             }
         );
     }

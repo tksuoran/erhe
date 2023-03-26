@@ -1,9 +1,9 @@
-#include "renderers/renderpass.hpp"
+#include "renderers/pipeline_renderpass.hpp"
 
 namespace editor
 {
 
-void Renderpass::reset()
+void Pipeline_renderpass::reset()
 {
     pipeline.reset();
     begin = {};

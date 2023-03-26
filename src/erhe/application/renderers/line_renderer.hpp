@@ -244,6 +244,12 @@ private:
         std::size_t             map_offset  {0};
         std::size_t             write_offset{0};
 
+        auto writable_data() const -> gsl::span<std::byte>
+        {
+            const auto map = m_buffer->map();
+            return map.subspan(write_offset, map.size_bytes() - write_offset);
+        }
+
         void begin(erhe::graphics::Buffer* buffer)
         {
             ERHE_VERIFY(m_buffer == nullptr);

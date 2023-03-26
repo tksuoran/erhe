@@ -58,14 +58,14 @@ erhe_target_sources_grouped(
     renderers/material_buffer.hpp
     renderers/mesh_memory.cpp
     renderers/mesh_memory.hpp
+    renderers/pipeline_renderpass.cpp
+    renderers/pipeline_renderpass.hpp
     renderers/primitive_buffer.cpp
     renderers/primitive_buffer.hpp
     renderers/program_interface.cpp
     renderers/program_interface.hpp
     renderers/programs.cpp
     renderers/programs.hpp
-    renderers/renderpass.cpp
-    renderers/renderpass.hpp
     renderers/render_context.cpp
     renderers/render_context.hpp
     renderers/shadow_renderer.cpp
