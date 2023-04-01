@@ -58,7 +58,7 @@ auto Camera_buffer::update(
     float                          exposure
 ) -> erhe::application::Buffer_range
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
         log_render,
@@ -79,7 +79,7 @@ auto Camera_buffer::update(
         log_render->critical("camera buffer capacity {} exceeded", buffer.capacity_byte_count());
         ERHE_FATAL("camera buffer capacity exceeded");
     }
-    
+
     const float viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),

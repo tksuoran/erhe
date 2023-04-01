@@ -35,7 +35,7 @@ void Image_transfer::declare_required_components()
 
 void Image_transfer::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_image_transfer == nullptr);
 
     const erhe::application::Scoped_gl_context gl_context;

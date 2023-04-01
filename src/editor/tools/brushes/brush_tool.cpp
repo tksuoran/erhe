@@ -625,7 +625,7 @@ void Brush_tool_impl::update_mesh()
 void Brush_tool_impl::tool_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ImGui::Checkbox   ("Snap to Polygon", &m_snap_to_hover_polygon);
     ImGui::Checkbox   ("Snap To Grid",    &m_snap_to_grid);
@@ -643,7 +643,7 @@ void Brush_tool_impl::tool_render(
     const Render_context& context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         !m_debug_visualization ||

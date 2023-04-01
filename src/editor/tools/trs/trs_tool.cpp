@@ -147,7 +147,7 @@ void Trs_tool::declare_required_components()
 
 void Trs_tool::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_trs_tool == nullptr);
     g_trs_tool = this; // visualizations needs config
 
@@ -554,7 +554,7 @@ auto Trs_tool::get_axis_direction() const -> vec3
 
 void Trs_tool::update_axis_translate_2d(Viewport_window* viewport_window)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (viewport_window == nullptr) {
         return;
@@ -610,7 +610,7 @@ void Trs_tool::update_axis_translate_2d(Viewport_window* viewport_window)
 
 void Trs_tool::update_axis_translate_3d(Scene_view* scene_view)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (scene_view == nullptr) {
         log_trs_tool->trace("scene_view == nullptr");
@@ -757,7 +757,7 @@ auto Trs_tool::get_plane_side(const bool world) const -> vec3
 
 void Trs_tool::update_plane_translate_2d(Viewport_window* viewport_window)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (viewport_window == nullptr) {
         return;
@@ -795,7 +795,7 @@ void Trs_tool::update_plane_translate_2d(Viewport_window* viewport_window)
 
 void Trs_tool::update_plane_translate_3d(Scene_view* scene_view)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (scene_view == nullptr) {
         return;
@@ -891,7 +891,7 @@ auto Trs_tool::project_pointer_to_plane(
 
 void Trs_tool::update_rotate(Scene_view* scene_view)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // log_trs_tool->trace("update_rotate()");
 
@@ -1031,7 +1031,7 @@ void Trs_tool::tool_render(
     const Render_context& context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (context.camera != nullptr) {
         return;

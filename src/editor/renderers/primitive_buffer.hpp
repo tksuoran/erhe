@@ -1,5 +1,7 @@
 #pragma once
 
+#include "renderers/enums.hpp"
+
 #include "erhe/application/renderers/multi_buffer.hpp"
 
 #include "erhe/graphics/shader_resource.hpp"
@@ -38,20 +40,6 @@ public:
     std::size_t                     max_primitive_count;
 };
 
-enum class Primitive_color_source : unsigned int
-{
-    id_offset = 0,
-    mesh_wireframe_color,
-    constant_color,
-};
-
-enum class Primitive_size_source : unsigned int
-{
-    mesh_point_size = 0,
-    mesh_line_width,
-    constant_size
-};
-
 class Primitive_interface_settings
 {
 public:
@@ -88,6 +76,7 @@ public:
     auto update(
         const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         const erhe::scene::Item_filter&                            filter,
+        const Primitive_interface_settings&                        settings,
         bool                                                       use_id_ranges = false
     ) -> erhe::application::Buffer_range;
 
@@ -103,8 +92,6 @@ public:
     void reset_id_ranges();
     [[nodiscard]] auto id_offset() const -> uint32_t;
     [[nodiscard]] auto id_ranges() const -> const std::vector<Id_range>&;
-
-    Primitive_interface_settings settings;
 
 private:
     Primitive_interface*  m_primitive_interface{nullptr};

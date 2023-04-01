@@ -110,7 +110,7 @@ void Physics_window::viewport_toolbar(bool& hovered)
 void Physics_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (g_selection_tool == nullptr) {
         return;
@@ -186,7 +186,7 @@ void Physics_window::tool_render(
     const Render_context& context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (context.scene_view == nullptr) {
         return;

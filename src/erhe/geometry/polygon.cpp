@@ -18,7 +18,7 @@ auto Polygon::compute_normal(
     const Property_map<Point_id, glm::vec3>& point_locations
 ) const -> glm::vec3
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (corner_count < 3) {
         return {};
@@ -48,7 +48,7 @@ void Polygon::compute_normal(
     const Property_map<Point_id, vec3>& point_locations
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (corner_count < 3) {
         return;
@@ -210,7 +210,7 @@ void Polygon::compute_planar_texture_coordinates(
     const bool                                 overwrite
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (corner_count < 3)
 {

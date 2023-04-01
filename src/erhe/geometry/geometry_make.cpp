@@ -15,7 +15,7 @@ namespace erhe::geometry
 // - Polygon must be allocated
 auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id) -> Corner_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(point_id < m_next_point_id);
     Expects(polygon_id < m_next_polygon_id);
@@ -37,7 +37,7 @@ auto Geometry::make_corner(const Point_id point_id, const Polygon_id polygon_id)
 // Allocates new Point / Point_id
 auto Geometry::make_point() -> Point_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ++m_serial;
 
@@ -58,7 +58,7 @@ auto Geometry::make_point() -> Point_id
 // Allocates new Polygon / Polygon_id
 auto Geometry::make_polygon() -> Polygon_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ++m_serial;
 
@@ -80,7 +80,7 @@ auto Geometry::make_polygon() -> Polygon_id
 // - Points must be ordered
 auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ++m_serial;
 
@@ -108,7 +108,7 @@ auto Geometry::make_edge(const Point_id a, const Point_id b) -> Edge_id
 // - Corner must be already allocated.
 void Geometry::reserve_point_corner(const Point_id point_id, const Corner_id corner_id)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(point_id < m_next_point_id);
     Expects(corner_id < m_next_corner_id);
@@ -122,7 +122,7 @@ void Geometry::reserve_point_corner(const Point_id point_id, const Corner_id cor
 
 void Geometry::make_point_corners()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ++m_serial;
 
@@ -157,7 +157,7 @@ void Geometry::make_point_corners()
 
 void Geometry::sort_point_corners()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     class Point_corner_info
     {
@@ -275,7 +275,7 @@ void Geometry::sort_point_corners()
 // - Polygon must be already allocated.
 auto Geometry::make_edge_polygon(const Edge_id edge_id, const Polygon_id polygon_id) -> Edge_polygon_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(edge_id < m_next_edge_id);
     Expects(polygon_id < m_next_polygon_id);
@@ -317,7 +317,7 @@ auto Geometry::make_polygon_corner_(
     const Corner_id  corner_id
 ) -> Polygon_corner_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(polygon_id < m_next_polygon_id);
     Expects(corner_id < m_next_corner_id);
@@ -360,7 +360,7 @@ auto Geometry::make_polygon_corner(
     const Point_id   point_id
 ) -> Corner_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(polygon_id < m_next_polygon_id);
     Expects(point_id < m_next_point_id);
@@ -380,7 +380,7 @@ auto Geometry::make_point(
     const float z
 ) -> Point_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const Point_id point_id        = make_point();
     auto* const    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
@@ -398,7 +398,7 @@ auto Geometry::make_point(
     const float t
 ) -> Point_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const Point_id point_id        = make_point();
     auto* const    point_positions = point_attributes().find_or_create<glm::vec3>(c_point_locations);
@@ -434,7 +434,7 @@ auto Geometry::make_polygon(
     const std::initializer_list<Point_id> point_list
 ) -> Polygon_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const Polygon_id polygon_id = make_polygon();
     for (Point_id point_id : point_list)
@@ -447,7 +447,7 @@ auto Geometry::make_polygon(
 auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_list)
 -> Polygon_id
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const Polygon_id polygon_id = make_polygon();
     for (

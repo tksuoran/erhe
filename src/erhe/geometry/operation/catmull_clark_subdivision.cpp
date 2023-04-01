@@ -28,7 +28,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
 )
     : Geometry_operation{src, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     //                       (n-3)P
     // Make initial P's with ------

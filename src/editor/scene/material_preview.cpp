@@ -40,6 +40,7 @@ Material_preview* g_material_preview{nullptr};
 
 Material_preview::Material_preview()
     : erhe::components::Component{c_type_name}
+    , m_composer{"Material Preview Composer"}
 {
 }
 
@@ -81,7 +82,8 @@ void Material_preview::deinitialize_component()
 void Material_preview::declare_required_components()
 {
     require<Editor_scenes>();
-    require<Mesh_memory>();
+    require<Mesh_memory  >();
+    require<Programs     >();
 }
 
 void Material_preview::initialize_component()
@@ -264,6 +266,33 @@ void Material_preview::make_preview_scene()
         )
     );
 
+    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
+
+    auto* vertex_input = g_mesh_memory->vertex_input.get();
+
+    using erhe::graphics::Vertex_input_state;
+    using erhe::graphics::Input_assembly_state;
+    using erhe::graphics::Rasterization_state;
+    using erhe::graphics::Depth_stencil_state;
+    using erhe::graphics::Color_blend_state;
+
+    m_pipeline_renderpass.pipeline.data = {
+        .name           = "Polygon Fill Opaque",
+        .shader_stages  = g_programs->circular_brushed_metal.get(),
+        .vertex_input   = vertex_input,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        .color_blend    = Color_blend_state::color_blend_disabled
+    };
+
+    auto renderpass = std::make_shared<Renderpass>("Material Preview Renderpass");
+    renderpass->mesh_layers      = { Mesh_layer_id::content };
+    renderpass->primitive_mode   = erhe::primitive::Primitive_mode::polygon_fill;
+    renderpass->filter           = erhe::scene::Item_filter{};
+    renderpass->passes           = { &m_pipeline_renderpass };
+    m_composer.renderpasses.push_back(renderpass);
+
 }
 
 void Material_preview::render_preview(
@@ -295,7 +324,6 @@ void Material_preview::render_preview(
     gl::clear_depth_f(*erhe::application::g_configuration->depth_clear_value_pointer());
 
     Viewport_config viewport_config;
-    viewport_config.post_processing_enable = false;
 
     const auto& layers = m_scene_root->layers();
 
@@ -326,10 +354,7 @@ void Material_preview::render_preview(
         gl::Clear_buffer_mask::color_buffer_bit |
         gl::Clear_buffer_mask::depth_buffer_bit
     );
-    using Fill_mode      = IEditor_rendering::Fill_mode;
-    using Blend_mode     = IEditor_rendering::Blend_mode;
-    using Selection_mode = IEditor_rendering::Selection_mode;
-    g_editor_rendering->render_content(context, Fill_mode::fill, Blend_mode::opaque, Selection_mode::not_selected);
+    m_composer.render(context);
     gl::disable(gl::Enable_cap::scissor_test);
 }
 

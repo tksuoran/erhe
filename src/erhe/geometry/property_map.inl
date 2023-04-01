@@ -2,15 +2,15 @@
 
 #include <algorithm>
 
-#ifndef ERHE_PROFILE_FUNCTION
-#   define ERHE_PROFILE_FUNCTION
+#if !defined(ERHE_PROFILE_FUNCTION)
+#   define ERHE_PROFILE_FUNCTION()
 #   define ERHE_PROFILE_FUNCTION_DUMMY
 #endif
-#ifndef ERHE_VERIFY
+#if !defined(ERHE_VERIFY)
 #   define ERHE_VERIFY(condition) assert(condition)
 #   define ERHE_VERIFY_DUMMY
 #endif
-#ifndef ERHE_FATAL
+#if !defined(ERHE_FATAL)
 #   define ERHE_FATAL(format, ...) assert(false)
 #   define ERHE_FATAL_DUMMY
 #endif
@@ -29,7 +29,7 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::clear()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     values.clear();
     present.clear();
@@ -75,7 +75,7 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::put(Key_type key, Value_type value)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::size_t i = static_cast<std::size_t>(key);
     if (values.size() <= i) {
@@ -90,7 +90,7 @@ template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::get(Key_type key) const -> Value_type
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::size_t i = static_cast<std::size_t>(key);
     if ((values.size() <= i) || !present[i]) {
@@ -103,7 +103,7 @@ template <typename Key_type, typename Value_type>
 inline void
 Property_map<Key_type, Value_type>::erase(Key_type key)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::size_t i = static_cast<std::size_t>(key);
     if (values.size() <= i) {
@@ -117,7 +117,7 @@ template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::maybe_get(Key_type key, Value_type& out_value) const -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::size_t i = static_cast<size_t>(key);
     if ((values.size() <= i) || !present[i]) {
@@ -132,7 +132,7 @@ template <typename Key_type, typename Value_type>
 inline auto
 Property_map<Key_type, Value_type>::has(Key_type key) const -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::size_t i = static_cast<std::size_t>(key);
     if ((values.size() <= i) || !present[i]) {
@@ -147,7 +147,7 @@ Property_map<Key_type, Value_type>::constructor(
     const Property_map_descriptor& descriptor
 ) const -> Property_map_base<Key_type>*
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Property_map<Key_type, Value_type>* instance = new Property_map<Key_type, Value_type>(descriptor);
     Property_map_base<Key_type>*        base_ptr = dynamic_cast<Property_map_base<Key_type>*>(instance);
@@ -161,7 +161,7 @@ Property_map<Key_type, Value_type>::interpolate(
     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     auto* destination = dynamic_cast<Property_map<Key_type, Value_type>*>(destination_base);
     ERHE_VERIFY(destination != nullptr);
@@ -268,7 +268,7 @@ Property_map<Key_type, Value_type>::import_from(
     Property_map_base<Key_type>* source_base
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto* const source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
     ERHE_VERIFY(source != nullptr);
@@ -288,7 +288,7 @@ Property_map<Key_type, Value_type>::transform(
     const glm::mat4 transform
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(values.size() == present.size());
 
@@ -356,7 +356,7 @@ Property_map<Key_type, Value_type>::import_from(
     const glm::mat4              transform
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     auto* source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
     ERHE_VERIFY(source != nullptr);
@@ -421,19 +421,19 @@ Property_map<Key_type, Value_type>::import_from(
 
 } // namespace erhe::geometry
 
-#ifdef ERHE_PROFILE_FUNCTION_DUMMY
+#if defined(ERHE_PROFILE_FUNCTION_DUMMY)
 #   undef ERHE_PROFILE_FUNCTION
 #   undef ERHE_PROFILE_FUNCTION_DUMMY
 #endif
-#ifdef ERHE_VERIFY_DUMMY
+#if defined(ERHE_VERIFY_DUMMY)
 #   undef ERHE_VERIFY
 #   undef ERHE_VERIFY_DUMMY
 #endif
-#ifdef ERHE_FATAL_DUMMY
+#if defined(ERHE_FATAL_DUMMY)
 #   undef ERHE_FATAL
 #   undef ERHE_FATAL_DUMMY
 #endif
-#ifdef SPDLOG_LOGGER_TRACE_DUMMY
+#if defined(SPDLOG_LOGGER_TRACE_DUMMY)
 #   undef SPDLOG_LOGGER_TRACE
 #   undef SPDLOG_LOGGER_TRACE_DUMMY
 #endif

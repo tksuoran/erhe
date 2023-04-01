@@ -35,7 +35,7 @@ auto Draw_indirect_buffer::update(
     const erhe::scene::Item_filter&                            filter
 ) -> Draw_indirect_buffer_range
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
         log_render,

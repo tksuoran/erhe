@@ -64,7 +64,7 @@ Xr_session::Xr_session(
         XR_FALSE
     }
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_xr->trace("{}", __func__);
 
@@ -125,7 +125,7 @@ Xr_session::Xr_session(
 
 auto Xr_session::create_session() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_xr->trace("{}", __func__);
 
@@ -491,7 +491,7 @@ auto Xr_session::attach_actions() -> bool
 
 auto Xr_session::create_hand_tracking() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
@@ -586,7 +586,7 @@ void Xr_session::update_view_pose()
 
 void Xr_session::update_hand_tracking()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_instance.xrLocateHandJointsEXT == nullptr) {
         return;
@@ -689,7 +689,7 @@ auto Xr_session::get_hand_tracking_active(const XrHandEXT hand) const -> bool
 
 auto Xr_session::begin_frame() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
@@ -718,7 +718,7 @@ auto Xr_session::begin_frame() -> bool
 
 auto Xr_session::wait_frame() -> XrFrameState*
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return nullptr;
@@ -753,7 +753,7 @@ auto Xr_session::wait_frame() -> XrFrameState*
 
 auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_callback) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;
@@ -905,7 +905,7 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
 
 auto Xr_session::end_frame(const bool rendered) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_session == XR_NULL_HANDLE) {
         return false;

@@ -183,7 +183,7 @@ auto Node::type_name() const -> const char*
 
 void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(attachment);
 
@@ -200,7 +200,7 @@ void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
 
 auto Node::detach(Node_attachment* attachment) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!attachment) {
         log->warn("empty attachment, cannot detach");
@@ -473,7 +473,7 @@ void Node::set_parent(
 
 void Node::set_depth_recursive(const std::size_t depth)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (node_data.depth == depth)  {
         return;
@@ -533,7 +533,7 @@ void Node::handle_scene_host_update(
 
 void Node::handle_transform_update(const uint64_t serial) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const uint64_t effective_serial = (serial > 0)
         ? serial
@@ -556,7 +556,7 @@ auto Node::root() -> std::weak_ptr<Node>
 
 void Node::update_transform(uint64_t serial) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto& current_parent = parent().lock();
     if (!current_parent) {
@@ -797,7 +797,7 @@ void Node::set_parent_from_node(const glm::mat4 parent_from_node)
 
 void Node::set_parent_from_node(const Transform& parent_from_node)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     node_data.transforms.parent_from_node = parent_from_node;
     update_world_from_node();

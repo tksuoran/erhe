@@ -255,7 +255,7 @@ auto Brush::get_scaled(const float scale) -> const Scaled&
 
 auto Brush::create_scaled(const int scale_key) -> Scaled
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const float scale    = static_cast<float>(scale_key) / c_scale_factor;
     const auto  geometry = get_geometry();
@@ -395,7 +395,7 @@ auto Brush::make_instance(
     const Instance_create_info& instance_create_info
 ) -> std::shared_ptr<erhe::scene::Node>
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     late_initialize();
 

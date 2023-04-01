@@ -15,7 +15,7 @@ namespace erhe::geometry::operation
 Subdivide::Subdivide(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // Add midpoints to edges and connect to polygon center
 

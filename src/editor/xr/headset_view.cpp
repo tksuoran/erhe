@@ -116,7 +116,7 @@ void Headset_view::declare_required_components()
 
 void Headset_view::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_headset_view == nullptr);
     g_headset_view = this; // we have early out
 
@@ -204,7 +204,7 @@ void Headset_view::post_initialize()
 
 void Headset_view::tool_render(const Render_context& context)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     static_cast<void>(context);
 
@@ -268,7 +268,7 @@ auto Headset_view::get_headset_view_resources(
     erhe::xr::Render_view& render_view
 ) -> std::shared_ptr<Headset_view_resources>
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     auto match_color_texture = [&render_view](const auto& i)
     {
@@ -308,7 +308,7 @@ static constexpr std::string_view c_id_headset_render_content{"HS render content
 
 void Headset_view::update_pointer_context_from_controller()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     auto* left_aim_pose  = m_headset->get_actions_left().aim_pose;
     auto* right_aim_pose = m_headset->get_actions_right().aim_pose;
@@ -336,7 +336,7 @@ void Headset_view::update_pointer_context_from_controller()
 
 void Headset_view::render_headset()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_headset == nullptr) {
         return;
@@ -420,31 +420,15 @@ void Headset_view::render_headset()
                     .viewport        = viewport
                 };
 
-                using Fill_mode      = IEditor_rendering::Fill_mode;
-                using Blend_mode     = IEditor_rendering::Blend_mode;
-                using Selection_mode = IEditor_rendering::Selection_mode;
+                g_editor_rendering->render_composer(render_context);
 
-                // Opaque
-                g_editor_rendering->render_content(render_context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::not_selected);
-                g_editor_rendering->render_content(render_context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::selected);
-                g_editor_rendering->render_content(render_context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::not_selected);
-                g_editor_rendering->render_content(render_context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::selected);
-                g_editor_rendering->render_sky    (render_context);
-
-                // Transparent
-                g_editor_rendering->render_content            (render_context, Fill_mode::fill,    Blend_mode::translucent, Selection_mode::any);
-                g_editor_rendering->render_content            (render_context, Fill_mode::outline, Blend_mode::translucent, Selection_mode::any);
-                g_editor_rendering->render_rendertarget_meshes(render_context);
-
-                if (erhe::application::g_line_renderer_set != nullptr) { // && m_headset->trigger_value() > 0.0f)
+                if (erhe::application::g_line_renderer_set != nullptr) {
                     ERHE_PROFILE_GPU_SCOPE(c_id_headset_render_content)
                     erhe::application::g_line_renderer_set->begin();
                     g_tools->render_tools(render_context);
                     erhe::application::g_line_renderer_set->render(viewport, *render_context.camera);
                     erhe::application::g_line_renderer_set->end();
                 }
-                g_editor_rendering->render_brush      (render_context);
-                g_editor_rendering->render_tool_meshes(render_context);
             }
 
             return true;
@@ -457,7 +441,7 @@ void Headset_view::render_headset()
 
 void Headset_view::setup_root_camera()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_root_camera = std::make_shared<erhe::scene::Camera>(
         "Headset Root Camera"
@@ -529,7 +513,7 @@ void Headset_view::add_finger_input(
 
 void Headset_view::begin_frame()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!m_headset) {
         return;

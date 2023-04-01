@@ -249,7 +249,7 @@ auto Application_impl::initialize_components(
     char**       argv
 ) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     erhe::application::log_startup->info("Parsing args");
     configuration.parse_args(argc, argv);

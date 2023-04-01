@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Ambo::Ambo(Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     make_polygon_centroids();
     make_edge_midpoints();

@@ -76,7 +76,7 @@ void Forward_renderer::declare_required_components()
 static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
 void Forward_renderer::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_forward_renderer == nullptr);
 
     const erhe::application::Scoped_gl_context gl_context;
@@ -108,28 +108,18 @@ void Forward_renderer::next_frame()
     m_primitive_buffers    ->next_frame();
 }
 
-auto Forward_renderer::primitive_settings() -> Primitive_interface_settings&
-{
-    return m_primitive_buffers->settings;
-}
-
-auto Forward_renderer::primitive_settings() const -> const Primitive_interface_settings&
-{
-    return m_primitive_buffers->settings;
-}
-
 void Forward_renderer::render(const Render_parameters& parameters)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
-    const auto& viewport      = parameters.viewport;
-    const auto* camera        = parameters.camera;
-    const auto& mesh_spans    = parameters.mesh_spans;
-    const auto& lights        = parameters.lights;
-    const auto& materials     = parameters.materials;
-    const auto& passes        = parameters.passes;
-    const auto& filter        = parameters.filter;
-    const auto primitive_mode = parameters.primitive_mode;
+    const auto& viewport       = parameters.viewport;
+    const auto* camera         = parameters.camera;
+    const auto& mesh_spans     = parameters.mesh_spans;
+    const auto& lights         = parameters.lights;
+    const auto& materials      = parameters.materials;
+    const auto& passes         = parameters.passes;
+    const auto& filter         = parameters.filter;
+    const auto  primitive_mode = parameters.primitive_mode;
     const bool  enable_shadows =
         (g_shadow_renderer != nullptr) &&
         (!lights.empty()) &&
@@ -196,7 +186,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
-        if (!pipeline.data.shader_stages) {
+        const bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
+        if (
+            (pipeline.data.shader_stages == nullptr) &&
+            !use_override_shader_stages
+        ) {
             continue;
         }
 
@@ -207,7 +201,10 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
-        erhe::graphics::g_opengl_state_tracker->execute(pipeline);
+        if (use_override_shader_stages) {
+            erhe::graphics::g_opengl_state_tracker->shader_stages.execute(parameters.override_shader_stages);
+        }
+        erhe::graphics::g_opengl_state_tracker->execute(pipeline, use_override_shader_stages);
 
         for (const auto& meshes : mesh_spans) {
             ERHE_PROFILE_SCOPE("mesh span");
@@ -216,7 +213,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 continue;
             }
 
-            const auto primitive_range            = m_primitive_buffers->update(meshes, filter);
+            const auto primitive_range            = m_primitive_buffers->update(meshes, filter, parameters.primitive_settings);
             const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(meshes, primitive_mode, filter);
             if (draw_indirect_buffer_range.draw_indirect_count == 0) {
                 continue;
@@ -260,7 +257,7 @@ void Forward_renderer::render_fullscreen(
     const erhe::scene::Light* light
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto& viewport       = parameters.viewport;
     const auto* camera         = parameters.camera;

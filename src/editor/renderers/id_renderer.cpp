@@ -120,7 +120,7 @@ static constexpr std::string_view c_id_renderer_initialize_component{"Id_rendere
 
 void Id_renderer::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_id_renderer == nullptr);
     g_id_renderer = this; // due to early exit
 
@@ -170,7 +170,7 @@ void Id_renderer::initialize_component()
 
 void Id_renderer::create_id_frame_resources()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_id_frame_resources.emplace_back(slot);
@@ -197,7 +197,7 @@ void Id_renderer::next_frame()
 
 void Id_renderer::update_framebuffer(const erhe::scene::Viewport viewport)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!config.enabled) {
         return;
@@ -282,7 +282,7 @@ void Id_renderer::render(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const erhe::scene::Item_filter id_filter{
         .require_all_bits_set           = erhe::scene::Item_flags::visible | erhe::scene::Item_flags::id,
@@ -290,7 +290,12 @@ void Id_renderer::render(
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
     };
-    const auto primitive_range            = m_primitive_buffers->update(meshes, id_filter, true);
+
+    const Primitive_interface_settings settings{
+        .color_source = Primitive_color_source::id_offset
+    };
+
+    const auto primitive_range            = m_primitive_buffers->update(meshes, id_filter, settings, true);
     const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
         meshes,
         erhe::primitive::Primitive_mode::polygon_fill,
@@ -325,7 +330,7 @@ static constexpr std::string_view c_id_renderer_render_read   {"Id_renderer::ren
 
 void Id_renderer::render(const Render_parameters& parameters)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!config.enabled) {
         return;
@@ -360,8 +365,6 @@ void Id_renderer::render(const Render_parameters& parameters)
     idr.x_offset        = std::max(x - (static_cast<int>(s_extent / 2)), 0);
     idr.y_offset        = std::max(y - (static_cast<int>(s_extent / 2)), 0);
     idr.clip_from_world = clip_from_world;
-
-    m_primitive_buffers->settings.color_source = Primitive_color_source::id_offset;
 
     const auto camera_range = m_camera_buffers->update(
         *camera->projection(),

@@ -45,7 +45,7 @@ void Editor_view_client::declare_required_components()
 
 void Editor_view_client::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_editor_view_client == nullptr);
 
     erhe::application::g_view->set_client(this);

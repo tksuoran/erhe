@@ -394,7 +394,7 @@ void Node_tree_window::drag_and_drop_source(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto id = item->get_id();
     m_tree_items.emplace(id, item);
@@ -474,7 +474,7 @@ auto Node_tree_window::drag_and_drop_target(
     const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!item) {
         return false;
@@ -581,7 +581,7 @@ void Node_tree_window::item_update_selection(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!g_selection_tool) {
         SPDLOG_LOGGER_TRACE(
@@ -814,7 +814,7 @@ auto Node_tree_window::item_icon_and_text(
     const bool                                update
 ) -> Tree_node_state
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     item_icon(item);
 
@@ -899,7 +899,7 @@ void Node_tree_window::imgui_item_node(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!m_filter(item->get_flag_bits())) {
         //// log_node_properties->info("filtered {}", item->describe());
@@ -966,7 +966,7 @@ auto Node_tree_window::expand_attachments() const -> bool
 void Node_tree_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
 #if 1 //// TODO
     ImGui::Checkbox("Expand Attachments", &m_expand_attachments);

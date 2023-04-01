@@ -45,7 +45,7 @@ void Tool_properties_window::initialize_component()
 void Tool_properties_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (g_tools == nullptr) {
         return;

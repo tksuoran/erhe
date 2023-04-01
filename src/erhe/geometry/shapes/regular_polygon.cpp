@@ -8,7 +8,7 @@ namespace erhe::geometry::shapes
 
 auto make_triangle(const double r) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const double a = sqrt(3.0) / 3.0; // 0.57735027
     const double b = sqrt(3.0) / 6.0; // 0.28867513
@@ -30,7 +30,7 @@ auto make_triangle(const double r) -> Geometry
 
 auto make_quad(const double edge) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     //
     //  0.707106781 = sqrt(2) / 2
@@ -66,7 +66,7 @@ auto make_rectangle(
     const bool   back_face
 ) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "rectangle",

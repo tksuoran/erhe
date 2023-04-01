@@ -58,7 +58,7 @@ void Hover_tool::declare_required_components()
 
 void Hover_tool::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_hover_tool == nullptr);
 
     set_flags(Tool_flags::background);
@@ -169,7 +169,7 @@ void Hover_tool::tool_render(
     const Render_context& context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (context.scene_view == nullptr) {
         return;

@@ -491,7 +491,7 @@ void calculate_bounding_volume(
     Bounding_sphere&              bounding_sphere
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     bounding_box.min = vec3{std::numeric_limits<float>::max()};
     bounding_box.max = vec3{std::numeric_limits<float>::lowest()};

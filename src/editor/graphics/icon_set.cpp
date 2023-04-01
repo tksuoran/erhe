@@ -47,7 +47,7 @@ void Icon_set::declare_required_components()
 
 void Icon_set::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_icon_set == nullptr);
 
     auto ini = erhe::application::get_ini("erhe.ini", "icons");

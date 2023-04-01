@@ -205,7 +205,7 @@ auto make_disc(
     const int    stack_count
 ) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "disc",
@@ -228,7 +228,7 @@ auto make_disc(
     const int    stack_end
 ) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "disc",

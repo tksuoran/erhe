@@ -140,7 +140,7 @@ void Scene_builder::declare_required_components()
 
 void Scene_builder::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_scene_builder == nullptr);
 
     auto ini = erhe::application::get_ini("erhe.ini", "scene");
@@ -408,7 +408,7 @@ auto Scene_builder::make_brush(
 
 void Scene_builder::make_brushes()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     std::unique_ptr<ITask_queue> execution_queue;
 
@@ -857,7 +857,7 @@ auto Scene_builder::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_q
 
 void Scene_builder::add_room()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!m_floor_brush) {
         return;
@@ -891,7 +891,7 @@ void Scene_builder::add_room()
 
 void Scene_builder::make_mesh_nodes()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_scene_root->scene().sanity_check();
 
@@ -1044,7 +1044,7 @@ void Scene_builder::make_mesh_nodes()
 
 void Scene_builder::make_cube_benchmark()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_scene_root->scene().sanity_check();
 
@@ -1272,7 +1272,7 @@ void Scene_builder::animate_lights(const double time_d)
 
 void Scene_builder::setup_scene()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     setup_cameras();
     setup_lights();

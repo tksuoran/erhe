@@ -199,7 +199,7 @@ void Imgui_viewport_window::hidden()
 void Imgui_viewport_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Rendergraph_node::set_enabled(true);
 

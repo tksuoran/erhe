@@ -64,14 +64,16 @@ public:
         const Light_projections*                                           light_projections{nullptr};
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
         const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
-        const std::initializer_list<
-            const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
+        const std::vector<
+            gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
         >&                                                                 mesh_spans;
-        const std::initializer_list<Pipeline_renderpass* const>            passes;
+        const std::vector<Pipeline_renderpass*>                            passes;
         erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
+        Primitive_interface_settings                                       primitive_settings;
         const erhe::graphics::Texture*                                     shadow_texture{nullptr};
         const erhe::scene::Viewport&                                       viewport;
         const erhe::scene::Item_filter                                     filter{};
+        const erhe::graphics::Shader_stages*                               override_shader_stages{nullptr};
     };
 
     void render(const Render_parameters& parameters);
@@ -82,9 +84,6 @@ public:
     );
 
     void next_frame();
-
-    auto primitive_settings() -> Primitive_interface_settings&;
-    auto primitive_settings() const -> const Primitive_interface_settings&;
 
 private:
     std::optional<Material_buffer     >      m_material_buffers;

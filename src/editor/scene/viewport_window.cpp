@@ -71,7 +71,7 @@ Viewport_window::Viewport_window(
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
     : erhe::application::Rendergraph_node{name}
-    , m_viewport_config                  {g_viewport_config_window->data}
+    , m_viewport_config                  {g_viewport_config_window->config}
     , m_name                             {name}
     , m_scene_root                       {scene_root}
     , m_tool_scene_root                  {g_tools->get_tool_scene_root()}
@@ -125,7 +125,7 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
 
 void Viewport_window::execute_rendergraph_node()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto& output_viewport = get_producer_output_viewport(
         erhe::application::Resource_routing::Resource_provided_by_consumer,
@@ -319,7 +319,7 @@ void Viewport_window::update_pointer_2d_position(
     const glm::vec2 position_in_viewport
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_position_in_viewport = position_in_viewport;
 }

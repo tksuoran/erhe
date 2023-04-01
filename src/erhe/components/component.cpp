@@ -26,7 +26,7 @@ auto c_str(const Component_state state) -> const char*
 Component::Component(const std::string_view name)
     : m_name{name}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 }
 
 Component::~Component() noexcept

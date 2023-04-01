@@ -93,7 +93,7 @@ static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow
 
 void Shadow_renderer::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_shadow_renderer == nullptr);
 
     auto ini = erhe::application::get_ini("erhe.ini", "shadow_renderer");
@@ -251,7 +251,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         return false;
     }
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ERHE_PROFILE_GPU_SCOPE(c_shadow_renderer_render)
 
@@ -286,7 +286,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     m_light_buffers->bind_light_buffer(light_range);
 
     for (const auto& meshes : mesh_spans) {
-        const auto primitive_range = m_primitive_buffers->update(meshes, shadow_filter);
+        const auto primitive_range = m_primitive_buffers->update(meshes, shadow_filter, Primitive_interface_settings{});
         const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
             meshes,
             erhe::primitive::Primitive_mode::polygon_fill,

@@ -25,7 +25,7 @@ namespace erhe::geometry::operation
 Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     source.for_each_point_const([&](auto& i)
     {

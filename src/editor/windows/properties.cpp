@@ -85,7 +85,7 @@ void Properties::initialize_component()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Properties::camera_properties(erhe::scene::Camera& camera) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
@@ -214,7 +214,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
 
 void Properties::light_properties(erhe::scene::Light& light) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
@@ -248,7 +248,7 @@ void Properties::light_properties(erhe::scene::Light& light) const
 
 void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     //ERHE_VERIFY(mesh.node_data.host != nullptr);
 
@@ -362,7 +362,7 @@ auto custom_drag_scalar(
     const char*       format  = "%.3f"
 ) -> Custom_drag_result
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ImGuiDataType      data_type = ImGuiDataType_Float;
     ImGuiSliderFlags   flags = 0;
@@ -470,7 +470,7 @@ auto Properties::make_scalar_button(
     const char* const imgui_label
 ) const -> Value_edit_state
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ImGui::PushStyleColor  (ImGuiCol_Text,          text_color);
     ImGui::PushStyleColor  (ImGuiCol_Button,        background_color);
@@ -513,7 +513,7 @@ auto Properties::make_angle_button(
     const char* const imgui_label
 ) const -> Value_edit_state
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ImGui::PushStyleColor  (ImGuiCol_Text,          text_color);
     ImGui::PushStyleColor  (ImGuiCol_Button,        background_color);
@@ -586,7 +586,7 @@ auto Properties::drop_node_state(erhe::scene::Node& node)
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 void Properties::transform_properties(erhe::scene::Node& node)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
@@ -873,7 +873,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
 void Properties::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto selected_material = g_content_library_window->selected_material();

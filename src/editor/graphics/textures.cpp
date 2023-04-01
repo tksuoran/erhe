@@ -31,7 +31,7 @@ void Textures::declare_required_components()
 
 void Textures::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const erhe::application::Scoped_gl_context gl_context;
 

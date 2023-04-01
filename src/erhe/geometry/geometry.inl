@@ -2,7 +2,7 @@
 
 //#include "erhe/toolkit/profile.hpp"
 #ifndef ERHE_PROFILE_FUNCTION
-#   define ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION()
 #   define ERHE_PROFILE_FUNCTION_DUMMY
 #endif
 
@@ -17,7 +17,7 @@ void Geometry::smooth_normalize(
     const float                                max_smoothing_angle_radians
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const float cos_max_smoothing_angle = std::cos(max_smoothing_angle_radians);
 
@@ -54,7 +54,7 @@ void Geometry::smooth_average(
     const Property_map<Polygon_id, glm::vec3>& point_normals
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for_each_polygon(
         [&](auto& i)

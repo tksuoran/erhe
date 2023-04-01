@@ -50,7 +50,7 @@ void Shader_monitor::declare_required_components()
 
 void Shader_monitor::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_shader_monitor == nullptr);
     g_shader_monitor = this; // here due to early exit
 
@@ -152,7 +152,7 @@ void Shader_monitor::poll_thread()
 void Shader_monitor::update_once_per_frame(const erhe::components::Time_context& time_context)
 {
     static_cast<void>(time_context);
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::lock_guard<std::mutex> lock{m_mutex};
 

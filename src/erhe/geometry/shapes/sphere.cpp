@@ -409,7 +409,7 @@ auto make_sphere(
     const unsigned int stack_division
 ) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "sphere",

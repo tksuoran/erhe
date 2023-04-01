@@ -88,9 +88,10 @@ class Mesh_layer_id
 public:
     static constexpr erhe::scene::Layer_id brush        = 0;
     static constexpr erhe::scene::Layer_id content      = 1;
-    static constexpr erhe::scene::Layer_id controller   = 2;
-    static constexpr erhe::scene::Layer_id tool         = 3;
-    static constexpr erhe::scene::Layer_id rendertarget = 4;
+    static constexpr erhe::scene::Layer_id sky          = 2;
+    static constexpr erhe::scene::Layer_id controller   = 3;
+    static constexpr erhe::scene::Layer_id tool         = 4;
+    static constexpr erhe::scene::Layer_id rendertarget = 5;
 };
 
 class Scene_layers
@@ -98,12 +99,13 @@ class Scene_layers
 public:
     explicit Scene_layers(erhe::scene::Scene& scene);
 
-    [[nodiscard]] auto brush       () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto content     () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto controller  () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto tool        () const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto rendertarget() const -> erhe::scene::Mesh_layer*;
-    [[nodiscard]] auto light       () const -> erhe::scene::Light_layer*;
+    [[nodiscard]] auto get_layer_by_id(erhe::scene::Layer_id id) const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto brush          () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto content        () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto controller     () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto tool           () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto rendertarget   () const -> erhe::scene::Mesh_layer*;
+    [[nodiscard]] auto light          () const -> erhe::scene::Light_layer*;
 
 private:
     std::shared_ptr<erhe::scene::Mesh_layer>  m_content;

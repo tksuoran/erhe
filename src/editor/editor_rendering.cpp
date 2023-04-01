@@ -1,6 +1,7 @@
 #include "editor_rendering.hpp"
 
 #include "editor_log.hpp"
+#include "renderers/composer.hpp"
 #include "renderers/forward_renderer.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -45,6 +46,8 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <initializer_list>
+
 namespace editor {
 
 using erhe::graphics::Color_blend_state;
@@ -71,72 +74,64 @@ auto Capture_frame_command::try_call() -> bool
 }
 #pragma endregion Commands
 
+class Pipeline_renderpasses
+{
+public:
+    void initialize();
+
+    std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
+    Pipeline_renderpass polygon_fill_standard_opaque;
+    Pipeline_renderpass polygon_fill_standard_translucent;
+    Pipeline_renderpass tool1_hidden_stencil;
+    Pipeline_renderpass tool2_visible_stencil;
+    Pipeline_renderpass tool3_depth_clear;
+    Pipeline_renderpass tool4_depth;
+    Pipeline_renderpass tool5_visible_color;
+    Pipeline_renderpass tool6_hidden_color;
+    Pipeline_renderpass line_hidden_blend;
+    Pipeline_renderpass brush_back;
+    Pipeline_renderpass brush_front;
+    Pipeline_renderpass edge_lines;
+    Pipeline_renderpass corner_points;
+    Pipeline_renderpass polygon_centroids;
+    Pipeline_renderpass rendertarget_meshes;
+    Pipeline_renderpass sky;
+};
+
 IEditor_rendering::~IEditor_rendering() noexcept = default;
 
 class Editor_rendering_impl
     : public IEditor_rendering
 {
 public:
-    Editor_rendering_impl()
-    {
-        ERHE_VERIFY(g_editor_rendering == nullptr);
-        g_editor_rendering = this;
-        erhe::application::g_commands->register_command(&m_capture_frame_command);
-        erhe::application::g_commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
-    }
-    ~Editor_rendering_impl() noexcept override
-    {
-        ERHE_VERIFY(g_editor_rendering == this);
-        g_editor_rendering = nullptr;
-    }
+    Editor_rendering_impl();
+    ~Editor_rendering_impl() noexcept override;
 
     void post_initialize();
 
     // Implements
-    void trigger_capture           () override;
-    void render                    () override;
-    void render_viewport_main      (const Render_context& context, bool has_pointer) override;
-    void render_viewport_overlay   (const Render_context& context, bool has_pointer) override;
-    void render_content            (const Render_context& context, Fill_mode fill_mode, Blend_mode blend_mode, Selection_mode selection_mode) override;
-    void render_tool_meshes        (const Render_context& context) override;
-    void render_rendertarget_meshes(const Render_context& context) override;
-    void render_brush              (const Render_context& context) override;
-    void render_id                 (const Render_context& context) override;
-    void render_sky                (const Render_context& context) override;
-    void begin_frame               () override;
-    void end_frame                 () override;
-
-    void apply_filter(erhe::scene::Item_filter& filter, Blend_mode     blend_mode) const;
-    void apply_filter(erhe::scene::Item_filter& filter, Selection_mode selection_mode) const;
+    void trigger_capture     () override;
+    void render              () override;
+    void render_viewport_main(const Render_context& context, bool has_pointer) override;
+    void render_composer     (const Render_context& context) override;
+    void render_id           (const Render_context& context) override;
+    void begin_frame         () override;
+    void end_frame           () override;
 
 private:
-    void setup_renderpasses();
+    auto make_renderpass        (const std::string_view name) -> std::shared_ptr<Renderpass>;
+    auto get_pipeline_renderpass(const Renderpass& renderpass, Blend_mode blend_mode) -> Pipeline_renderpass*;
+    void setup_renderpasses     ();
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
     // Commands
     Capture_frame_command m_capture_frame_command;
 
-    bool       m_trigger_capture{false};
+    bool                  m_trigger_capture{false};
+    Pipeline_renderpasses m_pipeline_renderpasses;
+    Composer              m_composer;
 
-    Pipeline_renderpass m_rp_polygon_fill_standard_opaque;
-    Pipeline_renderpass m_rp_polygon_fill_standard_translucent;
-    Pipeline_renderpass m_rp_tool1_hidden_stencil;
-    Pipeline_renderpass m_rp_tool2_visible_stencil;
-    Pipeline_renderpass m_rp_tool3_depth_clear;
-    Pipeline_renderpass m_rp_tool4_depth;
-    Pipeline_renderpass m_rp_tool5_visible_color;
-    Pipeline_renderpass m_rp_tool6_hidden_color;
-    Pipeline_renderpass m_rp_line_hidden_blend;
-    Pipeline_renderpass m_rp_brush_back;
-    Pipeline_renderpass m_rp_brush_front;
-    Pipeline_renderpass m_rp_edge_lines;
-    Pipeline_renderpass m_rp_corner_points;
-    Pipeline_renderpass m_rp_polygon_centroids;
-    Pipeline_renderpass m_rp_rendertarget_meshes;
-    Pipeline_renderpass m_rp_sky;
-
-    std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_content_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_selection_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_gui_timer;
@@ -168,6 +163,7 @@ void Editor_rendering::declare_required_components()
     require<erhe::application::Configuration      >();
     require<Programs   >();
     require<Mesh_memory>();
+    require<Tools      >();
 }
 
 void Editor_rendering::initialize_component()
@@ -180,6 +176,185 @@ void Editor_rendering::post_initialize()
     m_impl->post_initialize();
 }
 
+//
+
+Editor_rendering_impl::Editor_rendering_impl()
+    : m_composer{"Main Composer"}
+{
+    ERHE_VERIFY(g_editor_rendering == nullptr);
+    g_editor_rendering = this;
+    erhe::application::g_commands->register_command(&m_capture_frame_command);
+    erhe::application::g_commands->bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+
+    using Item_filter = erhe::scene::Item_filter;
+    using Item_flags  = erhe::scene::Item_flags;
+    using namespace erhe::primitive;
+    const Item_filter opaque_not_selected_filter{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::opaque,
+        .require_at_least_one_bit_set = Item_flags::content | Item_flags::controller,
+        .require_all_bits_clear       = Item_flags::translucent | Item_flags::selected
+    };
+    const Item_filter opaque_selected_filter{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::opaque | Item_flags::selected,
+        .require_at_least_one_bit_set = Item_flags::content | Item_flags::controller,
+        .require_all_bits_clear       = Item_flags::translucent
+    };
+    const Item_filter translucent_filter{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::translucent,
+        .require_at_least_one_bit_set = Item_flags::content | Item_flags::controller,
+        .require_all_bits_clear       = Item_flags::opaque
+    };
+
+    const auto render_style_selected = [](const Render_context& context)
+    {
+        return &context.viewport_config->render_style_selected;
+    };
+    const auto render_style_not_selected = [](const Render_context& context)
+    {
+        return &context.viewport_config->render_style_not_selected;
+    };
+
+    using namespace erhe::primitive;
+    auto opaque_fill_not_selected = make_renderpass("Content fill opaque not selected");
+    opaque_fill_not_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
+    opaque_fill_not_selected->primitive_mode   = Primitive_mode::polygon_fill;
+    opaque_fill_not_selected->filter           = opaque_not_selected_filter;
+    opaque_fill_not_selected->get_render_style = render_style_not_selected;
+    opaque_fill_not_selected->passes           = { get_pipeline_renderpass(*opaque_fill_not_selected.get(), Blend_mode::opaque) };
+
+    auto opaque_fill_selected = make_renderpass("Content fill opaque selected");
+    opaque_fill_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
+    opaque_fill_selected->primitive_mode   = Primitive_mode::polygon_fill;
+    opaque_fill_selected->filter           = opaque_selected_filter;
+    opaque_fill_selected->get_render_style = render_style_selected;
+    opaque_fill_selected->passes           = { get_pipeline_renderpass(*opaque_fill_selected.get(), Blend_mode::opaque) };
+
+    auto opaque_outline_not_selected = make_renderpass("Content outline opaque not selected");
+    opaque_outline_not_selected->mesh_layers      = { Mesh_layer_id::content };
+    opaque_outline_not_selected->primitive_mode   = Primitive_mode::edge_lines;
+    opaque_outline_not_selected->filter           = opaque_not_selected_filter;
+    opaque_outline_not_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_outline_not_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_outline_not_selected->get_render_style = render_style_not_selected;
+    opaque_outline_not_selected->passes           = { get_pipeline_renderpass(*opaque_outline_not_selected.get(), Blend_mode::opaque) };
+    opaque_outline_not_selected->allow_shader_stages_override = false;
+
+    auto opaque_outline_selected = make_renderpass("Content outline opaque selected");
+    opaque_outline_selected->mesh_layers      = { Mesh_layer_id::content };
+    opaque_outline_selected->primitive_mode   = Primitive_mode::edge_lines;
+    opaque_outline_selected->filter           = opaque_selected_filter;
+    opaque_outline_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_outline_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_outline_selected->get_render_style = render_style_selected;
+    opaque_outline_selected->passes           = { get_pipeline_renderpass(*opaque_outline_selected.get(), Blend_mode::opaque) };
+    opaque_outline_selected->allow_shader_stages_override = false;
+
+    auto sky = make_renderpass("Sky");
+    sky->mesh_layers    = {};
+    sky->passes         = { &m_pipeline_renderpasses.sky };
+    sky->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
+    sky->filter = erhe::scene::Item_filter{
+        .require_all_bits_set         = 0,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = 0
+    };
+    sky->allow_shader_stages_override = false;
+
+    // Translucent
+    auto translucent_fill = make_renderpass("Content fill translucent");
+    translucent_fill->mesh_layers    = { Mesh_layer_id::content };
+    translucent_fill->primitive_mode = Primitive_mode::polygon_fill;
+    translucent_fill->filter         = translucent_filter;
+    translucent_fill->passes         = { get_pipeline_renderpass(*translucent_fill.get(), Blend_mode::translucent) };
+
+    auto translucent_outline = make_renderpass("Content outline translucent");
+    translucent_outline->mesh_layers    = { Mesh_layer_id::content };
+    translucent_outline->primitive_mode = Primitive_mode::edge_lines;
+    translucent_outline->filter         = translucent_filter;
+    translucent_outline->begin          = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
+    translucent_outline->end            = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
+    translucent_outline->passes         = { get_pipeline_renderpass(*translucent_outline.get(), Blend_mode::translucent) };
+
+    auto brush = make_renderpass("Brush");
+    brush->mesh_layers    = { Mesh_layer_id::brush };
+    brush->passes         = { &m_pipeline_renderpasses.brush_back, &m_pipeline_renderpasses.brush_front };
+    brush->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
+    brush->filter = erhe::scene::Item_filter{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::brush,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = 0
+    };
+    brush->allow_shader_stages_override = false;
+
+    auto rendertarget = make_renderpass("Rendertarget");
+    rendertarget->mesh_layers    = { Mesh_layer_id::rendertarget };
+    rendertarget->passes         = { &m_pipeline_renderpasses.rendertarget_meshes };
+    rendertarget->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
+    rendertarget->filter = erhe::scene::Item_filter{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::rendertarget,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = 0
+    };
+    rendertarget->allow_shader_stages_override = false;
+
+    auto tool = make_renderpass("Tool");
+    tool->mesh_layers    = { Mesh_layer_id::tool };
+    tool->passes         = {
+        &m_pipeline_renderpasses.tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
+        &m_pipeline_renderpasses.tool2_visible_stencil,  // tag_depth_visible_with_stencil
+        &m_pipeline_renderpasses.tool3_depth_clear,      // clear_depth
+        &m_pipeline_renderpasses.tool4_depth,            // depth_only
+        &m_pipeline_renderpasses.tool5_visible_color,    // require_stencil_tag_depth_visible
+        &m_pipeline_renderpasses.tool6_hidden_color      // require_stencil_tag_depth_hidden_and_blend,
+    };
+    tool->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
+    tool->filter         = erhe::scene::Item_filter{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::tool,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = 0
+    };
+    tool->override_scene_root = g_tools->get_tool_scene_root();
+    tool->allow_shader_stages_override = false;
+}
+
+Editor_rendering_impl::~Editor_rendering_impl() noexcept
+{
+    ERHE_VERIFY(g_editor_rendering == this);
+    g_editor_rendering = nullptr;
+}
+
+auto Editor_rendering_impl::get_pipeline_renderpass(
+    const Renderpass& renderpass,
+    const Blend_mode  blend_mode
+) -> Pipeline_renderpass*
+{
+    using namespace erhe::primitive;
+    switch (renderpass.primitive_mode) {
+        case Primitive_mode::polygon_fill:
+            switch (blend_mode) {
+                case Blend_mode::opaque:      return &m_pipeline_renderpasses.polygon_fill_standard_opaque;
+                case Blend_mode::translucent: return &m_pipeline_renderpasses.polygon_fill_standard_translucent;
+                default:                      return nullptr;
+            }
+            break;
+
+        case Primitive_mode::edge_lines:
+            return &m_pipeline_renderpasses.edge_lines;
+
+        case Primitive_mode::corner_points    : return &m_pipeline_renderpasses.corner_points;
+        case Primitive_mode::corner_normals   : return &m_pipeline_renderpasses.edge_lines;
+        case Primitive_mode::polygon_centroids: return &m_pipeline_renderpasses.polygon_centroids;
+        default: return nullptr;
+    }
+}
+
+auto Editor_rendering_impl::make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>
+{
+    auto renderpass = std::make_shared<Renderpass>(name);
+    m_composer.renderpasses.push_back(renderpass);
+    return renderpass;
+}
+
 void Editor_rendering_impl::post_initialize()
 {
     setup_renderpasses();
@@ -190,7 +365,12 @@ void Editor_rendering_impl::post_initialize()
 
 void Editor_rendering_impl::setup_renderpasses()
 {
-    ERHE_PROFILE_FUNCTION
+    m_pipeline_renderpasses.initialize();
+}
+
+void Pipeline_renderpasses::initialize()
+{
+    ERHE_PROFILE_FUNCTION();
 
     const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
@@ -202,7 +382,7 @@ void Editor_rendering_impl::setup_renderpasses()
     using erhe::graphics::Depth_stencil_state;
     using erhe::graphics::Color_blend_state;
 
-    m_rp_polygon_fill_standard_opaque.pipeline.data = {
+    polygon_fill_standard_opaque.pipeline.data = {
         .name           = "Polygon Fill Opaque",
         .shader_stages  = g_programs->circular_brushed_metal.get(),
         .vertex_input   = vertex_input,
@@ -212,7 +392,7 @@ void Editor_rendering_impl::setup_renderpasses()
         .color_blend    = Color_blend_state::color_blend_disabled
     };
 
-    m_rp_polygon_fill_standard_translucent.pipeline.data = {
+    polygon_fill_standard_translucent.pipeline.data = {
         .name           = "Polygon Fill Translucent",
         .shader_stages  = g_programs->circular_brushed_metal.get(),
         .vertex_input   = vertex_input,
@@ -224,7 +404,7 @@ void Editor_rendering_impl::setup_renderpasses()
 
     m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
 
-    m_rp_sky.pipeline.data = {
+    sky.pipeline.data = {
         .name           = "Sky",
         .shader_stages  = g_programs->sky.get(),
         .vertex_input   = m_empty_vertex_input.get(),
@@ -238,12 +418,12 @@ void Editor_rendering_impl::setup_renderpasses()
         },
         .color_blend    = Color_blend_state::color_blend_disabled
     };
-    m_rp_sky.begin = [](){ gl::depth_range(0.0f, 0.0f); };
-    m_rp_sky.end   = [](){ gl::depth_range(0.0f, 1.0f); };
+    sky.begin = [](){ gl::depth_range(0.0f, 0.0f); };
+    sky.end   = [](){ gl::depth_range(0.0f, 1.0f); };
 
     // Tool pass one: For hidden tool parts, set stencil to 1.
     // Only reads depth buffer, only writes stencil buffer.
-    m_rp_tool1_hidden_stencil.pipeline.data = {
+    tool1_hidden_stencil.pipeline.data = {
         .name                    = "Tool pass 1: Tag depth hidden with stencil = 1",
         .shader_stages           = g_programs->tool.get(),
         .vertex_input            = vertex_input,
@@ -278,7 +458,7 @@ void Editor_rendering_impl::setup_renderpasses()
 
     // Tool pass two: For visible tool parts, set stencil to 2.
     // Only reads depth buffer, only writes stencil buffer.
-    m_rp_tool2_visible_stencil.pipeline.data = {
+    tool2_visible_stencil.pipeline.data = {
         .name                    = "Tool pass 2: Tag visible tool parts with stencil = 2",
         .shader_stages           = g_programs->tool.get(),
         .vertex_input            = vertex_input,
@@ -313,7 +493,7 @@ void Editor_rendering_impl::setup_renderpasses()
 
     // Tool pass three: Set depth to fixed value (with depth range)
     // Only writes depth buffer, depth test always.
-    m_rp_tool3_depth_clear.pipeline.data = {
+    tool3_depth_clear.pipeline.data = {
         .name           = "Tool pass 3: Set depth to fixed value",
         .shader_stages  = g_programs->tool.get(),
         .vertex_input   = vertex_input,
@@ -322,12 +502,12 @@ void Editor_rendering_impl::setup_renderpasses()
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
         .color_blend    = Color_blend_state::color_writes_disabled
     };
-    m_rp_tool3_depth_clear.begin = [](){ gl::depth_range(0.0f, 0.0f); };
-    m_rp_tool3_depth_clear.end   = [](){ gl::depth_range(0.0f, 1.0f); };
+    tool3_depth_clear.begin = [](){ gl::depth_range(0.0f, 0.0f); };
+    tool3_depth_clear.end   = [](){ gl::depth_range(0.0f, 1.0f); };
 
     // Tool pass four: Set depth to proper tool depth
     // Normal depth buffer update with depth test.
-    m_rp_tool4_depth.pipeline.data = {
+    tool4_depth.pipeline.data = {
         .name           = "Tool pass 4: Set depth to proper tool depth",
         .shader_stages  = g_programs->tool.get(),
         .vertex_input   = vertex_input,
@@ -339,7 +519,7 @@ void Editor_rendering_impl::setup_renderpasses()
 
     // Tool pass five: Render visible tool parts
     // Normal depth test, stencil test require 2, color writes enabled, no blending
-    m_rp_tool5_visible_color.pipeline.data = {
+    tool5_visible_color.pipeline.data = {
         .name                    = "Tool pass 5: Render visible tool parts",
         .shader_stages           = g_programs->tool.get(),
         .vertex_input            = vertex_input,
@@ -374,7 +554,7 @@ void Editor_rendering_impl::setup_renderpasses()
 
     // Tool pass six: Render hidden tool parts
     // Normal depth test, stencil test requires 1, color writes enabled, blending
-    m_rp_tool6_hidden_color.pipeline.data = {
+    tool6_hidden_color.pipeline.data = {
         .name                       = "Tool pass 6: Render hidden tool parts",
         .shader_stages              = g_programs->tool.get(),
         .vertex_input               = vertex_input,
@@ -420,7 +600,7 @@ void Editor_rendering_impl::setup_renderpasses()
         }
     };
 
-    m_rp_edge_lines.pipeline.data = {
+    edge_lines.pipeline.data = {
         .name           = "Edge Lines",
         .shader_stages  = g_programs->wide_lines_draw_color.get(),
         .vertex_input   = vertex_input,
@@ -455,7 +635,7 @@ void Editor_rendering_impl::setup_renderpasses()
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
-    m_rp_corner_points.pipeline.data = {
+    corner_points.pipeline.data = {
         .name           = "Corner Points",
         .shader_stages  = g_programs->points.get(),
         .vertex_input   = vertex_input,
@@ -465,7 +645,7 @@ void Editor_rendering_impl::setup_renderpasses()
         .color_blend    = Color_blend_state::color_blend_disabled
     };
 
-    m_rp_polygon_centroids.pipeline.data = {
+    polygon_centroids.pipeline.data = {
         .name           = "Polygon Centroids",
         .shader_stages  = g_programs->points.get(),
         .vertex_input   = vertex_input,
@@ -475,7 +655,7 @@ void Editor_rendering_impl::setup_renderpasses()
         .color_blend    = Color_blend_state::color_blend_disabled
     };
 
-    m_rp_line_hidden_blend.pipeline.data = {
+    line_hidden_blend.pipeline.data = {
         .name                       = "Hidden lines with blending",
         .shader_stages              = g_programs->wide_lines_draw_color.get(),
         .vertex_input               = vertex_input,
@@ -522,7 +702,7 @@ void Editor_rendering_impl::setup_renderpasses()
         }
     };
 
-    m_rp_brush_back.pipeline.data = {
+    brush_back.pipeline.data = {
         .name           = "Brush back faces",
         .shader_stages  = g_programs->brush.get(),
         .vertex_input   = vertex_input,
@@ -532,7 +712,7 @@ void Editor_rendering_impl::setup_renderpasses()
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
-    m_rp_brush_front.pipeline.data = {
+    brush_front.pipeline.data = {
         .name           = "Brush front faces",
         .shader_stages  = g_programs->brush.get(),
         .vertex_input   = vertex_input,
@@ -542,7 +722,7 @@ void Editor_rendering_impl::setup_renderpasses()
         .color_blend    = Color_blend_state::color_blend_premultiplied
     };
 
-    m_rp_rendertarget_meshes.pipeline.data = {
+    rendertarget_meshes.pipeline.data = {
         .name           = "Rendertarget Meshes",
         .shader_stages  = g_programs->textured.get(),
         .vertex_input   = vertex_input,
@@ -563,53 +743,6 @@ void Editor_rendering_impl::setup_renderpasses()
     //m_tools_timer     = std::make_unique<erhe::graphics::Gpu_timer>("Tools");
 }
 
-void Editor_rendering_impl::apply_filter(
-    erhe::scene::Item_filter& filter,
-    const Blend_mode          blend_mode
-) const
-{
-    using namespace erhe::scene;
-    switch (blend_mode) {
-        case Blend_mode::opaque: {
-            filter.require_all_bits_set   |= Item_flags::opaque;
-            filter.require_all_bits_clear |= Item_flags::translucent;
-            break;
-        }
-
-        case Blend_mode::translucent: {
-            filter.require_all_bits_set   |= Item_flags::translucent;
-            filter.require_all_bits_clear |= Item_flags::opaque;
-            break;
-        }
-
-        default:
-            return;
-    }
-}
-
-void Editor_rendering_impl::apply_filter(
-    erhe::scene::Item_filter& filter,
-    const Selection_mode      selection_mode
-) const
-{
-    using namespace erhe::scene;
-    switch (selection_mode) {
-        case Selection_mode::not_selected: {
-            filter.require_all_bits_clear |= Item_flags::selected;
-            break;
-        }
-
-        case Selection_mode::selected: {
-            filter.require_all_bits_set   |= Item_flags::selected;
-            break;
-        }
-
-        case Selection_mode::any:
-        default:
-            return;
-    }
-}
-
 void Editor_rendering_impl::trigger_capture()
 {
     m_trigger_capture = true;
@@ -627,7 +760,7 @@ auto Editor_rendering_impl::height() const -> int
 
 void Editor_rendering_impl::begin_frame()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_trigger_capture) {
         erhe::application::g_window->begin_renderdoc_capture();
@@ -672,7 +805,7 @@ void Editor_rendering_impl::end_frame()
 
 void Editor_rendering_impl::render()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(erhe::application::g_view != nullptr);
 
@@ -684,7 +817,7 @@ void Editor_rendering_impl::render_viewport_main(
     const bool            has_pointer
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     static_cast<void>(has_pointer);
 
     gl::enable(gl::Enable_cap::scissor_test);
@@ -709,25 +842,7 @@ void Editor_rendering_impl::render_viewport_main(
     );
 
     if (g_forward_renderer) {
-        static constexpr std::string_view c_id_main{"Main"};
-        ERHE_PROFILE_GPU_SCOPE(c_id_main);
-        erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
-        erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
-
-        // Opaque
-        render_content(context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::not_selected);
-        render_content(context, Fill_mode::fill,    Blend_mode::opaque, Selection_mode::selected);
-        render_content(context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::not_selected);
-        render_content(context, Fill_mode::outline, Blend_mode::opaque, Selection_mode::selected);
-        render_sky    (context);
-
-        // Translucent
-        render_content            (context, Fill_mode::fill, Blend_mode::translucent, Selection_mode::any);
-        render_brush              (context);
-        render_rendertarget_meshes(context);
-        render_tool_meshes        (context);
-
-        erhe::graphics::g_opengl_state_tracker->depth_stencil.reset(); // workaround issue in stencil state tracking
+        render_composer(context);
     }
 
     if (
@@ -747,22 +862,21 @@ void Editor_rendering_impl::render_viewport_main(
     gl::disable(gl::Enable_cap::scissor_test);
 }
 
-void Editor_rendering_impl::render_viewport_overlay(
-    const Render_context& context,
-    const bool            has_pointer
-)
+void Editor_rendering_impl::render_composer(const Render_context& context)
 {
-    ERHE_PROFILE_FUNCTION
+    static constexpr std::string_view c_id_main{"Main"};
+    ERHE_PROFILE_GPU_SCOPE(c_id_main);
+    erhe::graphics::Scoped_gpu_timer timer{*m_content_timer.get()};
+    erhe::graphics::Scoped_debug_group pass_scope{c_id_main};
 
-    static_cast<void>(context);
-    static_cast<void>(has_pointer);
+    m_composer.render(context);
 
-    // TODO move text renderer here when correct framebuffer is bound
+    erhe::graphics::g_opengl_state_tracker->depth_stencil.reset(); // workaround issue in stencil state tracking
 }
 
 void Editor_rendering_impl::render_id(const Render_context& context)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         (g_id_renderer      == nullptr) ||
@@ -801,298 +915,6 @@ void Editor_rendering_impl::render_id(const Render_context& context)
             .tool_mesh_spans    = { tool_layers.tool()->meshes },
             .x                  = static_cast<int>(position.x),
             .y                  = static_cast<int>(position.y)
-        }
-    );
-}
-
-void Editor_rendering_impl::render_content(
-    const Render_context& context,
-    const Fill_mode       fill_mode,
-    const Blend_mode      blend_mode,
-    const Selection_mode  selection_mode
-)
-{
-    ERHE_PROFILE_FUNCTION
-
-    if (
-        (g_forward_renderer      == nullptr) ||
-        (context.scene_view      == nullptr) ||
-        (context.camera          == nullptr) ||
-        (context.viewport_config == nullptr)
-    ) {
-        log_render->error("Missing forward renderer / scene viewport / camera / viewport config - cannot render");
-        return;
-    }
-
-    const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root) {
-        log_render->error("Missing scene root - cannot render");
-        return;
-    }
-
-    erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport content"};
-
-    auto& render_style = (selection_mode == Selection_mode::selected)
-        ? context.viewport_config->render_style_selected
-        : context.viewport_config->render_style_not_selected;
-
-    const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->content_library()->materials;
-    const auto& materials        = material_library.entries();
-
-    using Item_filter = erhe::scene::Item_filter;
-    using Item_flags  = erhe::scene::Item_flags;
-    Item_filter filter{
-        .require_all_bits_set         = Item_flags::visible,
-        .require_at_least_one_bit_set = Item_flags::content | Item_flags::controller,
-        .require_all_bits_clear       = 0
-    };
-    apply_filter(filter, blend_mode);
-    apply_filter(filter, selection_mode);
-
-    if ((fill_mode == Fill_mode::fill) && render_style.polygon_fill) {
-        //if (render_style.polygon_offset_enable) {
-        //    gl::enable(gl::Enable_cap::polygon_offset_fill);
-        //    gl::polygon_offset_clamp(render_style.polygon_offset_factor,
-        //                             render_style.polygon_offset_units,
-        //                             render_style.polygon_offset_clamp);
-        //}
-
-        Pipeline_renderpass renderpass = [this, blend_mode]() {
-            switch (blend_mode) {
-                case Blend_mode::opaque:      return m_rp_polygon_fill_standard_opaque;
-                case Blend_mode::translucent: return m_rp_polygon_fill_standard_translucent;
-                default:                      return Pipeline_renderpass{};
-            }
-        }();
-        if (context.override_shader_stages != nullptr) {
-            renderpass.pipeline.data.shader_stages = context.override_shader_stages;
-        }
-        g_forward_renderer->render(
-            {
-                .ambient_light     = layers.light()->ambient_light,
-                .camera            = context.camera,
-                .light_projections = context.scene_view->get_light_projections(),
-                .lights            = layers.light()->lights,
-                .materials         = materials,
-                .mesh_spans        = { layers.content()->meshes, layers.controller()->meshes },
-                .passes            = { &renderpass },
-                .shadow_texture    = context.scene_view->get_shadow_texture(),
-                .viewport          = context.viewport,
-                .filter            = filter,
-            }
-        );
-        //gl::disable(gl::Enable_cap::polygon_offset_line);
-        return;
-    }
-
-    auto& primitive_settings = g_forward_renderer->primitive_settings();
-
-    if (render_style.edge_lines) {
-        gl::enable(gl::Enable_cap::sample_alpha_to_coverage);
-        primitive_settings.color_source   = render_style.edge_lines_color_source;// Base_renderer::Primitive_color_source::constant_color;
-        primitive_settings.constant_color = render_style.line_color;
-        primitive_settings.size_source    = Primitive_size_source::constant_size;
-        primitive_settings.constant_size  = render_style.line_width;
-        g_forward_renderer->render(
-            {
-                .camera         = context.camera,
-                .materials      = materials,
-                .mesh_spans     = { layers.content()->meshes },
-                .passes         = { &m_rp_edge_lines },
-                .primitive_mode = erhe::primitive::Primitive_mode::edge_lines,
-                .viewport       = context.viewport,
-                .filter         = filter
-            }
-        );
-        gl::disable(gl::Enable_cap::sample_alpha_to_coverage);
-    }
-
-    if (render_style.polygon_centroids) {
-        primitive_settings.color_source   = render_style.polygon_centroids_color_source; // Base_renderer::Primitive_color_source::constant_color;
-        primitive_settings.constant_color = render_style.centroid_color;
-        primitive_settings.size_source    = Primitive_size_source::constant_size;
-        primitive_settings.constant_size  = render_style.point_size;
-        g_forward_renderer->render(
-            {
-                .camera         = context.camera,
-                .materials      = materials,
-                .mesh_spans     = { layers.content()->meshes },
-                .passes         = { &m_rp_polygon_centroids },
-                .primitive_mode = erhe::primitive::Primitive_mode::polygon_centroids,
-                .viewport       = context.viewport,
-                .filter         = filter
-            }
-        );
-    }
-
-    if (render_style.corner_points) {
-        primitive_settings.color_source   = render_style.corner_points_color_source; // Base_renderer::Primitive_color_source::constant_color;
-        primitive_settings.constant_color = render_style.corner_color;
-        primitive_settings.size_source    = Primitive_size_source::constant_size;
-        primitive_settings.constant_size  = render_style.point_size;
-        g_forward_renderer->render(
-            {
-                .camera         = context.camera,
-                .materials      = materials,
-                .mesh_spans     = { layers.content()->meshes },
-                .passes         = { &m_rp_corner_points },
-                .primitive_mode = erhe::primitive::Primitive_mode::corner_points,
-                .viewport       = context.viewport,
-                .filter         = filter
-            }
-        );
-    }
-}
-
-void Editor_rendering_impl::render_sky(const Render_context& context)
-{
-    g_forward_renderer->render_fullscreen(
-        Forward_renderer::Render_parameters{
-            .camera            = context.camera,
-            .light_projections = nullptr,
-            .lights            = {},
-            .materials         = {},
-            .mesh_spans        = {},
-            .passes            = { &m_rp_sky},
-            .shadow_texture    = nullptr,
-            .viewport          = context.viewport
-        },
-        nullptr
-    );
-}
-
-void Editor_rendering_impl::render_rendertarget_meshes(
-    const Render_context& context
-)
-{
-    ERHE_PROFILE_FUNCTION
-
-    if (
-        (g_forward_renderer      == nullptr) ||
-        (context.scene_view      == nullptr) ||
-        (context.camera          == nullptr) ||
-        (context.viewport_config == nullptr)
-    ) {
-        return;
-    }
-
-    const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
-    erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport rendertarget meshes"};
-
-    const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->content_library()->materials;
-    const auto& materials        = material_library.entries();
-
-    g_forward_renderer->render(
-        Forward_renderer::Render_parameters{
-            .camera     = context.camera,
-            .materials  = { materials },
-            .mesh_spans = { layers.rendertarget()->meshes },
-            .passes     = { &m_rp_rendertarget_meshes },
-            .viewport   = context.viewport,
-            .filter =
-            {
-                .require_all_bits_set = (
-                    erhe::scene::Item_flags::visible |
-                    erhe::scene::Item_flags::rendertarget
-                )
-            }
-        }
-    );
-}
-
-void Editor_rendering_impl::render_tool_meshes(const Render_context& context)
-{
-    ERHE_PROFILE_FUNCTION
-
-    if (
-        (context.camera     == nullptr) ||
-        (context.scene_view == nullptr)
-    ) {
-        return;
-    }
-
-    const auto& scene_root = g_tools->get_tool_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
-    const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->content_library()->materials;
-    const auto& materials        = material_library.entries();
-
-    if (layers.tool()->meshes.empty()) {
-        return;
-    }
-
-    g_forward_renderer->render(
-        {
-            .camera     = context.camera,
-            .lights     = {},
-            .materials  = materials,
-            .mesh_spans = { layers.tool()->meshes },
-            .passes     =
-            {
-                &m_rp_tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
-                &m_rp_tool2_visible_stencil,  // tag_depth_visible_with_stencil
-                &m_rp_tool3_depth_clear,      // clear_depth
-                &m_rp_tool4_depth,            // depth_only
-                &m_rp_tool5_visible_color,    // require_stencil_tag_depth_visible
-                &m_rp_tool6_hidden_color      // require_stencil_tag_depth_hidden_and_blend,
-            },
-            .viewport   = context.viewport,
-            .filter     =
-            {
-                .require_all_bits_set =
-                    erhe::scene::Item_flags::visible |
-                    erhe::scene::Item_flags::tool
-            }
-        }
-    );
-}
-
-void Editor_rendering_impl::render_brush(const Render_context& context)
-{
-    ERHE_PROFILE_FUNCTION
-
-    if (
-        (context.camera     == nullptr) ||
-        (context.scene_view == nullptr)
-    ) {
-        return;
-    }
-
-    const auto scene_root = context.scene_view->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
-    const auto& layers           = scene_root->layers();
-    const auto& material_library = scene_root->content_library()->materials;
-    const auto& materials        = material_library.entries();
-
-    if (layers.brush()->meshes.empty()) {
-        return;
-    }
-
-    g_forward_renderer->render(
-        {
-            .ambient_light = layers.light()->ambient_light,
-            .camera        = context.camera,
-            .lights        = layers.light()->lights,
-            .materials     = materials,
-            .mesh_spans    = { layers.brush()->meshes },
-            .passes        = { &m_rp_brush_back, &m_rp_brush_front },
-            .viewport      = context.viewport,
-            .filter        =
-            {
-                .require_all_bits_set = erhe::scene::Item_flags::visible | erhe::scene::Item_flags::brush
-            }
         }
     );
 }

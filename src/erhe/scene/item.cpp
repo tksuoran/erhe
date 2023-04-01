@@ -51,6 +51,38 @@ auto Item_filter::operator()(const uint64_t visibility_mask) const -> bool
     return true;
 }
 
+auto Item_filter::describe() const -> std::string
+{
+    bool first = true;
+    std::stringstream ss;
+    if (require_all_bits_set != 0) {
+        ss << "require_all_bits_set = " << Item_flags::to_string(this->require_all_bits_set);
+        first = false;
+    }
+    if (require_at_least_one_bit_set != 0) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << "require_at_least_one_bit_set = " << Item_flags::to_string(this->require_at_least_one_bit_set);
+        first = false;
+    }
+    if (require_all_bits_clear != 0) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << "require_all_bits_clear = " << Item_flags::to_string(this->require_all_bits_clear);
+        first = false;
+    }
+    if (require_at_least_one_bit_clear != 0) {
+        if (!first) {
+            ss << ", ";
+        }
+        ss << "require_at_least_one_bit_clear = " << Item_flags::to_string(this->require_at_least_one_bit_clear);
+        first = false;
+    }
+    return ss.str();
+}
+
 // -----------------------------------------------------------------------------
 
 Item::Item()

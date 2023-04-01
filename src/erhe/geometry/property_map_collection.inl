@@ -3,7 +3,7 @@
 //#include "erhe/toolkit/profile.hpp"
 
 #ifndef ERHE_PROFILE_FUNCTION
-#   define ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION()
 #   define ERHE_PROFILE_FUNCTION_DUMMY
 #endif
 #ifndef ERHE_VERIFY
@@ -26,7 +26,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::clear()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_entries.clear();
 }
@@ -42,7 +42,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::insert(Property_map_base<Key_type>* map)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     //// for (const auto& entry : m_entries)
     //// {
@@ -56,7 +56,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::remove(const std::string& name)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_entries.erase(
         std::remove_if(
@@ -77,7 +77,7 @@ inline auto
 Property_map_collection<Key_type>::contains(const std::string& name) const
     -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (const auto& entry : m_entries) {
         const bool match = entry.key == name;
@@ -95,7 +95,7 @@ Property_map_collection<Key_type>::find_base(
     const Property_map_descriptor& descriptor
 ) const -> Property_map_base<Key_type>*
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (const auto& entry : m_entries) {
         if (entry.key == descriptor.name) {
@@ -112,7 +112,7 @@ Property_map_collection<Key_type>::create(
     const Property_map_descriptor& descriptor
 ) -> Property_map<Key_type, Value_type>*
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     //// for (const auto& entry : m_entries)
     //// {
@@ -133,7 +133,7 @@ Property_map_collection<Key_type>::find(
     const Property_map_descriptor& descriptor
 ) const -> Property_map<Key_type, Value_type>*
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (const auto& entry : m_entries) {
         if (entry.key == descriptor.name) {
@@ -154,7 +154,7 @@ Property_map_collection<Key_type>::find_or_create(
     const Property_map_descriptor& descriptor
 ) -> Property_map<Key_type, Value_type>*
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (const auto& entry : m_entries) {
         if (entry.key == descriptor.name) {
@@ -177,7 +177,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::trim(size_t size)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (auto& entry : m_entries) {
         entry.value->trim(size);
@@ -188,7 +188,7 @@ template <typename Key_type>
 inline void
 Property_map_collection<Key_type>::remap_keys(const std::vector<Key_type>& key_new_to_old)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (auto& entry : m_entries){
         entry.value->remap_keys(key_new_to_old);
@@ -201,7 +201,7 @@ Property_map_collection<Key_type>::interpolate(
     Property_map_collection<Key_type>&                          destination,
     const std::vector<std::vector<std::pair<float, Key_type>>>& key_new_to_olds)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (auto& entry : m_entries) {
         Property_map_base<Key_type>* src_map    = entry.value.get();
@@ -225,7 +225,7 @@ Property_map_collection<Key_type>::merge_to(
     const glm::mat4                    transform
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (auto& entry : m_entries) {
         Property_map_base<Key_type>* this_map   = entry.value.get();

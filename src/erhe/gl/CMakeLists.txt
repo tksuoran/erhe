@@ -87,7 +87,6 @@ target_include_directories(${_target}
         ${ERHE_INCLUDE_ROOT}
         ${PROJECT_BINARY_DIR}/src
         ${ERHE_ADDITIONAL_GL_INCLUDES}
-    }
 )
 
 target_link_libraries(${_target}

@@ -139,7 +139,7 @@ void Hud::declare_required_components()
 
 void Hud::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_hud == nullptr);
     g_hud = this; // due to early out
 

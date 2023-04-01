@@ -103,7 +103,7 @@ void Content_library_window::imgui()
         ImGuiTreeNodeFlags_SpanFullWidth
     };
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto& scene_roots = g_editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {

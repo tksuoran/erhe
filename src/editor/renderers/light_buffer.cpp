@@ -134,7 +134,7 @@ auto Light_buffer::update(
     const glm::vec3&                                            ambient_light
 ) -> erhe::application::Buffer_range
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
         log_render,
@@ -243,7 +243,7 @@ auto Light_buffer::update(
 
 auto Light_buffer::update_control(const std::size_t light_index) -> erhe::application::Buffer_range
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     auto&      buffer     = m_control_buffer.current_buffer();
     auto&      writer     = m_control_buffer.writer();

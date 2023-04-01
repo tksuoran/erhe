@@ -100,7 +100,7 @@ void Grid_tool::tool_render(
     const Render_context& context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (erhe::application::g_line_renderer_set == nullptr) {
         return;
@@ -175,7 +175,7 @@ auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4
 void Grid_tool::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ImGui::Checkbox("Enable All", &m_enable);
 

@@ -104,7 +104,7 @@ auto Headset::is_valid() const -> bool
 
 auto Headset::begin_frame() -> Frame_timing
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Frame_timing result{
         .predicted_display_time   = 0,
@@ -150,7 +150,7 @@ auto Headset::begin_frame() -> Frame_timing
 
 auto Headset::render(std::function<bool(Render_view&)> render_view_callback) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!m_xr_session) {
         return false;
@@ -163,7 +163,7 @@ auto Headset::render(std::function<bool(Render_view&)> render_view_callback) -> 
 
 auto Headset::end_frame(const bool rendered) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!m_xr_instance) {
         return false;

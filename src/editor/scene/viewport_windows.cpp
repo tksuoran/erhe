@@ -414,7 +414,7 @@ void Viewport_windows::open_new_imgui_viewport_window()
 
 void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_viewport)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     std::shared_ptr<Viewport_window> old_window = m_hover_window;
     m_hover_stack.clear();

@@ -324,7 +324,7 @@ Weld::Weld(
 )
     : Geometry_operation{source, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const uint32_t point_count   = source.get_point_count();
     const uint32_t polygon_count = source.get_polygon_count();

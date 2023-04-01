@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Dual::Dual(Geometry& source, Geometry& destination, bool post_process)
     : Geometry_operation{source, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     make_polygon_centroids();
 

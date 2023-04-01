@@ -20,6 +20,7 @@ namespace editor
 class Scene_view;
 class Viewport_config;
 class Viewport_window;
+class Pipeline_renderpasses;
 
 class Render_context
 {

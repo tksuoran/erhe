@@ -18,7 +18,7 @@ Property_maps::Property_maps(
     const Format_info&              format_info
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_primitive_builder->trace(
         "Property_maps::Property_maps() for geometry = {}",

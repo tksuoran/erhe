@@ -19,7 +19,7 @@ Json_library::Json_library()
 
 Json_library::Json_library(const std::filesystem::path& path)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto opt_text = erhe::toolkit::read(path);
     if (!opt_text.has_value()) {
@@ -64,7 +64,7 @@ auto Json_library::make_geometry(
     const std::string& key_name
 ) const -> erhe::geometry::Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto mesh = m_json.FindMember(key_name.c_str());
     if (mesh == m_json.MemberEnd()) {

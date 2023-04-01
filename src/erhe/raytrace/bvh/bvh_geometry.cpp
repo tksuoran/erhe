@@ -121,7 +121,7 @@ bvh::v2::ParallelExecutor executor{thread_pool};
 
 void Bvh_geometry::commit()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     {
         const Buffer_info* index_buffer_info{nullptr};
@@ -212,7 +212,7 @@ void Bvh_geometry::commit()
             config.quality = bvh::v2::DefaultBuilder<Node>::Quality::Low;
 
             {
-                ERHE_PROFILE_SCOPE("bvh build")
+                ERHE_PROFILE_SCOPE("bvh build");
                 erhe::toolkit::Timer timer{m_debug_label.c_str()};
 
                 timer.begin();
@@ -235,7 +235,7 @@ void Bvh_geometry::commit()
 
         // This precomputes some data to speed up traversal further.
         {
-            ERHE_PROFILE_SCOPE("bvh precompute")
+            ERHE_PROFILE_SCOPE("bvh precompute");
             m_precomputed_triangles.clear();
             m_precomputed_triangles.resize(tris.size());
             executor.for_each(

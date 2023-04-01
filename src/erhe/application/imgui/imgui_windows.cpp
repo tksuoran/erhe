@@ -46,7 +46,7 @@ void Imgui_windows::declare_required_components()
 
 void Imgui_windows::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_imgui_windows == nullptr);
     ERHE_VERIFY(g_configuration != nullptr); // assert it has been initialized
 
@@ -157,7 +157,7 @@ void Imgui_windows::register_imgui_window(Imgui_window* window, const bool visib
 
 void Imgui_windows::imgui_windows()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(!m_iterating);
 

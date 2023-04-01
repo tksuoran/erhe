@@ -21,10 +21,10 @@ Viewport_config_window::Viewport_config_window()
     : erhe::components::Component    {c_type_name}
     , erhe::application::Imgui_window{c_title}
 {
-    data.render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    data.render_style_not_selected.edge_lines = false;
+    config.render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+    config.render_style_not_selected.edge_lines = false;
 
-    data.render_style_selected.edge_lines = false;
+    config.render_style_selected.edge_lines = false;
 }
 
 Viewport_config_window::~Viewport_config_window() = default;
@@ -48,45 +48,45 @@ void Viewport_config_window::initialize_component()
     erhe::application::g_imgui_windows->register_imgui_window(this, "viewport_config");
 
     auto ini = erhe::application::get_ini("erhe.ini", "viewport");
-    ini->get("polygon_fill",              config.polygon_fill);
-    ini->get("edge_lines",                config.edge_lines);
-    ini->get("edge_color",                config.edge_color);
-    ini->get("selection_polygon_fill",    config.selection_polygon_fill);
-    ini->get("selection_edge_lines",      config.selection_edge_lines);
-    ini->get("corner_points",             config.corner_points);
-    ini->get("polygon_centroids",         config.polygon_centroids);
-    ini->get("selection_bounding_box",    config.selection_bounding_box);
-    ini->get("selection_bounding_sphere", config.selection_bounding_sphere);
-    ini->get("selection_edge_color",      config.selection_edge_color);
-    ini->get("clear_color",               config.clear_color);
+    ini->get("polygon_fill",              polygon_fill);
+    ini->get("edge_lines",                edge_lines);
+    ini->get("edge_color",                edge_color);
+    ini->get("selection_polygon_fill",    selection_polygon_fill);
+    ini->get("selection_edge_lines",      selection_edge_lines);
+    ini->get("corner_points",             corner_points);
+    ini->get("polygon_centroids",         polygon_centroids);
+    ini->get("selection_bounding_box",    selection_bounding_box);
+    ini->get("selection_bounding_sphere", selection_bounding_sphere);
+    ini->get("selection_edge_color",      selection_edge_color);
+    ini->get("clear_color",               clear_color);
 
-    data.render_style_not_selected.polygon_fill      = config.polygon_fill;
-    data.render_style_not_selected.edge_lines        = config.edge_lines;
-    data.render_style_not_selected.corner_points     = config.corner_points;
-    data.render_style_not_selected.polygon_centroids = config.polygon_centroids;
-    data.render_style_not_selected.line_color        = config.edge_color;
-    data.render_style_not_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
-    data.render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
+    config.render_style_not_selected.polygon_fill      = polygon_fill;
+    config.render_style_not_selected.edge_lines        = edge_lines;
+    config.render_style_not_selected.corner_points     = corner_points;
+    config.render_style_not_selected.polygon_centroids = polygon_centroids;
+    config.render_style_not_selected.line_color        = edge_color;
+    config.render_style_not_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
+    config.render_style_not_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
 
-    data.render_style_selected.polygon_fill      = config.selection_polygon_fill;
-    data.render_style_selected.edge_lines        = config.selection_edge_lines;
-    data.render_style_selected.corner_points     = config.corner_points;
-    data.render_style_selected.polygon_centroids = config.polygon_centroids;
-    data.render_style_selected.line_color        = config.selection_edge_color;
-    data.render_style_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
-    data.render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
+    config.render_style_selected.polygon_fill      = selection_polygon_fill;
+    config.render_style_selected.edge_lines        = selection_edge_lines;
+    config.render_style_selected.corner_points     = corner_points;
+    config.render_style_selected.polygon_centroids = polygon_centroids;
+    config.render_style_selected.line_color        = selection_edge_color;
+    config.render_style_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
+    config.render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
     //data.render_style_selected.edge_lines = false;
 
-    data.selection_bounding_box    = config.selection_bounding_box;
-    data.selection_bounding_sphere = config.selection_bounding_sphere;
-    data.clear_color               = config.clear_color;
+    config.selection_bounding_box    = selection_bounding_box;
+    config.selection_bounding_sphere = selection_bounding_sphere;
+    config.clear_color               = clear_color;
     g_viewport_config_window = this;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Viewport_config_window::render_style_ui(Render_style& render_style)
+void Viewport_config_window::render_style_ui(Render_style_data& render_style)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -96,13 +96,13 @@ void Viewport_config_window::render_style_ui(Render_style& render_style)
 
     if (ImGui::TreeNodeEx("Polygon Fill", flags)) {
         ImGui::Checkbox("Visible", &render_style.polygon_fill);
-        if (render_style.polygon_fill) {
-            ImGui::Text       ("Polygon Offset");
-            ImGui::Checkbox   ("Enable", &render_style.polygon_offset_enable);
-            ImGui::SliderFloat("Factor", &render_style.polygon_offset_factor, -2.0f, 2.0f);
-            ImGui::SliderFloat("Units",  &render_style.polygon_offset_units,  -2.0f, 2.0f);
-            ImGui::SliderFloat("clamp",  &render_style.polygon_offset_clamp,  -0.01f, 0.01f);
-        }
+        //if (render_style.polygon_fill) {
+        //    ImGui::Text       ("Polygon Offset");
+        //    ImGui::Checkbox   ("Enable", &render_style.polygon_offset_enable);
+        //    ImGui::SliderFloat("Factor", &render_style.polygon_offset_factor, -2.0f, 2.0f);
+        //    ImGui::SliderFloat("Units",  &render_style.polygon_offset_units,  -2.0f, 2.0f);
+        //    ImGui::SliderFloat("clamp",  &render_style.polygon_offset_clamp,  -0.01f, 0.01f);
+        //}
         ImGui::TreePop();
     }
 
@@ -156,7 +156,7 @@ void Viewport_config_window::render_style_ui(Render_style& render_style)
 void Viewport_config_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
@@ -167,7 +167,6 @@ void Viewport_config_window::imgui()
 
     if (edit_data != nullptr) {
         ImGui::ColorEdit4("Clear Color", &edit_data->clear_color.x, ImGuiColorEditFlags_Float);
-        ImGui::Checkbox  ("Post Processing", &edit_data->post_processing_enable);
 
         if (ImGui::TreeNodeEx("Default Style", flags)) {
             render_style_ui(edit_data->render_style_not_selected);

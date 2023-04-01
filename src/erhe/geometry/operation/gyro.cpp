@@ -15,7 +15,7 @@ namespace erhe::geometry::operation
 Gyro::Gyro(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // Add midpoints 1/3 and 2/3 to edges and connect to polygon center
     // New polygon on each old edge

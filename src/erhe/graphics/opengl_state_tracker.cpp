@@ -45,7 +45,7 @@ void OpenGL_state_tracker::on_thread_enter()
 
 void OpenGL_state_tracker::reset()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     shader_stages .reset();
     vertex_input  .reset();
@@ -59,11 +59,16 @@ void OpenGL_state_tracker::reset()
     // dynamic
 }
 
-void OpenGL_state_tracker::execute(const Pipeline& pipeline)
+void OpenGL_state_tracker::execute(
+    const Pipeline& pipeline,
+    const bool      skip_shader_stages
+)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
-    shader_stages .execute(pipeline.data.shader_stages);
+    if (!skip_shader_stages) {
+        shader_stages.execute(pipeline.data.shader_stages);
+    }
     vertex_input  .execute(pipeline.data.vertex_input);
     input_assembly.execute(pipeline.data.input_assembly);
     // tessellation

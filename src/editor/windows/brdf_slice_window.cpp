@@ -94,7 +94,7 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     erhe::graphics::Scoped_debug_group pass_scope{"BRDF Slice"};
 
@@ -199,7 +199,7 @@ void Brdf_slice_window::imgui()
     SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui()");
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto selected_material = g_content_library_window->selected_material();
     if (!selected_material) {

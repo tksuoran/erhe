@@ -51,7 +51,7 @@ auto Material_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials
 ) -> erhe::application::Buffer_range
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
         log_render,

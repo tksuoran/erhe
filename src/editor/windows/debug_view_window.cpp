@@ -93,7 +93,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Rendergraph_node* input_node = get_consumer_input_node(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -392,7 +392,7 @@ void Debug_view_window::imgui()
 
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (g_shadow_renderer == nullptr) {
         SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui() - skipped - no shadow renderer");

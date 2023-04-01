@@ -26,7 +26,7 @@ namespace erhe::xr {
 Xr_instance::Xr_instance(const Xr_configuration& configuration)
     : m_configuration(configuration)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!enumerate_layers()) {
         return;
@@ -117,7 +117,7 @@ auto Xr_instance::debug_utils_messenger_callback(
 
 auto Xr_instance::create_instance() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_xr->trace("{}", __func__);
 
@@ -229,7 +229,7 @@ auto Xr_instance::get_proc_addr(const char* function) const -> PFN_xrVoidFunctio
 
 Xr_instance::~Xr_instance() noexcept
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_instance != nullptr) {
         xrDestroyInstance(m_xr_instance);
@@ -264,7 +264,7 @@ auto Xr_instance::get_xr_environment_blend_mode() const -> XrEnvironmentBlendMod
 
 auto Xr_instance::enumerate_layers() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_xr->trace("{}", __func__);
 
@@ -296,7 +296,7 @@ auto Xr_instance::enumerate_layers() -> bool
 
 auto Xr_instance::enumerate_extensions() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_xr->trace("{}", __func__);
 
@@ -337,7 +337,7 @@ auto Xr_instance::enumerate_extensions() -> bool
 
 auto Xr_instance::get_system_info() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_xr->trace("{}", __func__);
 
@@ -402,7 +402,7 @@ auto blend_mode_score(const XrEnvironmentBlendMode environment_blend_mode) -> in
 
 auto Xr_instance::enumerate_blend_modes() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     uint32_t environment_blend_mode_count{0};
 
@@ -449,7 +449,7 @@ auto Xr_instance::enumerate_blend_modes() -> bool
 
 auto Xr_instance::enumerate_view_configurations() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_xr->trace("{}", __func__);
 
@@ -919,7 +919,7 @@ void Xr_instance::update_action_bindings()
 
 auto Xr_instance::update_actions(Xr_session& session) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const XrActiveActionSet active_action_set{
         .actionSet     = m_action_set,
@@ -1040,7 +1040,7 @@ auto Xr_instance::get_configuration() const -> const Xr_configuration&
 
 auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     XrInteractionProfileState left{
         .type               = XR_TYPE_INTERACTION_PROFILE_STATE,
@@ -1076,7 +1076,7 @@ auto Xr_instance::get_current_interaction_profile(Xr_session& session) -> bool
 
 auto Xr_instance::poll_xr_events(Xr_session& session) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (;;) {
         XrEventDataBuffer buffer{};

@@ -86,7 +86,7 @@ Downsample_node::Downsample_node(
 
 void Downsample_node::bind_framebuffer() const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     {
         ERHE_PROFILE_SCOPE("bind");
@@ -255,7 +255,7 @@ void Post_processing_node::execute_rendergraph_node()
 
     static constexpr std::string_view c_post_processing{"Post_processing"};
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_PROFILE_GPU_SCOPE(c_post_processing)
 
     const bool downsample_nodes_unchanged = update_downsample_nodes();
@@ -331,7 +331,7 @@ void Post_processing::declare_required_components()
 
 void Post_processing::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_post_processing == nullptr);
 
     using erhe::graphics::Shader_stages;
@@ -552,7 +552,7 @@ void Post_processing::downsample(
     const erhe::graphics::Pipeline& pipeline
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_PROFILE_GPU_SCOPE(c_downsample)
 
     auto&             parameter_buffer   = m_parameter_buffer.current_buffer();
@@ -635,7 +635,7 @@ void Post_processing::compose(Post_processing_node& node)
 
     erhe::graphics::Scoped_debug_group downsample_scope{"Compose"};
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_PROFILE_GPU_SCOPE(c_compose)
 
     auto&             parameter_buffer   = m_parameter_buffer.current_buffer();

@@ -35,7 +35,7 @@ using std::make_unique;
 
 Font::~Font() noexcept
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
 #if defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
     hb_buffer_destroy(m_harfbuzz_buffer);
@@ -58,7 +58,7 @@ Font::Font(
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
     , m_outline_thickness{outline_thickness}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto current_path = std::filesystem::current_path();
     log_font->info("current path = {}", current_path.string());
@@ -95,7 +95,7 @@ Font::Font(
 
 auto Font::render() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     FT_Error res;
     res = FT_Init_FreeType(&m_freetype_library);
@@ -440,7 +440,7 @@ void Font::trace_info() const {}
 
 void Font::post_process()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Bitmap bm{
         m_bitmap->width(),
@@ -498,7 +498,7 @@ auto Font::print(
     Rectangle&          out_bounds
 ) const -> size_t
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
         log_font,
@@ -633,7 +633,7 @@ auto Font::get_glyph_count(const std::string_view text) const -> size_t
 
 auto Font::measure(const std::string_view text) const -> Rectangle
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (text.empty()) {
         return Rectangle{0.0f, 0.0f, 0.0f, 0.0f};

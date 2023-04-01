@@ -91,7 +91,7 @@ Geometry::Geometry(Geometry&& other) noexcept
 
 auto Geometry::count_polygon_triangles() const -> std::size_t
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     std::size_t triangle_count{0};
     for (
@@ -133,7 +133,7 @@ auto Geometry::get_mesh_info() const -> Mesh_info
 
 void Geometry::reserve_points(const std::size_t point_count)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (point_count > points.size()) {
         points.reserve(point_count);
@@ -142,7 +142,7 @@ void Geometry::reserve_points(const std::size_t point_count)
 
 void Geometry::reserve_polygons(const std::size_t polygon_count)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (polygon_count > polygons.size()) {
         polygons.reserve(polygon_count);
@@ -151,7 +151,7 @@ void Geometry::reserve_polygons(const std::size_t polygon_count)
 
 auto Geometry::has_polygon_normals() const -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_serial_polygon_normals == m_serial) {
         return true;
@@ -166,7 +166,7 @@ auto Geometry::has_polygon_normals() const -> bool
 // Requires point locations
 auto Geometry::compute_polygon_normals() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (has_polygon_normals()) {
         return true;
@@ -211,7 +211,7 @@ auto Geometry::has_polygon_centroids() const -> bool
 
 auto Geometry::compute_polygon_centroids() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (has_polygon_centroids()) {
         return true;
@@ -251,7 +251,7 @@ auto Geometry::has_edges() const -> bool
 
 void Geometry::build_edges(bool is_manifold)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (has_edges()) {
         return;
@@ -354,7 +354,7 @@ void Geometry::build_edges(bool is_manifold)
 
 void Geometry::debug_trace() const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for_each_corner_const([](auto& i)
     {
@@ -433,7 +433,7 @@ void Geometry::debug_trace() const
 
 auto Geometry::compute_point_normal(const Point_id point_id) -> vec3
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(point_id < points.size());
 
@@ -460,7 +460,7 @@ auto Geometry::has_point_normals() const -> bool
 
 auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (has_point_normals()) {
         return true;
@@ -499,7 +499,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
 
 auto Geometry::transform(const mat4& m) -> Geometry&
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m == mat4{1.0f}) {
         return *this;
@@ -522,7 +522,7 @@ auto Geometry::transform(const mat4& m) -> Geometry&
 
 void Geometry::reverse_polygons()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (Polygon_id polygon_id = 0; polygon_id < m_next_polygon_id; ++polygon_id) {
         polygons[polygon_id].reverse(*this);
@@ -531,7 +531,7 @@ void Geometry::reverse_polygons()
 
 void Geometry::flip_reversed_polygons()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ++m_serial;
 
@@ -562,7 +562,7 @@ void Mesh_info::trace(const std::shared_ptr<spdlog::logger>& log) const
 
 void Geometry::generate_texture_coordinates_spherical()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_geometry->info("{} for {}", __func__, name);
 
@@ -628,7 +628,7 @@ auto Geometry::has_polygon_texture_coordinates() const -> bool
 
 auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existing_texture_coordinates) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (has_polygon_texture_coordinates()) {
         return true;
@@ -866,7 +866,7 @@ void Geometry::compute_bounding_box(vec3& min_corner, vec3& max_corner) const
 
 auto Geometry::get_mass_properties() -> Mass_properties
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!compute_polygon_centroids())
     {

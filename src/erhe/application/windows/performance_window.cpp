@@ -305,7 +305,7 @@ Plot::~Plot() noexcept
 void Plot::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     //ImGuiContext& g = *GImGui;
     ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -509,7 +509,7 @@ void Plot::imgui()
 void Performance_window_impl::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto all_gpu_timers = erhe::graphics::Gpu_timer::all_gpu_timers();
     for (auto* timer : all_gpu_timers) {

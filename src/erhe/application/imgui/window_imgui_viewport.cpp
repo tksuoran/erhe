@@ -75,7 +75,7 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
 {
     SPDLOG_LOGGER_TRACE(log_frame, "Window_imgui_viewport::begin_imgui_frame()");
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto& context_window = g_window->get_context_window();
     auto*       glfw_window    = context_window->get_glfw_window();

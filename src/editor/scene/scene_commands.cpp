@@ -76,7 +76,7 @@ void Scene_commands::declare_required_components()
 
 void Scene_commands::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_scene_commands == nullptr);
 
     auto& commands = *erhe::application::g_commands;

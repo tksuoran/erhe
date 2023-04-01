@@ -143,7 +143,7 @@ void Paint_tool::declare_required_components()
 
 void Paint_tool::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_paint_tool == nullptr);
 
     set_base_priority(c_priority);

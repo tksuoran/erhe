@@ -2,7 +2,7 @@
 
 //#include "erhe/toolkit/profile.hpp"
 #ifndef ERHE_PROFILE_FUNCTION
-#   define ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION()
 #   define ERHE_PROFILE_FUNCTION_DUMMY
 #endif
 
@@ -17,7 +17,7 @@ void Polygon::copy_to_corners(
     const Property_map<Polygon_id, T>& polygon_attribute
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const T polygon_value = polygon_attribute.get(this_polygon_id);
     for_each_corner_const(
@@ -38,7 +38,7 @@ void Polygon::smooth_normalize(
     const float                                cos_max_smoothing_angle
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (
         Polygon_corner_id polygon_corner_id = first_polygon_corner_id,
@@ -68,7 +68,7 @@ void Polygon::smooth_average(
     const Property_map<Point_id, glm::vec3>&  point_normals
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (
         Polygon_corner_id polygon_corner_id = first_polygon_corner_id,

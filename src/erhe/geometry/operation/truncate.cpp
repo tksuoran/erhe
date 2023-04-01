@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Truncate::Truncate(Geometry& source, Geometry& destination)
     : Geometry_operation{source, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // Trisect each old edge by generating two new points.
     float t0 = 1.0f / 3.0f;

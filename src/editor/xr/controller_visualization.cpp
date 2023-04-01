@@ -21,7 +21,7 @@ Controller_visualization::Controller_visualization(
     erhe::scene::Node* view_root
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     auto& material_library = scene_root.content_library()->materials;
     auto controller_material = material_library.make(

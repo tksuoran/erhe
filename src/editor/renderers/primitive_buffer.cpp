@@ -59,10 +59,11 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 auto Primitive_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     const erhe::scene::Item_filter&                            filter,
+    const Primitive_interface_settings&                        settings,
     bool                                                       use_id_ranges
 ) -> erhe::application::Buffer_range
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(
         log_render,

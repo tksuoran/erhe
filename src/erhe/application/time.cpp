@@ -34,7 +34,7 @@ void Time::start_time()
 
 void Time::update()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto new_time   = std::chrono::steady_clock::now();
     const auto duration   = new_time - m_current_time;
@@ -77,14 +77,14 @@ void Time::update_fixed_step(
     const erhe::components::Time_context& time_context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_components->update_fixed_step(time_context);
 }
 
 void Time::update_once_per_frame()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_components->update_once_per_frame(m_last_update);
     ++m_frame_number;

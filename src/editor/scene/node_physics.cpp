@@ -128,7 +128,7 @@ void Node_physics::set_motion_mode(const erhe::physics::Motion_mode motion_mode)
 
 auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (get_node() == nullptr) {
         return erhe::physics::Transform{};
@@ -172,7 +172,7 @@ void Node_physics::set_world_from_node(
     const glm::mat4& world_from_node
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // TODO ERHE_VERIFY(m_node != nullptr);
     if (m_node == nullptr) {
@@ -202,7 +202,7 @@ void Node_physics::set_world_from_node(
     const erhe::physics::Transform world_from_node
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // TDOO ERHE_VERIFY(m_node != nullptr);
     if (m_node == nullptr) {

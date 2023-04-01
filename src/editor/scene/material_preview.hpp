@@ -1,6 +1,8 @@
 #pragma once
 
+#include "renderers/composer.hpp"
 #include "renderers/light_buffer.hpp"
+#include "renderers/pipeline_renderpass.hpp"
 #include "scene/scene_view.hpp"
 
 #include "erhe/components/components.hpp"
@@ -92,6 +94,8 @@ private:
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
     std::shared_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
     Light_projections                             m_light_projections;
+    Composer                                      m_composer;
+    Pipeline_renderpass                           m_pipeline_renderpass;
 
     std::shared_ptr<Scene_root>          m_scene_root;
     std::shared_ptr<Content_library>     m_content_library;
@@ -105,7 +109,7 @@ private:
     std::shared_ptr<erhe::graphics::Texture>   m_shadow_texture;
     std::shared_ptr<erhe::primitive::Material> m_last_material;
 
-    glm::vec4         m_clear_color{0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec4         m_clear_color{0.0f, 0.0f, 0.0f, 0.333f};
 
     int   m_slice_count{40};
     int   m_stack_count{22};

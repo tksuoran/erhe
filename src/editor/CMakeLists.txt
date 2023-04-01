@@ -42,6 +42,8 @@ erhe_target_sources_grouped(
 
     renderers/camera_buffer.cpp
     renderers/camera_buffer.hpp
+    renderers/composer.cpp
+    renderers/composer.hpp
     renderers/draw_indirect_buffer.cpp
     renderers/draw_indirect_buffer.hpp
     renderers/forward_renderer.cpp
@@ -68,6 +70,10 @@ erhe_target_sources_grouped(
     renderers/programs.hpp
     renderers/render_context.cpp
     renderers/render_context.hpp
+    renderers/render_style.cpp
+    renderers/render_style.hpp
+    renderers/renderpass.cpp
+    renderers/renderpass.hpp
     renderers/shadow_renderer.cpp
     renderers/shadow_renderer.hpp
     renderers/viewport_config.cpp

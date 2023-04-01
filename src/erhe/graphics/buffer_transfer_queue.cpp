@@ -39,7 +39,7 @@ void Buffer_transfer_queue::enqueue(
 
 void Buffer_transfer_queue::flush()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::lock_guard<std::mutex> lock{m_mutex};
 

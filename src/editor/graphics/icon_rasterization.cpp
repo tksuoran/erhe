@@ -146,7 +146,7 @@ void Icon_rasterization::icon(
     static_cast<void>(uv0);
     static_cast<void>(tint_color);
 #else
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     erhe::application::g_imgui_renderer->image(
         m_texture,
@@ -174,7 +174,7 @@ auto Icon_rasterization::icon_button(
     static_cast<void>(tint_color);
     return false;
 #else
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(erhe::application::g_imgui_renderer != nullptr);
 
     const bool result = erhe::application::g_imgui_renderer->image_button(

@@ -82,12 +82,40 @@ public:
     static constexpr uint64_t frame_controller = (1u << 14);
     static constexpr uint64_t grid             = (1u << 15);
     static constexpr uint64_t rendertarget     = (1u << 16);
+    static constexpr uint64_t renderpass       = (1u << 17);
+    static constexpr uint64_t composer         = (1u << 18);
+
+    static constexpr const char* c_bit_labels[] =
+    {
+        "Nonone",
+        "scene",
+        "mesh_layer",
+        "light_layer",
+        "content_folder",
+        "brush",
+        "material",
+        "node",
+        "node_attachment",
+        "mesh",
+        "camera",
+        "light",
+        "physics",
+        "raytrace",
+        "frame_controller",
+        "rendertarget"
+        "renderpass"
+        "composer"
+    };
+
+    [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
 };
 
 class Item_filter
 {
 public:
     [[nodiscard]] auto operator()(uint64_t filter_bits) const -> bool;
+
+    auto describe() const -> std::string;
 
     uint64_t require_all_bits_set          {0};
     uint64_t require_at_least_one_bit_set  {0};

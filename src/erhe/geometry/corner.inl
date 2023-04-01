@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef ERHE_PROFILE_FUNCTION
-#   define ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION()
 #   define ERHE_PROFILE_FUNCTION_DUMMY
 #endif
 #ifndef ERHE_VERIFY
@@ -29,7 +29,7 @@ void Corner::smooth_normalize(
     const Property_map<Polygon_id, glm::vec3>& polygon_normals,
     const float                                cos_max_smoothing_angle) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (polygon_normals.has(polygon_id) == false) {
         return;
@@ -84,7 +84,7 @@ void Corner::smooth_average(
     const Property_map<Point_id, glm::vec3>&  point_normals
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const bool has_corner_normal = corner_normals.has(this_corner_id);
     if (!has_corner_normal && !point_normals.has(point_id)) {

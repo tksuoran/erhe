@@ -101,7 +101,7 @@ Scene_root::Scene_root(
     , m_scene          {std::make_shared<Scene>(name, this)}
     , m_layers         (*m_scene.get())
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // Layer configuration
     using std::make_shared;

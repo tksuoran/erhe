@@ -191,7 +191,7 @@ auto Rendertarget_imgui_window::flags() -> ImGuiWindowFlags
 void Rendertarget_imgui_window::on_begin()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();

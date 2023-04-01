@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 
 void Geometry_operation::post_processing()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     destination.make_point_corners();
     destination.build_edges();
@@ -25,7 +25,7 @@ void Geometry_operation::post_processing()
 
 void Geometry_operation::make_points_from_points()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     point_old_to_new.reserve(source.get_point_count());
     source.for_each_point_const([&](auto& i)
@@ -36,7 +36,7 @@ void Geometry_operation::make_points_from_points()
 
 void Geometry_operation::make_polygon_centroids()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     old_polygon_centroid_to_new_points.reserve(source.get_polygon_count());
     source.for_each_polygon_const([&](auto& i)
@@ -90,7 +90,7 @@ auto Geometry_operation::find_or_make_point_from_edge(
 
 void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> relative_positions)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::size_t split_count = relative_positions.size();
     reserve_edge_to_new_points();
@@ -531,7 +531,7 @@ void Geometry_operation::build_destination_edges_with_sourcing()
 
 void Geometry_operation::interpolate_all_property_maps()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     new_point_sources  .resize(destination.get_point_count());
     new_polygon_sources.resize(destination.get_polygon_count());

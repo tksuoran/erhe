@@ -364,7 +364,7 @@ void Hand::draw_joint_line_strip(
     erhe::application::Line_renderer&  line_renderer
 ) const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (joint_names.size() < 2) {
         return;

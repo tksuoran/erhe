@@ -10,10 +10,10 @@
 #       define glGetQueryObjectui64v gl::glGetQueryObjectui64v
 #       define glQueryCounter        gl::glQueryCounter
 #   endif
-#   include <Tracy.hpp>
+#   include <Tracy/Tracy.hpp>
 
 #   if defined(ERHE_TRACY_GL)
-#       include "TracyOpenGL.hpp"
+#       include "Tracy/TracyOpenGL.hpp"
 #   endif
 #   if defined(TRACY_ENABLE) && defined(ERHE_TRACY_GL)
 #       undef glGenQueries
@@ -24,7 +24,7 @@
 #       undef glQueryCounter
 #   endif
 #
-#   define ERHE_PROFILE_FUNCTION ZoneScoped
+#   define ERHE_PROFILE_FUNCTION() ZoneScoped
 #   define ERHE_PROFILE_SCOPE(erhe_profile_id) ZoneScopedN(erhe_profile_id)
 #   define ERHE_PROFILE_COLOR(erhe_profile_id, erhe_profile_color) ZoneScopedNC(erhe_profile_id, erhe_profile_color);
 #   define ERHE_PROFILE_DATA(erhe_profile_id, erhe_profile_data, erhe_profile_data_length) ZoneName(erhe_profile_data, erhe_profile_data_length)
@@ -47,7 +47,7 @@
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
 #else
-#   define ERHE_PROFILE_FUNCTION
+#   define ERHE_PROFILE_FUNCTION();
 #   define ERHE_PROFILE_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_COLOR(erhe_profile_id, erhe_profile_color) static_cast<void>(erhe_profile_id);
 #   define ERHE_PROFILE_DATA(erhe_profile_id, erhe_profile_data, erhe_profile_data_length) static_cast<void>(erhe_profile_id);

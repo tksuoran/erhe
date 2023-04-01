@@ -150,7 +150,7 @@ void Hotbar::declare_required_components()
 
 void Hotbar::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_hotbar == nullptr);
 
     auto ini = erhe::application::get_ini("erhe.ini", "hotbar");

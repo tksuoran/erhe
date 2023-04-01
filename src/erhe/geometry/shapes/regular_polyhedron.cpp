@@ -8,7 +8,7 @@ namespace erhe::geometry::shapes
 
 auto make_cuboctahedron(const double r) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "cuboctahedron",
@@ -54,7 +54,7 @@ auto make_cuboctahedron(const double r) -> Geometry
 
 auto make_dodecahedron(const double r) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "dodecahedron",
@@ -109,7 +109,7 @@ auto make_dodecahedron(const double r) -> Geometry
 
 auto make_icosahedron(const double r) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "icosahedron",
@@ -164,7 +164,7 @@ auto make_icosahedron(const double r) -> Geometry
 
 auto make_octahedron(const double r) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "octahedron",
@@ -196,7 +196,7 @@ auto make_octahedron(const double r) -> Geometry
 
 auto make_tetrahedron(double r) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "tetrahedron",
@@ -225,7 +225,7 @@ auto make_tetrahedron(double r) -> Geometry
 
 auto make_cube(const double r) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "cube",

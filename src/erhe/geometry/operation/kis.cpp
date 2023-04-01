@@ -12,7 +12,7 @@ namespace erhe::geometry::operation
 Kis::Kis(Geometry& src, Geometry& destination)
     : Geometry_operation{src, destination}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     make_points_from_points();
     make_polygon_centroids();

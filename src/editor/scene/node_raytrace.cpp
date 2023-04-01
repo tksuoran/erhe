@@ -120,7 +120,7 @@ Node_raytrace::Node_raytrace(
 
 void Node_raytrace::initialize()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_geometry = erhe::raytrace::IGeometry::create_unique(
         m_source_geometry->name + "_triangle_geometry",
@@ -258,7 +258,7 @@ void Node_raytrace::handle_node_scene_host_update(
 
 void Node_raytrace::handle_node_transform_update()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_instance->set_transform(m_node->world_from_node());
     m_instance->commit();

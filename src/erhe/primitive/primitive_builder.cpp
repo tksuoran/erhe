@@ -70,7 +70,7 @@ Primitive_builder::~Primitive_builder() noexcept
 
 void Primitive_builder::prepare_vertex_format(Build_info& build_info)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (build_info.buffer.vertex_format) {
         return;
@@ -245,7 +245,7 @@ Build_context_root::Build_context_root(
     , vertex_format     {build_info.buffer.vertex_format.get()}
     , vertex_stride     {vertex_format->stride()}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     get_mesh_info         ();
     get_vertex_attributes ();
@@ -318,7 +318,7 @@ void Build_context_root::get_mesh_info()
 
 void Build_context_root::get_vertex_attributes()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto& format_info = build_info.format;
     attributes.position      = Vertex_attribute_info(vertex_format, format_info.position_type,      3, Vertex_attribute::Usage_type::position,  0);
@@ -346,7 +346,7 @@ void Build_context_root::allocate_vertex_buffer()
 
 void Build_context_root::allocate_index_buffer()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(total_index_count > 0);
 
@@ -415,7 +415,7 @@ void Build_context_root::calculate_bounding_volume(
     erhe::geometry::Property_map<Point_id, vec3>* point_locations
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(primitive_geometry != nullptr);
 
@@ -437,7 +437,7 @@ auto Primitive_builder::build() -> Primitive_geometry
 
 void Primitive_builder::build(Primitive_geometry* primitive_geometry)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(primitive_geometry != nullptr);
 
@@ -497,7 +497,7 @@ Build_context::~Build_context() noexcept
 
 void Build_context::build_polygon_id()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!root.build_info.format.features.id) {
         return;
@@ -528,7 +528,7 @@ auto Build_context::get_polygon_normal() -> vec3
 
 void Build_context::build_vertex_position()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         !root.build_info.format.features.position ||
@@ -550,7 +550,7 @@ void Build_context::build_vertex_position()
 
 void Build_context::build_vertex_normal()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const vec3 polygon_normal = get_polygon_normal();
     vec3 normal{0.0f, 1.0f, 0.0f};
@@ -628,7 +628,7 @@ void Build_context::build_vertex_normal()
 
 void Build_context::build_vertex_tangent()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!root.build_info.format.features.tangent || !root.attributes.tangent.is_valid()) {
         return;
@@ -663,7 +663,7 @@ void Build_context::build_vertex_tangent()
 
 void Build_context::build_vertex_bitangent()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!root.build_info.format.features.bitangent || !root.attributes.bitangent.is_valid()) {
         return;
@@ -699,7 +699,7 @@ void Build_context::build_vertex_bitangent()
 
 void Build_context::build_vertex_texcoord()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!root.build_info.format.features.texcoord || !root.attributes.texcoord.is_valid()) {
         return;
@@ -753,7 +753,7 @@ void Build_context::build_vertex_texcoord()
 
 void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!root.build_info.format.features.color || !root.attributes.color.is_valid()) {
         return;
@@ -857,7 +857,7 @@ void Build_context::build_triangle_fill_index()
 
 void Build_context::build_polygon_fill()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // TODO property_maps.corner_indices needs to be setup
     //      also if edge lines are wanted.
@@ -939,7 +939,7 @@ void Build_context::build_polygon_fill()
 
 void Build_context::build_edge_lines()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!root.build_info.format.features.edge_lines) {
         return;
@@ -980,7 +980,7 @@ void Build_context::build_edge_lines()
 
 void Build_context::build_centroid_points()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!root.build_info.format.features.centroid_points) {
         return;
@@ -1026,7 +1026,7 @@ auto make_primitive(
     const Normal_style              normal_style
 ) -> Primitive_geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Primitive_builder builder{geometry, build_info, normal_style};
     return builder.build();

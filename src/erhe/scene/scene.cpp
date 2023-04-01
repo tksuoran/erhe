@@ -278,7 +278,7 @@ void Scene::sort_transform_nodes()
 
 void Scene::update_node_transforms()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!m_nodes_sorted) {
         sort_transform_nodes();
@@ -340,7 +340,7 @@ void Scene::register_node(
     const std::shared_ptr<erhe::scene::Node>& node
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
 #ifndef NDEBUG
     const auto i = std::find(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);

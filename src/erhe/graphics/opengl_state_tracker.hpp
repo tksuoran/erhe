@@ -41,7 +41,7 @@ public:
     void on_thread_exit () override;
     void on_thread_enter() override;
     void reset          ();
-    void execute        (const Pipeline& pipeline);
+    void execute        (const Pipeline& pipeline, bool skip_shader_stages = false);
 
     Shader_stages_tracker        shader_stages;
     Vertex_input_state_tracker   vertex_input;

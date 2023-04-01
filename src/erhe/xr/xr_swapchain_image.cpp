@@ -66,7 +66,7 @@ auto Swapchain_image::get_gl_texture() const -> uint32_t
 Swapchain::Swapchain(XrSwapchain xr_swapchain)
     : m_xr_swapchain{xr_swapchain}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     Expects(xr_swapchain != XR_NULL_HANDLE);
     enumerate_images();
@@ -74,7 +74,7 @@ Swapchain::Swapchain(XrSwapchain xr_swapchain)
 
 Swapchain::~Swapchain()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_swapchain != XR_NULL_HANDLE) {
         check_gl_context_in_current_in_this_thread();
@@ -103,7 +103,7 @@ void Swapchain::operator=(Swapchain&& other) noexcept
 
 auto Swapchain::acquire() -> std::optional<Swapchain_image>
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_swapchain == XR_NULL_HANDLE) {
         return {};
@@ -135,7 +135,7 @@ auto Swapchain::acquire() -> std::optional<Swapchain_image>
 
 auto Swapchain::release() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_swapchain == XR_NULL_HANDLE) {
         return true;
@@ -154,7 +154,7 @@ auto Swapchain::release() -> bool
 
 auto Swapchain::wait() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_swapchain == XR_NULL_HANDLE) {
         return false;
@@ -186,7 +186,7 @@ auto Swapchain::get_xr_swapchain() const -> XrSwapchain
 
 auto Swapchain::enumerate_images() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_xr_swapchain == XR_NULL_HANDLE){
         return false;

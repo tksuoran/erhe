@@ -68,7 +68,7 @@ void Framebuffer_window::bind_framebuffer()
 void Framebuffer_window::update_framebuffer()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto win_min = ImGui::GetWindowContentRegionMin();
     const auto win_max = ImGui::GetWindowContentRegionMax();
@@ -151,7 +151,7 @@ void Framebuffer_window::update_framebuffer()
 void Framebuffer_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         m_texture &&

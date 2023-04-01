@@ -125,7 +125,7 @@ void Components::deinitialize_component(Component* component)
 
 void Components::post_initialize_components()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_components->info(
         "Post-initializing {} Components:",
@@ -143,7 +143,7 @@ void Components::post_initialize_components()
 
 void Components::cleanup_components()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     queue_all_components_to_be_processed();
 
@@ -222,7 +222,7 @@ void Serial_execution_queue::wait()
 
 void Components::show_dependencies() const
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_components->info("Component dependencies:");
     for (auto const& component : m_components) {
@@ -247,7 +247,7 @@ void Components::show_dependencies() const
 
 void Components::collect_uninitialized_depended_by(Component* component, std::set<Component*>& result)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (Component* dependend_by_component : component->get_depended_by()) {
         if (dependend_by_component->get_state() == Component_state::Initialized) {
@@ -322,7 +322,7 @@ void Components::initialize_component(const bool in_worker_thread)
 
 void Components::queue_all_components_to_be_processed()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     std::transform(
         m_components.begin(),
@@ -337,7 +337,7 @@ void Components::queue_all_components_to_be_processed()
 
 void Components::launch_component_initialization(const bool parallel)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_parallel_initialization                  = parallel;
     m_initialize_component_count_worker_thread = 0;
@@ -401,7 +401,7 @@ void Components::launch_component_initialization(const bool parallel)
 
 auto Components::get_component_to_initialize(const bool in_worker_thread) -> Component*
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     {
         const std::lock_guard<std::mutex> lock{m_mutex};
@@ -482,7 +482,7 @@ auto Components::get_component_to_initialize(const bool in_worker_thread) -> Com
 
 auto Components::is_component_initialization_complete() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const std::lock_guard<std::mutex> lock{m_mutex};
     return m_is_ready; // TODO atomic bool
@@ -490,7 +490,7 @@ auto Components::is_component_initialization_complete() -> bool
 
 void Components::wait_component_initialization_complete()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(m_execution_queue);
 
@@ -514,7 +514,7 @@ void Components::update_fixed_step(
     const Time_context& time_context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (auto update : m_fixed_step_updates) {
         update->update_fixed_step(time_context);
@@ -525,7 +525,7 @@ void Components::update_once_per_frame(
     const Time_context& time_context
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (auto update : m_once_per_frame_updates) {
         update->update_once_per_frame(time_context);
@@ -534,7 +534,7 @@ void Components::update_once_per_frame(
 
 void Components::on_thread_exit()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (const auto& component : m_components) {
         component->on_thread_exit();
@@ -543,7 +543,7 @@ void Components::on_thread_exit()
 
 void Components::on_thread_enter()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     for (const auto& component : m_components) {
         component->on_thread_enter();

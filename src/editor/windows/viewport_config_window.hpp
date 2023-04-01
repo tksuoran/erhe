@@ -19,22 +19,17 @@ class Viewport_config_window
     , public erhe::application::Imgui_window
 {
 public:
-    class Config
-    {
-    public:
-        bool      polygon_fill             {true};
-        bool      edge_lines               {false};
-        bool      selection_polygon_fill   {true};
-        bool      selection_edge_lines     {false};
-        bool      corner_points            {false};
-        bool      polygon_centroids        {false};
-        bool      selection_bounding_sphere{true};
-        bool      selection_bounding_box   {true};
-        glm::vec4 edge_color               {0.0f, 0.0f, 0.0f, 0.5f};
-        glm::vec4 selection_edge_color     {0.0f, 0.0f, 0.0f, 0.5f};
-        glm::vec4 clear_color              {0.1f, 0.2f, 0.4f, 1.0f};
-    };
-    Config config;
+    bool      polygon_fill             {true};
+    bool      edge_lines               {false};
+    bool      selection_polygon_fill   {true};
+    bool      selection_edge_lines     {false};
+    bool      corner_points            {false};
+    bool      polygon_centroids        {false};
+    bool      selection_bounding_sphere{true};
+    bool      selection_bounding_box   {true};
+    glm::vec4 edge_color               {0.0f, 0.0f, 0.0f, 0.5f};
+    glm::vec4 selection_edge_color     {0.0f, 0.0f, 0.0f, 0.5f};
+    glm::vec4 clear_color              {0.1f, 0.2f, 0.4f, 1.0f};
 
     static constexpr const char* c_visualization_mode_strings[] =
     {
@@ -60,9 +55,9 @@ public:
     void imgui          () override;
 
     // Public API
-    void render_style_ui(Render_style& render_style);
+    void render_style_ui(Render_style_data& render_style);
 
-    Viewport_config  data;
+    Viewport_config  config;
     float            rendertarget_mesh_lod_bias{-0.666f};
     Viewport_config* edit_data{nullptr};
 };

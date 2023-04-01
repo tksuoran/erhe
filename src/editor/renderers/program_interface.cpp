@@ -159,7 +159,7 @@ Program_interface::Shader_resources::Shader_resources(
 
 void Program_interface::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ERHE_VERIFY(g_program_interface == nullptr);
 

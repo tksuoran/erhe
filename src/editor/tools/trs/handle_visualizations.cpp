@@ -133,7 +133,7 @@ auto Handle_visualizations::make_mesh(
     const Part&                                       part
 ) -> std::shared_ptr<erhe::scene::Mesh>
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     auto node = std::make_shared<erhe::scene::Node>(name);
     auto mesh = std::make_shared<erhe::scene::Mesh>(
         name,
@@ -183,7 +183,7 @@ namespace {
 
 auto Handle_visualizations::make_arrow_cylinder() -> Part
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_cylinder(
@@ -206,7 +206,7 @@ auto Handle_visualizations::make_arrow_cylinder() -> Part
 
 auto Handle_visualizations::make_arrow_cone() -> Part
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
         const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_cone(
@@ -228,7 +228,7 @@ auto Handle_visualizations::make_arrow_cone() -> Part
 
 auto Handle_visualizations::make_box() -> Part
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_box(
@@ -250,7 +250,7 @@ auto Handle_visualizations::make_box() -> Part
 
 auto Handle_visualizations::make_rotate_ring() -> Part
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_torus(
@@ -319,7 +319,7 @@ auto Handle_visualizations::get_handle_material(
 
 void Handle_visualizations::initialize()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     m_tool_node = std::make_shared<erhe::scene::Node>("Trs");
     const auto scene_root = m_trs_tool.get_tool_scene_root();
@@ -423,7 +423,7 @@ auto Handle_visualizations::get_handle(erhe::scene::Mesh* mesh) const -> Handle
 
 void Handle_visualizations::update_transforms() //const uint64_t serial)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto root = m_root.lock();
     if (!root) {

@@ -124,7 +124,7 @@ void View::on_close()
 
 void View::update()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(log_frame, "update()");
 

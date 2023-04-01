@@ -242,10 +242,8 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     tracy
-    GIT_REPOSITORY https://github.com/tksuoran/tracy.git
-    GIT_TAG        origin/fix-operator-precedence-v0.8.1
-    #GIT_REPOSITORY https://github.com/tksuoran/tracy.git
-    #GIT_TAG        v0.8.1
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG        v0.9.1
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

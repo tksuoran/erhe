@@ -159,7 +159,7 @@ void Imgui_renderer::declare_required_components()
 
 void Imgui_renderer::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_imgui_renderer == nullptr);
 
     const Scoped_gl_context gl_context{};
@@ -447,7 +447,7 @@ auto Imgui_renderer::vr_mono_font() const -> ImFont*
 
 void Imgui_renderer::create_font_texture()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto& config = g_configuration->imgui;
 
@@ -742,7 +742,7 @@ void Imgui_renderer::use(
     const uint64_t                                  handle
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
 #if !defined(NDEBUG)
     if (!erhe::graphics::Instance::info.use_bindless_texture) {
@@ -764,7 +764,7 @@ void Imgui_renderer::render_draw_data()
 {
     SPDLOG_LOGGER_TRACE(log_frame, "begin Imgui_renderer::render_draw_data()");
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     // Also make font texture handle resident
     {

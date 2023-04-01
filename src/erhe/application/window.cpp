@@ -58,7 +58,7 @@ void Window::initialize_component()
 
 auto Window::create_gl_window() -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const char* month_name[] = {
         "January",

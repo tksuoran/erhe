@@ -167,7 +167,7 @@ static constexpr std::string_view c_line_renderer_initialize_component{"Line_ren
 
 void Line_renderer_set::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_line_renderer_set == nullptr);
 
     const Scoped_gl_context gl_context;
@@ -373,7 +373,7 @@ Line_renderer::Line_renderer(
     : m_name    {name}
     , m_pipeline{pipeline}
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const auto            reverse_depth = g_configuration->graphics.reverse_depth;
     constexpr std::size_t vertex_count  = 512 * 1024;
@@ -1336,7 +1336,7 @@ void Line_renderer::render(
         return;
     }
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_PROFILE_GPU_SCOPE(c_line_renderer_render)
 
     erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_render};

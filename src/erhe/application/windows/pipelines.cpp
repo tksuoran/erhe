@@ -156,7 +156,7 @@ void Pipelines::rasterization(
     erhe::graphics::Rasterization_state& rasterization
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         !ImGui::TreeNodeEx(
@@ -228,7 +228,7 @@ void Pipelines::stencil_op(
     erhe::graphics::Stencil_op_state& stencil_op
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         !ImGui::TreeNodeEx(
@@ -283,7 +283,7 @@ void Pipelines::stencil_op(
 
 void Pipelines::depth_stencil(erhe::graphics::Depth_stencil_state& depth_stencil)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         !ImGui::TreeNodeEx(
@@ -323,7 +323,7 @@ void Pipelines::blend_state_component(
     erhe::graphics::Blend_state_component& component
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         !ImGui::TreeNodeEx(
@@ -366,7 +366,7 @@ void Pipelines::blend_state_component(
 
 void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         !ImGui::TreeNodeEx(
@@ -413,7 +413,7 @@ void Pipelines::color_blend(erhe::graphics::Color_blend_state& color_blend)
 void Pipelines::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ImGui::Begin(c_title.data());
     //const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};

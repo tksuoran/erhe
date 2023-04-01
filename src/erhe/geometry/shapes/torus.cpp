@@ -49,7 +49,7 @@ public:
 
     auto make_point_data(const double rel_major, const double rel_minor) const -> Point_data
     {
-        ERHE_PROFILE_FUNCTION
+        ERHE_PROFILE_FUNCTION();
 
         const double R         = major_radius;
         const double r         = minor_radius;
@@ -95,7 +95,7 @@ public:
         const double rel_minor
     ) -> Point_id
     {
-        ERHE_PROFILE_FUNCTION
+        ERHE_PROFILE_FUNCTION();
 
         const Point_id   point_id = geometry.make_point();
         const Point_data data     = make_point_data(rel_major, rel_minor);
@@ -146,7 +146,7 @@ public:
 
     void make_corner(const Polygon_id polygon_id, int major, int minor)
     {
-        ERHE_PROFILE_FUNCTION
+        ERHE_PROFILE_FUNCTION();
 
         const auto rel_major           = static_cast<double>(major) / static_cast<double>(major_axis_steps);
         const auto rel_minor           = static_cast<double>(minor) / static_cast<double>(minor_axis_steps);
@@ -200,7 +200,7 @@ public:
         , major_axis_steps{major_axis_steps}
         , minor_axis_steps{minor_axis_steps}
     {
-        ERHE_PROFILE_FUNCTION
+        ERHE_PROFILE_FUNCTION();
 
         point_locations   = geometry.point_attributes()  .create<vec3>(c_point_locations  );
         point_normals     = geometry.point_attributes()  .create<vec3>(c_point_normals    );
@@ -215,7 +215,7 @@ public:
 
     void build()
     {
-        ERHE_PROFILE_FUNCTION
+        ERHE_PROFILE_FUNCTION();
 
         // red channel   = anisotropy strength
         // green channel = apply texture coordinate to anisotropy
@@ -281,7 +281,7 @@ auto make_torus(
     const int    minor_axis_steps
 ) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "torus",

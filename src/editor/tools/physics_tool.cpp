@@ -565,7 +565,7 @@ void Physics_tool::handle_priority_update(int old_priority, int new_priority)
 
 void Physics_tool::tool_render(const Render_context& /*context*/)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     erhe::application::Line_renderer& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 

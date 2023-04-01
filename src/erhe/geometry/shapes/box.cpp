@@ -36,7 +36,7 @@ auto make_box(
     const double z_size
 ) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     const double x = x_size / 2.0;
     const double y = y_size / 2.0;
@@ -382,7 +382,7 @@ auto make_box(
     const float      p
 ) -> Geometry
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     return Geometry{
         "box",

@@ -78,7 +78,7 @@ void Log_window::toggle_pause()
 void Log_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     auto& tail  = erhe::log::get_tail_store_log();
     auto& frame = erhe::log::get_frame_store_log();

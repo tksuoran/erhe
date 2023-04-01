@@ -129,7 +129,7 @@ auto parse_obj_geometry(
     const std::filesystem::path& path
 ) -> std::vector<std::shared_ptr<erhe::geometry::Geometry>>
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_parsers->trace("path = {}", path.generic_string());
 

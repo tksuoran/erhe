@@ -50,7 +50,7 @@ void Gl_context_provider::provide_worker_contexts(
     std::function<bool()>          worker_contexts_still_needed_callback
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     log_startup->info("Starting to provide worked GL contexts");
 
@@ -124,7 +124,7 @@ auto Gl_context_provider::acquire_gl_context() -> Gl_worker_context
 
 void Gl_context_provider::release_gl_context(Gl_worker_context context)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (std::this_thread::get_id() == m_main_thread_id) {
         ERHE_VERIFY(context.id == 0);
@@ -151,7 +151,7 @@ Scoped_gl_context::Scoped_gl_context()
 
 Scoped_gl_context::~Scoped_gl_context() noexcept
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     g_gl_context_provider->release_gl_context(m_context);
 }

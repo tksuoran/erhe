@@ -132,7 +132,7 @@ void Multi_buffer::next_frame()
 
 void Multi_buffer::bind(const erhe::application::Buffer_range& range)
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (range.byte_count == 0) {
         return;

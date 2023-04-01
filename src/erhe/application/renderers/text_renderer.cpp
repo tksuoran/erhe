@@ -227,7 +227,7 @@ static constexpr std::string_view c_text_renderer_initialize_component{"Text_ren
 
 void Text_renderer::initialize_component()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_text_renderer == nullptr);
 
     auto ini = erhe::application::get_ini("erhe.ini", "text_renderer");
@@ -349,7 +349,7 @@ void Text_renderer::initialize_component()
 
 void Text_renderer::create_frame_resources()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     constexpr std::size_t vertex_count{65536 * 8};
     const bool reverse_depth = g_configuration->graphics.reverse_depth;
@@ -387,7 +387,7 @@ void Text_renderer::print(
     const std::string_view text
 )
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!m_font) {
         return;
@@ -442,7 +442,7 @@ void Text_renderer::render(erhe::scene::Viewport viewport)
         return;
     }
 
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     ERHE_PROFILE_GPU_SCOPE(c_text_renderer_render)
 

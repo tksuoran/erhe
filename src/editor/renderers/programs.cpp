@@ -209,7 +209,7 @@ auto Programs_impl::make_prototype(
     erhe::graphics::Shader_stages::Create_info create_info
 ) -> std::unique_ptr<erhe::graphics::Shader_stages::Prototype>
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     SPDLOG_LOGGER_TRACE(log_programs, "Programs::make_program({})", create_info.name);
     SPDLOG_LOGGER_TRACE(log_programs, "current directory is {}", std::filesystem::current_path().string());
@@ -285,7 +285,7 @@ auto Programs_impl::make_program(
     erhe::graphics::Shader_stages::Prototype& prototype
 ) -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (!prototype.is_valid()) {
         log_programs->error("current directory is {}", std::filesystem::current_path().string());

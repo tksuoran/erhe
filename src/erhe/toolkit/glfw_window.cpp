@@ -392,7 +392,7 @@ auto Context_window::open(
     const Window_configuration& configuration
 ) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (s_window_count == 0) {
         if (glfwInit() != GLFW_TRUE) {
@@ -557,17 +557,17 @@ void Context_window::break_event_loop()
 
 void Context_window::poll_events()
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (m_configuration.sleep_time > 0.0f) {
-        ERHE_PROFILE_SCOPE("sleep")
+        ERHE_PROFILE_SCOPE("sleep");
         sleep_for(std::chrono::duration<float, std::milli>(m_configuration.sleep_time * 1000.0f));
     }
     if (m_configuration.wait_time > 0.0f) {
-        ERHE_PROFILE_SCOPE("wait")
+        ERHE_PROFILE_SCOPE("wait");
         glfwWaitEventsTimeout(m_configuration.wait_time);
     } else {
-        ERHE_PROFILE_SCOPE("poll")
+        ERHE_PROFILE_SCOPE("poll");
 
         glfwPollEvents();
     }

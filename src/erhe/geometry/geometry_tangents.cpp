@@ -45,7 +45,7 @@ auto Geometry::compute_tangents(
     const bool override_existing
 ) -> bool
 {
-    ERHE_PROFILE_FUNCTION
+    ERHE_PROFILE_FUNCTION();
 
     if (
         (!polygon_tangents   || has_polygon_tangents  ()) &&
