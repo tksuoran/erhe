@@ -13,6 +13,8 @@
 namespace erhe::graphics
 {
 
+class Vertex_attribute;
+
 // Shader resource represents data or data structure that can
 // be made available to shader program.
 //
@@ -205,6 +207,8 @@ public:
         const std::string_view           name,
         const std::optional<std::size_t> array_size = {}
     ) -> Shader_resource*;
+
+    auto add(const Vertex_attribute& attribute) -> Shader_resource*;
 
 private:
     void align_offset_to(const unsigned int alignment);

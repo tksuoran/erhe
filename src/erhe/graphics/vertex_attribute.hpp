@@ -13,18 +13,18 @@ class Vertex_attribute
 public:
     enum class Usage_type : unsigned int
     {
-        none           =    0,
-        automatic      =    1,
-        position       =    2,
-        tangent        =    4,
-        normal         =    8,
-        bitangent      =   16,
-        color          =   32,
-        weights        =   64,
-        matrix_indices =  128,
-        tex_coord      =  256,
-        id             =  512,
-        custom         = 1024
+        none           =  0,
+        automatic      = (1 <<  0u),
+        position       = (1 <<  1u),
+        tangent        = (1 <<  2u),
+        normal         = (1 <<  3u),
+        bitangent      = (1 <<  4u),
+        color          = (1 <<  5u),
+        weights        = (1 <<  6u),
+        matrix_indices = (1 <<  7u),
+        tex_coord      = (1 <<  8u),
+        id             = (1 <<  9u),
+        custom         = (1 << 10u)
     };
 
     // for example tex_coord 0

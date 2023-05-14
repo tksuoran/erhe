@@ -1,6 +1,10 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/instance.hpp"
+#include "erhe/graphics/vertex_format.hpp"
+#include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/toolkit/verify.hpp"
+
+#include "fmt/format.h"
 
 #include <algorithm>
 
@@ -996,6 +1000,50 @@ auto Shader_resource::add_uint64(
     ).get();
     m_offset += new_member->size_bytes();
     return new_member;
+}
+
+auto Shader_resource::add(const Vertex_attribute& attribute) -> Shader_resource*
+{
+    const std::string name = fmt::format(
+        "{}_{}",
+        Vertex_attribute::desc(attribute.usage.type),
+        attribute.usage.index
+    );
+
+    switch (attribute.data_type.type) {
+        case gl::Vertex_attrib_type::int_: {
+            switch (attribute.data_type.dimension) {
+                case 1: return add_int(name);
+                //case 2: return add_ivec2(name);
+                //case 3: return add_ivec3(name);
+                //case 4: return add_ivec4(name);
+                default: break;
+            }
+            break;
+        }
+        case gl::Vertex_attrib_type::unsigned_int: {
+            switch (attribute.data_type.dimension) {
+                case 1: return add_uint(name);
+                case 2: return add_uvec2(name);
+                case 3: return add_uvec3(name);
+                case 4: return add_uvec4(name);
+                default: break;
+            }
+            break;
+        }
+        case gl::Vertex_attrib_type::float_: {
+            switch (attribute.data_type.dimension) {
+                case 1: return add_float(name);
+                case 2: return add_vec2(name);
+                case 3: return add_vec3(name);
+                case 4: return add_vec4(name);
+                default: break;
+            }
+            break;
+        }
+    }
+
+    return nullptr;
 }
 
 void Shader_resource::align_offset_to(const unsigned int alignment)

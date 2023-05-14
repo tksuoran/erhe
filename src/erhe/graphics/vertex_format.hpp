@@ -10,6 +10,8 @@
 namespace erhe::graphics
 {
 
+class Shader_resource;
+
 /// Describes vertex data layout in buffer / memory
 class Vertex_format final
 {
@@ -42,6 +44,8 @@ public:
     }
 
     [[nodiscard]] auto match(const Vertex_format& other) const -> bool;
+
+    void add_to(Shader_resource& shader_resource);
 
 private:
     void align_to(std::size_t alignment);

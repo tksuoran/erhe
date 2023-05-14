@@ -1,4 +1,5 @@
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/graphics/shader_resource.hpp"
 #include "erhe/gl/gl_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -101,6 +102,13 @@ auto Vertex_format::find_attribute(
     }
 
     ERHE_FATAL("vertex_attribute not found");
+}
+
+void Vertex_format::add_to(Shader_resource& shader_resource)
+{
+    for (const auto& attribute : m_attributes) {
+        shader_resource.add(attribute);
+    }
 }
 
 } // namespace erhe::graphics
