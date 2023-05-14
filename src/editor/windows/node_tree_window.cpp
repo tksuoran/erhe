@@ -415,16 +415,6 @@ void Node_tree_window::drag_and_drop_source(
 
 namespace {
 
-static inline ImVec2 operator+(const ImVec2& lhs, const ImVec2& rhs)
-{
-    return ImVec2{lhs.x + rhs.x, lhs.y + rhs.y};
-}
-
-static inline ImVec2 operator-(const ImVec2& lhs, const ImVec2& rhs)
-{
-    return ImVec2{lhs.x - rhs.x, lhs.y - rhs.y};
-}
-
 void drag_and_drop_rectangle_preview(const ImRect rect)
 {
     const auto* g       = ImGui::GetCurrentContext();

@@ -54,7 +54,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     embree
     GIT_REPOSITORY https://github.com/embree/embree.git
-    GIT_TAG        v3.13.3
+    GIT_TAG        v3.13.3 # TODO v4.1.0 is out
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -63,7 +63,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     etl
     GIT_REPOSITORY https://github.com/ETLCPP/etl.git
-    GIT_TAG        20.35.10
+    GIT_TAG        20.35.14 
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -80,7 +80,7 @@ FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
     #GIT_TAG        origin/master
-    GIT_TAG        9.1.0
+    GIT_TAG        10.0.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -235,7 +235,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.10.0
+    GIT_TAG        v1.11.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
