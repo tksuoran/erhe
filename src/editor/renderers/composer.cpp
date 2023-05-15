@@ -34,9 +34,9 @@ Composer::~Composer() = default;
 
 void Composer::render(const Render_context& context) const
 {
-    log_frame->info("Composer::render()");
+    log_frame->trace("Composer::render()");
     for (const auto& renderpass : renderpasses) {
-        log_frame->info("  rp: {}", renderpass->describe());
+        log_frame->trace("  rp: {}", renderpass->describe());
         renderpass->render(context);
     }
 }

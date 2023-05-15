@@ -111,9 +111,9 @@ void Id_renderer::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
-    require<Mesh_memory>();
+    require<Mesh_memory      >();
     require<Program_interface>();
-    require<Programs>();
+    require<Programs         >();
 }
 
 static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
@@ -144,7 +144,7 @@ void Id_renderer::initialize_component()
     m_pipeline.data = {
         .name           = "ID Renderer",
         .shader_stages  = g_programs->id.get(),
-        .vertex_input   = g_mesh_memory->vertex_input.get(),
+        .vertex_input   = g_mesh_memory->get_vertex_input(),
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
@@ -154,7 +154,7 @@ void Id_renderer::initialize_component()
     m_selective_depth_clear_pipeline.data = {
         .name           = "ID Renderer selective depth clear",
         .shader_stages  = g_programs->id.get(),
-        .vertex_input   = g_mesh_memory->vertex_input.get(),
+        .vertex_input   = g_mesh_memory->get_vertex_input(),
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
         .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,

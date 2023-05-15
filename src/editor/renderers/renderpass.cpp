@@ -80,7 +80,8 @@ void Renderpass::render(const Render_context& context) const
         (render_style != nullptr) &&
         !render_style->is_primitive_mode_enabled(this->primitive_mode)
     ) {
-        log_frame->info("primitive mode is not enabled - skipping");
+        //// XXX TODO
+        log_frame->trace("primitive mode is not enabled - skipping");
         return;
     }
 
@@ -96,7 +97,7 @@ void Renderpass::render(const Render_context& context) const
     //}
 
     if (this->mesh_layers.empty()) {
-        log_frame->info("render_fullscreen");
+        //log_frame->trace("render_fullscreen");
         g_forward_renderer->render_fullscreen(
             Forward_renderer::Render_parameters{
                 .camera                 = context.camera,

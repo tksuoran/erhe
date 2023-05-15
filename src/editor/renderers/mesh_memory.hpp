@@ -11,6 +11,7 @@ namespace erhe::graphics
 {
     class Buffer;
     class Buffer_transfer_queue;
+    class Shader_resource;
     class Vertex_format;
     class Vertex_input_state;
 }
@@ -28,12 +29,14 @@ class IMesh_memory
 public:
     virtual ~IMesh_memory() noexcept;
 
-    [[nodiscard]] virtual auto gl_vertex_format() const -> erhe::graphics::Vertex_format& = 0;
-    [[nodiscard]] virtual auto gl_index_type   () const -> gl::Draw_elements_type = 0;
+    [[nodiscard]] virtual auto gl_vertex_format   () const -> erhe::graphics::Vertex_format& = 0;
+    [[nodiscard]] virtual auto gl_index_type      () const -> gl::Draw_elements_type = 0;
+    [[nodiscard]] virtual auto get_vertex_input   () -> erhe::graphics::Vertex_input_state* = 0;
+    [[nodiscard]] virtual auto get_vertex_data_in () -> erhe::graphics::Shader_resource& = 0;
+    [[nodiscard]] virtual auto get_vertex_data_out() -> erhe::graphics::Shader_resource& = 0;
 
     std::unique_ptr<erhe::graphics::Buffer_transfer_queue> gl_buffer_transfer_queue;
     std::unique_ptr<erhe::primitive::Gl_buffer_sink>       gl_buffer_sink;
-    std::unique_ptr<erhe::graphics::Vertex_input_state>    vertex_input;
     std::shared_ptr<erhe::graphics::Buffer>                gl_vertex_buffer;
     std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
     erhe::primitive::Build_info                            build_info;

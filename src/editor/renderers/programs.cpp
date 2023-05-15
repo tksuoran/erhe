@@ -1,4 +1,5 @@
 #include "renderers/programs.hpp"
+#include "renderers/mesh_memory.hpp"
 
 #include "editor_log.hpp"
 
@@ -197,6 +198,7 @@ void Programs::declare_required_components()
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Shader_monitor     >();
+    require<Mesh_memory      >();
     require<Program_interface>();
 }
 
@@ -214,27 +216,31 @@ auto Programs_impl::make_prototype(
     SPDLOG_LOGGER_TRACE(log_programs, "Programs::make_program({})", create_info.name);
     SPDLOG_LOGGER_TRACE(log_programs, "current directory is {}", std::filesystem::current_path().string());
 
-    const std::filesystem::path vs_path = m_shader_path / std::filesystem::path(create_info.name + ".vert");
-    const std::filesystem::path gs_path = m_shader_path / std::filesystem::path(create_info.name + ".geom");
+    const std::filesystem::path cs_path = m_shader_path / std::filesystem::path(create_info.name + ".comp");
     const std::filesystem::path fs_path = m_shader_path / std::filesystem::path(create_info.name + ".frag");
+    const std::filesystem::path gs_path = m_shader_path / std::filesystem::path(create_info.name + ".geom");
+    const std::filesystem::path vs_path = m_shader_path / std::filesystem::path(create_info.name + ".vert");
 
-    const bool vs_exists = std::filesystem::exists(vs_path);
-    const bool gs_exists = std::filesystem::exists(gs_path);
+    const bool cs_exists = std::filesystem::exists(cs_path);
     const bool fs_exists = std::filesystem::exists(fs_path);
+    const bool gs_exists = std::filesystem::exists(gs_path);
+    const bool vs_exists = std::filesystem::exists(vs_path);
 
     const auto& shader_resources = *g_program_interface->shader_resources.get();
 
     create_info.vertex_attribute_mappings = &shader_resources.attribute_mappings,
     create_info.fragment_outputs          = &shader_resources.fragment_outputs,
+    create_info.struct_types.push_back(&shader_resources.material_interface.material_struct);
+    create_info.struct_types.push_back(&shader_resources.light_interface.light_struct);
+    create_info.struct_types.push_back(&shader_resources.camera_interface.camera_struct);
+    create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
+    create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_in());
+    create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_out());
     create_info.add_interface_block(&shader_resources.material_interface.material_block);
     create_info.add_interface_block(&shader_resources.light_interface.light_block);
     create_info.add_interface_block(&shader_resources.light_interface.light_control_block);
     create_info.add_interface_block(&shader_resources.camera_interface.camera_block);
     create_info.add_interface_block(&shader_resources.primitive_interface.primitive_block);
-    create_info.struct_types.push_back(&shader_resources.material_interface.material_struct);
-    create_info.struct_types.push_back(&shader_resources.light_interface.light_struct);
-    create_info.struct_types.push_back(&shader_resources.camera_interface.camera_struct);
-    create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
 
     if (erhe::graphics::Instance::info.gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
@@ -268,14 +274,17 @@ auto Programs_impl::make_prototype(
     //    create_info.pragmas.push_back("optimize(off)");
     //}
 
-    if (vs_exists) {
-        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
+    if (cs_exists) {
+        create_info.shaders.emplace_back(gl::Shader_type::compute_shader,  cs_path);
+    }
+    if (fs_exists) {
+        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     }
     if (gs_exists) {
         create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
     }
-    if (fs_exists) {
-        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
+    if (vs_exists) {
+        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     }
 
     return std::make_unique<Shader_stages::Prototype>(create_info);

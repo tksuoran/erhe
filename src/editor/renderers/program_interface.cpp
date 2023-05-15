@@ -1,10 +1,12 @@
 #include "renderers/program_interface.hpp"
+#include "renderers/mesh_memory.hpp"
 #include "editor_log.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/window.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/sampler.hpp"
+#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 

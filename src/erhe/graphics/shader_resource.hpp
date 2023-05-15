@@ -140,6 +140,11 @@ public:
 
     static constexpr const std::size_t unsized_array = 0;
 
+    void set_readonly (bool value);
+    void set_writeonly(bool value);
+    [[nodiscard]] auto get_readonly () const -> bool;
+    [[nodiscard]] auto get_writeonly() const -> bool;
+
     auto add_struct(
         const std::string_view           name,
         gsl::not_null<Shader_resource*>  struct_type,
@@ -243,6 +248,9 @@ private:
 
     // Blocks and samplers in default uniform block
     int               m_binding_point{-1};
+
+    bool m_readonly {false};
+    bool m_writeonly{false};
 
     // Only used for uniforms in program
 };

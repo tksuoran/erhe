@@ -248,7 +248,7 @@ void Vertex_input_state::update()
                 break;
             }
 
-            case gl::Attribute_type::   unsigned_int64_arb:
+            case gl::Attribute_type::unsigned_int64_arb:
             case gl::Attribute_type::double_:
             case gl::Attribute_type::double_vec2:
             case gl::Attribute_type::double_vec3:

@@ -691,6 +691,12 @@ auto Shader_resource::layout_string() const -> std::string
         //first = false;
     }
     ss << ") ";
+    if (m_readonly) {
+        ss << "readonly ";
+    }
+    if (m_writeonly) {
+        ss << "writeonly ";
+    }
     return ss.str();
 }
 
@@ -1000,6 +1006,26 @@ auto Shader_resource::add_uint64(
     ).get();
     m_offset += new_member->size_bytes();
     return new_member;
+}
+
+void Shader_resource::set_readonly (bool value)
+{
+    m_readonly = value;
+}
+
+void Shader_resource::set_writeonly(bool value)
+{
+    m_writeonly = value;
+}
+
+auto Shader_resource::get_readonly() const -> bool
+{
+    return m_readonly;
+}
+
+auto Shader_resource::get_writeonly() const -> bool
+{
+    return m_writeonly;
 }
 
 auto Shader_resource::add(const Vertex_attribute& attribute) -> Shader_resource*

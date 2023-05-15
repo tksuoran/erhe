@@ -374,7 +374,7 @@ void Pipeline_renderpasses::initialize()
 
     const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
-    auto* vertex_input = g_mesh_memory->vertex_input.get();
+    auto* vertex_input = g_mesh_memory->get_vertex_input();
 
     using erhe::graphics::Vertex_input_state;
     using erhe::graphics::Input_assembly_state;

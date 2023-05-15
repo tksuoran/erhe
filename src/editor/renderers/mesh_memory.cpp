@@ -94,15 +94,9 @@ public:
 
         erhe::primitive::Primitive_builder::prepare_vertex_format(build_info);
 
-        const auto& shader_resources = *g_program_interface->shader_resources.get();
-        vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
-            erhe::graphics::Vertex_input_state_data::make(
-                shader_resources.attribute_mappings,
-                gl_vertex_format(),
-                gl_vertex_buffer.get(),
-                gl_index_buffer.get()
-            )
-        );
+        gl_vertex_format().add_to(m_vertex_data_in);
+        gl_vertex_format().add_to(m_vertex_data_out);
+
     }
     ~Mesh_memory_impl() noexcept override
     {
@@ -120,6 +114,35 @@ public:
         return build_info.buffer.index_type;
     }
 
+    auto get_vertex_input() -> erhe::graphics::Vertex_input_state* override
+    {
+        if (!m_vertex_input) {
+            const auto& shader_resources = *g_program_interface->shader_resources.get();
+            m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
+                erhe::graphics::Vertex_input_state_data::make(
+                    shader_resources.attribute_mappings,
+                    gl_vertex_format(),
+                    gl_vertex_buffer.get(),
+                    gl_index_buffer.get()
+                )
+            );
+        }
+        return m_vertex_input.get();
+    }
+
+    auto get_vertex_data_in() -> erhe::graphics::Shader_resource& override
+    {
+        return m_vertex_data_in;
+    }
+    auto get_vertex_data_out() -> erhe::graphics::Shader_resource& override
+    {
+        return m_vertex_data_out;
+    }
+
+private:
+    std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
+    erhe::graphics::Shader_resource                     m_vertex_data_in {"vertex_data_in"};   // For SSBO read
+    erhe::graphics::Shader_resource                     m_vertex_data_out{"vertex_data_out"};  // For SSBO write
 };
 
 IMesh_memory* g_mesh_memory{nullptr};
