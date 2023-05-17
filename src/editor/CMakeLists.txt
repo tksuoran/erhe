@@ -129,14 +129,14 @@ erhe_target_sources_grouped(
     tools/brushes/create/create_torus.hpp
     tools/brushes/create/create_uv_sphere.cpp
     tools/brushes/create/create_uv_sphere.hpp
-    tools/trs/handle_visualizations.cpp
-    tools/trs/handle_visualizations.hpp
-    tools/trs/move_tool.cpp
-    tools/trs/move_tool.hpp
-    tools/trs/rotate_tool.cpp
-    tools/trs/rotate_tool.hpp
-    tools/trs/trs_tool.cpp
-    tools/trs/trs_tool.hpp
+    tools/transform/handle_visualizations.cpp
+    tools/transform/handle_visualizations.hpp
+    tools/transform/move_tool.cpp
+    tools/transform/move_tool.hpp
+    tools/transform/rotate_tool.cpp
+    tools/transform/rotate_tool.hpp
+    tools/transform/transform_tool.cpp
+    tools/transform/transform_tool.hpp
     tools/debug_visualizations.cpp
     tools/debug_visualizations.hpp
     tools/fly_camera_tool.cpp

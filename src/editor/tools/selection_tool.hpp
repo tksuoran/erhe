@@ -95,7 +95,7 @@ public:
 
     // Public API
     void viewport_toolbar(bool& hovered);
-    [[nodiscard]] auto selection               () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
+    [[nodiscard]] auto get_selection           () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
     [[nodiscard]] auto is_in_selection         (const std::shared_ptr<erhe::scene::Item>& item) const -> bool;
     [[nodiscard]] auto range_selection         () -> Range_selection&;
     [[nodiscard]] auto get_first_selected_node () -> std::shared_ptr<erhe::scene::Node>;

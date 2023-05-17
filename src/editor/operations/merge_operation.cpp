@@ -40,7 +40,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
     // TODO count meshes in selection
-    if (g_selection_tool->selection().size() < 2) {
+    if (g_selection_tool->get_selection().size() < 2) {
         return;
     }
 
@@ -57,9 +57,9 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
     ERHE_VERIFY(g_selection_tool != nullptr);
 
-    m_selection_before = g_selection_tool->selection();
+    m_selection_before = g_selection_tool->get_selection();
 
-    for (const auto& item : g_selection_tool->selection()) {
+    for (const auto& item : g_selection_tool->get_selection()) {
         const auto& mesh = as_mesh(item);
         if (!mesh) {
             continue;

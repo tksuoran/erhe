@@ -1,12 +1,15 @@
 #include "operations/node_operation.hpp"
-
 #include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
+#include "erhe/log/log_glm.hpp"
 #include "erhe/scene/scene.hpp"
 
 #include <fmt/format.h>
+
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <sstream>
 
@@ -55,6 +58,56 @@ void Node_operation::undo()
 void Node_operation::add_entry(Entry&& entry)
 {
     m_entries.emplace_back(entry);
+}
+
+// ----------------------------------------------------------------------------
+
+Node_transform_operation::Node_transform_operation(
+    const Parameters& parameters
+)
+    : m_parameters{parameters}
+{
+}
+
+Node_transform_operation::~Node_transform_operation() noexcept
+{
+}
+
+auto Node_transform_operation::describe() const -> std::string
+{
+    std::stringstream ss;
+    ss << "Node_transform " << m_parameters.node->get_name();
+    return ss.str();
+}
+
+void Node_transform_operation::execute()
+{
+    log_operations->trace("Op Execute {}", describe());
+
+    glm::vec3 scale;
+    glm::quat orientation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::decompose(m_parameters.parent_from_node_after.matrix(), scale, orientation, translation, skew, perspective);
+    log_operations->info("Op Execute {} scale = {}", describe(), scale);
+
+    m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
+}
+
+void Node_transform_operation::undo()
+{
+    log_operations->trace("Op Undo {}", describe());
+
+    glm::vec3 scale;
+    glm::quat orientation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::decompose(m_parameters.parent_from_node_after.matrix(), scale, orientation, translation, skew, perspective);
+    log_operations->info("Op Undo {} scale = {}", describe(), scale);
+
+    m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
 }
 
 // ----------------------------------------------------------------------------

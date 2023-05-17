@@ -303,6 +303,8 @@ void Bvh_geometry::set_user_data(void* ptr)
 
 auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!m_enabled) {
         return false;
     }

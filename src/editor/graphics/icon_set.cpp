@@ -90,6 +90,7 @@ void Icon_set::initialize_component()
     icons.pull              = load(icon_directory / "pull.svg");
     icons.push              = load(icon_directory / "push.svg");
     icons.rotate            = load(icon_directory / "rotate.svg");
+    icons.scale             = load(icon_directory / "scale.svg");
     icons.scene             = load(icon_directory / "scene.svg");
     icons.select            = load(icon_directory / "select.svg");
     icons.space_mouse       = load(icon_directory / "space_mouse.svg");

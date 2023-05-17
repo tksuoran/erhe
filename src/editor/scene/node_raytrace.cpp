@@ -16,6 +16,7 @@
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/scene_host.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe/toolkit/defer.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -331,13 +332,13 @@ auto Node_raytrace::raytrace_instance() const -> const IInstance*
 [[nodiscard]] auto Node_raytrace::get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
 {
     auto* node = get_node();
-    if (
-        (node == nullptr)  ||
-        !is_mesh(node)     ||
-        !m_primitive       ||
-        !m_source_geometry ||
-        hit.primitive_id > m_primitive->primitive_geometry.primitive_id_to_polygon_id.size()
-    ) {
+    if (node == nullptr) {
+        return {};
+    }
+    if (!m_primitive || !m_source_geometry) {
+        return {};
+    }
+    if (hit.primitive_id > m_primitive->primitive_geometry.primitive_id_to_polygon_id.size()) {
         return {};
     }
 
@@ -482,32 +483,35 @@ void draw_ray_hit(
     erhe::raytrace::Hit&          hit
 ) -> bool
 {
-    std::size_t count{0};
-    for (;;) {
-        raytrace_scene->intersect(ray, hit);
-        if (hit.instance == nullptr) {
-            return false;
-        }
-        void* user_data     = hit.instance->get_user_data();
-        auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
-        if (raytrace_node == nullptr) {
-            return false;
-        }
-        auto* node = raytrace_node->get_node(); // TODO get_mesh() ?
-        if (node == nullptr) {
-            return false;
-        }
-        const auto& mesh = get_mesh(node);
-        if (mesh.get() == ignore_mesh) {
-            ray.origin = ray.origin + ray.t_far * ray.direction + 0.001f * ray.direction;
-            ++count;
-            if (count > 100) {
-                return false;
-            }
-            continue;
-        }
-        return true;
+    ERHE_PROFILE_FUNCTION();
+
+    erhe::scene::Node*             ignore_node     = ignore_mesh->get_node();
+    std::shared_ptr<Node_raytrace> ignore_raytrace = get_raytrace(ignore_node);
+    bool stored_ignore_hidden_state{false};
+    if (ignore_raytrace) {
+        stored_ignore_hidden_state = ignore_raytrace->is_hidden();
+        ignore_raytrace->hide();
     }
+    ERHE_DEFER(
+        if (ignore_raytrace) {
+            ignore_raytrace->set_visible(stored_ignore_hidden_state);
+        }
+    );
+
+    raytrace_scene->intersect(ray, hit);
+    if (hit.instance == nullptr) {
+        return false;
+    }
+    void* user_data     = hit.instance->get_user_data();
+    auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+    if (raytrace_node == nullptr) {
+        return false;
+    }
+    auto* node = raytrace_node->get_node(); // TODO get_mesh() ?
+    if (node == nullptr) {
+        return false;
+    }
+    return true;
 }
 
 }

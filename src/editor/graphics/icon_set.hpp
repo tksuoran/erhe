@@ -55,6 +55,7 @@ public:
     glm::vec2 pull             {};
     glm::vec2 push             {};
     glm::vec2 rotate           {};
+    glm::vec2 scale            {};
     glm::vec2 scene            {};
     glm::vec2 select           {};
     glm::vec2 space_mouse      {};

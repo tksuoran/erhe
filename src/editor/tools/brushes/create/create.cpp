@@ -268,7 +268,7 @@ void Create_impl::imgui()
     }
 
     {
-        const auto& selection = g_selection_tool->selection();
+        const auto& selection = g_selection_tool->get_selection();
         if (!selection.empty()) {
             std::shared_ptr<erhe::geometry::Geometry> source_geometry;
             for (const auto& node : selection) {

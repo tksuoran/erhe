@@ -11,6 +11,7 @@
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #include <bvh/v2/default_builder.h>
 
@@ -125,6 +126,8 @@ void Bvh_scene::commit()
 
 void Bvh_scene::intersect(Ray& ray, Hit& hit)
 {
+    ERHE_PROFILE_FUNCTION();
+
     for (const auto& instance : m_instances) {
         instance->intersect(ray, hit);
     }

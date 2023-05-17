@@ -3,7 +3,7 @@
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
 #include "rendertarget_mesh.hpp"
-#include "operations/insert_operation.hpp"
+#include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/frame_controller.hpp"
@@ -896,7 +896,7 @@ void Properties::imgui()
         return;
     }
 
-    const auto& selection = g_selection_tool->selection();
+    const auto& selection = g_selection_tool->get_selection();
     for (const auto& item : selection) {
         ERHE_VERIFY(item);
         item_properties(item);

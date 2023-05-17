@@ -33,6 +33,30 @@ private:
     std::vector<Entry> m_entries;
 };
 
+class Node_transform_operation
+    : public IOperation
+{
+public:
+    class Parameters
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node> node;
+        erhe::scene::Transform             parent_from_node_before;
+        erhe::scene::Transform             parent_from_node_after;
+    };
+
+    explicit Node_transform_operation(const Parameters& parameters);
+    ~Node_transform_operation() noexcept override;
+
+    // Implements IOperation
+    [[nodiscard]] auto describe() const -> std::string override;
+    void execute() override;
+    void undo   () override;
+
+private:
+    Parameters m_parameters;
+};
+
 class Attach_operation
     : public IOperation
 {

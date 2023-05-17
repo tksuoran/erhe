@@ -1,4 +1,4 @@
-#include "tools/trs/handle_visualizations.hpp"
+#include "tools/transform/handle_visualizations.hpp"
 
 #include "editor_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -7,7 +7,7 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs/trs_tool.hpp"
+#include "tools/transform/transform_tool.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
@@ -38,12 +38,19 @@ namespace editor
         case Handle::e_handle_rotate_x    : return "Rotate X";
         case Handle::e_handle_rotate_y    : return "Rotate Y";
         case Handle::e_handle_rotate_z    : return "Rotate Z";
+        case Handle::e_handle_scale_x     : return "Scale X";
+        case Handle::e_handle_scale_y     : return "Scale Y";
+        case Handle::e_handle_scale_z     : return "Scale Z";
+        case Handle::e_handle_scale_xy    : return "Scale XY";
+        case Handle::e_handle_scale_xz    : return "Scale YZ";
+        case Handle::e_handle_scale_yz    : return "Scale YZ";
+        case Handle::e_handle_scale_xyz   : return "Scale XYZ";
         default: return "?";
     };
 }
 
-Handle_visualizations::Handle_visualizations(Trs_tool& trs_tool)
-    : m_trs_tool{trs_tool}
+Handle_visualizations::Handle_visualizations(Transform_tool& transform_tool)
+    : m_transform_tool{transform_tool}
 {
     initialize();
 }
@@ -52,21 +59,19 @@ void Handle_visualizations::update_scale(
     const glm::vec3 view_position_in_world
 )
 {
-    const auto root = m_root.lock();
-    if (!root) {
-        return;
-    }
-
-    const glm::vec3 position_in_world = root->position_in_world();
-    m_view_distance = glm::length(position_in_world - glm::vec3{view_position_in_world});
+    const glm::vec3 anchor_position_in_world = glm::vec3{m_world_from_anchor.matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    m_view_distance = glm::length(anchor_position_in_world - glm::vec3{view_position_in_world});
 }
 
 auto Handle_visualizations::get_handle_visibility(const Handle handle) const -> bool
 {
-    switch (m_trs_tool.get_handle_type(handle)) {
+    switch (m_transform_tool.get_handle_type(handle)) {
         case Handle_type::e_handle_type_translate_axis:  return m_show_translate;
         case Handle_type::e_handle_type_translate_plane: return m_show_translate;
         case Handle_type::e_handle_type_rotate:          return m_show_rotate;
+        case Handle_type::e_handle_type_scale_axis:      return m_show_scale;
+        case Handle_type::e_handle_type_scale_plane:     return m_show_scale;
+        case Handle_type::e_handle_type_scale_uniform:   return m_show_scale;
         default:                                         return false;
     }
 }
@@ -76,20 +81,24 @@ void Handle_visualizations::update_mesh_visibility(
     bool                                      trs_visible
 )
 {
-    const auto active_handle = m_trs_tool.get_active_handle();
-    const auto hover_handle  = m_trs_tool.get_hover_handle();
+    const auto active_handle = m_transform_tool.get_active_handle();
+    const auto hover_handle  = m_transform_tool.get_hover_handle();
     const bool show_all      = (active_handle == Handle::e_handle_none); // nothing is active, so show all handles
     const auto handle        = get_handle(mesh.get());
     const bool show          = get_handle_visibility(handle);
-    const bool translate_x   = m_trs_tool.is_x_translate_active() && (handle == Handle::e_handle_translate_x);
-    const bool translate_y   = m_trs_tool.is_y_translate_active() && (handle == Handle::e_handle_translate_y);
-    const bool translate_z   = m_trs_tool.is_z_translate_active() && (handle == Handle::e_handle_translate_z);
+    const bool translate_x   = m_transform_tool.is_x_translate_active() && (handle == Handle::e_handle_translate_x);
+    const bool translate_y   = m_transform_tool.is_y_translate_active() && (handle == Handle::e_handle_translate_y);
+    const bool translate_z   = m_transform_tool.is_z_translate_active() && (handle == Handle::e_handle_translate_z);
+    const bool scale_x       = m_transform_tool.is_x_scale_active() && (handle == Handle::e_handle_scale_x);
+    const bool scale_y       = m_transform_tool.is_y_scale_active() && (handle == Handle::e_handle_scale_y);
+    const bool scale_z       = m_transform_tool.is_z_scale_active() && (handle == Handle::e_handle_scale_z);
 
     const bool visible = trs_visible && show &&
         (
             !m_hide_inactive ||
             (active_handle == handle) ||
             (translate_x || translate_y || translate_z) ||
+            (scale_x || scale_y || scale_z) ||
             show_all
         );
 
@@ -104,25 +113,34 @@ void Handle_visualizations::update_mesh_visibility(
     mesh->mesh_data.primitives.front().material = get_handle_material(handle, mode);
 }
 
-void Handle_visualizations::update_visibility(
-    const bool visible
-)
+void Handle_visualizations::set_has_selection(bool has_selection)
 {
-    update_mesh_visibility(m_x_arrow_cylinder_mesh, visible);
-    update_mesh_visibility(m_x_arrow_neg_cone_mesh, visible);
-    update_mesh_visibility(m_x_arrow_pos_cone_mesh, visible);
-    update_mesh_visibility(m_y_arrow_cylinder_mesh, visible);
-    update_mesh_visibility(m_y_arrow_neg_cone_mesh, visible);
-    update_mesh_visibility(m_y_arrow_pos_cone_mesh, visible);
-    update_mesh_visibility(m_z_arrow_cylinder_mesh, visible);
-    update_mesh_visibility(m_z_arrow_neg_cone_mesh, visible);
-    update_mesh_visibility(m_z_arrow_pos_cone_mesh, visible);
-    update_mesh_visibility(m_xy_box_mesh          , visible);
-    update_mesh_visibility(m_xz_box_mesh          , visible);
-    update_mesh_visibility(m_yz_box_mesh          , visible);
-    update_mesh_visibility(m_x_rotate_ring_mesh   , visible);
-    update_mesh_visibility(m_y_rotate_ring_mesh   , visible);
-    update_mesh_visibility(m_z_rotate_ring_mesh   , visible);
+    m_has_selection = has_selection;
+}
+
+void Handle_visualizations::update_visibility()
+{
+    update_mesh_visibility(m_x_arrow_cylinder_mesh, m_has_selection);
+    update_mesh_visibility(m_x_arrow_neg_cone_mesh, m_has_selection);
+    update_mesh_visibility(m_x_arrow_pos_cone_mesh, m_has_selection);
+    update_mesh_visibility(m_y_arrow_cylinder_mesh, m_has_selection);
+    update_mesh_visibility(m_y_arrow_neg_cone_mesh, m_has_selection);
+    update_mesh_visibility(m_y_arrow_pos_cone_mesh, m_has_selection);
+    update_mesh_visibility(m_z_arrow_cylinder_mesh, m_has_selection);
+    update_mesh_visibility(m_z_arrow_neg_cone_mesh, m_has_selection);
+    update_mesh_visibility(m_z_arrow_pos_cone_mesh, m_has_selection);
+    update_mesh_visibility(m_xy_translate_box_mesh, m_has_selection);
+    update_mesh_visibility(m_xz_translate_box_mesh, m_has_selection);
+    update_mesh_visibility(m_yz_translate_box_mesh, m_has_selection);
+    update_mesh_visibility(m_x_rotate_ring_mesh   , m_has_selection);
+    update_mesh_visibility(m_y_rotate_ring_mesh   , m_has_selection);
+    update_mesh_visibility(m_z_rotate_ring_mesh   , m_has_selection);
+    update_mesh_visibility(m_x_neg_scale_mesh     , m_has_selection);
+    update_mesh_visibility(m_x_pos_scale_mesh     , m_has_selection);
+    update_mesh_visibility(m_y_neg_scale_mesh     , m_has_selection);
+    update_mesh_visibility(m_y_pos_scale_mesh     , m_has_selection);
+    update_mesh_visibility(m_z_neg_scale_mesh     , m_has_selection);
+    update_mesh_visibility(m_z_pos_scale_mesh     , m_has_selection);
 }
 
 //// TODO Fix https://github.com/tksuoran/erhe/issues/31
@@ -161,7 +179,7 @@ auto Handle_visualizations::make_mesh(
         node->attach(node_raytrace);
     }
 
-    const auto scene_root    = m_trs_tool.get_tool_scene_root();
+    const auto scene_root    = m_transform_tool.get_tool_scene_root();
     const auto tool_layer_id = scene_root->layers().tool()->id;
     mesh->mesh_data.layer_id = tool_layer_id;
     node->set_parent(m_tool_node);
@@ -226,18 +244,18 @@ auto Handle_visualizations::make_arrow_cone() -> Part
     };
 }
 
-auto Handle_visualizations::make_box() -> Part
+auto Handle_visualizations::make_box(const bool uniform) -> Part
 {
     ERHE_PROFILE_FUNCTION();
 
     const auto geometry_shared = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::shapes::make_box(
             -box_length,
-            box_length,
+             box_length,
             -box_length,
-            box_length,
-            -box_half_thickness,
-            box_half_thickness
+             box_length,
+            (uniform ? -box_length : -box_half_thickness),
+            (uniform ?  box_length :  box_half_thickness)
         )
     );
 
@@ -298,6 +316,9 @@ auto Handle_visualizations::get_handle_material(
         case Handle::e_handle_rotate_x    : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
         case Handle::e_handle_rotate_y    : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
         case Handle::e_handle_rotate_z    : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
+        case Handle::e_handle_scale_x     : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
+        case Handle::e_handle_scale_y     : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
+        case Handle::e_handle_scale_z     : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
         default: return {};
     }
 }
@@ -308,7 +329,7 @@ auto Handle_visualizations::get_handle_material(
     const Mode       mode
 ) -> std::shared_ptr<erhe::primitive::Material>
 {
-    auto& material_library = m_trs_tool.get_tool_scene_root()->content_library()->materials;
+    auto& material_library = m_transform_tool.get_tool_scene_root()->content_library()->materials;
     switch (mode) {
         case Mode::Normal: return material_library.make(name, color);
         case Mode::Active: return material_library.make(name, glm::vec3(1.0f, 0.7f, 0.1f));
@@ -322,12 +343,12 @@ void Handle_visualizations::initialize()
     ERHE_PROFILE_FUNCTION();
 
     m_tool_node = std::make_shared<erhe::scene::Node>("Trs");
-    const auto scene_root = m_trs_tool.get_tool_scene_root();
+    const auto scene_root = m_transform_tool.get_tool_scene_root();
     m_tool_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
 
-    m_scale          = g_trs_tool->config.scale;
-    m_show_translate = g_trs_tool->config.show_translate;
-    m_show_rotate    = g_trs_tool->config.show_rotate;
+    m_scale          = g_transform_tool->config.scale;
+    m_show_translate = g_transform_tool->config.show_translate;
+    m_show_rotate    = g_transform_tool->config.show_rotate;
 
     m_x_material        = make_material("x",        glm::vec3{1.00f, 0.00f, 0.0f}, Mode::Normal);
     m_y_material        = make_material("y",        glm::vec3{0.23f, 1.00f, 0.0f}, Mode::Normal);
@@ -347,24 +368,34 @@ void Handle_visualizations::initialize()
 
     const auto arrow_cylinder = make_arrow_cylinder();
     const auto arrow_cone     = make_arrow_cone    ();
-    const auto box            = make_box           ();
+    const auto thin_box       = make_box           (false);
+    const auto uniform_box    = make_box           (true);
     const auto rotate_ring    = make_rotate_ring   ();
 
     m_x_arrow_cylinder_mesh  = make_mesh("X arrow cylinder", m_x_material, arrow_cylinder);
-    m_x_arrow_neg_cone_mesh  = make_mesh("X arrow cone",     m_x_material, arrow_cone    );
-    m_x_arrow_pos_cone_mesh  = make_mesh("X arrow cone",     m_x_material, arrow_cone    );
+    m_x_arrow_neg_cone_mesh  = make_mesh("-X arrow cone",    m_x_material, arrow_cone    );
+    m_x_arrow_pos_cone_mesh  = make_mesh("+X arrow cone",    m_x_material, arrow_cone    );
     m_y_arrow_cylinder_mesh  = make_mesh("Y arrow cylinder", m_y_material, arrow_cylinder);
-    m_y_arrow_neg_cone_mesh  = make_mesh("Y arrow cone",     m_y_material, arrow_cone    );
-    m_y_arrow_pos_cone_mesh  = make_mesh("Y arrow cone",     m_y_material, arrow_cone    );
+    m_y_arrow_neg_cone_mesh  = make_mesh("-Y arrow cone",    m_y_material, arrow_cone    );
+    m_y_arrow_pos_cone_mesh  = make_mesh("+Y arrow cone",    m_y_material, arrow_cone    );
     m_z_arrow_cylinder_mesh  = make_mesh("Z arrow cylinder", m_z_material, arrow_cylinder);
-    m_z_arrow_neg_cone_mesh  = make_mesh("Z arrow cone",     m_z_material, arrow_cone    );
-    m_z_arrow_pos_cone_mesh  = make_mesh("Z arrow cone",     m_z_material, arrow_cone    );
-    m_xy_box_mesh            = make_mesh("XY box",           m_z_material, box           );
-    m_xz_box_mesh            = make_mesh("XZ box",           m_y_material, box           );
-    m_yz_box_mesh            = make_mesh("YZ box",           m_x_material, box           );
+    m_z_arrow_neg_cone_mesh  = make_mesh("-Z arrow cone",    m_z_material, arrow_cone    );
+    m_z_arrow_pos_cone_mesh  = make_mesh("+Z arrow cone",    m_z_material, arrow_cone    );
+    m_xy_translate_box_mesh  = make_mesh("XY translate box", m_z_material, thin_box      );
+    m_xz_translate_box_mesh  = make_mesh("XZ translate box", m_y_material, thin_box      );
+    m_yz_translate_box_mesh  = make_mesh("YZ translate box", m_x_material, thin_box      );
     m_x_rotate_ring_mesh     = make_mesh("X rotate ring",    m_x_material, rotate_ring   );
     m_y_rotate_ring_mesh     = make_mesh("Y rotate ring",    m_y_material, rotate_ring   );
     m_z_rotate_ring_mesh     = make_mesh("Z rotate ring",    m_z_material, rotate_ring   );
+    m_x_neg_scale_mesh       = make_mesh("-X scale box",     m_x_material, arrow_cone    ); // TODO uniform_box
+    m_x_pos_scale_mesh       = make_mesh("+X scale box",     m_x_material, arrow_cone    ); // TODO uniform_box
+    m_y_neg_scale_mesh       = make_mesh("-Y scale box",     m_y_material, arrow_cone    ); // TODO uniform_box
+    m_y_pos_scale_mesh       = make_mesh("+Y scale box",     m_y_material, arrow_cone    ); // TODO uniform_box
+    m_z_neg_scale_mesh       = make_mesh("-Z scale box",     m_z_material, arrow_cone    ); // TODO uniform_box
+    m_z_pos_scale_mesh       = make_mesh("+Z scale box",     m_z_material, arrow_cone    ); // TODO uniform_box
+    m_xy_scale_box_mesh      = make_mesh("XY scale box",     m_z_material, thin_box      );
+    m_xz_scale_box_mesh      = make_mesh("XZ scale box",     m_y_material, thin_box      );
+    m_yz_scale_box_mesh      = make_mesh("YZ scale box",     m_x_material, thin_box      );
 
     m_handles[m_x_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_x;
     m_handles[m_x_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_x;
@@ -375,12 +406,21 @@ void Handle_visualizations::initialize()
     m_handles[m_z_arrow_cylinder_mesh.get()] = Handle::e_handle_translate_z;
     m_handles[m_z_arrow_neg_cone_mesh.get()] = Handle::e_handle_translate_z;
     m_handles[m_z_arrow_pos_cone_mesh.get()] = Handle::e_handle_translate_z;
-    m_handles[m_xy_box_mesh          .get()] = Handle::e_handle_translate_xy;
-    m_handles[m_xz_box_mesh          .get()] = Handle::e_handle_translate_xz;
-    m_handles[m_yz_box_mesh          .get()] = Handle::e_handle_translate_yz;
+    m_handles[m_xy_translate_box_mesh.get()] = Handle::e_handle_translate_xy;
+    m_handles[m_xz_translate_box_mesh.get()] = Handle::e_handle_translate_xz;
+    m_handles[m_yz_translate_box_mesh.get()] = Handle::e_handle_translate_yz;
     m_handles[m_x_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_x;
     m_handles[m_y_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_y;
     m_handles[m_z_rotate_ring_mesh   .get()] = Handle::e_handle_rotate_z;
+    m_handles[m_x_neg_scale_mesh     .get()] = Handle::e_handle_scale_x;
+    m_handles[m_x_pos_scale_mesh     .get()] = Handle::e_handle_scale_x;
+    m_handles[m_y_neg_scale_mesh     .get()] = Handle::e_handle_scale_y;
+    m_handles[m_y_pos_scale_mesh     .get()] = Handle::e_handle_scale_y;
+    m_handles[m_z_neg_scale_mesh     .get()] = Handle::e_handle_scale_z;
+    m_handles[m_z_pos_scale_mesh     .get()] = Handle::e_handle_scale_z;
+    m_handles[m_xy_scale_box_mesh    .get()] = Handle::e_handle_scale_xy;
+    m_handles[m_xz_scale_box_mesh    .get()] = Handle::e_handle_scale_xz;
+    m_handles[m_yz_scale_box_mesh    .get()] = Handle::e_handle_scale_yz;
 
     using erhe::scene::Transform;
     const auto rotate_z_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f});
@@ -397,19 +437,31 @@ void Handle_visualizations::initialize()
     m_y_arrow_cylinder_mesh->get_node()->set_parent_from_node(rotate_z_pos_90);
     m_y_arrow_neg_cone_mesh->get_node()->set_parent_from_node(rotate_z_neg_90);
     m_y_arrow_pos_cone_mesh->get_node()->set_parent_from_node(rotate_z_pos_90);
+
     m_z_arrow_cylinder_mesh->get_node()->set_parent_from_node(rotate_y_neg_90);
     m_z_arrow_neg_cone_mesh->get_node()->set_parent_from_node(rotate_y_pos_90);
     m_z_arrow_pos_cone_mesh->get_node()->set_parent_from_node(rotate_y_neg_90);
 
-    m_xy_box_mesh          ->get_node()->set_parent_from_node(glm::mat4{1.0f});
-    m_xz_box_mesh          ->get_node()->set_parent_from_node(rotate_x_pos_90);
-    m_yz_box_mesh          ->get_node()->set_parent_from_node(rotate_y_neg_90);
+    m_xy_translate_box_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
+    m_xz_translate_box_mesh->get_node()->set_parent_from_node(rotate_x_pos_90);
+    m_yz_translate_box_mesh->get_node()->set_parent_from_node(rotate_y_neg_90);
 
     m_y_rotate_ring_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
     m_x_rotate_ring_mesh->get_node()->set_parent_from_node(rotate_z_pos_90);
     m_z_rotate_ring_mesh->get_node()->set_parent_from_node(rotate_x_pos_90);
 
-    update_visibility(false);
+    m_x_neg_scale_mesh->get_node()->set_parent_from_node(rotate_y_pos_180);
+    m_x_pos_scale_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
+    m_y_neg_scale_mesh->get_node()->set_parent_from_node(rotate_z_neg_90);
+    m_y_pos_scale_mesh->get_node()->set_parent_from_node(rotate_z_pos_90);
+    m_z_neg_scale_mesh->get_node()->set_parent_from_node(rotate_y_pos_90);
+    m_z_pos_scale_mesh->get_node()->set_parent_from_node(rotate_y_neg_90);
+
+    m_xy_scale_box_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
+    m_xz_scale_box_mesh->get_node()->set_parent_from_node(rotate_x_pos_90);
+    m_yz_scale_box_mesh->get_node()->set_parent_from_node(rotate_y_neg_90);
+
+    update_visibility();
 }
 
 auto Handle_visualizations::get_handle(erhe::scene::Mesh* mesh) const -> Handle
@@ -425,26 +477,23 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto root = m_root.lock();
-    if (!root) {
-        return;
-    }
-
-    auto world_from_root_transform = m_local
-        ? root->world_from_node_transform()
-        : erhe::scene::Transform::create_translation(root->position_in_world());
+    auto world_from_anchor_transform = m_local
+        ? m_world_from_anchor
+        : erhe::scene::Transform::create_translation(
+            glm::vec3{m_world_from_anchor.matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}
+        );
 
     const glm::mat4 scaling = erhe::toolkit::create_scale<float>(m_scale * m_view_distance / 100.0f);
-    world_from_root_transform.catenate(scaling);
+    world_from_anchor_transform.catenate(scaling);
 
-    m_tool_node->set_parent_from_node(world_from_root_transform);
+    m_tool_node->set_parent_from_node(world_from_anchor_transform);
 }
 
-void Handle_visualizations::set_target(
-    const std::shared_ptr<erhe::scene::Node>& node
+void Handle_visualizations::set_anchor(
+    const erhe::scene::Transform& world_from_anchor
 )
 {
-    m_root = node;
+    m_world_from_anchor = world_from_anchor;
 }
 
 void Handle_visualizations::set_translate(const bool enabled)
@@ -455,6 +504,11 @@ void Handle_visualizations::set_translate(const bool enabled)
 void Handle_visualizations::set_rotate(const bool enabled)
 {
     m_show_rotate = enabled;
+}
+
+void Handle_visualizations::set_scale(const bool enabled)
+{
+    m_show_scale = enabled;
 }
 
 void Handle_visualizations::set_local(const bool local)
@@ -487,6 +541,7 @@ void Handle_visualizations::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const bool   show_translate = m_show_translate;
     const bool   show_rotate    = m_show_rotate;
+    const bool   show_scale     = m_show_scale;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
 
     if (
@@ -516,13 +571,15 @@ void Handle_visualizations::imgui()
 
     ImGui::Checkbox("Translate Tool", &m_show_translate);
     ImGui::Checkbox("Rotate Tool",    &m_show_rotate);
+    ImGui::Checkbox("Scale Tool",     &m_show_scale);
     ImGui::Checkbox("Hide Inactive",  &m_hide_inactive);
 
     if (
         (show_translate != m_show_translate) ||
-        (show_rotate    != m_show_rotate   )
+        (show_rotate    != m_show_rotate   ) ||
+        (show_scale     != m_show_scale    )
     ) {
-        update_visibility(!m_root.expired());
+        update_visibility();
     }
 #endif
 }
@@ -586,7 +643,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         }
         if (translate_pressed) {
             m_show_translate = !m_show_translate;
-            update_visibility(!m_root.expired());
+            update_visibility();
         }
     }
 
@@ -613,9 +670,37 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
         }
         if (rotate_pressed) {
             m_show_rotate = !m_show_rotate;
-            update_visibility(!m_root.expired());
+            update_visibility();
         }
     }
+
+    ImGui::SameLine();
+    {
+        const auto mode = m_show_scale
+            ? erhe::application::Item_mode::active
+            : erhe::application::Item_mode::normal;
+        erhe::application::begin_button_style(mode);
+        const bool scale_pressed = icon_rasterication.icon_button(
+            ERHE_HASH("scale"),
+            g_icon_set->icons.scale,
+            glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+            glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}
+        );
+        erhe::application::end_button_style(mode);
+        if (ImGui::IsItemHovered()) {
+            hovered = true;
+            ImGui::SetTooltip(
+                m_show_scale
+                    ? "Hide Scale Tool"
+                    : "Show Scale Tool"
+            );
+        }
+        if (scale_pressed) {
+            m_show_scale = !m_show_scale;
+            update_visibility();
+        }
+    }
+
     ImGui::PopID();
 }
 

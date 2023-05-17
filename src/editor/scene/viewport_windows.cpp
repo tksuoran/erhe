@@ -346,7 +346,7 @@ auto Viewport_windows::open_new_viewport_window(
 
     if (scene_root) {
         if (g_selection_tool != nullptr) {
-            for (const auto& entry : g_selection_tool->selection()) {
+            for (const auto& entry : g_selection_tool->get_selection()) {
                 if (is_camera(entry)) {
                     const auto camera = as_camera(entry);
                     return create_viewport_window(

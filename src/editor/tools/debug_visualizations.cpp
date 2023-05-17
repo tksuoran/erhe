@@ -12,7 +12,7 @@
 #include "scene/viewport_window.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs/trs_tool.hpp"
+#include "tools/transform/transform_tool.hpp"
 
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
@@ -541,7 +541,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
 
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
-    const auto& selection = g_selection_tool->selection();
+    const auto& selection = g_selection_tool->get_selection();
 
     m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
     for (const auto& scene_item : selection) {
@@ -956,12 +956,12 @@ void Debug_visualizations::tool_render(
         return;
     }
 
-    if (m_tool_hide && (g_trs_tool != nullptr) && g_trs_tool->is_trs_active()) {
+    if (m_tool_hide && (g_transform_tool != nullptr) && g_transform_tool->is_trs_active()) {
         return;
     }
 
     std::shared_ptr<erhe::scene::Camera> selected_camera;
-    const auto& selection = g_selection_tool->selection();
+    const auto& selection = g_selection_tool->get_selection();
     for (const auto& node : selection) {
         if (is_camera(node)) {
             selected_camera = as_camera(node);

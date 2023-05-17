@@ -65,7 +65,7 @@ void initialize_logging()
     log_svg                        = erhe::log::make_logger("editor::svg"                       , spdlog::level::info);
     log_textures                   = erhe::log::make_logger("editor::textures"                  , spdlog::level::info);
     log_tools                      = erhe::log::make_logger("editor::tools"                     , spdlog::level::info);
-    log_trs_tool                   = erhe::log::make_logger("editor::trs_tool"                  , spdlog::level::info);
+    log_trs_tool                   = erhe::log::make_logger("editor::transform_tool"            , spdlog::level::info);
     log_xr                         = erhe::log::make_logger("editor::xr"                        , spdlog::level::info);
     log_tree                       = erhe::log::make_logger("editor::tree"                      , spdlog::level::info);
 }

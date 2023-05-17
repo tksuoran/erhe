@@ -10,6 +10,9 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 namespace editor
 {
 
@@ -92,6 +95,16 @@ void Node_physics::handle_node_transform_update()
         return;
     }
 
+    // TODO This is a hack, remove when Node_physics handles shape scale
+    const glm::mat4 m = get_node()->world_from_node();
+    glm::vec3 scale;
+    glm::quat orientation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::decompose(m, scale, orientation, translation, skew, perspective);
+    m_scale = (scale.x + scale.y + scale.z) / 3.0f;
+
     const erhe::physics::Transform world_from_node = get_world_from_node();
 
     log_physics->trace(
@@ -169,7 +182,7 @@ void Node_physics::set_world_from_rigidbody(
 
 // This is intended to be called from physics backend
 void Node_physics::set_world_from_node(
-    const glm::mat4& world_from_node
+    const glm::mat4& world_from_node_no_scale
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -178,6 +191,10 @@ void Node_physics::set_world_from_node(
     if (m_node == nullptr) {
         return; // TODO FIX
     }
+
+    // TODO This is a hack, remove when Node_physics handles shape scale
+    const glm::mat4 scale = erhe::toolkit::create_scale<float>(m_scale);
+    const glm::mat4& world_from_node = world_from_node_no_scale * scale;
 
     // TODO Take center of mass into account
 

@@ -59,7 +59,7 @@ class Render_context;
 class Scene_root;
 class Selection_tool;
 class Shadow_render_node;
-class Trs_tool;
+class Transform_tool;
 class Viewport_window;
 class Viewport_windows;
 

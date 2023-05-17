@@ -75,7 +75,7 @@ void Mesh_operation::make_entries(
     > operation
 )
 {
-    const auto& selection = g_selection_tool->selection();
+    const auto& selection = g_selection_tool->get_selection();
     if (selection.empty()) {
         return;
     }
@@ -88,7 +88,7 @@ void Mesh_operation::make_entries(
     const auto& scene = scene_root->scene();
     scene.sanity_check();
 
-    for (auto& item : g_selection_tool->selection()) {
+    for (auto& item : g_selection_tool->get_selection()) {
         const auto& mesh = as_mesh(item);
         if (!mesh) {
             continue;

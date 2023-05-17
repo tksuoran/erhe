@@ -54,7 +54,7 @@ void Operations::initialize_component()
 
 auto Operations::count_selected_meshes() const -> size_t
 {
-    const auto& selection = g_selection_tool->selection();
+    const auto& selection = g_selection_tool->get_selection();
     std::size_t count = 0;
     for (const auto& node : selection) {
         if (is_mesh(node)) {
@@ -120,8 +120,8 @@ void Operations::imgui()
         ? erhe::application::Item_mode::normal
         : erhe::application::Item_mode::disabled;
     if (erhe::application::make_button("Attach", multi_select_mode, button_size)) {
-        const auto& node0 = as_node(g_selection_tool->selection().at(0));
-        const auto& node1 = as_node(g_selection_tool->selection().at(1));
+        const auto& node0 = as_node(g_selection_tool->get_selection().at(0));
+        const auto& node1 = as_node(g_selection_tool->get_selection().at(1));
         if (node0 && node1) {
             g_operation_stack->push(
                 std::make_shared<Node_attach_operation>(
@@ -139,7 +139,7 @@ void Operations::imgui()
         : erhe::application::Item_mode::disabled;
 
     if (make_button("Unparent", has_selection_mode, button_size)) {
-        const auto& node0 = as_node(g_selection_tool->selection().at(0));
+        const auto& node0 = as_node(g_selection_tool->get_selection().at(0));
         if (node0)
         {
             g_operation_stack->push(

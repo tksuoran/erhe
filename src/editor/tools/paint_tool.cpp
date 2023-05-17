@@ -431,7 +431,7 @@ void Paint_tool::imgui()
         m_ngon_colors.push_back(glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
     }
     if (ImGui::Button("Color Selection") && !m_ngon_colors.empty()) {
-        const auto& selection = g_selection_tool->selection();
+        const auto& selection = g_selection_tool->get_selection();
         for (const auto& node : selection) {
             const auto& mesh = as_mesh(node);
             if (!mesh) {

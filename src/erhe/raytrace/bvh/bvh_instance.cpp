@@ -2,6 +2,7 @@
 #include "erhe/raytrace/bvh/bvh_scene.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 namespace erhe::raytrace
 {
@@ -71,6 +72,8 @@ void Bvh_instance::set_user_data(void* ptr)
 
 void Bvh_instance::intersect(Ray& ray, Hit& hit)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!m_enabled) {
         return;
     }

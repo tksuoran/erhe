@@ -156,7 +156,7 @@ void Node_tree_window::move_selection(
     );
 
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = g_selection_tool->selection();
+    const auto& selection = g_selection_tool->get_selection();
     const auto& drag_item = get_item_by_id(payload_id);
 
     std::shared_ptr<erhe::scene::Node> anchor = target_node;
@@ -253,7 +253,7 @@ void Node_tree_window::reposition(
     }
 
     if (selection_usage == Selection_usage::Selection_used) {
-        const auto& selection = g_selection_tool->selection();
+        const auto& selection = g_selection_tool->get_selection();
 
         // Ignore nodes if their ancestors is in selection
         const auto ancestor_in_selection = get_ancestor_in(node, selection);
@@ -326,7 +326,7 @@ void Node_tree_window::try_add_to_attach(
     }
 
     if (selection_usage == Selection_usage::Selection_used) {
-        const auto& selection = g_selection_tool->selection();
+        const auto& selection = g_selection_tool->get_selection();
 
         // Ignore nodes if their ancestors is in selection
         const auto ancestor_in_selection = get_ancestor_in(node, selection);
@@ -367,7 +367,7 @@ void Node_tree_window::attach_selection_to(
     ////     payload_id
     //// );
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = g_selection_tool->selection();
+    const auto& selection = g_selection_tool->get_selection();
     auto drag_item = get_item_by_id(payload_id);
 
     if (is_in(drag_item, selection)) {
@@ -401,7 +401,7 @@ void Node_tree_window::drag_and_drop_source(
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
         ImGui::SetDragDropPayload(item->type_name(), &id, sizeof(id));
 
-        const auto& selection = g_selection_tool->selection();
+        const auto& selection = g_selection_tool->get_selection();
         if (is_in(item, selection)) {
             for (const auto& selection_item : selection) {
                 item_icon_and_text(selection_item, false);

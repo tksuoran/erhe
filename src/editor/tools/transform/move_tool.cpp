@@ -1,10 +1,10 @@
-#include "tools/trs/move_tool.hpp"
+#include "tools/transform/move_tool.hpp"
 
 #include "graphics/icon_set.hpp"
 #include "tools/tools.hpp"
 #include "tools/selection_tool.hpp"
-#include "tools/trs/trs_tool.hpp"
-#include "tools/trs/rotate_tool.hpp"
+#include "tools/transform/transform_tool.hpp"
+#include "tools/transform/rotate_tool.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor
@@ -49,8 +49,8 @@ void Move_tool::initialize_component()
 
 void Move_tool::handle_priority_update(int old_priority, int new_priority)
 {
-    if (g_trs_tool) {
-        g_trs_tool->set_translate(new_priority > old_priority);
+    if (g_transform_tool) {
+        g_transform_tool->set_translate(new_priority > old_priority);
     }
 }
 

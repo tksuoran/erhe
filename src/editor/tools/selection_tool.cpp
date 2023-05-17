@@ -15,9 +15,9 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs/trs_tool.hpp"
-#include "tools/trs/move_tool.hpp"
-#include "tools/trs/rotate_tool.hpp"
+#include "tools/transform/transform_tool.hpp"
+#include "tools/transform/move_tool.hpp"
+#include "tools/transform/rotate_tool.hpp"
 #include "windows/node_tree_window.hpp"
 #include "windows/viewport_config_window.hpp"
 
@@ -326,7 +326,7 @@ void Selection_tool::handle_priority_update(int old_priority, int new_priority)
     }
 }
 
-auto Selection_tool::selection() const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&
+auto Selection_tool::get_selection() const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&
 {
     return m_selection;
 }

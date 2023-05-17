@@ -17,7 +17,7 @@
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
-#include "tools/trs/trs_tool.hpp"
+#include "tools/transform/transform_tool.hpp"
 #include "windows/physics_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -507,8 +507,8 @@ auto Viewport_window::viewport_toolbar() -> bool
     if (g_selection_tool != nullptr) {
         g_selection_tool->viewport_toolbar(hovered);
     }
-    if (g_trs_tool != nullptr) {
-        g_trs_tool->viewport_toolbar(hovered);
+    if (g_transform_tool != nullptr) {
+        g_transform_tool->viewport_toolbar(hovered);
     }
 
     if (g_grid_tool != nullptr) {

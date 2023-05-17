@@ -13,40 +13,6 @@
 namespace editor
 {
 
-Node_transform_operation::Node_transform_operation(
-    const Parameters& parameters
-)
-    : m_parameters{parameters}
-{
-}
-
-Node_transform_operation::~Node_transform_operation() noexcept
-{
-}
-
-auto Node_transform_operation::describe() const -> std::string
-{
-    std::stringstream ss;
-    ss << "Node_transform " << m_parameters.node->get_name();
-    return ss.str();
-}
-
-void Node_transform_operation::execute()
-{
-    log_operations->trace("Op Execute {}", describe());
-
-    m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
-}
-
-void Node_transform_operation::undo()
-{
-    log_operations->trace("Op Undo {}", describe());
-
-    m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
-}
-
-//
-
 auto Node_insert_remove_operation::describe() const -> std::string
 {
     ERHE_VERIFY(m_node);
@@ -67,10 +33,10 @@ Node_insert_remove_operation::Node_insert_remove_operation(
     : m_mode{parameters.mode}
 {
     m_node             = parameters.node,
-    m_selection_before = g_selection_tool->selection();
+    m_selection_before = g_selection_tool->get_selection();
 
     if (parameters.mode == Mode::insert) {
-        m_selection_after = g_selection_tool->selection();
+        m_selection_after = g_selection_tool->get_selection();
         m_after_parent    = parameters.parent;
     }
 
