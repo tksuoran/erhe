@@ -461,13 +461,13 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto world_from_anchor_transform = m_local
+    const auto& settings = g_transform_tool->shared.settings;
+    auto world_from_anchor_transform = settings.local
         ? m_world_from_anchor
         : erhe::scene::Transform::create_translation(
             glm::vec3{m_world_from_anchor.matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}
         );
 
-    const auto& settings = g_transform_tool->shared.settings;
     const glm::mat4 scaling = erhe::toolkit::create_scale<float>(settings.gizmo_scale * m_view_distance / 100.0f);
     world_from_anchor_transform.catenate(scaling);
 
@@ -493,7 +493,7 @@ void Handle_visualizations::imgui()
     if (
         erhe::application::make_button(
             "Local",
-            (m_local)
+            (settings.local)
                 ? erhe::application::Item_mode::active
                 : erhe::application::Item_mode::normal,
             button_size
@@ -504,7 +504,7 @@ void Handle_visualizations::imgui()
     if (
         erhe::application::make_button(
             "Global",
-            (!m_local)
+            (!settings.local)
                 ? erhe::application::Item_mode::active
                 : erhe::application::Item_mode::normal,
             button_size
@@ -539,7 +539,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     auto& settings = g_transform_tool->shared.settings;
     const auto local_pressed = erhe::application::make_button(
         "L",
-        m_local
+        settings.local
             ? erhe::application::Item_mode::active
             : erhe::application::Item_mode::normal
     );
@@ -554,7 +554,7 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     ImGui::SameLine();
     const auto global_pressed = erhe::application::make_button(
         "W",
-        (!m_local)
+        (!settings.local)
             ? erhe::application::Item_mode::active
             : erhe::application::Item_mode::normal
     );

@@ -807,6 +807,71 @@ class Bounding_volume_combiner
     : public erhe::toolkit::Bounding_volume_source
 {
 public:
+    Bounding_volume_combiner()
+    {
+        // https://polyhedr.com/mathematical-properties-of-the-platonic-solids.html
+        // Radius
+
+        // To find the radius of the circumscribed sphere of an icosahedron
+        // (a regular polyhedron with 20 equilateral triangular faces),
+        // we can use the relationship between the inradius and the circumradius.
+
+        // The inradius (r) of an icosahedron is related to the edge length (a) of
+        // its triangular faces by the formula:
+
+        // r = a * √(10 + 2 * √5) / (4 * √3)
+
+        // Now, to find the radius of the circumscribed sphere (R), we can use the relationship:
+
+        // R = (2 * r) / √3
+
+        const float r     =  1.0f; // inscribed sphere radius
+        const float R     = (2.0f * r) / std::sqrt(3.0f);
+        const float phi   = (1.0f + std::sqrt(5.0f)) / 2.0f; // golden ratio
+        const float denom = std::sqrt(phi * sqrt(5.0f));
+        const float k     = R / denom;
+        const float k_phi = k * phi;
+
+        const glm::vec3 p0 { 0.0f,    k,      k_phi };
+        const glm::vec3 p1 { 0.0f,    k,     -k_phi };
+        const glm::vec3 p2 { 0.0f,   -k,      k_phi };
+        const glm::vec3 p3 { 0.0f,   -k,     -k_phi };
+        const glm::vec3 p4 {  k,      k_phi,  0.0f  };
+        const glm::vec3 p5 {  k,     -k_phi,  0.0f  };
+        const glm::vec3 p6 { -k,      k_phi,  0.0f  };
+        const glm::vec3 p7 { -k,     -k_phi,  0.0f  };
+        const glm::vec3 p8 {  k_phi,  0.0f,   k     };
+        const glm::vec3 p9 { -k_phi,  0.0f,   k     };
+        const glm::vec3 p10{  k_phi,  0.0f,  -k     };
+        const glm::vec3 p11{ -k_phi,  0.0f,  -k     };
+
+        const float r0  = glm::length(p0 );
+        const float r1  = glm::length(p1 );
+        const float r2  = glm::length(p2 );
+        const float r3  = glm::length(p3 );
+        const float r4  = glm::length(p4 );
+        const float r5  = glm::length(p5 );
+        const float r6  = glm::length(p6 );
+        const float r7  = glm::length(p7 );
+        const float r8  = glm::length(p8 );
+        const float r9  = glm::length(p9 );
+        const float r10 = glm::length(p10);
+        const float r11 = glm::length(p11);
+
+        static_cast<void>(r0 );
+        static_cast<void>(r1 );
+        static_cast<void>(r2 );
+        static_cast<void>(r3 );
+        static_cast<void>(r4 );
+        static_cast<void>(r5 );
+        static_cast<void>(r6 );
+        static_cast<void>(r7 );
+        static_cast<void>(r8 );
+        static_cast<void>(r9 );
+        static_cast<void>(r10);
+        static_cast<void>(r11);
+    }
+
     void add_point(const glm::mat4& transform, const glm::vec3& point)
     {
         m_offsets.push_back(m_points.size());

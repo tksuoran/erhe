@@ -631,10 +631,12 @@ void Line_renderer::add_sphere(
 {
     const mat4 m      = transform.matrix();
     const vec3 center = vec3{m * vec4{local_center, 1.0f}};
-    const vec3 axis_x{radius, 0.0f, 0.0f};
-    const vec3 axis_y{0.0f, radius, 0.0f};
-    const vec3 axis_z{0.0f, 0.0f, radius};
-    const mat4 I{1.0f};
+    const vec3 size  {transform.matrix() * vec4{radius, radius, radius, 0.0f}};
+    const vec3 axis_x{size.x, 0.0f, 0.0f};
+    const vec3 axis_y{0.0f, size.y, 0.0f};
+    const vec3 axis_z{0.0f, 0.0f, size.z};
+    const mat4 I     {1.0f};
+
     set_thickness(great_circle_thickness);
     for (int i = 0; i < step_count; ++i) {
         const float t0 = glm::two_pi<float>() * static_cast<float>(i    ) / static_cast<float>(step_count);

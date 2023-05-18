@@ -110,7 +110,6 @@ private:
     std::map<erhe::scene::Mesh*, Handle>             m_handles;
     erhe::scene::Transform                           m_world_from_anchor;
     std::shared_ptr<erhe::scene::Node>               m_tool_node;
-    bool                                             m_local{true};
     float                                            m_view_distance{1.0f};
     std::shared_ptr<erhe::primitive::Material>       m_x_material;
     std::shared_ptr<erhe::primitive::Material>       m_y_material;

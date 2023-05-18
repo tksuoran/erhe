@@ -21,7 +21,7 @@ static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSEPRO           = 0xc62bu;
 Space_mouse_controller::Space_mouse_controller(Space_mouse_listener& listener)
     : m_listener{listener}
 {
-    //initialize();
+    initialize();
 
     if (m_device != nullptr) {
         if (!m_listener.is_active() && !m_running) {

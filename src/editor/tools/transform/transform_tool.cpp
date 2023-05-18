@@ -485,10 +485,11 @@ void Transform_tool::release_node_physics()
         }
         const auto node_physics = get_node_physics(node.get());
         if (node_physics && node_physics->rigid_body()) {
-            ERHE_VERIFY(entry.original_motion_mode.has_value());
-            log_trs_tool->trace("S restoring old physics node");
             auto* const rigid_body = node_physics->rigid_body();
-            rigid_body->set_motion_mode     (entry.original_motion_mode.value());
+            if (entry.original_motion_mode.has_value()) {
+                log_trs_tool->trace("S restoring old physics node");
+                rigid_body->set_motion_mode(entry.original_motion_mode.value());
+            }
             rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
             rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
             rigid_body->end_move            ();

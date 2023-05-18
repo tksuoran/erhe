@@ -125,10 +125,10 @@ void Debug_visualizations::mesh_selection_visualization(
         }
         const auto& primitive_geometry = primitive.gl_primitive_geometry;
 
-        const float box_volume             = primitive_geometry.bounding_box.volume();
-        const float sphere_volume          = primitive_geometry.bounding_sphere.volume();
+        const float box_volume    = primitive_geometry.bounding_box.volume();
+        const float sphere_volume = primitive_geometry.bounding_sphere.volume();
         //const bool  smallest_visualization = !m_viewport_config->selection_bounding_box && !m_viewport_config->selection_bounding_sphere;
-        const bool  box_smaller            = box_volume < sphere_volume;
+        const bool  box_smaller   = box_volume < sphere_volume;
 
         if (box_smaller) {
             m_selection_bounding_volume.add_box(
