@@ -1,0 +1,219 @@
+#include "tools/transform/subtool.hpp"
+#include "editor_log.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/insert_operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
+#include "scene/scene_view.hpp"
+#include "tools/transform/handle_enums.hpp"
+#include "tools/transform/transform_tool.hpp"
+
+#include <glm/glm.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
+
+namespace editor
+{
+
+using namespace glm;
+
+Subtool::Subtool() = default;
+
+Subtool::~Subtool() noexcept = default;
+
+void Subtool::imgui()
+{
+}
+
+auto Subtool::is_active() const -> bool
+{
+    return m_active;
+}
+
+auto Subtool::get_axis_mask() const -> unsigned int
+{
+    return m_axis_mask;
+}
+
+void Subtool::end()
+{
+    auto& shared = get_shared();
+
+    m_active = false;
+
+    if (!shared.touched || shared.entries.empty()) {
+        return;
+    }
+
+    log_trs_tool->trace("creating transform operation");
+
+    Compound_operation::Parameters compompound_parameters;
+    for (auto& entry : g_transform_tool->shared.entries) {
+        auto node_operation = std::make_shared<Node_transform_operation>(
+            Node_transform_operation::Parameters{
+                .node                    = entry.node,
+                .parent_from_node_before = entry.parent_from_node_before,
+                .parent_from_node_after  = entry.node->parent_from_node_transform()
+            }
+        );
+        compompound_parameters.operations.push_back(node_operation);
+    }
+    g_operation_stack->push(
+        std::make_shared<Compound_operation>(
+            std::move(compompound_parameters)
+        )
+    );
+}
+
+namespace {
+
+constexpr glm::mat4 mat4_identity{1.0f};
+
+};
+
+[[nodiscard]] auto Subtool::get_shared() const -> Transform_tool::Shared&
+{
+    return g_transform_tool->shared;
+}
+
+auto Subtool::get_basis() const -> const glm::mat4&
+{
+    const auto& shared = get_shared();
+    return shared.settings.local 
+        ? shared.drag.initial_world_from_anchor
+        : mat4_identity;
+}
+
+auto Subtool::get_basis(const bool world) const -> const glm::mat4&
+{
+    const auto& shared = get_shared();
+
+    return world
+        ? mat4_identity
+        : shared.drag.initial_world_from_anchor;
+}
+
+auto Subtool::get_axis_direction() const -> vec3
+{
+    const glm::mat4& basis = get_basis();
+    switch (m_axis_mask) {
+        case Axis_mask::x:  return basis[0];
+        case Axis_mask::yz: return basis[0];
+        case Axis_mask::y:  return basis[1];
+        case Axis_mask::xz: return basis[1];
+        case Axis_mask::z:  return basis[2];
+        case Axis_mask::xy: return basis[2];
+        default: {
+            ERHE_FATAL("get_axis_direction() failed for axis mask %02x", m_axis_mask);
+            break;
+        }
+    }
+}
+
+auto Subtool::get_plane_normal(const bool world) const -> vec3
+{
+    const glm::mat4& basis = get_basis(world);
+    switch (m_axis_mask) {
+        case Axis_mask::x:  return basis[0];
+        case Axis_mask::yz: return basis[0];
+        case Axis_mask::y:  return basis[1];
+        case Axis_mask::xz: return basis[1];
+        case Axis_mask::z:  return basis[2];
+        case Axis_mask::xy: return basis[2];
+        default: {
+            ERHE_FATAL("get_plane_normal(): bad axis mask = %02x", m_axis_mask);
+            break;
+        }
+    }
+}
+
+auto Subtool::get_plane_side(const bool world) const -> vec3
+{
+    const glm::mat4& basis = get_basis(world);
+    switch (m_axis_mask) {
+        case Axis_mask::x:  return basis[1];
+        case Axis_mask::yz: return basis[1];
+        case Axis_mask::y:  return basis[2];
+        case Axis_mask::xz: return basis[2];
+        case Axis_mask::z:  return basis[0];
+        case Axis_mask::xy: return basis[0];
+        default: {
+            ERHE_FATAL("get_plane_side(): bad axis mask = %02x", m_axis_mask);
+            break;
+        }
+    }
+}
+
+void Subtool::touch()
+{
+    auto& shared = get_shared();
+
+    if (!shared.touched) {
+        log_trs_tool->trace("TRS touch - not touched");
+        g_transform_tool->acquire_node_physics();
+        shared.touched = true;
+    }
+}
+
+
+#pragma region Helpers
+
+auto Subtool::offset_plane_origo(const vec3 p) const -> vec3
+{
+    switch (m_axis_mask) {
+        case Axis_mask::x: return vec3{ p.x, 0.0f, 0.0f};
+        case Axis_mask::y: return vec3{0.0f,  p.y, 0.0f};
+        case Axis_mask::z: return vec3{0.0f, 0.0f,  p.z};
+        default:
+            ERHE_FATAL("offset_plane_origo(): bad axis mask = %02x", m_axis_mask);
+            break;
+    }
+}
+
+auto Subtool::project_to_offset_plane(
+    const vec3 P,
+    const vec3 Q
+) const -> vec3
+{
+    switch (m_axis_mask) {
+        case Axis_mask::x: return vec3{P.x, Q.y, Q.z};
+        case Axis_mask::y: return vec3{Q.x, P.y, Q.z};
+        case Axis_mask::z: return vec3{Q.x, Q.y, P.z};
+        default:
+            ERHE_FATAL("project_to_offset_plane(): bad axis mask = %02x", m_axis_mask);
+            break;
+    }
+}
+
+auto Subtool::project_pointer_to_plane(
+    Scene_view* scene_view,
+    const vec3  n,
+    const vec3  p
+) -> std::optional<vec3>
+{
+    if (scene_view == nullptr) {
+        return {};
+    }
+
+    const auto origin_opt    = scene_view->get_control_ray_origin_in_world();
+    const auto direction_opt = scene_view->get_control_ray_direction_in_world();
+    if (
+        !origin_opt.has_value() ||
+        !direction_opt.has_value()
+    ) {
+        return {};
+    }
+
+    const vec3 q0           = origin_opt.value();
+    const vec3 v            = direction_opt.value();
+    const auto intersection = erhe::toolkit::intersect_plane<float>(n, p, q0, v);
+    if (intersection.has_value()) {
+        return q0 + intersection.value() * v;
+    }
+    return {};
+}
+
+#pragma endregion Helpers
+
+} // namespace editor

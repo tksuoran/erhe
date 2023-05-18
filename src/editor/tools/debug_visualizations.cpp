@@ -956,7 +956,11 @@ void Debug_visualizations::tool_render(
         return;
     }
 
-    if (m_tool_hide && (g_transform_tool != nullptr) && g_transform_tool->is_trs_active()) {
+    if (
+        m_tool_hide &&
+        (g_transform_tool != nullptr) &&
+        g_transform_tool->is_transform_tool_active()
+    ) {
         return;
     }
 

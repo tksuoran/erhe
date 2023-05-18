@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tools/transform/transform_tool_settings.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/transform.hpp"
 
@@ -37,41 +38,10 @@ namespace editor
 class Icon_set;
 class Mesh_memory;
 class Raytrace_primitive;
+class Scene_view;
 class Transform_tool;
 
-enum class Handle : unsigned int
-{
-    e_handle_none         =  0,
-    e_handle_translate_x  =  1,
-    e_handle_translate_y  =  2,
-    e_handle_translate_z  =  3,
-    e_handle_translate_xy =  4,
-    e_handle_translate_xz =  5,
-    e_handle_translate_yz =  6,
-    e_handle_rotate_x     =  7,
-    e_handle_rotate_y     =  8,
-    e_handle_rotate_z     =  9,
-    e_handle_scale_x      = 10,
-    e_handle_scale_y      = 11,
-    e_handle_scale_z      = 12,
-    e_handle_scale_xy     = 13,
-    e_handle_scale_xz     = 14,
-    e_handle_scale_yz     = 15,
-    e_handle_scale_xyz    = 16 // uniform scale
-};
-
-enum class Handle_type : unsigned int
-{
-    e_handle_type_none            = 0,
-    e_handle_type_translate_axis  = 1,
-    e_handle_type_translate_plane = 2,
-    e_handle_type_rotate          = 3,
-    e_handle_type_scale_axis      = 4,
-    e_handle_type_scale_plane     = 5,
-    e_handle_type_scale_uniform   = 6,
-};
-
-[[nodiscard]] auto c_str(const Handle handle) -> const char*;
+enum class Handle : unsigned int;
 
 class Handle_visualizations
 {
@@ -96,30 +66,18 @@ public:
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
-    [[nodiscard]] auto get_local            () const -> bool;
-    [[nodiscard]] auto get_scale            () const -> float;
-    [[nodiscard]] auto get_translate        () const -> bool;
-    [[nodiscard]] auto get_rotate           () const -> bool;
-    void imgui           ();
-    void viewport_toolbar(bool& hovered);
-
-    void initialize();
-
-    void set_has_selection(bool has_selection);
+    void initialize       ();
+    void imgui            ();
+    void viewport_toolbar (bool& hovered);
     void update_visibility();
-    void update_scale     (glm::vec3 view_position_in_world);
+    void update_for_view  (Scene_view* scene_view);
     void update_transforms(); //const uint64_t serial);
 
     void update_mesh_visibility(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh,
-        bool                                      trs_visible
+        const std::shared_ptr<erhe::scene::Mesh>& mesh
     );
 
-    void set_anchor   (const erhe::scene::Transform& world_from_anchor);
-    void set_translate(bool value);
-    void set_rotate   (bool value);
-    void set_scale    (bool value);
-    void set_local    (bool local);
+    void set_anchor(const erhe::scene::Transform& world_from_anchor);
 
 private:
     [[nodiscard]] auto make_arrow_cylinder() -> Part;
@@ -147,12 +105,7 @@ private:
     ) -> std::shared_ptr<erhe::primitive::Material>;
 
     Transform_tool& m_transform_tool;
-    bool      m_has_selection {false};
-    bool      m_show_translate{true};
-    bool      m_show_rotate   {false};
-    bool      m_show_scale    {false};
-    bool      m_hide_inactive {true};
-    float     m_scale         {1.0f};
+    float           m_scale         {1.0f};
 
     std::map<erhe::scene::Mesh*, Handle>             m_handles;
     erhe::scene::Transform                           m_world_from_anchor;

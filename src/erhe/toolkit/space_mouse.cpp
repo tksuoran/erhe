@@ -21,7 +21,7 @@ static constexpr uint16_t USB_DEVICE_ID_SPACEMOUSEPRO           = 0xc62bu;
 Space_mouse_controller::Space_mouse_controller(Space_mouse_listener& listener)
     : m_listener{listener}
 {
-    initialize();
+    //initialize();
 
     if (m_device != nullptr) {
         if (!m_listener.is_active() && !m_running) {
@@ -43,6 +43,7 @@ Space_mouse_controller::~Space_mouse_controller() noexcept
 
 auto Space_mouse_controller::initialize() -> bool
 {
+    log_space_mouse->info("Initializing space mouse");
     hid_device_info* const device_list = hid_enumerate(0x0u, 0x0u);
     hid_device_info* device = device_list;
 
@@ -89,6 +90,7 @@ auto Space_mouse_controller::initialize() -> bool
         return false;
     }
 
+    log_space_mouse->info("Space mouse initialized");
     return true;
 }
 
