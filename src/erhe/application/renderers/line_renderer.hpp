@@ -157,7 +157,7 @@ public:
         float                         edge_thickness,
         float                         great_circle_thickness,
         const glm::vec3&              local_center,
-        float                         radius,
+        float                         local_radius,
         const erhe::scene::Transform* camera_world_from_node = nullptr,
         int                           step_count = 40
     );

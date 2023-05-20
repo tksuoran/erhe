@@ -789,6 +789,11 @@ public:
     float     radius{0.0f};
 };
 
+[[nodiscard]] auto transform(
+    const glm::mat4&       m,
+    const Bounding_sphere& sphere
+) -> Bounding_sphere;
+
 class Bounding_volume_source
 {
 public:

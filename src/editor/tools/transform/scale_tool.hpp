@@ -47,11 +47,7 @@ public:
     auto update(Scene_view* scene_view) -> bool                         override;
 
 private:
-    void update_axis_2d (Viewport_window* viewport_window);
-    void update_axis_3d (Scene_view* scene_view);
-    void update_plane_2d(Viewport_window* viewport_window);
-    void update_plane_3d(Scene_view* scene_view);
-    void update_final   (const glm::vec3 drag_position);
+    void update(const glm::vec3 drag_position);
 };
 
 extern Scale_tool* g_scale_tool;

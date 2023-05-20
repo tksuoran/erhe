@@ -112,7 +112,6 @@ public:
     void open_new_imgui_viewport_window();
 
     //void update_hover();
-    void reset_hover ();
     void update_hover(erhe::application::Imgui_viewport* imgui_viewport);
 
     /// <summary>

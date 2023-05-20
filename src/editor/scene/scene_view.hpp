@@ -128,12 +128,14 @@ public:
         glm::vec3 far_position_in_world
     );
 
-    void set_world_from_control     (const glm::mat4& world_from_control);
-    void reset_control_transform    ();
-    void reset_hover_slots          ();
-    void update_hover_with_id_render();
-    void update_hover_with_raytrace ();
-    void update_grid_hover          ();
+    [[nodiscard]] virtual auto get_closest_point_on_line (const glm::vec3 P0, const glm::vec3 P1) -> std::optional<glm::vec3>;
+    [[nodiscard]] virtual auto get_closest_point_on_plane(const glm::vec3 N,  const glm::vec3 P ) -> std::optional<glm::vec3>;
+
+    void set_world_from_control    (const glm::mat4& world_from_control);
+    void reset_control_transform   ();
+    void reset_hover_slots         ();
+    void update_hover_with_raytrace();
+    void update_grid_hover         ();
 
     [[nodiscard]] auto get_world_from_control                   () const -> std::optional<glm::mat4>;
     [[nodiscard]] auto get_control_from_world                   () const -> std::optional<glm::mat4>;

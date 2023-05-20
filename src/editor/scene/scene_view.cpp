@@ -388,4 +388,53 @@ void Scene_view::update_hover_with_raytrace()
     }
 }
 
+auto Scene_view::get_closest_point_on_line(
+    const glm::vec3 P0,
+    const glm::vec3 P1
+) -> std::optional<glm::vec3>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const auto Q_origin_opt    = get_control_ray_origin_in_world();
+    const auto Q_direction_opt = get_control_ray_direction_in_world();
+    if (Q_origin_opt.has_value() && Q_direction_opt.has_value()) {
+        const auto Q0 = Q_origin_opt.value();
+        const auto Q1 = Q0 + Q_direction_opt.value();
+        const auto closest_points_q = erhe::toolkit::closest_points<float>(P0, P1, Q0, Q1);
+        if (closest_points_q.has_value()) {
+            return closest_points_q.value().P;
+        }
+    }
+    return {};
+}
+
+auto Scene_view::get_closest_point_on_plane(
+    const glm::vec3 N,
+    const glm::vec3 P
+) -> std::optional<glm::vec3>
+{
+    using vec3 = glm::vec3;
+    const auto Q_origin_opt    = get_control_ray_origin_in_world();
+    const auto Q_direction_opt = get_control_ray_direction_in_world();
+    if (
+        !Q_origin_opt.has_value() ||
+        !Q_direction_opt.has_value()
+    ) {
+        return {};
+    }
+
+    const vec3 Q0 = Q_origin_opt.value();
+    const vec3 Q1 = Q0 + Q_direction_opt.value();
+    const vec3 v  = normalize(Q1 - Q0);
+
+    const auto intersection = erhe::toolkit::intersect_plane<float>(N, P, Q0, v);
+    if (!intersection.has_value()) {
+        return {};
+    }
+
+    const vec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
+    return drag_point_new_position_in_world;
+}
+
+
 } // namespace editor

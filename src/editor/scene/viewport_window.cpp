@@ -42,6 +42,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -621,6 +622,96 @@ void Viewport_window::set_final_output(
 auto Viewport_window::get_final_output() -> std::weak_ptr<erhe::application::Rendergraph_node>
 {
     return m_final_output;
+}
+
+auto Viewport_window::get_closest_point_on_line(
+    const glm::vec3 P0,
+    const glm::vec3 P1
+) -> std::optional<glm::vec3>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    using vec2 = glm::vec2;
+    using vec3 = glm::vec3;
+
+    const auto position_in_viewport_opt = get_position_in_viewport();
+    if (!position_in_viewport_opt.has_value()) {
+        return {};
+    }
+
+    const auto ss_P0_opt = project_to_viewport(P0);
+    const auto ss_P1_opt = project_to_viewport(P1);
+    if (
+        !ss_P0_opt.has_value() ||
+        !ss_P1_opt.has_value()
+    ) {
+        return {};
+    }
+
+    const vec3 ss_P0      = ss_P0_opt.value();
+    const vec3 ss_P1      = ss_P1_opt.value();
+    const auto ss_closest = erhe::toolkit::closest_point<float>(
+        vec2{ss_P0},
+        vec2{ss_P1},
+        vec2{position_in_viewport_opt.value()}
+    );
+
+    if (ss_closest.has_value()) {
+        const auto R0_opt = unproject_to_world(vec3{ss_closest.value(), 0.0f});
+        const auto R1_opt = unproject_to_world(vec3{ss_closest.value(), 1.0f});
+        if (R0_opt.has_value() && R1_opt.has_value()) {
+            const auto R0 = R0_opt.value();
+            const auto R1 = R1_opt.value();
+            const auto closest_points_r = erhe::toolkit::closest_points<float>(P0, P1, R0, R1);
+            if (closest_points_r.has_value()) {
+                return closest_points_r.value().P;
+            }
+        }
+    } else {
+        const auto Q0_opt = position_in_world_viewport_depth(1.0);
+        const auto Q1_opt = position_in_world_viewport_depth(0.0);
+        if (Q0_opt.has_value() && Q1_opt.has_value()) {
+            const auto Q0 = Q0_opt.value();
+            const auto Q1 = Q1_opt.value();
+            const auto closest_points_q = erhe::toolkit::closest_points<float>(P0, P1, Q0, Q1);
+            if (closest_points_q.has_value()) {
+                return closest_points_q.value().P;
+            }
+        }
+    }
+
+    return {};
+}
+
+auto Viewport_window::get_closest_point_on_plane(
+    const glm::vec3 N,
+    const glm::vec3 P
+) -> std::optional<glm::vec3>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    using vec3 = glm::vec3;
+
+    const auto Q0_opt = position_in_world_viewport_depth(1.0);
+    const auto Q1_opt = position_in_world_viewport_depth(0.0);
+    if (
+        !Q0_opt.has_value() ||
+        !Q1_opt.has_value()
+    ) {
+        return {};
+    }
+
+    const vec3 Q0 = Q0_opt.value();
+    const vec3 Q1 = Q1_opt.value();
+    const vec3 v  = normalize(Q1 - Q0);
+
+    const auto intersection = erhe::toolkit::intersect_plane<float>(N, P, Q0, v);
+    if (!intersection.has_value()) {
+        return {};
+    }
+
+    const vec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
+    return drag_point_new_position_in_world;
 }
 
 } // namespace editor

@@ -9,6 +9,8 @@
 
 #include "Geometry/Sphere.h"
 
+#include <glm/gtx/pca.hpp>
+
 #include <algorithm>
 #include <array>
 #include <stdexcept>
@@ -547,4 +549,61 @@ void calculate_bounding_volume(
     bounding_sphere.center = glm::vec3{sphere.pos.x, sphere.pos.y, sphere.pos.z};
 }
 
+[[nodiscard]] auto transform(
+    const glm::mat4&       m,
+    const Bounding_sphere& sphere
+) -> Bounding_sphere
+{
+#if 0
+    // Initial simple version
+    const float r     =  sphere.radius; // inscribed sphere radius
+    const float R     = (2.0f * r) / std::sqrt(3.0f);
+    const float phi   = (1.0f + std::sqrt(5.0f)) / 2.0f; // golden ratio
+    const float denom = std::sqrt(phi * sqrt(5.0f));
+    const float k     = R / denom;
+    const float k_phi = k * phi;
+
+    Bounding_volume_combiner combiner;
+    combiner.add_point(m, sphere.center + vec3{ 0.0f,   k,      k_phi});
+    combiner.add_point(m, sphere.center + vec3{ 0.0f,   k,     -k_phi});
+    combiner.add_point(m, sphere.center + vec3{ 0.0f,  -k,      k_phi});
+    combiner.add_point(m, sphere.center + vec3{ 0.0f,  -k,     -k_phi});
+    combiner.add_point(m, sphere.center + vec3{ k,      k_phi,  0.0f });
+    combiner.add_point(m, sphere.center + vec3{ k,     -k_phi,  0.0f });
+    combiner.add_point(m, sphere.center + vec3{-k,      k_phi,  0.0f });
+    combiner.add_point(m, sphere.center + vec3{-k,     -k_phi,  0.0f });
+    combiner.add_point(m, sphere.center + vec3{ k_phi,  0.0f,   k    });
+    combiner.add_point(m, sphere.center + vec3{-k_phi,  0.0f,   k    });
+    combiner.add_point(m, sphere.center + vec3{ k_phi,  0.0f,  -k    });
+    combiner.add_point(m, sphere.center + vec3{-k_phi,  0.0f,  -k    });
+
+    Bounding_box    transformed_icosahedron_bounding_box;
+    Bounding_sphere transformed_icosahedron_bounding_sphere;
+    calculate_bounding_volume(combiner, transformed_icosahedron_bounding_box, transformed_icosahedron_bounding_sphere);
+#endif
+
+    using mat3 = glm::mat3;
+
+    // The maximum radius of transformed sphere is r * sqrt(rho(M^TM)) where sqrt(rho(M^TM)) is the spectral radius of M,
+    // M is mat3 submatrix of m.
+    const float r = sphere.radius; // inscribed sphere radius
+    const mat3 m3{m};
+    const mat3 covariant = glm::transpose(m3) * m3;
+    vec3 eigenvalues;
+    mat3 eigenvectors;
+    const unsigned int result_count = glm::findEigenvaluesSymReal<3, float>(covariant, eigenvalues, eigenvectors);
+    float max_eigenvalue = 0.0f;
+    for (unsigned int i = 0; i < result_count; ++i) {
+        max_eigenvalue = std::max(max_eigenvalue, eigenvalues[i]);
+    }
+    const float R_ = r * std::sqrt(max_eigenvalue);
+
+    Bounding_sphere transformed_bounding_sphere
+    {
+        .center = vec3{m * vec4{sphere.center, 1.0f}},
+        .radius = R_
+    };
+
+    return transformed_bounding_sphere;
+}
 } // namespace erhe::toolkit

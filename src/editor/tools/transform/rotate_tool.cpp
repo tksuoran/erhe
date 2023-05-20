@@ -134,29 +134,15 @@ auto Rotate_tool::snap(
     return std::floor((angle_radians + snap * 0.5f) / snap) * snap;
 }
 
-auto Rotate_tool::update(
-    Scene_view* scene_view
-) -> bool
+auto Rotate_tool::update(Scene_view* scene_view) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
-    // log_trs_tool->trace("update_rotate()");
-
-    //constexpr float c_parallel_threshold = 0.2f;
-    //const vec3  V0      = vec3{root()->position_in_world()} - vec3{camera->position_in_world()};
-    //const vec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0});
-    //const float v_dot_n = dot(V, m_rotation.normal);
-    bool ready_to_rotate{false};
-    //log_trs_tool->trace("R: {} @ {}", root()->name(), root()->position_in_world());
-    //log_trs_tool->trace("C: {} @ {}", camera->name(), camera->position_in_world());
-    //log_trs_tool->trace("V: {}", vec3{V});
-    //log_trs_tool->trace("N: {}", vec3{m_rotation.normal});
-    //log_trs_tool->trace("V.N = {}", v_dot_n);
-    //if (std::abs(v_dot_n) > c_parallel_threshold) TODO
-    {
-        ready_to_rotate = update_circle_around(scene_view);
+    if (scene_view == nullptr) {
+        return false;
     }
 
+    bool ready_to_rotate = update_circle_around(scene_view);
     if (!ready_to_rotate) {
         ready_to_rotate = update_parallel(scene_view);
     }
@@ -180,9 +166,6 @@ auto Rotate_tool::update_circle_around(Scene_view* scene_view) -> bool
 
 auto Rotate_tool::update_parallel(Scene_view* scene_view) -> bool
 {
-    if (scene_view == nullptr) {
-        return false;
-    }
     const auto p_origin_opt    = scene_view->get_control_ray_origin_in_world();
     const auto p_direction_opt = scene_view->get_control_ray_direction_in_world();
     if (!p_origin_opt.has_value() || !p_direction_opt.has_value()) {

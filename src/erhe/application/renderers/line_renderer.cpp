@@ -618,24 +618,29 @@ void Line_renderer::add_cube(
 }
 
 void Line_renderer::add_sphere(
-    const erhe::scene::Transform&       transform,
+    const erhe::scene::Transform&       world_from_local,
     const vec4&                         edge_color,
     const vec4&                         great_circle_color,
     const float                         edge_thickness,
     const float                         great_circle_thickness,
     const vec3&                         local_center,
-    const float                         radius,
+    const float                         local_radius,
     const erhe::scene::Transform* const camera_world_from_node,
     const int                           step_count
 )
 {
-    const mat4 m      = transform.matrix();
-    const vec3 center = vec3{m * vec4{local_center, 1.0f}};
-    const vec3 size  {transform.matrix() * vec4{radius, radius, radius, 0.0f}};
-    const vec3 axis_x{size.x, 0.0f, 0.0f};
-    const vec3 axis_y{0.0f, size.y, 0.0f};
-    const vec3 axis_z{0.0f, 0.0f, size.z};
-    const mat4 I     {1.0f};
+    erhe::toolkit::Bounding_sphere sphere = erhe::toolkit::transform(
+        world_from_local.matrix(),
+        erhe::toolkit::Bounding_sphere{
+            .center = local_center,
+            .radius = local_radius
+        }
+    );
+    const float radius = sphere.radius;
+    const vec3  center = sphere.center;
+    const vec3  axis_x{radius, 0.0f, 0.0f};
+    const vec3  axis_y{0.0f, radius, 0.0f};
+    const vec3  axis_z{0.0f, 0.0f, radius};
 
     set_thickness(great_circle_thickness);
     for (int i = 0; i < step_count; ++i) {
