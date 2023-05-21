@@ -6,6 +6,7 @@
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include "Geometry/Sphere.h"
 
@@ -606,4 +607,44 @@ void calculate_bounding_volume(
 
     return transformed_bounding_sphere;
 }
+
+[[nodiscard]] auto recompose(
+    glm::vec3 scale,
+    glm::quat orientation,
+    glm::vec3 translation,
+    glm::vec3 skew,
+    glm::vec4 perspective
+) -> glm::mat4
+{
+    glm::mat4 p = glm::mat4{1.0f};
+
+    p[0][3] = perspective.x;
+    p[1][3] = perspective.y;
+    p[2][3] = perspective.z;
+    p[3][3] = perspective.w;
+
+    glm::mat4 m = glm::translate(p, translation);
+    m *= glm::mat4_cast(orientation);
+
+    if (skew.x) {
+        glm::mat4 tmp { 1.f };
+        tmp[2][1] = skew.x;
+        m *= tmp;
+    }
+
+    if (skew.y) {
+        glm::mat4 tmp { 1.f };
+        tmp[2][0] = skew.y;
+        m *= tmp;
+    }
+
+    if (skew.z) {
+        glm::mat4 tmp { 1.f };
+        tmp[1][0] = skew.z;
+        m *= tmp;
+    }
+
+    return glm::scale(m, scale);
+}
+
 } // namespace erhe::toolkit

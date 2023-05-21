@@ -41,6 +41,30 @@ void make_combo(
 auto from_erhe           (const erhe::toolkit::Keycode keycode) -> ImGuiKey;
 void update_key_modifiers(::ImGuiIO& io, uint32_t modifier_mask);
 
+class Value_edit_state
+{
+public:
+    void combine(const Value_edit_state& other);
+    bool value_changed{false};
+    bool edit_ended   {false};
+};
+
+auto make_scalar_button(
+    float*      value,
+    uint32_t    text_color,
+    uint32_t    background_color,
+    const char* label,
+    const char* imgui_label
+) -> Value_edit_state;
+
+auto make_angle_button(
+    float&      radians_value,
+    uint32_t    text_color,
+    uint32_t    background_color,
+    const char* label,
+    const char* imgui_label
+) -> Value_edit_state;
+
 } // namespace editor
 
 #endif

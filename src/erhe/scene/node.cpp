@@ -759,6 +759,15 @@ auto Node::world_from_parent() const -> glm::mat4
     return glm::mat4{1};
 }
 
+auto Node::parent_from_world() const -> glm::mat4
+{
+    const auto& current_parent = parent().lock();
+    if (current_parent) {
+        return current_parent->node_from_world();
+    }
+    return glm::mat4{1};
+}
+
 auto Node::position_in_world() const -> glm::vec4
 {
     return world_from_node() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};

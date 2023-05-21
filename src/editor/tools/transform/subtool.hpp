@@ -37,8 +37,6 @@ public:
     [[nodiscard]] auto get_axis_mask() const -> unsigned int;
 
 protected:
-    void touch();
-
     [[nodiscard]] auto get_shared              () const -> Transform_tool::Shared&;
     [[nodiscard]] auto get_basis               () const -> const glm::mat4&;
     [[nodiscard]] auto get_basis               (bool world) const -> const glm::mat4&;

@@ -175,7 +175,11 @@ public:
     [[nodiscard]] auto get_handle         (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_tool_scene_root() -> std::shared_ptr<Scene_root>;
 
-    [[nodiscard]] auto get_visualizations() -> Handle_visualizations*;
+    void touch();
+    void record_transform_operation();
+
+    // Interface for Properties window
+    void transform_properties();
 
     // Interface for Subtool usage
     void update_world_from_anchor_transform(const glm::mat4& updated_world_from_anchor);

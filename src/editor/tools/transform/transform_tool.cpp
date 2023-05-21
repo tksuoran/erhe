@@ -5,6 +5,11 @@
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
+#include "operations/compound_operation.hpp"
+#include "operations/insert_operation.hpp"
+#include "operations/node_operation.hpp"
+#include "operations/operation_stack.hpp"
+
 #include "renderers/mesh_memory.hpp" // need to be able to pass to visualization
 #include "renderers/render_context.hpp"
 #include "scene/node_physics.hpp"
@@ -38,6 +43,9 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
 
@@ -49,6 +57,8 @@
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
+#   include <imgui_internal.h>
+#   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
 namespace editor
@@ -172,7 +182,7 @@ void Transform_tool::initialize_component()
 
     g_tools->register_tool(this);
 
-    erhe::application::g_imgui_windows->register_imgui_window(this, "Transform Tool");
+    erhe::application::g_imgui_windows->register_imgui_window(this, "transform");
 
     auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_drag_command);
@@ -236,17 +246,68 @@ auto Transform_tool::is_transform_tool_active() const -> bool
 
 void Transform_tool::imgui()
 {
-    shared.visualization->imgui();
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+    auto& settings = shared.settings;
+    const bool   show_translate = settings.show_translate;
+    const bool   show_rotate    = settings.show_rotate;
+    const bool   show_scale     = settings.show_scale;
+    const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
+    const bool   multiselect    = shared.entries.size() > 1;
 
-    ImGui::Separator();
+    if (multiselect) {
+        ImGui::BeginDisabled();
+    }
+    if (
+        erhe::application::make_button(
+            "Local",
+            (settings.local) ? erhe::application::Item_mode::active : erhe::application::Item_mode::normal,
+            button_size
+        )
+    ) {
+        settings.local = true;
+    }
+    if (
+        erhe::application::make_button(
+            "Global",
+            (!settings.local) ? erhe::application::Item_mode::active : erhe::application::Item_mode::normal,
+            button_size
+        )
+    ) {
+        settings.local = false;
+    }
+    if (multiselect) {
+        ImGui::EndDisabled();
+    }
 
-    ImGui::Checkbox("Cast Rays", &shared.settings.cast_rays);
+    ImGui::SliderFloat("Scale", &settings.gizmo_scale, 1.0f, 10.0f);
 
-    ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
-    ImGui::Text("Active handle: %s", c_str(m_active_handle));
+    ImGui::Checkbox("Translate Tool", &settings.show_translate);
+    ImGui::Checkbox("Rotate Tool",    &settings.show_rotate);
+    ImGui::Checkbox("Scale Tool",     &settings.show_scale);
+    ImGui::Checkbox("Hide Inactive",  &settings.hide_inactive);
 
-    g_move_tool->imgui();
+    if (
+        (show_translate != settings.show_translate) ||
+        (show_rotate    != settings.show_rotate   ) ||
+        (show_scale     != settings.show_scale    )
+    ) {
+        shared.visualization->update_visibility();
+    }
+
+    transform_properties();
+
+    if (m_active_tool != nullptr) {
+        ImGui::Separator();
+
+        m_active_tool->imgui();
+
+        ImGui::Separator();
+
+        ImGui::Text("Hover handle: %s", c_str(m_hover_handle));
+        ImGui::Text("Active handle: %s", c_str(m_active_handle));
+
+        ImGui::Checkbox("Cast Rays", &shared.settings.cast_rays);
+    }
 
     ImGui::Separator();
 #endif
@@ -640,6 +701,128 @@ void Transform_tool::update_transforms()
 auto Transform_tool::get_tool_scene_root() -> std::shared_ptr<Scene_root>
 {
     return g_tools->get_tool_scene_root();
+}
+
+void Transform_tool::touch()
+{
+    if (!shared.touched) {
+        log_trs_tool->trace("TRS touch - not touched");
+        acquire_node_physics();
+        shared.touched = true;
+    }
+}
+
+void Transform_tool::record_transform_operation()
+{
+    if (!shared.touched || shared.entries.empty()) {
+        return;
+    }
+
+    log_trs_tool->trace("creating transform operation");
+
+    Compound_operation::Parameters compompound_parameters;
+    for (auto& entry : g_transform_tool->shared.entries) {
+        auto node_operation = std::make_shared<Node_transform_operation>(
+            Node_transform_operation::Parameters{
+                .node                    = entry.node,
+                .parent_from_node_before = entry.parent_from_node_before,
+                .parent_from_node_after  = entry.node->parent_from_node_transform()
+            }
+        );
+        compompound_parameters.operations.push_back(node_operation);
+    }
+    g_operation_stack->push(
+        std::make_shared<Compound_operation>(
+            std::move(compompound_parameters)
+        )
+    );
+}
+
+void Transform_tool::transform_properties()
+{
+    if (shared.entries.empty()) {
+        return;
+    }
+
+    if (!ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    glm::vec3 scale;
+    glm::quat orientation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+
+    const bool  multiselect        = shared.entries.size() > 1;
+    const auto& first_node         = shared.entries.front().node;
+    glm::mat4   world_from_parent  = first_node->world_from_parent();
+    glm::mat4   parent_from_world  = first_node->parent_from_world();
+    glm::mat4   parent_from_anchor = parent_from_world * shared.world_from_anchor;
+    bool        use_world_mode     = !shared.settings.local || multiselect;
+
+    glm::decompose(
+        use_world_mode
+            ? shared.world_from_anchor
+            : parent_from_anchor,
+        scale,
+        orientation,
+        translation,
+        skew,
+        perspective
+    );
+
+    const glm::mat4 orientation_matrix{orientation};
+    glm::vec3 euler_angles;
+    glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
+
+    using namespace erhe::application;
+    Value_edit_state translate_edit_state;
+    if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen)) {
+        translate_edit_state.combine(make_scalar_button(&translation.x, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
+        translate_edit_state.combine(make_scalar_button(&translation.y, 0xff88ff88u, 0xff226622u, "Y", "##T.Y"));
+        translate_edit_state.combine(make_scalar_button(&translation.z, 0xffff8888u, 0xff662222u, "Z", "##T.Z"));
+        ImGui::TreePop();
+    }
+
+    Value_edit_state rotate_edit_state;
+    if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen)) {
+        rotate_edit_state.combine(make_angle_button(euler_angles.x, 0xff8888ffu, 0xff222266u, "X", "##R.X"));
+        rotate_edit_state.combine(make_angle_button(euler_angles.y, 0xff88ff88u, 0xff226622u, "Y", "##R.Y"));
+        rotate_edit_state.combine(make_angle_button(euler_angles.z, 0xffff8888u, 0xff662222u, "Z", "##R.Z"));
+        ImGui::TreePop();
+    }
+
+    Value_edit_state scale_edit_state;
+    if (ImGui::TreeNodeEx("Scale", ImGuiTreeNodeFlags_DefaultOpen)) {
+        scale_edit_state.combine(make_scalar_button(&scale.x, 0xff8888ffu, 0xff222266u, "X", "##S.X"));
+        scale_edit_state.combine(make_scalar_button(&scale.y, 0xff88ff88u, 0xff226622u, "Y", "##S.Y"));
+        scale_edit_state.combine(make_scalar_button(&scale.z, 0xffff8888u, 0xff662222u, "Z", "##S.Z"));
+        ImGui::TreePop();
+    }
+
+    Value_edit_state edit_state;
+    edit_state.combine(translate_edit_state);
+    edit_state.combine(rotate_edit_state);
+    edit_state.combine(scale_edit_state);
+    if (edit_state.value_changed || edit_state.edit_ended) {
+        const glm::mat4 new_translation           = erhe::toolkit::create_translation<float>(translation);
+        const glm::mat4 new_rotation              = glm::eulerAngleZYX(euler_angles.x, euler_angles.y, euler_angles.z);
+        const glm::mat4 new_scale                 = erhe::toolkit::create_scale<float>(scale);
+        const glm::mat4 updated_transform         = new_translation * new_rotation * new_scale;
+        const glm::mat4 updated_world_from_anchor = use_world_mode ? updated_transform : world_from_parent * updated_transform;
+
+        touch();
+        update_world_from_anchor_transform(updated_world_from_anchor);
+        update_transforms();
+    }
+
+    if (edit_state.edit_ended && shared.touched) {
+        record_transform_operation();
+        release_node_physics(); // TODO
+    }
+
+    ImGui::TreePop();
 }
 
 }

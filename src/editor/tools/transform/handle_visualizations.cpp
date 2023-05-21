@@ -481,55 +481,6 @@ void Handle_visualizations::set_anchor(
     m_world_from_anchor = world_from_anchor;
 }
 
-void Handle_visualizations::imgui()
-{
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    auto& settings = g_transform_tool->shared.settings;
-    const bool   show_translate = settings.show_translate;
-    const bool   show_rotate    = settings.show_rotate;
-    const bool   show_scale     = settings.show_scale;
-    const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
-
-    if (
-        erhe::application::make_button(
-            "Local",
-            (settings.local)
-                ? erhe::application::Item_mode::active
-                : erhe::application::Item_mode::normal,
-            button_size
-        )
-    ) {
-        settings.local = true;
-    }
-    if (
-        erhe::application::make_button(
-            "Global",
-            (!settings.local)
-                ? erhe::application::Item_mode::active
-                : erhe::application::Item_mode::normal,
-            button_size
-        )
-    ) {
-        settings.local = false;
-    }
-
-    ImGui::SliderFloat("Scale", &settings.gizmo_scale, 1.0f, 10.0f);
-
-    ImGui::Checkbox("Translate Tool", &settings.show_translate);
-    ImGui::Checkbox("Rotate Tool",    &settings.show_rotate);
-    ImGui::Checkbox("Scale Tool",     &settings.show_scale);
-    ImGui::Checkbox("Hide Inactive",  &settings.hide_inactive);
-
-    if (
-        (show_translate != settings.show_translate) ||
-        (show_rotate    != settings.show_rotate   ) ||
-        (show_scale     != settings.show_scale    )
-    ) {
-        update_visibility();
-    }
-#endif
-}
-
 void Handle_visualizations::viewport_toolbar(bool& hovered)
 {
     ImGui::PushID("Handle_visualizations::viewport_toolbar");

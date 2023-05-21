@@ -200,7 +200,7 @@ void Rotate_tool::update_final()
 
     m_rotation.current_angle = angle;
 
-    touch();
+    g_transform_tool->touch();
     g_transform_tool->update_world_from_anchor_transform(updated_world_from_anchor);
     g_transform_tool->update_transforms();
 }

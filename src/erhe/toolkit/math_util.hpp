@@ -1035,4 +1035,12 @@ static inline auto compute_cofactor(glm::mat4 const& m) -> glm::mat4
     return transpose(inverse);
 }
 
+[[nodiscard]] auto recompose(
+    glm::vec3 scale,
+    glm::quat orientation,
+    glm::vec3 translation,
+    glm::vec3 skew,
+    glm::vec4 perspective
+) -> glm::mat4;
+
 } // namespace erhe::toolkit

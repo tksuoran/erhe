@@ -67,7 +67,6 @@ public:
     [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
     void initialize       ();
-    void imgui            ();
     void viewport_toolbar (bool& hovered);
     void update_visibility();
     void update_for_view  (Scene_view* scene_view);

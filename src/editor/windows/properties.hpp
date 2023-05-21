@@ -54,45 +54,6 @@ private:
     void node_physics_properties(Node_physics& node_physics) const;
     void item_flags             (const std::shared_ptr<erhe::scene::Item>& item);
     void item_properties        (const std::shared_ptr<erhe::scene::Item>& item);
-
-    class Value_edit_state
-    {
-    public:
-        void combine(const Value_edit_state& other);
-        bool value_changed{false};
-        bool edit_ended   {false};
-    };
-
-    auto make_scalar_button(
-        float*      value,
-        uint32_t    text_color,
-        uint32_t    background_color,
-        const char* label,
-        const char* imgui_label
-    ) const -> Value_edit_state;
-
-    auto make_angle_button(
-        float&      radians_value,
-        uint32_t    text_color,
-        uint32_t    background_color,
-        const char* label,
-        const char* imgui_label
-    ) const -> Value_edit_state;
-
-    struct Node_state
-    {
-        explicit Node_state(erhe::scene::Node& node);
-
-        erhe::scene::Node*     node   {nullptr};
-        bool                   touched{false};
-        erhe::scene::Transform initial_parent_from_node_transform;
-        erhe::scene::Transform initial_world_from_node_transform;
-    };
-
-    [[nodiscard]] auto get_node_state(erhe::scene::Node& node) -> Node_state&;
-    auto drop_node_state(erhe::scene::Node& node);
-
-    std::vector<Node_state> m_node_states;
 };
 
 extern Properties* g_properties;

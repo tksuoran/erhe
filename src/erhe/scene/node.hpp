@@ -127,6 +127,7 @@ public:
     [[nodiscard]] auto node_from_parent                       () const -> glm::mat4;
     [[nodiscard]] auto node_from_world                        () const -> glm::mat4;
     [[nodiscard]] auto world_from_parent                      () const -> glm::mat4;
+    [[nodiscard]] auto parent_from_world                      () const -> glm::mat4;
     [[nodiscard]] auto position_in_world                      () const -> glm::vec4;
     [[nodiscard]] auto direction_in_world                     () const -> glm::vec4;
     [[nodiscard]] auto look_at                                (const Node& target) const -> glm::mat4;

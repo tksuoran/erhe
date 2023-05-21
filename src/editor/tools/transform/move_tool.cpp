@@ -171,7 +171,7 @@ void Move_tool::update(const vec3 drag_position_in_world)
     const mat4 translation               = erhe::toolkit::create_translation<float>(snapped_translation);
     const mat4 updated_world_from_anchor = translation * shared.drag.initial_world_from_anchor;
 
-    touch();
+    g_transform_tool->touch();
     g_transform_tool->update_world_from_anchor_transform(updated_world_from_anchor);
     g_transform_tool->update_transforms();
 }

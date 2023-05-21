@@ -1,8 +1,5 @@
 #include "tools/transform/subtool.hpp"
 #include "editor_log.hpp"
-#include "operations/compound_operation.hpp"
-#include "operations/insert_operation.hpp"
-#include "operations/operation_stack.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_view.hpp"
@@ -38,32 +35,8 @@ auto Subtool::get_axis_mask() const -> unsigned int
 
 void Subtool::end()
 {
-    auto& shared = get_shared();
-
+    g_transform_tool->record_transform_operation();
     m_active = false;
-
-    if (!shared.touched || shared.entries.empty()) {
-        return;
-    }
-
-    log_trs_tool->trace("creating transform operation");
-
-    Compound_operation::Parameters compompound_parameters;
-    for (auto& entry : g_transform_tool->shared.entries) {
-        auto node_operation = std::make_shared<Node_transform_operation>(
-            Node_transform_operation::Parameters{
-                .node                    = entry.node,
-                .parent_from_node_before = entry.parent_from_node_before,
-                .parent_from_node_after  = entry.node->parent_from_node_transform()
-            }
-        );
-        compompound_parameters.operations.push_back(node_operation);
-    }
-    g_operation_stack->push(
-        std::make_shared<Compound_operation>(
-            std::move(compompound_parameters)
-        )
-    );
 }
 
 namespace {
@@ -144,18 +117,6 @@ auto Subtool::get_plane_side(const bool world) const -> vec3
         }
     }
 }
-
-void Subtool::touch()
-{
-    auto& shared = get_shared();
-
-    if (!shared.touched) {
-        log_trs_tool->trace("TRS touch - not touched");
-        g_transform_tool->acquire_node_physics();
-        shared.touched = true;
-    }
-}
-
 
 #pragma region Helpers
 

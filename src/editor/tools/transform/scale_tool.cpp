@@ -134,7 +134,7 @@ void Scale_tool::update(const vec3 drag_position_in_world)
     const mat4 untranslate               = erhe::toolkit::create_translation<float>(vec3{ shared.anchor_state_initial.pivot_point_in_world});
     const mat4 updated_world_from_anchor = untranslate * scale * translate * shared.drag.initial_world_from_anchor;
 
-    touch();
+    g_transform_tool->touch();
     g_transform_tool->update_world_from_anchor_transform(updated_world_from_anchor);
     g_transform_tool->update_transforms();
 }
