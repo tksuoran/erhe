@@ -181,7 +181,7 @@ auto Viewport_windows::create_viewport_window(
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera,
     const int                                   msaa_sample_count,
-    const bool                                  enable_post_processing
+    bool                                        enable_post_processing
 ) -> std::shared_ptr<Viewport_window>
 {
     const auto new_viewport_window = std::make_shared<Viewport_window>(

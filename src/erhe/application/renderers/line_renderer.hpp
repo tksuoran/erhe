@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe/application/renderers/buffer_writer.hpp"
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
@@ -234,54 +235,6 @@ private:
     public:
         std::size_t first_byte_offset{0};
         std::size_t byte_count       {0};
-    };
-
-    class Buffer_writer
-    {
-    public:
-        erhe::graphics::Buffer* m_buffer{nullptr};
-        Buffer_range            range;
-        std::size_t             map_offset  {0};
-        std::size_t             write_offset{0};
-
-        auto writable_data() const -> gsl::span<std::byte>
-        {
-            const auto map = m_buffer->map();
-            return map.subspan(write_offset, map.size_bytes() - write_offset);
-        }
-
-        void begin(erhe::graphics::Buffer* buffer)
-        {
-            ERHE_VERIFY(m_buffer == nullptr);
-            m_buffer = buffer;
-            if (!erhe::graphics::Instance::info.use_persistent_buffers) {
-                map_offset = write_offset;
-                write_offset = 0;
-                m_buffer->begin_write(write_offset, 0); // TODO
-            }
-            range.first_byte_offset = map_offset; //// write_offset;
-        }
-
-        void end()
-        {
-            ERHE_VERIFY(m_buffer != nullptr);
-            range.byte_count = write_offset; //// - range.first_byte_offset;
-            if (!erhe::graphics::Instance::info.use_persistent_buffers) {
-                m_buffer->end_write(map_offset, write_offset);
-                write_offset += map_offset;
-                map_offset = 0;
-            }
-            m_buffer = nullptr;
-        }
-
-        void reset()
-        {
-            ERHE_VERIFY(m_buffer == nullptr);
-            range.first_byte_offset = 0;
-            range.byte_count = 0;
-            write_offset = 0;
-            map_offset = 0;
-        }
     };
 
     [[nodiscard]] auto current_frame_resources() -> Frame_resources&;

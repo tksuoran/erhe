@@ -413,7 +413,7 @@ void Line_renderer::begin()
 {
     ERHE_VERIFY(!m_inside_begin_end);
 
-    m_vertex_writer.begin(&current_frame_resources().vertex_buffer);
+    m_vertex_writer.begin(&current_frame_resources().vertex_buffer, 0); // map all
     m_line_count       = 0;
     m_inside_begin_end = true;
 }
@@ -452,10 +452,11 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto                   vertex_gpu_data = m_vertex_writer.writable_data();
-    std::byte* const       start           = vertex_gpu_data.data();
-    const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
-    const std::size_t      word_count      = byte_count / sizeof(float);
+    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline->vertex_format.stride();
+    const auto             vertex_gpu_data   = m_vertex_writer.subspan(vertex_byte_count);
+    std::byte* const       start             = vertex_gpu_data.data();
+    const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count        = byte_count / sizeof(float);
     const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
@@ -466,7 +467,6 @@ void Line_renderer::add_lines(
         put(vec3{p1} / p1.w, m_line_thickness, m_line_color, gpu_float_data, word_offset);
     }
 
-    m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
 }
 
@@ -477,10 +477,11 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto                   vertex_gpu_data = m_vertex_writer.writable_data();
-    std::byte* const       start           = vertex_gpu_data.data();
-    const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
-    const std::size_t      word_count      = byte_count / sizeof(float);
+    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline->vertex_format.stride();
+    const auto             vertex_gpu_data   = m_vertex_writer.subspan(vertex_byte_count);
+    std::byte* const       start             = vertex_gpu_data.data();
+    const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count        = byte_count / sizeof(float);
     const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
@@ -491,7 +492,6 @@ void Line_renderer::add_lines(
         put(vec3{p1} / p1.w, line.p1.w, m_line_color, gpu_float_data, word_offset);
     }
 
-    m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
 }
 
@@ -536,10 +536,11 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    auto                   vertex_gpu_data = m_vertex_writer.writable_data();
-    std::byte* const       start           = vertex_gpu_data.data();
-    const std::size_t      byte_count      = vertex_gpu_data.size_bytes();
-    const std::size_t      word_count      = byte_count / sizeof(float);
+    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline->vertex_format.stride();
+    const auto             vertex_gpu_data   = m_vertex_writer.subspan(vertex_byte_count);
+    std::byte* const       start             = vertex_gpu_data.data();
+    const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
+    const std::size_t      word_count        = byte_count / sizeof(float);
     const gsl::span<float> gpu_float_data{reinterpret_cast<float*>(start), word_count};
 
     std::size_t word_offset = 0;
@@ -548,7 +549,6 @@ void Line_renderer::add_lines(
         put(line.p1, m_line_thickness, m_line_color, gpu_float_data, word_offset);
     }
 
-    m_vertex_writer.write_offset += lines.size() * 2 * m_pipeline->vertex_format.stride();
     m_line_count += lines.size();
 }
 
@@ -1348,14 +1348,18 @@ void Line_renderer::render(
 
     erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_render};
 
-    m_view_writer.begin(&current_frame_resources().view_buffer);
+    auto* const               view_buffer         = &current_frame_resources().view_buffer;
+    const auto                view_gpu_data       = m_view_writer.begin(view_buffer, m_pipeline->view_block->size_bytes());
+    std::byte* const          start               = view_gpu_data.data();
+    const std::size_t         byte_count          = view_gpu_data.size_bytes();
+    const std::size_t         word_count          = byte_count / sizeof(float);
+    const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
+    const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const auto  projection_transforms  = camera.projection_transforms(viewport);
     const mat4  clip_from_world        = projection_transforms.clip_from_world.matrix();
     const vec4  view_position_in_world = camera_node->position_in_world();
     const auto  fov_sides              = camera.projection()->get_fov_sides(viewport);
-    auto* const view_buffer            = &current_frame_resources().view_buffer;
-    const auto  view_gpu_data          = m_view_writer.writable_data();
     const float viewport_floats[4] {
         static_cast<float>(viewport.x),
         static_cast<float>(viewport.y),
@@ -1371,10 +1375,10 @@ void Line_renderer::render(
 
     using erhe::graphics::write;
     using erhe::graphics::as_span;
-    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->clip_from_world_offset,        as_span(clip_from_world       ));
-    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->view_position_in_world_offset, as_span(view_position_in_world));
-    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->viewport_offset,               as_span(viewport_floats       ));
-    write(view_gpu_data, m_view_writer.write_offset + m_pipeline->fov_offset,                    as_span(fov_floats            ));
+    write(view_gpu_data, m_pipeline->clip_from_world_offset,        as_span(clip_from_world       ));
+    write(view_gpu_data, m_pipeline->view_position_in_world_offset, as_span(view_position_in_world));
+    write(view_gpu_data, m_pipeline->viewport_offset,               as_span(viewport_floats       ));
+    write(view_gpu_data, m_pipeline->fov_offset,                    as_span(fov_floats            ));
 
     m_view_writer.write_offset += m_pipeline->view_block->size_bytes();
     m_view_writer.end();

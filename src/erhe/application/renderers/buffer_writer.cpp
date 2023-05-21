@@ -59,15 +59,25 @@ auto Buffer_writer::begin(
         write_end    = byte_count;
         m_buffer->begin_write(map_offset, byte_count);
         range.first_byte_offset = map_offset + write_offset;
-        return buffer->map();
+        m_map = buffer->map();
+        return m_map;
     } else {
         // The whole buffer is always mapped - return subspan for requested range
-        write_end = write_offset + byte_count;
+        write_end               = write_offset + byte_count;
         range.first_byte_offset = write_offset;
         write_offset = 0;
-        return buffer->map().subspan(range.first_byte_offset, byte_count);
+        m_map = buffer->map().subspan(range.first_byte_offset, byte_count);
+        return m_map;
     }
 
+}
+
+auto Buffer_writer::subspan(const std::size_t byte_count) -> gsl::span<std::byte>
+{
+    ERHE_VERIFY(m_map.size() >= write_offset + byte_count);
+    auto result = m_map.subspan(write_offset, byte_count);
+    write_offset += byte_count;
+    return result;
 }
 
 void Buffer_writer::end()
@@ -84,6 +94,7 @@ void Buffer_writer::end()
         write_offset += range.first_byte_offset;
     }
     m_buffer = nullptr;
+    m_map = {};
 
 }
 
@@ -93,6 +104,7 @@ void Buffer_writer::reset()
     range.byte_count        = 0;
     map_offset              = 0;
     write_offset            = 0;
+    m_map                   = {};
 }
 
 } // namespace erhe::application

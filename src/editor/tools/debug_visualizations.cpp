@@ -27,6 +27,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -97,6 +98,32 @@ constexpr vec3 axis_x         { 1.0f,  0.0f, 0.0f};
 constexpr vec3 axis_y         { 0.0f,  1.0f, 0.0f};
 constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
+auto get_selected_camera(
+    const Render_context& render_context
+) -> std::shared_ptr<erhe::scene::Camera>
+{
+    const auto* scene = render_context.get_scene();
+
+    const auto& selection = g_selection_tool->get_selection();
+
+    for (const auto& scene_item : selection) {
+        const auto& node = as_node(scene_item);
+        if (node) {
+            if (node->get_scene() != scene) {
+                continue;
+            }
+            for (const auto& attachment : node->attachments()) {
+                const auto camera = as_camera(attachment);
+                if (camera) {
+                    return camera;
+                }
+            }
+        }
+    }
+
+    return {};
+}
+
 }
 
 void Debug_visualizations::mesh_selection_visualization(
@@ -118,6 +145,15 @@ void Debug_visualizations::mesh_selection_visualization(
     if (camera_node == nullptr) {
         return;
     }
+
+    std::shared_ptr<erhe::scene::Camera> selected_camera  = get_selected_camera(render_context);
+    std::shared_ptr<erhe::scene::Camera> context_camera   = render_context.scene_view->get_camera();
+    std::shared_ptr<erhe::scene::Camera> used_camera      = selected_camera ? selected_camera : context_camera;
+    erhe::scene::Node*                   used_camera_node = used_camera ? used_camera->get_node() : nullptr;
+
+    erhe::scene::Transform camera_world_from_node_transform = (used_camera_node != nullptr)
+        ? used_camera_node->world_from_node_transform()
+        : erhe::scene::Transform{};
 
     for (const auto& primitive : mesh->mesh_data.primitives) {
         if (!primitive.source_geometry) {
@@ -167,9 +203,7 @@ void Debug_visualizations::mesh_selection_visualization(
             )
         ) {
             if (render_context.scene_view != nullptr) {
-                const auto& view_camera = render_context.scene_view->get_camera();
-                if (view_camera) {
-                    const erhe::scene::Transform& camera_world_from_node_transform = camera_node->world_from_node_transform();
+                if (used_camera) {
                     line_renderer.add_sphere(
                         node->world_from_node_transform(),
                         m_selection_major_color,
