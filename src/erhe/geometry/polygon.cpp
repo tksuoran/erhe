@@ -212,8 +212,7 @@ void Polygon::compute_planar_texture_coordinates(
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (corner_count < 3)
-{
+    if (corner_count < 3) {
         return;
     }
 
@@ -277,11 +276,12 @@ void Polygon::compute_planar_texture_coordinates(
         const float distance = glm::length(uv);
         max_distance = std::max(distance, max_distance);
     }
+    const float scale = 1.0f / max_distance;
 
     // Second pass - generate texture coordinates
     for (const auto& unscaled_uv : unscaled_uvs) {
         if (overwrite || !corner_texcoords.has(unscaled_uv.first)) {
-            corner_texcoords.put(unscaled_uv.first, unscaled_uv.second);
+            corner_texcoords.put(unscaled_uv.first, unscaled_uv.second * scale);
         }
     }
 }

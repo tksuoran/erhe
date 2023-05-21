@@ -461,5 +461,21 @@ auto Geometry::make_polygon_reverse(const std::initializer_list<Point_id> point_
     return polygon_id;
 }
 
+auto Geometry::make_quad_with_corner_texcoords(
+    Property_map<Corner_id, glm::vec2>* corner_texcoords,
+    const Point_id                      p0,
+    const Point_id                      p1,
+    const Point_id                      p2,
+    const Point_id                      p3
+) -> Polygon_id
+{
+    const Polygon_id polygon_id = make_polygon();
+    corner_texcoords->put(make_polygon_corner(polygon_id, p0), glm::vec2{0, 0});
+    corner_texcoords->put(make_polygon_corner(polygon_id, p1), glm::vec2{1, 0});
+    corner_texcoords->put(make_polygon_corner(polygon_id, p2), glm::vec2{1, 1});
+    corner_texcoords->put(make_polygon_corner(polygon_id, p3), glm::vec2{0, 1});
+    return polygon_id;
+}
+
 
 }

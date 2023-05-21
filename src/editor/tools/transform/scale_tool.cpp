@@ -114,16 +114,25 @@ auto Scale_tool::update(Scene_view* scene_view) -> bool
 
 void Scale_tool::update(const vec3 drag_position_in_world)
 {
-    const auto& shared = get_shared();
-    const float initial_distance          = glm::distance(shared.anchor_state_initial.pivot_point_in_world, shared.drag.initial_position_in_world);
-    const float current_distance          = glm::distance(shared.anchor_state_initial.pivot_point_in_world, drag_position_in_world);
-    const float scale_value               = current_distance / initial_distance;
-    const float snapped_scale_value       = scale_value; // TODO
-    const mat4  scale                     = erhe::toolkit::create_scale<float>(snapped_scale_value);
-
-    const mat4  translate                 = erhe::toolkit::create_translation<float>(vec3{-shared.anchor_state_initial.pivot_point_in_world});
-    const mat4  untranslate               = erhe::toolkit::create_translation<float>(vec3{ shared.anchor_state_initial.pivot_point_in_world});
-    const mat4  updated_world_from_anchor = untranslate * scale * translate * shared.drag.initial_world_from_anchor;
+    const auto& shared           = get_shared();
+    const float initial_distance = glm::distance(shared.anchor_state_initial.pivot_point_in_world, shared.drag.initial_position_in_world);
+    const float current_distance = glm::distance(shared.anchor_state_initial.pivot_point_in_world, drag_position_in_world);
+    const float s                = current_distance / initial_distance;
+    const mat4  scale = [&](){
+        switch (m_axis_mask) {
+        case Axis_mask::x  : return erhe::toolkit::create_scale<float>(s, 1.0f, 1.0f);
+        case Axis_mask::y  : return erhe::toolkit::create_scale<float>(1.0f, s, 1.0f);
+        case Axis_mask::z  : return erhe::toolkit::create_scale<float>(1.0f, 1.0f, s);
+        case Axis_mask::xy : return erhe::toolkit::create_scale<float>(s, s, 1.0f);
+        case Axis_mask::xz : return erhe::toolkit::create_scale<float>(s, 1.0f, s);
+        case Axis_mask::yz : return erhe::toolkit::create_scale<float>(1.0f, s, s);
+        case Axis_mask::xyz: return erhe::toolkit::create_scale<float>(s, s, s);
+        default:             return glm::mat4{1.0f};
+        }
+    }();
+    const mat4 translate                 = erhe::toolkit::create_translation<float>(vec3{-shared.anchor_state_initial.pivot_point_in_world});
+    const mat4 untranslate               = erhe::toolkit::create_translation<float>(vec3{ shared.anchor_state_initial.pivot_point_in_world});
+    const mat4 updated_world_from_anchor = untranslate * scale * translate * shared.drag.initial_world_from_anchor;
 
     touch();
     g_transform_tool->update_world_from_anchor_transform(updated_world_from_anchor);

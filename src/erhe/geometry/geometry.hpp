@@ -614,6 +614,14 @@ public:
 
     auto make_polygon_reverse(const std::initializer_list<Point_id> point_list) -> Polygon_id;
 
+    auto make_quad_with_corner_texcoords(
+        Property_map<Corner_id, glm::vec2>* corner_texcoords,
+        Point_id                            p0,
+        Point_id                            p1,
+        Point_id                            p2,
+        Point_id                            p3
+    ) -> Polygon_id;
+
     // Requires point locations.
     // Returns false if point locations are not available.
     // Returns true on success.

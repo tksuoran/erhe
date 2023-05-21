@@ -2,6 +2,7 @@
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/geometry_log.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -67,15 +68,15 @@ auto Geometry::compute_tangents(
     if (!compute_point_normals(c_point_normals_smooth)) {
         return false;
     }
-    if (!generate_polygon_texture_coordinates(false)) {
-        return false;
-    }
+    //if (!generate_polygon_texture_coordinates(false)) {
+    //    return false;
+    //}
 
     class Geometry_context
     {
     public:
-        Geometry* geometry{nullptr};
-        int       triangle_count{0};
+        Geometry* geometry         {nullptr};
+        int       triangle_count   {0};
         bool      override_existing{false};
 
         Property_map<Polygon_id, vec3>* polygon_normals     {nullptr};
@@ -423,22 +424,42 @@ auto Geometry::compute_tangents(
             static_cast<void>(fMagS);
             static_cast<void>(fMagT);
             static_cast<void>(bIsOrientationPreserving);
-            auto*       context  = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            auto*       context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+
+            const Polygon& polygon = context->get_polygon(iFace);
+            if ((polygon.corner_count > 3) && (iVert == 0)) {
+                return;
+            }
+
+            const auto  polygon_id = context->get_polygon_id(iFace);        static_cast<void>(polygon_id);
+            const auto  corner_id  = context->get_corner_id (iFace, iVert); static_cast<void>(corner_id);
+            const auto  P          = context->get_position  (iFace, iVert); static_cast<void>(P);
             const auto  N        = context->get_normal(iFace, iVert);
+            const auto  N_a      = context->get_normal(iFace, 0); static_cast<void>(N_a);
+            const auto  N_b      = context->get_normal(iFace, 1); static_cast<void>(N_b);
+            const auto  N_c      = context->get_normal(iFace, 2); static_cast<void>(N_c);
             const vec3  T0       = vec3{fvTangent  [0], fvTangent  [1], fvTangent  [2]};
             const vec3  B0       = vec3{fvBiTangent[0], fvBiTangent[1], fvBiTangent[2]};
             const float N_dot_T0 = glm::dot(N, T0);
             const float N_dot_B0 = glm::dot(N, B0);
+            if (
+                (std::abs(N_dot_T0) > 0.01f) ||
+                (std::abs(N_dot_B0) > 0.01f)
+            ) {
+                log_tangent_gen->error(
+                    "polygon_id = {}, corner_id = {}, P = {}, N = {}, T0 = {}, B0 = {}",
+                    polygon_id, corner_id, P, N, T0, B0
+                );
+            }
+            //ERHE_VERIFY(std::abs(N_dot_B0) < 0.01f);
             const vec3  T        = glm::normalize(T0 - N_dot_T0 * N);
             const float t_w      = (glm::dot(glm::cross(N, T0), B0) < 0.0f) ? -1.0f : 1.0f;
             const vec3  B        = glm::normalize(B0 - N_dot_B0 * N);
             const float b_w      = (glm::dot(glm::cross(B0, N), T0) < 0.0f) ? -1.0f : 1.0f;
-            const float N_dot_T  = glm::dot(N, T);
-            const float N_dot_B  = glm::dot(N, B);
-            ERHE_VERIFY(std::abs(N_dot_T0) < 0.01f);
-            ERHE_VERIFY(std::abs(N_dot_B0) < 0.01f);
-            ERHE_VERIFY(std::abs(N_dot_T) < 0.01f);
-            ERHE_VERIFY(std::abs(N_dot_B) < 0.01f);
+            //// const float N_dot_T  = glm::dot(N, T);
+            //// const float N_dot_B  = glm::dot(N, B);
+            //ERHE_VERIFY(std::abs(N_dot_T) < 0.01f);
+            //ERHE_VERIFY(std::abs(N_dot_B) < 0.01f);
             context->set_tangent  (iFace, iVert, T, t_w);
             context->set_bitangent(iFace, iVert, B, b_w);
         }

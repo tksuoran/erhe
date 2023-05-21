@@ -119,6 +119,8 @@
 #include "erhe/xr/xr_log.hpp"
 #endif
 
+// #define ERHE_DISABLE_TRANSFORM_TOOL 1
+
 namespace editor {
 
 class Application_impl
@@ -178,7 +180,9 @@ private:
     editor::Material_paint_tool    material_paint_tool   ;
     editor::Material_preview       material_preview      ;
     editor::Mesh_memory            mesh_memory           ;
+#if !defined(ERHE_DISABLE_TRANSFORM_TOOL)
     editor::Move_tool              move_tool             ;
+#endif
     editor::Node_tree_window       node_tree_window      ;
     editor::Operation_stack        operation_stack       ;
     editor::Operations             operations            ;
@@ -191,8 +195,10 @@ private:
     editor::Programs               programs              ;
     editor::Properties             properties            ;
     editor::Rendergraph_window     rendergraph_window    ;
+#if !defined(ERHE_DISABLE_TRANSFORM_TOOL)
     editor::Rotate_tool            rotate_tool           ;
     editor::Scale_tool             scale_tool            ;
+#endif
     editor::Scene_builder          scene_builder         ;
     editor::Scene_commands         scene_commands        ;
     editor::Selection_tool         selection_tool        ;
@@ -200,7 +206,9 @@ private:
     editor::Shadow_renderer        shadow_renderer       ;
     editor::Tool_properties_window tool_properties_window;
     editor::Tools                  tools                 ;
+#if !defined(ERHE_DISABLE_TRANSFORM_TOOL)
     editor::Transform_tool         transform_tool        ;
+#endif
     editor::Viewport_config_window viewport_config_window;
     editor::Viewport_windows       viewport_windows      ;
 
@@ -305,7 +313,9 @@ auto Application_impl::initialize_components(
         m_components.add(&material_paint_tool   );
         m_components.add(&material_preview      );
         m_components.add(&mesh_memory           );
+#if !defined(ERHE_DISABLE_TRANSFORM_TOOL)
         m_components.add(&move_tool             );
+#endif
         m_components.add(&node_tree_window      );
         m_components.add(&operation_stack       );
         m_components.add(&operations            );
@@ -318,8 +328,10 @@ auto Application_impl::initialize_components(
         m_components.add(&programs              );
         m_components.add(&properties            );
         m_components.add(&rendergraph_window    );
+#if !defined(ERHE_DISABLE_TRANSFORM_TOOL)
         m_components.add(&rotate_tool           );
         m_components.add(&scale_tool            );
+#endif
         m_components.add(&scene_builder         );
         m_components.add(&scene_commands        );
         m_components.add(&scene_message_bus     );
@@ -328,7 +340,9 @@ auto Application_impl::initialize_components(
         m_components.add(&shadow_renderer       );
         m_components.add(&tool_properties_window);
         m_components.add(&tools                 );
+#if !defined(ERHE_DISABLE_TRANSFORM_TOOL)
         m_components.add(&transform_tool        );
+#endif
         m_components.add(&viewport_config_window);
         m_components.add(&viewport_windows      );
 

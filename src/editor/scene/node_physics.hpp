@@ -66,7 +66,7 @@ private:
     std::shared_ptr<erhe::physics::IRigid_body>      m_rigid_body;
     std::shared_ptr<erhe::physics::ICollision_shape> m_collision_shape;
     bool                                             m_transform_change_from_physics{false};
-    float                                            m_scale{1.0f}; // TODO hack
+    glm::vec3                                        m_scale{1.0f, 1.0f, 1.0f}; // TODO hack
 };
 
 auto is_physics(const erhe::scene::Item* scene_item) -> bool;

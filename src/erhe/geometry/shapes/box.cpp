@@ -46,21 +46,23 @@ auto make_box(
         "box",
         [=](auto& geometry)
         {
-            geometry.make_point(-x,  y,  z, 0, 1); // 0
-            geometry.make_point( x,  y,  z, 1, 1); // 1
-            geometry.make_point( x, -y,  z, 1, 1); // 2
-            geometry.make_point(-x, -y,  z, 0, 1); // 3
-            geometry.make_point(-x,  y, -z, 0, 0); // 4
-            geometry.make_point( x,  y, -z, 1, 0); // 5
-            geometry.make_point( x, -y, -z, 1, 0); // 6
-            geometry.make_point(-x, -y, -z, 0, 0); // 7
+            Property_map<Corner_id, vec2>* corner_texcoords = geometry.corner_attributes().create<vec2>(c_corner_texcoords);
 
-            geometry.make_polygon_reverse( {0, 1, 2, 3} );
-            geometry.make_polygon_reverse( {0, 3, 7, 4} );
-            geometry.make_polygon_reverse( {0, 4, 5, 1} ); // top
-            geometry.make_polygon_reverse( {5, 4, 7, 6} );
-            geometry.make_polygon_reverse( {2, 1, 5, 6} );
-            geometry.make_polygon_reverse( {7, 3, 2, 6} ); // bottom
+            geometry.make_point(-x, -y, -z); // 0    6------7
+            geometry.make_point( x, -y, -z); // 1   /|     /|
+            geometry.make_point(-x,  y, -z); // 2  2------4 |
+            geometry.make_point(-x, -y,  z); // 3  | |    | |
+            geometry.make_point( x,  y, -z); // 4  | |    | |
+            geometry.make_point( x, -y,  z); // 5  | 3----|-5
+            geometry.make_point(-x,  y,  z); // 6  |/     |/
+            geometry.make_point( x,  y,  z); // 7  0------1
+
+            geometry.make_quad_with_corner_texcoords(corner_texcoords, 4, 7, 5, 1); // x+
+            geometry.make_quad_with_corner_texcoords(corner_texcoords, 6, 7, 4, 2); // y+
+            geometry.make_quad_with_corner_texcoords(corner_texcoords, 7, 6, 3, 5); // z+
+            geometry.make_quad_with_corner_texcoords(corner_texcoords, 6, 2, 0, 3); // x-
+            geometry.make_quad_with_corner_texcoords(corner_texcoords, 0, 1, 5, 3); // y-
+            geometry.make_quad_with_corner_texcoords(corner_texcoords, 2, 4, 1, 0); // z-
 
             geometry.make_point_corners();
             geometry.build_edges();

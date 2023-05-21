@@ -17,12 +17,13 @@ Primitive_interface::Primitive_interface(const std::size_t max_primitive_count)
     : primitive_block {"primitive", 3, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , primitive_struct{"Primitive"}
     , offsets{
-        .world_from_node = primitive_struct.add_mat4 ("world_from_node")->offset_in_parent(),
-        .color           = primitive_struct.add_vec4 ("color"          )->offset_in_parent(),
-        .material_index  = primitive_struct.add_uint ("material_index" )->offset_in_parent(),
-        .size            = primitive_struct.add_float("size"           )->offset_in_parent(),
-        .extra2          = primitive_struct.add_uint ("extra2"         )->offset_in_parent(),
-        .extra3          = primitive_struct.add_uint ("extra3"         )->offset_in_parent()
+        .world_from_node          = primitive_struct.add_mat4 ("world_from_node"         )->offset_in_parent(),
+        .world_from_node_cofactor = primitive_struct.add_mat4 ("world_from_node_cofactor")->offset_in_parent(),
+        .color                    = primitive_struct.add_vec4 ("color"                   )->offset_in_parent(),
+        .material_index           = primitive_struct.add_uint ("material_index"          )->offset_in_parent(),
+        .size                     = primitive_struct.add_float("size"                    )->offset_in_parent(),
+        .extra2                   = primitive_struct.add_uint ("extra2"                  )->offset_in_parent(),
+        .extra3                   = primitive_struct.add_uint ("extra3"                  )->offset_in_parent()
     },
     max_primitive_count{max_primitive_count}
 {
@@ -117,7 +118,10 @@ auto Primitive_buffer::update(
 
         //const auto& node_data = node->node_data;
         const auto& mesh_data = mesh->mesh_data;
-        const glm::mat4 world_from_node = node->world_from_node();
+        const glm::mat4 world_from_node          = node->world_from_node();
+
+        // TODO Use compute shader
+        const glm::mat4 world_from_node_cofactor = erhe::toolkit::compute_cofactor(world_from_node);
 
         std::size_t mesh_primitive_index{0};
         for (const auto& primitive : mesh_data.primitives) {
@@ -165,12 +169,13 @@ auto Primitive_buffer::update(
             {
                 //ZoneScopedN("write");
                 using erhe::graphics::write;
-                write(primitive_gpu_data, m_writer.write_offset + offsets.world_from_node, as_span(world_from_node));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.color,           color_span              );
-                write(primitive_gpu_data, m_writer.write_offset + offsets.material_index,  as_span(material_index ));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.size,            size_span               );
-                write(primitive_gpu_data, m_writer.write_offset + offsets.extra2,          as_span(extra2         ));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.extra3,          as_span(extra3         ));
+                write(primitive_gpu_data, m_writer.write_offset + offsets.world_from_node,          as_span(world_from_node         ));
+                write(primitive_gpu_data, m_writer.write_offset + offsets.world_from_node_cofactor, as_span(world_from_node_cofactor));
+                write(primitive_gpu_data, m_writer.write_offset + offsets.color,                    color_span                       );
+                write(primitive_gpu_data, m_writer.write_offset + offsets.material_index,           as_span(material_index          ));
+                write(primitive_gpu_data, m_writer.write_offset + offsets.size,                     size_span                        );
+                write(primitive_gpu_data, m_writer.write_offset + offsets.extra2,                   as_span(extra2                  ));
+                write(primitive_gpu_data, m_writer.write_offset + offsets.extra3,                   as_span(extra3                  ));
 
             }
             m_writer.write_offset += entry_size;

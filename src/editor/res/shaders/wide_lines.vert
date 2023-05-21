@@ -3,10 +3,12 @@ out float vs_line_width;
 
 void main()
 {
-    mat4 world_from_node = primitive.primitives[gl_DrawID].world_from_node;
-    mat4 clip_from_world = camera.cameras[0].clip_from_world;
+    mat4 world_from_node          = primitive.primitives[gl_DrawID].world_from_node;
+    mat4 world_from_node_cofactor = primitive.primitives[gl_DrawID].world_from_node_cofactor;
+    mat4 clip_from_world          = camera.cameras[0].clip_from_world;
+
     vec4 position        = world_from_node * vec4(a_position, 1.0);
-    vec3 normal          = normalize(vec3(world_from_node * vec4(a_normal_smooth, 0.0)));
+    vec3 normal          = normalize(vec3(world_from_node_cofactor * vec4(a_normal_smooth, 0.0)));
 
     vec3 view_position_in_world = vec3(
         camera.cameras[0].world_from_node[3][0],

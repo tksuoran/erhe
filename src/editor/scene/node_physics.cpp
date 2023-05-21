@@ -103,7 +103,7 @@ void Node_physics::handle_node_transform_update()
     glm::vec3 skew;
     glm::vec4 perspective;
     glm::decompose(m, scale, orientation, translation, skew, perspective);
-    m_scale = (scale.x + scale.y + scale.z) / 3.0f;
+    m_scale = scale;
 
     const erhe::physics::Transform world_from_node = get_world_from_node();
 
