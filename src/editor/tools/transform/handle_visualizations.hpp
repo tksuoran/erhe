@@ -2,7 +2,7 @@
 
 #include "tools/transform/transform_tool_settings.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
-#include "erhe/scene/transform.hpp"
+#include "erhe/scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
 
@@ -76,7 +76,7 @@ public:
         const std::shared_ptr<erhe::scene::Mesh>& mesh
     );
 
-    void set_anchor(const erhe::scene::Transform& world_from_anchor);
+    void set_anchor(const erhe::scene::Trs_transform& world_from_anchor);
 
 private:
     [[nodiscard]] auto make_arrow_cylinder() -> Part;
@@ -107,7 +107,7 @@ private:
     float           m_scale         {1.0f};
 
     std::map<erhe::scene::Mesh*, Handle>             m_handles;
-    erhe::scene::Transform                           m_world_from_anchor;
+    erhe::scene::Trs_transform                       m_world_from_anchor;
     std::shared_ptr<erhe::scene::Node>               m_tool_node;
     float                                            m_view_distance{1.0f};
     std::shared_ptr<erhe::primitive::Material>       m_x_material;

@@ -50,26 +50,19 @@ public:
     void render(const Render_context& context);
 
 private:
-    class Rotation_context
-    {
-    public:
-        glm::vec3                normal              {0.0f}; // also rotation axis
-        glm::vec3                reference_direction {0.0f};
-        glm::vec3                center_of_rotation  {0.0f};
-        std::optional<glm::vec3> intersection        {};
-        float                    start_rotation_angle{0.0f};
-        float                    current_angle       {0.0f};
-        erhe::scene::Transform   world_from_anchor;
-    };
-
     auto update_circle_around(Scene_view* scene_view) -> bool;
     auto update_parallel     (Scene_view* scene_view) -> bool;
     void update_final        ();
 
     [[nodiscard]] auto snap(float angle_radians) const -> float;
 
-    int              m_rotate_snap_index{2};
-    Rotation_context m_rotation;
+    int                      m_rotate_snap_index{2};
+    glm::vec3                m_normal              {0.0f}; // also rotation axis
+    glm::vec3                m_reference_direction {0.0f};
+    glm::vec3                m_center_of_rotation  {0.0f};
+    std::optional<glm::vec3> m_intersection        {};
+    float                    m_start_rotation_angle{0.0f};
+    float                    m_current_angle       {0.0f};
 };
 
 extern Rotate_tool* g_rotate_tool;

@@ -32,7 +32,7 @@ void Create_box::render_preview(
     if (view_camera) {
         auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
         line_renderer.add_cube(
-            preview_settings.transform.matrix(),
+            preview_settings.transform.get_matrix(),
             preview_settings.major_color,
             -0.5f * m_size,
              0.5f * m_size

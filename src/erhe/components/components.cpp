@@ -307,7 +307,9 @@ void Components::initialize_component(const bool in_worker_thread)
             component_->component_initialized(component);
         }
         ++m_count_initialized_in_worker_thread;
-        const std::string message_text = fmt::format("{} initialized (total {})", component->name(), m_count_initialized_in_worker_thread);
+        const std::string_view component_name = component->name();
+        int initialization_count = m_count_initialized_in_worker_thread.load();
+        const std::string message_text = fmt::format("{} initialized (total {})", component_name, initialization_count);
         ERHE_PROFILE_MESSAGE(message_text.c_str(), message_text.length());
         log_components->trace(message_text);
         m_component_processed.notify_all();

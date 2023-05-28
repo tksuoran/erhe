@@ -247,12 +247,12 @@ auto Light::stable_directional_light_projection_transforms(
         snapped_light_from_world
     };
     const Transform clip_from_world{
-        clip_from_light.matrix() * snapped_light_from_world,
-        snapped_world_from_light * clip_from_light.inverse_matrix()
+        clip_from_light.get_matrix() * snapped_light_from_world,
+        snapped_world_from_light * clip_from_light.get_inverse_matrix()
     };
     const Transform texture_from_world{
-        texture_from_clip * clip_from_world.matrix(),
-        clip_from_world.inverse_matrix() * clip_from_texture
+        texture_from_clip * clip_from_world.get_matrix(),
+        clip_from_world.get_inverse_matrix() * clip_from_texture
     };
 
     return Light_projection_transforms{
@@ -403,12 +403,12 @@ auto Light::stable_directional_light_projection_transforms(
     ERHE_VERIFY(node != nullptr);
 
     const Transform clip_from_world{
-        clip_from_light_camera.matrix() * node->node_from_world(),
-        node->world_from_node() * clip_from_light_camera.inverse_matrix()
+        clip_from_light_camera.get_matrix() * node->node_from_world(),
+        node->world_from_node() * clip_from_light_camera.get_inverse_matrix()
     };
     const Transform texture_from_world{
-        texture_from_clip * clip_from_world.matrix(),
-        clip_from_world.inverse_matrix() * clip_from_texture
+        texture_from_clip * clip_from_world.get_matrix(),
+        clip_from_world.get_inverse_matrix() * clip_from_texture
     };
 
     return Light_projection_transforms{

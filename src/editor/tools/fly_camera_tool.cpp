@@ -405,11 +405,12 @@ auto Fly_camera_tool::try_move(
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     if (
-        (g_viewport_windows->hover_window() == nullptr) &&
+        (get_hover_scene_view() == nullptr) &&
         active
     ) {
-        log_fly_camera->warn("rejected press because no viewport window");
-
+        m_camera_controller->translate_x.reset();
+        m_camera_controller->translate_y.reset();
+        m_camera_controller->translate_z.reset();
         return false;
     }
 

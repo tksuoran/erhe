@@ -27,6 +27,8 @@ erhe_target_sources_grouped(
     scene_message_bus.hpp
     transform.cpp
     transform.hpp
+    trs_transform.cpp
+    trs_transform.hpp
     viewport.cpp
     viewport.hpp
 )

@@ -42,6 +42,9 @@
 namespace editor
 {
 
+using Transform = erhe::scene::Transform;
+using Trs_transform = erhe::scene::Trs_transform;
+
 class Create_impl
     : public erhe::application::Imgui_window
     , public Tool
@@ -331,9 +334,9 @@ void Create_impl::tool_render(const Render_context& context)
         return;
     }
 
-    const erhe::scene::Transform transform = parent
+    const Trs_transform transform = parent
         ? parent->world_from_node_transform()
-        : erhe::scene::Transform{};
+        : Trs_transform{};
     if (m_brush_create != nullptr) {
         if (m_preview_ideal_shape) {
             const Create_preview_settings preview_settings

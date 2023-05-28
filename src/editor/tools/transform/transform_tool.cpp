@@ -47,6 +47,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/matrix_interpolation.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -68,10 +69,18 @@ using glm::normalize;
 using glm::cross;
 using glm::dot;
 using glm::distance;
-using glm::mat4;
-using glm::vec2;
-using glm::vec3;
-using glm::vec4;
+using glm::mat3_cast;
+using glm::mat4_cast;
+using glm::quat_cast;
+using mat3 = glm::mat3;
+using mat4 = glm::mat4;
+using quat = glm::quat;
+using vec2 = glm::vec2;
+using vec3 = glm::vec3;
+using vec4 = glm::vec4;
+
+using Trs_transform = erhe::scene::Trs_transform;
+
 
 #pragma region Commands
 
@@ -217,18 +226,15 @@ void Transform_tool::on_message(Editor_message& message)
         update_hover();
     }
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
-        update_target_nodes();
+        update_target_nodes(nullptr);
+    }
+    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_node_touched_operation_stack)) {
+        update_target_nodes(message.node);
     }
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
         update_for_view(message.scene_view);
     }
 }
-
-
-//// void Transform_tool::set_local(const bool local)
-//// {
-////     m_visualization->set_local(local);
-//// }
 
 void Transform_tool::viewport_toolbar(bool& hovered)
 {
@@ -313,81 +319,172 @@ void Transform_tool::imgui()
 #endif
 }
 
-void Transform_tool::update_target_nodes()
+void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
     const auto& selection = g_selection_tool->get_selection();
 
-    glm::vec3 cumulative_translation{0.0f, 0.0f, 0.0f};
-    glm::quat cumulative_rotation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3 cumulative_scale{1.0f, 1.0f, 1.0f};
+    vec3 cumulative_world_translation{0.0f, 0.0f, 0.0f};
+    quat cumulative_world_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+    vec3 cumulative_world_scale      {0.0f, 0.0f, 0.0f};
     std::size_t node_count{0};
-    shared.entries.clear();
+    release_node_physics();
+    if (node_filter == nullptr) {
+        shared.entries.clear();
+    }
+    std::size_t i = 0;
     for (const auto& item : selection) {
         std::shared_ptr<erhe::scene::Node> node = as_node(item);
         if (!node) {
             continue;
         }
-        const glm::mat4 world_from_node = node->world_from_node();
-        glm::vec3 scale;
-        glm::quat orientation;
-        glm::vec3 translation;
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(world_from_node, scale, orientation, translation, skew, perspective);
-        cumulative_translation += translation;
-        cumulative_rotation = orientation; //cumulative_rotation *= orientation;
-        cumulative_scale += scale;
+        const Trs_transform& world_from_node = node->world_from_node_transform();
+
+        cumulative_world_translation += world_from_node.get_translation();
+        cumulative_world_rotation     = world_from_node.get_rotation();
+        cumulative_world_scale       += world_from_node.get_scale();
+
         ++node_count;
-        shared.entries.push_back(
-            Entry{
-                .node                    = node,
-                .parent_from_node_before = node->parent_from_node_transform()
+        if (node_filter == nullptr) {
+            shared.entries.push_back(
+                Entry{
+                    .node                    = node,
+                    .parent_from_node_before = node->parent_from_node_transform(),
+                    .world_from_node_before  = node->world_from_node_transform()
+                }
+            );
+        } else {
+            if (node.get() == node_filter) {
+                shared.entries.at(i).parent_from_node_before = node->parent_from_node_transform();
+                shared.entries.at(i).world_from_node_before  = node->world_from_node_transform();
             }
-        );
+            ++i;
+        }
     }
+    acquire_node_physics();
 
-    Anchor_state state;
-    state.pivot_point_in_world = cumulative_translation / static_cast<float>(node_count);
-    state.anchor_translation   = erhe::toolkit::create_translation<float>(state.pivot_point_in_world);
-    state.anchor_rotation      = cumulative_rotation; // glm::pow(cumulative_rotation, 1.0f / static_cast<float>(node_count));
-    //m_anchor_scale         = erhe::toolkit::create_scale<float>(cumulative_scale / static_cast<float>(node_count));
-    state.world_from_anchor    = state.anchor_translation * glm::mat4{state.anchor_rotation};// * anchor_scale;
-
-    shared.anchor_state_initial = state;
-    shared.world_from_anchor    = state.world_from_anchor;
-    shared.anchor_from_world    = glm::inverse(shared.world_from_anchor); // TODO compute directly
-
-    shared.visualization->set_anchor(
-        erhe::scene::Transform{state.world_from_anchor}
+    shared.world_from_anchor_initial_state.set_trs(
+        cumulative_world_translation / static_cast<float>(node_count),
+        cumulative_world_rotation,
+        cumulative_world_scale / static_cast<float>(node_count)
     );
+
+    shared.world_from_anchor = shared.world_from_anchor_initial_state;
+
+    shared.visualization->set_anchor(shared.world_from_anchor);
     shared.visualization->update_visibility();
 }
 
-void Transform_tool::update_world_from_anchor_transform(
-    const mat4& updated_world_from_anchor
-)
+void Transform_tool::adjust(const mat4& updated_world_from_anchor)
 {
-    glm::mat4 updated_anchor_from_world = glm::inverse(updated_world_from_anchor);
+    touch();
     for (auto& entry : shared.entries) {
         const auto& node = entry.node;
         if (!node) {
             return;
         }
-
-        const glm::mat4 previous_anchor_from_node = shared.anchor_from_world  * node->world_from_node();
-        const glm::mat4 updated_world_from_node   = updated_world_from_anchor * previous_anchor_from_node;
+        const mat4 world_from_node           = entry.world_from_node_before.get_matrix();
+        const mat4 anchor_from_world         = shared.world_from_anchor_initial_state.get_inverse_matrix();
+        const mat4 previous_anchor_from_node = anchor_from_world         * world_from_node;
+        const mat4 updated_world_from_node   = updated_world_from_anchor * previous_anchor_from_node;
 
         const auto& parent = node->parent().lock();
-        const mat4 parent_from_world = parent
-            ? mat4{parent->node_from_world()} * updated_world_from_node
-            : updated_world_from_node;
-        node->set_parent_from_node(mat4{parent_from_world});
+        const mat4 parent_from_world = [&]() -> mat4 {
+            if (parent) {
+                return parent->node_from_world() * updated_world_from_node;
+            } else {
+                return updated_world_from_node;
+            }
+        }();
+        node->set_parent_from_node(parent_from_world);
     }
 
-    shared.world_from_anchor = updated_world_from_anchor;
-    shared.anchor_from_world = glm::inverse(shared.world_from_anchor);
+    shared.world_from_anchor.set(updated_world_from_anchor);
+}
 
-    shared.visualization->set_anchor(erhe::scene::Transform{updated_world_from_anchor});
+void Transform_tool::adjust_translation(const vec3 translation)
+{
+    if (shared.settings.local) {
+        touch();
+        for (auto& entry : shared.entries) {
+            auto& node = entry.node;
+            if (!node) {
+                return;
+            }
+            node->set_world_from_node(
+                erhe::scene::translate(entry.world_from_node_before, translation)
+            );
+        }
+        shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
+    } else {
+        adjust(
+            glm::translate(
+                shared.world_from_anchor_initial_state.get_matrix(),
+                translation
+            )
+        );
+    }
+    update_transforms();
+}
+
+void Transform_tool::adjust_rotation(
+    const vec3 center_of_rotation,
+    const quat rotation
+)
+{
+    if (shared.settings.local && shared.entries.size() == 1) {
+        touch();
+        for (auto& entry : shared.entries) {
+            auto& node = entry.node;
+            if (!node) {
+                return;
+            }
+            node->set_world_from_node(
+                erhe::scene::rotate(entry.world_from_node_before, rotation)
+            );
+        }
+        shared.world_from_anchor = erhe::scene::rotate(shared.world_from_anchor_initial_state, rotation);
+    } else {
+        const mat4 translate   = erhe::toolkit::create_translation<float>(vec3{-center_of_rotation});
+        const mat4 untranslate = erhe::toolkit::create_translation<float>(vec3{ center_of_rotation});
+        adjust(
+            untranslate * mat4_cast(rotation) * translate * shared.world_from_anchor_initial_state.get_matrix()
+        );
+    }
+    update_transforms();
+}
+
+void Transform_tool::adjust_scale(
+    const vec3 center_of_scale,
+    const vec3 scale
+)
+{
+    if (shared.settings.local && shared.entries.size() == 1) {
+        touch();
+        for (auto& entry : shared.entries) {
+            auto& node = entry.node;
+            if (!node) {
+                return;
+            }
+            node->set_world_from_node(
+                erhe::scene::scale(entry.world_from_node_before, scale)
+            );
+        }
+        shared.world_from_anchor = erhe::scene::scale(shared.world_from_anchor_initial_state, scale);
+    } else {
+        adjust(
+            glm::translate(
+                glm::scale(
+                    glm::translate(
+                        shared.world_from_anchor_initial_state.get_matrix(),
+                        center_of_scale
+                    ),
+                    scale
+                ),
+                -center_of_scale
+            )
+        );
+    }
+    update_transforms();
 }
 
 void Transform_tool::update_hover()
@@ -475,11 +572,9 @@ auto Transform_tool::on_drag_ready() -> bool
         return false;
     }
 
-    shared.drag.initial_position_in_world = hover_entry.position.value();
-    shared.drag.initial_world_from_anchor = shared.anchor_state_initial.world_from_anchor;
-    shared.drag.initial_anchor_from_world = glm::inverse(shared.drag.initial_world_from_anchor); // TODO Consider computing this directly, without inverse
-    shared.drag.initial_distance          = glm::distance(
-        glm::vec3{camera_node->position_in_world()},
+    shared.initial_drag_position_in_world = hover_entry.position.value();
+    shared.initial_drag_distance = distance(
+        vec3{camera_node->position_in_world()},
         hover_entry.position.value()
     );
 
@@ -502,20 +597,13 @@ void Transform_tool::end_drag()
 
     m_active_handle = Handle::e_handle_none;
     m_active_tool   = nullptr;
-
-    // TODO Consider mode where nodes physics is kept acquired until transform tool is deactivated
-    release_node_physics();
-
-    shared.drag.initial_position_in_world = vec3{0.0f};
-    shared.drag.initial_world_from_anchor = mat4{1.0f};
-    shared.drag.initial_distance          = 0.0;
+    shared.initial_drag_distance = 0.0;
 
     log_trs_tool->trace("drag ended");
 }
 
 void Transform_tool::acquire_node_physics()
 {
-    //// shared.touched = true;
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
         if (!node) {
@@ -551,8 +639,8 @@ void Transform_tool::release_node_physics()
                 log_trs_tool->trace("S restoring old physics node");
                 rigid_body->set_motion_mode(entry.original_motion_mode.value());
             }
-            rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
-            rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+            rigid_body->set_linear_velocity (vec3{0.0f, 0.0f, 0.0f});
+            rigid_body->set_angular_velocity(vec3{0.0f, 0.0f, 0.0f});
             rigid_body->end_move            ();
             node_physics->handle_node_transform_update();
             entry.original_motion_mode.reset();
@@ -593,7 +681,7 @@ void render_rays(erhe::scene::Node& node)
     if (scene_root == nullptr) {
         return;
     }
-    glm::vec3 directions[] = {
+    vec3 directions[] = {
         { 0.0f, -1.0f,  0.0f},
         { 1.0f,  0.0f,  0.0f},
         {-1.0f,  0.0f,  0.0f},
@@ -621,10 +709,10 @@ void render_rays(erhe::scene::Node& node)
         if (project_ray(&raytrace_scene, mesh.get(), ray, hit)) {
             Ray_hit_style ray_hit_style
             {
-                .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
+                .ray_color     = vec4{1.0f, 0.0f, 1.0f, 1.0f},
                 .ray_thickness = 8.0f,
                 .ray_length    = 0.5f,
-                .hit_color     = glm::vec4{0.8f, 0.2f, 0.8f, 0.75f},
+                .hit_color     = vec4{0.8f, 0.2f, 0.8f, 0.75f},
                 .hit_thickness = 8.0f,
                 .hit_size      = 0.10f
             };
@@ -662,29 +750,9 @@ void Transform_tool::tool_render(
 
 void Transform_tool::update_for_view(Scene_view* scene_view)
 {
-    // TODO Should this be elsewhere?
-    bool can_update_target_nodes = (m_active_tool == nullptr) || !m_active_tool->is_active();
-    if (can_update_target_nodes) {
-        update_target_nodes();
-    }
-
     update_visibility();
     shared.visualization->update_for_view(scene_view);
     update_transforms();
-
-    //if (root() == nullptr)
-    //{
-    //    return;
-    //}
-    //
-    //const vec3  V0      = vec3{root()->position_in_world()} - vec3{camera->position_in_world()};
-    //const vec3  V       = normalize(m_drag.initial_local_from_world * vec4{V0, 0.0});
-    //const float v_dot_n = dot(V, m_rotation.normal);
-    //->tail_log.trace("R: {} @ {}", root()->name(), root()->position_in_world());
-    //->tail_log.trace("C: {} @ {}", camera->name(), camera->position_in_world());
-    //->tail_log.trace("V: {}", vec3{V});
-    //->tail_log.trace("N: {}", vec3{m_rotation.normal});
-    //->tail_log.trace("V.N = {}", v_dot_n);
 }
 
 void Transform_tool::update_visibility()
@@ -695,6 +763,7 @@ void Transform_tool::update_visibility()
 
 void Transform_tool::update_transforms()
 {
+    shared.visualization->set_anchor(shared.world_from_anchor);
     shared.visualization->update_transforms();
 }
 
@@ -707,7 +776,6 @@ void Transform_tool::touch()
 {
     if (!shared.touched) {
         log_trs_tool->trace("TRS touch - not touched");
-        acquire_node_physics();
         shared.touched = true;
     }
 }
@@ -748,78 +816,78 @@ void Transform_tool::transform_properties()
         return;
     }
 
-    glm::vec3 scale;
-    glm::quat orientation;
-    glm::vec3 translation;
-    glm::vec3 skew;
-    glm::vec4 perspective;
+    const bool  multiselect       = shared.entries.size() > 1;
+    const auto& first_node        = shared.entries.front().node;
+    mat4        world_from_parent = first_node->world_from_parent();
+    bool        use_world_mode    = !shared.settings.local || multiselect;
 
-    const bool  multiselect        = shared.entries.size() > 1;
-    const auto& first_node         = shared.entries.front().node;
-    glm::mat4   world_from_parent  = first_node->world_from_parent();
-    glm::mat4   parent_from_world  = first_node->parent_from_world();
-    glm::mat4   parent_from_anchor = parent_from_world * shared.world_from_anchor;
-    bool        use_world_mode     = !shared.settings.local || multiselect;
-
-    glm::decompose(
+    Trs_transform& transform =
         use_world_mode
             ? shared.world_from_anchor
-            : parent_from_anchor,
-        scale,
-        orientation,
-        translation,
-        skew,
-        perspective
-    );
+            : shared.entries.front().node->parent_from_node_transform();
 
-    const glm::mat4 orientation_matrix{orientation};
-    glm::vec3 euler_angles;
-    glm::extractEulerAngleZYX(orientation_matrix, euler_angles.x, euler_angles.y, euler_angles.z);
+    vec3 scale       = transform.get_scale      ();
+    quat rotation    = transform.get_rotation   ();
+    vec3 translation = transform.get_translation();
+    vec3 skew        = transform.get_skew       ();
 
     using namespace erhe::application;
     Value_edit_state translate_edit_state;
     if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen)) {
-        translate_edit_state.combine(make_scalar_button(&translation.x, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
-        translate_edit_state.combine(make_scalar_button(&translation.y, 0xff88ff88u, 0xff226622u, "Y", "##T.Y"));
-        translate_edit_state.combine(make_scalar_button(&translation.z, 0xffff8888u, 0xff662222u, "Z", "##T.Z"));
+        translate_edit_state.combine(make_scalar_button(&translation.x, 0.0f, 0.0f, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
+        translate_edit_state.combine(make_scalar_button(&translation.y, 0.0f, 0.0f, 0xff88ff88u, 0xff226622u, "Y", "##T.Y"));
+        translate_edit_state.combine(make_scalar_button(&translation.z, 0.0f, 0.0f, 0xffff8888u, 0xff662222u, "Z", "##T.Z"));
         ImGui::TreePop();
+    }
+    if (translate_edit_state.value_changed) {
+        adjust_translation(translation - shared.world_from_anchor_initial_state.get_translation());
     }
 
     Value_edit_state rotate_edit_state;
     if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen)) {
-        rotate_edit_state.combine(make_angle_button(euler_angles.x, 0xff8888ffu, 0xff222266u, "X", "##R.X"));
-        rotate_edit_state.combine(make_angle_button(euler_angles.y, 0xff88ff88u, 0xff226622u, "Y", "##R.Y"));
-        rotate_edit_state.combine(make_angle_button(euler_angles.z, 0xffff8888u, 0xff662222u, "Z", "##R.Z"));
+        m_rotation.imgui(rotate_edit_state, rotation);
         ImGui::TreePop();
+    }
+    if (rotate_edit_state.value_changed) {
+        Trs_transform n = shared.world_from_anchor_initial_state;
+        n.set_rotation(m_rotation.get_quaternion());
+        adjust(n.get_matrix());
     }
 
     Value_edit_state scale_edit_state;
     if (ImGui::TreeNodeEx("Scale", ImGuiTreeNodeFlags_DefaultOpen)) {
-        scale_edit_state.combine(make_scalar_button(&scale.x, 0xff8888ffu, 0xff222266u, "X", "##S.X"));
-        scale_edit_state.combine(make_scalar_button(&scale.y, 0xff88ff88u, 0xff226622u, "Y", "##S.Y"));
-        scale_edit_state.combine(make_scalar_button(&scale.z, 0xffff8888u, 0xff662222u, "Z", "##S.Z"));
+        scale_edit_state.combine(make_scalar_button(&scale.x, 0.01f, FLT_MAX, 0xff8888ffu, 0xff222266u, "X", "##S.X"));
+        scale_edit_state.combine(make_scalar_button(&scale.y, 0.01f, FLT_MAX, 0xff88ff88u, 0xff226622u, "Y", "##S.Y"));
+        scale_edit_state.combine(make_scalar_button(&scale.z, 0.01f, FLT_MAX, 0xffff8888u, 0xff662222u, "Z", "##S.Z"));
         ImGui::TreePop();
+    }
+    if (scale_edit_state.value_changed) {
+        Trs_transform n = shared.world_from_anchor_initial_state;
+        n.set_scale(scale);
+        adjust(n.get_matrix());
+    }
+
+    Value_edit_state skew_edit_state;
+    if (ImGui::TreeNodeEx("Skew", ImGuiTreeNodeFlags_DefaultOpen)) {
+        skew_edit_state.combine(make_scalar_button(&skew.x, 0.0f, 0.0f, 0xff8888ffu, 0xff222266u, "X", "##K.X"));
+        skew_edit_state.combine(make_scalar_button(&skew.y, 0.0f, 0.0f, 0xff88ff88u, 0xff226622u, "Y", "##K.Y"));
+        skew_edit_state.combine(make_scalar_button(&skew.z, 0.0f, 0.0f, 0xffff8888u, 0xff662222u, "Z", "##K.Z"));
+        ImGui::TreePop();
+    }
+    if (skew_edit_state.value_changed) {
+        Trs_transform n = shared.world_from_anchor_initial_state;
+        n.set_skew(skew);
+        adjust(n.get_matrix());
     }
 
     Value_edit_state edit_state;
     edit_state.combine(translate_edit_state);
     edit_state.combine(rotate_edit_state);
     edit_state.combine(scale_edit_state);
-    if (edit_state.value_changed || edit_state.edit_ended) {
-        const glm::mat4 new_translation           = erhe::toolkit::create_translation<float>(translation);
-        const glm::mat4 new_rotation              = glm::eulerAngleZYX(euler_angles.x, euler_angles.y, euler_angles.z);
-        const glm::mat4 new_scale                 = erhe::toolkit::create_scale<float>(scale);
-        const glm::mat4 updated_transform         = new_translation * new_rotation * new_scale;
-        const glm::mat4 updated_world_from_anchor = use_world_mode ? updated_transform : world_from_parent * updated_transform;
-
-        touch();
-        update_world_from_anchor_transform(updated_world_from_anchor);
-        update_transforms();
-    }
+    edit_state.combine(skew_edit_state);
 
     if (edit_state.edit_ended && shared.touched) {
         record_transform_operation();
-        release_node_physics(); // TODO
     }
 
     ImGui::TreePop();

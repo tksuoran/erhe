@@ -117,8 +117,8 @@ auto Move_tool::update(
     switch (std::popcount(m_axis_mask)) {
         case 1: {
             const vec3 drag_world_direction = get_axis_direction();
-            const vec3 P0                   = shared.drag.initial_position_in_world - drag_world_direction;
-            const vec3 P1                   = shared.drag.initial_position_in_world + drag_world_direction;
+            const vec3 P0                   = shared.initial_drag_position_in_world - drag_world_direction;
+            const vec3 P1                   = shared.initial_drag_position_in_world + drag_world_direction;
             const auto closest_point        = scene_view->get_closest_point_on_line(P0, P1);
             if (closest_point.has_value()) {
                 update(closest_point.value());
@@ -128,7 +128,7 @@ auto Move_tool::update(
         }
 
         case 2: {
-            const vec3 P             = shared.drag.initial_position_in_world;
+            const vec3 P             = shared.initial_drag_position_in_world;
             const vec3 N             = get_plane_normal(!shared.settings.local);
             const auto closest_point = scene_view->get_closest_point_on_plane(N, P);
             if (closest_point.has_value()) {
@@ -166,14 +166,10 @@ void Move_tool::update(const vec3 drag_position_in_world)
 {
     const auto& shared = get_shared();
 
-    const vec3 translation_vector        = drag_position_in_world - shared.drag.initial_position_in_world;
-    const vec3 snapped_translation       = snap(translation_vector);
-    const mat4 translation               = erhe::toolkit::create_translation<float>(snapped_translation);
-    const mat4 updated_world_from_anchor = translation * shared.drag.initial_world_from_anchor;
+    const vec3 translation_vector  = drag_position_in_world - shared.initial_drag_position_in_world;
+    const vec3 snapped_translation = snap(translation_vector);
 
-    g_transform_tool->touch();
-    g_transform_tool->update_world_from_anchor_transform(updated_world_from_anchor);
-    g_transform_tool->update_transforms();
+    g_transform_tool->adjust_translation(snapped_translation);
 }
 
 } // namespace editor

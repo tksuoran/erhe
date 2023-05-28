@@ -41,6 +41,7 @@ namespace editor
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
+using Trs_transform = erhe::scene::Trs_transform;
 
 Debug_visualizations* g_debug_visualizations{nullptr};
 
@@ -151,9 +152,9 @@ void Debug_visualizations::mesh_selection_visualization(
     std::shared_ptr<erhe::scene::Camera> used_camera      = selected_camera ? selected_camera : context_camera;
     erhe::scene::Node*                   used_camera_node = used_camera ? used_camera->get_node() : nullptr;
 
-    erhe::scene::Transform camera_world_from_node_transform = (used_camera_node != nullptr)
+    Trs_transform camera_world_from_node_transform = (used_camera_node != nullptr)
         ? used_camera_node->world_from_node_transform()
-        : erhe::scene::Transform{};
+        : Trs_transform{};
 
     for (const auto& primitive : mesh->mesh_data.primitives) {
         if (!primitive.source_geometry) {
@@ -282,8 +283,8 @@ void Debug_visualizations::directional_light_visualization(
         return;
     }
 
-    const glm::mat4 world_from_light_clip   = light_projection_transforms->clip_from_world.inverse_matrix();
-    const glm::mat4 world_from_light_camera = light_projection_transforms->world_from_light_camera.matrix();
+    const glm::mat4 world_from_light_clip   = light_projection_transforms->clip_from_world.get_inverse_matrix();
+    const glm::mat4 world_from_light_camera = light_projection_transforms->world_from_light_camera.get_matrix();
 
     line_renderer.set_thickness(m_light_visualization_width);
     line_renderer.add_cube(
@@ -616,7 +617,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         if (m_selection_bounding_points_visible) {
             const auto*     camera                = context.camera;
             const auto      projection_transforms = camera->projection_transforms(context.viewport);
-            const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+            const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
             for (std::size_t i = 0, i_end = m_selection_bounding_volume.get_element_count(); i < i_end; ++i) {
                 for (std::size_t j = 0, j_end = m_selection_bounding_volume.get_element_point_count(i); j < j_end; ++j) {
@@ -784,7 +785,7 @@ void Debug_visualizations::mesh_labels(
     }
     const auto*     camera                = context.camera;
     const auto      projection_transforms = camera->projection_transforms(context.viewport);
-    const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+    const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     const glm::mat4 world_from_node = node->world_from_node();
     for (auto& primitive : mesh->mesh_data.primitives) {

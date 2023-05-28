@@ -65,8 +65,8 @@ auto Camera::projection_transforms(const Viewport& viewport) const -> Camera_pro
     return Camera_projection_transforms{
         .clip_from_camera = clip_from_node,
         .clip_from_world = Transform{
-            clip_from_node.matrix() * node->node_from_world(),
-            node->world_from_node() * clip_from_node.inverse_matrix()
+            clip_from_node.get_matrix() * node->node_from_world(),
+            node->world_from_node()     * clip_from_node.get_inverse_matrix()
         }
     };
 }

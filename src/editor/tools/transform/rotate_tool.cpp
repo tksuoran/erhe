@@ -102,7 +102,7 @@ auto Rotate_tool::begin(
     const bool world        = !shared.settings.local;
     const vec3 n            = get_plane_normal(world);
     const vec3 side         = get_plane_side  (world);
-    const vec3 center       = shared.anchor_state_initial.pivot_point_in_world;
+    const vec3 center       = shared.world_from_anchor_initial_state.get_translation();
     const auto intersection = project_pointer_to_plane(scene_view, n, center);
 
     if (!intersection.has_value()) {
@@ -110,14 +110,11 @@ auto Rotate_tool::begin(
         return false;
     }
 
-    const vec3 direction = normalize(intersection.value() - center);
-    m_rotation = Rotation_context{
-        .normal               = n,
-        .reference_direction  = direction,
-        .center_of_rotation   = center,
-        .start_rotation_angle = erhe::toolkit::angle_of_rotation<float>(direction, n, side),
-        .world_from_anchor    = erhe::scene::Transform{shared.anchor_state_initial.world_from_anchor}
-    };
+    m_normal               = n;
+    m_reference_direction  = normalize(intersection.value() - center);
+    m_center_of_rotation   = center;
+    m_start_rotation_angle = erhe::toolkit::angle_of_rotation<float>(m_reference_direction, n, side);
+
     return true;
 }
 
@@ -156,12 +153,12 @@ auto Rotate_tool::update(Scene_view* scene_view) -> bool
 
 auto Rotate_tool::update_circle_around(Scene_view* scene_view) -> bool
 {
-    m_rotation.intersection = project_pointer_to_plane(
+    m_intersection = project_pointer_to_plane(
         scene_view,
-        m_rotation.normal,
-        m_rotation.center_of_rotation
+        m_normal,
+        m_center_of_rotation
     );
-    return m_rotation.intersection.has_value();
+    return m_intersection.has_value();
 }
 
 auto Rotate_tool::update_parallel(Scene_view* scene_view) -> bool
@@ -175,34 +172,25 @@ auto Rotate_tool::update_parallel(Scene_view* scene_view) -> bool
     const auto& shared = get_shared();
     const auto p0        = p_origin_opt.value();
     const auto direction = p_direction_opt.value();
-    const auto q0        = p0 + shared.drag.initial_distance * direction;
+    const auto q0        = p0 + shared.initial_drag_distance * direction;
 
-    m_rotation.intersection = project_to_offset_plane(
-        m_rotation.center_of_rotation,
-        q0
-    );
+    m_intersection = project_to_offset_plane(m_center_of_rotation, q0);
     return true;
 }
 
 void Rotate_tool::update_final()
 {
-    Expects(m_rotation.intersection.has_value());
+    Expects(m_intersection.has_value());
 
-    const auto& shared = get_shared();
-    const vec3  q_                        = normalize                               (m_rotation.intersection.value() - m_rotation.center_of_rotation);
-    const float angle                     = erhe::toolkit::angle_of_rotation<float> (q_, m_rotation.normal, m_rotation.reference_direction);
-    const float snapped_angle             = snap                                    (angle);
-    const vec3  rotation_axis_in_world    = get_axis_direction                      ();
-    const mat4  rotation                  = erhe::toolkit::create_rotation<float>   (snapped_angle, rotation_axis_in_world);
-    const mat4  translate                 = erhe::toolkit::create_translation<float>(vec3{-m_rotation.center_of_rotation});
-    const mat4  untranslate               = erhe::toolkit::create_translation<float>(vec3{ m_rotation.center_of_rotation});
-    const mat4  updated_world_from_anchor = untranslate * rotation * translate * shared.drag.initial_world_from_anchor;
+    const vec3  q_                     = normalize                              (m_intersection.value() - m_center_of_rotation);
+    const float angle                  = erhe::toolkit::angle_of_rotation<float>(q_, m_normal, m_reference_direction);
+    const float snapped_angle          = snap                                   (angle);
+    const vec3  rotation_axis_in_world = get_axis_direction                     ();
+    const mat4  rotation               = erhe::toolkit::create_rotation<float>  (snapped_angle, rotation_axis_in_world);
 
-    m_rotation.current_angle = angle;
+    m_current_angle = angle;
 
-    g_transform_tool->touch();
-    g_transform_tool->update_world_from_anchor_transform(updated_world_from_anchor);
-    g_transform_tool->update_transforms();
+    g_transform_tool->adjust_rotation(m_center_of_rotation, glm::quat_cast(rotation));
 }
 
 void Rotate_tool::render(const Render_context& context)
@@ -221,9 +209,9 @@ void Rotate_tool::render(const Render_context& context)
     }
 
     const auto& shared = get_shared();
-    const vec3  p                 = m_rotation.center_of_rotation;
-    const vec3  n                 = m_rotation.normal;
-    const vec3  side1             = m_rotation.reference_direction;
+    const vec3  p                 = m_center_of_rotation;
+    const vec3  n                 = m_normal;
+    const vec3  side1             = m_reference_direction;
     const vec3  side2             = normalize(cross(n, side1));
     const vec3  position_in_world = p;//node.position_in_world();
     const float distance          = length(position_in_world - vec3{camera_node->position_in_world()});
@@ -282,7 +270,7 @@ void Rotate_tool::render(const Render_context& context)
         }
     }
 
-    const float snapped_angle = snap(m_rotation.current_angle);
+    const float snapped_angle = snap(m_current_angle);
     const auto  snapped = p + r1 * std::cos(snapped_angle) * side1 + r1 * std::sin(snapped_angle) * side2;
 
     line_renderer.add_lines(red,                         { { p, r1 * side1 } } );

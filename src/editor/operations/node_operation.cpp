@@ -1,5 +1,6 @@
 #include "operations/node_operation.hpp"
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -75,39 +76,63 @@ Node_transform_operation::~Node_transform_operation() noexcept
 
 auto Node_transform_operation::describe() const -> std::string
 {
-    std::stringstream ss;
-    ss << "Node_transform " << m_parameters.node->get_name();
-    return ss.str();
+    glm::vec3 scale_before;
+    glm::quat orientation_before;
+    glm::vec3 translation_before;
+    glm::vec3 skew_before;
+    glm::vec4 perspective_before;
+
+    glm::vec3 scale_after;
+    glm::quat orientation_after;
+    glm::vec3 translation_after;
+    glm::vec3 skew_after;
+    glm::vec4 perspective_after;
+    glm::decompose(
+        m_parameters.parent_from_node_before.get_matrix(),
+        scale_before,
+        orientation_before,
+        translation_before,
+        skew_before,
+        perspective_before
+    );
+    glm::decompose(
+        m_parameters.parent_from_node_after.get_matrix(),
+        scale_after,
+        orientation_after,
+        translation_after,
+        skew_after,
+        perspective_after
+    );
+    return fmt::format(
+        "Trs_transform {} translate before = {}, translate after = {}",
+        m_parameters.node->get_name(),
+        translation_before,
+        translation_after
+    );
 }
 
 void Node_transform_operation::execute()
 {
     log_operations->trace("Op Execute {}", describe());
-
-    glm::vec3 scale;
-    glm::quat orientation;
-    glm::vec3 translation;
-    glm::vec3 skew;
-    glm::vec4 perspective;
-    glm::decompose(m_parameters.parent_from_node_after.matrix(), scale, orientation, translation, skew, perspective);
-    log_operations->info("Op Execute {} scale = {}", describe(), scale);
-
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
+    g_editor_message_bus->send_message(
+        Editor_message{
+            .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
+            .node         = m_parameters.node.get()
+        }
+    );
 }
 
 void Node_transform_operation::undo()
 {
     log_operations->trace("Op Undo {}", describe());
-
-    glm::vec3 scale;
-    glm::quat orientation;
-    glm::vec3 translation;
-    glm::vec3 skew;
-    glm::vec4 perspective;
-    glm::decompose(m_parameters.parent_from_node_after.matrix(), scale, orientation, translation, skew, perspective);
-    log_operations->info("Op Undo {} scale = {}", describe(), scale);
-
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
+    g_editor_message_bus->send_message(
+        Editor_message{
+            .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
+            .node         = m_parameters.node.get()
+        }
+    );
 }
 
 // ----------------------------------------------------------------------------

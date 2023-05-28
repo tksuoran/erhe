@@ -282,7 +282,7 @@ auto Viewport_window::project_to_viewport(
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::toolkit::project_to_screen_space<float>(
-        camera_projection_transforms.clip_from_world.matrix(),
+        camera_projection_transforms.clip_from_world.get_matrix(),
         position_in_world,
         depth_range_near,
         depth_range_far,
@@ -305,7 +305,7 @@ auto Viewport_window::unproject_to_world(
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
     return erhe::toolkit::unproject<float>(
-        camera_projection_transforms.clip_from_world.inverse_matrix(),
+        camera_projection_transforms.clip_from_world.get_inverse_matrix(),
         position_in_window,
         depth_range_near,
         depth_range_far,
@@ -467,7 +467,7 @@ auto Viewport_window::position_in_world_viewport_depth(
     };
     const auto      vp                    = projection_viewport();
     const auto      projection_transforms = camera->projection_transforms(vp);
-    const glm::mat4 world_from_clip       = projection_transforms.clip_from_world.inverse_matrix();
+    const glm::mat4 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
 
     return erhe::toolkit::unproject<float>(
         glm::mat4{world_from_clip},

@@ -137,6 +137,8 @@ erhe_target_sources_grouped(
     tools/transform/move_tool.hpp
     tools/transform/rotate_tool.cpp
     tools/transform/rotate_tool.hpp
+    tools/transform/rotation_inspector.cpp
+    tools/transform/rotation_inspector.hpp
     tools/transform/scale_tool.cpp
     tools/transform/scale_tool.hpp
     tools/transform/subtool.cpp
@@ -384,12 +386,15 @@ target_link_libraries(
     erhe::application
     erhe::log
     erhe::net
-    cpp-terminal
     cxxopts
     mINI
     RectangleBinPack
     rapidjson
 )
+
+if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
+    target_link_libraries(${_target} PRIVATE cpp-terminal)
+endif ()
 
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

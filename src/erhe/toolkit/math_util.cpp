@@ -608,43 +608,74 @@ void calculate_bounding_volume(
     return transformed_bounding_sphere;
 }
 
-[[nodiscard]] auto recompose(
+[[nodiscard]] auto compose(
     glm::vec3 scale,
-    glm::quat orientation,
+    glm::quat rotation,
     glm::vec3 translation,
     glm::vec3 skew,
     glm::vec4 perspective
 ) -> glm::mat4
 {
     glm::mat4 p = glm::mat4{1.0f};
-
     p[0][3] = perspective.x;
     p[1][3] = perspective.y;
     p[2][3] = perspective.z;
     p[3][3] = perspective.w;
 
     glm::mat4 m = glm::translate(p, translation);
-    m *= glm::mat4_cast(orientation);
+    m *= glm::mat4_cast(rotation);
 
-    if (skew.x) {
-        glm::mat4 tmp { 1.f };
-        tmp[2][1] = skew.x;
-        m *= tmp;
-    }
+    glm::mat4 skew_x{1.0f};
+    skew_x[2][1] = skew.x;
+    m *= skew_x;
 
-    if (skew.y) {
-        glm::mat4 tmp { 1.f };
-        tmp[2][0] = skew.y;
-        m *= tmp;
-    }
+    glm::mat4 skew_y{1.0f};
+    skew_y[2][0] = skew.y;
+    m *= skew_y;
 
-    if (skew.z) {
-        glm::mat4 tmp { 1.f };
-        tmp[1][0] = skew.z;
-        m *= tmp;
-    }
+    glm::mat4 skew_z{1.0f};
+    skew_z[1][0] = skew.z;
+    m *= skew_z;
 
     return glm::scale(m, scale);
+}
+
+[[nodiscard]] auto compose(
+    glm::vec3 scale,
+    glm::quat rotation,
+    glm::vec3 translation,
+    glm::vec3 skew
+) -> glm::mat4
+{
+    glm::mat4 m = create_translation<float>(translation);
+    m *= glm::mat4_cast(rotation);
+
+    glm::mat4 skew_x{1.0f};
+    skew_x[2][1] = skew.x;
+    m *= skew_x;
+
+    glm::mat4 skew_y{1.0f};
+    skew_y[2][0] = skew.y;
+    m *= skew_y;
+
+    glm::mat4 skew_z{1.0f};
+    skew_z[1][0] = skew.z;
+    m *= skew_z;
+
+    return glm::scale(m, scale);
+}
+
+[[nodiscard]] auto compose_inverse(
+    glm::vec3 scale,
+    glm::quat rotation,
+    glm::vec3 translation,
+    glm::vec3 skew
+) -> glm::mat4
+{
+    // TODO compute directly
+    return glm::inverse(
+        compose(scale, rotation, translation, skew)
+    );
 }
 
 } // namespace erhe::toolkit

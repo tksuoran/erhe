@@ -90,6 +90,7 @@ private:
     [[nodiscard]] auto stable_directional_light_projection_transforms(
         const Light_projection_parameters& parameters
     ) const -> Light_projection_transforms;
+
     [[nodiscard]] auto spot_light_projection_transforms(
         const Light_projection_parameters& parameters
     ) const -> Light_projection_transforms;

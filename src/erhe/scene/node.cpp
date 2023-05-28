@@ -7,6 +7,8 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+#include <glm/gtx/matrix_decompose.hpp>
+
 #include <fmt/format.h>
 
 #include <sstream>
@@ -554,7 +556,7 @@ auto Node::root() -> std::weak_ptr<Node>
     return current_parent->root();
 }
 
-void Node::update_transform(uint64_t serial) const
+void Node::update_transform(uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -710,44 +712,39 @@ auto Node::attachments() const -> const std::vector<std::shared_ptr<Node_attachm
     return node_data.attachments;
 }
 
-auto Node::parent_from_node_transform() const -> const Transform&
+auto Node::parent_from_node_transform() const -> const Trs_transform&
 {
     return node_data.transforms.parent_from_node;
 }
 
-auto Node::node_from_parent_transform() const -> const Transform
+auto Node::parent_from_node_transform() -> Trs_transform&
 {
-    return Transform::inverse(node_data.transforms.parent_from_node);
+    return node_data.transforms.parent_from_node;
 }
 
 auto Node::parent_from_node() const -> glm::mat4
 {
-    return node_data.transforms.parent_from_node.matrix();
+    return node_data.transforms.parent_from_node.get_matrix();
 }
 
-auto Node::world_from_node_transform() const -> const Transform&
+auto Node::world_from_node_transform() const -> const Trs_transform&
 {
     return node_data.transforms.world_from_node;
 }
 
-auto Node::node_from_world_transform() const -> const Transform
-{
-    return Transform::inverse(node_data.transforms.world_from_node);
-}
-
 auto Node::world_from_node() const -> glm::mat4
 {
-    return node_data.transforms.world_from_node.matrix();
+    return node_data.transforms.world_from_node.get_matrix();
 }
 
 auto Node::node_from_parent() const -> glm::mat4
 {
-    return node_data.transforms.parent_from_node.inverse_matrix();
+    return node_data.transforms.parent_from_node.get_inverse_matrix();
 }
 
 auto Node::node_from_world() const -> glm::mat4
 {
-    return node_data.transforms.world_from_node.inverse_matrix();
+    return node_data.transforms.world_from_node.get_inverse_matrix();
 }
 
 auto Node::world_from_parent() const -> glm::mat4
@@ -808,21 +805,30 @@ void Node::set_parent_from_node(const Transform& parent_from_node)
 {
     ERHE_PROFILE_FUNCTION();
 
-    node_data.transforms.parent_from_node = parent_from_node;
+    node_data.transforms.parent_from_node.set(
+        parent_from_node.get_matrix(),
+        parent_from_node.get_inverse_matrix()
+    );
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
 void Node::set_node_from_parent(const glm::mat4 node_from_parent)
 {
-    node_data.transforms.parent_from_node.set(glm::inverse(node_from_parent), node_from_parent);
+    node_data.transforms.parent_from_node.set(
+        glm::inverse(node_from_parent),
+        node_from_parent
+    );
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
 void Node::set_node_from_parent(const Transform& node_from_parent)
 {
-    node_data.transforms.parent_from_node = Transform::inverse(node_from_parent);
+    node_data.transforms.parent_from_node.set(
+        node_from_parent.get_inverse_matrix(),
+        node_from_parent.get_matrix()
+    );
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
@@ -841,7 +847,9 @@ void Node::set_world_from_node(const Transform& world_from_node)
 {
     const auto& current_parent = parent().lock();
     if (current_parent) {
-        set_parent_from_node(current_parent->node_from_world_transform() * world_from_node);
+        set_parent_from_node(
+            current_parent->node_from_world() * world_from_node.get_matrix()
+        );
     } else {
         set_parent_from_node(world_from_node);
     }
@@ -850,7 +858,7 @@ void Node::set_world_from_node(const Transform& world_from_node)
 void Node::set_node_from_world(const glm::mat4 node_from_world)
 {
     node_data.transforms.world_from_node.set(glm::inverse(node_from_world), node_from_world);
-    const auto& world_from_node = node_data.transforms.world_from_node.matrix();
+    const auto& world_from_node = node_data.transforms.world_from_node.get_matrix();
     const auto& current_parent = parent().lock();
     if (current_parent) {
         node_data.transforms.parent_from_node.set(
@@ -865,12 +873,15 @@ void Node::set_node_from_world(const glm::mat4 node_from_world)
 
 void Node::set_node_from_world(const Transform& node_from_world)
 {
-    node_data.transforms.world_from_node = Transform::inverse(node_from_world);
+    node_data.transforms.world_from_node.set(
+        node_from_world.get_inverse_matrix(),
+        node_from_world.get_matrix()
+    );
     const auto& current_parent = parent().lock();
     if (current_parent) {
         node_data.transforms.parent_from_node.set(
-            current_parent->node_from_world() * node_data.transforms.world_from_node.matrix(),
-            node_from_world.matrix() * current_parent->world_from_node()
+            current_parent->node_from_world() * node_data.transforms.world_from_node.get_matrix(),
+            node_from_world.get_matrix() * current_parent->world_from_node()
         );
     } else {
         node_data.transforms.parent_from_node = node_data.transforms.world_from_node;

@@ -58,8 +58,8 @@ void Handle_visualizations::update_for_view(
     // TODO Consider fov / ortho size
     // erhe::scene::Projection* projection = camera->projection();
 
-    const glm::vec3 view_position_in_world = glm::vec3{camera_node->position_in_world()};
-    const glm::vec3 anchor_position_in_world = glm::vec3{m_world_from_anchor.matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    const glm::vec3 view_position_in_world   = glm::vec3{camera_node->position_in_world()};
+    const glm::vec3 anchor_position_in_world = glm::vec3{m_world_from_anchor.get_translation()};
     m_view_distance = glm::length(anchor_position_in_world - glm::vec3{view_position_in_world});
 }
 
@@ -131,8 +131,45 @@ void Handle_visualizations::update_visibility()
     update_mesh_visibility(m_z_pos_scale_mesh     );
 }
 
-//// TODO Fix https://github.com/tksuoran/erhe/issues/31
+auto Handle_visualizations::get_mode_material(
+    const Mode                                        mode,
+    const std::shared_ptr<erhe::primitive::Material>& active,
+    const std::shared_ptr<erhe::primitive::Material>& hover,
+    const std::shared_ptr<erhe::primitive::Material>& normal
+) -> std::shared_ptr<erhe::primitive::Material>
+{
+    switch (mode) {
+        case Mode::Normal: return normal;
+        case Mode::Active: return active;
+        case Mode::Hover:  return hover;
+        default:           return {};
+    }
+}
 
+auto Handle_visualizations::get_handle_material(
+    const Handle handle,
+    const Mode   mode
+) -> std::shared_ptr<erhe::primitive::Material>
+{
+    switch (handle) {
+        case Handle::e_handle_translate_x : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
+        case Handle::e_handle_translate_y : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
+        case Handle::e_handle_translate_z : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
+        case Handle::e_handle_translate_xy: return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
+        case Handle::e_handle_translate_xz: return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
+        case Handle::e_handle_translate_yz: return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
+        case Handle::e_handle_rotate_x    : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
+        case Handle::e_handle_rotate_y    : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
+        case Handle::e_handle_rotate_z    : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
+        case Handle::e_handle_scale_x     : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
+        case Handle::e_handle_scale_y     : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
+        case Handle::e_handle_scale_z     : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
+        // TODO
+        default: return {};
+    }
+}
+
+#pragma region Make handles
 auto Handle_visualizations::make_mesh(
     const std::string_view                            name,
     const std::shared_ptr<erhe::primitive::Material>& material,
@@ -274,44 +311,6 @@ auto Handle_visualizations::make_rotate_ring() -> Part
     };
 }
 
-auto Handle_visualizations::get_mode_material(
-    const Mode                                        mode,
-    const std::shared_ptr<erhe::primitive::Material>& active,
-    const std::shared_ptr<erhe::primitive::Material>& hover,
-    const std::shared_ptr<erhe::primitive::Material>& normal
-) -> std::shared_ptr<erhe::primitive::Material>
-{
-    switch (mode) {
-        case Mode::Normal: return normal;
-        case Mode::Active: return active;
-        case Mode::Hover:  return hover;
-        default:           return {};
-    }
-}
-
-auto Handle_visualizations::get_handle_material(
-    const Handle handle,
-    const Mode   mode
-) -> std::shared_ptr<erhe::primitive::Material>
-{
-    switch (handle) {
-        case Handle::e_handle_translate_x : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
-        case Handle::e_handle_translate_y : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
-        case Handle::e_handle_translate_z : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
-        case Handle::e_handle_translate_xy: return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
-        case Handle::e_handle_translate_xz: return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
-        case Handle::e_handle_translate_yz: return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
-        case Handle::e_handle_rotate_x    : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
-        case Handle::e_handle_rotate_y    : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
-        case Handle::e_handle_rotate_z    : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
-        case Handle::e_handle_scale_x     : return get_mode_material(mode, m_x_active_material, m_x_hover_material, m_x_material);
-        case Handle::e_handle_scale_y     : return get_mode_material(mode, m_y_active_material, m_y_hover_material, m_y_material);
-        case Handle::e_handle_scale_z     : return get_mode_material(mode, m_z_active_material, m_z_hover_material, m_z_material);
-        // TODO
-        default: return {};
-    }
-}
-
 [[nodiscard]] auto Handle_visualizations::make_material(
     const char*      name,
     const glm::vec3& color,
@@ -326,6 +325,7 @@ auto Handle_visualizations::get_handle_material(
         default:           return {};
     }
 }
+#pragma endregion Make handles
 
 void Handle_visualizations::initialize()
 {
@@ -407,12 +407,13 @@ void Handle_visualizations::initialize()
     m_handles[m_yz_scale_box_mesh    .get()] = Handle::e_handle_scale_yz;
 
     using erhe::scene::Transform;
-    const auto rotate_z_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f});
-    const auto rotate_z_neg_90  = Transform::create_rotation(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f});
-    const auto rotate_x_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, glm::vec3{1.0f, 0.0f, 0.0f});
-    const auto rotate_y_pos_90  = Transform::create_rotation( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f});
-    const auto rotate_y_neg_90  = Transform::create_rotation(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f});
-    const auto rotate_y_pos_180 = Transform::create_rotation(-glm::pi<float>()       , glm::vec3{0.0f, 1.0f, 0.0f});
+    using namespace erhe::toolkit;
+    const auto rotate_z_pos_90  = Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f})};
+    const auto rotate_z_neg_90  = Transform{create_rotation<float>(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f})};
+    const auto rotate_x_pos_90  = Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{1.0f, 0.0f, 0.0f})};
+    const auto rotate_y_pos_90  = Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f})};
+    const auto rotate_y_neg_90  = Transform{create_rotation<float>(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f})};
+    const auto rotate_y_pos_180 = Transform{create_rotation<float>(-glm::pi<float>()       , glm::vec3{0.0f, 1.0f, 0.0f})};
 
     m_x_arrow_cylinder_mesh->get_node()->set_parent_from_node(glm::mat4{1.0f});
     m_x_arrow_neg_cone_mesh->get_node()->set_parent_from_node(rotate_y_pos_180);
@@ -461,21 +462,17 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& settings = g_transform_tool->shared.settings;
-    auto world_from_anchor_transform = settings.local
-        ? m_world_from_anchor
-        : erhe::scene::Transform::create_translation(
-            glm::vec3{m_world_from_anchor.matrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}}
-        );
+    const auto&     settings = g_transform_tool->shared.settings;
+    const glm::mat4 scale    = erhe::toolkit::create_scale<float>(settings.gizmo_scale * m_view_distance / 100.0f);
+    const glm::mat4 world_from_anchor = settings.local
+        ? m_world_from_anchor.get_matrix()
+        : erhe::toolkit::create_translation<float>(m_world_from_anchor.get_translation());
 
-    const glm::mat4 scaling = erhe::toolkit::create_scale<float>(settings.gizmo_scale * m_view_distance / 100.0f);
-    world_from_anchor_transform.catenate(scaling);
-
-    m_tool_node->set_parent_from_node(world_from_anchor_transform);
+    m_tool_node->set_parent_from_node(world_from_anchor * scale);
 }
 
 void Handle_visualizations::set_anchor(
-    const erhe::scene::Transform& world_from_anchor
+    const erhe::scene::Trs_transform& world_from_anchor
 )
 {
     m_world_from_anchor = world_from_anchor;

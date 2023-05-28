@@ -3,12 +3,14 @@
 #include "erhe/net/server.hpp"
 #include "erhe/net/net_log.hpp"
 
-#include "cpp-terminal/base.hpp"
-#include "cpp-terminal/exception.hpp"
-#include "cpp-terminal/input.hpp"
-#include "cpp-terminal/terminal.hpp"
-#include "cpp-terminal/window.hpp"
-#include "cpp-terminal/tty.hpp"
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
+#   include "cpp-terminal/base.hpp"
+#   include "cpp-terminal/exception.hpp"
+#   include "cpp-terminal/input.hpp"
+#   include "cpp-terminal/terminal.hpp"
+#   include "cpp-terminal/window.hpp"
+#   include "cpp-terminal/tty.hpp"
+#endif
 
 #include <cxxopts.hpp>
 #include <fmt/format.h>
@@ -80,6 +82,7 @@ private:
     erhe::net::Client* m_client{nullptr};
 };
 
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
 class Window
 {
 public:
@@ -385,6 +388,7 @@ private:
     std::size_t              m_row_messages   {0};
     std::size_t              m_row_log        {0};
 };
+#endif
 
 auto str(const bool value) -> const char*
 {
@@ -440,14 +444,20 @@ public:
 
 auto main(int argc, char** argv) -> int
 {
-    std::unique_ptr<Term::Terminal> terminal;
     std::unique_ptr<Server_peer>    server_peer;
     std::unique_ptr<Client_peer>    client_peer;
-    std::unique_ptr<Window>         client_window;
-    std::unique_ptr<Window>         server_window;
     Options                         options{argc, argv};
 
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
+    std::unique_ptr<Term::Terminal> terminal;
+    std::unique_ptr<Window>         client_window;
+    std::unique_ptr<Window>         server_window;
+    int window_count = 0;
+#endif
+
     erhe::log::console_init();
+
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
     if (Term::is_stdin_a_tty() && options.terminal) {
         try {
             terminal = std::make_unique<Term::Terminal>(true, true, true);
@@ -455,7 +465,9 @@ auto main(int argc, char** argv) -> int
             // NOP
         }
     }
-    if (!terminal) {
+    if (!terminal)
+#endif
+    {
         erhe::log::log_to_console();
     }
     erhe::log::initialize_log_sinks();
@@ -465,24 +477,33 @@ auto main(int argc, char** argv) -> int
     erhe::net::Client client;
     erhe::net::Server server;
 
-    int window_count = 0;
     if (options.run_server) {
         server.listen(options.listen_address.c_str(), options.listen_port);
+        server_peer = std::make_unique<Server_peer>(&server);
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
         if (terminal) {
-            server_peer   = std::make_unique<Server_peer>(&server);
             server_window = std::make_unique<Window>(server_peer.get());
             ++window_count;
         }
+#endif
         server.set_receive_handler(
-            [&terminal, &server_window](const uint8_t* data, const std::size_t length)
+            [
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
+                &terminal,
+                &server_window
+#endif
+            ](const uint8_t* data, const std::size_t length)
             {
                 if ((data == nullptr) || (length == 0)) {
                     return;
                 }
                 static_cast<void>(length);
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
                 if (server_window) {
                     server_window->received(std::string{reinterpret_cast<const char*>(data), length});
-                } else {
+                } else
+#endif
+                {
                     // Note: data is not NUL-terminated
                     fputs("server received: ", stdout);
                     fwrite(data, sizeof(char), length, stdout);
@@ -495,21 +516,31 @@ auto main(int argc, char** argv) -> int
 
     if (options.run_client) {
         client.connect(options.connect_address.c_str(), options.connect_port);
+        client_peer = std::make_unique<Client_peer>(&client);
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
         if (terminal) {
-            client_peer   = std::make_unique<Client_peer>(&client);
             client_window = std::make_unique<Window>(client_peer.get());
             ++window_count;
         }
+#endif
         client.set_receive_handler(
-            [&terminal, &client_window](const uint8_t* data, const std::size_t length)
+            [
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
+                &terminal,
+                &client_window
+#endif
+            ](const uint8_t* data, const std::size_t length)
             {
                 if ((data == nullptr) || (length == 0)) {
                     return;
                 }
                 static_cast<void>(length);
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
                 if (client_window) {
                     client_window->received(std::string{reinterpret_cast<const char*>(data), length});
-                } else {
+                } else
+#endif
+                {
                     // Note: data is not NUL-terminated
                     fputs("client received: ", stdout);
                     fwrite(data, sizeof(char), length, stdout);
@@ -534,6 +565,7 @@ auto main(int argc, char** argv) -> int
                 client.connect(options.connect_address.c_str(), options.connect_port);
             }
         }
+#if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
         if (terminal && (window_count > 0)) {
             static std::size_t last_width     = 0;
             static std::size_t last_row_count = 0;
@@ -571,6 +603,7 @@ auto main(int argc, char** argv) -> int
                 client_window->update();
             }
         }
+#endif
     }
 
     return EXIT_SUCCESS;

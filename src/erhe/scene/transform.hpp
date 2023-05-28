@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <memory>
 #include <stdexcept>
@@ -18,21 +19,16 @@ public:
 class Transform
 {
 public:
-    Transform         () = default;
+    Transform() = default;
     explicit Transform(const glm::mat4 m);
-    Transform         (const glm::mat4 matrix, const glm::mat4 inverse_matrix);
-    Transform         (const Transform& t);
-    auto operator=    (const Transform& t) -> Transform&;
+    Transform(const glm::mat4 matrix, const glm::mat4 inverse_matrix);
+    Transform(const Transform& t);
+    auto operator=(const Transform& t) -> Transform&;
 
-    [[nodiscard]] auto matrix         () const -> const glm::mat4& { return m_matrix; }
-    [[nodiscard]] auto inverse_matrix () const -> const glm::mat4& { return m_inverse_matrix; }
+    [[nodiscard]] auto get_matrix        () const -> const glm::mat4& { return m_matrix; }
+    [[nodiscard]] auto get_inverse_matrix() const -> const glm::mat4& { return m_inverse_matrix; }
 
-    void set_translation(const glm::vec3 v);
-    void fix_inverse    ();
-    void set_translation(float x, float y, float z);
-    void set_rotation   (float angle_radians, const glm::vec3& axis);
-    void set_scale      (float s);
-    void set_scale      (float x, float y, float z);
+    [[nodiscard]] static auto inverse(const Transform& transform) -> Transform;
 
     void set_orthographic          (const Clip_range clip_range, float left,     float right,        float bottom, float top);
     void set_orthographic_centered (const Clip_range clip_range, float width,    float height);
@@ -44,19 +40,10 @@ public:
     void set_perspective_horizontal(const Clip_range clip_range, float fov_x,    float aspect_ratio);
     void set                       (const glm::mat4& matrix);
     void set                       (const glm::mat4& matrix, const glm::mat4& inverse_matrix);
-    void catenate                  (const glm::mat4& m);
-
-    static auto inverse           (const Transform& transform)                 -> Transform;
-    static auto create_translation(float x, float y, float z)                  -> Transform;
-    static auto create_translation(const glm::vec3& translation)               -> Transform;
-    static auto create_rotation   (float angle_radians, const glm::vec3& axis) -> Transform;
-    static auto create_scale      (float s)                                    -> Transform;
-    static auto create_scale      (float x, float y, float z)                  -> Transform;
-    static auto create_scale      (const glm::vec3& scale)                     -> Transform;
 
     static bool s_reverse_depth;
 
-private:
+protected:
     glm::mat4 m_matrix        {1.0f};
     glm::mat4 m_inverse_matrix{1.0f};
 };
@@ -66,3 +53,4 @@ auto operator==(const Transform& lhs, const Transform& rhs) -> bool;
 auto operator!=(const Transform& lhs, const Transform& rhs) -> bool;
 
 } // namespace erhe::scene
+

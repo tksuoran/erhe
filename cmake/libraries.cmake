@@ -80,7 +80,8 @@ FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
     #GIT_TAG        origin/master
-    GIT_TAG        10.0.0
+    #GIT_TAG        171a020c828669490b98af0c2640e50f1511d2cc
+    GIT_TAG        9.1.0
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -181,8 +182,6 @@ FetchContent_Declare(
     JoltPhysics
     GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
     GIT_TAG         origin/master
-    #GIT_REPOSITORY  https://github.com/tksuoran/JoltPhysics.git
-    #GIT_TAG         point-constraint-edit
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )
@@ -212,18 +211,6 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 
-# Subset now in src/mango
-#
-#FetchContent_Declare(
-#    mango
-#    #GIT_REPOSITORY https://github.com/t0rakka/mango.git
-#    GIT_REPOSITORY https://github.com/tksuoran/mango.git
-#    #GIT_TAG        master
-#    GIT_TAG        origin/subset
-#    GIT_SHALLOW    TRUE
-#    GIT_PROGRESS   TRUE
-#)
-
 FetchContent_Declare(
     OpenXR-SDK
     GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
@@ -235,7 +222,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.11.0
+    GIT_TAG        v1.x
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

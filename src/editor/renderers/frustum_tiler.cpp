@@ -315,7 +315,7 @@ void Frustum_tiler::get_frustum_hull(
     };
 
     // From view camera clip space to light camera clip
-    const glm::mat4  world_from_view_camera_clip = view_camera.projection_transforms(view_camera_viewport).clip_from_world.inverse_matrix();
+    const glm::mat4  world_from_view_camera_clip = view_camera.projection_transforms(view_camera_viewport).clip_from_world.get_inverse_matrix();
     const glm::mat4& m = light_clip_from_world * world_from_view_camera_clip;
     const float w = static_cast<float>(m_viewport.width);
     const float h = static_cast<float>(m_viewport.height);

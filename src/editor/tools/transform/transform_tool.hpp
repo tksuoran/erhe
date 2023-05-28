@@ -4,6 +4,7 @@
 #include "operations/node_operation.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/handle_visualizations.hpp"
+#include "tools/transform/rotation_inspector.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
@@ -16,6 +17,7 @@
 #include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include <array>
@@ -23,6 +25,11 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+
+namespace erhe::application
+{
+    class Value_edit_state;
+}
 
 namespace erhe::physics
 {
@@ -61,29 +68,12 @@ class Transform_tool
     , public Tool
 {
 public:
-    class Drag
-    {
-    public:
-        glm::mat4 initial_world_from_anchor{1.0f};
-        glm::mat4 initial_anchor_from_world{1.0f};
-        glm::vec3 initial_position_in_world{0.0f, 0.0f, 0.0f};
-        float     initial_distance         {0.0f};
-    };
-
-    class Anchor_state
-    {
-    public:
-        glm::vec3 pivot_point_in_world{0.0f, 0.0f, 0.0f};
-        glm::mat4 anchor_translation  {1.0f};
-        glm::quat anchor_rotation     {1.0f, 0.0f, 0.0f, 0.0f};
-        glm::mat4 world_from_anchor   {1.0f};
-    };
-
     class Entry
     {
     public:
         std::shared_ptr<erhe::scene::Node>        node;
-        erhe::scene::Transform                    parent_from_node_before;
+        erhe::scene::Trs_transform                parent_from_node_before;
+        erhe::scene::Trs_transform                world_from_node_before;
         std::optional<erhe::physics::Motion_mode> original_motion_mode;
         erhe::physics::Motion_mode                motion_mode{erhe::physics::Motion_mode::e_invalid};
     };
@@ -110,10 +100,10 @@ public:
     public:
         Transform_tool_settings              settings;
         std::vector<Entry>                   entries;
-        Drag                                 drag;
-        Anchor_state                         anchor_state_initial;
-        glm::mat4                            world_from_anchor{1.0f};
-        glm::mat4                            anchor_from_world{1.0f};
+        glm::vec3                            initial_drag_position_in_world{0.0f};
+        float                                initial_drag_distance         {0.0f};
+        erhe::scene::Trs_transform           world_from_anchor_initial_state;
+        erhe::scene::Trs_transform           world_from_anchor;
         bool                                 touched          {false};
         Debug_rendering                      debug_rendering;
         std::optional<Handle_visualizations> visualization;
@@ -178,23 +168,29 @@ public:
     void touch();
     void record_transform_operation();
 
+    // Exposed for Node_transform_operation
+    void update_target_nodes(erhe::scene::Node* node_filter);
+
     // Interface for Properties window
     void transform_properties();
 
     // Interface for Subtool usage
-    void update_world_from_anchor_transform(const glm::mat4& updated_world_from_anchor);
-    void acquire_node_physics              ();
-    void release_node_physics              ();
-    void update_visibility                 ();
-    void update_transforms                 ();
+    void adjust            (const glm::mat4& updated_world_from_anchor);
+    void adjust_translation(glm::vec3 translation);
+    void adjust_rotation   (glm::vec3 center_of_rotation, glm::quat rotation);
+    void adjust_scale      (glm::vec3 center_of_scale,    glm::vec3 scale);
+    void update_visibility ();
+    void update_transforms ();
 
     Shared shared;
 
 private:
-    void on_message         (Editor_message& message);
-    void update_for_view    (Scene_view* scene_view);
-    void update_hover       ();
-    void update_target_nodes();
+    void on_message          (Editor_message& message);
+    void acquire_node_physics();
+    void release_node_physics();
+    void update_entry        ();
+    void update_for_view     (Scene_view* scene_view);
+    void update_hover        ();
 
     Transform_tool_drag_command            m_drag_command;
     erhe::application::Redirect_command    m_drag_redirect_update_command;
@@ -205,6 +201,7 @@ private:
     std::shared_ptr<erhe::scene::Node> m_tool_node;
     Subtool*                           m_hover_tool   {nullptr};
     Subtool*                           m_active_tool  {nullptr};
+    Rotation_inspector                 m_rotation;
 };
 
 extern Transform_tool* g_transform_tool;

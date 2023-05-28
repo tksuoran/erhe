@@ -72,8 +72,8 @@ auto Camera_buffer::update(
     const auto      clip_from_camera = camera_projection.clip_from_node_transform(viewport);
     const auto      gpu_data         = m_writer.begin(&buffer, entry_size);
     const glm::mat4 world_from_node  = camera_node.world_from_node();
-    const glm::mat4 world_from_clip  = world_from_node * clip_from_camera.inverse_matrix();
-    const glm::mat4 clip_from_world  = clip_from_camera.matrix() * camera_node.node_from_world();
+    const glm::mat4 world_from_clip  = world_from_node * clip_from_camera.get_inverse_matrix();
+    const glm::mat4 clip_from_world  = clip_from_camera.get_matrix() * camera_node.node_from_world();
 
     if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
         log_render->critical("camera buffer capacity {} exceeded", buffer.capacity_byte_count());

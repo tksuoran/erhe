@@ -54,7 +54,7 @@ auto Subtool::get_basis() const -> const glm::mat4&
 {
     const auto& shared = get_shared();
     return shared.settings.local 
-        ? shared.drag.initial_world_from_anchor
+        ? shared.world_from_anchor_initial_state.get_matrix()
         : mat4_identity;
 }
 
@@ -64,7 +64,7 @@ auto Subtool::get_basis(const bool world) const -> const glm::mat4&
 
     return world
         ? mat4_identity
-        : shared.drag.initial_world_from_anchor;
+        : shared.world_from_anchor_initial_state.get_matrix();
 }
 
 auto Subtool::get_axis_direction() const -> vec3

@@ -1,8 +1,10 @@
 #pragma once
 
 #include "erhe/scene/item.hpp"
-#include "erhe/scene/transform.hpp"
+#include "erhe/scene/trs_transform.hpp"
 #include "erhe/toolkit/unique_id.hpp"
+
+#include <glm/gtc/quaternion.hpp>
 
 #include <cstdint>
 #include <functional>
@@ -51,8 +53,8 @@ class Node_transforms
 {
 public:
     mutable std::uint64_t update_serial{0}; // update needed if 0
-    Transform             parent_from_node; // normative
-    mutable Transform     world_from_node;  // calculated by update_transform()
+    Trs_transform         parent_from_node; // normative
+    mutable Trs_transform world_from_node;  // calculated by update_transform()
 
     static auto get_current_serial() -> uint64_t;
     static auto get_next_serial   () -> uint64_t;
@@ -118,11 +120,10 @@ public:
     [[nodiscard]] auto children                               () const -> const std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto mutable_children                       () -> std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto attachments                            () const -> const std::vector<std::shared_ptr<Node_attachment>>&;
-    [[nodiscard]] auto parent_from_node_transform             () const -> const Transform&;
-    [[nodiscard]] auto node_from_parent_transform             () const -> const Transform;
+    [[nodiscard]] auto parent_from_node_transform             () const -> const Trs_transform&;
+    [[nodiscard]] auto parent_from_node_transform             () -> Trs_transform&;
     [[nodiscard]] auto parent_from_node                       () const -> glm::mat4;
-    [[nodiscard]] auto world_from_node_transform              () const -> const Transform&;
-    [[nodiscard]] auto node_from_world_transform              () const -> const Transform;
+    [[nodiscard]] auto world_from_node_transform              () const -> const Trs_transform&;
     [[nodiscard]] auto world_from_node                        () const -> glm::mat4;
     [[nodiscard]] auto node_from_parent                       () const -> glm::mat4;
     [[nodiscard]] auto node_from_world                        () const -> glm::mat4;
@@ -147,7 +148,7 @@ public:
     void set_parent            (const std::shared_ptr<Node>& parent, std::size_t position = 0);
     void set_depth_recursive   (std::size_t depth);
     void update_world_from_node();
-    void update_transform      (uint64_t serial) const;
+    void update_transform      (uint64_t serial);
     void sanity_check          () const;
     void sanity_check_root_path(const Node* node) const;
     void set_parent_from_node  (const glm::mat4 parent_from_node);

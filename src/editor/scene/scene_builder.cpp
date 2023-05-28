@@ -807,9 +807,10 @@ void Scene_builder::make_brushes()
             node->set_parent          (m_scene_root->scene().get_root_node());
         };
 
+        using namespace erhe::toolkit;
         make_mesh_node("X ring", Transform{} );
-        make_mesh_node("Y ring", Transform::create_rotation( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f}));
-        make_mesh_node("Z ring", Transform::create_rotation(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f}));
+        make_mesh_node("Y ring", Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f})});
+        make_mesh_node("Z ring", Transform{create_rotation<float>(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f})});
     }
 
     Json_library library;//("res/polyhedra/johnson.json");

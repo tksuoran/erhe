@@ -657,7 +657,7 @@ void Brush_tool_impl::tool_render(
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
 
     const auto& transform = m_brush_node->parent_from_node_transform();
-    glm::mat4 m = transform.matrix();
+    glm::mat4 m = transform.get_matrix();
 
     constexpr vec3 O     { 0.0f };
     constexpr vec3 axis_x{ 1.0f, 0.0f, 0.0f};

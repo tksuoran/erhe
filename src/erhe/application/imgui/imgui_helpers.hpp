@@ -47,10 +47,13 @@ public:
     void combine(const Value_edit_state& other);
     bool value_changed{false};
     bool edit_ended   {false};
+    bool active       {false};
 };
 
 auto make_scalar_button(
     float*      value,
+    float       value_min,
+    float       value_max,
     uint32_t    text_color,
     uint32_t    background_color,
     const char* label,
@@ -59,6 +62,8 @@ auto make_scalar_button(
 
 auto make_angle_button(
     float&      radians_value,
+    float       value_min,
+    float       value_max,
     uint32_t    text_color,
     uint32_t    background_color,
     const char* label,

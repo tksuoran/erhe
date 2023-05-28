@@ -630,7 +630,7 @@ void Line_renderer::add_sphere(
 )
 {
     erhe::toolkit::Bounding_sphere sphere = erhe::toolkit::transform(
-        world_from_local.matrix(),
+        world_from_local.get_matrix(),
         erhe::toolkit::Bounding_sphere{
             .center = local_center,
             .radius = local_radius
@@ -707,7 +707,7 @@ void Line_renderer::add_sphere(
     //   C      P d             V  p*p + h*h = r*r          .
     //                             p = sqrt(r*r - h*h)      .
 
-    const vec3 camera_position                 = vec3{camera_world_from_node->matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    const vec3 camera_position                 = vec3{camera_world_from_node->get_matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
     const vec3 from_camera_to_sphere           = center - camera_position;
     const vec3 from_sphere_to_camera           = camera_position - center;
     const vec3 from_camera_to_sphere_direction = glm::normalize(from_camera_to_sphere);
@@ -723,7 +723,7 @@ void Line_renderer::add_sphere(
     const float p  = std::sqrt(r2 - h2);
 
     const vec3 P              = center + p * from_sphere_to_camera_direction;
-    const vec3 up0_direction  = vec3{camera_world_from_node->matrix() * vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+    const vec3 up0_direction  = vec3{camera_world_from_node->get_matrix() * vec4{0.0f, 1.0f, 0.0f, 0.0f}};
     const vec3 side_direction = erhe::toolkit::safe_normalize_cross<float>(from_camera_to_sphere_direction, up0_direction);
     const vec3 up_direction   = erhe::toolkit::safe_normalize_cross<float>(side_direction, from_camera_to_sphere_direction);
     const vec3 axis_a         = h * side_direction;
@@ -776,8 +776,8 @@ void Line_renderer::add_cone(
     constexpr vec3 bottom_normal{0.0f, -1.0f, 0.0f};
     constexpr vec3 top_normal   {0.0f,  1.0f, 0.0f};
 
-    const mat4 m                       = world_from_node.matrix();
-    const mat4 node_from_world         = world_from_node.inverse_matrix();
+    const mat4 m                       = world_from_node.get_matrix();
+    const mat4 node_from_world         = world_from_node.get_inverse_matrix();
     const vec3 top_center              = bottom_center + vec3{0.0f, height, 0.0f};
     const vec3 camera_position_in_node = vec4{node_from_world * vec4{camera_position_in_world, 1.0f}};
 
@@ -1244,8 +1244,8 @@ void Line_renderer::add_torus(
     constexpr vec3 axis_x{1.0f, 0.0f, 0.0f};
     constexpr vec3 axis_y{0.0f, 1.0f, 0.0f};
     constexpr vec3 axis_z{0.0f, 0.0f, 1.0f};
-    const     mat4 m                       = world_from_node.matrix();
-    const     mat4 node_from_world         = world_from_node.inverse_matrix();
+    const     mat4 m                       = world_from_node.get_matrix();
+    const     mat4 node_from_world         = world_from_node.get_inverse_matrix();
     const     vec3 camera_position_in_node = vec4{node_from_world * vec4{camera_position_in_world, 1.0f}};
     const     vec2 tor                     = vec2{major_radius, minor_radius};
     constexpr int  k = 8;
@@ -1357,7 +1357,7 @@ void Line_renderer::render(
     const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
     const auto  projection_transforms  = camera.projection_transforms(viewport);
-    const mat4  clip_from_world        = projection_transforms.clip_from_world.matrix();
+    const mat4  clip_from_world        = projection_transforms.clip_from_world.get_matrix();
     const vec4  view_position_in_world = camera_node->position_in_world();
     const auto  fov_sides              = camera.projection()->get_fov_sides(viewport);
     const float viewport_floats[4] {

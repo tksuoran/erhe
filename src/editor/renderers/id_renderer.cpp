@@ -359,7 +359,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     update_framebuffer(viewport);
 
     const auto projection_transforms = camera->projection_transforms(viewport);
-    const mat4 clip_from_world       = projection_transforms.clip_from_world.matrix();
+    const mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
 
     auto& idr = current_id_frame_resources();
     idr.x_offset        = std::max(x - (static_cast<int>(s_extent / 2)), 0);

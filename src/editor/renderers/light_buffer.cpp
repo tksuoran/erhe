@@ -200,9 +200,9 @@ auto Light_buffer::update(
             continue;
         }
 
-        const mat4 texture_from_world   = light_projection_transforms->texture_from_world.matrix();
+        const mat4 texture_from_world   = light_projection_transforms->texture_from_world.get_matrix();
         const vec3 direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-        const vec3 position             = vec3{light_projection_transforms->world_from_light_camera.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        const vec3 position             = vec3{light_projection_transforms->world_from_light_camera.get_matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         const vec4 radiance             = vec4{light->intensity * light->color, light->range};
         const auto inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
         const auto outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
@@ -213,7 +213,7 @@ auto Light_buffer::update(
 
         ERHE_VERIFY(light_offset < writer.write_end);
         max_light_index = std::max(max_light_index, light_index);
-        write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.matrix()));
+        write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.get_matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
         write(light_gpu_data, light_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
         write(light_gpu_data, light_offset + offsets.light.direction_and_outer_spot_cos, as_span(direction_outer_spot));
