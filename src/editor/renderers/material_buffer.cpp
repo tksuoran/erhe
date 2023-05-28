@@ -69,6 +69,7 @@ auto Material_buffer::update(
     m_used_handles.clear();
     uint32_t material_index = 0;
     for (const auto& material : materials) {
+        ERHE_VERIFY(material);
         if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
             log_render->critical("material buffer capacity {} exceeded", buffer.capacity_byte_count());
             ERHE_FATAL("material buffer capacity exceeded");

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <type_traits>
 
 #if !defined(ERHE_PROFILE_FUNCTION)
 #   define ERHE_PROFILE_FUNCTION()
@@ -194,16 +195,19 @@ Property_map<Key_type, Value_type>::interpolate(
         }
 
         Value_type new_value(0);
-        for (auto j : old_keys) {
-            const float    weight  = j.first;
-            const Key_type old_key = j.second;
+        // TODO
+        if constexpr (!std::is_same_v<Value_type, glm::uvec4>) {
+            for (auto j : old_keys) {
+                const float    weight  = j.first;
+                const Key_type old_key = j.second;
 
-            if (has(old_key)) {
-                const Value_type old_value = get(old_key);
-                SPDLOG_LOGGER_TRACE(log_interpolate, "\told value {} weight {}", old_value, (weight / sum_weights));
-                new_value += static_cast<Value_type>((weight / sum_weights) * old_value);
-            } else {
-                SPDLOG_LOGGER_TRACE(log_interpolate, "\told value not found");
+                if (has(old_key)) {
+                    const Value_type old_value = get(old_key);
+                    SPDLOG_LOGGER_TRACE(log_interpolate, "\told value {} weight {}", old_value, (weight / sum_weights));
+                    new_value += static_cast<Value_type>((weight / sum_weights) * static_cast<Value_type>(old_value));
+                } else {
+                    SPDLOG_LOGGER_TRACE(log_interpolate, "\told value not found");
+                }
             }
         }
 
@@ -300,7 +304,7 @@ Property_map<Key_type, Value_type>::transform(
                 break;
             }
 
-            case Transform_mode::matrix: {
+            case Transform_mode::position: {
                 for (std::size_t i = 0, end = values.size(); i < end; ++i) {
                     values[i] = apply_transform(values[i], transform, 1.0f);
                 }
@@ -308,7 +312,7 @@ Property_map<Key_type, Value_type>::transform(
             }
 
             // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::normalize_inverse_transpose_matrix: {
+            case Transform_mode::direction: {
                 if constexpr (std::is_same_v<Value_type, glm::vec3>) {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                     for (std::size_t i = 0, end = values.size(); i < end; ++i) {
@@ -325,7 +329,7 @@ Property_map<Key_type, Value_type>::transform(
             }
 
             // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::normalize_inverse_transpose_matrix_vec3_float: {
+            case Transform_mode::direction_vec3_float: {
                 if constexpr (std::is_same_v<Value_type, glm::vec4>) {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                     for (std::size_t i = 0, end = values.size(); i < end; ++i) {
@@ -380,7 +384,7 @@ Property_map<Key_type, Value_type>::import_from(
                 break;
             }
 
-            case Transform_mode::matrix: {
+            case Transform_mode::position: {
                 for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
                     const Value_type source_value = source->values[i];
                     const Value_type result       = apply_transform(source_value, transform, 1.0f);
@@ -390,7 +394,7 @@ Property_map<Key_type, Value_type>::import_from(
             }
 
             // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::normalize_inverse_transpose_matrix: {
+            case Transform_mode::direction: {
                 if constexpr (std::is_same_v<Value_type, glm::vec3>) {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {
@@ -403,7 +407,7 @@ Property_map<Key_type, Value_type>::import_from(
             }
 
             // TODO Use cofactor matrix for bivectors?
-            case Transform_mode::normalize_inverse_transpose_matrix_vec3_float: {
+            case Transform_mode::direction_vec3_float: {
                 if constexpr (std::is_same_v<Value_type, glm::vec4>) {
                     const glm::mat4 inverse_transpose_transform = glm::inverse(glm::transpose(transform));
                     for (std::size_t i = 0, end = source->values.size(); i < end; ++i) {

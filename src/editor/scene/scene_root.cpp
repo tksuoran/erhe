@@ -152,6 +152,8 @@ void Scene_root::unregister_camera(const std::shared_ptr<erhe::scene::Camera>& c
 
 void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
+    ERHE_VERIFY(mesh);
+
     if (m_scene) {
         m_scene->register_mesh(mesh);
     }
@@ -164,6 +166,9 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     // Make sure materials are in the material library
     auto& material_library = content_library()->materials;
     for (const auto& primitive : mesh->mesh_data.primitives) {
+        if (!primitive.material) {
+            continue;
+        }
         material_library.add(primitive.material);
     }
 }

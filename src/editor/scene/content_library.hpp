@@ -115,6 +115,9 @@ auto Library<T>::combo(
         ++index;
     }
     for (const auto& entry : m_entries) {
+        if (!entry) {
+            continue;
+        }
         if (!entry->is_shown_in_ui()) {
             continue;
         }
@@ -144,6 +147,7 @@ auto Library<T>::combo(
 template <typename T>
 void Library<T>::add(const std::shared_ptr<T>& entry)
 {
+    ERHE_VERIFY(entry);
     const std::lock_guard<std::mutex> lock{m_mutex};
     auto i = std::find(m_entries.begin(), m_entries.end(), entry);
     if (i != m_entries.end()) {
@@ -155,6 +159,7 @@ void Library<T>::add(const std::shared_ptr<T>& entry)
 template <typename T>
 auto Library<T>::remove(const std::shared_ptr<T>& entry) -> bool
 {
+    ERHE_VERIFY(entry);
     const std::lock_guard<std::mutex> lock{m_mutex};
     const auto i = std::remove(m_entries.begin(), m_entries.end(), entry);
     if (i == m_entries.end()) {
