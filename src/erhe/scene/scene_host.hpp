@@ -10,6 +10,7 @@ class Light;
 class Mesh;
 class Node;
 class Scene;
+class Skin;
 
 class Scene_host
 {
@@ -24,6 +25,8 @@ public:
     virtual void unregister_camera(const std::shared_ptr<Camera>& camera) = 0;
     virtual void register_mesh    (const std::shared_ptr<Mesh>&   mesh)   = 0;
     virtual void unregister_mesh  (const std::shared_ptr<Mesh>&   mesh)   = 0;
+    virtual void register_skin    (const std::shared_ptr<Skin>&   skin)   = 0;
+    virtual void unregister_skin  (const std::shared_ptr<Skin>&   skin)   = 0;
     virtual void register_light   (const std::shared_ptr<Light>&  light)  = 0;
     virtual void unregister_light (const std::shared_ptr<Light>&  light)  = 0;
 };

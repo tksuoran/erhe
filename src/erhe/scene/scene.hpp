@@ -20,6 +20,7 @@ class Light;
 class Mesh;
 class Node;
 class Scene;
+class Skin;
 
 using Layer_id = uint64_t;
 
@@ -117,6 +118,8 @@ public:
     void unregister_camera(const std::shared_ptr<Camera>& camera);
     void register_mesh    (const std::shared_ptr<Mesh>& mesh);
     void unregister_mesh  (const std::shared_ptr<Mesh>& mesh);
+    void register_skin    (const std::shared_ptr<Skin>& skin);
+    void unregister_skin  (const std::shared_ptr<Skin>& skin);
     void register_light   (const std::shared_ptr<Light>& light);
     void unregister_light (const std::shared_ptr<Light>& light);
 
@@ -125,6 +128,7 @@ private:
     std::shared_ptr<erhe::scene::Node>        m_root_node;
     std::vector<std::shared_ptr<Node>>        m_flat_node_vector;
     std::vector<std::shared_ptr<Mesh_layer>>  m_mesh_layers;
+    std::vector<std::shared_ptr<Skin>>        m_skins;
     std::vector<std::shared_ptr<Light_layer>> m_light_layers;
     std::vector<std::shared_ptr<Camera>>      m_cameras;
     bool                                      m_nodes_sorted{false};

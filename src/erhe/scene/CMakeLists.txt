@@ -25,6 +25,8 @@ erhe_target_sources_grouped(
     scene_message.hpp
     scene_message_bus.cpp
     scene_message_bus.hpp
+    skin.cpp
+    skin.hpp
     transform.cpp
     transform.hpp
     trs_transform.cpp

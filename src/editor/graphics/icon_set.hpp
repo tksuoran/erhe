@@ -33,6 +33,7 @@ class Icons;
 class Icons
 {
 public:
+    glm::vec2 bone             {};
     glm::vec2 brush_small      {}; // for vertex paint
     glm::vec2 brush_big        {}; // for brush tool
     glm::vec2 camera           {};
@@ -51,13 +52,16 @@ public:
     glm::vec2 mouse_rmb_drag   {};
     glm::vec2 move             {};
     glm::vec2 node             {};
+    glm::vec2 physics          {};
     glm::vec2 point_light      {};
     glm::vec2 pull             {};
     glm::vec2 push             {};
+    glm::vec2 raytrace         {};
     glm::vec2 rotate           {};
     glm::vec2 scale            {};
     glm::vec2 scene            {};
     glm::vec2 select           {};
+    glm::vec2 skin             {};
     glm::vec2 space_mouse      {};
     glm::vec2 space_mouse_lmb  {};
     glm::vec2 space_mouse_rmb  {};
@@ -110,7 +114,7 @@ private:
     int                               m_row_count   {0};
     int                               m_column_count{0};
     int                               m_row         {0};
-    int                               m_column      {0};
+    int                               m_column      {1};
 };
 
 extern Icon_set* g_icon_set;

@@ -617,6 +617,22 @@ void Line_renderer::add_cube(
     }
 }
 
+void Line_renderer::add_bone(
+    const mat4& transform,
+    const vec4& color,
+    const vec3& start,
+    const vec3& end
+)
+{
+    add_lines(
+        transform,
+        color,
+        {
+            { start, end }
+        }
+    );
+}
+
 void Line_renderer::add_sphere(
     const erhe::scene::Transform&       world_from_local,
     const vec4&                         edge_color,

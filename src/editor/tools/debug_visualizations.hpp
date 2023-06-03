@@ -16,6 +16,7 @@ namespace erhe::scene
     class Camera;
     class Light;
     class Mesh;
+    class Skin;
 }
 
 namespace editor
@@ -63,6 +64,10 @@ private:
     void mesh_selection_visualization(
         const Render_context& render_context,
         erhe::scene::Mesh*    mesh
+    );
+    void skin_selection_visualization(
+        const Render_context& render_context,
+        erhe::scene::Skin*    skin
     );
 
     void light_visualization(

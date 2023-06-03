@@ -151,6 +151,13 @@ public:
         bool             z_cross = false
     );
 
+    void add_bone(
+        const glm::mat4& transform,
+        const glm::vec4& color,
+        const glm::vec3& start,
+        const glm::vec3& end
+    );
+
     void add_sphere(
         const erhe::scene::Transform& transform,
         const glm::vec4&              edge_color,

@@ -68,6 +68,7 @@ void Icon_set::initialize_component()
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
+    icons.bone              = load(icon_directory / "bone_data.svg");
     icons.brush_big         = load(icon_directory / "brush_big.svg");
     icons.brush_small       = load(icon_directory / "brush_small.svg");
     icons.camera            = load(icon_directory / "camera.svg");
@@ -86,13 +87,16 @@ void Icon_set::initialize_component()
     icons.mouse_rmb_drag    = load(icon_directory / "mouse_rmb_drag.svg");
     icons.move              = load(icon_directory / "move.svg");
     icons.node              = load(icon_directory / "node.svg");
+    icons.physics           = load(icon_directory / "physics.svg");
     icons.point_light       = load(icon_directory / "point_light.svg");
     icons.pull              = load(icon_directory / "pull.svg");
     icons.push              = load(icon_directory / "push.svg");
+    icons.raytrace          = load(icon_directory / "curve_path.svg");
     icons.rotate            = load(icon_directory / "rotate.svg");
     icons.scale             = load(icon_directory / "scale.svg");
     icons.scene             = load(icon_directory / "scene.svg");
     icons.select            = load(icon_directory / "select.svg");
+    icons.skin              = load(icon_directory / "armature_data.svg");
     icons.space_mouse       = load(icon_directory / "space_mouse.svg");
     icons.space_mouse_lmb   = load(icon_directory / "space_mouse_lmb.svg");
     icons.space_mouse_rmb   = load(icon_directory / "space_mouse_rmb.svg");

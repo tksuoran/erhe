@@ -24,6 +24,7 @@ namespace erhe::scene
 class Camera;
 class Light;
 class Mesh;
+class Skin;
 };
 
 namespace editor
@@ -64,6 +65,7 @@ public:
     Library<erhe::scene::Camera>       cameras;
     Library<erhe::scene::Light>        lights;
     Library<erhe::scene::Mesh>         meshes;
+    Library<erhe::scene::Skin>         skins;
     Library<erhe::primitive::Material> materials;
     Library<erhe::graphics::Texture>   texture;
 };

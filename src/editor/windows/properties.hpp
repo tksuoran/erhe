@@ -15,6 +15,7 @@ namespace erhe::scene
     class Mesh;
     class Node;
     class Item;
+    class Skin;
 }
 
 namespace editor
@@ -49,6 +50,7 @@ private:
     void camera_properties      (erhe::scene::Camera& camera) const;
     void light_properties       (erhe::scene::Light& light) const;
     void mesh_properties        (erhe::scene::Mesh& mesh) const;
+    void skin_properties        (erhe::scene::Skin& skin) const;
     void transform_properties   (erhe::scene::Node& node);
     void rendertarget_properties(Rendertarget_mesh& rendertarget) const;
     void node_physics_properties(Node_physics& node_physics) const;

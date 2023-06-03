@@ -15,6 +15,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 
 #include "erhe/toolkit/file.hpp"
@@ -1237,6 +1238,55 @@ private:
 
         //// erhe_node->attach(node_raytrace); TODO
     }
+    void parse_skin(cgltf_node* node)
+    {
+        cgltf_skin* skin = node->skin;
+        const char* skin_name = safe_str(skin->name);
+        const cgltf_size node_index = node - m_data->nodes;
+        const cgltf_size skin_index = skin - m_data->skins;
+        log_parsers->info(
+            "Skin: node index = {}, skin index = {}, name = {}",
+            node_index, skin_index, skin_name
+        );
+
+        auto erhe_node = m_nodes.at(node_index);
+        auto erhe_skin = m_scene_root->content_library()->skins.make(skin_name);
+        erhe_skin->enable_flag_bits(
+            Item_flags::content    |
+            Item_flags::show_in_ui |
+            Item_flags::id
+        );
+        for (cgltf_size i = 0; i < skin->joints_count; ++i) {
+            if (skin->joints[i] != nullptr) {
+                const cgltf_size joint_node_index = skin->joints[i] - m_data->nodes;
+                auto& erhe_joint_node = m_nodes.at(joint_node_index);
+                erhe_skin->skin_data.joints.push_back(erhe_joint_node);
+            } else {
+                erhe_skin->skin_data.joints.push_back({});
+            }
+            if (skin->inverse_bind_matrices != nullptr) {
+                cgltf_float m[16];
+                cgltf_accessor_read_float(skin->inverse_bind_matrices, i, m, 16);
+                const glm::mat4 matrix{
+                    m[ 0], m[ 1], m[ 2], m[ 3],
+                    m[ 4], m[ 5], m[ 6], m[ 7],
+                    m[ 8], m[ 9], m[10], m[11],
+                    m[12], m[13], m[14], m[15]
+                };
+                erhe_skin->skin_data.inverse_bind_matrices.push_back(matrix);
+            } else {
+                erhe_skin->skin_data.inverse_bind_matrices.push_back(glm::mat4{1.0f});
+            }
+        }
+        if (skin->skeleton != nullptr) {
+            const cgltf_size skeleton_node_index = skin->skeleton - m_data->nodes;
+            erhe_skin->skin_data.skeleton = m_nodes.at(skeleton_node_index);
+        } else {
+            erhe_skin->skin_data.skeleton.reset();;
+        }
+
+        erhe_node->attach(erhe_skin);
+    }
     void parse_mesh(cgltf_node* node)
     {
         cgltf_mesh* mesh = node->mesh;
@@ -1293,6 +1343,10 @@ private:
 
         if (node->mesh != nullptr) {
             parse_mesh(node);
+        }
+
+        if (node->skin != nullptr) {
+            parse_skin(node);
         }
 
         for (cgltf_size i = 0; i < node->children_count; ++i) {

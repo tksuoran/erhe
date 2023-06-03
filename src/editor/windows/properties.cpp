@@ -28,6 +28,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -238,6 +239,30 @@ void Properties::light_properties(erhe::scene::Light& light) const
     }
 }
 
+void Properties::skin_properties(erhe::scene::Skin& skin) const
+{
+    ERHE_PROFILE_FUNCTION();
+
+    auto& skin_data  = skin.skin_data;
+    const auto* node = skin.get_node();
+    auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
+    if (scene_root == nullptr) {
+        ImGui::Text("Skin host not set");
+        return;
+    }
+    if (!ImGui::TreeNodeEx("Skin", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+    for (auto& joint : skin_data.joints) {
+        if (!joint) {
+            ImGui::TextUnformatted("(missing joint)");
+        } else {
+            ImGui::TextUnformatted(joint->get_name().c_str());
+        }
+    }
+    ImGui::TreePop();
+}
+
 void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
     ERHE_PROFILE_FUNCTION();
@@ -262,7 +287,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
             ? fmt::format("Primitive: {}", geometry->name)
             : fmt::format("Primitive: {}", primitive_index);
 
-        if (ImGui::TreeNodeEx(label.c_str())) {
+        if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Indent(indent);
             material_library.combo("Material", primitive.material, false);
             if (primitive.material) {
@@ -470,6 +495,8 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
             }
         }
 
+        ImGui::Text("Id: %u", static_cast<unsigned int>(item->get_id()));
+
         item_flags(item);
 
         if (!is_light(item)) { // light uses light color, so hide item color
@@ -505,6 +532,11 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
     auto mesh = as_mesh(item);
     if (mesh) {
         mesh_properties(*mesh);
+    }
+
+    auto skin = as_skin(item);
+    if (skin) {
+        skin_properties(*skin);
     }
 
     auto rendertarget = as_rendertarget(item);

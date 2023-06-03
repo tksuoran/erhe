@@ -5,6 +5,7 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/scene/scene_message_bus.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -447,6 +448,30 @@ void Scene::unregister_mesh(const std::shared_ptr<Mesh>& mesh)
         mesh_layer->remove(mesh);
     } else {
         log->error("mesh {} layer not found", mesh->get_name());
+    }
+}
+
+void Scene::register_skin(const std::shared_ptr<Skin>& skin)
+{
+#ifndef NDEBUG
+    const auto i = std::find(m_skins.begin(), m_skins.end(), skin);
+    if (i != m_skins.end()) {
+        log->error("skin {} already in scene cameras", skin->get_name());
+    } else
+#endif
+    {
+        m_skins.push_back(skin);
+    }
+}
+
+void Scene::unregister_skin(const std::shared_ptr<Skin>& skin)
+{
+    ERHE_VERIFY(skin);
+    const auto i = std::remove(m_skins.begin(), m_skins.end(), skin);
+    if (i == m_skins.end()) {
+        log->error("skin {} not in scene cameras", skin->get_name());
+    } else {
+        m_skins.erase(i, m_skins.end());
     }
 }
 

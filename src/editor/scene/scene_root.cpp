@@ -22,6 +22,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -192,6 +193,20 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     // TODO reference count? Remove materials from material library
     // auto& material_library = content_library()->materials;
     // material_library.remove(m_material);
+}
+
+void Scene_root::register_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
+{
+    if (m_scene) {
+        m_scene->register_skin(skin);
+    }
+}
+
+void Scene_root::unregister_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
+{
+    if (m_scene) {
+        m_scene->unregister_skin(skin);
+    }
 }
 
 void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light)

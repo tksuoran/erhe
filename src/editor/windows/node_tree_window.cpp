@@ -12,6 +12,7 @@
 #include "operations/operation_stack.hpp"
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
@@ -22,10 +23,11 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -770,6 +772,21 @@ void Node_tree_window::item_icon(
     const auto& mesh = as_mesh(item);
     if (mesh) {
         icon = g_icon_set->icons.mesh;
+    }
+    const auto& skin = as_skin(item);
+    if (skin) {
+        icon = g_icon_set->icons.skin;
+    }
+    const auto& node_raytrace = as_raytrace(item);
+    if (node_raytrace) {
+        icon = g_icon_set->icons.raytrace;
+    }
+    const auto& node_physics = as_physics(item);
+    if (node_physics) {
+        icon = g_icon_set->icons.physics;
+    }
+    if (is_bone(item)) {
+        icon = g_icon_set->icons.bone;
     }
     const auto& light = as_light(item);
     if (light) {

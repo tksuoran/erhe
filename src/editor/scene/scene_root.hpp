@@ -134,6 +134,8 @@ public:
     void unregister_camera(const std::shared_ptr<erhe::scene::Camera>& camera) override;
     void register_mesh    (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
     void unregister_mesh  (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
+    void register_skin    (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
+    void unregister_skin  (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
     void register_light   (const std::shared_ptr<erhe::scene::Light>&  light)  override;
     void unregister_light (const std::shared_ptr<erhe::scene::Light>&  light)  override;
 

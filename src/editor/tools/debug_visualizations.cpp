@@ -27,6 +27,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -223,6 +224,54 @@ void Debug_visualizations::mesh_selection_visualization(
 
     if (m_show_only_selection) {
         mesh_labels(render_context, mesh);
+    }
+}
+
+void Debug_visualizations::skin_selection_visualization(
+    const Render_context& render_context,
+    erhe::scene::Skin*    skin
+)
+{
+    if (skin == nullptr) {
+        return;
+    }
+    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
+
+    const auto* node = skin->get_node();
+    if (node == nullptr) {
+        return;
+    }
+
+    const auto* camera_node = render_context.get_camera_node();
+    if (camera_node == nullptr) {
+        return;
+    }
+
+    std::shared_ptr<erhe::scene::Camera> selected_camera  = get_selected_camera(render_context);
+    std::shared_ptr<erhe::scene::Camera> context_camera   = render_context.scene_view->get_camera();
+    std::shared_ptr<erhe::scene::Camera> used_camera      = selected_camera ? selected_camera : context_camera;
+    erhe::scene::Node*                   used_camera_node = used_camera ? used_camera->get_node() : nullptr;
+
+    Trs_transform camera_world_from_node_transform = (used_camera_node != nullptr)
+        ? used_camera_node->world_from_node_transform()
+        : Trs_transform{};
+
+    constexpr vec4 red  { 1.0f, 0.0f, 0.0f, 1.0f};
+    constexpr vec4 green{ 0.0f, 1.0f, 0.0f, 1.0f};
+    constexpr vec4 blue { 0.0f, 0.0f, 1.0f, 1.0f};
+    line_renderer.set_thickness(10.0f);
+
+    // TODO: Work in progress - this is not yet correct
+    const mat4 world_from_node = node->world_from_node();
+    for (std::size_t i = 0, end = skin->skin_data.joints.size(); i < end; ++i) {
+        const auto& joint = skin->skin_data.joints[i];
+        const mat4 world_from_joint = joint->world_from_node();
+        const mat4 joint_from_bind  = skin->skin_data.inverse_bind_matrices[i];
+        const mat4 world_from_bind  = world_from_joint * joint_from_bind;
+        const mat4& m = world_from_bind;
+        line_renderer.add_lines( m, red,   { { O, axis_x }});
+        line_renderer.add_lines( m, green, { { O, axis_y }});
+        line_renderer.add_lines( m, blue,  { { O, axis_z }});
     }
 }
 
@@ -599,6 +648,10 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 const auto mesh = as_mesh(attachment);
                 if (mesh) {
                     mesh_selection_visualization(context, mesh.get());
+                }
+                const auto skin = as_skin(attachment);
+                if (skin) {
+                    skin_selection_visualization(context, skin.get());
                 }
 
                 const auto camera = as_camera(attachment);
