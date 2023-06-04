@@ -52,6 +52,8 @@ erhe_target_sources_grouped(
     renderers/frustum_tiler.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
+    renderers/joint_buffer.cpp
+    renderers/joint_buffer.hpp
     renderers/light_buffer.cpp
     renderers/light_buffer.hpp
     renderers/light_mesh.cpp

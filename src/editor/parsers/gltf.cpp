@@ -33,6 +33,7 @@ extern "C" {
 #include <fstream>
 #include <limits>
 #include <string>
+#include <unordered_set>
 
 namespace editor {
 
@@ -1368,6 +1369,34 @@ private:
             fix_node_hierarchy(node->children[i]);
         }
     }
+    void color_graph(
+        erhe::scene::Node*             node,
+        const std::unordered_set<int>& available_colors
+    ) {
+        std::unordered_set<int> colors_for_node = available_colors;
+        auto parent = node->parent().lock();
+        if (parent) {
+            auto i = m_node_colors.find(parent.get());
+            if (i != m_node_colors.end()) {
+                int parent_color = i->second;
+                colors_for_node.erase(parent_color);
+            }
+        }
+        for (const auto& child : node->children()) {
+            auto i = m_node_colors.find(child.get());
+            if (i != m_node_colors.end()) {
+                int child_color = i->second;
+                colors_for_node.erase(child_color);
+            }
+        }
+
+        int node_color = *colors_for_node.begin();
+        m_node_colors.emplace(node, node_color);
+
+        for (auto& child : node->children()) {
+            color_graph(child.get(), available_colors);
+        }
+    }
     void parse_scene(cgltf_scene* scene)
     {
         const cgltf_size scene_index = scene - m_data->scenes;
@@ -1391,6 +1420,35 @@ private:
         for (cgltf_size i = 0; i < scene->nodes_count; ++i) {
             fix_node_hierarchy(scene->nodes[i]);
         }
+
+        // Assign node colors
+        std::vector<glm::vec4> colors;
+        colors.emplace_back(0.0f, 1.0f, 1.0f, 1.0f);
+        colors.emplace_back(0.0f, 1.0f, 0.0f, 1.0f);
+        colors.emplace_back(1.0f, 1.0f, 0.0f, 1.0f);
+        colors.emplace_back(1.0f, 0.0f, 0.0f, 1.0f);
+        colors.emplace_back(1.0f, 0.0f, 1.0f, 1.0f);
+
+        std::unordered_set<int> available_colors;
+        for (int i = 0; i < colors.size(); ++i) {
+            available_colors.insert(i);
+        }
+
+        const auto root_node = m_scene_root->scene().get_root_node();
+        for (auto& node : m_nodes) {
+            auto parent = node->parent().lock();
+            if (parent == root_node) {
+                color_graph(node.get(), available_colors);
+            }
+        }
+        for (auto& node : m_nodes) {
+            auto i = m_node_colors.find(node.get());
+            if (i != m_node_colors.end()) {
+                int color = i->second;
+                node->set_wireframe_color(colors.at(color));
+            }
+        }
+
         m_nodes.clear();
     }
 
@@ -1406,6 +1464,7 @@ private:
 
     // Scene context
     std::vector<std::shared_ptr<erhe::scene::Node>>   m_nodes;
+    std::map<erhe::scene::Node*, int> m_node_colors;
 };
 
 void parse_gltf(

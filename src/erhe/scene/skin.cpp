@@ -17,13 +17,6 @@ Skin::Skin(const std::string_view name)
 {
 }
 
-//Skin::Skin(
-//    const std::string_view name,
-//)
-//    : Node_attachment{name}
-//{
-//}
-
 Skin::~Skin() noexcept
 {
 }

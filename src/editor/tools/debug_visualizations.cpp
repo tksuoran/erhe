@@ -256,22 +256,71 @@ void Debug_visualizations::skin_selection_visualization(
         ? used_camera_node->world_from_node_transform()
         : Trs_transform{};
 
-    constexpr vec4 red  { 1.0f, 0.0f, 0.0f, 1.0f};
-    constexpr vec4 green{ 0.0f, 1.0f, 0.0f, 1.0f};
-    constexpr vec4 blue { 0.0f, 0.0f, 1.0f, 1.0f};
-    line_renderer.set_thickness(10.0f);
+    //constexpr vec4 red  { 1.0f, 0.0f, 0.0f, 1.0f};
+    //constexpr vec4 green{ 0.0f, 1.0f, 0.0f, 1.0f};
+    //constexpr vec4 blue { 0.0f, 0.0f, 1.0f, 1.0f};
+    //constexpr vec4 cyan { 0.0f, 1.0f, 1.0f, 1.0f};
+    line_renderer.set_thickness(2.0f);
 
-    // TODO: Work in progress - this is not yet correct
-    const mat4 world_from_node = node->world_from_node();
-    for (std::size_t i = 0, end = skin->skin_data.joints.size(); i < end; ++i) {
-        const auto& joint = skin->skin_data.joints[i];
-        const mat4 world_from_joint = joint->world_from_node();
-        const mat4 joint_from_bind  = skin->skin_data.inverse_bind_matrices[i];
-        const mat4 world_from_bind  = world_from_joint * joint_from_bind;
-        const mat4& m = world_from_bind;
-        line_renderer.add_lines( m, red,   { { O, axis_x }});
-        line_renderer.add_lines( m, green, { { O, axis_y }});
-        line_renderer.add_lines( m, blue,  { { O, axis_z }});
+    for (std::size_t i = 0, end_i = skin->skin_data.joints.size(); i < end_i; ++i) {
+        const auto& joint            = skin->skin_data.joints[i];
+        const mat4  world_from_joint = joint->world_from_node();
+
+        line_renderer.set_line_color(joint->get_wireframe_color());
+        vec3 a = joint->position_in_world();
+        vec3 b = a + vec3{0.2f, 0.0f, 0.0f};
+
+        // Search for child to connect bone tip:
+        bool child_found = false;
+        for (std::size_t j = 0, end_j = skin->skin_data.joints.size(); j < end_j; ++j) {
+            if (j == i) {
+                continue;
+            }
+            const auto& other_joint = skin->skin_data.joints[j];
+            if (other_joint->parent().lock() == joint) {
+                b = other_joint->position_in_world();
+                child_found = true;
+                break;
+            }
+        }
+        if (!child_found) {
+            // No child, try to guess bone tip compared to parent (if it has parent):
+            const auto& parent = joint->parent().lock();
+            if (parent) {
+                const vec3 parent_position = parent->position_in_world();
+                const float distance = glm::distance(parent_position, a);
+                vec3 joint_local_axis_y = joint->transform_direction_from_local_to_world(axis_y);
+                b = a + distance * joint_local_axis_y;
+            }
+        }
+
+        // For linear blend skinning, matrices to be used on the shader would be:
+        //const mat4  joint_from_bind  = skin->skin_data.inverse_bind_matrices[i];
+        //const mat4  world_from_bind  = world_from_joint * joint_from_bind;
+        float side_length = 0.1f * glm::distance(a, b);
+        vec3 mid_point = glm::mix(a, b, 0.1f);
+        vec3 joint_local_axis_x = joint->transform_direction_from_local_to_world(axis_x);
+        vec3 joint_local_axis_z = joint->transform_direction_from_local_to_world(axis_z);
+        vec3 m1 = mid_point + side_length * joint_local_axis_x;
+        vec3 m2 = mid_point + side_length * joint_local_axis_z;
+        vec3 m3 = mid_point - side_length * joint_local_axis_x;
+        vec3 m4 = mid_point - side_length * joint_local_axis_z;
+        //line_renderer.add_lines( world_from_joint, red,   { { side_length * axis_x }});
+        //line_renderer.add_lines( world_from_joint, green, { { side_length * axis_y }});
+        //line_renderer.add_lines( world_from_joint, blue,  { { side_length * axis_z }});
+        //line_renderer.add_lines( cyan,  { { a, b }});
+        line_renderer.add_lines( {{ a,  m1 }} );
+        line_renderer.add_lines( {{ a,  m2 }} );
+        line_renderer.add_lines( {{ a,  m3 }} );
+        line_renderer.add_lines( {{ a,  m4 }} );
+        line_renderer.add_lines( {{ b,  m1 }} );
+        line_renderer.add_lines( {{ b,  m2 }} );
+        line_renderer.add_lines( {{ b,  m3 }} );
+        line_renderer.add_lines( {{ b,  m4 }} );
+        line_renderer.add_lines( {{ m1, m2 }} );
+        line_renderer.add_lines( {{ m2, m3 }} );
+        line_renderer.add_lines( {{ m3, m4 }} );
+        line_renderer.add_lines( {{ m4, m1 }} );
     }
 }
 

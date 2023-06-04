@@ -14,9 +14,10 @@ namespace erhe::scene
 class Skin_data
 {
 public:
+    uint32_t                                        joint_buffer_index{0}; // updated by Joint_buffer::update()
     std::vector<std::shared_ptr<erhe::scene::Node>> joints;
-    std::vector<glm::mat4> inverse_bind_matrices;
-    std::shared_ptr<erhe::scene::Node> skeleton;
+    std::vector<glm::mat4>                          inverse_bind_matrices;
+    std::shared_ptr<erhe::scene::Node>              skeleton;
 };
 
 class Skin
@@ -25,7 +26,6 @@ class Skin
 public:
     Skin         ();
     explicit Skin(const std::string_view name);
-    //Skin         (const std::string_view name);
     ~Skin        () noexcept override;
 
     // Implements Node_attachment

@@ -134,6 +134,8 @@ public:
     [[nodiscard]] auto look_at                                (const Node& target) const -> glm::mat4;
     [[nodiscard]] auto transform_point_from_world_to_local    (const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto transform_direction_from_world_to_local(const glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto transform_point_from_local_to_world    (const glm::vec3 p) const -> glm::vec3;
+    [[nodiscard]] auto transform_direction_from_local_to_world(const glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto root                                   () -> std::weak_ptr<Node>;
     [[nodiscard]] auto child_count                            () const -> std::size_t;
     [[nodiscard]] auto child_count                            (const Item_filter& filter) const -> std::size_t;
