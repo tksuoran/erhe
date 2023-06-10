@@ -225,7 +225,12 @@ void Transform_tool::on_message(Editor_message& message)
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         update_hover();
     }
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
+    if (
+        test_any_rhs_bits_set(
+            message.update_flags,
+            Message_flag_bit::c_flag_bit_selection | Message_flag_bit::c_flag_bit_animation_update
+        )
+    ) {
         update_target_nodes(nullptr);
     }
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_node_touched_operation_stack)) {

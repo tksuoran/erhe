@@ -20,8 +20,8 @@ public:
         normal        = (1 <<  3u),
         bitangent     = (1 <<  4u),
         color         = (1 <<  5u),
-        joint_weights = (1 <<  6u),
-        joint_indices = (1 <<  7u),
+        joint_indices = (1 <<  6u),
+        joint_weights = (1 <<  7u),
         tex_coord     = (1 <<  8u),
         id            = (1 <<  9u),
         custom        = (1 << 10u)

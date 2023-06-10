@@ -10,6 +10,7 @@
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/scene/animation.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -270,27 +271,49 @@ public:
 //     }
 // };
 
-// [[nodiscard]] auto c_str(const cgltf_animation_path_type value) -> const char*
-// {
-//     switch (value) {
-//         case cgltf_animation_path_type::cgltf_animation_path_type_invalid:     return "invalid";
-//         case cgltf_animation_path_type::cgltf_animation_path_type_translation: return "translation";
-//         case cgltf_animation_path_type::cgltf_animation_path_type_rotation:    return "rotation";
-//         case cgltf_animation_path_type::cgltf_animation_path_type_scale:       return "scale";
-//         case cgltf_animation_path_type::cgltf_animation_path_type_weights:     return "weights";
-//         default:                 return "?";
-//     }
-// };
+[[nodiscard]] auto c_str(const cgltf_animation_path_type value) -> const char*
+{
+    switch (value) {
+        case cgltf_animation_path_type::cgltf_animation_path_type_invalid:     return "invalid";
+        case cgltf_animation_path_type::cgltf_animation_path_type_translation: return "translation";
+        case cgltf_animation_path_type::cgltf_animation_path_type_rotation:    return "rotation";
+        case cgltf_animation_path_type::cgltf_animation_path_type_scale:       return "scale";
+        case cgltf_animation_path_type::cgltf_animation_path_type_weights:     return "weights";
+        default:                                                               return "?";
+    }
+};
 
-// [[nodiscard]] auto c_str(const cgltf_interpolation_type value) -> const char*
-// {
-//     switch (value) {
-//         case cgltf_interpolation_type::cgltf_interpolation_type_linear:       return "linear";
-//         case cgltf_interpolation_type::cgltf_interpolation_type_step:         return "step";
-//         case cgltf_interpolation_type::cgltf_interpolation_type_cubic_spline: return "cubicspline";
-//         default:                                                              return "?";
-//     }
-// };
+[[nodiscard]] auto to_erhe(const cgltf_animation_path_type value) -> erhe::scene::Animation_path
+{
+    switch (value) {
+        case cgltf_animation_path_type::cgltf_animation_path_type_invalid:     return erhe::scene::Animation_path::INVALID;
+        case cgltf_animation_path_type::cgltf_animation_path_type_translation: return erhe::scene::Animation_path::TRANSLATION;
+        case cgltf_animation_path_type::cgltf_animation_path_type_rotation:    return erhe::scene::Animation_path::ROTATION;
+        case cgltf_animation_path_type::cgltf_animation_path_type_scale:       return erhe::scene::Animation_path::SCALE;
+        case cgltf_animation_path_type::cgltf_animation_path_type_weights:     return erhe::scene::Animation_path::WEIGHTS;
+        default:                                                               return erhe::scene::Animation_path::INVALID;
+    }
+};
+
+[[nodiscard]] auto c_str(const cgltf_interpolation_type value) -> const char*
+{
+    switch (value) {
+        case cgltf_interpolation_type::cgltf_interpolation_type_linear:       return "linear";
+        case cgltf_interpolation_type::cgltf_interpolation_type_step:         return "step";
+        case cgltf_interpolation_type::cgltf_interpolation_type_cubic_spline: return "cubicspline";
+        default:                                                              return "?";
+    }
+};
+
+[[nodiscard]] auto to_erhe(const cgltf_interpolation_type value) -> erhe::scene::Animation_interpolation_mode
+{
+    switch (value) {
+        case cgltf_interpolation_type::cgltf_interpolation_type_linear:       return erhe::scene::Animation_interpolation_mode::LINEAR;
+        case cgltf_interpolation_type::cgltf_interpolation_type_step:         return erhe::scene::Animation_interpolation_mode::STEP;
+        case cgltf_interpolation_type::cgltf_interpolation_type_cubic_spline: return erhe::scene::Animation_interpolation_mode::CUBICSPLINE;
+        default:                                                              return erhe::scene::Animation_interpolation_mode::STEP;
+    }
+};
 
 // [[nodiscard]] auto c_str(const cgltf_camera_type value) -> const char*
 // {
@@ -410,6 +433,10 @@ public:
 
     void parse_and_build()
     {
+        if (m_data == nullptr) {
+            log_parsers->error("No data loaded to parse glTF");
+            return;
+        }
         m_default_material = std::make_shared<erhe::primitive::Material>(
             "Default",
             glm::vec3{0.500f, 0.500f, 0.500f},
@@ -431,6 +458,12 @@ public:
 
         for (cgltf_size i = 0; i < m_data->scenes_count; ++i) {
             parse_scene(&m_data->scenes[i]);
+        }
+
+        // Animations point to nodes in m_nodes, which are parsed in parse_scene()
+        m_animations.reserve(m_data->animations_count);
+        for (cgltf_size i = 0; i < m_data->animations_count; ++i) {
+            parse_animation(&m_data->animations[i]);
         }
     }
 
@@ -508,6 +541,131 @@ private:
         for (cgltf_size i = 0; i < m_data->extensions_required_count; ++i) {
             log_parsers->trace("Extension Required: {}", m_data->extensions_required[i]);
         }
+    }
+
+    void parse_animation(cgltf_animation* animation)
+    {
+        const cgltf_size animation_index = animation - m_data->animations;
+        const char* animation_name = safe_str(animation->name);
+        log_parsers->trace(
+            "Animation: id = {}, name = {}",
+            animation_index,
+            animation_name
+        );
+
+        auto new_animation = m_scene_root->content_library()->animations.make(animation_name);
+        for (cgltf_size i = 0; i < animation->samplers_count; ++i) {
+            cgltf_animation_sampler& sampler = animation->samplers[i];
+            if (sampler.input == nullptr) {
+                log_parsers->warn("Animation `{}` sampler {} has nullptr input", animation_name, i);
+                continue;
+            }
+            if (sampler.output == nullptr) {
+                log_parsers->warn("Animation `{}` sampler {} has nullptr output", animation_name, i);
+                continue;
+            }
+            log_parsers->info(
+                "Animation `{}` sampler index = {}, "
+                "input type = {}, output type = {}, "
+                "interpolation = {}, "
+                "input timestamp count = {}, value count = {}",
+                animation_name,
+                i,
+                c_str(sampler.input->type),
+                c_str(sampler.output->type),
+                c_str(sampler.interpolation),
+                sampler.input->count,
+                sampler.output->count
+            );
+
+            erhe::scene::Animation_interpolation_mode interpolation_mode = to_erhe(sampler.interpolation);
+            new_animation->samplers.emplace_back(interpolation_mode);
+            auto& erhe_sampler = new_animation->samplers.back();
+            cgltf_size output_component_count = cgltf_num_components(sampler.output->type);
+            cgltf_size output_float_count = sampler.output->count * output_component_count;
+            std::vector<float> input_timestamps(sampler.input ->count);
+            std::vector<float> output_values   (output_float_count);
+            cgltf_size timestamps_read_count = cgltf_accessor_unpack_floats(sampler.input, input_timestamps.data(), sampler.input->count);
+            if (timestamps_read_count != sampler.input->count) {
+                log_parsers->warn(
+                    "Animation `{}` channel {} timestamp read count mismatch: read {} timestamps, expected {}",
+                    animation_name,
+                    i,
+                    timestamps_read_count,
+                    sampler.input->count
+                );
+            }
+            //for (cgltf_size j = 0; j < timestamps_read_count; ++j) {
+            //    log_parsers->trace("Timestamp {}: {}", j, input_timestamps[j]);
+            //}
+
+            cgltf_size value_read_count = cgltf_accessor_unpack_floats(sampler.output, output_values   .data(), output_float_count);
+            if (value_read_count != output_float_count) {
+                log_parsers->warn(
+                    "Animation `{}` channel {} value read count mismatch: read {} values, expected {}",
+                    animation_name,
+                    i,
+                    value_read_count,
+                    output_float_count
+                );
+            }
+
+            erhe_sampler.set(std::move(input_timestamps), std::move(output_values));
+        }
+        for (cgltf_size i = 0; i < animation->channels_count; ++i) {
+            cgltf_animation_channel& channel = animation->channels[i];
+            if (channel.target_node == nullptr) {
+                log_parsers->warn("Animation `{}` channel {} has nullptr target", animation_name, i);
+                continue;
+            }
+            if (channel.sampler == nullptr) {
+                log_parsers->warn("Animation `{}` channel {} has nullptr sampler", animation_name, i);
+                continue;
+            }
+            erhe::scene::Animation_path path = to_erhe(channel.target_path);
+            const auto& target_node = m_nodes.at(channel.target_node - m_data->nodes);
+            const cgltf_size sampler_index = channel.sampler - animation->samplers;
+            log_parsers->info(
+                "Channel {} target = {}, pos = {} path = {}, sampler index = {}",
+                i,
+                target_node->get_name(),
+                target_node->position_in_world(),
+                c_str(channel.target_path),
+                sampler_index
+            );
+
+            //const auto& sampler = new_animation->samplers.at(sampler_index);
+            //const auto component_count = erhe::scene::get_component_count(to_erhe(channel.target_path));
+            //cgltf_size t = 0;
+            //for (cgltf_size j = 0; j < sampler.data.size();) {
+            //    std::stringstream ss;
+            //    ss << fmt::format("t = {}: ", sampler.timestamps.at(t++));
+            //    bool first = true;
+            //    for (cgltf_size k = 0; k < component_count; ++k) {
+            //        if (!first) {
+            //            ss << ", ";
+            //        } else {
+            //            first = false;
+            //        }
+            //        ss << fmt::format("v{} = {}", k, sampler.data[j]);
+            //        ++j;
+            //    }
+            //    log_parsers->trace(ss.str());
+            //}
+
+            new_animation->channels.push_back(
+                erhe::scene::Animation_channel{
+                    .path           = to_erhe(channel.target_path),
+                    .sampler_index  = sampler_index,
+                    .target         = target_node,
+                    .start_position = 0,
+                    .value_offset   = (channel.sampler->interpolation == cgltf_interpolation_type_cubic_spline)
+                        ? get_component_count(path)
+                        : 0
+                }
+            );
+        }
+        m_animations.push_back(new_animation);
     }
 
     void parse_material(cgltf_material* material)
@@ -782,6 +940,18 @@ private:
                 case cgltf_type::cgltf_type_vec4: {
                     //ERHE_VERIFY(accessor->component_type == cgltf_component_type::cgltf_component_type_r_32f); // TODO
                     switch (accessor->component_type) {
+                        case cgltf_component_type::cgltf_component_type_r_8u:
+                        {
+                            auto* property_map = point_attributes.create<
+                                Get_attribute<cgltf_uint, cgltf_type::cgltf_type_vec4>::value_type
+                            >(property_descriptor);
+                            for (cgltf_size index : context.primitive_used_indices) {
+                                Get_attribute<cgltf_uint, cgltf_type::cgltf_type_vec4> a(accessor, index);
+                                const auto p = context.erhe_point_id_from_gltf_index.at(index - context.primitive_min_index);
+                                property_map->put(p, a.value);
+                            }
+                            break;
+                        }
                         case cgltf_component_type::cgltf_component_type_r_32f:
                         {
                             auto* property_map = point_attributes.create<
@@ -1436,20 +1606,24 @@ private:
 
         const auto root_node = m_scene_root->scene().get_root_node();
         for (auto& node : m_nodes) {
+            if (!node) {
+                continue;
+            }
             auto parent = node->parent().lock();
             if (parent == root_node) {
                 color_graph(node.get(), available_colors);
             }
         }
         for (auto& node : m_nodes) {
+            if (!node) {
+                continue;
+            }
             auto i = m_node_colors.find(node.get());
             if (i != m_node_colors.end()) {
                 int color = i->second;
                 node->set_wireframe_color(colors.at(color));
             }
         }
-
-        m_nodes.clear();
     }
 
     std::shared_ptr<Materials>   m_materials_;
@@ -1461,6 +1635,7 @@ private:
 
     std::shared_ptr<erhe::primitive::Material>              m_default_material;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
+    std::vector<std::shared_ptr<erhe::scene::Animation>>    m_animations;
 
     // Scene context
     std::vector<std::shared_ptr<erhe::scene::Node>>   m_nodes;

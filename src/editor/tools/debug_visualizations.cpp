@@ -227,7 +227,7 @@ void Debug_visualizations::mesh_selection_visualization(
     }
 }
 
-void Debug_visualizations::skin_selection_visualization(
+void Debug_visualizations::skin_visualization(
     const Render_context& render_context,
     erhe::scene::Skin*    skin
 )
@@ -264,6 +264,9 @@ void Debug_visualizations::skin_selection_visualization(
 
     for (std::size_t i = 0, end_i = skin->skin_data.joints.size(); i < end_i; ++i) {
         const auto& joint            = skin->skin_data.joints[i];
+        if (!joint) {
+            continue;
+        }
         const mat4  world_from_joint = joint->world_from_node();
 
         line_renderer.set_line_color(joint->get_wireframe_color());
@@ -698,10 +701,10 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 if (mesh) {
                     mesh_selection_visualization(context, mesh.get());
                 }
-                const auto skin = as_skin(attachment);
-                if (skin) {
-                    skin_selection_visualization(context, skin.get());
-                }
+                //const auto skin = as_skin(attachment);
+                //if (skin) {
+                //    skin_visualization(context, skin.get());
+                //}
 
                 const auto camera = as_camera(attachment);
                 if (
@@ -1141,6 +1144,12 @@ void Debug_visualizations::tool_render(
         }
     }
 
+    if (m_skins) {
+        for (const auto& skin : scene_root->scene().get_skins()) {
+            skin_visualization(context, skin.get());
+        }
+    }
+
     if (m_physics) {
         physics_nodes_visualization(scene_root);
     }
@@ -1191,6 +1200,7 @@ void Debug_visualizations::imgui()
     ImGui::Checkbox   ("Physics",               &m_physics);
     ImGui::Checkbox   ("Lights",                &m_lights);
     ImGui::Checkbox   ("Cameras",               &m_cameras);
+    ImGui::Checkbox   ("Skins",                 &m_skins);
     ImGui::Checkbox   ("Selection",             &m_selection);
     ImGui::Checkbox   ("Bounding points",       &m_selection_bounding_points_visible);
     if (m_selection_bounding_points_visible) {

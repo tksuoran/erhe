@@ -21,6 +21,7 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -55,10 +56,10 @@ Forward_renderer::~Forward_renderer() noexcept
 void Forward_renderer::deinitialize_component()
 {
     ERHE_VERIFY(g_forward_renderer == this);
-    m_material_buffers     .reset();
-    m_light_buffers        .reset();
     m_camera_buffers       .reset();
     m_draw_indirect_buffers.reset();
+    m_light_buffers        .reset();
+    m_material_buffers     .reset();
     m_primitive_buffers    .reset();
     m_dummy_texture        .reset();
     g_forward_renderer = nullptr;
@@ -84,12 +85,11 @@ void Forward_renderer::initialize_component()
     erhe::graphics::Scoped_debug_group forward_renderer_initialization{c_forward_renderer_initialize_component};
 
     auto& shader_resources  = *g_program_interface->shader_resources.get();
-    m_material_buffers      = Material_buffer     {&shader_resources.material_interface};
-    m_light_buffers         = Light_buffer        {&shader_resources.light_interface};
     m_camera_buffers        = Camera_buffer       {&shader_resources.camera_interface};
-    m_draw_indirect_buffers = Draw_indirect_buffer{
-        static_cast<size_t>(g_program_interface->config.max_draw_count)
-    };
+    m_draw_indirect_buffers = Draw_indirect_buffer{static_cast<size_t>(g_program_interface->config.max_draw_count)};
+    m_joint_buffers         = Joint_buffer        {&shader_resources.joint_interface};
+    m_light_buffers         = Light_buffer        {&shader_resources.light_interface};
+    m_material_buffers      = Material_buffer     {&shader_resources.material_interface};
     m_primitive_buffers     = Primitive_buffer    {&shader_resources.primitive_interface};
 
     m_dummy_texture = erhe::graphics::create_dummy_texture();
@@ -101,10 +101,11 @@ static constexpr std::string_view c_forward_renderer_render{"Forward_renderer::r
 
 void Forward_renderer::next_frame()
 {
-    m_material_buffers     ->next_frame();
-    m_light_buffers        ->next_frame();
     m_camera_buffers       ->next_frame();
     m_draw_indirect_buffers->next_frame();
+    m_joint_buffers        ->next_frame();
+    m_light_buffers        ->next_frame();
+    m_material_buffers     ->next_frame();
     m_primitive_buffers    ->next_frame();
 }
 
@@ -116,6 +117,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto* camera         = parameters.camera;
     const auto& mesh_spans     = parameters.mesh_spans;
     const auto& lights         = parameters.lights;
+    const auto& skins          = parameters.skins;
     const auto& materials      = parameters.materials;
     const auto& passes         = parameters.passes;
     const auto& filter         = parameters.filter;
@@ -154,6 +156,9 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     const auto naterial_range = m_material_buffers->update(materials);
     m_material_buffers->bind(naterial_range);
+
+    const auto joint_range = m_joint_buffers->update(skins);
+    m_joint_buffers->bind(joint_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.

@@ -71,6 +71,8 @@ public:
     erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec4>*   point_bitangents    {nullptr};
     erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec2>*   point_texcoords     {nullptr};
     erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec4>*   point_colors        {nullptr};
+    erhe::geometry::Property_map<erhe::geometry::Point_id, glm::uvec4>*  point_joint_indices {nullptr};
+    erhe::geometry::Property_map<erhe::geometry::Point_id, glm::vec4>*   point_joint_weights {nullptr};
 };
 
 } // namespace erhe::primitive

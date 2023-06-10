@@ -102,6 +102,8 @@ public:
     [[nodiscard]] auto get_root_node        () const -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_cameras          () -> std::vector<std::shared_ptr<Camera>>&;
     [[nodiscard]] auto get_cameras          () const -> const std::vector<std::shared_ptr<Camera>>&;
+    [[nodiscard]] auto get_skins            () -> std::vector<std::shared_ptr<Skin>>&;
+    [[nodiscard]] auto get_skins            () const -> const std::vector<std::shared_ptr<Skin>>&;
     [[nodiscard]] auto get_flat_nodes       () -> std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto get_flat_nodes       () const -> const std::vector<std::shared_ptr<Node>>&;
     [[nodiscard]] auto get_mesh_layers      () -> std::vector<std::shared_ptr<Mesh_layer>>&;

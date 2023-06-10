@@ -47,6 +47,8 @@ public:
     Vertex_attribute_info texcoord         ;
     Vertex_attribute_info id_vec3          ;
     Vertex_attribute_info attribute_id_uint;
+    Vertex_attribute_info joint_indices    ;
+    Vertex_attribute_info joint_weights    ;
 };
 
 class Build_context_root
@@ -103,12 +105,14 @@ private:
 
     [[nodiscard]] auto get_polygon_normal() -> glm::vec3;
 
-    void build_vertex_position   ();
-    void build_vertex_normal     ();
-    void build_vertex_tangent    ();
-    void build_vertex_bitangent  ();
-    void build_vertex_texcoord   ();
-    void build_vertex_color      (const uint32_t polygon_corner_count);
+    void build_vertex_position     ();
+    void build_vertex_normal       ();
+    void build_vertex_tangent      ();
+    void build_vertex_bitangent    ();
+    void build_vertex_texcoord     ();
+    void build_vertex_color        (const uint32_t polygon_corner_count);
+    void build_vertex_joint_indices();
+    void build_vertex_joint_weights();
 
     void build_centroid_position ();
     void build_centroid_normal   ();

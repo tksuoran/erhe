@@ -478,6 +478,8 @@ void Scene_builder::make_brushes()
                     //"res/models/SM_Deccer_Cubes.gltf"
                     //"res/models/MetalRoughSpheresNoTextures.gltf"
                     //"res/models/SimpleSkin.gltf"
+                    //"res/models/AnimatedTriangle.gltf"
+                    //"res/models/BoxAnimated.gltf"
                     "res/models/RiggedFigure.gltf"
                     //"res/models/Box.gltf"
                     //"res/models/test.gltf"

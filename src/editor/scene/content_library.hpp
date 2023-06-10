@@ -21,6 +21,7 @@ class Material;
 
 namespace erhe::scene
 {
+class Animation;
 class Camera;
 class Light;
 class Mesh;
@@ -62,6 +63,7 @@ class Content_library
 public:
     bool                               is_shown_in_ui{true};
     Library<Brush>                     brushes;
+    Library<erhe::scene::Animation>    animations;
     Library<erhe::scene::Camera>       cameras;
     Library<erhe::scene::Light>        lights;
     Library<erhe::scene::Mesh>         meshes;

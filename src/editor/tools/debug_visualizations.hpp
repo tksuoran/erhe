@@ -65,7 +65,7 @@ private:
         const Render_context& render_context,
         erhe::scene::Mesh*    mesh
     );
-    void skin_selection_visualization(
+    void skin_visualization(
         const Render_context& render_context,
         erhe::scene::Skin*    skin
     );
@@ -109,6 +109,7 @@ private:
     bool  m_selection{true};
     bool  m_lights   {false};
     bool  m_cameras  {false};
+    bool  m_skins    {true};
 
     bool      m_selection_bounding_points_visible{false};
     bool      m_selection_node_axis_visible      {false};

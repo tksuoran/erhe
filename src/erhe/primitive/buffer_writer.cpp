@@ -19,7 +19,8 @@ namespace
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
     const gl::Draw_elements_type  type,
-    const std::size_t             value)
+    const std::size_t             value
+)
 {
     switch (type) {
         //using enum gl::Draw_elements_type;
@@ -52,7 +53,8 @@ inline void write_low(
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
-    const unsigned int            value)
+    const unsigned int            value
+)
 {
     switch (type) {
         //using enum gl::Vertex_attrib_type;
@@ -85,7 +87,8 @@ inline void write_low(
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
-    const glm::vec2               value)
+    const glm::vec2               value
+)
 {
     if (type == gl::Vertex_attrib_type::float_) {
         auto* const ptr = reinterpret_cast<float*>(destination.data());
@@ -106,7 +109,8 @@ inline void write_low(
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
-    const glm::vec3               value)
+    const glm::vec3               value
+)
 {
     if (type == gl::Vertex_attrib_type::float_) {
         auto* const ptr = reinterpret_cast<float*>(destination.data());
@@ -126,7 +130,8 @@ inline void write_low(
 inline void write_low(
     const gsl::span<std::uint8_t> destination,
     const gl::Vertex_attrib_type  type,
-    const glm::vec4               value)
+    const glm::vec4               value
+)
 {
     if (type == gl::Vertex_attrib_type::float_) {
         auto* const ptr = reinterpret_cast<float*>(destination.data());
@@ -143,6 +148,55 @@ inline void write_low(
         ptr[3] = glm::packHalf1x16(value.w);
     } else {
         ERHE_FATAL("unsupported attribute type");
+    }
+}
+
+inline void write_low(
+    const gsl::span<std::uint8_t> destination,
+    const gl::Vertex_attrib_type  type,
+    const glm::uvec4              value
+)
+{
+    switch (type) {
+        //using enum gl::Vertex_attrib_type;
+        case gl::Vertex_attrib_type::unsigned_byte: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            Expects(value.x <= 0xffU);
+            Expects(value.y <= 0xffU);
+            Expects(value.z <= 0xffU);
+            Expects(value.w <= 0xffU);
+            ptr[0] = value.x & 0xffU;
+            ptr[1] = value.y & 0xffU;
+            ptr[2] = value.z & 0xffU;
+            ptr[3] = value.w & 0xffU;
+            break;
+        }
+
+        case gl::Vertex_attrib_type::unsigned_short: {
+            auto* const ptr = reinterpret_cast<uint16_t*>(destination.data());
+            Expects(value.x <= 0xffffU);
+            Expects(value.y <= 0xffffU);
+            Expects(value.z <= 0xffffU);
+            Expects(value.w <= 0xffffU);
+            ptr[0] = value.x & 0xffffU;
+            ptr[1] = value.y & 0xffffU;
+            ptr[2] = value.z & 0xffffU;
+            ptr[3] = value.w & 0xffffU;
+            break;
+        }
+
+        case gl::Vertex_attrib_type::unsigned_int: {
+            auto* ptr = reinterpret_cast<uint32_t*>(destination.data());
+            ptr[0] = value.x;
+            ptr[1] = value.y;
+            ptr[2] = value.z;
+            ptr[3] = value.w;
+            break;
+        }
+
+        default: {
+            ERHE_FATAL("bad index type");
+        }
     }
 }
 
@@ -273,6 +327,21 @@ void Vertex_buffer_writer::write(
 void Vertex_buffer_writer::write(
     const Vertex_attribute_info& attribute,
     const uint32_t               value
+)
+{
+    write_low(
+        vertex_data_span.subspan(
+            vertex_write_offset + attribute.offset,
+            attribute.size
+        ),
+        attribute.data_type,
+        value
+    );
+}
+
+void Vertex_buffer_writer::write(
+    const Vertex_attribute_info& attribute,
+    const glm::uvec4             value
 )
 {
     write_low(

@@ -1,10 +1,11 @@
 #pragma once
 
-#include "renderers/pipeline_renderpass.hpp"
-#include "renderers/material_buffer.hpp"
-#include "renderers/light_buffer.hpp"
 #include "renderers/camera_buffer.hpp"
 #include "renderers/draw_indirect_buffer.hpp"
+#include "renderers/joint_buffer.hpp"
+#include "renderers/light_buffer.hpp"
+#include "renderers/material_buffer.hpp"
+#include "renderers/pipeline_renderpass.hpp"
 #include "renderers/primitive_buffer.hpp"
 
 #include "erhe/components/components.hpp"
@@ -28,10 +29,10 @@ namespace erhe::graphics
 namespace erhe::scene
 {
     class Camera;
+    class Item_filter;
     class Light;
     class Mesh;
     class Mesh_layer;
-    class Item_filter;
 }
 
 namespace editor
@@ -63,6 +64,7 @@ public:
         const erhe::scene::Camera*                                         camera           {nullptr};
         const Light_projections*                                           light_projections{nullptr};
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
+        const gsl::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
         const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
         const std::vector<
             gsl::span<const std::shared_ptr<erhe::scene::Mesh>>
@@ -86,10 +88,11 @@ public:
     void next_frame();
 
 private:
-    std::optional<Material_buffer     >      m_material_buffers;
-    std::optional<Light_buffer        >      m_light_buffers;
     std::optional<Camera_buffer       >      m_camera_buffers;
     std::optional<Draw_indirect_buffer>      m_draw_indirect_buffers;
+    std::optional<Joint_buffer        >      m_joint_buffers;
+    std::optional<Light_buffer        >      m_light_buffers;
+    std::optional<Material_buffer     >      m_material_buffers;
     std::optional<Primitive_buffer    >      m_primitive_buffers;
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
 };

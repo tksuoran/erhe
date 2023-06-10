@@ -47,10 +47,11 @@ using Mesh_info         = erhe::geometry::Mesh_info;
 using erhe::graphics::Vertex_attribute;
 using gl_helpers::size_of_type;
 
-using glm::vec2;
-using glm::vec3;
-using glm::vec4;
-using glm::mat4;
+using vec2 = glm::vec2;
+using vec3 = glm::vec3;
+using vec4 = glm::vec4;
+using uvec4 = glm::uvec4;
+using mat4 = glm::mat4;
 
 
 Primitive_builder::Primitive_builder(
@@ -232,6 +233,36 @@ void Primitive_builder::prepare_vertex_format(Build_info& build_info)
             }
         );
     }
+
+    if (features.joint_indices) {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::joint_indices
+                },
+                .shader_type   = gl::Attribute_type::unsigned_int_vec4,
+                .data_type = {
+                    .type      = gl::Vertex_attrib_type::unsigned_byte,
+                    .dimension = 4
+                }
+            }
+        );
+    }
+
+    if (features.joint_weights) {
+        vf->add_attribute(
+            erhe::graphics::Vertex_attribute{
+                .usage = {
+                    .type      = Vertex_attribute::Usage_type::joint_weights
+                },
+                .shader_type   = gl::Attribute_type::float_vec4,
+                .data_type = {
+                    .type      = gl::Vertex_attrib_type::float_,
+                    .dimension = 4
+                }
+            }
+        );
+    }
 }
 
 Build_context_root::Build_context_root(
@@ -321,20 +352,21 @@ void Build_context_root::get_vertex_attributes()
     ERHE_PROFILE_FUNCTION();
 
     const auto& format_info = build_info.format;
-    attributes.position      = Vertex_attribute_info(vertex_format, format_info.position_type,      3, Vertex_attribute::Usage_type::position,  0);
-    attributes.normal        = Vertex_attribute_info(vertex_format, format_info.normal_type,        3, Vertex_attribute::Usage_type::normal,    0); // content normals
-    attributes.normal_flat   = Vertex_attribute_info(vertex_format, format_info.normal_flat_type,   3, Vertex_attribute::Usage_type::normal,    1); // flat normals
-    attributes.normal_smooth = Vertex_attribute_info(vertex_format, format_info.normal_smooth_type, 3, Vertex_attribute::Usage_type::normal,    2); // smooth normals
-    attributes.tangent       = Vertex_attribute_info(vertex_format, format_info.tangent_type,       4, Vertex_attribute::Usage_type::tangent,   0);
-    attributes.bitangent     = Vertex_attribute_info(vertex_format, format_info.bitangent_type,     4, Vertex_attribute::Usage_type::bitangent, 0);
-    attributes.color         = Vertex_attribute_info(vertex_format, format_info.color_type,         4, Vertex_attribute::Usage_type::color,     0);
-    attributes.texcoord      = Vertex_attribute_info(vertex_format, format_info.texcoord_type,      2, Vertex_attribute::Usage_type::tex_coord, 0);
-    attributes.id_vec3       = Vertex_attribute_info(vertex_format, format_info.id_vec3_type,       3, Vertex_attribute::Usage_type::id,        0);
+    attributes.position      = Vertex_attribute_info(vertex_format, format_info.position_type,      3, Vertex_attribute::Usage_type::position,      0);
+    attributes.normal        = Vertex_attribute_info(vertex_format, format_info.normal_type,        3, Vertex_attribute::Usage_type::normal,        0); // content normals
+    attributes.normal_flat   = Vertex_attribute_info(vertex_format, format_info.normal_flat_type,   3, Vertex_attribute::Usage_type::normal,        1); // flat normals
+    attributes.normal_smooth = Vertex_attribute_info(vertex_format, format_info.normal_smooth_type, 3, Vertex_attribute::Usage_type::normal,        2); // smooth normals
+    attributes.tangent       = Vertex_attribute_info(vertex_format, format_info.tangent_type,       4, Vertex_attribute::Usage_type::tangent,       0);
+    attributes.bitangent     = Vertex_attribute_info(vertex_format, format_info.bitangent_type,     4, Vertex_attribute::Usage_type::bitangent,     0);
+    attributes.color         = Vertex_attribute_info(vertex_format, format_info.color_type,         4, Vertex_attribute::Usage_type::color,         0);
+    attributes.texcoord      = Vertex_attribute_info(vertex_format, format_info.texcoord_type,      2, Vertex_attribute::Usage_type::tex_coord,     0);
+    attributes.id_vec3       = Vertex_attribute_info(vertex_format, format_info.id_vec3_type,       3, Vertex_attribute::Usage_type::id,            0);
     if (erhe::graphics::Instance::info.use_integer_polygon_ids)
     {
         attributes.attribute_id_uint = Vertex_attribute_info(vertex_format, format_info.id_uint_type, 1, Vertex_attribute::Usage_type::id, 0);
     }
-
+    attributes.joint_indices = Vertex_attribute_info(vertex_format, format_info.joint_indices_type, 4, Vertex_attribute::Usage_type::joint_indices, 0);
+    attributes.joint_weights = Vertex_attribute_info(vertex_format, format_info.joint_weights_type, 4, Vertex_attribute::Usage_type::joint_weights, 0);
 }
 
 void Build_context_root::allocate_vertex_buffer()
@@ -731,6 +763,52 @@ void Build_context::build_vertex_texcoord()
     vertex_writer.write(root.attributes.texcoord, texcoord);
 }
 
+void Build_context::build_vertex_joint_indices()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (
+        !root.build_info.format.features.joint_indices ||
+        !root.attributes.joint_indices.is_valid()
+    ) {
+        return;
+    }
+
+    const uvec4 joint_indices = (property_maps.point_joint_indices != nullptr)
+        ? property_maps.point_joint_indices->get(point_id)
+        : uvec4{0u, 0u, 0u, 0u};
+    vertex_writer.write(root.attributes.joint_indices, joint_indices);
+
+    SPDLOG_LOGGER_TRACE(
+        log_primitive_builder,
+        "polygon {} corner {} point {} vertex {} joint_indices {}",
+        polygon_index, corner_id, point_id, vertex_index, joint_indices
+    );
+}
+
+void Build_context::build_vertex_joint_weights()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (
+        !root.build_info.format.features.joint_weights ||
+        !root.attributes.joint_weights.is_valid()
+    ) {
+        return;
+    }
+
+    const vec4 joint_weights = (property_maps.point_joint_weights != nullptr)
+        ? property_maps.point_joint_weights->get(point_id)
+        : vec4{1.0f, 0.0f, 0.0f, 0.0f};
+    vertex_writer.write(root.attributes.joint_weights, joint_weights);
+
+    SPDLOG_LOGGER_TRACE(
+        log_primitive_builder,
+        "polygon {} corner {} point {} vertex {} joint_weights {}",
+        polygon_index, corner_id, point_id, vertex_index, joint_weights
+    );
+}
+
 // namespace {
 //
 // constexpr glm::vec3 unique_colors[13] = {
@@ -901,14 +979,15 @@ void Build_context::build_polygon_fill()
 
             build_polygon_id      ();
             build_vertex_position ();
-            if (any_normal_feature)
-            {
+            if (any_normal_feature) {
                 build_vertex_normal();
             }
             build_vertex_tangent  ();
             build_vertex_bitangent();
             build_vertex_texcoord ();
             build_vertex_color    (polygon.corner_count);
+            build_vertex_joint_indices();
+            build_vertex_joint_weights();
 
             // Indices
             property_maps.corner_indices->put(corner_id, vertex_index);

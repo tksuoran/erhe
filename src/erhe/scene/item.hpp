@@ -65,27 +65,30 @@ public:
 class Item_type
 {
 public:
-    static constexpr uint64_t none             =  0u;
-    static constexpr uint64_t scene            = (1u <<  1);
-    static constexpr uint64_t mesh_layer       = (1u <<  2);
-    static constexpr uint64_t light_layer      = (1u <<  3);
-    static constexpr uint64_t content_folder   = (1u <<  4);
-    static constexpr uint64_t brush            = (1u <<  5);
-    static constexpr uint64_t material         = (1u <<  6);
-    static constexpr uint64_t node             = (1u <<  7);
-    static constexpr uint64_t node_attachment  = (1u <<  8);
-    static constexpr uint64_t mesh             = (1u <<  9);
-    static constexpr uint64_t skin             = (1u << 10);
-    static constexpr uint64_t bone             = (1u << 11);
-    static constexpr uint64_t camera           = (1u << 12);
-    static constexpr uint64_t light            = (1u << 13);
-    static constexpr uint64_t physics          = (1u << 14);
-    static constexpr uint64_t raytrace         = (1u << 15);
-    static constexpr uint64_t frame_controller = (1u << 16);
-    static constexpr uint64_t grid             = (1u << 17);
-    static constexpr uint64_t rendertarget     = (1u << 18);
-    static constexpr uint64_t renderpass       = (1u << 19);
-    static constexpr uint64_t composer         = (1u << 20);
+    static constexpr uint64_t none              =  0u;
+    static constexpr uint64_t scene             = (1u <<  1);
+    static constexpr uint64_t mesh_layer        = (1u <<  2);
+    static constexpr uint64_t light_layer       = (1u <<  3);
+    static constexpr uint64_t content_folder    = (1u <<  4);
+    static constexpr uint64_t brush             = (1u <<  5);
+    static constexpr uint64_t material          = (1u <<  6);
+    static constexpr uint64_t node              = (1u <<  7);
+    static constexpr uint64_t node_attachment   = (1u <<  8);
+    static constexpr uint64_t mesh              = (1u <<  9);
+    static constexpr uint64_t skin              = (1u << 10);
+    static constexpr uint64_t bone              = (1u << 11);
+    //static constexpr uint64_t animation_sampler = (1u << 12);
+    //static constexpr uint64_t animation_channel = (1u << 13);
+    static constexpr uint64_t animation         = (1u << 14);
+    static constexpr uint64_t camera            = (1u << 15);
+    static constexpr uint64_t light             = (1u << 16);
+    static constexpr uint64_t physics           = (1u << 17);
+    static constexpr uint64_t raytrace          = (1u << 18);
+    static constexpr uint64_t frame_controller  = (1u << 19);
+    static constexpr uint64_t grid              = (1u << 20);
+    static constexpr uint64_t rendertarget      = (1u << 21);
+    static constexpr uint64_t renderpass        = (1u << 22);
+    static constexpr uint64_t composer          = (1u << 23);
 
     static constexpr const char* c_bit_labels[] =
     {

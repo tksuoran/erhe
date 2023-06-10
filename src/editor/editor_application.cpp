@@ -46,6 +46,7 @@
 #include "tools/transform/scale_tool.hpp"
 #include "tools/transform/transform_tool.hpp"
 
+#include "windows/animation_window.hpp"
 #include "windows/brdf_slice_window.hpp"
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
@@ -156,6 +157,7 @@ private:
     erhe::graphics::OpenGL_state_tracker         opengl_state_tracker;
     erhe::scene::Scene_message_bus               scene_message_bus;
 
+    editor::Animation_window       animation_window      ;
     editor::Brdf_slice_window      brdf_slice_window     ;
     editor::Brush_tool             brush_tool            ;
     editor::Content_library_window content_library_window;
@@ -289,6 +291,7 @@ auto Application_impl::initialize_components(
         m_components.add(&line_renderer_set );
         m_components.add(&opengl_state_tracker);
 
+        m_components.add(&animation_window      );
         m_components.add(&brdf_slice_window     );
         m_components.add(&brush_tool            );
         m_components.add(&content_library_window);

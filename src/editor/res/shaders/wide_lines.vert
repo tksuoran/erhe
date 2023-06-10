@@ -3,8 +3,26 @@ out float vs_line_width;
 
 void main()
 {
-    mat4 world_from_node          = primitive.primitives[gl_DrawID].world_from_node;
-    mat4 world_from_node_cofactor = primitive.primitives[gl_DrawID].world_from_node_cofactor;
+    mat4 world_from_node         ;
+    mat4 world_from_node_cofactor;
+
+    if (primitive.primitives[gl_DrawID].skinning_factor < 0.5) {
+        world_from_node          = primitive.primitives[gl_DrawID].world_from_node;
+        world_from_node_cofactor = primitive.primitives[gl_DrawID].world_from_node_cofactor;
+    } else {
+        world_from_node =
+            a_weights.x * joint.joints[int(a_joints.x)].world_from_bind +
+            a_weights.y * joint.joints[int(a_joints.y)].world_from_bind +
+            a_weights.z * joint.joints[int(a_joints.z)].world_from_bind +
+            a_weights.w * joint.joints[int(a_joints.w)].world_from_bind;
+        world_from_node_cofactor =
+            a_weights.x * joint.joints[int(a_joints.x)].world_from_bind_cofactor +
+            a_weights.y * joint.joints[int(a_joints.y)].world_from_bind_cofactor +
+            a_weights.z * joint.joints[int(a_joints.z)].world_from_bind_cofactor +
+            a_weights.w * joint.joints[int(a_joints.w)].world_from_bind_cofactor;
+    }
+
+
     mat4 clip_from_world          = camera.cameras[0].clip_from_world;
 
     vec4 position        = world_from_node * vec4(a_position, 1.0);

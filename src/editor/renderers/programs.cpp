@@ -234,6 +234,7 @@ auto Programs_impl::make_prototype(
     create_info.struct_types.push_back(&shader_resources.light_interface.light_struct);
     create_info.struct_types.push_back(&shader_resources.camera_interface.camera_struct);
     create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
+    create_info.struct_types.push_back(&shader_resources.joint_interface.joint_struct);
     create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_in());
     create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_out());
     create_info.add_interface_block(&shader_resources.material_interface.material_block);
@@ -241,6 +242,7 @@ auto Programs_impl::make_prototype(
     create_info.add_interface_block(&shader_resources.light_interface.light_control_block);
     create_info.add_interface_block(&shader_resources.camera_interface.camera_block);
     create_info.add_interface_block(&shader_resources.primitive_interface.primitive_block);
+    create_info.add_interface_block(&shader_resources.joint_interface.joint_block);
 
     if (erhe::graphics::Instance::info.gl_version < 430) {
         ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));

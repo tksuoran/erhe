@@ -19,8 +19,8 @@ namespace editor
 class Joint_struct
 {
 public:
-    std::size_t world_from_joint;            // mat4 16 * 4 bytes
-    std::size_t world_from_joint_cofactor;   // mat4 16 * 4 bytes
+    std::size_t world_from_bind;            // mat4 16 * 4 bytes
+    std::size_t world_from_bind_cofactor;   // mat4 16 * 4 bytes
 };
 
 class Joint_interface

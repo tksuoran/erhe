@@ -567,9 +567,9 @@ void Node::update_transform(uint64_t serial)
 
     serial = std::max(serial, current_parent->node_data.transforms.update_serial);
 
-    if (node_data.transforms.update_serial >= serial) {
-        return;
-    }
+    // if (node_data.transforms.update_serial >= serial) {
+    //     return;
+    // }
 
     node_data.transforms.world_from_node.set(
         current_parent->world_from_node() * parent_from_node(),

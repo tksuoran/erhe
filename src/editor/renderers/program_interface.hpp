@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renderers/camera_buffer.hpp"
+#include "renderers/joint_buffer.hpp"
 #include "renderers/light_buffer.hpp"
 #include "renderers/material_buffer.hpp"
 #include "renderers/primitive_buffer.hpp"
@@ -24,8 +25,9 @@ public:
         int max_material_count  {256};
         int max_light_count     {256};
         int max_camera_count    {256};
-        int max_primitive_count {8000}; // GLTF primitives
+        int max_primitive_count {8000}; // glTF primitives
         int max_draw_count      {8000};
+        int max_joint_count     {1000}; // glTF joint nodes
     };
     Config config;
 
@@ -52,7 +54,8 @@ public:
             std::size_t max_material_count,
             std::size_t max_light_count,
             std::size_t max_camera_count,
-            std::size_t max_primitive_count
+            std::size_t max_primitive_count,
+            std::size_t max_joint_count
         );
 
         erhe::graphics::Fragment_outputs          fragment_outputs;
@@ -60,6 +63,7 @@ public:
 
         Camera_interface    camera_interface;
         Light_interface     light_interface;
+        Joint_interface     joint_interface;
         Material_interface  material_interface;
         Primitive_interface primitive_interface;
     };

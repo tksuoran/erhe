@@ -215,42 +215,52 @@ auto Scene::get_root_node() const -> std::shared_ptr<erhe::scene::Node>
     return m_root_node;
 }
 
-[[nodiscard]] auto Scene::get_cameras() -> std::vector<std::shared_ptr<Camera>>&
+auto Scene::get_cameras() -> std::vector<std::shared_ptr<Camera>>&
 {
     return m_cameras;
 }
 
-[[nodiscard]] auto Scene::get_cameras() const -> const std::vector<std::shared_ptr<Camera>>&
+auto Scene::get_cameras() const -> const std::vector<std::shared_ptr<Camera>>&
 {
     return m_cameras;
 }
 
-[[nodiscard]] auto Scene::get_flat_nodes() -> std::vector<std::shared_ptr<Node>>&
+auto Scene::get_skins() -> std::vector<std::shared_ptr<Skin>>&
+{
+    return m_skins;
+}
+
+auto Scene::get_skins() const -> const std::vector<std::shared_ptr<Skin>>&
+{
+    return m_skins;
+}
+
+auto Scene::get_flat_nodes() -> std::vector<std::shared_ptr<Node>>&
 {
     return m_flat_node_vector;
 }
 
-[[nodiscard]] auto Scene::get_flat_nodes() const -> const std::vector<std::shared_ptr<Node>>&
+auto Scene::get_flat_nodes() const -> const std::vector<std::shared_ptr<Node>>&
 {
     return m_flat_node_vector;
 }
 
-[[nodiscard]] auto Scene::get_mesh_layers() -> std::vector<std::shared_ptr<Mesh_layer>>&
+auto Scene::get_mesh_layers() -> std::vector<std::shared_ptr<Mesh_layer>>&
 {
     return m_mesh_layers;
 }
 
-[[nodiscard]] auto Scene::get_mesh_layers() const -> const std::vector<std::shared_ptr<Mesh_layer>>&
+auto Scene::get_mesh_layers() const -> const std::vector<std::shared_ptr<Mesh_layer>>&
 {
     return m_mesh_layers;
 }
 
-[[nodiscard]] auto Scene::get_light_layers() -> std::vector<std::shared_ptr<Light_layer>>&
+auto Scene::get_light_layers() -> std::vector<std::shared_ptr<Light_layer>>&
 {
     return m_light_layers;
 }
 
-[[nodiscard]] auto Scene::get_light_layers() const -> const std::vector<std::shared_ptr<Light_layer>>&
+auto Scene::get_light_layers() const -> const std::vector<std::shared_ptr<Light_layer>>&
 {
     return m_light_layers;
 }

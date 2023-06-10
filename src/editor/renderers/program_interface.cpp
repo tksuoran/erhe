@@ -49,7 +49,8 @@ Program_interface::Shader_resources::Shader_resources(
     std::size_t max_material_count,
     std::size_t max_light_count,
     std::size_t max_camera_count,
-    std::size_t max_primitive_count
+    std::size_t max_primitive_count,
+    std::size_t max_joint_count
 )
     : fragment_outputs{
         erhe::graphics::Fragment_output{
@@ -150,12 +151,31 @@ Program_interface::Shader_resources::Shader_resources(
             {
                 .type  = Vertex_attribute::Usage_type::id,
             }
+        },
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 9,
+            .shader_type     = gl::Attribute_type::unsigned_int_vec4,
+            .name            = "a_joints",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::joint_indices,
+            }
+        },
+        erhe::graphics::Vertex_attribute_mapping{
+            .layout_location = 10,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_weights",
+            .src_usage       =
+            {
+                .type  = Vertex_attribute::Usage_type::joint_weights,
+            }
         }
     }
     , camera_interface   {max_camera_count   }
     , light_interface    {max_light_count    }
     , material_interface {max_material_count }
     , primitive_interface{max_primitive_count}
+    , joint_interface    {max_joint_count    }
 {
 }
 
@@ -171,12 +191,14 @@ void Program_interface::initialize_component()
     ini->get("max_camera_count",    config.max_camera_count   );
     ini->get("max_primitive_count", config.max_primitive_count);
     ini->get("max_draw_count",      config.max_draw_count     );
+    ini->get("max_joint_count",     config.max_joint_count    );
 
     shader_resources = std::make_unique<Shader_resources>(
         config.max_material_count,
         config.max_light_count,
         config.max_camera_count,
-        config.max_primitive_count
+        config.max_primitive_count,
+        config.max_joint_count
     );
 
     g_program_interface = this;

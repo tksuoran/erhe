@@ -87,7 +87,9 @@ public:
             .bitangent        = true,
             .color            = true,
             .texcoord         = true,
-            .id               = true
+            .id               = true,
+            .joint_indices    = true,
+            .joint_weights    = true,
         };
         format_info.normal_style              = erhe::primitive::Normal_style::corner_normals;
         format_info.vertex_attribute_mappings = &g_program_interface->shader_resources->attribute_mappings;

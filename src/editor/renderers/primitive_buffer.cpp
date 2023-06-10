@@ -8,6 +8,7 @@
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 namespace editor
@@ -22,7 +23,7 @@ Primitive_interface::Primitive_interface(const std::size_t max_primitive_count)
         .color                    = primitive_struct.add_vec4 ("color"                   )->offset_in_parent(),
         .material_index           = primitive_struct.add_uint ("material_index"          )->offset_in_parent(),
         .size                     = primitive_struct.add_float("size"                    )->offset_in_parent(),
-        .extra2                   = primitive_struct.add_uint ("extra2"                  )->offset_in_parent(),
+        .skinning_factor          = primitive_struct.add_float("skinning_factor"         )->offset_in_parent(),
         .extra3                   = primitive_struct.add_uint ("extra3"                  )->offset_in_parent()
     },
     max_primitive_count{max_primitive_count}
@@ -153,7 +154,7 @@ auto Primitive_buffer::update(
             const glm::vec3 id_offset_vec3  = erhe::toolkit::vec3_from_uint(m_id_offset);
             const glm::vec4 id_offset_vec4  = glm::vec4{id_offset_vec3, 0.0f};
             const uint32_t  material_index  = (primitive.material != nullptr) ? primitive.material->material_buffer_index : 0u;
-            const uint32_t  extra2          = 0;
+            const float     skinning_factor = get_skin(node) ? 1.0f : 0.0f;
             const uint32_t  extra3          = 0;
 
             using erhe::graphics::as_span;
@@ -174,7 +175,7 @@ auto Primitive_buffer::update(
                 write(primitive_gpu_data, m_writer.write_offset + offsets.color,                    color_span                       );
                 write(primitive_gpu_data, m_writer.write_offset + offsets.material_index,           as_span(material_index          ));
                 write(primitive_gpu_data, m_writer.write_offset + offsets.size,                     size_span                        );
-                write(primitive_gpu_data, m_writer.write_offset + offsets.extra2,                   as_span(extra2                  ));
+                write(primitive_gpu_data, m_writer.write_offset + offsets.skinning_factor,          as_span(skinning_factor         ));
                 write(primitive_gpu_data, m_writer.write_offset + offsets.extra3,                   as_span(extra3                  ));
 
             }

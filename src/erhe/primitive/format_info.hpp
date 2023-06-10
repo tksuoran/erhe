@@ -29,6 +29,8 @@ public:
     bool color          {false};
     bool texcoord       {false};
     bool id             {false};
+    bool joint_indices  {false};
+    bool joint_weights  {false};
 };
 
 class Format_info
@@ -47,6 +49,8 @@ public:
     gl::Vertex_attrib_type texcoord_type     {gl::Vertex_attrib_type::float_};
     gl::Vertex_attrib_type id_vec3_type      {gl::Vertex_attrib_type::float_};
     gl::Vertex_attrib_type id_uint_type      {gl::Vertex_attrib_type::float_};
+    gl::Vertex_attrib_type joint_indices_type{gl::Vertex_attrib_type::unsigned_byte};
+    gl::Vertex_attrib_type joint_weights_type{gl::Vertex_attrib_type::float_};
 
     glm::vec4                                  constant_color           {1.0f};
     bool                                       keep_geometry            {false};

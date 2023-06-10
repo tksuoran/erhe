@@ -12,6 +12,7 @@ namespace erhe::primitive
 using vec2 = glm::vec2;
 using vec3 = glm::vec3;
 using vec4 = glm::vec4;
+using uvec4 = glm::uvec4;
 
 Property_maps::Property_maps(
     const erhe::geometry::Geometry& geometry,
@@ -26,21 +27,23 @@ Property_maps::Property_maps(
     );
     //const erhe::log::Indenter indenter;
 
-    polygon_normals      = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_normals     );
-    polygon_centroids    = geometry.polygon_attributes().find<vec3>(erhe::geometry::c_polygon_centroids   );
-    polygon_colors       = geometry.polygon_attributes().find<vec4>(erhe::geometry::c_polygon_colors      );
-    corner_normals       = geometry.corner_attributes ().find<vec3>(erhe::geometry::c_corner_normals      );
-    corner_tangents      = geometry.corner_attributes ().find<vec4>(erhe::geometry::c_corner_tangents     );
-    corner_bitangents    = geometry.corner_attributes ().find<vec4>(erhe::geometry::c_corner_bitangents   );
-    corner_texcoords     = geometry.corner_attributes ().find<vec2>(erhe::geometry::c_corner_texcoords    );
-    corner_colors        = geometry.corner_attributes ().find<vec4>(erhe::geometry::c_corner_colors       );
-    point_locations      = geometry.point_attributes  ().find<vec3>(erhe::geometry::c_point_locations     );
-    point_normals        = geometry.point_attributes  ().find<vec3>(erhe::geometry::c_point_normals       );
-    point_normals_smooth = geometry.point_attributes  ().find<vec3>(erhe::geometry::c_point_normals_smooth);
-    point_tangents       = geometry.point_attributes  ().find<vec4>(erhe::geometry::c_point_tangents      );
-    point_bitangents     = geometry.point_attributes  ().find<vec4>(erhe::geometry::c_point_bitangents    );
-    point_texcoords      = geometry.point_attributes  ().find<vec2>(erhe::geometry::c_point_texcoords     );
-    point_colors         = geometry.point_attributes  ().find<vec4>(erhe::geometry::c_point_colors        );
+    polygon_normals      = geometry.polygon_attributes().find<vec3 >(erhe::geometry::c_polygon_normals     );
+    polygon_centroids    = geometry.polygon_attributes().find<vec3 >(erhe::geometry::c_polygon_centroids   );
+    polygon_colors       = geometry.polygon_attributes().find<vec4 >(erhe::geometry::c_polygon_colors      );
+    corner_normals       = geometry.corner_attributes ().find<vec3 >(erhe::geometry::c_corner_normals      );
+    corner_tangents      = geometry.corner_attributes ().find<vec4 >(erhe::geometry::c_corner_tangents     );
+    corner_bitangents    = geometry.corner_attributes ().find<vec4 >(erhe::geometry::c_corner_bitangents   );
+    corner_texcoords     = geometry.corner_attributes ().find<vec2 >(erhe::geometry::c_corner_texcoords    );
+    corner_colors        = geometry.corner_attributes ().find<vec4 >(erhe::geometry::c_corner_colors       );
+    point_locations      = geometry.point_attributes  ().find<vec3 >(erhe::geometry::c_point_locations     );
+    point_normals        = geometry.point_attributes  ().find<vec3 >(erhe::geometry::c_point_normals       );
+    point_normals_smooth = geometry.point_attributes  ().find<vec3 >(erhe::geometry::c_point_normals_smooth);
+    point_tangents       = geometry.point_attributes  ().find<vec4 >(erhe::geometry::c_point_tangents      );
+    point_bitangents     = geometry.point_attributes  ().find<vec4 >(erhe::geometry::c_point_bitangents    );
+    point_texcoords      = geometry.point_attributes  ().find<vec2 >(erhe::geometry::c_point_texcoords     );
+    point_colors         = geometry.point_attributes  ().find<vec4 >(erhe::geometry::c_point_colors        );
+    point_joint_indices  = geometry.point_attributes  ().find<uvec4>(erhe::geometry::c_point_joint_indices );
+    point_joint_weights  = geometry.point_attributes  ().find<vec4 >(erhe::geometry::c_point_joint_weights );
 
     if (point_locations == nullptr) {
         log_primitive_builder->error("geometry has no point locations");
@@ -124,6 +127,16 @@ Property_maps::Property_maps(
 #endif
 
     corner_indices = corner_attributes.create<unsigned int>(erhe::geometry::c_corner_indices);
+
+    // if ((point_joint_indices == nullptr) && format_info.features.joint_indices) {
+    //     point_joint_indices = polygon_attributes.create<uvec4>(erhe::geometry::c_point_joint_indices);
+    //     log_primitive_builder->trace("created point_joint_indices");
+    // }
+    // if ((point_joint_weights == nullptr) && format_info.features.joint_weights) {
+    //     point_joint_weights = polygon_attributes.create<vec4>(erhe::geometry::c_point_joint_weights);
+    //     log_primitive_builder->trace("created point_joint_weights");
+    // }
+
 }
 
 } // namespace erhe::primitive
