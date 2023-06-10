@@ -746,21 +746,16 @@ private:
         };
         erhe_node->set_parent_from_node(matrix);
     }
-    void parse_camera(cgltf_node* node)
+    void parse_camera(const cgltf_size camera_index)
     {
-        cgltf_camera* camera = node->camera;
-        const cgltf_size node_index   = node   - m_data->nodes;
-        const cgltf_size camera_index = camera - m_data->cameras;
+        cgltf_camera* camera = &m_data->cameras[camera_index];
         const char* camera_name = safe_str(camera->name);
-        log_parsers->trace(
-            "Camera: node_index = {}, camera index = {}, name = {}",
-            node_index, camera_index, camera_name
-        );
+        log_parsers->trace("Camera: camera index = {}, name = {}", camera_index, camera_name);
 
-        auto erhe_node  = m_nodes.at(node_index);
-        auto new_camera = m_scene_root->content_library()->cameras.make(camera_name);
-        new_camera->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
-        auto* projection = new_camera->projection();
+        auto erhe_camera = m_scene_root->content_library()->cameras.make(camera_name);
+        m_cameras[camera_index] = erhe_camera;
+        erhe_camera->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
+        auto* projection = erhe_camera->projection();
         switch (camera->type) {
             case cgltf_camera_type::cgltf_camera_type_perspective: {
                 const cgltf_camera_perspective& perspective = camera->data.perspective;
@@ -797,37 +792,28 @@ private:
                 break;
             }
         }
-
-        erhe_node->attach(new_camera);
     }
-    void parse_light(cgltf_node* node)
+    void parse_light(const cgltf_size light_index)
     {
-        cgltf_light* light = node->light;
-        const cgltf_size node_index  = node  - m_data->nodes;
-        const cgltf_size light_index = light - m_data->lights;
+        cgltf_light* light = &m_data->lights[light_index];
         const char* light_name = safe_str(light->name);
-        log_parsers->trace(
-            "Light: node_index = {}, camera index = {}, name = {}",
-            node_index, light_index, light_name
-        );
+        log_parsers->trace("Light: camera index = {}, name = {}", light_index, light_name);
 
-        auto erhe_node = m_nodes.at(node_index);
-        auto new_light = m_scene_root->content_library()->lights.make(light_name);
-        new_light->color = glm::vec3{
+        auto erhe_light = m_scene_root->content_library()->lights.make(light_name);
+        m_lights[light_index] = erhe_light;
+        erhe_light->color = glm::vec3{
             light->color[0],
             light->color[1],
             light->color[2]
         };
-        new_light->intensity        = light->intensity;
-        new_light->type             = to_erhe(light->type);
-        new_light->range            = light->range;
-        new_light->inner_spot_angle = light->spot_inner_cone_angle;
-        new_light->outer_spot_angle = light->spot_outer_cone_angle;
+        erhe_light->intensity        = light->intensity;
+        erhe_light->type             = to_erhe(light->type);
+        erhe_light->range            = light->range;
+        erhe_light->inner_spot_angle = light->spot_inner_cone_angle;
+        erhe_light->outer_spot_angle = light->spot_outer_cone_angle;
 
-        new_light->layer_id = m_scene_root->layers().light()->id;
-        new_light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
-
-        erhe_node->attach(new_light);
+        erhe_light->layer_id = m_scene_root->layers().light()->id;
+        erhe_light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     }
 
     class Primitive_context
@@ -1020,7 +1006,7 @@ private:
                     break;
                 }
                 case cgltf_type::cgltf_type_vec4: {
-                    ERHE_VERIFY(accessor->component_type == cgltf_component_type::cgltf_component_type_r_32f); // TODO
+                    //ERHE_VERIFY(accessor->component_type == cgltf_component_type::cgltf_component_type_r_32f); // TODO
                     auto* property_map = corner_attributes.create<glm::vec4>(property_descriptor);
                     for (erhe::geometry::Corner_id corner_id = context.corner_id_start; corner_id != context.corner_id_end; ++corner_id) {
                         const cgltf_size index = context.gltf_index_from_corner_id.at(corner_id - context.corner_id_start);
@@ -1363,14 +1349,11 @@ private:
         load_new_primitive_geometry(context, geometry_entry);
     }
     void parse_primitive(
-        const std::shared_ptr<erhe::scene::Node>& erhe_node,
         const std::shared_ptr<erhe::scene::Mesh>& erhe_mesh,
         cgltf_mesh*                               mesh,
         cgltf_primitive*                          primitive
     )
     {
-        static_cast<void>(erhe_node);
-
         const cgltf_size primitive_index = primitive - mesh->primitives;
 
         auto name = (mesh->name != nullptr)
@@ -1409,31 +1392,27 @@ private:
 
         //// erhe_node->attach(node_raytrace); TODO
     }
-    void parse_skin(cgltf_node* node)
+    void parse_skin(const cgltf_size skin_index)
     {
-        cgltf_skin* skin = node->skin;
+        cgltf_skin* skin = &m_data->skins[skin_index];
         const char* skin_name = safe_str(skin->name);
-        const cgltf_size node_index = node - m_data->nodes;
-        const cgltf_size skin_index = skin - m_data->skins;
-        log_parsers->info(
-            "Skin: node index = {}, skin index = {}, name = {}",
-            node_index, skin_index, skin_name
-        );
+        log_parsers->info("Skin: skin index = {}, name = {}", skin_index, skin_name);
 
-        auto erhe_node = m_nodes.at(node_index);
         auto erhe_skin = m_scene_root->content_library()->skins.make(skin_name);
+        m_skins[skin_index] = erhe_skin;
         erhe_skin->enable_flag_bits(
             Item_flags::content    |
             Item_flags::show_in_ui |
             Item_flags::id
         );
+        erhe_skin->skin_data.joints.resize(skin->joints_count);
+        erhe_skin->skin_data.inverse_bind_matrices.resize(skin->joints_count);
         for (cgltf_size i = 0; i < skin->joints_count; ++i) {
             if (skin->joints[i] != nullptr) {
                 const cgltf_size joint_node_index = skin->joints[i] - m_data->nodes;
                 auto& erhe_joint_node = m_nodes.at(joint_node_index);
-                erhe_skin->skin_data.joints.push_back(erhe_joint_node);
-            } else {
-                erhe_skin->skin_data.joints.push_back({});
+                ERHE_VERIFY(erhe_joint_node);
+                erhe_skin->skin_data.joints[i] = erhe_joint_node;
             }
             if (skin->inverse_bind_matrices != nullptr) {
                 cgltf_float m[16];
@@ -1444,9 +1423,9 @@ private:
                     m[ 8], m[ 9], m[10], m[11],
                     m[12], m[13], m[14], m[15]
                 };
-                erhe_skin->skin_data.inverse_bind_matrices.push_back(matrix);
+                erhe_skin->skin_data.inverse_bind_matrices[i] = matrix;
             } else {
-                erhe_skin->skin_data.inverse_bind_matrices.push_back(glm::mat4{1.0f});
+                erhe_skin->skin_data.inverse_bind_matrices[i] = glm::mat4{1.0f};
             }
         }
         if (skin->skeleton != nullptr) {
@@ -1455,22 +1434,15 @@ private:
         } else {
             erhe_skin->skin_data.skeleton.reset();;
         }
-
-        erhe_node->attach(erhe_skin);
     }
-    void parse_mesh(cgltf_node* node)
+    void parse_mesh(const cgltf_size mesh_index)
     {
-        cgltf_mesh* mesh = node->mesh;
+        cgltf_mesh* mesh = &m_data->meshes[mesh_index];
         const char* mesh_name = safe_str(mesh->name);
-        const cgltf_size node_index = node - m_data->nodes;
-        const cgltf_size mesh_index = mesh - m_data->meshes;
-        log_parsers->trace(
-            "Mesh: node index = {}, mesh index = {}, name = {}",
-            node_index, mesh_index, mesh_name
-        );
+        log_parsers->trace("Mesh: mesh index = {}, name = {}", mesh_index, mesh_name);
 
-        auto erhe_node = m_nodes.at(node_index);
         auto erhe_mesh = m_scene_root->content_library()->meshes.make(mesh_name);
+        m_meshes[mesh_index] = erhe_mesh;
         erhe_mesh->enable_flag_bits(
             Item_flags::content     |
             Item_flags::visible     |
@@ -1480,11 +1452,10 @@ private:
             Item_flags::id
         );
         for (cgltf_size i = 0; i < mesh->primitives_count; ++i) {
-            parse_primitive(erhe_node, erhe_mesh, mesh, &mesh->primitives[i]);
+            parse_primitive(erhe_mesh, mesh, &mesh->primitives[i]);
         }
 
         erhe_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
-        erhe_node->attach(erhe_mesh);
     }
     void parse_node(
         cgltf_node*                        node,
@@ -1504,39 +1475,43 @@ private:
         m_nodes[node_index] = erhe_node;
         parse_node_transform(node, erhe_node);
 
-        if (node->camera != nullptr) {
-            parse_camera(node);
-        }
-
-        if (node->light != nullptr) {
-            parse_light(node);
-        }
-
-        if (node->mesh != nullptr) {
-            parse_mesh(node);
-        }
-
-        if (node->skin != nullptr) {
-            parse_skin(node);
-        }
-
         for (cgltf_size i = 0; i < node->children_count; ++i) {
             parse_node(node->children[i], erhe_node);
         }
     }
-    void fix_node_hierarchy(cgltf_node* node)
+    void fix_pointers(cgltf_node* node)
     {
         const cgltf_size node_index = node - m_data->nodes;
-        auto& erhe_parent_node = m_nodes.at(node_index);
+        auto& erhe_node = m_nodes.at(node_index);
         for (cgltf_size i = 0; i < node->children_count; ++i) {
             cgltf_node* child_node       = node->children[i];
             cgltf_size  child_node_index = child_node - m_data->nodes;
             auto& erhe_child_node        = m_nodes.at(child_node_index);
-            erhe_child_node->set_parent(erhe_parent_node);
+            erhe_child_node->set_parent(erhe_node);
+        }
+
+        if (node->camera != nullptr) {
+            const cgltf_size camera_index = node->camera - m_data->cameras;
+            erhe_node->attach(m_cameras[camera_index]);
+        }
+
+        if (node->light != nullptr) {
+            const cgltf_size light_index = node->light - m_data->lights;
+            erhe_node->attach(m_lights[light_index]);
+        }
+
+        if (node->mesh != nullptr) {
+            const cgltf_size mesh_index = node->mesh - m_data->meshes;
+            erhe_node->attach(m_meshes[mesh_index]);
+        }
+
+        if (node->skin != nullptr) {
+            const cgltf_size skin_index = node->skin - m_data->skins;
+            erhe_node->attach(m_skins[skin_index]);
         }
 
         for (cgltf_size i = 0; i < node->children_count; ++i) {
-            fix_node_hierarchy(node->children[i]);
+            fix_pointers(node->children[i]);
         }
     }
     void color_graph(
@@ -1574,21 +1549,33 @@ private:
         log_parsers->trace("Scene: id = {}, name = {}", scene_index, scene_name);
 
         m_nodes.resize(m_data->nodes_count);
-        std::fill(
-            m_nodes.begin(),
-            m_nodes.end(),
-            std::shared_ptr<erhe::scene::Node>{}
-        );
+        const auto root = m_scene_root->scene().get_root_node();
         for (cgltf_size i = 0; i < scene->nodes_count; ++i) {
-            parse_node(
-                scene->nodes[i],
-                m_scene_root->scene().get_root_node()
-            );
+            parse_node(scene->nodes[i], root);
         }
 
-        // Setup node hierarchy
+        m_cameras.resize(m_data->cameras_count);
+        for (cgltf_size i = 0; i < m_data->cameras_count; ++i) {
+            parse_camera(i);
+        }
+
+        m_lights.resize(m_data->lights_count);
+        for (cgltf_size i = 0; i < m_data->lights_count; ++i) {
+            parse_light(i);
+        }
+
+        m_meshes.resize(m_data->meshes_count);
+        for (cgltf_size i = 0; i < m_data->meshes_count; ++i) {
+            parse_mesh(i);
+        }
+
+        m_skins.resize(m_data->skins_count);
+        for (cgltf_size i = 0; i < m_data->skins_count; ++i) {
+            parse_skin(i);
+        }
+
         for (cgltf_size i = 0; i < scene->nodes_count; ++i) {
-            fix_node_hierarchy(scene->nodes[i]);
+            fix_pointers(scene->nodes[i]);
         }
 
         // Assign node colors
@@ -1635,7 +1622,11 @@ private:
 
     std::shared_ptr<erhe::primitive::Material>              m_default_material;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>>         m_meshes;
     std::vector<std::shared_ptr<erhe::scene::Animation>>    m_animations;
+    std::vector<std::shared_ptr<erhe::scene::Camera>>       m_cameras;
+    std::vector<std::shared_ptr<erhe::scene::Light>>        m_lights;
+    std::vector<std::shared_ptr<erhe::scene::Skin>>         m_skins;
 
     // Scene context
     std::vector<std::shared_ptr<erhe::scene::Node>>   m_nodes;
