@@ -1,8 +1,8 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "renderers/primitive_buffer.hpp"
-#include "renderers/program_interface.hpp"
-#include "editor_log.hpp"
+#include "erhe/renderer/primitive_buffer.hpp"
+#include "erhe/renderer/program_interface.hpp"
+#include "erhe/renderer/renderer_log.hpp"
 
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/material.hpp"
@@ -11,7 +11,7 @@
 #include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-namespace editor
+namespace erhe::renderer
 {
 
 Primitive_interface::Primitive_interface(const std::size_t max_primitive_count)
@@ -204,4 +204,4 @@ auto Primitive_buffer::update(
     return m_writer.range;
 }
 
-}
+} // namespace erhe::renderer

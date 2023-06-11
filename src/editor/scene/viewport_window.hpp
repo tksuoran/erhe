@@ -38,6 +38,11 @@ namespace erhe::graphics
     class OpenGL_state_tracker;
 }
 
+namespace erhe::renderer
+{
+    class Light_projections;
+}
+
 namespace erhe::scene
 {
     class Camera;
@@ -50,7 +55,6 @@ class Editor_rendering;
 class Editor_scenes;
 class Grid_tool;
 class Id_renderer;
-class Light_projections;
 class Node_raytrace;
 class Physics_window;
 class Post_processing;

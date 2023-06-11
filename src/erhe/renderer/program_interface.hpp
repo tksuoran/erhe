@@ -1,19 +1,21 @@
 #pragma once
 
-#include "renderers/camera_buffer.hpp"
-#include "renderers/joint_buffer.hpp"
-#include "renderers/light_buffer.hpp"
-#include "renderers/material_buffer.hpp"
-#include "renderers/primitive_buffer.hpp"
+#include "erhe/renderer/camera_buffer.hpp"
+#include "erhe/renderer/joint_buffer.hpp"
+#include "erhe/renderer/light_buffer.hpp"
+#include "erhe/renderer/material_buffer.hpp"
+#include "erhe/renderer/primitive_buffer.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 
 #include <memory>
 
-namespace editor {
+namespace erhe::renderer
+{
 
 class Program_interface
     : public erhe::components::Component
@@ -58,6 +60,15 @@ public:
             std::size_t max_joint_count
         );
 
+        [[nodiscard]] auto make_prototype(
+            const std::filesystem::path&               shader_path,
+            erhe::graphics::Shader_stages::Create_info create_info
+        ) -> std::unique_ptr<erhe::graphics::Shader_stages::Prototype>;
+
+        [[nodiscard]] auto make_program(
+            erhe::graphics::Shader_stages::Prototype& prototype
+        ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+
         erhe::graphics::Fragment_outputs          fragment_outputs;
         erhe::graphics::Vertex_attribute_mappings attribute_mappings;
 
@@ -73,4 +84,4 @@ public:
 
 extern Program_interface* g_program_interface;
 
-}
+} // namespace erhe::renderer

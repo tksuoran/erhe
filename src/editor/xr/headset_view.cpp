@@ -6,7 +6,6 @@
 #include "editor_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/shadow_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 #include "scene/scene_builder.hpp"
@@ -39,6 +38,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
@@ -107,10 +107,10 @@ void Headset_view::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::Imgui_windows>();
-    require<erhe::application::Window>();
+    require<erhe::application::Window       >();
+    require<erhe::renderer::Shadow_renderer >();
     require<Mesh_memory    >();
     require<Scene_builder  >();
-    require<Shadow_renderer>();
     require<Tools          >();
 }
 
@@ -179,7 +179,7 @@ void Headset_view::initialize_component()
     set_description(c_description);
     g_tools->register_tool(this);
 
-    m_shadow_render_node = g_shadow_renderer->create_node_for_scene_view(*this);
+    m_shadow_render_node = g_editor_rendering->create_shadow_node_for_scene_view(*this);
     erhe::application::g_rendergraph->connect(
         erhe::application::Rendergraph_node_key::shadow_maps,
         m_shadow_render_node,

@@ -1,17 +1,18 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "renderers/material_buffer.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/program_interface.hpp"
-#include "editor_log.hpp"
+#include "erhe/renderer/material_buffer.hpp"
+//#include "erhe/renderer/programs.hpp"
+#include "erhe/renderer/program_interface.hpp"
+#include "erhe/renderer/renderer_log.hpp"
 
+#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <imgui.h>
 
-namespace editor
+namespace erhe::renderer
 {
 
 Material_interface::Material_interface(std::size_t max_material_count)
@@ -40,6 +41,16 @@ Material_buffer::Material_buffer(Material_interface* material_interface)
     : Multi_buffer        {"material"}
     , m_material_interface{material_interface}
 {
+    m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::nearest,
+        gl::Texture_mag_filter::nearest
+    );
+
+    m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::linear,
+        gl::Texture_mag_filter::linear
+    );
+
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
         m_material_interface->material_block.binding_point(),
@@ -85,7 +96,7 @@ auto Material_buffer::update(
                     *material->texture.get(),
                     material->sampler
                         ? *material->sampler.get()
-                        : *g_programs->linear_sampler.get()
+                        : *m_linear_sampler.get()
                 )
             : 0;
 
@@ -128,4 +139,4 @@ auto Material_buffer::update(
     return m_used_handles;
 }
 
-} // namespace editor
+} // namespace erhe::renderer

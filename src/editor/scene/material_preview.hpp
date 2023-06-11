@@ -1,12 +1,12 @@
 #pragma once
 
 #include "renderers/composer.hpp"
-#include "renderers/light_buffer.hpp"
-#include "renderers/pipeline_renderpass.hpp"
 #include "scene/scene_view.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/renderer//light_buffer.hpp"
+#include "erhe/renderer//pipeline_renderpass.hpp"
 #include "erhe/scene/viewport.hpp"
 
 #include <gsl/gsl>
@@ -23,6 +23,11 @@ namespace erhe::primitive
     class Material;
 }
 
+namespace erhe::renderer
+{
+    class Light_projections;
+}
+
 namespace erhe::scene
 {
     class Camera;
@@ -35,7 +40,6 @@ namespace editor
 {
 
 class Content_library;
-class Light_projections;
 class Scene_root;
 
 class Material_preview
@@ -69,7 +73,7 @@ public:
     auto get_scene_root       () const -> std::shared_ptr<Scene_root>                          override;
     auto get_camera           () const -> std::shared_ptr<erhe::scene::Camera>                 override;
     auto get_rendergraph_node ()       -> std::shared_ptr<erhe::application::Rendergraph_node> override;
-    auto get_light_projections() const -> const Light_projections*                             override;
+    auto get_light_projections() const -> const erhe::renderer::Light_projections*             override;
     auto get_shadow_texture   () const -> erhe::graphics::Texture*                             override;
 
     // Public API
@@ -93,9 +97,9 @@ private:
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
     std::shared_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
-    Light_projections                             m_light_projections;
+    erhe::renderer::Light_projections             m_light_projections;
+    erhe::renderer::Pipeline_renderpass           m_pipeline_renderpass;
     Composer                                      m_composer;
-    Pipeline_renderpass                           m_pipeline_renderpass;
 
     std::shared_ptr<Scene_root>          m_scene_root;
     std::shared_ptr<Content_library>     m_content_library;
@@ -109,11 +113,11 @@ private:
     std::shared_ptr<erhe::graphics::Texture>   m_shadow_texture;
     std::shared_ptr<erhe::primitive::Material> m_last_material;
 
-    glm::vec4         m_clear_color{0.0f, 0.0f, 0.0f, 0.333f};
+    glm::vec4 m_clear_color{0.0f, 0.0f, 0.0f, 0.333f};
 
-    int   m_slice_count{40};
-    int   m_stack_count{22};
-    float m_radius{1.0f};
+    int       m_slice_count{40};
+    int       m_stack_count{22};
+    float     m_radius{1.0f};
 };
 
 extern Material_preview* g_material_preview;

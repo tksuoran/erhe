@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace editor
+namespace erhe::renderer
 {
 
 enum class Primitive_color_source : unsigned int
@@ -36,4 +36,4 @@ static constexpr std::array<const char*, 3> c_primitive_color_source_strings_dat
 Primitive_color_source primitive_color_source  {Primitive_color_source::constant_color};
 glm::vec4              primitive_constant_color{1.0f, 1.0f, 1.0f, 1.0f};
 
-} // namespace editor
+} // namespace erhe::renderer

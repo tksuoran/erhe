@@ -6,7 +6,6 @@
 
 #include "scene/content_library.hpp"
 #include "scene/debug_draw.hpp"
-#include "scene/scene_message_bus.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"

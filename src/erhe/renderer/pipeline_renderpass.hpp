@@ -5,7 +5,7 @@
 
 #include <functional>
 
-namespace editor
+namespace erhe::renderer
 {
 
 class Pipeline_renderpass
@@ -18,4 +18,4 @@ public:
     std::function<void()>    end;
 };
 
-} // namespace editor
+} // namespace erhe::renderer

@@ -17,13 +17,13 @@ class Vertex_input_state;
 class Pipeline_data
 {
 public:
-    const char*          name          {nullptr};
-    Shader_stages*       shader_stages {nullptr};
-    Vertex_input_state*  vertex_input  {nullptr};
-    Input_assembly_state input_assembly;
-    Rasterization_state  rasterization;
-    Depth_stencil_state  depth_stencil;
-    Color_blend_state    color_blend;
+    const char*               name          {nullptr};
+    Shader_stages*            shader_stages {nullptr};
+    const Vertex_input_state* vertex_input  {nullptr};
+    Input_assembly_state      input_assembly;
+    Rasterization_state       rasterization;
+    Depth_stencil_state       depth_stencil;
+    Color_blend_state         color_blend;
 };
 
 class Pipeline final

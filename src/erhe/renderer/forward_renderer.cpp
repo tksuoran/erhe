@@ -1,10 +1,8 @@
-#include "renderers/forward_renderer.hpp"
+#include "erhe/renderer/forward_renderer.hpp"
 
-#include "editor_log.hpp"
-#include "renderers/mesh_memory.hpp"
-#include "renderers/program_interface.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/shadow_renderer.hpp"
+#include "erhe/renderer/renderer_log.hpp"
+#include "erhe/renderer/program_interface.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -14,6 +12,7 @@
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
+#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
@@ -33,7 +32,7 @@
 
 #include <functional>
 
-namespace editor
+namespace erhe::renderer
 {
 
 using erhe::graphics::Vertex_input_state;
@@ -69,9 +68,9 @@ void Forward_renderer::declare_required_components()
 {
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    require<Mesh_memory      >();
+    //require<Mesh_memory      >();
     require<Program_interface>();
-    require<Programs         >();
+    //require<Programs         >();
 }
 
 static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
@@ -93,6 +92,16 @@ void Forward_renderer::initialize_component()
     m_primitive_buffers     = Primitive_buffer    {&shader_resources.primitive_interface};
 
     m_dummy_texture = erhe::graphics::create_dummy_texture();
+
+    m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::nearest,
+        gl::Texture_mag_filter::nearest
+    );
+
+    m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::linear,
+        gl::Texture_mag_filter::linear
+    );
 
     g_forward_renderer = this;
 }
@@ -131,12 +140,12 @@ void Forward_renderer::render(const Render_parameters& parameters)
         ?
             erhe::graphics::get_handle(
                 *parameters.shadow_texture,
-                *g_programs->nearest_sampler.get()
+                *m_nearest_sampler.get()
             )
         : 0;
     const uint64_t fallback_texture_handle = erhe::graphics::get_handle(
         *m_dummy_texture.get(),
-        *g_programs->nearest_sampler.get()
+        *m_nearest_sampler.get()
     );
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -151,7 +160,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     }
 
     if (!erhe::graphics::Instance::info.use_bindless_texture) {
-        erhe::graphics::s_texture_unit_cache.reset(g_programs->base_texture_unit);
+        erhe::graphics::s_texture_unit_cache.reset(m_base_texture_unit);
     }
 
     const auto naterial_range = m_material_buffers->update(materials);
@@ -182,8 +191,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
         ERHE_PROFILE_SCOPE("bind texture units");
 
         if (enable_shadows) {
-            gl::bind_texture_unit(g_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (g_programs->shadow_texture_unit, g_programs->nearest_sampler->gl_name());
+            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit, m_nearest_sampler->gl_name());
         }
 
         erhe::graphics::s_texture_unit_cache.bind(fallback_texture_handle);
@@ -230,7 +239,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 ERHE_PROFILE_SCOPE("mdi");
                 gl::multi_draw_elements_indirect(
                     pipeline.data.input_assembly.primitive_topology,
-                    g_mesh_memory->gl_index_type(),
+                    parameters.index_type,
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
@@ -277,7 +286,7 @@ void Forward_renderer::render_fullscreen(
         ?
             erhe::graphics::get_handle(
                 *parameters.shadow_texture,
-                *g_programs->nearest_sampler.get()
+                *m_nearest_sampler.get()
             )
         : 0;
 
@@ -317,8 +326,8 @@ void Forward_renderer::render_fullscreen(
         if (erhe::graphics::Instance::info.use_bindless_texture) {
             gl::make_texture_handle_resident_arb(shadow_texture_handle);
         } else {
-            gl::bind_texture_unit(g_programs->shadow_texture_unit, parameters.shadow_texture->gl_name());
-            gl::bind_sampler     (g_programs->shadow_texture_unit, g_programs->nearest_sampler->gl_name());
+            gl::bind_texture_unit(Shadow_renderer::shadow_texture_unit, parameters.shadow_texture->gl_name());
+            gl::bind_sampler     (Shadow_renderer::shadow_texture_unit, m_nearest_sampler->gl_name());
         }
     }
 
@@ -349,4 +358,4 @@ void Forward_renderer::render_fullscreen(
     }
 }
 
-} // namespace editor
+} // namespace erhe::renderer

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace editor
+namespace erhe::renderer
 {
 
 //enum class Fill_mode : int
@@ -22,6 +22,7 @@ enum class Blend_mode : int
 //    any          = 2
 //};
 
+// TODO This does not? belong to erhe::renderer?
 enum class Visualization_mode : unsigned int
 {
     off = 0,
@@ -43,4 +44,4 @@ enum class Primitive_size_source : unsigned int
     constant_size
 };
 
-}
+} // namespace erhe::renderer

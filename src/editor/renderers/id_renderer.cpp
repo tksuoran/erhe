@@ -2,7 +2,6 @@
 
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/program_interface.hpp"
 #include "renderers/programs.hpp"
 
 #include "erhe/application/configuration.hpp"
@@ -22,6 +21,7 @@
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/renderer/program_interface.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -109,11 +109,11 @@ void Id_renderer::deinitialize_component()
 
 void Id_renderer::declare_required_components()
 {
-    require<erhe::application::Configuration>();
+    require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    require<Mesh_memory      >();
-    require<Program_interface>();
-    require<Programs         >();
+    require<erhe::renderer::Program_interface     >();
+    require<Mesh_memory>();
+    require<Programs   >();
 }
 
 static constexpr std::string_view c_id_renderer_initialize_component{"Id_renderer::initialize_component()"};
@@ -134,10 +134,10 @@ void Id_renderer::initialize_component()
 
     const erhe::application::Scoped_gl_context gl_context;
 
-    auto& shader_resources  = *g_program_interface->shader_resources.get();
-    m_camera_buffers        = std::make_unique<Camera_buffer       >(&shader_resources.camera_interface);
-    m_draw_indirect_buffers = std::make_unique<Draw_indirect_buffer>(g_program_interface->config.max_draw_count);
-    m_primitive_buffers     = std::make_unique<Primitive_buffer    >(&shader_resources.primitive_interface);
+    auto& shader_resources  = *erhe::renderer::g_program_interface->shader_resources.get();
+    m_camera_buffers        = std::make_unique<erhe::renderer::Camera_buffer       >(&shader_resources.camera_interface);
+    m_draw_indirect_buffers = std::make_unique<erhe::renderer::Draw_indirect_buffer>(erhe::renderer::g_program_interface->config.max_draw_count);
+    m_primitive_buffers     = std::make_unique<erhe::renderer::Primitive_buffer    >(&shader_resources.primitive_interface);
 
     const auto reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
 
@@ -291,8 +291,8 @@ void Id_renderer::render(
         .require_at_least_one_bit_clear = 0u
     };
 
-    const Primitive_interface_settings settings{
-        .color_source = Primitive_color_source::id_offset
+    const erhe::renderer::Primitive_interface_settings settings{
+        .color_source = erhe::renderer::Primitive_color_source::id_offset
     };
 
     const auto primitive_range            = m_primitive_buffers->update(meshes, id_filter, settings, true);

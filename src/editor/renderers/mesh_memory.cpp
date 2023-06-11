@@ -1,14 +1,14 @@
 #include "renderers/mesh_memory.hpp"
 
-#include "renderers/program_interface.hpp"
-
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/raytrace/ibuffer.hpp"
+#include "erhe/renderer/program_interface.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -92,7 +92,7 @@ public:
             .joint_weights    = true,
         };
         format_info.normal_style              = erhe::primitive::Normal_style::corner_normals;
-        format_info.vertex_attribute_mappings = &g_program_interface->shader_resources->attribute_mappings;
+        format_info.vertex_attribute_mappings = &erhe::renderer::g_program_interface->shader_resources->attribute_mappings;
 
         erhe::primitive::Primitive_builder::prepare_vertex_format(build_info);
 
@@ -119,7 +119,7 @@ public:
     auto get_vertex_input() -> erhe::graphics::Vertex_input_state* override
     {
         if (!m_vertex_input) {
-            const auto& shader_resources = *g_program_interface->shader_resources.get();
+            const auto& shader_resources = *erhe::renderer::g_program_interface->shader_resources.get();
             m_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>(
                 erhe::graphics::Vertex_input_state_data::make(
                     shader_resources.attribute_mappings,
@@ -129,6 +129,12 @@ public:
                 )
             );
         }
+        return m_vertex_input.get();
+    }
+
+    auto get_vertex_input() const -> const erhe::graphics::Vertex_input_state* override
+    {
+        ERHE_VERIFY(m_vertex_input);
         return m_vertex_input.get();
     }
 
@@ -168,7 +174,7 @@ void Mesh_memory::declare_required_components()
 {
     require<erhe::application::Configuration>();
     require<erhe::application::Gl_context_provider>();
-    require<Program_interface>();
+    require<erhe::renderer::Program_interface>();
 }
 
 void Mesh_memory::initialize_component()

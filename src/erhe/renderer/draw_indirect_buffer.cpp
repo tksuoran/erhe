@@ -1,9 +1,9 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "renderers/draw_indirect_buffer.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/program_interface.hpp"
-#include "editor_log.hpp"
+#include "erhe/renderer/draw_indirect_buffer.hpp"
+//#include "erhe/renderer/programs.hpp"
+#include "erhe/renderer/program_interface.hpp"
+#include "erhe/renderer/renderer_log.hpp"
 
 #include "erhe/gl/draw_indirect.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -17,7 +17,7 @@
 
 #include <imgui.h>
 
-namespace editor
+namespace erhe::renderer
 {
 
 Draw_indirect_buffer::Draw_indirect_buffer(const std::size_t max_draw_count)

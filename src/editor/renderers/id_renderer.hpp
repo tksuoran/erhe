@@ -1,8 +1,8 @@
 #pragma once
 
-#include "renderers/camera_buffer.hpp"
-#include "renderers/draw_indirect_buffer.hpp"
-#include "renderers/primitive_buffer.hpp"
+#include "erhe/renderer/camera_buffer.hpp"
+#include "erhe/renderer/draw_indirect_buffer.hpp"
+#include "erhe/renderer/primitive_buffer.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -152,9 +152,9 @@ private:
     bool               m_use_renderbuffers{true};
     bool               m_use_textures     {false};
 
-    std::unique_ptr<Camera_buffer       > m_camera_buffers;
-    std::unique_ptr<Draw_indirect_buffer> m_draw_indirect_buffers;
-    std::unique_ptr<Primitive_buffer    > m_primitive_buffers;
+    std::unique_ptr<erhe::renderer::Camera_buffer       > m_camera_buffers;
+    std::unique_ptr<erhe::renderer::Draw_indirect_buffer> m_draw_indirect_buffers;
+    std::unique_ptr<erhe::renderer::Primitive_buffer    > m_primitive_buffers;
 };
 
 extern Id_renderer* g_id_renderer;

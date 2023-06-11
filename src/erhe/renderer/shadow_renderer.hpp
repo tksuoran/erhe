@@ -1,8 +1,8 @@
 #pragma once
 
-#include "renderers/light_buffer.hpp"
-#include "renderers/draw_indirect_buffer.hpp"
-#include "renderers/primitive_buffer.hpp"
+#include "erhe/renderer/light_buffer.hpp"
+#include "erhe/renderer/draw_indirect_buffer.hpp"
+#include "erhe/renderer/primitive_buffer.hpp"
 
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/components/components.hpp"
@@ -17,6 +17,7 @@ namespace erhe::graphics
 {
     class Framebuffer;
     class Gpu_timer;
+    class Sampler;
     class Texture;
     class Vertex_input_state;
 }
@@ -28,18 +29,19 @@ namespace erhe::scene
     class Mesh;
 }
 
-namespace editor
+namespace erhe::renderer
 {
 
-class Editor_message;
 class Scene_root;
 class Scene_view;
-class Shadow_render_node;
+//class Shadow_render_node;
 
 class Shadow_renderer
     : public erhe::components::Component
 {
 public:
+    static const int shadow_texture_unit{15};
+
     class Config
     {
     public:
@@ -66,7 +68,9 @@ public:
     class Render_parameters
     {
     public:
-        Scene_root*                                                scene_root;
+        const erhe::graphics::Vertex_input_state*                  vertex_input_state;
+        gl::Draw_elements_type                                     index_type;
+
         const erhe::scene::Camera*                                 view_camera;
         const erhe::scene::Viewport                                view_camera_viewport;
         const erhe::scene::Viewport                                light_camera_viewport;
@@ -83,26 +87,35 @@ public:
         Light_projections&                                         light_projections;
     };
 
-    auto create_node_for_scene_view(Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>;
-    auto get_node_for_view         (const Scene_view* scene_view) -> std::shared_ptr<Shadow_render_node>;
-    auto get_nodes                 () const -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
-
     auto render    (const Render_parameters& parameters) -> bool;
     void next_frame();
 
 private:
-    void on_message                      (Editor_message& message);
-    void handle_graphics_settings_changed();
+    class Pipeline_cache_entry
+    {
+    public:
+        uint64_t                            serial            {0};
+        erhe::graphics::Vertex_input_state* vertex_input_state{nullptr};
+        erhe::graphics::Pipeline            pipeline;
+    };
 
-    erhe::graphics::Pipeline                            m_pipeline;
+    [[nodiscard]] auto get_pipeline(
+        const erhe::graphics::Vertex_input_state* vertex_input_state
+    ) -> erhe::graphics::Pipeline&;
+
+    uint64_t                          m_pipeline_cache_serial{0};
+    std::vector<Pipeline_cache_entry> m_pipeline_cache_entries;
+
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
     std::unique_ptr<erhe::graphics::Gpu_timer>          m_gpu_timer;
-    std::vector<std::shared_ptr<Shadow_render_node>>    m_nodes;
     std::unique_ptr<Light_buffer        >               m_light_buffers;
     std::unique_ptr<Draw_indirect_buffer>               m_draw_indirect_buffers;
     std::unique_ptr<Primitive_buffer    >               m_primitive_buffers;
+
+    std::unique_ptr<erhe::graphics::Shader_stages> m_shader_stages;
+    std::unique_ptr<erhe::graphics::Sampler>       m_nearest_sampler;
 };
 
 extern Shadow_renderer* g_shadow_renderer;
 
-} // namespace editor
+} // namespace erhe::renderer

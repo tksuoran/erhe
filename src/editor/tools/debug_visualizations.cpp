@@ -4,7 +4,6 @@
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/shadow_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -23,6 +22,7 @@
 #include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -370,15 +370,15 @@ void Debug_visualizations::directional_light_visualization(
     const Light_visualization_context& context
 )
 {
-    const auto shadow_render_node = g_shadow_renderer->get_node_for_view(context.render_context.scene_view);
+    const auto shadow_render_node = g_editor_rendering->get_shadow_node_for_view(context.render_context.scene_view);
     if (!shadow_render_node) {
         return;
     }
 
     auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
-    const Light_projections& light_projections           = shadow_render_node->get_light_projections();
-    const auto*              light                       = context.light;
-    const auto               light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light);
+    const auto& light_projections           = shadow_render_node->get_light_projections();
+    const auto* light                       = context.light;
+    const auto  light_projection_transforms = light_projections.get_light_projection_transforms_for_light(light);
 
     if (light_projection_transforms == nullptr) {
         return;
@@ -710,7 +710,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 if (
                     camera &&
                     (viewport_config != nullptr) &&
-                    (viewport_config->debug_visualizations.camera == Visualization_mode::selected)
+                    (viewport_config->debug_visualizations.camera == erhe::renderer::Visualization_mode::selected)
                 ) {
                     camera_visualization(context, camera.get());
                 }

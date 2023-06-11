@@ -1,18 +1,12 @@
 #pragma once
 
-#include "renderers/enums.hpp"
-#include "renderers/primitive_buffer.hpp"
 #include "renderers/render_style.hpp"
 
-#include "erhe/application/imgui/imgui_window.hpp"
 #include "erhe/components/components.hpp"
-#include "erhe/graphics/instance.hpp"
 #include "erhe/primitive/enums.hpp"
-#include "erhe/scene/item.hpp"
+#include "erhe/renderer/enums.hpp"
 
 #include <glm/glm.hpp>
-
-#include <string_view>
 
 namespace editor
 {
@@ -29,8 +23,8 @@ public:
     class Debug_visualizations
     {
     public:
-        Visualization_mode light {Visualization_mode::selected};
-        Visualization_mode camera{Visualization_mode::selected};
+        erhe::renderer::Visualization_mode light {erhe::renderer::Visualization_mode::selected};
+        erhe::renderer::Visualization_mode camera{erhe::renderer::Visualization_mode::selected};
     };
 
     Debug_visualizations debug_visualizations;

@@ -1,8 +1,8 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "renderers/light_buffer.hpp"
-#include "renderers/program_interface.hpp"
-#include "editor_log.hpp"
+#include "erhe/renderer/light_buffer.hpp"
+#include "erhe/renderer/program_interface.hpp"
+#include "erhe/renderer/renderer_log.hpp"
 
 #include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/material.hpp"
@@ -11,7 +11,7 @@
 #include "erhe/scene/transform.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-namespace editor
+namespace erhe::renderer
 {
 
 Light_interface::Light_interface(const std::size_t max_light_count)
@@ -278,4 +278,4 @@ void Light_buffer::bind_control_buffer(const erhe::application::Buffer_range& ra
     m_control_buffer.bind(range);
 }
 
-} // namespace editor
+} // namespace erhe::renderer

@@ -15,7 +15,6 @@
 #include "rendergraph/shadow_render_node.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
-#include "renderers/shadow_renderer.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
@@ -56,6 +55,7 @@
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -131,12 +131,12 @@ void Scene_builder::declare_required_components()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Imgui_windows      >();
     require<erhe::application::Rendergraph        >();
+    require<erhe::renderer::Shadow_renderer       >();
     require<Debug_view_window>();
     require<Editor_rendering >();
     require<Editor_scenes    >();
     require<Fly_camera_tool  >();
     require<Mesh_memory      >();
-    require<Shadow_renderer  >();
     require<Viewport_windows >();
 }
 
@@ -475,12 +475,12 @@ void Scene_builder::make_brushes()
                 //constexpr bool instantiate = true;
 
                 const char* files_names[] = {
-                    //"res/models/SM_Deccer_Cubes.gltf"
+                    "res/models/SM_Deccer_Cubes.gltf"
                     //"res/models/MetalRoughSpheresNoTextures.gltf"
                     //"res/models/SimpleSkin.gltf"
                     //"res/models/AnimatedTriangle.gltf"
                     //"res/models/BoxAnimated.gltf"
-                    "res/models/RiggedFigure.gltf"
+                    //"res/models/RiggedFigure.gltf"
                     //"res/models/Box.gltf"
                     //"res/models/test.gltf"
                     //"res/models/Suzanne.gltf"

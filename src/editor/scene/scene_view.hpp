@@ -40,6 +40,11 @@ namespace erhe::graphics
     class Texture;
 }
 
+namespace erhe::renderer
+{
+    class Light_projections;
+}
+
 namespace erhe::scene
 {
     class Camera;
@@ -51,7 +56,6 @@ namespace editor
 
 class Editor_message;
 class Grid;
-class Light_projections;
 class Node_raytrace;
 class Render_context;
 class Scene_root;
@@ -118,7 +122,7 @@ public:
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
     [[nodiscard]] virtual auto get_shadow_texture    () const -> erhe::graphics::Texture*;
     [[nodiscard]] virtual auto get_rendergraph_node  () -> std::shared_ptr<erhe::application::Rendergraph_node> = 0;
-    [[nodiscard]] virtual auto get_light_projections () const -> const Light_projections*;
+    [[nodiscard]] virtual auto get_light_projections () const -> const erhe::renderer::Light_projections*;
     [[nodiscard]] virtual auto as_viewport_window    () -> Viewport_window*;
     [[nodiscard]] virtual auto as_viewport_window    () const -> const Viewport_window*;
 

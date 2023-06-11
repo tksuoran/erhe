@@ -1,8 +1,8 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "renderers/camera_buffer.hpp"
-#include "renderers/program_interface.hpp"
-#include "editor_log.hpp"
+#include "erhe/renderer/camera_buffer.hpp"
+#include "erhe/renderer/program_interface.hpp"
+#include "erhe/renderer/renderer_log.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -13,7 +13,7 @@
 #include "erhe/toolkit/profile.hpp"
 
 
-namespace editor
+namespace erhe::renderer
 {
 
 

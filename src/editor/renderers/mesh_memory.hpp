@@ -31,6 +31,7 @@ public:
 
     [[nodiscard]] virtual auto gl_vertex_format   () const -> erhe::graphics::Vertex_format& = 0;
     [[nodiscard]] virtual auto gl_index_type      () const -> gl::Draw_elements_type = 0;
+    [[nodiscard]] virtual auto get_vertex_input   () const -> const erhe::graphics::Vertex_input_state* = 0;
     [[nodiscard]] virtual auto get_vertex_input   () -> erhe::graphics::Vertex_input_state* = 0;
     [[nodiscard]] virtual auto get_vertex_data_in () -> erhe::graphics::Shader_resource& = 0;
     [[nodiscard]] virtual auto get_vertex_data_out() -> erhe::graphics::Shader_resource& = 0;

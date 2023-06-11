@@ -4,6 +4,8 @@ add_library(erhe::scene ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    animation.cpp
+    animation.hpp
     camera.cpp
     camera.hpp
     item.cpp

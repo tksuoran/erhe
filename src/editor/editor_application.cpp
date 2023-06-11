@@ -14,19 +14,20 @@
 
 #include "rendergraph/shadow_render_node.hpp"
 
-#include "renderers/forward_renderer.hpp"
 #include "renderers/programs.hpp"
-#include "renderers/program_interface.hpp"
+#include "renderers/id_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
+
+#include "erhe/renderer/forward_renderer.hpp"
+#include "erhe/renderer/program_interface.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #   include "xr/hand_tracker.hpp"
 #   include "xr/theremin.hpp"
 #endif
-#include "renderers/id_renderer.hpp"
-#include "renderers/mesh_memory.hpp"
-#include "renderers/program_interface.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/shadow_renderer.hpp"
+
 #include "rendergraph/post_processing.hpp"
 #include "scene/material_preview.hpp"
 
@@ -113,6 +114,7 @@
 #include "erhe/physics/physics_log.hpp"
 #include "erhe/primitive/primitive_log.hpp"
 #include "erhe/raytrace/raytrace_log.hpp"
+#include "erhe/renderer/renderer_log.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/toolkit/toolkit_log.hpp"
 #include "erhe/ui/ui_log.hpp"
@@ -155,6 +157,9 @@ private:
     erhe::application::Window                    window;
 
     erhe::graphics::OpenGL_state_tracker         opengl_state_tracker;
+    erhe::renderer::Forward_renderer             forward_renderer;
+    erhe::renderer::Program_interface            program_interface;
+    erhe::renderer::Shadow_renderer              shadow_renderer;
     erhe::scene::Scene_message_bus               scene_message_bus;
 
     editor::Animation_window       animation_window      ;
@@ -170,7 +175,6 @@ private:
     editor::Editor_scenes          editor_scenes         ;
     editor::Editor_view_client     editor_view_client    ;
     editor::Fly_camera_tool        fly_camera_tool       ;
-    editor::Forward_renderer       forward_renderer      ;
     editor::Grid_tool              grid_tool             ;
     editor::Hotbar                 hotbar                ;
     editor::Hover_tool             hover_tool            ;
@@ -193,7 +197,6 @@ private:
     editor::Physics_window         physics_window        ;
     editor::Post_processing        post_processing       ;
     editor::Post_processing_window post_processing_window;
-    editor::Program_interface      program_interface     ;
     editor::Programs               programs              ;
     editor::Properties             properties            ;
     editor::Rendergraph_window     rendergraph_window    ;
@@ -205,7 +208,6 @@ private:
     editor::Scene_commands         scene_commands        ;
     editor::Selection_tool         selection_tool        ;
     editor::Settings_window        settings_window       ;
-    editor::Shadow_renderer        shadow_renderer       ;
     editor::Tool_properties_window tool_properties_window;
     editor::Tools                  tools                 ;
 #if !defined(ERHE_DISABLE_TRANSFORM_TOOL)
@@ -238,6 +240,7 @@ void init_logs()
     erhe::physics::initialize_logging();
     erhe::primitive::initialize_logging();
     erhe::raytrace::initialize_logging();
+    erhe::renderer::initialize_logging();
     erhe::scene::initialize_logging();
     erhe::toolkit::initialize_logging();
     erhe::ui::initialize_logging();

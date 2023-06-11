@@ -34,9 +34,11 @@ auto Render_style_data::is_primitive_mode_enabled(
 
 auto Render_style_data::get_primitive_settings(
     erhe::primitive::Primitive_mode primitive_mode
-) const -> Primitive_interface_settings
+) const -> erhe::renderer::Primitive_interface_settings
 {
     using namespace erhe::primitive;
+    using Primitive_size_source = erhe::renderer::Primitive_size_source;
+    using Primitive_interface_settings = erhe::renderer::Primitive_interface_settings;
     switch (primitive_mode) {
         case Primitive_mode::not_set          : return Primitive_interface_settings{};
         case Primitive_mode::polygon_fill     : return Primitive_interface_settings{};

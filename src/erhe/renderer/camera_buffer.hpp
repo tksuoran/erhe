@@ -13,7 +13,7 @@ namespace erhe::scene
     class Viewport;
 }
 
-namespace editor
+namespace erhe::renderer
 {
 
 class Camera_struct
@@ -58,4 +58,4 @@ private:
     Camera_interface* m_camera_interface{nullptr};
 };
 
-} // namespace editor
+} // namespace erhe::renderer

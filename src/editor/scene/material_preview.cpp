@@ -327,7 +327,7 @@ void Material_preview::render_preview(
 
     const auto& layers = m_scene_root->layers();
 
-    m_light_projections = Light_projections{
+    m_light_projections = erhe::renderer::Light_projections{
         layers.light()->lights,
         m_camera.get(),
         erhe::scene::Viewport{},
@@ -373,7 +373,7 @@ auto Material_preview::get_rendergraph_node() -> std::shared_ptr<erhe::applicati
     return {};
 }
 
-auto Material_preview::get_light_projections() const -> const Light_projections*
+auto Material_preview::get_light_projections() const -> const erhe::renderer::Light_projections*
 {
     return &m_light_projections;
 }

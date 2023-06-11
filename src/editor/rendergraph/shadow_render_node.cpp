@@ -1,14 +1,17 @@
 #include "rendergraph/shadow_render_node.hpp"
+#include "renderers/mesh_memory.hpp"
 #include "editor_log.hpp"
 
-#include "renderers/shadow_renderer.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 
+#include "erhe/application/configuration.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -21,18 +24,17 @@ namespace editor
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
+
 Shadow_render_node::Shadow_render_node(
-    Shadow_renderer& shadow_renderer,
-    Scene_view&      scene_view,
-    const int        resolution,
-    const int        light_count,
-    const bool       reverse_depth
+    Scene_view& scene_view,
+    const int   resolution,
+    const int   light_count,
+    const bool  reverse_depth
 )
     : erhe::application::Rendergraph_node{
         "shadow_maps" // TODO fmt::format("Shadow render {}", viewport_window->name())
     }
-    , m_shadow_renderer{shadow_renderer}
-    , m_scene_view     {scene_view}
+    , m_scene_view{scene_view}
 {
     register_output(
         erhe::application::Resource_routing::Resource_provided_by_producer,
@@ -120,9 +122,11 @@ void Shadow_render_node::execute_rendergraph_node()
 
     scene_root->sort_lights();
 
-    m_shadow_renderer.render(
-        Shadow_renderer::Render_parameters{
-            .scene_root            = scene_root.get(),
+    erhe::renderer::g_shadow_renderer->render(
+        erhe::renderer::Shadow_renderer::Render_parameters{
+            .vertex_input_state    = g_mesh_memory->get_vertex_input(),
+            .index_type            = g_mesh_memory->gl_index_type(),
+
             .view_camera           = camera.get(),
             ////.view_camera_viewport  = m_viewport_window->projection_viewport(),
             .light_camera_viewport = m_viewport,
@@ -169,7 +173,7 @@ void Shadow_render_node::execute_rendergraph_node()
     return m_scene_view;
 }
 
-[[nodiscard]] auto Shadow_render_node::get_light_projections() -> Light_projections&
+[[nodiscard]] auto Shadow_render_node::get_light_projections() -> erhe::renderer::Light_projections&
 {
     return m_light_projections;
 }

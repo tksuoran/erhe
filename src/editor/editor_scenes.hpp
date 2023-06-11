@@ -1,11 +1,6 @@
 #pragma once
 
-//#include "editor_message.hpp"
 #include "erhe/components/components.hpp"
-//#include "erhe/message_bus/message_bus.hpp"
-//#include "erhe/scene/scene_message.hpp"
-
-//#include <thread>
 
 #include <memory>
 

@@ -1,17 +1,9 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
-#include "renderers/shadow_renderer.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 
-#include "editor_log.hpp"
-#include "editor_message_bus.hpp"
-
-#include "rendergraph/shadow_render_node.hpp"
-#include "renderers/mesh_memory.hpp"
-#include "renderers/program_interface.hpp"
-#include "renderers/programs.hpp"
-#include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "windows/debug_view_window.hpp"
+#include "erhe/renderer/renderer_log.hpp"
+#include "erhe/renderer/program_interface.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
@@ -29,8 +21,6 @@
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/log/log_glm.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
@@ -45,7 +35,7 @@
 
 #include <sstream>
 
-namespace editor
+namespace erhe::renderer
 {
 
 using erhe::graphics::Framebuffer;
@@ -71,10 +61,12 @@ Shadow_renderer::~Shadow_renderer() noexcept
 void Shadow_renderer::deinitialize_component()
 {
     ERHE_VERIFY(g_shadow_renderer == this);
-    m_pipeline.reset();
+    m_pipeline_cache_entries.clear();
     m_vertex_input.reset();
     m_gpu_timer.reset();
+#if 0
     m_nodes.clear();
+#endif
     m_light_buffers.reset();
     m_draw_indirect_buffers.reset();
     m_primitive_buffers.reset();
@@ -84,9 +76,11 @@ void Shadow_renderer::deinitialize_component()
 void Shadow_renderer::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
+#if 0
     require<Editor_message_bus>();
+#endif
     require<Program_interface >();
-    require<Programs          >();
+//    require<Programs          >();
 }
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
@@ -124,103 +118,79 @@ void Shadow_renderer::initialize_component()
 
     ERHE_VERIFY(config.shadow_map_max_light_count <= g_program_interface->config.max_light_count);
 
-    m_vertex_input = std::make_unique<Vertex_input_state>(
-        erhe::graphics::Vertex_input_state_data::make(
-            shader_resources.attribute_mappings,
-            g_mesh_memory->gl_vertex_format(),
-            g_mesh_memory->gl_vertex_buffer.get(),
-            g_mesh_memory->gl_index_buffer.get()
-        )
+    //.using Vertex_attribute = erhe::graphics::Vertex_attribute;
+
+    //m_vertex_input = std::make_unique<Vertex_input_state>(
+    //    erhe::graphics::Vertex_input_state_data::make(
+    //        shader_resources.attribute_mappings,
+    //        g_mesh_memory->gl_vertex_format(),
+    //        g_mesh_memory->gl_vertex_buffer.get(),
+    //        g_mesh_memory->gl_index_buffer.get()
+    //    )
+    //);
+
+    //std::unique_ptr<erhe::graphics::Shader_stages>*           program{nullptr};
+    auto prototype = shader_resources.make_prototype(
+        "res/shaders",
+        erhe::graphics::Shader_stages::Create_info{ .name = "depth"  }
     );
 
-    m_pipeline.data = {
-        .name           = "Shadow Renderer",
-        .shader_stages  = g_programs->depth.get(),
-        .vertex_input   = m_vertex_input.get(),
-        .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_none,
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(erhe::application::g_configuration->graphics.reverse_depth),
-        .color_blend    = Color_blend_state::color_writes_disabled
-    };
+    prototype->compile_shaders();
+    prototype->link_program();
+    m_shader_stages = shader_resources.make_program(*prototype.get());
+
+    m_pipeline_cache_entries.resize(8);
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Shadow_renderer");
 
+#if 0
     g_editor_message_bus->add_receiver(
         [&](Editor_message& message)
         {
             on_message(message);
         }
     );
+#endif
+
+    m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
+        gl::Texture_min_filter::nearest,
+        gl::Texture_mag_filter::nearest
+    );
 
     g_shadow_renderer = this;
 }
 
-void Shadow_renderer::on_message(Editor_message& message)
+auto Shadow_renderer::get_pipeline(
+    const Vertex_input_state* vertex_input_state
+) -> erhe::graphics::Pipeline&
 {
-    using namespace erhe::toolkit;
-    if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings))
-    {
-        handle_graphics_settings_changed();
+    ++m_pipeline_cache_serial;
+    uint64_t              lru_serial{m_pipeline_cache_serial};
+    Pipeline_cache_entry* lru_entry {nullptr};
+    for (auto& entry : m_pipeline_cache_entries) {
+        if (entry.vertex_input_state == vertex_input_state) {
+            entry.serial = m_pipeline_cache_serial;
+            return entry.pipeline;
+        }
+        if (entry.serial < lru_serial) {
+            lru_serial = entry.serial;
+            lru_entry = &entry;
+        }
     }
+    lru_entry->serial = m_pipeline_cache_serial;
+    lru_entry->pipeline.data = {
+        .name           = "Shadow Renderer",
+        .shader_stages  = m_shader_stages.get(),
+        .vertex_input   = vertex_input_state,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_none,
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(erhe::application::g_configuration->graphics.reverse_depth),
+        .color_blend    = Color_blend_state::color_writes_disabled
+    };
+    return lru_entry->pipeline;
 }
 
 static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::render()"};
-
-auto Shadow_renderer::create_node_for_scene_view(
-    Scene_view& scene_view
-) -> std::shared_ptr<Shadow_render_node>
-{
-    const int  resolution    = config.enabled ? config.shadow_map_resolution      : 1;
-    const int  light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
-    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
-
-    auto shadow_render_node = std::make_shared<Shadow_render_node>(
-        *this,
-        scene_view,
-        resolution,
-        light_count,
-        reverse_depth
-    );
-    erhe::application::g_rendergraph->register_node(shadow_render_node);
-    m_nodes.push_back(shadow_render_node);
-    return shadow_render_node;
-}
-
-void Shadow_renderer::handle_graphics_settings_changed()
-{
-    const int  resolution    = config.enabled ? config.shadow_map_resolution      : 1;
-    const int  light_count   = config.enabled ? config.shadow_map_max_light_count : 1;
-    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
-
-    for (const auto& node : m_nodes) {
-        node->reconfigure(resolution, light_count, reverse_depth);
-    }
-}
-
-auto Shadow_renderer::get_node_for_view(
-    const Scene_view* scene_view
-) -> std::shared_ptr<Shadow_render_node>
-{
-    if (scene_view == nullptr) {
-        return {};
-    }
-    auto i = std::find_if(
-        m_nodes.begin(),
-        m_nodes.end(),
-        [scene_view](const auto& entry) {
-            return &entry->get_scene_view() == scene_view;
-        }
-    );
-    if (i == m_nodes.end()) {
-        return {};
-    }
-    return *i;
-}
-
-auto Shadow_renderer::get_nodes() const -> const std::vector<std::shared_ptr<Shadow_render_node>>&
-{
-    return m_nodes;
-}
 
 void Shadow_renderer::next_frame()
 {
@@ -243,11 +213,11 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.light_camera_viewport,
         erhe::graphics::get_handle(
             parameters.texture,
-            *g_programs->nearest_sampler.get()
+            *m_nearest_sampler.get()
         )
     };
 
-    if (!config.enabled || !parameters.scene_root) {
+    if (!config.enabled) {
         return false;
     }
 
@@ -261,7 +231,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     const auto& mesh_spans = parameters.mesh_spans;
     const auto& lights     = parameters.lights;
 
-    erhe::graphics::g_opengl_state_tracker->execute(m_pipeline);
+    auto& pipeline = get_pipeline(parameters.vertex_input_state);
+
+    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
     gl::viewport(
         parameters.light_camera_viewport.x,
         parameters.light_camera_viewport.y,
@@ -347,8 +319,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 ERHE_PROFILE_SCOPE("mdi");
                 ERHE_PROFILE_GPU_SCOPE(c_id_mdi);
                 gl::multi_draw_elements_indirect(
-                    m_pipeline.data.input_assembly.primitive_topology,
-                    g_mesh_memory->gl_index_type(),
+                    pipeline.data.input_assembly.primitive_topology,
+                    parameters.index_type,
                     reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
                     static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
                     static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
@@ -359,4 +331,4 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     return true;
 }
 
-} // namespace editor
+} // namespace erhe::renderer

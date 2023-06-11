@@ -1,11 +1,11 @@
 #include "windows/viewport_config_window.hpp"
 
-#include "renderers/primitive_buffer.hpp"
 #include "tools/hotbar.hpp"
 
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/imgui/imgui_windows.hpp"
 #include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/renderer/primitive_buffer.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -106,6 +106,7 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
         ImGui::TreePop();
     }
 
+    using Primitive_interface_settings = erhe::renderer::Primitive_interface_settings;
     if (ImGui::TreeNodeEx("Edge Lines", flags)) {
         ImGui::Checkbox("Visible", &render_style.edge_lines);
         if (render_style.edge_lines) {

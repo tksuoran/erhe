@@ -6,12 +6,17 @@
 
 #include <set>
 
+namespace erhe::graphics
+{
+    class Sampler;
+}
+
 namespace erhe::primitive
 {
     class Material;
 }
 
-namespace editor
+namespace erhe::renderer
 {
 
 class Programs;
@@ -57,6 +62,9 @@ public:
 private:
     Material_interface* m_material_interface{nullptr};
     std::set<uint64_t>  m_used_handles;
+
+    std::unique_ptr<erhe::graphics::Sampler> m_nearest_sampler;
+    std::unique_ptr<erhe::graphics::Sampler> m_linear_sampler;
 };
 
-} // namespace editor
+} // namespace erhe::renderer

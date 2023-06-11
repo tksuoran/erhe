@@ -40,34 +40,16 @@ erhe_target_sources_grouped(
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
 
-    renderers/camera_buffer.cpp
-    renderers/camera_buffer.hpp
     renderers/composer.cpp
     renderers/composer.hpp
-    renderers/draw_indirect_buffer.cpp
-    renderers/draw_indirect_buffer.hpp
-    renderers/forward_renderer.cpp
-    renderers/forward_renderer.hpp
     renderers/frustum_tiler.cpp
     renderers/frustum_tiler.hpp
     renderers/id_renderer.cpp
     renderers/id_renderer.hpp
-    renderers/joint_buffer.cpp
-    renderers/joint_buffer.hpp
-    renderers/light_buffer.cpp
-    renderers/light_buffer.hpp
     renderers/light_mesh.cpp
     renderers/light_mesh.hpp
-    renderers/material_buffer.cpp
-    renderers/material_buffer.hpp
     renderers/mesh_memory.cpp
     renderers/mesh_memory.hpp
-    renderers/pipeline_renderpass.cpp
-    renderers/pipeline_renderpass.hpp
-    renderers/primitive_buffer.cpp
-    renderers/primitive_buffer.hpp
-    renderers/program_interface.cpp
-    renderers/program_interface.hpp
     renderers/programs.cpp
     renderers/programs.hpp
     renderers/render_context.cpp
@@ -76,8 +58,6 @@ erhe_target_sources_grouped(
     renderers/render_style.hpp
     renderers/renderpass.cpp
     renderers/renderpass.hpp
-    renderers/shadow_renderer.cpp
-    renderers/shadow_renderer.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
 
@@ -176,6 +156,10 @@ erhe_target_sources_grouped(
     tools/tools.cpp
     tools/tools.hpp
 
+    windows/animation_curve.cpp
+    windows/animation_curve.hpp
+    windows/animation_window.cpp
+    windows/animation_window.hpp
     windows/brdf_slice_window.cpp
     windows/brdf_slice_window.hpp
     windows/content_library_window.cpp
@@ -323,6 +307,7 @@ target_link_libraries(
     erhe::net
     erhe::physics
     erhe::primitive
+    erhe::renderer
     erhe::scene
     erhe::toolkit
     erhe::ui

@@ -63,13 +63,13 @@ void Scene_view::set_hover(
     }
 }
 
-auto Scene_view::get_light_projections() const -> const Light_projections*
+auto Scene_view::get_light_projections() const -> const erhe::renderer::Light_projections*
 {
     auto* shadow_render_node = get_shadow_render_node();
     if (shadow_render_node == nullptr) {
         return nullptr;
     }
-    Light_projections& light_projections = shadow_render_node->get_light_projections();
+    erhe::renderer::Light_projections& light_projections = shadow_render_node->get_light_projections();
     return &light_projections;
 }
 

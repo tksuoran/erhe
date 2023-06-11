@@ -1,7 +1,5 @@
 #pragma once
 
-#include "renderers/pipeline_renderpass.hpp"
-
 #include "erhe/application/rendergraph/texture_rendergraph_node.hpp"
 #include "erhe/application/rendergraph/rendergraph_node.hpp"
 #include "erhe/application/windows/framebuffer_window.hpp"
@@ -10,6 +8,7 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/renderer/pipeline_renderpass.hpp"
 #include "erhe/scene/viewport.hpp"
 
 #include <memory>
@@ -40,7 +39,7 @@ private:
     void initialize_pipeline();
 
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
-    Pipeline_renderpass                                 m_renderpass;
+    erhe::renderer::Pipeline_renderpass                 m_renderpass;
     int                                                 m_light_index{};
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_vertex_input;
 };

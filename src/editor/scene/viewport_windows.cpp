@@ -9,7 +9,6 @@
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/shadow_renderer.hpp"
 #include "rendergraph/basic_viewport_window.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -38,6 +37,7 @@
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
@@ -106,9 +106,9 @@ void Viewport_windows::declare_required_components()
     require<erhe::application::Imgui_windows>();
     require<erhe::application::Rendergraph  >();
     require<erhe::application::Window       >();
+    require<erhe::renderer::Shadow_renderer >();
     require<Editor_message_bus>();
     require<Post_processing   >();
-    require<Shadow_renderer   >();
 }
 
 void Viewport_windows::initialize_component()
@@ -196,9 +196,9 @@ auto Viewport_windows::create_viewport_window(
     }
     erhe::application::g_rendergraph->register_node(new_viewport_window);
 
-    if (g_shadow_renderer->config.enabled) {
+    if (erhe::renderer::g_shadow_renderer->config.enabled) {
         //// TODO: Share Shadow_render_node for each unique (scene, camera) pair
-        const auto shadow_render_node = g_shadow_renderer->create_node_for_scene_view(
+        const auto shadow_render_node = g_editor_rendering->create_shadow_node_for_scene_view(
             *new_viewport_window.get()
         );
         erhe::application::g_rendergraph->connect(
@@ -207,7 +207,7 @@ auto Viewport_windows::create_viewport_window(
             new_viewport_window
         );
 
-        //// const auto& shadow_render_nodes = m_shadow_renderer->get_nodes();
+        //// const auto& shadow_render_nodes = Shadow_render_node::get_all_nodes();
         //// if (!shadow_render_nodes.empty())
         //// {
         ////     auto& shadow_render_node = shadow_render_nodes.front();

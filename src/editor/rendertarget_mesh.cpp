@@ -3,7 +3,6 @@
 #include "rendertarget_mesh.hpp"
 
 #include "editor_log.hpp"
-#include "renderers/forward_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
@@ -30,6 +29,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/renderer/forward_renderer.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"

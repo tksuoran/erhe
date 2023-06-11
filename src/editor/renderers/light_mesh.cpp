@@ -1,5 +1,4 @@
 #include "renderers/light_mesh.hpp"
-#include "renderers/program_interface.hpp"
 
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
@@ -9,6 +8,7 @@
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
+#include "erhe/renderer/program_interface.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
@@ -32,7 +32,7 @@ Light_mesh::~Light_mesh() noexcept
 
 void Light_mesh::declare_required_components()
 {
-    require<Program_interface>();
+    require<erhe::renderer::Program_interface>();
 }
 
 void Light_mesh::initialize_component()

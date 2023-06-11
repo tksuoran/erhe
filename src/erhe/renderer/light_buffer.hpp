@@ -16,7 +16,7 @@ namespace erhe::primitive
     class Material;
 }
 
-namespace editor
+namespace erhe::renderer
 {
 
 class Light_struct
@@ -114,4 +114,4 @@ private:
     erhe::application::Multi_buffer m_control_buffer;
 };
 
-} // namespace editor
+} // namespace erhe::renderer

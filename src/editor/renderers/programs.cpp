@@ -3,18 +3,17 @@
 
 #include "editor_log.hpp"
 
-#include "renderers/program_interface.hpp"
-#include "renderers/material_buffer.hpp"
-#include "renderers/light_buffer.hpp"
-#include "renderers/camera_buffer.hpp"
-#include "renderers/primitive_buffer.hpp"
-
 #include "erhe/application/configuration.hpp"
 #include "erhe/application/graphics/gl_context_provider.hpp"
 #include "erhe/application/graphics/shader_monitor.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/sampler.hpp"
+#include "erhe/renderer/camera_buffer.hpp"
+#include "erhe/renderer/light_buffer.hpp"
+#include "erhe/renderer/material_buffer.hpp"
+#include "erhe/renderer/primitive_buffer.hpp"
+#include "erhe/renderer/program_interface.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -198,8 +197,8 @@ void Programs::declare_required_components()
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Shader_monitor     >();
-    require<Mesh_memory      >();
-    require<Program_interface>();
+    require<erhe::renderer::Program_interface     >();
+    require<Mesh_memory>();
 }
 
 void Programs::initialize_component()
@@ -211,106 +210,17 @@ auto Programs_impl::make_prototype(
     erhe::graphics::Shader_stages::Create_info create_info
 ) -> std::unique_ptr<erhe::graphics::Shader_stages::Prototype>
 {
-    ERHE_PROFILE_FUNCTION();
-
-    SPDLOG_LOGGER_TRACE(log_programs, "Programs::make_program({})", create_info.name);
-    SPDLOG_LOGGER_TRACE(log_programs, "current directory is {}", std::filesystem::current_path().string());
-
-    const std::filesystem::path cs_path = m_shader_path / std::filesystem::path(create_info.name + ".comp");
-    const std::filesystem::path fs_path = m_shader_path / std::filesystem::path(create_info.name + ".frag");
-    const std::filesystem::path gs_path = m_shader_path / std::filesystem::path(create_info.name + ".geom");
-    const std::filesystem::path vs_path = m_shader_path / std::filesystem::path(create_info.name + ".vert");
-
-    const bool cs_exists = std::filesystem::exists(cs_path);
-    const bool fs_exists = std::filesystem::exists(fs_path);
-    const bool gs_exists = std::filesystem::exists(gs_path);
-    const bool vs_exists = std::filesystem::exists(vs_path);
-
-    const auto& shader_resources = *g_program_interface->shader_resources.get();
-
-    create_info.vertex_attribute_mappings = &shader_resources.attribute_mappings,
-    create_info.fragment_outputs          = &shader_resources.fragment_outputs,
-    create_info.struct_types.push_back(&shader_resources.material_interface.material_struct);
-    create_info.struct_types.push_back(&shader_resources.light_interface.light_struct);
-    create_info.struct_types.push_back(&shader_resources.camera_interface.camera_struct);
-    create_info.struct_types.push_back(&shader_resources.primitive_interface.primitive_struct);
-    create_info.struct_types.push_back(&shader_resources.joint_interface.joint_struct);
-    create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_in());
-    create_info.struct_types.push_back(&g_mesh_memory->get_vertex_data_out());
-    create_info.add_interface_block(&shader_resources.material_interface.material_block);
-    create_info.add_interface_block(&shader_resources.light_interface.light_block);
-    create_info.add_interface_block(&shader_resources.light_interface.light_control_block);
-    create_info.add_interface_block(&shader_resources.camera_interface.camera_block);
-    create_info.add_interface_block(&shader_resources.primitive_interface.primitive_block);
-    create_info.add_interface_block(&shader_resources.joint_interface.joint_block);
-
-    if (erhe::graphics::Instance::info.gl_version < 430) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_storage_buffer_object"});
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
-    }
-    if (erhe::graphics::Instance::info.gl_version < 460) {
-        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
-        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
-        create_info.extensions.push_back({gl::Shader_type::geometry_shader, "GL_ARB_shader_draw_parameters"});
-        create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
-    }
-
-    const auto& config = *erhe::application::g_configuration;
-    // TODO if (config->shadow_renderer.enabled)
-    {
-        create_info.defines.emplace_back("ERHE_SHADOW_MAPS", "1");
-    }
-    if (config.graphics.simpler_shaders) {
-        create_info.defines.emplace_back("ERHE_SIMPLER_SHADERS", "1");
-    }
-
-    if (erhe::graphics::Instance::info.use_bindless_texture) {
-        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-    }
-
-    //if (config->shader_monitor.enabled)
-    //{
-    //    create_info.pragmas.push_back("optimize(off)");
-    //}
-
-    if (cs_exists) {
-        create_info.shaders.emplace_back(gl::Shader_type::compute_shader,  cs_path);
-    }
-    if (fs_exists) {
-        create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
-    }
-    if (gs_exists) {
-        create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
-    }
-    if (vs_exists) {
-        create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
-    }
-
-    return std::make_unique<Shader_stages::Prototype>(create_info);
+    return erhe::renderer::g_program_interface->shader_resources->make_prototype(
+        m_shader_path,
+        create_info
+    );
 }
 
 auto Programs_impl::make_program(
     erhe::graphics::Shader_stages::Prototype& prototype
 ) -> std::unique_ptr<erhe::graphics::Shader_stages>
 {
-    ERHE_PROFILE_FUNCTION();
-
-    if (!prototype.is_valid()) {
-        log_programs->error("current directory is {}", std::filesystem::current_path().string());
-        log_programs->error("Compiling shader program {} failed", prototype.name());
-        return {};
-    }
-
-    auto p = std::make_unique<Shader_stages>(std::move(prototype));
-
-    if (erhe::application::g_shader_monitor != nullptr) {
-        erhe::application::g_shader_monitor->add(prototype.create_info(), p.get());
-    }
-
-    return p;
+    return erhe::renderer::g_program_interface->shader_resources->make_program(prototype);
 }
 
 Programs_impl::Program_prototype::Program_prototype() = default;

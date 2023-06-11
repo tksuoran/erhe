@@ -1,16 +1,15 @@
 #include "editor_rendering.hpp"
 
+#include "editor_message_bus.hpp"
 #include "editor_log.hpp"
 #include "renderers/composer.hpp"
-#include "renderers/forward_renderer.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/pipeline_renderpass.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
-#include "renderers/shadow_renderer.hpp"
 #include "renderers/viewport_config.hpp"
 #include "rendergraph/post_processing.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 #include "rendertarget_mesh.hpp"
 #include "scene/material_library.hpp"
@@ -32,6 +31,7 @@
 #include "erhe/application/imgui/window_imgui_viewport.hpp"
 #include "erhe/application/renderers/line_renderer.hpp"
 #include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/application/rendergraph/rendergraph.hpp"
 #include "erhe/application/time.hpp"
 #include "erhe/application/application_view.hpp"
 #include "erhe/application/window.hpp"
@@ -41,8 +41,12 @@
 #include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/renderer/forward_renderer.hpp"
+#include "erhe/renderer/pipeline_renderpass.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -80,6 +84,7 @@ public:
     void initialize();
 
     std::unique_ptr<erhe::graphics::Vertex_input_state> m_empty_vertex_input;
+    using Pipeline_renderpass = erhe::renderer::Pipeline_renderpass;
     Pipeline_renderpass polygon_fill_standard_opaque;
     Pipeline_renderpass polygon_fill_standard_translucent;
     Pipeline_renderpass tool1_hidden_stencil;
@@ -118,10 +123,16 @@ public:
     void begin_frame         () override;
     void end_frame           () override;
 
+    [[nodiscard]] auto create_shadow_node_for_scene_view(Scene_view& scene_view)       -> std::shared_ptr<Shadow_render_node> override;
+    [[nodiscard]] auto get_shadow_node_for_view         (const Scene_view* scene_view) -> std::shared_ptr<Shadow_render_node> override;
+    [[nodiscard]] auto get_all_shadow_nodes             () -> const std::vector<std::shared_ptr<Shadow_render_node>>& override;
+
 private:
-    auto make_renderpass        (const std::string_view name) -> std::shared_ptr<Renderpass>;
-    auto get_pipeline_renderpass(const Renderpass& renderpass, Blend_mode blend_mode) -> Pipeline_renderpass*;
-    void setup_renderpasses     ();
+    void handle_graphics_settings_changed();
+    auto make_renderpass                 (const std::string_view name) -> std::shared_ptr<Renderpass>;
+    auto get_pipeline_renderpass         (const Renderpass& renderpass, erhe::renderer::Blend_mode blend_mode) -> erhe::renderer::Pipeline_renderpass*;
+    void setup_renderpasses              ();
+
     [[nodiscard]] auto width () const -> int;
     [[nodiscard]] auto height() const -> int;
 
@@ -137,6 +148,8 @@ private:
     std::unique_ptr<erhe::graphics::Gpu_timer> m_gui_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_brush_timer;
     std::unique_ptr<erhe::graphics::Gpu_timer> m_tools_timer;
+
+    std::vector<std::shared_ptr<Shadow_render_node>> m_all_shadow_render_nodes;
 };
 
 IEditor_rendering* g_editor_rendering{nullptr};
@@ -161,9 +174,10 @@ void Editor_rendering::declare_required_components()
     require<erhe::application::Gl_context_provider>();
     require<erhe::application::Commands           >();
     require<erhe::application::Configuration      >();
-    require<Programs   >();
-    require<Mesh_memory>();
-    require<Tools      >();
+    require<Editor_message_bus>();
+    require<Programs          >();
+    require<Mesh_memory       >();
+    require<Tools             >();
 }
 
 void Editor_rendering::initialize_component()
@@ -215,6 +229,7 @@ Editor_rendering_impl::Editor_rendering_impl()
     };
 
     using namespace erhe::primitive;
+    using Blend_mode = erhe::renderer::Blend_mode;
     auto opaque_fill_not_selected = make_renderpass("Content fill opaque not selected");
     opaque_fill_not_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
     opaque_fill_not_selected->primitive_mode   = Primitive_mode::polygon_fill;
@@ -315,6 +330,16 @@ Editor_rendering_impl::Editor_rendering_impl()
     };
     tool->override_scene_root = g_tools->get_tool_scene_root();
     tool->allow_shader_stages_override = false;
+
+    g_editor_message_bus->add_receiver(
+        [&](Editor_message& message)
+        {
+            using namespace erhe::toolkit;
+            if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
+                handle_graphics_settings_changed();
+            }
+        }
+    );
 }
 
 Editor_rendering_impl::~Editor_rendering_impl() noexcept
@@ -323,18 +348,75 @@ Editor_rendering_impl::~Editor_rendering_impl() noexcept
     g_editor_rendering = nullptr;
 }
 
+auto Editor_rendering_impl::create_shadow_node_for_scene_view(
+    Scene_view& scene_view
+) -> std::shared_ptr<Shadow_render_node>
+{
+    const auto& shadow_config = erhe::renderer::g_shadow_renderer->config;
+    const int  resolution    = shadow_config.enabled ? shadow_config.shadow_map_resolution      : 1;
+    const int  light_count   = shadow_config.enabled ? shadow_config.shadow_map_max_light_count : 1;
+    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
+
+    auto shadow_render_node = std::make_shared<Shadow_render_node>(
+        scene_view,
+        resolution,
+        light_count,
+        reverse_depth
+    );
+    erhe::application::g_rendergraph->register_node(shadow_render_node);
+    m_all_shadow_render_nodes.push_back(shadow_render_node);
+    return shadow_render_node;
+}
+
+void Editor_rendering_impl::handle_graphics_settings_changed()
+{
+    const auto& shadow_config = erhe::renderer::g_shadow_renderer->config;
+    const int  resolution    = shadow_config.enabled ? shadow_config.shadow_map_resolution      : 1;
+    const int  light_count   = shadow_config.enabled ? shadow_config.shadow_map_max_light_count : 1;
+    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
+
+    for (const auto& node : m_all_shadow_render_nodes) {
+        node->reconfigure(resolution, light_count, reverse_depth);
+    }
+}
+
+auto Editor_rendering_impl::get_shadow_node_for_view(
+    const Scene_view* scene_view
+) -> std::shared_ptr<Shadow_render_node>
+{
+    if (scene_view == nullptr) {
+        return {};
+    }
+    auto i = std::find_if(
+        m_all_shadow_render_nodes.begin(),
+        m_all_shadow_render_nodes.end(),
+        [scene_view](const auto& entry) {
+            return &entry->get_scene_view() == scene_view;
+        }
+    );
+    if (i == m_all_shadow_render_nodes.end()) {
+        return {};
+    }
+    return *i;
+}
+
+auto Editor_rendering_impl::get_all_shadow_nodes() -> const std::vector<std::shared_ptr<Shadow_render_node>>&
+{
+    return m_all_shadow_render_nodes;
+}
+
 auto Editor_rendering_impl::get_pipeline_renderpass(
-    const Renderpass& renderpass,
-    const Blend_mode  blend_mode
-) -> Pipeline_renderpass*
+    const Renderpass&                renderpass,
+    const erhe::renderer::Blend_mode blend_mode
+) -> erhe::renderer::Pipeline_renderpass*
 {
     using namespace erhe::primitive;
     switch (renderpass.primitive_mode) {
         case Primitive_mode::polygon_fill:
             switch (blend_mode) {
-                case Blend_mode::opaque:      return &m_pipeline_renderpasses.polygon_fill_standard_opaque;
-                case Blend_mode::translucent: return &m_pipeline_renderpasses.polygon_fill_standard_translucent;
-                default:                      return nullptr;
+                case erhe::renderer::Blend_mode::opaque:      return &m_pipeline_renderpasses.polygon_fill_standard_opaque;
+                case erhe::renderer::Blend_mode::translucent: return &m_pipeline_renderpasses.polygon_fill_standard_translucent;
+                default:                                      return nullptr;
             }
             break;
 
@@ -791,11 +873,10 @@ void Editor_rendering_impl::end_frame()
 
     if (erhe::application::g_line_renderer_set != nullptr) erhe::application::g_line_renderer_set->next_frame();
     if (erhe::application::g_text_renderer     != nullptr) erhe::application::g_text_renderer    ->next_frame();
-
-    if (g_forward_renderer != nullptr) g_forward_renderer ->next_frame();
-    if (g_id_renderer      != nullptr) g_id_renderer      ->next_frame();
-    if (g_post_processing  != nullptr) g_post_processing  ->next_frame();
-    if (g_shadow_renderer  != nullptr) g_shadow_renderer  ->next_frame();
+    if (erhe::renderer   ::g_forward_renderer  != nullptr) erhe::renderer   ::g_forward_renderer ->next_frame();
+    if (erhe::renderer   ::g_shadow_renderer   != nullptr) erhe::renderer   ::g_shadow_renderer  ->next_frame();
+    if (g_id_renderer     != nullptr) g_id_renderer    ->next_frame();
+    if (g_post_processing != nullptr) g_post_processing->next_frame();
 
     if (m_trigger_capture) {
         erhe::application::g_window->end_renderdoc_capture();
@@ -841,7 +922,7 @@ void Editor_rendering_impl::render_viewport_main(
         gl::Clear_buffer_mask::stencil_buffer_bit
     );
 
-    if (g_forward_renderer) {
+    if (erhe::renderer::g_forward_renderer) {
         render_composer(context);
     }
 

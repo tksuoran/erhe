@@ -3,9 +3,9 @@
 #include "windows/debug_view_window.hpp"
 
 #include "editor_log.hpp"
-#include "renderers/forward_renderer.hpp"
+#include "editor_rendering.hpp"
+#include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
-#include "renderers/shadow_renderer.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -24,6 +24,8 @@
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/renderer/forward_renderer.hpp"
+#include "erhe/renderer/shadow_renderer.hpp"
 #include "erhe/scene/scene.hpp" // TODO move light layer to separate header
 #include "erhe/toolkit/profile.hpp"
 
@@ -176,15 +178,17 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     const auto& layers = scene_root->layers();
     auto texture = shadow_render_node->get_texture();
 
-    g_forward_renderer->render_fullscreen(
-        Forward_renderer::Render_parameters{
-            .light_projections = &light_projections,
-            .lights            = layers.light()->lights,
-            .materials         = {},
-            .mesh_spans        = {},
-            .passes            = { &m_renderpass },
-            .shadow_texture    = texture.get(),
-            .viewport          = output_viewport
+    erhe::renderer::g_forward_renderer->render_fullscreen(
+        erhe::renderer::Forward_renderer::Render_parameters{
+            .vertex_input_state = g_mesh_memory->get_vertex_input(),
+            .index_type         = g_mesh_memory->gl_index_type(),
+            .light_projections  = &light_projections,
+            .lights             = layers.light()->lights,
+            .materials          = {},
+            .mesh_spans         = {},
+            .passes             = { &m_renderpass },
+            .shadow_texture     = texture.get(),
+            .viewport           = output_viewport
         },
         light_projection_transforms.light
     );
@@ -309,9 +313,9 @@ void Debug_view_window::initialize_component()
 
 void Debug_view_window::post_initialize()
 {
-    const auto nodes = g_shadow_renderer->get_nodes();
+    const auto& nodes = g_editor_rendering->get_all_shadow_nodes();
     if (!nodes.empty()) {
-        const auto node = nodes.front();
+        const auto& node = nodes.front();
         set_shadow_renderer_node(node);
     }
 }
@@ -376,7 +380,7 @@ void Debug_view_window::imgui()
     SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui()");
 
     //// Rendergraph_node::set_enabled(true);
-    const auto nodes = g_shadow_renderer->get_nodes();
+    const auto& nodes = g_editor_rendering->get_all_shadow_nodes();
     if (!nodes.empty()) {
         int last_node_index = static_cast<int>(nodes.size() - 1);
         const bool node_set = ImGui::SliderInt("Node", &m_selected_node, 0, last_node_index);
@@ -394,7 +398,7 @@ void Debug_view_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    if (g_shadow_renderer == nullptr) {
+    if (erhe::renderer::g_shadow_renderer == nullptr) {
         SPDLOG_LOGGER_TRACE(log_render, "Debug_view_window::imgui() - skipped - no shadow renderer");
         return;
     }

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "renderers/camera_buffer.hpp"
-#include "renderers/draw_indirect_buffer.hpp"
-#include "renderers/joint_buffer.hpp"
-#include "renderers/light_buffer.hpp"
-#include "renderers/material_buffer.hpp"
-#include "renderers/pipeline_renderpass.hpp"
-#include "renderers/primitive_buffer.hpp"
+#include "erhe/renderer/camera_buffer.hpp"
+#include "erhe/renderer/draw_indirect_buffer.hpp"
+#include "erhe/renderer/joint_buffer.hpp"
+#include "erhe/renderer/light_buffer.hpp"
+#include "erhe/renderer/material_buffer.hpp"
+#include "erhe/renderer/pipeline_renderpass.hpp"
+#include "erhe/renderer/primitive_buffer.hpp"
 
 #include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
@@ -23,6 +23,7 @@
 
 namespace erhe::graphics
 {
+    class Sampler;
     class Texture;
 }
 
@@ -35,7 +36,7 @@ namespace erhe::scene
     class Mesh_layer;
 }
 
-namespace editor
+namespace erhe::renderer
 {
 
 class Forward_renderer
@@ -60,9 +61,12 @@ public:
     class Render_parameters
     {
     public:
+        const erhe::graphics::Vertex_input_state*                          vertex_input_state{nullptr};
+        gl::Draw_elements_type                                             index_type        {gl::Draw_elements_type::unsigned_int};
+
         const glm::vec3                                                    ambient_light    {0.0f};
         const erhe::scene::Camera*                                         camera           {nullptr};
-        const Light_projections*                                           light_projections{nullptr};
+        const erhe::renderer::Light_projections*                           light_projections{nullptr};
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
         const gsl::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
         const gsl::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
@@ -94,9 +98,15 @@ private:
     std::optional<Light_buffer        >      m_light_buffers;
     std::optional<Material_buffer     >      m_material_buffers;
     std::optional<Primitive_buffer    >      m_primitive_buffers;
+
+
+    int m_base_texture_unit{0};
+
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;
+    std::unique_ptr<erhe::graphics::Sampler> m_nearest_sampler;
+    std::unique_ptr<erhe::graphics::Sampler> m_linear_sampler;
 };
 
 extern Forward_renderer* g_forward_renderer;
 
-} // namespace editor
+} // namespace erhe::renderer

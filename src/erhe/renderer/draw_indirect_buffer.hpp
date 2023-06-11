@@ -9,7 +9,7 @@ namespace erhe::scene
     class Item_filter;
 }
 
-namespace editor
+namespace erhe::renderer
 {
 
 class Draw_indirect_buffer_range
@@ -39,4 +39,4 @@ private:
     int  m_max_index_count       {256};
 };
 
-} // namespace editor
+} // namespace erhe::renderer

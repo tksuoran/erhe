@@ -3,7 +3,6 @@
 #include "windows/brdf_slice_window.hpp"
 
 #include "editor_log.hpp"
-#include "renderers/forward_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "scene/content_library.hpp"
 #include "scene/material_library.hpp"
@@ -27,6 +26,7 @@
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/renderer/forward_renderer.hpp"
 #include "erhe/scene/scene.hpp" // TODO move light layer to separate header
 #include "erhe/toolkit/profile.hpp"
 
@@ -108,20 +108,22 @@ void Brdf_slice_rendergraph_node::execute_rendergraph_node()
         m_framebuffer->gl_name()
     );
 
-    Light_projections light_projections;
+    erhe::renderer::Light_projections light_projections;
     light_projections.brdf_phi          = g_brdf_slice_window->phi;
     light_projections.brdf_incident_phi = g_brdf_slice_window->incident_phi;
     light_projections.brdf_material     = g_brdf_slice_window->material;
 
-    g_forward_renderer->render_fullscreen(
-        Forward_renderer::Render_parameters{
-            .light_projections = &light_projections,
-            .lights            = {},
-            .materials         = gsl::span<const std::shared_ptr<erhe::primitive::Material>>(&selected_material, 1),
-            .mesh_spans        = {},
-            .passes            = { &m_renderpass },
-            .shadow_texture    = nullptr,
-            .viewport          = output_viewport
+    erhe::renderer::g_forward_renderer->render_fullscreen(
+        erhe::renderer::Forward_renderer::Render_parameters{
+            .vertex_input_state = m_empty_vertex_input.get(),
+            .index_type         = gl::Draw_elements_type::unsigned_int, // Note: This indices are not used by render_fullscreen()
+            .light_projections  = &light_projections,
+            .lights             = {},
+            .materials          = gsl::span<const std::shared_ptr<erhe::primitive::Material>>(&selected_material, 1),
+            .mesh_spans         = {},
+            .passes             = { &m_renderpass },
+            .shadow_texture     = nullptr,
+            .viewport           = output_viewport
         },
         nullptr
     );

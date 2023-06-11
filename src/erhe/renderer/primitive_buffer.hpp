@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderers/enums.hpp"
+#include "erhe/renderer/enums.hpp"
 
 #include "erhe/application/renderers/multi_buffer.hpp"
 
@@ -15,7 +15,7 @@ namespace erhe::scene
     class Item_filter;
 }
 
-namespace editor
+namespace erhe::renderer
 {
 
 class Primitive_struct
@@ -100,4 +100,4 @@ private:
     std::vector<Id_range> m_id_ranges;
 };
 
-} // namespace editor
+} // namespace erhe::renderer
