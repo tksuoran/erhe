@@ -135,15 +135,11 @@ public:
 };
 
 [[nodiscard]] auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool;
-
 [[nodiscard]] auto operator!=(const Texture& lhs, const Texture& rhs) noexcept -> bool;
 
 [[nodiscard]] auto component_count(gl::Pixel_format pixel_format) -> size_t;
-
 [[nodiscard]] auto byte_count(gl::Pixel_type pixel_type) -> size_t;
-
 [[nodiscard]] auto get_upload_pixel_byte_count(gl::Internal_format internalformat) -> size_t;
-
 [[nodiscard]] auto get_format_and_type(
     gl::Internal_format internalformat,
     gl::Pixel_format&   format,
@@ -151,6 +147,8 @@ public:
 ) -> bool;
 
 [[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
+
+[[nodiscard]] auto format_texture_handle(uint64_t handle) -> std::string;
 
 // For non-bindless textures
 class Texture_unit_cache

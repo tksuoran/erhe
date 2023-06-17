@@ -9,7 +9,7 @@
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/verify.hpp"
-
+#include <fmt/format.h>
 #include <algorithm>
 
 namespace erhe::graphics
@@ -646,7 +646,7 @@ void Texture::set_debug_label(const std::string& value)
         value
     );
 
-    m_debug_label = "(T) " + value;
+    m_debug_label = fmt::format("(T:{}) {}", gl_name(), value);
     gl::object_label(
         gl::Object_identifier::texture,
         gl_name(),
@@ -758,6 +758,13 @@ auto create_dummy_texture() -> std::shared_ptr<Texture>
     );
 
     return texture;
+}
+
+auto format_texture_handle(uint64_t handle) -> std::string
+{
+    uint32_t low  = static_cast<uint32_t>((handle & 0xffffffffu));
+    uint32_t high = static_cast<uint32_t>( handle >> 32u);
+    return fmt::format("{:08x}.{:08x} {}.{}", high, low, high, low);
 }
 
 Texture_unit_cache::Texture_unit_cache()

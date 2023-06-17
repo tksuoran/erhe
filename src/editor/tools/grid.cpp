@@ -97,7 +97,7 @@ auto Grid::grid_from_world() const -> glm::mat4
 
 void Grid::render(const Render_context& context)
 {
-    if (!m_enable) {
+    if (!is_visible()) {
         return;
     }
 
@@ -172,7 +172,10 @@ void Grid::imgui()
 {
     ImGui::InputText  ("Name",             &m_name);
     ImGui::Separator();
-    ImGui::Checkbox   ("Enable",           &m_enable);
+    bool enable = is_visible();
+    if (ImGui::Checkbox("Enable", &enable)) {
+        set_visible(enable);
+    }
     ImGui::Checkbox   ("See Major Hidden", &m_see_hidden_major);
     ImGui::Checkbox   ("See Minor Hidden", &m_see_hidden_minor);
     ImGui::SliderFloat("Cell Size",        &m_cell_size,       0.0f, 10.0f);
@@ -245,7 +248,7 @@ auto Grid::intersect_ray(
     const glm::vec3& ray_direction_in_world
 ) -> std::optional<glm::vec3>
 {
-    if (!m_enable) {
+    if (!is_visible()) {
         return {};
     }
 

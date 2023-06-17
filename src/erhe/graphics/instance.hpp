@@ -67,6 +67,7 @@ public:
         int max_tess_control_uniform_blocks          {0};
         int max_tess_evaluation_shader_storage_blocks{0};
         int max_tess_evaluation_uniform_blocks       {0};
+        float max_texture_max_anisotropy{1.0f};
     };
 
     class Implementation_defined

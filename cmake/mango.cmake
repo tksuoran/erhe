@@ -13,7 +13,7 @@ function (FetchContent_MakeAvailable_mango)
         endforeach ()
 
         # Disable image fomrats that are not currently needed
-        set(MANGO_ALL_IMAGE_FORMATS ASTC; ATARI; BMP; C64; DDS; GIF; HDR; IFF; JPG; KTX; PCX; PKM; PNM; PVR; SGI; TGA; WEBP; ZPNG)
+        set(MANGO_ALL_IMAGE_FORMATS ASTC; ATARI; BMP; C64; DDS; GIF; HDR; IFF; KTX; PCX; PKM; PNM; PVR; SGI; TGA; WEBP; ZPNG)
         foreach (format ${MANGO_ALL_IMAGE_FORMATS})
             option(MANGO_DISABLE_IMAGE_${format} "" ON)
         endforeach ()

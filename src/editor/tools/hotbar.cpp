@@ -153,6 +153,8 @@ void Hotbar::initialize_component()
     ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_hotbar == nullptr);
 
+    g_hotbar = this;
+
     auto ini = erhe::application::get_ini("erhe.ini", "hotbar");
     ini->get("enabled",    m_enabled);
     ini->get("show",       m_show);
@@ -204,8 +206,6 @@ void Hotbar::initialize_component()
             on_message(message);
         }
     );
-
-    g_hotbar = this;
 }
 
 void Hotbar::init_hotbar()

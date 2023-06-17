@@ -59,12 +59,19 @@ public:
     void render(const Render_context& context);
     void imgui ();
 
+    void set_cell_size  (float cell_size) { m_cell_size = cell_size; }
+    void set_cell_div   (int cell_div) { m_cell_div = cell_div; }
+    void set_cell_count (int cell_count) { m_cell_count = cell_count; }
+    void set_major_color(glm::vec4 color) { m_major_color = color; }
+    void set_minor_color(glm::vec4 color) { m_minor_color = color; }
+    void set_major_width(float width) { m_major_width = width; }
+    void set_minor_width(float width) { m_minor_width = width; }
+
 private:
     std::string     m_name;
     Grid_plane_type m_plane_type      {Grid_plane_type::XZ};
     float           m_rotation        {0.0f}; // Used only if plane type != node
     glm::vec3       m_center          {0.0f}; // Used only if plane type != node
-    bool            m_enable          {true};
     bool            m_see_hidden_major{false};
     bool            m_see_hidden_minor{false};
     float           m_cell_size       {1.0f};

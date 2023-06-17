@@ -56,6 +56,24 @@ auto Gl_buffer_sink::allocate_index_buffer(
     };
 }
 
+void Gl_buffer_sink::enqueue_index_data(std::size_t offset, std::vector<uint8_t>&& data) const
+{
+    m_buffer_transfer_queue.enqueue(
+        m_index_buffer,
+        offset,
+        std::move(data)
+    );
+}
+
+void Gl_buffer_sink::enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const
+{
+    m_buffer_transfer_queue.enqueue(
+        m_vertex_buffer,
+        offset,
+        std::move(data)
+    );
+}
+
 void Gl_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const
 {
     m_buffer_transfer_queue.enqueue(
@@ -110,6 +128,20 @@ auto Raytrace_buffer_sink::allocate_index_buffer(
         .element_size = index_element_size,
         .byte_offset  = index_byte_offset
     };
+}
+
+void Raytrace_buffer_sink::enqueue_index_data(std::size_t offset, std::vector<uint8_t>&& data) const
+{
+    auto buffer_span = m_index_buffer.span();
+    auto offset_span = buffer_span.subspan(offset, data.size());
+    memcpy(offset_span.data(), data.data(), data.size());
+}
+
+void Raytrace_buffer_sink::enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const
+{
+    auto buffer_span = m_vertex_buffer.span();
+    auto offset_span = buffer_span.subspan(offset, data.size());
+    memcpy(offset_span.data(), data.data(), data.size());
 }
 
 void Raytrace_buffer_sink::buffer_ready(Vertex_buffer_writer& writer) const

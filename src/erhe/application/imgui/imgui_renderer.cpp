@@ -410,18 +410,27 @@ void Imgui_renderer::create_samplers()
     m_dummy_texture = erhe::graphics::create_dummy_texture();
 
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::nearest,
-        gl::Texture_mag_filter::nearest
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Imgui_renderer nearest"
+        }
     );
 
     m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear,
-        gl::Texture_mag_filter::linear
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::linear,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Imgui_renderer linear"
+        }
     );
 
     m_linear_mipmap_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear_mipmap_linear,
-        gl::Texture_mag_filter::linear
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Imgui_renderer linear mipmap"
+        }
     );
 }
 

@@ -63,18 +63,6 @@ void Fly_camera_space_mouse_listener::on_button(const int)
 }
 #endif
 
-void Fly_camera_turn_command::try_ready()
-{
-    if (g_fly_camera_tool == nullptr) {
-        return;
-    }
-
-    if (g_fly_camera_tool->try_ready())
-    {
-        set_ready();
-    }
-}
-
 auto Fly_camera_tool::try_ready() -> bool
 {
     const Scene_view* scene_view = get_hover_scene_view();
@@ -118,6 +106,18 @@ Fly_camera_turn_command::Fly_camera_turn_command()
 {
 }
 
+void Fly_camera_turn_command::try_ready()
+{
+    if (g_fly_camera_tool == nullptr) {
+        return;
+    }
+
+    if (g_fly_camera_tool->try_ready())
+    {
+        set_ready();
+    }
+}
+
 auto Fly_camera_turn_command::try_call_with_input(
     erhe::application::Input_arguments& input
 ) -> bool
@@ -142,6 +142,53 @@ auto Fly_camera_turn_command::try_call_with_input(
     }
 
     g_fly_camera_tool->turn_relative(-value.x, -value.y);
+    return true;
+}
+
+Fly_camera_zoom_command::Fly_camera_zoom_command()
+    : Command{"Fly_camera.zoom_camera"}
+{
+}
+
+void Fly_camera_zoom_command::try_ready()
+{
+    if (g_fly_camera_tool == nullptr) {
+        return;
+    }
+
+    if (g_fly_camera_tool->try_ready())
+    {
+        set_ready();
+    }
+}
+
+auto Fly_camera_zoom_command::try_call_with_input(
+    erhe::application::Input_arguments& input
+) -> bool
+{
+    if (g_fly_camera_tool == nullptr) {
+        return false;
+    }
+
+    set_ready();
+
+    const auto value = input.vector2.relative_value;
+    //const auto state = get_command_state();
+    //if (state == erhe::application::State::Ready) {
+    //    if (g_fly_camera_tool->get_hover_scene_view() == nullptr) {
+    //        set_inactive();
+    //        return false;
+    //    }
+    //    if (value.y != 0.0f) {
+    //        set_active();
+    //    }
+    //}
+
+    //if (get_command_state() != erhe::application::State::Active) {
+    //    return false;
+    //}
+
+    g_fly_camera_tool->zoom(value.y);
     return true;
 }
 
@@ -199,6 +246,7 @@ void Fly_camera_tool::deinitialize_component()
 {
     ERHE_VERIFY(g_fly_camera_tool == this);
     m_turn_command                  .set_host(nullptr);
+    m_zoom_command                  .set_host(nullptr);
     m_move_up_active_command        .set_host(nullptr);
     m_move_up_inactive_command      .set_host(nullptr);
     m_move_down_active_command      .set_host(nullptr);
@@ -278,6 +326,9 @@ void Fly_camera_tool::initialize_component()
     commands.register_command(&m_turn_command);
     commands.bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left, false);
 
+    commands.register_command(&m_zoom_command);
+    commands.bind_command_to_mouse_wheel(&m_zoom_command);
+
     m_camera_controller = std::make_shared<Frame_controller>();
 
     m_camera_controller->get_controller(Control::translate_x).set_damp_and_max_delta(config.velocity_damp, config.velocity_max_delta);
@@ -295,6 +346,7 @@ void Fly_camera_tool::initialize_component()
     );
 
     m_turn_command                  .set_host(this);
+    m_zoom_command                  .set_host(this);
     m_move_up_active_command        .set_host(this);
     m_move_up_inactive_command      .set_host(this);
     m_move_down_active_command      .set_host(this);
@@ -420,6 +472,25 @@ auto Fly_camera_tool::try_move(
     return true;
 }
 
+auto Fly_camera_tool::zoom(const float delta) -> bool
+{
+    const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
+
+    const auto viewport_window = g_viewport_windows->hover_window();
+    if (!viewport_window) {
+        return false;
+    }
+
+    if (delta != 0.0f) {
+        glm::vec3 position = m_camera_controller->get_position();
+        const float l = glm::length(position);
+        const float k = (-1.0f / 32.0f) * l * delta;
+        m_camera_controller->get_controller(Control::translate_z).adjust(k);
+    }
+
+    return true;
+}
+
 auto Fly_camera_tool::turn_relative(const float dx, const float dy) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
@@ -502,8 +573,8 @@ void Fly_camera_tool::imgui()
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
 
     // \xc2\xb0 is degree symbol UTF-8 encoded
-    ImGui::Text("Heading = %.2f\xc2\xb0", simple_degrees(m_camera_controller->heading()));
-    ImGui::Text("Elevation = %.2f\xc2\xb0", simple_degrees(m_camera_controller->elevation()));
+    ImGui::Text("Heading = %.2f\xc2\xb0", simple_degrees(m_camera_controller->get_heading()));
+    ImGui::Text("Elevation = %.2f\xc2\xb0", simple_degrees(m_camera_controller->get_elevation()));
 
     m_camera_controller->translate_x.set_max_delta(speed);
     m_camera_controller->translate_y.set_max_delta(speed);

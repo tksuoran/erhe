@@ -316,6 +316,7 @@ Scene::Scene(
 
 Scene::~Scene()
 {
+    m_root_node->trace();
     sanity_check();
 
     m_root_node->recursive_remove();

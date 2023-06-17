@@ -104,15 +104,15 @@ void Node_attachment::set_node(
     m_node = node;
     Scene_host* const new_host = (m_node != nullptr) ? m_node->get_item_host() : nullptr;
 
-    auto this_shared = (node != nullptr)
-        ? std::static_pointer_cast<Node_attachment>(shared_from_this())
-        : std::shared_ptr<Node_attachment>{};
     if (old_node != nullptr) {
         old_node->handle_remove_attachment(this);
     }
     if (node != nullptr) {
+        auto weak_this = weak_from_this();
+        ERHE_VERIFY(!weak_this.expired());
+        auto shared_this = std::static_pointer_cast<Node_attachment>(weak_this.lock());
         node->handle_add_attachment(
-            this_shared,
+            shared_this,
             position
         );
 
@@ -317,12 +317,12 @@ void Node::handle_add_child(
 #ifndef NDEBUG
     const auto i = std::find(node_data.children.begin(), node_data.children.end(), child_node);
     if (i != node_data.children.end()) {
-        log->error("Node {} already has child {}", get_name(), child_node->get_name());
+        log->error("Node {} already has child {}", describe(), child_node->describe());
         return;
     }
 #endif
 
-    log->trace("'{}'::handle_add_child '{}'", get_name(), child_node->get_name());
+    log->trace("'{}'::handle_add_child '{}'", describe(), child_node->describe());
     node_data.children.insert(node_data.children.begin() + position, child_node);
 }
 
@@ -332,13 +332,7 @@ void Node::trace()
     for (int i = 0; i < node_data.depth; ++i) {
         ss << "  ";
     }
-    log->trace(
-        "{}{} '{}' id = {}",
-        ss.str(),
-        type_name(),
-        get_name(),
-        get_id()
-    );
+    log->trace("{}{} (depth = {})", ss.str(), describe(), get_depth());
     for (const auto& child : node_data.children) {
         child->trace();
     }
@@ -346,7 +340,7 @@ void Node::trace()
 
 void Node::handle_add_attachment(
     const std::shared_ptr<Node_attachment>& attachment,
-    std::size_t                             position
+    const std::size_t                       position
 )
 {
     ERHE_VERIFY(attachment);
@@ -354,12 +348,12 @@ void Node::handle_add_attachment(
 #ifndef NDEBUG
     const auto i = std::find(node_data.attachments.begin(), node_data.attachments.end(), attachment);
     if (i != node_data.attachments.end()) {
-        log->error("Node {} already has attachment {}", get_name(), attachment->get_name());
+        log->error("Node {} already has attachment {}", describe(), attachment->get_name());
         return;
     }
 #endif
 
-    log->trace("'{}'::handle_add_attachment '{}'", get_name(), attachment->get_name());
+    log->trace("'{}'::handle_add_attachment '{}'", describe(), attachment->get_name());
     node_data.attachments.insert(node_data.attachments.begin() + position, attachment);
 }
 
@@ -378,12 +372,12 @@ void Node::handle_remove_child(
         }
     );
     if (i != node_data.children.end()) {
-        log->trace("Removing child '{}' from node '{}'", child_node->get_name(), get_name());
+        log->trace("Removing child '{}' from node '{}'", child_node->describe(), describe());
         node_data.children.erase(i, node_data.children.end());
     } else {
         log->error(
             "child node '{}' cannot be removed from parent node '{}': child not found",
-            child_node->get_name(),
+            child_node->describe(),
             get_name()
         );
     }
@@ -426,9 +420,10 @@ void Node::set_parent(
     node_data.parent = new_parent_node;
     Node* new_parent = node_data.parent.lock().get();
 
-    auto shared_this = new_parent
-        ? std::static_pointer_cast<Node>(shared_from_this())
-        : std::shared_ptr<Node>{};
+    auto weak_this = weak_from_this();
+    ERHE_VERIFY(!new_parent || !weak_this.expired());
+
+    auto shared_this = std::static_pointer_cast<Node>(weak_this.lock());
     if (old_parent == new_parent) {
         return;
     }

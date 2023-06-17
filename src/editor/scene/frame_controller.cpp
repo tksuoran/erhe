@@ -79,17 +79,17 @@ void Frame_controller::set_heading(const float value)
     update();
 }
 
-auto Frame_controller::position() const -> vec3
+auto Frame_controller::get_position() const -> vec3
 {
     return m_position;
 }
 
-auto Frame_controller::elevation() const -> float
+auto Frame_controller::get_elevation() const -> float
 {
     return m_elevation;
 }
 
-auto Frame_controller::heading() const -> float
+auto Frame_controller::get_heading() const -> float
 {
     return m_heading;
 }
@@ -114,13 +114,8 @@ auto Frame_controller::type_name() const -> const char*
     return static_type_name();
 }
 
-void Frame_controller::handle_node_transform_update()
+void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
 {
-    if (m_transform_update) {
-        return;
-    }
-
-    auto* node = get_node();
     if (node == nullptr) {
         return;
     }
@@ -138,7 +133,28 @@ void Frame_controller::handle_node_transform_update()
         m_heading,
         erhe::toolkit::vector_types<float>::vec3_unit_y()
     );
+}
 
+void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::scene::Node* new_node)
+{
+    static_cast<void>(old_node);
+    if (new_node == nullptr) {
+        return;
+    }
+    get_transform_from_node(new_node);
+}
+
+void Frame_controller::handle_node_transform_update()
+{
+    if (m_transform_update) {
+        return;
+    }
+
+    auto* node = get_node();
+    if (node == nullptr) {
+        return;
+    }
+    get_transform_from_node(node);
     update();
 }
 
@@ -166,52 +182,31 @@ void Frame_controller::update()
     m_rotation_matrix = m_heading_matrix * elevation_matrix;
 
     mat4 parent_from_local = m_rotation_matrix;
-    //mat4 parent_to_local = transpose(local_to_parent);
-
-    // HACK
-    // if (m_position.y < 0.03f)
-    // {
-    //     m_position.y = 0.03f;
-    // }
 
     // Put translation to column 3
     parent_from_local[3] = vec4{m_position, 1.0f};
 
-    // Put inverse translation to column 3
-    /*parentToLocal._03 = parentToLocal._00 * -positionInParent.X + parentToLocal._01 * -positionInParent.Y + parentToLocal._02 * - positionInParent.Z;
-   parentToLocal._13 = parentToLocal._10 * -positionInParent.X + parentToLocal._11 * -positionInParent.Y + parentToLocal._12 * - positionInParent.Z;
-   parentToLocal._23 = parentToLocal._20 * -positionInParent.X + parentToLocal._21 * -positionInParent.Y + parentToLocal._22 * - positionInParent.Z;
-   parentToLocal._33 = 1.0f;
-   */
-    //m_local_from_parent = inverse(m_parent_from_local);
     m_transform_update = true;
-    //node->set_parent_from_node(parent_from_local);
-    node->set_world_from_node(parent_from_local);
+    node->set_parent_from_node(parent_from_local);
     m_transform_update = false;
-
-    //vec4 position  = m_node->world_from_local.matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    //vec4 direction = m_node->world_from_local.matrix() * vec4{0.0f, 0.0f, 1.0f, 0.0f};
-    //float elevation;
-    //float heading;
-    //cartesian_to_heading_elevation(direction, elevation, heading);
-    //log_render.info("elevation = {:.2f}, heading = {:.2f}\n", elevation / glm::pi<float>(), heading / glm::pi<float>());
-
-    //Frame.LocalToParent.Set(localToParent, parentToLocal);
 }
 
-auto Frame_controller::right() const -> vec3
+auto Frame_controller::get_axis_x() const -> vec3
 {
-    return vec3{m_heading_matrix[0]};
+    return vec3{m_rotation_matrix[0]};
+    //return vec3{m_heading_matrix[0]};
 }
 
-auto Frame_controller::up() const -> vec3
+auto Frame_controller::get_axis_y() const -> vec3
 {
-    return vec3{m_heading_matrix[1]};
+    return vec3{m_rotation_matrix[1]};
+    //return vec3{m_heading_matrix[1]};
 }
 
-auto Frame_controller::back() const -> vec3
+auto Frame_controller::get_axis_z() const -> vec3
 {
-    return vec3{m_heading_matrix[2]};
+    return vec3{m_rotation_matrix[2]};
+    //return vec3{m_heading_matrix[2]};
 }
 
 void Frame_controller::update_fixed_step()
@@ -227,15 +222,15 @@ void Frame_controller::update_fixed_step()
     const float speed = 0.8f + speed_modifier.current_value();
 
     if (translate_x.current_value() != 0.0f) {
-        m_position += right() * translate_x.current_value() * speed;
+        m_position += get_axis_x() * translate_x.current_value() * speed;
     }
 
     if (translate_y.current_value() != 0.0f) {
-        m_position += up() * translate_y.current_value() * speed;
+        m_position += get_axis_y() * translate_y.current_value() * speed;
     }
 
     if (translate_z.current_value() != 0.0f) {
-        m_position += back() * translate_z.current_value() * speed;
+        m_position += get_axis_z() * translate_z.current_value() * speed;
     }
 
     if (
@@ -256,44 +251,13 @@ void Frame_controller::update_fixed_step()
     }
 
     update();
-#if 0
-   m_parent_from_local = m_rotation_matrix;
-   //Matrix4 parentToLocal;
-
-   //Matrix4.Transpose(localToParent, out parentToLocal);
-
-   // HACK
-   if (m_position.y < 0.03f)
-      m_position.y = 0.03f;
-
-   /*  Put translation to column 3  */
-   m_parent_from_local[3] = vec4{m_position, 1.0f};
-
-#    if 0
-   localToParent._03 = positionInParent.X;
-   localToParent._13 = positionInParent.Y;
-   localToParent._23 = positionInParent.Z;
-   localToParent._33 = 1.0f;
-
-   /*  Put inverse translation to column 3 */
-   parentToLocal._03 = parentToLocal._00 * -positionInParent.X + parentToLocal._01 * -positionInParent.Y + parentToLocal._02 * - positionInParent.Z;
-   parentToLocal._13 = parentToLocal._10 * -positionInParent.X + parentToLocal._11 * -positionInParent.Y + parentToLocal._12 * - positionInParent.Z;
-   parentToLocal._23 = parentToLocal._20 * -positionInParent.X + parentToLocal._21 * -positionInParent.Y + parentToLocal._22 * - positionInParent.Z;
-   parentToLocal._33 = 1.0f;
-
-   Frame.LocalToParent.Set(localToParent, parentToLocal);
-#    endif
-
-   m_local_from_parent = inverse(m_parent_from_local);
-#endif
 }
 
 auto is_frame_controller(
     const erhe::scene::Item* const item
 ) -> bool
 {
-    if (item == nullptr)
-    {
+    if (item == nullptr) {
         return false;
     }
     using namespace erhe::toolkit;

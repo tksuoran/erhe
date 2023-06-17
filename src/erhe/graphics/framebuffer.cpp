@@ -6,7 +6,7 @@
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/verify.hpp"
-
+#include <fmt/format.h>
 #include <thread>
 
 namespace erhe::graphics
@@ -247,11 +247,11 @@ auto Framebuffer::gl_name() const -> unsigned int
 
 void Framebuffer::set_debug_label(const std::string& label)
 {
-    m_debug_label = "(F) " + label;
+    m_debug_label = fmt::format("(F:{}) {}", gl_name(), label);
     gl::object_label(
         gl::Object_identifier::framebuffer,
         gl_name(),
-        static_cast<GLsizei>(label.length()),
+        static_cast<GLsizei>(m_debug_label.length()),
         m_debug_label.c_str()
     );
 }

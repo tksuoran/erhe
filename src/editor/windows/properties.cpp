@@ -300,29 +300,14 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 ImGui::TreeNodeEx("Statistics")
             ) {
                 ImGui::Indent(indent);
-                material_library.combo("Material", primitive.material, false);
-                if (primitive.material) {
-                    ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
-                } else {
-                    ImGui::Text("Null material");
-                }
-                if (ImGui::TreeNodeEx("Statistics")) {
-                    ImGui::Indent(indent);
-                    int point_count   = geometry->get_point_count();
-                    int polygon_count = geometry->get_polygon_count();
-                    int edge_count    = geometry->get_edge_count();
-                    int corner_count  = geometry->get_corner_count();
-                    ImGui::InputInt("Points",      &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Polygons",    &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Edges",       &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputInt("Corners",     &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
-                    float bbox_volume    = primitive.gl_primitive_geometry.bounding_box.volume();
-                    float bsphere_volume = primitive.gl_primitive_geometry.bounding_sphere.volume();
-                    ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
-                    ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
-                    ImGui::Unindent(indent);
-                    ImGui::TreePop();
-                }
+                int point_count   = geometry->get_point_count();
+                int polygon_count = geometry->get_polygon_count();
+                int edge_count    = geometry->get_edge_count();
+                int corner_count  = geometry->get_corner_count();
+                ImGui::InputInt("Points",   &point_count,   0, 0, ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputInt("Polygons", &polygon_count, 0, 0, ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputInt("Edges",    &edge_count,    0, 0, ImGuiInputTextFlags_ReadOnly);
+                ImGui::InputInt("Corners",  &corner_count,  0, 0, ImGuiInputTextFlags_ReadOnly);
                 ImGui::Unindent(indent);
                 ImGui::TreePop();
             }
@@ -475,11 +460,20 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
         return;
     }
 
+    const auto node_physics = as_physics     (item);
+    const auto camera       = as_camera      (item);
+    const auto light        = as_light       (item);
+    const auto mesh         = as_mesh        (item);
+    const auto skin         = as_skin        (item);
+    const auto rendertarget = as_rendertarget(item);
+
+    const bool default_open = !node_physics;
+
     if (
         !ImGui::TreeNodeEx(
             item->type_name(),
             ImGuiTreeNodeFlags_Framed |
-            ImGuiTreeNodeFlags_DefaultOpen
+            (default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0)
         )
     ) {
         return;
@@ -514,32 +508,26 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
         }
     }
 
-    auto node_physics = as_physics(item);
     if (node_physics) {
         node_physics_properties(*node_physics);
     }
 
-    auto camera = as_camera(item);
     if (camera) {
         camera_properties(*camera);
     }
 
-    auto light = as_light(item);
     if (light) {
         light_properties(*light);
     }
 
-    auto mesh = as_mesh(item);
     if (mesh) {
         mesh_properties(*mesh);
     }
 
-    auto skin = as_skin(item);
     if (skin) {
         skin_properties(*skin);
     }
 
-    auto rendertarget = as_rendertarget(item);
     if (rendertarget) {
         rendertarget_properties(*rendertarget);
     }
@@ -548,11 +536,8 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
     ImGui::PopID();
 }
 
-void Properties::imgui()
+void Properties::material_properties()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ERHE_PROFILE_FUNCTION();
-
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto selected_material = g_content_library_window->selected_material();
     if (selected_material) {
@@ -560,7 +545,7 @@ void Properties::imgui()
             ImGui::TreeNodeEx(
                 "Material",
                 ImGuiTreeNodeFlags_Framed |
-                ImGuiTreeNodeFlags_DefaultOpen
+                0 //ImGuiTreeNodeFlags_DefaultOpen
             )
         ) {
             std::string name = selected_material->get_name();
@@ -580,6 +565,12 @@ void Properties::imgui()
         }
     }
 #endif
+}
+
+void Properties::imgui()
+{
+#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    ERHE_PROFILE_FUNCTION();
 
     if (g_selection_tool == nullptr) {
         return;
@@ -590,6 +581,8 @@ void Properties::imgui()
         ERHE_VERIFY(item);
         item_properties(item);
     }
+
+    material_properties();
 #endif
 }
 

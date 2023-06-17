@@ -5,6 +5,7 @@
 #include "erhe/gl/gl_helpers.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
+#include <fmt/format.h>
 
 namespace erhe::graphics
 {
@@ -132,11 +133,11 @@ Renderbuffer::~Renderbuffer() noexcept
 
 void Renderbuffer::set_debug_label(const std::string& label)
 {
-    m_debug_label = "(R) " + label;
+    m_debug_label = fmt::format("(R:{}) {}", gl_name(), label);
     gl::object_label(
         gl::Object_identifier::renderbuffer,
         gl_name(),
-        static_cast<GLsizei>(label.length()),
+        static_cast<GLsizei>(m_debug_label.length()),
         m_debug_label.c_str()
     );
 }

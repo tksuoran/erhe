@@ -4,6 +4,7 @@
 #include "erhe/renderer/program_interface.hpp"
 #include "erhe/renderer/renderer_log.hpp"
 
+#include "erhe/graphics/texture.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/light.hpp"
@@ -70,6 +71,7 @@ Light_buffer::Light_buffer(Light_interface* light_interface)
 }
 
 Light_projections::Light_projections()
+    : shadow_map_texture_handle{0}
 {
 }
 
@@ -77,6 +79,7 @@ Light_projections::Light_projections(
     const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const erhe::scene::Camera*                                  view_camera,
     const erhe::scene::Viewport&                                light_texture_viewport,
+    const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
     uint64_t                                                    shadow_map_texture_handle
 )
     : parameters
@@ -84,6 +87,7 @@ Light_projections::Light_projections(
             .view_camera         = view_camera,
             .shadow_map_viewport = light_texture_viewport
         }
+    , shadow_map_texture       {shadow_map_texture}
     , shadow_map_texture_handle{shadow_map_texture_handle}
 {
     light_projection_transforms.clear();
@@ -155,7 +159,7 @@ auto Light_buffer::update(
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
     const uint32_t shadow_map_texture_handle_uvec2[2] = {
         light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle & 0xffffffffu)) : 0,
-        light_projections ? static_cast<uint32_t>(light_projections->shadow_map_texture_handle >> 32u) : 0
+        light_projections ? static_cast<uint32_t>( light_projections->shadow_map_texture_handle >> 32u) : 0
     };
 
     using erhe::graphics::as_span;
@@ -234,8 +238,8 @@ auto Light_buffer::update(
     write(light_gpu_data, common_offset + offsets.ambient_light,           as_span(ambient_light)            );
     write(light_gpu_data, common_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
 
+    //writer.dump();
     writer.end();
-
     SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", max_light_index);
 
     return writer.range;

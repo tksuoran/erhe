@@ -34,7 +34,6 @@ namespace erhe::renderer
 
 class Scene_root;
 class Scene_view;
-//class Shadow_render_node;
 
 class Shadow_renderer
     : public erhe::components::Component
@@ -74,7 +73,7 @@ public:
         const erhe::scene::Camera*                                 view_camera;
         const erhe::scene::Viewport                                view_camera_viewport;
         const erhe::scene::Viewport                                light_camera_viewport;
-        erhe::graphics::Texture&                                   texture;
+        std::shared_ptr<erhe::graphics::Texture>                   texture;
         const std::vector<
             std::unique_ptr<erhe::graphics::Framebuffer>
         >&                                                         framebuffers;
@@ -94,9 +93,8 @@ private:
     class Pipeline_cache_entry
     {
     public:
-        uint64_t                            serial            {0};
-        erhe::graphics::Vertex_input_state* vertex_input_state{nullptr};
-        erhe::graphics::Pipeline            pipeline;
+        uint64_t                 serial  {0};
+        erhe::graphics::Pipeline pipeline{};
     };
 
     [[nodiscard]] auto get_pipeline(

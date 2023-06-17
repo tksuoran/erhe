@@ -282,4 +282,4 @@ void Multisample_resolve_node::execute_rendergraph_node()
     }
 }
 
-} // namespace editor
+} // namespace erhe::application

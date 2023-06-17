@@ -1,5 +1,8 @@
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
+#include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/scoped_buffer_mapping.hpp"
@@ -28,7 +31,8 @@ void Buffer_transfer_queue::enqueue(
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
 
-    log_buffer->trace(
+    SPDLOG_LOGGER_TRACE(
+        log_buffer,
         "queued buffer {} transfer offset = {} size = {}",
         buffer.gl_name(),
         offset,
@@ -44,8 +48,10 @@ void Buffer_transfer_queue::flush()
     const std::lock_guard<std::mutex> lock{m_mutex};
 
     for (const auto& entry : m_queued) {
-        log_buffer->trace(
-            "buffer upload {} transfer offset = {} size = {}",
+        SPDLOG_LOGGER_TRACE(
+            log_buffer,
+            "buffer upload {} {} transfer offset = {} size = {}",
+            gl::c_str(entry.target.target()),
             entry.target.gl_name(),
             entry.target_offset,
             entry.data.size()

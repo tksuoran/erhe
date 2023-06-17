@@ -41,8 +41,6 @@ public:
     void set                       (const glm::mat4& matrix);
     void set                       (const glm::mat4& matrix, const glm::mat4& inverse_matrix);
 
-    static bool s_reverse_depth;
-
 protected:
     glm::mat4 m_matrix        {1.0f};
     glm::mat4 m_inverse_matrix{1.0f};

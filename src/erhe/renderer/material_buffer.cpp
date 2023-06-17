@@ -1,7 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/renderer/material_buffer.hpp"
-//#include "erhe/renderer/programs.hpp"
 #include "erhe/renderer/program_interface.hpp"
 #include "erhe/renderer/renderer_log.hpp"
 
@@ -19,14 +18,17 @@ Material_interface::Material_interface(std::size_t max_material_count)
     : material_block {"material", 0, erhe::graphics::Shader_resource::Type::shader_storage_block}
     , material_struct{"Material"}
     , offsets        {
-        .roughness    = material_struct.add_vec2 ("roughness"   )->offset_in_parent(),
-        .metallic     = material_struct.add_float("metallic"    )->offset_in_parent(),
-        .reflectance  = material_struct.add_float("reflectance" )->offset_in_parent(),
-        .base_color   = material_struct.add_vec4 ("base_color"  )->offset_in_parent(),
-        .emissive     = material_struct.add_vec4 ("emissive"    )->offset_in_parent(),
-        .base_texture = material_struct.add_uvec2("base_texture")->offset_in_parent(),
-        .opacity      = material_struct.add_float("opacity"     )->offset_in_parent(),
-        .reserved     = material_struct.add_float("reserved"    )->offset_in_parent()
+        .roughness                  = material_struct.add_vec2 ("roughness"                 )->offset_in_parent(),
+        .metallic                   = material_struct.add_float("metallic"                  )->offset_in_parent(),
+        .reflectance                = material_struct.add_float("reflectance"               )->offset_in_parent(),
+        .base_color                 = material_struct.add_vec4 ("base_color"                )->offset_in_parent(),
+        .emissive                   = material_struct.add_vec4 ("emissive"                  )->offset_in_parent(),
+        .base_color_texture         = material_struct.add_uvec2("base_color_texture"        )->offset_in_parent(),
+        .metallic_roughness_texture = material_struct.add_uvec2("metallic_roughness_texture")->offset_in_parent(),
+        .opacity                    = material_struct.add_float("opacity"                   )->offset_in_parent(),
+        .reserved1                  = material_struct.add_float("reserved1"                 )->offset_in_parent(),
+        .reserved2                  = material_struct.add_float("reserved2"                 )->offset_in_parent(),
+        .reserved3                  = material_struct.add_float("reserved3"                 )->offset_in_parent()
     },
     max_material_count{max_material_count}
 {
@@ -42,13 +44,19 @@ Material_buffer::Material_buffer(Material_interface* material_interface)
     , m_material_interface{material_interface}
 {
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::nearest,
-        gl::Texture_mag_filter::nearest
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Material_buffer nearest"
+        }
     );
 
     m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear,
-        gl::Texture_mag_filter::linear
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::linear,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Material_buffer linear"
+        }
     );
 
     Multi_buffer::allocate(
@@ -90,18 +98,31 @@ auto Material_buffer::update(
         using erhe::graphics::as_span;
         using erhe::graphics::write;
 
-        const uint64_t handle = material->texture
+        const uint64_t base_color_handle = material->base_color_texture
             ?
                 erhe::graphics::get_handle(
-                    *material->texture.get(),
-                    material->sampler
-                        ? *material->sampler.get()
+                    *material->base_color_texture.get(),
+                    material->base_color_sampler
+                        ? *material->base_color_sampler.get()
+                        : *m_linear_sampler.get()
+                )
+            : 0;
+        const uint64_t metallic_roughness_handle = material->metallic_roughness_texture
+            ?
+                erhe::graphics::get_handle(
+                    *material->metallic_roughness_texture.get(),
+                    material->metallic_roughness_sampler
+                        ? *material->metallic_roughness_sampler.get()
                         : *m_linear_sampler.get()
                 )
             : 0;
 
-        if (handle != 0) {
-            m_used_handles.insert(handle);
+
+        if (base_color_handle != 0) {
+            m_used_handles.insert(base_color_handle);
+        }
+        if (metallic_roughness_handle != 0) {
+            m_used_handles.insert(metallic_roughness_handle);
         }
 
         material->material_buffer_index = material_index;
@@ -114,13 +135,23 @@ auto Material_buffer::update(
         write(gpu_data, m_writer.write_offset + offsets.opacity    , as_span(material->opacity    ));
 
         if (erhe::graphics::Instance::info.use_bindless_texture) {
-            write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(handle));
+            write(gpu_data, m_writer.write_offset + offsets.base_color_texture,         as_span(base_color_handle));
+            write(gpu_data, m_writer.write_offset + offsets.metallic_roughness_texture, as_span(metallic_roughness_handle));
         } else {
-            std::optional<std::size_t> opt_texture_unit = erhe::graphics::s_texture_unit_cache.allocate_texture_unit(handle);
-            const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : 0);
-            const uint64_t magic        = static_cast<uint64_t>(0x7fff'ffff);
-            const uint64_t value        = texture_unit | (magic << 32);
-            write(gpu_data, m_writer.write_offset + offsets.base_texture, as_span(value));
+            {
+                std::optional<std::size_t> opt_texture_unit = erhe::graphics::s_texture_unit_cache.allocate_texture_unit(base_color_handle);
+                const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : 0);
+                const uint64_t magic        = static_cast<uint64_t>(0x7fff'ffff);
+                const uint64_t value        = texture_unit | (magic << 32);
+                write(gpu_data, m_writer.write_offset + offsets.base_color_texture, as_span(value));
+            }
+            {
+                std::optional<std::size_t> opt_texture_unit = erhe::graphics::s_texture_unit_cache.allocate_texture_unit(metallic_roughness_handle);
+                const uint64_t texture_unit = static_cast<uint64_t>(opt_texture_unit.has_value() ? opt_texture_unit.value() : 0);
+                const uint64_t magic        = static_cast<uint64_t>(0x7fff'ffff);
+                const uint64_t value        = texture_unit | (magic << 32);
+                write(gpu_data, m_writer.write_offset + offsets.metallic_roughness_texture, as_span(value));
+            }
         }
 
         m_writer.write_offset += entry_size;

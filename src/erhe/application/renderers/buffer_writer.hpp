@@ -34,6 +34,7 @@ public:
     auto subspan             (std::size_t byte_count) -> gsl::span<std::byte>;
     void end                 ();
     void reset               ();
+    void dump                ();
 
 private:
     erhe::graphics::Buffer* m_buffer{nullptr};

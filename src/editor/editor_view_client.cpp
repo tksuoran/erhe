@@ -62,8 +62,9 @@ void Editor_view_client::update_fixed_step(const erhe::components::Time_context&
     }
 }
 
-void Editor_view_client::update()
+void Editor_view_client::update(erhe::application::View& view)
 {
+    static_cast<void>(view);
     {
         // TODO something nicer
         g_scene_builder->buffer_transfer_queue().flush();

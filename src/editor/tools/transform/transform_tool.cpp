@@ -262,7 +262,7 @@ void Transform_tool::imgui()
     const bool   show_translate = settings.show_translate;
     const bool   show_rotate    = settings.show_rotate;
     const bool   show_scale     = settings.show_scale;
-    const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
+    const ImVec2 button_size{ImGui::GetContentRegionAvail().x / 2, 0.0f};
     const bool   multiselect    = shared.entries.size() > 1;
 
     if (multiselect) {
@@ -277,6 +277,7 @@ void Transform_tool::imgui()
     ) {
         settings.local = true;
     }
+    ImGui::SameLine();
     if (
         erhe::application::make_button(
             "Global",
@@ -290,12 +291,12 @@ void Transform_tool::imgui()
         ImGui::EndDisabled();
     }
 
-    ImGui::SliderFloat("Scale", &settings.gizmo_scale, 1.0f, 10.0f);
+    //ImGui::SliderFloat("Scale", &settings.gizmo_scale, 1.0f, 10.0f);
 
-    ImGui::Checkbox("Translate Tool", &settings.show_translate);
-    ImGui::Checkbox("Rotate Tool",    &settings.show_rotate);
-    ImGui::Checkbox("Scale Tool",     &settings.show_scale);
-    ImGui::Checkbox("Hide Inactive",  &settings.hide_inactive);
+    //ImGui::Checkbox("Translate Tool", &settings.show_translate);
+    //ImGui::Checkbox("Rotate Tool",    &settings.show_rotate);
+    //ImGui::Checkbox("Scale Tool",     &settings.show_scale);
+    //ImGui::Checkbox("Hide Inactive",  &settings.hide_inactive);
 
     if (
         (show_translate != settings.show_translate) ||
@@ -817,10 +818,6 @@ void Transform_tool::transform_properties()
         return;
     }
 
-    if (!ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
     const bool  multiselect       = shared.entries.size() > 1;
     const auto& first_node        = shared.entries.front().node;
     mat4        world_from_parent = first_node->world_from_parent();
@@ -873,7 +870,7 @@ void Transform_tool::transform_properties()
     }
 
     Value_edit_state skew_edit_state;
-    if (ImGui::TreeNodeEx("Skew", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::TreeNodeEx("Skew"/*ImGuiTreeNodeFlags_DefaultOpen*/)) {
         skew_edit_state.combine(make_scalar_button(&skew.x, 0.0f, 0.0f, 0xff8888ffu, 0xff222266u, "X", "##K.X"));
         skew_edit_state.combine(make_scalar_button(&skew.y, 0.0f, 0.0f, 0xff88ff88u, 0xff226622u, "Y", "##K.Y"));
         skew_edit_state.combine(make_scalar_button(&skew.z, 0.0f, 0.0f, 0xffff8888u, 0xff662222u, "Z", "##K.Z"));
@@ -894,8 +891,6 @@ void Transform_tool::transform_properties()
     if (edit_state.edit_ended && shared.touched) {
         record_transform_operation();
     }
-
-    ImGui::TreePop();
 }
 
 }

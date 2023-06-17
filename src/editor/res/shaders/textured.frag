@@ -34,9 +34,9 @@ vec4 sample_texture_lod_bias(vec2 texcoord, float lod_bias)
 {
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(v_texture);
-    return texture(s_texture, v_texcoord, lod_bias);
+    return texture(s_texture, texcoord, lod_bias);
 #else
-    return texture(s_texture[v_texture.x], v_texcoord, lod_bias);
+    return texture(s_texture[v_texture.x], texcoord, lod_bias);
 #endif
 }
 

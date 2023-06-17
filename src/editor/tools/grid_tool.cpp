@@ -78,18 +78,16 @@ void Grid_tool::initialize_component()
     ini->get("cell_count",  config.cell_count);
 
     std::shared_ptr<Grid> grid = std::make_shared<Grid>();
-
-    // TODO Move config to editor
-    //
+    // TODO Move config to editor ?
     // grid->name        = "Default Grid";
-    // grid->enable      = config.enabled;
-    // grid->cell_size   = config.cell_size;
-    // grid->cell_div    = config.cell_div;
-    // grid->cell_count  = config.cell_count;
-    // grid->major_width = config.major_width;
-    // grid->minor_width = config.minor_width;
-    // grid->major_color = config.major_color;
-    // grid->minor_color = config.minor_color;
+    grid->set_visible    (config.enabled);
+    grid->set_cell_size  (config.cell_size);
+    grid->set_cell_div   (config.cell_div);
+    grid->set_cell_count (config.cell_count);
+    grid->set_major_color(config.major_color);
+    grid->set_minor_color(config.minor_color);
+    grid->set_major_width(config.major_width);
+    grid->set_minor_width(config.minor_width);
 
     m_grids.push_back(grid);
 

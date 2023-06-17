@@ -273,7 +273,6 @@ void Configuration::parse_args(int argc, char** argv)
         if (ini.has("graphics")) {
             const auto& section = ini["graphics"];
             ini_get(section, "reverse_depth",               graphics.reverse_depth);
-            ini_get(section, "simpler_shaders",             graphics.simpler_shaders);
             ini_get(section, "post_processing",             graphics.post_processing);
             ini_get(section, "use_time_query",              graphics.use_time_query);
             ini_get(section, "force_no_bindless",           graphics.force_no_bindless);

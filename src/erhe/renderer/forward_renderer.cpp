@@ -68,9 +68,7 @@ void Forward_renderer::declare_required_components()
 {
     require<erhe::application::Configuration      >();
     require<erhe::application::Gl_context_provider>();
-    //require<Mesh_memory      >();
     require<Program_interface>();
-    //require<Programs         >();
 }
 
 static constexpr std::string_view c_forward_renderer_initialize_component{"Forward_renderer::initialize_component()"};
@@ -94,13 +92,19 @@ void Forward_renderer::initialize_component()
     m_dummy_texture = erhe::graphics::create_dummy_texture();
 
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::nearest,
-        gl::Texture_mag_filter::nearest
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Forward_renderer nearest"
+        }
     );
 
     m_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear,
-        gl::Texture_mag_filter::linear
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::linear,
+            .mag_filter  = gl::Texture_mag_filter::linear,
+            .debug_label = "Forward_renderer linear"
+        }
     );
 
     g_forward_renderer = this;
@@ -116,6 +120,15 @@ void Forward_renderer::next_frame()
     m_light_buffers        ->next_frame();
     m_material_buffers     ->next_frame();
     m_primitive_buffers    ->next_frame();
+}
+
+namespace {
+
+const char* safe_str(const char* str)
+{
+    return str != nullptr ? str : "";
+}
+
 }
 
 void Forward_renderer::render(const Render_parameters& parameters)
@@ -134,18 +147,22 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const bool  enable_shadows =
         (g_shadow_renderer != nullptr) &&
         (!lights.empty()) &&
-        (parameters.shadow_texture != nullptr);
+        (parameters.shadow_texture != nullptr) &&
+        (parameters.light_projections->shadow_map_texture_handle != 0);
 
     const uint64_t shadow_texture_handle = enable_shadows
-        ?
-            erhe::graphics::get_handle(
-                *parameters.shadow_texture,
-                *m_nearest_sampler.get()
-            )
+        ? parameters.light_projections->shadow_map_texture_handle
         : 0;
     const uint64_t fallback_texture_handle = erhe::graphics::get_handle(
         *m_dummy_texture.get(),
         *m_nearest_sampler.get()
+    );
+
+    log_shadow_renderer->trace(
+        "render({}) shadow T '{}' handle {}",
+        safe_str(parameters.passes.front()->pipeline.data.name),
+        enable_shadows ? parameters.shadow_texture->debug_label() : "",
+        erhe::graphics::format_texture_handle(shadow_texture_handle)
     );
 
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -257,7 +274,6 @@ void Forward_renderer::render(const Render_parameters& parameters)
         ERHE_PROFILE_SCOPE("make textures non resident");
 
         if (enable_shadows) {
-            ERHE_PROFILE_SCOPE("shadow texture non resident");
             gl::make_texture_handle_non_resident_arb(shadow_texture_handle);
         }
         for (const uint64_t handle : m_material_buffers->used_handles()) {

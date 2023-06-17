@@ -70,6 +70,6 @@ auto make_angle_button(
     const char* imgui_label
 ) -> Value_edit_state;
 
-} // namespace editor
+} // namespace erhe::application
 
 #endif

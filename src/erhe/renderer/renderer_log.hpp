@@ -9,6 +9,7 @@ namespace erhe::renderer {
 extern std::shared_ptr<spdlog::logger> log_draw;
 extern std::shared_ptr<spdlog::logger> log_render;
 extern std::shared_ptr<spdlog::logger> log_program_interface;
+extern std::shared_ptr<spdlog::logger> log_shadow_renderer;
 
 void initialize_logging();
 

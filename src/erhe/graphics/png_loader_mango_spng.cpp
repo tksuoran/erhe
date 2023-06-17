@@ -71,7 +71,7 @@ void PNG_loader::close()
 
 auto PNG_loader::open(
     const std::filesystem::path& path,
-    Image_info&     info
+    Image_info&                  info
 ) -> bool
 {
     close();
@@ -86,6 +86,56 @@ auto PNG_loader::open(
 
     int result{};
     result = ::spng_set_png_buffer(m_image_decoder, file.data(), file.size());
+    if (result != 0) {
+        return false;
+    }
+
+    result = ::spng_decode_chunks(m_image_decoder);
+    if (result != 0) {
+        return false;
+    }
+
+    struct ::spng_ihdr ihdr{
+        .width      = 0,
+        .height     = 0,
+        .bit_depth  = 0,
+        .color_type = SPNG_COLOR_TYPE_GRAYSCALE
+    };
+    result = ::spng_get_ihdr(m_image_decoder, &ihdr);
+    if (result != 0) {
+        return false;
+    }
+
+    std::size_t image_size{};
+    result = ::spng_decoded_image_size(m_image_decoder, SPNG_FMT_RGBA8, &image_size);
+    if (result != 0) {
+        return false;
+    }
+
+    info.width       = ihdr.width;
+    info.height      = ihdr.height;
+    info.depth       = 1;
+    info.level_count = 1;
+    info.row_stride  = ihdr.width * 4;
+    info.format      = Image_format::srgb8_alpha8;
+
+    return true;
+}
+
+auto PNG_loader::open(
+    const gsl::span<const std::byte>& buffer_view,
+    Image_info&                       info
+) -> bool
+{
+    close();
+
+    m_image_decoder = ::spng_ctx_new(0);
+    if (m_image_decoder == nullptr) {
+        return false;
+    }
+
+    int result{};
+    result = ::spng_set_png_buffer(m_image_decoder, buffer_view.data(), buffer_view.size());
     if (result != 0) {
         return false;
     }

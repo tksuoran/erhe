@@ -31,4 +31,4 @@ public:
 
 extern Scene_message_bus* g_scene_message_bus;
 
-} // namespace editor
+} // namespace erhe::application

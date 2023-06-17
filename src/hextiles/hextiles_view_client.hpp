@@ -23,7 +23,7 @@ public:
     void initialize_component       () override;
 
     // Implements erhe::application::View_client
-    void update() override;
+    void update(erhe::application::View& view) override;
 };
 
 } // namespace hextiles

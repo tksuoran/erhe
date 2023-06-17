@@ -40,8 +40,6 @@ public:
         m_settings.mPoint2      = to_jolt(settings.pivot_in_b);
         m_settings.mMinDistance = 0.0f;
         m_settings.mMaxDistance = 0.0f;
-        m_settings.mFrequency   = settings.frequency;
-        m_settings.mDamping     = settings.damping;
         auto* const body_a = reinterpret_cast<Jolt_rigid_body*>(settings.rigid_body_a)->get_jolt_body();
         auto* const body_b = reinterpret_cast<Jolt_rigid_body*>(settings.rigid_body_b)->get_jolt_body();
         m_constraint = m_settings.Create(

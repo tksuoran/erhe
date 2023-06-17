@@ -51,6 +51,15 @@ public:
     auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
 };
 
+class Fly_camera_zoom_command
+    : public erhe::application::Command
+{
+public:
+    Fly_camera_zoom_command();
+    void try_ready          () override;
+    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
+};
+
 class Fly_camera_move_command
     : public erhe::application::Command
 {
@@ -125,12 +134,14 @@ public:
         erhe::application::Controller_item item,
         bool                               active
     ) -> bool;
-    auto turn_relative (float dx, float dy) -> bool;
+    auto turn_relative(float dx, float dy) -> bool;
+    auto zoom         (float delta) -> bool;
 
 private:
     void update_camera();
 
     Fly_camera_turn_command           m_turn_command;
+    Fly_camera_zoom_command           m_zoom_command;
     Fly_camera_move_command           m_move_up_active_command;
     Fly_camera_move_command           m_move_up_inactive_command;
     Fly_camera_move_command           m_move_down_active_command;

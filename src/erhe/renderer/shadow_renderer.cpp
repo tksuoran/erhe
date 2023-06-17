@@ -76,11 +76,7 @@ void Shadow_renderer::deinitialize_component()
 void Shadow_renderer::declare_required_components()
 {
     require<erhe::application::Gl_context_provider>();
-#if 0
-    require<Editor_message_bus>();
-#endif
-    require<Program_interface >();
-//    require<Programs          >();
+    require<Program_interface>();
 }
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
@@ -118,21 +114,12 @@ void Shadow_renderer::initialize_component()
 
     ERHE_VERIFY(config.shadow_map_max_light_count <= g_program_interface->config.max_light_count);
 
-    //.using Vertex_attribute = erhe::graphics::Vertex_attribute;
-
-    //m_vertex_input = std::make_unique<Vertex_input_state>(
-    //    erhe::graphics::Vertex_input_state_data::make(
-    //        shader_resources.attribute_mappings,
-    //        g_mesh_memory->gl_vertex_format(),
-    //        g_mesh_memory->gl_vertex_buffer.get(),
-    //        g_mesh_memory->gl_index_buffer.get()
-    //    )
-    //);
-
-    //std::unique_ptr<erhe::graphics::Shader_stages>*           program{nullptr};
     auto prototype = shader_resources.make_prototype(
         "res/shaders",
-        erhe::graphics::Shader_stages::Create_info{ .name = "depth"  }
+        erhe::graphics::Shader_stages::Create_info{
+            .name           = "depth",
+            .dump_interface = false
+        }
     );
 
     prototype->compile_shaders();
@@ -143,18 +130,12 @@ void Shadow_renderer::initialize_component()
 
     m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Shadow_renderer");
 
-#if 0
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
-            on_message(message);
-        }
-    );
-#endif
-
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::nearest,
-        gl::Texture_mag_filter::nearest
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Shadow_renderer"
+        }
     );
 
     g_shadow_renderer = this;
@@ -168,7 +149,7 @@ auto Shadow_renderer::get_pipeline(
     uint64_t              lru_serial{m_pipeline_cache_serial};
     Pipeline_cache_entry* lru_entry {nullptr};
     for (auto& entry : m_pipeline_cache_entries) {
-        if (entry.vertex_input_state == vertex_input_state) {
+        if (entry.pipeline.data.vertex_input == vertex_input_state) {
             entry.serial = m_pipeline_cache_serial;
             return entry.pipeline;
         }
@@ -177,6 +158,7 @@ auto Shadow_renderer::get_pipeline(
             lru_entry = &entry;
         }
     }
+    ERHE_VERIFY(lru_entry != nullptr);
     lru_entry->serial = m_pipeline_cache_serial;
     lru_entry->pipeline.data = {
         .name           = "Shadow Renderer",
@@ -205,16 +187,26 @@ void Shadow_renderer::next_frame()
 
 auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 {
+    log_shadow_renderer->trace(
+        "Making light projections using texture '{}' sampler '{}' handle '{}'",
+        parameters.texture->debug_label(),
+        m_nearest_sampler->debug_label(),
+        erhe::graphics::format_texture_handle(parameters.light_projections.shadow_map_texture_handle)
+    );
+    const auto shadow_texture_handle =
+        erhe::graphics::get_handle(
+            *parameters.texture.get(),
+            *m_nearest_sampler.get()
+        );
+
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections = Light_projections{
         parameters.lights,
         parameters.view_camera,
         ////parameters.view_camera_viewport,
         parameters.light_camera_viewport,
-        erhe::graphics::get_handle(
-            parameters.texture,
-            *m_nearest_sampler.get()
-        )
+        parameters.texture,
+        shadow_texture_handle
     };
 
     if (!config.enabled) {
@@ -257,6 +249,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     );
     m_light_buffers->bind_light_buffer(light_range);
 
+    log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->debug_label());
+
     for (const auto& meshes : mesh_spans) {
         const auto primitive_range = m_primitive_buffers->update(meshes, shadow_filter, Primitive_interface_settings{});
         const auto draw_indirect_buffer_range = m_draw_indirect_buffers->update(
@@ -283,14 +277,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             if (light_index >= parameters.framebuffers.size()) {
                 continue;
             }
-
-            //Frustum_tiler frustum_tiler{*m_texture.get()};
-            //frustum_tiler.update(
-            //    light_index,
-            //    m_light_projections.projection_transforms[light_index].clip_from_world.matrix(),
-            //    parameters.view_camera,
-            //    parameters.view_camera_viewport
-            //);
 
             {
                 ERHE_PROFILE_SCOPE("bind fbo");

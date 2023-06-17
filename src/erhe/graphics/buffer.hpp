@@ -25,6 +25,11 @@ public:
     ) noexcept;
 
     Buffer(
+        std::size_t             capacity_bytes_count,
+        gl::Buffer_storage_mask storage_mask
+    ) noexcept;
+
+    Buffer(
         gl::Buffer_target          target,
         std::size_t                capacity_byte_count,
         gl::Buffer_storage_mask    storage_mask,

@@ -28,7 +28,7 @@ public:
     void update_fixed_step(const erhe::components::Time_context&) override;
 
     // Implements erhe::application::View_client
-    void update() override;
+    void update(erhe::application::View& view) override;
 };
 
 extern Editor_view_client* g_editor_view_client;

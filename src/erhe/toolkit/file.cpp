@@ -15,46 +15,62 @@ namespace erhe::toolkit
 
 auto read(const std::filesystem::path& path) -> std::optional<std::string>
 {
-    // Watch out for fio
-    try {
-        if (
-            std::filesystem::exists(path) &&
-            std::filesystem::is_regular_file(path) &&
-            !std::filesystem::is_empty(path)
-        ) {
-            const std::size_t file_length = std::filesystem::file_size(path);
-            std::FILE* file =
-#if defined(_WIN32) // _MSC_VER
-                _wfopen(path.c_str(), L"rb");
-#else
-                std::fopen(path.c_str(), "rb");
-#endif
-            if (file == nullptr) {
-                log_file->error("Could not open file '{}' for reading", path.string());
-                return {};
-            }
-
-            std::size_t bytes_to_read = file_length;
-            std::size_t bytes_read = 0;
-            std::string result(file_length, '\0');
-            do {
-                const auto read_byte_count = std::fread(result.data() + bytes_read, 1, bytes_to_read, file);
-                if (read_byte_count == 0) {
-                    log_file->error("Error reading file '{}'", path.string());
-                    return {};
-                }
-                bytes_read += read_byte_count;
-                bytes_to_read -= read_byte_count;
-            } while (bytes_to_read > 0);
-
-            std::fclose(file);
-
-            return std::optional<std::string>(result);
-        }
-    } catch (...) {
-        log_file->error("Error reading file '{}'", path.string());
+    std::error_code error_code;
+    const bool exists = std::filesystem::exists(path, error_code);
+    if (error_code) {
+        log_file->warn("std::filesystem::exists('{}') returned error code {}", path.string(), error_code.value());
+        return {};
     }
-    return {};
+    if (!exists) {
+        log_file->warn("File '{}' not found", path.string());
+        return {};
+    }
+    const bool is_regular_file = std::filesystem::is_regular_file(path, error_code);
+    if (error_code) {
+        log_file->warn("std::filesystem::is_regular_file('{}') returned error code {}", path.string(), error_code.value());
+        return {};
+    }
+    if (!is_regular_file) {
+        log_file->warn("File '{}' is not regular file", path.string());
+        return {};
+    }
+    const bool is_empty = std::filesystem::is_empty(path, error_code);
+    if (error_code) {
+        log_file->warn("std::filesystem::is_empty('{}') returned error code {}", path.string(), error_code.value());
+        return {};
+    }
+    if (is_empty) {
+        return {};
+    }
+
+    const std::size_t file_length = std::filesystem::file_size(path);
+    std::FILE* file =
+#if defined(_WIN32) // _MSC_VER
+        _wfopen(path.c_str(), L"rb");
+#else
+        std::fopen(path.c_str(), "rb");
+#endif
+    if (file == nullptr) {
+        log_file->error("Could not open file '{}' for reading", path.string());
+        return {};
+    }
+
+    std::size_t bytes_to_read = file_length;
+    std::size_t bytes_read = 0;
+    std::string result(file_length, '\0');
+    do {
+        const auto read_byte_count = std::fread(result.data() + bytes_read, 1, bytes_to_read, file);
+        if (read_byte_count == 0) {
+            log_file->error("Error reading file '{}'", path.string());
+            return {};
+        }
+        bytes_read += read_byte_count;
+        bytes_to_read -= read_byte_count;
+    } while (bytes_to_read > 0);
+
+    std::fclose(file);
+
+    return std::optional<std::string>(result);
 }
 
 #if defined(ERHE_OS_WINDOWS)

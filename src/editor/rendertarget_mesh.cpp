@@ -116,9 +116,12 @@ void Rendertarget_mesh::init_rendertarget(
     }
 
     m_sampler = std::make_shared<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::linear_mipmap_linear,
-        gl::Texture_mag_filter::nearest,
-        -0.666f
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .lod_bias    = -0.666f,
+            .debug_label = "Rendertarget_mesh"
+        }
     );
 
     Framebuffer::Create_info create_info;
@@ -133,8 +136,8 @@ void Rendertarget_mesh::add_primitive()
         "Rendertarget Node",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
     );
-    m_material->texture = m_texture;
-    m_material->sampler = m_sampler;
+    m_material->base_color_texture = m_texture;
+    m_material->base_color_sampler = m_sampler;
 
     m_local_width  = static_cast<float>(m_texture->width ()) / m_pixels_per_meter;
     m_local_height = static_cast<float>(m_texture->height()) / m_pixels_per_meter;
@@ -377,11 +380,14 @@ void Rendertarget_mesh::render_done()
 
     if (g_viewport_config_window->rendertarget_mesh_lod_bias != m_sampler->lod_bias) {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
-            gl::Texture_min_filter::linear_mipmap_linear,
-            gl::Texture_mag_filter::nearest,
-            g_viewport_config_window->rendertarget_mesh_lod_bias
+            erhe::graphics::Sampler_create_info{
+                .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
+                .mag_filter  = gl::Texture_mag_filter::nearest,
+                .lod_bias    = g_viewport_config_window->rendertarget_mesh_lod_bias,
+                .debug_label = "Rendertarget_mesh"
+            }
         );
-        m_material->sampler = m_sampler;
+        m_material->base_color_sampler = m_sampler;
     }
 }
 

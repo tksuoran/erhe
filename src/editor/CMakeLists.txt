@@ -311,6 +311,7 @@ target_link_libraries(
     erhe::scene
     erhe::toolkit
     erhe::ui
+    meshoptimizer
     mINI
     RectangleBinPack
     rapidjson

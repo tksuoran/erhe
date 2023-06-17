@@ -22,7 +22,10 @@ auto read_file(const char* const path) -> std::vector<unsigned char>
     const long file_length = std::ftell(file);
     std::rewind(file);
     std::vector<unsigned char> data(file_length);
-    std::fread(data.data(), file_length, 1, file);
+    const auto read_count = std::fread(data.data(), file_length, 1, file);
+    if (read_count != file_length) {
+        log_file->warn("Failed to read all {} bytes of '{}', only read {} bytes", file_length, path, read_count);
+    }
     std::fclose(file);
     return data;
 }
@@ -43,7 +46,10 @@ auto read_file_string(const char* const path) -> std::string
     const long file_length = std::ftell(file);
     std::rewind(file);
     std::vector<unsigned char> data(file_length);
-    std::fread(data.data(), file_length, 1, file);
+    const auto read_count = std::fread(data.data(), file_length, 1, file);
+    if (read_count != file_length) {
+        log_file->warn("Failed to read all {} bytes of '{}', only read {} bytes", file_length, path, read_count);
+    }
     std::fclose(file);
     return std::string(data.begin(), data.end());
 }

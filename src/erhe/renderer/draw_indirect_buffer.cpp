@@ -1,7 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/renderer/draw_indirect_buffer.hpp"
-//#include "erhe/renderer/programs.hpp"
 #include "erhe/renderer/program_interface.hpp"
 #include "erhe/renderer/renderer_log.hpp"
 

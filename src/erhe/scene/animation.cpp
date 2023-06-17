@@ -47,6 +47,8 @@ namespace erhe::scene
     }
 }
 
+Animation_sampler::Animation_sampler() = default;
+
 Animation_sampler::Animation_sampler(
     const Animation_interpolation_mode interpolation_mode
 )

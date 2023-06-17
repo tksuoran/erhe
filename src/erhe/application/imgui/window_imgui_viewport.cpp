@@ -159,4 +159,4 @@ auto Window_imgui_viewport::get_producer_output_viewport(
     };
 }
 
-}  // namespace editor
+}  // namespace erhe::application

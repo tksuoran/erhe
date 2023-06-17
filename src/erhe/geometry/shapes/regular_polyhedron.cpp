@@ -229,7 +229,7 @@ auto make_cube(const double r) -> Geometry
 
     return Geometry{
         "cube",
-        [=](auto& geometry)
+        [=](Geometry& geometry)
         {
             const double a =  0.5 * r;
             const double b = -0.5 * r;

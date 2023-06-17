@@ -33,18 +33,27 @@ public:
         const erhe::application::Scoped_gl_context gl_context;
 
         nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-            gl::Texture_min_filter::nearest,
-            gl::Texture_mag_filter::nearest
+            erhe::graphics::Sampler_create_info{
+                .min_filter  = gl::Texture_min_filter::nearest,
+                .mag_filter  = gl::Texture_mag_filter::nearest,
+                .debug_label = "Programs nearest"
+            }
         );
 
         linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-            gl::Texture_min_filter::linear,
-            gl::Texture_mag_filter::linear
+            erhe::graphics::Sampler_create_info{
+                .min_filter = gl::Texture_min_filter::linear,
+                .mag_filter = gl::Texture_mag_filter::linear,
+                .debug_label = "Programs linear"
+            }
         );
 
         linear_mipmap_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-            gl::Texture_min_filter::linear_mipmap_linear,
-            gl::Texture_mag_filter::linear
+            erhe::graphics::Sampler_create_info{
+                .min_filter = gl::Texture_min_filter::linear_mipmap_linear,
+                .mag_filter = gl::Texture_mag_filter::linear,
+                .debug_label = "Programs linear mipmap"
+            }
         );
 
         if (!erhe::graphics::Instance::info.use_bindless_texture) {

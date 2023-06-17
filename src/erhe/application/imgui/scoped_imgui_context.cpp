@@ -20,4 +20,4 @@ Scoped_imgui_context::~Scoped_imgui_context() noexcept
     g_imgui_windows->unlock_mutex();
 }
 
-}  // namespace editor
+}  // namespace erhe::application

@@ -51,7 +51,7 @@ private:
     void light_properties       (erhe::scene::Light& light) const;
     void mesh_properties        (erhe::scene::Mesh& mesh) const;
     void skin_properties        (erhe::scene::Skin& skin) const;
-    void transform_properties   (erhe::scene::Node& node);
+    void material_properties    ();
     void rendertarget_properties(Rendertarget_mesh& rendertarget) const;
     void node_physics_properties(Node_physics& node_physics) const;
     void item_flags             (const std::shared_ptr<erhe::scene::Item>& item);

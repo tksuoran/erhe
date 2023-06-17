@@ -153,8 +153,7 @@ auto Shader_stages::Create_info::final_source(
     sb << struct_types_source();
     sb << interface_blocks_source();
 
-    if (default_uniform_block != nullptr)
-    {
+    if (default_uniform_block != nullptr) {
         sb << "// Default uniform block\n";
         sb << default_uniform_block->source();
         sb << "\n";
@@ -163,19 +162,27 @@ auto Shader_stages::Create_info::final_source(
     if (!shader.source.empty()) {
         sb << shader.source;
     } else if (!shader.path.empty()) {
-        try {
-            if (!std::filesystem::exists(shader.path)) {
-                log_program->warn("Cannot load shader from non-existing file '{}'", shader.path.string());
-            } else {
-                if (!std::filesystem::is_regular_file(shader.path)) {
-                    log_program->warn("Cannot load shader from non-regular file '{}'", shader.path.string());
-                }
-                if (std::filesystem::is_empty(shader.path)) {
-                    log_program->warn("Cannot load shader from empty path");
-                }
-            }
-        } catch (...) {
-            log_program->warn("Unspecified exception trying to load shader from empty path");
+        std::error_code error_code;
+        const bool exists = std::filesystem::exists(shader.path, error_code);
+        if (error_code) {
+            log_program->warn("Shader: std::filesystem::exists('{}') returned error code {}", shader.path.string(), error_code.value());
+        }
+        if (!exists) {
+            log_program->warn("Shader: Cannot load from non-existing file '{}'", shader.path.string());
+        }
+        const bool is_regular_file = std::filesystem::is_regular_file(shader.path, error_code);
+        if (error_code) {
+            log_program->warn("Shader: std::filesystem::is_regular_file('{}') returned error code {}", shader.path.string(), error_code.value());
+        }
+        if (!is_regular_file) {
+            log_program->warn("Shader: Source file '{}' is not regular file", shader.path.string());
+        }
+        const bool is_empty = std::filesystem::is_empty(shader.path, error_code);
+        if (error_code) {
+            log_program->warn("Shader: std::filesystem::is_empty('{}') returned error code {}", shader.path.string(), error_code.value());
+        }
+        if (is_empty) {
+            log_program->warn("Shader: Source file '{}' is empty", shader.path.string());
         }
 
         auto source = erhe::toolkit::read(shader.path);

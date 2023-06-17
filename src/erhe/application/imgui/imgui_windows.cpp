@@ -369,4 +369,4 @@ void Imgui_windows::on_char(
     }
 }
 
-}  // namespace editor
+}  // namespace erhe::application

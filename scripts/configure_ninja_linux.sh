@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# LD=ld.lld-12 CC=clang-12 CXX=clang++-12 scripts/configure_ninja.sh
+# LD=ld.lld-15 CC=clang-15 CXX=clang++-15 scripts/configure_ninja.sh
 #-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
 #-DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld \
 
@@ -12,8 +12,6 @@ cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -Wno-dev \
-    -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
-    -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld \
     -DERHE_FONT_RASTERIZATION_LIBRARY=freetype \
     -DERHE_GLTF_LIBRARY=cgltf \
     -DERHE_GUI_LIBRARY=imgui \

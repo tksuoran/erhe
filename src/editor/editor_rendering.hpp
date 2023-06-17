@@ -25,9 +25,9 @@ public:
     virtual void render_id           (const Render_context& context) = 0;
     virtual void begin_frame         () = 0;
     virtual void end_frame           () = 0;
-    virtual [[nodiscard]] auto create_shadow_node_for_scene_view(Scene_view& scene_view)       -> std::shared_ptr<Shadow_render_node> = 0;
-    virtual [[nodiscard]] auto get_shadow_node_for_view         (const Scene_view* scene_view) -> std::shared_ptr<Shadow_render_node> = 0;
-    virtual [[nodiscard]] auto get_all_shadow_nodes             () -> const std::vector<std::shared_ptr<Shadow_render_node>>& = 0;
+    virtual auto create_shadow_node_for_scene_view(Scene_view& scene_view)       -> std::shared_ptr<Shadow_render_node> = 0;
+    virtual auto get_shadow_node_for_view         (const Scene_view* scene_view) -> std::shared_ptr<Shadow_render_node> = 0;
+    virtual auto get_all_shadow_nodes             () -> const std::vector<std::shared_ptr<Shadow_render_node>>& = 0;
 };
 
 class Editor_rendering_impl;

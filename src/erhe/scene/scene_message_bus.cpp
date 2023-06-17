@@ -23,4 +23,4 @@ void Scene_message_bus::initialize_component()
     g_scene_message_bus = this;
 }
 
-} // namespace editor
+} // namespace erhe::application

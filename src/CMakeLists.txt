@@ -35,6 +35,7 @@ endif ()
 
 add_subdirectory(erhe)
 add_subdirectory(editor)
+add_subdirectory(example)
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     add_subdirectory(hextiles)

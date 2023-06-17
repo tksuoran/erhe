@@ -258,8 +258,11 @@ void Tile_renderer::initialize_component()
     }
 
     m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-        gl::Texture_min_filter::nearest,
-        gl::Texture_mag_filter::nearest
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Tile_renderer"
+        }
     );
 
     const auto clip_from_window = m_projection_block->add_mat4 ("clip_from_window");

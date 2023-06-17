@@ -79,7 +79,7 @@ void View::on_refresh()
         if (g_time != nullptr) {
             g_time->update(); // Does not do once per frame updates - moving to next slot in renderers
         }
-        m_view_client->update(); // Should call once per frame updates
+        m_view_client->update(*this); // Should call once per frame updates
         if (g_window != nullptr)
         {
             g_window->get_context_window()->swap_buffers();
@@ -133,7 +133,7 @@ void View::update()
     }
 
     if (m_view_client != nullptr) {
-        m_view_client->update();
+        m_view_client->update(*this);
     } else if (g_time != nullptr) {
         g_time->update_once_per_frame();
     }
@@ -348,4 +348,4 @@ auto View::mouse_position() const -> glm::vec2
     return m_mouse_position;
 }
 
-}  // namespace editor
+}  // erhe::application

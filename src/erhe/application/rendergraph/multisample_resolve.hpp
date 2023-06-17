@@ -72,4 +72,4 @@ private:
     int                                           m_key;
 };
 
-} // namespace editor
+} // namespace erhe::application

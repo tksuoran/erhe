@@ -52,11 +52,12 @@ Shader_stages::Shader_stages(Prototype&& prototype)
     m_handle           = std::move(prototype.m_handle);
     m_attached_shaders = std::move(prototype.m_shaders);
 
+    std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
     gl::object_label(
         gl::Object_identifier::program,
         gl_name(),
-        static_cast<GLsizei>(m_name.length()),
-        m_name.c_str()
+        static_cast<GLsizei>(label.length()),
+        label.c_str()
     );
 }
 
@@ -73,6 +74,7 @@ void Shader_stages::reload(Prototype&& prototype)
     m_handle           = std::move(prototype.m_handle);
     m_attached_shaders = std::move(prototype.m_shaders);
 
+    std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
     gl::object_label(
         gl::Object_identifier::program,
         gl_name(),

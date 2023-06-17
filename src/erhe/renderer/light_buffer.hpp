@@ -11,6 +11,11 @@
 #include <memory>
 #include <optional>
 
+namespace erhe::graphics
+{
+    class Texture;
+}
+
 namespace erhe::primitive
 {
     class Material;
@@ -67,6 +72,7 @@ public:
         const erhe::scene::Camera*                                  view_camera,
         ////const erhe::scene::Viewport&                                view_camera_viewport,
         const erhe::scene::Viewport&                                light_texture_viewport,
+        const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
         uint64_t                                                    shadow_map_texture_handle
     );
 
@@ -76,12 +82,14 @@ public:
     [[nodiscard]] auto get_light_projection_transforms_for_light(
         const erhe::scene::Light* light
     ) -> erhe::scene::Light_projection_transforms*;
+
     [[nodiscard]] auto get_light_projection_transforms_for_light(
         const erhe::scene::Light* light
     ) const -> const erhe::scene::Light_projection_transforms*;
 
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
+    std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
     uint64_t                                              shadow_map_texture_handle;
 
     // TODO A bit hacky injection of these parameters..

@@ -32,8 +32,9 @@ void Hextiles_view_client::initialize_component()
     erhe::application::g_view->set_client(this);
 }
 
-void Hextiles_view_client::update()
+void Hextiles_view_client::update(erhe::application::View& view)
 {
+    static_cast<void>(view);
     // TODO Use more render graph
     g_map_window->render();
     erhe::application::g_imgui_windows->imgui_windows();

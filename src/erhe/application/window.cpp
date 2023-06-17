@@ -84,6 +84,7 @@ auto Window::create_gl_window() -> bool
         1900 + l->tm_year
     );
 
+    const bool direct_framebuffer = !g_configuration->imgui.window_viewport && !g_configuration->graphics.post_processing;
     m_context_window = std::make_unique<erhe::toolkit::Context_window>(
         erhe::toolkit::Window_configuration{
             .fullscreen               = g_configuration->window.fullscreen,
@@ -93,13 +94,7 @@ auto Window::create_gl_window() -> bool
             .gl_minor                 = g_configuration->window.gl_minor,
             .width                    = g_configuration->window.width,
             .height                   = g_configuration->window.height,
-            .msaa_sample_count        =
-                (
-                    g_configuration->imgui.window_viewport ||
-                    g_configuration->graphics.post_processing
-                )
-                ? 0
-                : g_configuration->graphics.msaa_sample_count,
+            .msaa_sample_count        = direct_framebuffer ? g_configuration->graphics.msaa_sample_count : 0,
             .swap_interval            = g_configuration->window.swap_interval,
             .sleep_time               = g_configuration->window.sleep_time,
             .wait_time                = g_configuration->window.wait_time,
@@ -113,9 +108,10 @@ auto Window::create_gl_window() -> bool
     const std::filesystem::path current_path = std::filesystem::current_path();
     const std::filesystem::path path         = current_path / "res" / "images" / "gl32w.png";
     log_startup->trace("current directory is {}", current_path.string());
-    const bool exists          = std::filesystem::exists(path);
-    const bool is_regular_file = std::filesystem::is_regular_file(path);
-    if (exists && is_regular_file) {
+    std::error_code exists_error_code, is_regular_file_error_code;
+    const bool exists          = std::filesystem::exists(path, exists_error_code);
+    const bool is_regular_file = std::filesystem::is_regular_file(path, is_regular_file_error_code);
+    if (!exists_error_code && exists && !is_regular_file_error_code && is_regular_file) {
         ERHE_PROFILE_SCOPE("icon");
 
         const bool open_ok = loader.open(path, image_info);
@@ -170,13 +166,11 @@ auto Window::create_gl_window() -> bool
 
     if (g_configuration->graphics.initial_clear) {
         for (size_t i = 0; i < 3; ++i) {
-            gl::clear_color(0.0f, 0.0f, 0.0f, 1.0f);
+            gl::clear_color(0.3f, 0.3f, 0.3f, 1.0f);
             gl::clear(gl::Clear_buffer_mask::color_buffer_bit | gl::Clear_buffer_mask::depth_buffer_bit);
             m_context_window->swap_buffers();
         }
     }
-
-    log_startup->info("Created OpenGL Window");
 
     return true;
 }

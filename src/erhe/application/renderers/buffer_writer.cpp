@@ -1,7 +1,10 @@
 #include "erhe/application/renderers/buffer_writer.hpp"
+#include "erhe/application/application_log.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/verify.hpp"
+#include <fmt/format.h>
+#include <sstream>
 
 namespace erhe::application
 {
@@ -78,6 +81,31 @@ auto Buffer_writer::subspan(const std::size_t byte_count) -> gsl::span<std::byte
     auto result = m_map.subspan(write_offset, byte_count);
     write_offset += byte_count;
     return result;
+}
+
+void Buffer_writer::dump()
+{
+    auto span = m_buffer->map();
+    uint8_t* data = reinterpret_cast<uint8_t*>(span.data());
+    const std::size_t byte_count = span.size();
+    const std::size_t word_count{byte_count / sizeof(uint32_t)};
+
+    std::stringstream ss;
+    for (std::size_t i = 0; i < word_count; ++i) {
+        if (i % 16u == 0) {
+            ss << fmt::format("{:04x}: ", static_cast<unsigned int>(i));
+        }
+
+        ss << fmt::format("{:02x} ", data[i]);
+
+        if (i % 16u == 15u) {
+            log_frame->info(ss.str());
+            ss = std::stringstream();
+        }
+    }
+    if (!ss.str().empty()) {
+        log_frame->info(ss.str());
+    }
 }
 
 void Buffer_writer::end()

@@ -52,9 +52,12 @@ public:
         Image_info&                  image_info
     ) -> bool;
 
-    [[nodiscard]] auto load(
-        gsl::span<std::byte> transfer_buffer
+    [[nodiscard]] auto open(
+        const gsl::span<const std::byte>& png_encoded_buffer_view,
+        Image_info&                       image_info
     ) -> bool;
+
+    [[nodiscard]] auto load(gsl::span<std::byte> transfer_buffer) -> bool;
 
     void close();
 

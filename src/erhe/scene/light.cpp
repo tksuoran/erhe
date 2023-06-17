@@ -121,6 +121,7 @@ auto Light::projection_transforms(
             //    : stable_directional_light_projection_transforms(parameters);
         }
 
+        case Light_type::point: // fallthrough
         case Light_type::spot: {
             return spot_light_projection_transforms(parameters);
         }

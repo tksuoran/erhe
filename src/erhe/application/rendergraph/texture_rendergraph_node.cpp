@@ -247,4 +247,4 @@ void Texture_rendergraph_node::execute_rendergraph_node()
     }
 }
 
-} // namespace editor
+} // namespace erhe::application

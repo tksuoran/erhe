@@ -73,15 +73,10 @@ auto Joint_buffer::update(
             break;
         }
 
-        //const auto& node_data = node->node_data;
         auto& skin_data = skin->skin_data;
         skin_data.joint_buffer_index = joint_index;
         for (std::size_t i = 0, end_i = skin->skin_data.joints.size(); i < end_i; ++i) {
             const auto&     joint           = skin->skin_data.joints[i];
-            //if (!joint) {
-            //    continue;
-            //}
-
             const glm::mat4 joint_from_bind = skin->skin_data.inverse_bind_matrices[i];
             if ((m_writer.write_offset + entry_size) > m_writer.write_end) {
                 log_render->critical("joint buffer capacity {} exceeded", buffer.capacity_byte_count());

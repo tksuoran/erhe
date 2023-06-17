@@ -168,6 +168,17 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         erhe::application::Resource_routing::Resource_provided_by_consumer,
         m_output_key
     );
+    ERHE_VERIFY(output_viewport.width >= 0);
+    ERHE_VERIFY(output_viewport.height >= 0);
+    ERHE_VERIFY(output_viewport.width < 32768);
+    ERHE_VERIFY(output_viewport.height < 32768);
+    if (
+        (output_viewport.width == 0) ||
+        (output_viewport.height == 0)
+    )
+    {
+        return;
+    }
 
     gl::bind_framebuffer(
         gl::Framebuffer_target::draw_framebuffer,
@@ -177,6 +188,8 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
     const auto& layers = scene_root->layers();
     auto texture = shadow_render_node->get_texture();
+
+    log_frame->trace("Depth to color from texture '{}'", texture->debug_label());
 
     erhe::renderer::g_forward_renderer->render_fullscreen(
         erhe::renderer::Forward_renderer::Render_parameters{
@@ -231,6 +244,7 @@ void Debug_view_node::execute_rendergraph_node()
 
 void Debug_view_node::set_area_size(const int size)
 {
+    ERHE_VERIFY(size >= 0);
     m_area_size = size;
 }
 
@@ -472,15 +486,33 @@ void Debug_view_window::imgui()
         }
     }
 
-    const auto  available_size = ImGui::GetContentRegionAvail();
-    const float image_size     = std::min(available_size.x, available_size.y);
-    const int   area_size      = static_cast<int>(image_size);
-    m_node->set_area_size(area_size);
+    const uint32_t shadow_map_texture_handle_uvec2[2] = {
+        static_cast<uint32_t>((light_projections.shadow_map_texture_handle & 0xffffffffu)),
+        static_cast<uint32_t>( light_projections.shadow_map_texture_handle >> 32u)
+    };
 
     const auto& texture = m_node->get_consumer_input_texture(
         erhe::application::Resource_routing::Resource_provided_by_producer,
         erhe::application::Rendergraph_node_key::depth_visualization
     );
+
+    ImGui::Text("Shadow Texture Handle: 0x%08x 0x%08x", shadow_map_texture_handle_uvec2[1], shadow_map_texture_handle_uvec2[0]);
+    ImGui::Text("Shadow Texture Handle: %u %u", shadow_map_texture_handle_uvec2[1], shadow_map_texture_handle_uvec2[0]);
+    if (light_projections.shadow_map_texture) {
+        ImGui::Text(
+            "Shadow Texture Name: %u",
+            light_projections.shadow_map_texture->gl_name()
+        );
+    }
+
+    const auto  available_size = ImGui::GetContentRegionAvail();
+    const float image_size     = std::min(available_size.x, available_size.y);
+    const int   area_size      = static_cast<int>(image_size);
+    if (area_size <= 0) {
+        return; // Not visible
+    }
+    m_node->set_area_size(area_size);
+
     if (!texture) {
         log_render->warn("Debug_view_window has no input render graph node");
         return;

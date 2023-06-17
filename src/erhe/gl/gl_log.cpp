@@ -10,7 +10,6 @@ void initialize_logging()
 {
     // To enable logging GL calls, uncomment this version
     //log_gl = erhe::log::make_logger("gl", spdlog::level::trace);
-
     log_gl = erhe::log::make_logger("gl", spdlog::level::info);
 }
 

@@ -169,4 +169,4 @@ void Rendering::make_unit_type_combo(
     }
 }
 
-}  // namespace editor
+}  // namespace hextiles

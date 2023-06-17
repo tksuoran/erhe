@@ -331,6 +331,7 @@ void Material_preview::render_preview(
         layers.light()->lights,
         m_camera.get(),
         erhe::scene::Viewport{},
+        std::shared_ptr<erhe::graphics::Texture>{},
         0
     };
 

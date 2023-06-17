@@ -13,18 +13,12 @@
 
 namespace erhe::application {
 
+class View;
+
 class View_client
 {
 public:
-    virtual void update() = 0;
-};
-
-class Render_task
-{
-public:
-    virtual void execute() = 0;
-
-    std::vector<Render_task*> dependencies;
+    virtual void update(View& view) = 0;
 };
 
 class View

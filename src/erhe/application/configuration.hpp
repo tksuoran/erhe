@@ -85,7 +85,6 @@ public:
     {
     public:
         bool reverse_depth              {true};  // TODO move to editor
-        bool simpler_shaders            {true};  // TODO move to editor
         bool post_processing            {true};  // TODO move to editor
         bool use_time_query             {true};
         bool force_no_bindless          {false}; // TODO move to erhe::graphics

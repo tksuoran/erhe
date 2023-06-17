@@ -37,22 +37,24 @@ public:
     [[nodiscard]] static auto static_type_name() -> const char*;
     [[nodiscard]] auto get_type () const -> uint64_t override;
     [[nodiscard]] auto type_name() const -> const char* override;
+    void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node);
     void handle_node_transform_update() override;
 
     // Public API
-    void reset            ();
-    void update           ();
-    void update_fixed_step();
-    void set_position     (const glm::vec3 position);
-    void set_elevation    (const float value);
-    void set_heading      (const float value);
+    void reset                  ();
+    void update                 ();
+    void update_fixed_step      ();
+    void set_position           (const glm::vec3 position);
+    void set_elevation          (const float value);
+    void set_heading            (const float value);
+    void get_transform_from_node(erhe::scene::Node* node);
 
-    [[nodiscard]] auto position      () const -> glm::vec3;
-    [[nodiscard]] auto elevation     () const -> float;
-    [[nodiscard]] auto heading       () const -> float;
-    [[nodiscard]] auto right         () const -> glm::vec3;
-    [[nodiscard]] auto up            () const -> glm::vec3;
-    [[nodiscard]] auto back          () const -> glm::vec3;
+    [[nodiscard]] auto get_position  () const -> glm::vec3;
+    [[nodiscard]] auto get_elevation () const -> float;
+    [[nodiscard]] auto get_heading   () const -> float;
+    [[nodiscard]] auto get_axis_x    () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_y    () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_z    () const -> glm::vec3;
     [[nodiscard]] auto get_controller(const Control control) -> erhe::application::Controller&;
 
     erhe::application::Controller rotate_x;

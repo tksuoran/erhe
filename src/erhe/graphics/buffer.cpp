@@ -106,6 +106,24 @@ Buffer::Buffer(
 }
 
 Buffer::Buffer(
+    const std::size_t             capacity_byte_count,
+    const gl::Buffer_storage_mask storage_mask
+) noexcept
+    : m_target             {0}
+    , m_capacity_byte_count{capacity_byte_count}
+    , m_storage_mask       {storage_mask}
+{
+    log_buffer->trace(
+        "Buffer::Buffer(capacity_byte_count = {}, storage_mask = {}) name = {}",
+        capacity_byte_count,
+        gl::to_string(storage_mask),
+        gl_name()
+    );
+
+    allocate_storage();
+}
+
+Buffer::Buffer(
     const gl::Buffer_target          target,
     const std::size_t                capacity_byte_count,
     const gl::Buffer_storage_mask    storage_mask,
@@ -205,7 +223,7 @@ auto Buffer::target() const noexcept -> gl::Buffer_target
 
 void Buffer::set_debug_label(const std::string_view label) noexcept
 {
-    m_debug_label = fmt::format("(B) {}", label);
+    m_debug_label = fmt::format("(B:{}) {}", gl_name(), label);
     gl::object_label(
         gl::Object_identifier::buffer,
         gl_name(),
@@ -381,7 +399,7 @@ auto Buffer::map_bytes(
     if (map_pointer == nullptr) {
         log_buffer->warn("glMapNamedBufferRange() returned nullptr");
         GLint is_buffer = gl::is_buffer(gl_name());
-        log_buffer->warn("is_buffer = {}", is_buffer);
+        log_buffer->trace("is_buffer = {}", is_buffer);
         GLint int_access           {0};
         GLint int_access_flags     {0};
         GLint int_immutable_storage{0};

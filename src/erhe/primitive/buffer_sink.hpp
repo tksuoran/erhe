@@ -5,6 +5,7 @@
 #include <gsl/span>
 
 #include <memory>
+#include <vector>
 
 namespace erhe::graphics
 {
@@ -30,17 +31,19 @@ public:
     virtual ~Buffer_sink() noexcept;
 
     [[nodiscard]] virtual auto allocate_vertex_buffer(
-        const std::size_t vertex_count,
-        const std::size_t vertex_element_size
+        std::size_t vertex_count,
+        std::size_t vertex_element_size
     ) -> Buffer_range = 0;
 
     [[nodiscard]] virtual auto allocate_index_buffer(
-        const std::size_t index_count,
-        const std::size_t index_element_size
+        std::size_t index_count,
+        std::size_t index_element_size
     ) -> Buffer_range = 0;
 
-    virtual void buffer_ready(Vertex_buffer_writer& writer) const = 0;
-    virtual void buffer_ready(Index_buffer_writer&  writer) const = 0;
+    virtual void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const = 0;
+    virtual void enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const = 0;
+    virtual void buffer_ready       (Vertex_buffer_writer& writer) const = 0;
+    virtual void buffer_ready       (Index_buffer_writer&  writer) const = 0;
 };
 
 class Gl_buffer_sink
@@ -54,17 +57,19 @@ public:
     );
 
     [[nodiscard]] auto allocate_vertex_buffer(
-        const std::size_t vertex_count,
-        const std::size_t vertex_element_size
+        std::size_t vertex_count,
+        std::size_t vertex_element_size
     ) -> Buffer_range override;
 
     [[nodiscard]] auto allocate_index_buffer(
-        const std::size_t index_count,
-        const std::size_t index_element_size
+        std::size_t index_count,
+        std::size_t index_element_size
     ) -> Buffer_range override;
 
-    void buffer_ready(Vertex_buffer_writer& writer) const override;
-    void buffer_ready(Index_buffer_writer&  writer) const override;
+    void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void buffer_ready       (Vertex_buffer_writer& writer) const                    override;
+    void buffer_ready       (Index_buffer_writer&  writer) const                    override;
 
 private:
     erhe::graphics::Buffer_transfer_queue& m_buffer_transfer_queue;
@@ -82,17 +87,19 @@ public:
     );
 
     [[nodiscard]] auto allocate_vertex_buffer(
-        const std::size_t vertex_count,
-        const std::size_t vertex_element_size
+        std::size_t vertex_count,
+        std::size_t vertex_element_size
     ) -> Buffer_range override;
 
     [[nodiscard]] auto allocate_index_buffer(
-        const std::size_t index_count,
-        const std::size_t index_element_size
+        std::size_t index_count,
+        std::size_t index_element_size
     ) -> Buffer_range override;
 
-    void buffer_ready(Vertex_buffer_writer& writer) const override;
-    void buffer_ready(Index_buffer_writer&  writer) const override;
+    void enqueue_index_data (std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void enqueue_vertex_data(std::size_t offset, std::vector<uint8_t>&& data) const override;
+    void buffer_ready       (Vertex_buffer_writer& writer) const                    override;
+    void buffer_ready       (Index_buffer_writer&  writer) const                    override;
 
 private:
     erhe::raytrace::IBuffer& m_vertex_buffer;

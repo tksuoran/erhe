@@ -943,4 +943,4 @@ void Commands::sort_bindings()
     sort_mouse_bindings();
 }
 
-}  // namespace editor
+}  // erhe::application

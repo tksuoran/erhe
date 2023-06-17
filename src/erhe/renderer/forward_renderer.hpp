@@ -99,7 +99,6 @@ private:
     std::optional<Material_buffer     >      m_material_buffers;
     std::optional<Primitive_buffer    >      m_primitive_buffers;
 
-
     int m_base_texture_unit{0};
 
     std::shared_ptr<erhe::graphics::Texture> m_dummy_texture;

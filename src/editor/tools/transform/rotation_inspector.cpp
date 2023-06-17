@@ -29,6 +29,8 @@
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
+#include <cmath>
+
 namespace editor
 {
 
@@ -133,15 +135,16 @@ auto Rotation_inspector::is_tait_bryan(Euler_angle_order euler_angle_order) -> b
 
 auto Rotation_inspector::gimbal_lock_warning() const -> bool
 {
+    using namespace std;
     if (is_proper(m_euler_angle_order)) {
-        const float modulo   = std::fmodf(m_euler_angles[1], glm::pi<float>());
+        const float modulo   = fmodf(m_euler_angles[1], glm::pi<float>());
         const float distance = std::min(
             std::abs(modulo),
             std::abs(modulo - glm::pi<float>())
         );
         return distance < 0.15;
     } else {
-        const float modulo   = std::fmodf(m_euler_angles[1] + glm::half_pi<float>(), glm::pi<float>());
+        const float modulo   = fmodf(m_euler_angles[1] + glm::half_pi<float>(), glm::pi<float>());
         const float distance = std::min(
             std::abs(modulo),
             std::abs(modulo - glm::pi<float>())
@@ -403,6 +406,8 @@ void Rotation_inspector::imgui(
             }
             break;
         }
+        case Representation::e_count:
+        default: break;
     }
     m_active = value_edit_state.active;
 }

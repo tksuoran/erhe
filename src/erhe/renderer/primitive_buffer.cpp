@@ -117,9 +117,8 @@ auto Primitive_buffer::update(
             break;
         }
 
-        //const auto& node_data = node->node_data;
-        const auto& mesh_data = mesh->mesh_data;
-        const glm::mat4 world_from_node          = node->world_from_node();
+        const auto&     mesh_data       = mesh->mesh_data;
+        const glm::mat4 world_from_node = node->world_from_node();
 
         // TODO Use compute shader
         const glm::mat4 world_from_node_cofactor = erhe::toolkit::compute_cofactor(world_from_node);

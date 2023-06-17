@@ -42,6 +42,7 @@ class Animation_channel;
 class Animation_sampler
 {
 public:
+    Animation_sampler();
     Animation_sampler(Animation_interpolation_mode interpolation_mode);
     ~Animation_sampler() noexcept;
 
@@ -57,9 +58,8 @@ public:
 
     [[nodiscard]] auto evaluate(Animation_channel& channel, float time_current, std::size_t component) const -> float;
 
-    [[nodiscard]] void apply(Animation_channel& channel, float time_current) const;
-
-    void seek(Animation_channel& channel, float time_current) const;
+    void apply(Animation_channel& channel, float time_current) const;
+    void seek (Animation_channel& channel, float time_current) const;
 
     Animation_interpolation_mode interpolation_mode{Animation_interpolation_mode::LINEAR};
     std::vector<float>           timestamps;
@@ -91,7 +91,7 @@ public:
     [[nodiscard]] auto type_name() const -> const char* override;
 
     [[nodiscard]] auto evaluate(float time_current, std::size_t channel_index, std::size_t component) -> float;
-    [[nodiscard]] void apply   (float time_current);
+    void apply(float time_current);
 
     std::vector<Animation_sampler> samplers;
     std::vector<Animation_channel> channels;

@@ -130,7 +130,7 @@ void Shadow_render_node::execute_rendergraph_node()
             .view_camera           = camera.get(),
             ////.view_camera_viewport  = m_viewport_window->projection_viewport(),
             .light_camera_viewport = m_viewport,
-            .texture               = *m_texture.get(),
+            .texture               = m_texture,
             .framebuffers          = m_framebuffers,
             .mesh_spans            = { layers.content()->meshes },
             .lights                = layers.light()->lights,
