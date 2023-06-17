@@ -10,10 +10,10 @@
 #       define glGetQueryObjectui64v gl::glGetQueryObjectui64v
 #       define glQueryCounter        gl::glQueryCounter
 #   endif
-#   include <Tracy/Tracy.hpp>
+#   include <tracy/Tracy.hpp>
 
 #   if defined(ERHE_TRACY_GL)
-#       include "Tracy/TracyOpenGL.hpp"
+#       include "tracy/TracyOpenGL.hpp"
 #   endif
 #   if defined(TRACY_ENABLE) && defined(ERHE_TRACY_GL)
 #       undef glGenQueries
