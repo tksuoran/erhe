@@ -6,6 +6,7 @@
 
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -633,6 +634,7 @@ private:
         auto& slot = m_context.image_transfer.get_slot();
 
         erhe::graphics::Texture_create_info texture_create_info{
+            .instance        = m_context.graphics_instance,
             .internal_format = to_gl(image_info.format),
             .use_mipmaps     = true, //(image_info.level_count > 1),
             .width           = image_info.width,
@@ -697,6 +699,7 @@ private:
         auto& slot = m_context.image_transfer.get_slot();
 
         erhe::graphics::Texture_create_info texture_create_info{
+            .instance        = m_context.graphics_instance,
             .internal_format = to_gl(image_info.format),
             .use_mipmaps     = true, //(image_info.level_count > 1),
             .width           = image_info.width,
@@ -771,7 +774,7 @@ private:
         create_info.mag_filter     = static_cast<gl::Texture_mag_filter>(sampler->mag_filter);
         create_info.wrap_mode[0]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_s);
         create_info.wrap_mode[1]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_t);
-        create_info.max_anisotropy = erhe::graphics::Instance::limits.max_texture_max_anisotropy;
+        create_info.max_anisotropy = m_context.graphics_instance.limits.max_texture_max_anisotropy;
         create_info.debug_label    = sampler_name;
 
         auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(create_info);
@@ -1023,8 +1026,8 @@ private:
             //memcpy(data.data(), flip_indices.data(), data.size());
             memcpy(data.data(), read_indices.data(), data.size());
 
-            erhe::primitive::Buffer_range index_range = m_context.buffer_sink->allocate_index_buffer(primitive->indices->count, index_stride);
-            m_context.buffer_sink->enqueue_index_data(index_range.byte_offset, std::move(data));
+            erhe::primitive::Buffer_range index_range = m_context.buffer_sink.allocate_index_buffer(primitive->indices->count, index_stride);
+            m_context.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(data));
             //allocate_index_buffer(primitive->indices->count, 4);
             //auto span = m_context.index_buffer->begin_write(index_buffer_byte_offset, index_buffer_byte_count);
             //memcpy(
@@ -1046,7 +1049,7 @@ private:
         {
             const cgltf_size  vertex_count             = primitive->attributes[0].data->count;
             const std::size_t vertex_buffer_byte_count = vertex_count * m_context.vertex_format.stride();
-            erhe::primitive::Buffer_range vertex_range = m_context.buffer_sink->allocate_vertex_buffer(vertex_count, m_context.vertex_format.stride());
+            erhe::primitive::Buffer_range vertex_range = m_context.buffer_sink.allocate_vertex_buffer(vertex_count, m_context.vertex_format.stride());
 
             std::vector<uint8_t> data(vertex_buffer_byte_count);
             uint8_t* span_start = data.data();
@@ -1165,7 +1168,7 @@ private:
                 }
             }
 
-            m_context.buffer_sink->enqueue_vertex_data(vertex_range.byte_offset, std::move(data));
+            m_context.buffer_sink.enqueue_vertex_data(vertex_range.byte_offset, std::move(data));
         }
 
         const cgltf_size material_index = primitive->material - m_data->materials;

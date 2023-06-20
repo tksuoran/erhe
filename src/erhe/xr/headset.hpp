@@ -35,7 +35,10 @@ public:
 class Headset final
 {
 public:
-    Headset(erhe::toolkit::Context_window* window, const Xr_configuration& configuration);
+    Headset(
+        erhe::toolkit::Context_window& context_window,
+        const Xr_configuration&        configuration
+    );
     ~Headset() noexcept;
 
     auto is_valid   () const -> bool;

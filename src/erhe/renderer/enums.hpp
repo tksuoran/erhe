@@ -30,18 +30,5 @@ enum class Visualization_mode : unsigned int
     all
 };
 
-enum class Primitive_color_source : unsigned int
-{
-    id_offset = 0,
-    mesh_wireframe_color,
-    constant_color,
-};
-
-enum class Primitive_size_source : unsigned int
-{
-    mesh_point_size = 0,
-    mesh_line_width,
-    constant_size
-};
 
 } // namespace erhe::renderer

@@ -4,8 +4,7 @@
 #include "scene/collision_generator.hpp"
 #include "scene/frame_controller.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/message_bus/message_bus.hpp"
 #include "erhe/primitive/material.hpp"
@@ -13,6 +12,7 @@
 #include "erhe/primitive/format_info.hpp"
 #include "erhe/scene/scene_host.hpp"
 #include "erhe/scene/scene_message.hpp"
+#include "erhe/scene/scene_message_bus.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <map>
@@ -23,42 +23,27 @@
 
 class btCollisionShape;
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
-
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Buffer;
     class Buffer_transfer_queue;
     class Vertex_format;
 }
-
-namespace erhe::physics
-{
+namespace erhe::physics {
     class IWorld;
 }
-
-namespace erhe::raytrace
-{
-    class IScene;
-}
-
-namespace erhe::scene
-{
-    using Layer_id = uint64_t;
-}
-
-namespace erhe::primitive
-{
+namespace erhe::primitive {
     class Material;
     class Primitive_geometry;
     class Primitive;
 }
-
-namespace erhe::scene
-{
+namespace erhe::raytrace {
+    class IScene;
+}
+namespace erhe::scene {
+    using Layer_id = uint64_t;
     class Camera;
     class Light;
     class Light_layer;
@@ -67,6 +52,7 @@ namespace erhe::scene
     class Message_bus;
     class Node;
     class Scene;
+    class Scene_message_bus;
 }
 
 namespace editor
@@ -78,7 +64,6 @@ class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
 class Rendertarget_mesh;
-class Scene_message_bus;
 class Scene_root;
 class Scene_view;
 class Viewport_window;
@@ -97,7 +82,9 @@ public:
 class Scene_layers
 {
 public:
-    explicit Scene_layers(erhe::scene::Scene& scene);
+    explicit Scene_layers();
+
+    void add_layers_to_scene(erhe::scene::Scene& scene);
 
     [[nodiscard]] auto get_layer_by_id(erhe::scene::Layer_id id) const -> erhe::scene::Mesh_layer*;
     [[nodiscard]] auto brush          () const -> erhe::scene::Mesh_layer*;
@@ -121,6 +108,7 @@ class Scene_root
 {
 public:
     Scene_root(
+        erhe::scene::Scene_message_bus&         scene_message_bus,
         const std::shared_ptr<Content_library>& content_library,
         const std::string_view                  name
     );

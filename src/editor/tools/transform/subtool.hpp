@@ -1,6 +1,6 @@
 #pragma once
 
-#include "tools/transform/transform_tool.hpp"
+#include "tools/tool.hpp"
 
 #include <glm/glm.hpp>
 
@@ -11,23 +11,20 @@ namespace editor
 
 enum class Handle : unsigned int;
 
-class Scene_view;
 class Hover_entry;
+class Scene_view;
+class Tools;
+class Transform_tool_shared;
 
 class Subtool
+    : public Tool
 {
 public:
-    Subtool();
-    virtual ~Subtool() noexcept;
+    Subtool(Editor_context& editor_context);
+    ~Subtool() noexcept override;
 
-    [[nodiscard]] virtual auto begin(
-        unsigned int axis_mask,
-        Scene_view*  scene_view
-    ) -> bool = 0;
-
-    [[nodiscard]] virtual auto update(
-        Scene_view* scene_view
-    ) -> bool = 0;
+    [[nodiscard]] virtual auto begin (unsigned int axis_mask, Scene_view* scene_view) -> bool = 0;
+    [[nodiscard]] virtual auto update(Scene_view* scene_view) -> bool = 0;
 
     virtual void imgui();
 
@@ -37,7 +34,7 @@ public:
     [[nodiscard]] auto get_axis_mask() const -> unsigned int;
 
 protected:
-    [[nodiscard]] auto get_shared              () const -> Transform_tool::Shared&;
+    [[nodiscard]] auto get_shared              () const -> Transform_tool_shared&;
     [[nodiscard]] auto get_basis               () const -> const glm::mat4&;
     [[nodiscard]] auto get_basis               (bool world) const -> const glm::mat4&;
     [[nodiscard]] auto project_pointer_to_plane(Scene_view* scene_view, const glm::vec3 n, const glm::vec3 p) -> std::optional<glm::vec3>;

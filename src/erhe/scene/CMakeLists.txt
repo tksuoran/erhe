@@ -33,8 +33,8 @@ erhe_target_sources_grouped(
     transform.hpp
     trs_transform.cpp
     trs_transform.hpp
-    viewport.cpp
-    viewport.hpp
+    #viewport.cpp
+    #viewport.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
@@ -42,7 +42,6 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(
     ${_target}
     PRIVATE
-        erhe::components
         erhe::gl
         erhe::log
         erhe::message_bus

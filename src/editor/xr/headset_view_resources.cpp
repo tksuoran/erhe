@@ -17,9 +17,10 @@ using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
 Headset_view_resources::Headset_view_resources(
-    erhe::xr::Render_view& render_view,
-    Headset_view&          headset_view,
-    const std::size_t      slot
+    erhe::graphics::Instance& graphics_instance,
+    erhe::xr::Render_view&    render_view,
+    Headset_view&             headset_view,
+    const std::size_t         slot
 )
 {
     // log_headset.trace(
@@ -42,6 +43,7 @@ Headset_view_resources::Headset_view_resources(
 
     color_texture = std::make_shared<Texture>(
         Texture::Create_info{
+            .instance          = graphics_instance,
             .target            = gl::Texture_target::texture_2d,
             .internal_format   = render_view.color_format,
             .width             = width,
@@ -53,6 +55,7 @@ Headset_view_resources::Headset_view_resources(
 
     depth_texture = std::make_shared<Texture>(
         Texture::Create_info{
+            .instance          = graphics_instance,
             .target            = gl::Texture_target::texture_2d,
             .internal_format   = render_view.depth_format,
             .width             = width,

@@ -62,8 +62,7 @@ Property_map_collection<Key_type>::remove(const std::string& name)
         std::remove_if(
             m_entries.begin(),
             m_entries.end(),
-            [name](const Entry& entry)
-            {
+            [name](const Entry& entry) {
                 return entry.key == name;
             }
         ),

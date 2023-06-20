@@ -11,6 +11,7 @@ namespace erhe::graphics
 {
 
 Renderbuffer::Renderbuffer(
+    Instance&                 instance,
     const gl::Internal_format internal_format,
     const unsigned int        width,
     const unsigned int        height
@@ -20,6 +21,7 @@ Renderbuffer::Renderbuffer(
     , m_width          {width}
     , m_height         {height}
 {
+    static_cast<void>(instance);
     Expects(gl_name() != 0);
     Expects(m_width  > 0);
     Expects(m_height > 0);
@@ -34,6 +36,7 @@ Renderbuffer::Renderbuffer(
 }
 
 Renderbuffer::Renderbuffer(
+    Instance&                 instance,
     const gl::Internal_format internal_format,
     const unsigned int        sample_count,
     const unsigned int        width,
@@ -74,15 +77,15 @@ Renderbuffer::Renderbuffer(
         // }
         // else
         {
-            m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_samples));
+            m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_samples));
             if (gl_helpers::has_color(m_internal_format) || gl_helpers::has_alpha(m_internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_color_texture_samples));
+                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_color_texture_samples));
             }
             if (gl_helpers::has_depth(m_internal_format) || gl_helpers::has_stencil(m_internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_depth_texture_samples));
+                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_depth_texture_samples));
             }
             if (gl_helpers::is_integer(m_internal_format)) {
-                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(Instance::limits.max_integer_samples));
+                m_sample_count = std::min(m_sample_count, static_cast<unsigned int>(instance.limits.max_integer_samples));
             }
         }
     }

@@ -25,6 +25,7 @@ class Font final
 {
 public:
     Font(
+        erhe::graphics::Instance&    graphics_instance,
         const std::filesystem::path& path,
         unsigned int                 size,
         float                        outline_thickness = 0.0f
@@ -162,6 +163,8 @@ private:
         std::array<float, 4> u{0.0f, 0.0f, 0.0f, 0.0f};
         std::array<float, 4> v{0.0f, 0.0f, 0.0f, 0.0f};
     };
+
+    erhe::graphics::Instance&  m_graphics_instance;
 
     std::map<uint32_t, size_t> m_glyph_to_char;
 

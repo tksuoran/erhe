@@ -12,10 +12,11 @@ erhe_target_sources_grouped(
     hash.hpp
     math_util.cpp
     math_util.hpp
-    toolkit_log.cpp
-    toolkit_log.hpp
-    optional.hpp
     profile.hpp
+    renderdoc_capture.cpp
+    renderdoc_capture.hpp
+    simulation_variable.cpp
+    simulation_variable.hpp
     sleep.cpp
     sleep.hpp
     space_mouse.cpp
@@ -24,10 +25,16 @@ erhe_target_sources_grouped(
     timer.hpp
     timestamp.cpp
     timestamp.hpp
+    toolkit_log.cpp
+    toolkit_log.hpp
+    unique_id.hpp
     verify.hpp
-    view.cpp
-    view.hpp
+    viewport.cpp
+    viewport.hpp
+    window.cpp
     window.hpp
+    window_event_handler.cpp
+    window_event_handler.hpp
 )
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "glfw")

@@ -1,6 +1,7 @@
 #include "graphics/image_transfer.hpp"
 
-#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -10,62 +11,37 @@
 namespace editor
 {
 
-Image_transfer* g_image_transfer{nullptr};
-
-Image_transfer::Image_transfer()
-    : erhe::components::Component{c_type_name}
+Image_transfer::Image_transfer(
+    erhe::graphics::Instance& graphics_instance
+)
+    : m_slots{
+        Slot{graphics_instance},
+        Slot{graphics_instance},
+        Slot{graphics_instance},
+        Slot{graphics_instance}
+    }
 {
-}
-
-Image_transfer::~Image_transfer() noexcept
-{
-}
-
-void Image_transfer::deinitialize_component()
-{
-    ERHE_VERIFY(g_image_transfer == this);
-    m_slots.reset();
-    g_image_transfer = nullptr;
-}
-
-void Image_transfer::declare_required_components()
-{
-    require<erhe::application::Gl_context_provider>();
-}
-
-void Image_transfer::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_image_transfer == nullptr);
-
-    const erhe::application::Scoped_gl_context gl_context;
-
-    m_slots = std::make_unique<std::array<Slot, 4>>();
-
-    g_image_transfer = this;
 }
 
 auto Image_transfer::get_slot() -> Slot&
 {
-    m_index = (m_index + 1) % m_slots->size();
-    return m_slots->at(m_index);
+    m_index = (m_index + 1) % m_slots.size();
+    return m_slots.at(m_index);
 }
 
-Image_transfer::Slot::Slot()
+Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
+    : m_graphics_instance{graphics_instance}
 {
     Expects(m_pbo.gl_name() != 0);
 
     m_capacity = 8 * 1024 * 1024;
-
-    m_storage_mask =
-        gl::Buffer_storage_mask::map_write_bit;
-
+    m_storage_mask = gl::Buffer_storage_mask::map_write_bit;
     m_access_mask = 
         gl::Map_buffer_access_mask::map_invalidate_buffer_bit |
         gl::Map_buffer_access_mask::map_flush_explicit_bit    |
         gl::Map_buffer_access_mask::map_write_bit;
 
-    if (erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (graphics_instance.info.use_persistent_buffers) {
         m_storage_mask = m_storage_mask | gl::Buffer_storage_mask::map_persistent_bit;
         m_access_mask  = m_access_mask  | gl::Map_buffer_access_mask::map_persistent_bit;
     }
@@ -78,7 +54,7 @@ Image_transfer::Slot::Slot()
         gl::Buffer_storage_mask::map_persistent_bit
     );
 
-    if (erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (graphics_instance.info.use_persistent_buffers) {
         map();
     }
 }
@@ -107,7 +83,7 @@ void Image_transfer::Slot::unmap()
 
 void Image_transfer::Slot::end()
 {
-    if (!erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (!m_graphics_instance.info.use_persistent_buffers) {
         unmap();
     }
 }
@@ -125,7 +101,7 @@ auto Image_transfer::Slot::begin_span_for(
     auto byte_count = row_stride * span_height;
     Expects(byte_count >= 1);
     Expects(byte_count <= m_capacity);
-    if (!erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (!m_graphics_instance.info.use_persistent_buffers) {
         map();
     }
 

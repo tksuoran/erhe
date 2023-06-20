@@ -16,18 +16,18 @@ Compound_operation::~Compound_operation() noexcept
 {
 }
 
-void Compound_operation::execute()
+void Compound_operation::execute(Editor_context& context)
 {
     log_operations->trace("Op Execute Begin {}", describe());
 
     for (auto& operation : m_parameters.operations) {
-        operation->execute();
+        operation->execute(context);
     }
 
     log_operations->trace("Op Execute End {}", describe());
 }
 
-void Compound_operation::undo()
+void Compound_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo Begin {}", describe());
 
@@ -38,7 +38,7 @@ void Compound_operation::undo()
         ++i
     ) {
         auto& operation = *i;
-        operation->undo();
+        operation->undo(context);
     }
 
     log_operations->trace("Op Undo End {}", describe());

@@ -10,7 +10,7 @@
 #include "scene/node_raytrace.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/application/configuration.hpp"
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/primitive/material.hpp"
@@ -24,6 +24,7 @@
 #include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/gtx/color_space.hpp>
 
@@ -43,23 +44,25 @@ using erhe::scene::Mesh_layer;
 using erhe::scene::Scene;
 using erhe::primitive::Material;
 
-Scene_layers::Scene_layers(erhe::scene::Scene& scene)
+Scene_layers::Scene_layers()
 {
-    using std::make_shared;
-
     m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::scene::Item_flags::brush,        Mesh_layer_id::brush);
     m_content      = std::make_shared<Mesh_layer>("content",      erhe::scene::Item_flags::content,      Mesh_layer_id::content);
     m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::scene::Item_flags::controller,   Mesh_layer_id::controller);
     m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::scene::Item_flags::rendertarget, Mesh_layer_id::rendertarget);
     m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::scene::Item_flags::tool,         Mesh_layer_id::tool);
 
+    m_light = std::make_shared<Light_layer>("lights", 0);
+}
+
+void Scene_layers::add_layers_to_scene(erhe::scene::Scene& scene)
+{
     scene.add_mesh_layer(m_brush);
     scene.add_mesh_layer(m_content);
     scene.add_mesh_layer(m_controller);
     scene.add_mesh_layer(m_rendertarget);
     scene.add_mesh_layer(m_tool);
 
-    m_light = std::make_shared<Light_layer>("lights", 0);
     scene.add_light_layer(m_light);
 }
 
@@ -94,14 +97,16 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 }
 
 Scene_root::Scene_root(
+    erhe::scene::Scene_message_bus&         scene_message_bus,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name
 )
     : m_content_library{content_library}
-    , m_scene          {std::make_shared<Scene>(name, this)}
-    , m_layers         (*m_scene.get())
 {
     ERHE_PROFILE_FUNCTION();
+
+    m_scene = std::make_shared<Scene>(scene_message_bus, name, this);
+    m_layers.add_layers_to_scene(*m_scene.get());
 
     // Layer configuration
     using std::make_shared;

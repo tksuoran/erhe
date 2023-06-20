@@ -118,7 +118,8 @@
         "semaphore": "cpp",
         "coroutine": "cpp",
         "resumable": "cpp",
-        "ranges": "cpp"
+        "ranges": "cpp",
+        "execution": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled",
     "C_Cpp.dimInactiveRegions": false,

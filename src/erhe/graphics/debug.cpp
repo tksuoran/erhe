@@ -78,7 +78,7 @@ void erhe_opengl_callback(
         return;
     }
 
-    log_configuration->info(
+    log_debug->info(
         "GL debug message:\n"
         "source:   {}\n"
         "type:     {}\n"

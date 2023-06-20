@@ -1,7 +1,8 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/renderer/draw_indirect_buffer.hpp"
-#include "erhe/renderer/program_interface.hpp"
+
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/renderer/renderer_log.hpp"
 
 #include "erhe/gl/draw_indirect.hpp"
@@ -11,20 +12,28 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
-#include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/viewport.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
-#include <imgui.h>
+////#if defined(ERHE_GUI_LIBRARY_IMGUI)
+////#   include <imgui/imgui.h>
+////#endif
 
 namespace erhe::renderer
 {
 
-Draw_indirect_buffer::Draw_indirect_buffer(const std::size_t max_draw_count)
-    : Multi_buffer{"draw indirect"}
+Draw_indirect_buffer::Draw_indirect_buffer(
+    erhe::graphics::Instance& graphics_instance
+)
+    : Multi_buffer{graphics_instance, "draw indirect"}
 {
+    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
+    ini->get("max_draw_count", m_max_draw_count);
+
     Multi_buffer::allocate(
         gl::Buffer_target::draw_indirect_buffer,
-        sizeof(gl::Draw_elements_indirect_command) * max_draw_count
+        sizeof(gl::Draw_elements_indirect_command) * m_max_draw_count
     );
 }
 
@@ -119,15 +128,15 @@ auto Draw_indirect_buffer::update(
     return { m_writer.range, draw_indirect_count };
 }
 
-void Draw_indirect_buffer::debug_properties_window()
-{
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-    ImGui::Begin    ("Base Renderer Debug Properties");
-    ImGui::Checkbox ("Enable Max Index Count", &m_max_index_count_enable);
-    ImGui::SliderInt("Max Index Count", &m_max_index_count, 0, 256);
-    ImGui::End      ();
-#endif
-}
-
+//// void Draw_indirect_buffer::debug_properties_window()
+//// {
+//// #if defined(ERHE_GUI_LIBRARY_IMGUI)
+////     ImGui::Begin    ("Base Renderer Debug Properties");
+////     ImGui::Checkbox ("Enable Max Index Count", &m_max_index_count_enable);
+////     ImGui::SliderInt("Max Index Count", &m_max_index_count, 0, 256);
+////     ImGui::End      ();
+//// #endif
+//// }
+//// 
 
 }

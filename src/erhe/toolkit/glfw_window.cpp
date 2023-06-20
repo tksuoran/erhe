@@ -206,11 +206,11 @@ auto glfw_mouse_button_action_to_erhe(const int glfw_mouse_button_action) -> boo
     }
 }
 
-auto get_event_handler(GLFWwindow* glfw_window) -> Event_handler*
+auto get_event_handler(GLFWwindow* glfw_window) -> Window_event_handler*
 {
     auto* const window = reinterpret_cast<Context_window*>(glfwGetWindowUserPointer(glfw_window));
     if (window != nullptr) {
-        return &window->get_root_view();
+        return &window->get_root_window_event_handler();
     }
     return nullptr;
 }
@@ -360,7 +360,7 @@ auto Context_window::get_glfw_window() const -> GLFWwindow*
 int Context_window::s_window_count{0};
 
 Context_window::Context_window(const Window_configuration& configuration)
-    : m_root_view{this}
+    : m_root_window_event_handler{this}
 {
     const bool ok = open(configuration);
 
@@ -368,7 +368,7 @@ Context_window::Context_window(const Window_configuration& configuration)
 }
 
 Context_window::Context_window(Context_window* share)
-    : m_root_view{this}
+    : m_root_window_event_handler{this}
 {
     Expects(share != nullptr);
 
@@ -448,7 +448,7 @@ auto Context_window::open(
         m_glfw_window = glfwCreateWindow(
             mode->width,
             mode->height,
-            configuration.title,
+            configuration.title.data(),
             monitor,
             share_window
         );
@@ -458,7 +458,7 @@ auto Context_window::open(
         m_glfw_window = glfwCreateWindow(
             configuration.width,
             configuration.height,
-            configuration.title,
+            configuration.title.data(),
             monitor,
             share_window
         );
@@ -587,7 +587,7 @@ void Context_window::enter_event_loop()
             break;
         }
 
-        m_root_view.on_idle();
+        m_root_window_event_handler.on_idle();
     }
 }
 
@@ -705,9 +705,9 @@ auto Context_window::get_height() const -> int
     return height;
 }
 
-auto Context_window::get_root_view() -> Root_view&
+auto Context_window::get_root_window_event_handler() -> Root_window_event_handler&
 {
-    return m_root_view;
+    return m_root_window_event_handler;
 }
 
 void Context_window::get_extensions()

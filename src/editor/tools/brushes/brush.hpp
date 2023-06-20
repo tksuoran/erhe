@@ -8,25 +8,18 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/build_info.hpp"
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
-
-namespace erhe::physics
-{
+namespace erhe::physics {
     class ICollision_shape;
     class IWorld;
 }
-
-namespace erhe::primitive
-{
+namespace erhe::primitive {
     class Material;
     class Primitive_geometry;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Mesh;
     class Mesh_layer;
     class Node;
@@ -36,6 +29,8 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_context;
+class Editor_settings;
 class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
@@ -73,6 +68,7 @@ using Geometry_generator = std::function<std::shared_ptr<erhe::geometry::Geometr
 class Brush_data
 {
 public:
+    Editor_context&                                  context;
     std::string                                      name;
     erhe::primitive::Build_info                      build_info;
     erhe::primitive::Normal_style                    normal_style               {erhe::primitive::Normal_style::corner_normals};

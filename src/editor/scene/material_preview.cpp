@@ -1,18 +1,20 @@
 #include "scene/material_preview.hpp"
 
+#include "editor_context.hpp"
+#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
-#include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/viewport_config.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
+#include "tools/tools.hpp"
 
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
@@ -36,79 +38,53 @@
 
 namespace editor {
 
-Material_preview* g_material_preview{nullptr};
+using Vertex_input_state   = erhe::graphics::Vertex_input_state;
+using Input_assembly_state = erhe::graphics::Input_assembly_state;
+using Rasterization_state  = erhe::graphics::Rasterization_state;
+using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
+using Color_blend_state    = erhe::graphics::Color_blend_state;
 
-Material_preview::Material_preview()
-    : erhe::components::Component{c_type_name}
+Material_preview::Material_preview(
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::scene::Scene_message_bus& scene_message_bus,
+    Editor_context&                 editor_context,
+    Mesh_memory&                    mesh_memory,
+    Programs&                       programs
+)
+#define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
+    : Scene_view{editor_context}
+    , m_context {editor_context}
+    , m_pipeline_renderpass{erhe::graphics::Pipeline{{
+        .name           = "Polygon Fill Opaque",
+        .shader_stages  = &programs.circular_brushed_metal,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .color_blend    = Color_blend_state::color_blend_disabled
+    }}}
     , m_composer{"Material Preview Composer"}
+#undef REVERSE_DEPTH
 {
-}
-
-Material_preview::~Material_preview() noexcept
-{
-    ERHE_VERIFY(g_material_preview == nullptr);
-}
-
-void Material_preview::deinitialize_component()
-{
-    ERHE_VERIFY(g_material_preview == this);
-    m_scene_root->sanity_check();
-
-    m_color_texture.reset();
-    m_depth_renderbuffer.reset();
-    m_framebuffer.reset();
-
-    m_mesh.reset();
-    m_node.reset();
-
-    m_key_light.reset();
-    m_key_light_node.reset();
-
-    m_camera.reset();
-    m_camera_node.reset();
-
-    m_shadow_texture.reset();
-    m_last_material.reset();
-    m_content_library.reset();
-    m_scene_root->sanity_check();
-
-    const auto use_count = m_scene_root.use_count();
-    ERHE_VERIFY(use_count == 1);
-    m_scene_root.reset();
-    reset_hover_slots();
-    g_material_preview = nullptr;
-}
-
-void Material_preview::declare_required_components()
-{
-    require<Editor_scenes>();
-    require<Mesh_memory  >();
-    require<Programs     >();
-}
-
-void Material_preview::initialize_component()
-{
-    ERHE_VERIFY(g_material_preview == nullptr);
     m_content_library = std::make_shared<Content_library>();
     m_content_library->is_shown_in_ui = false;
 
     m_scene_root = std::make_shared<Scene_root>(
+        scene_message_bus,
         m_content_library,
         "Material preview scene"
     );
 
     m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
-    make_preview_scene();
-    make_rendertarget();
-
-    g_material_preview = this;
+    make_preview_scene(mesh_memory);
+    make_rendertarget(graphics_instance);
 }
 
-void Material_preview::make_rendertarget()
+void Material_preview::make_rendertarget(
+    erhe::graphics::Instance& graphics_instance
+)
 {
-    const erhe::application::Scoped_gl_context gl_context;
-
     m_width        = 256;
     m_height       = 256;
     m_color_format = gl::Internal_format::rgba16f;
@@ -119,6 +95,7 @@ void Material_preview::make_rendertarget()
     using Texture      = erhe::graphics::Texture;
     m_color_texture = std::make_shared<Texture>(
         Texture::Create_info{
+            .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = m_color_format,
             .width           = m_width,
@@ -140,6 +117,7 @@ void Material_preview::make_rendertarget()
     }
 
     m_depth_renderbuffer = std::make_unique<erhe::graphics::Renderbuffer>(
+        graphics_instance,
         m_depth_format,
         m_width,
         m_height
@@ -169,8 +147,8 @@ void Material_preview::make_rendertarget()
     }
 
     m_shadow_texture = std::make_shared<Texture>(
-        Texture::Create_info
-        {
+        Texture::Create_info {
+            .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d_array,
             .internal_format = gl::Internal_format::depth_component32f,
             .width           = 1,
@@ -179,7 +157,7 @@ void Material_preview::make_rendertarget()
         }
     );
 
-    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
+    const bool reverse_depth = graphics_instance.configuration.reverse_depth;
     m_shadow_texture->set_debug_label("Material Preview Shadowmap");
     float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
     if (gl::is_command_supported(gl::Command::Command_glClearTexImage)) {
@@ -195,10 +173,11 @@ void Material_preview::make_rendertarget()
     }
 }
 
-void Material_preview::make_preview_scene()
+void Material_preview::make_preview_scene(
+    //erhe::graphics::Instance& graphics_instance,
+    Mesh_memory&              mesh_memory
+)
 {
-    const erhe::application::Scoped_gl_context gl_context;
-
     erhe::geometry::Geometry sphere_geometry = erhe::geometry::shapes::make_sphere(
         m_radius,
         std::max(1, m_slice_count),
@@ -206,7 +185,10 @@ void Material_preview::make_preview_scene()
     );
     erhe::primitive::Primitive_geometry gl_primitive_geometry = erhe::primitive::make_primitive(
         sphere_geometry,
-        g_mesh_memory->build_info,
+        erhe::primitive::Build_info{
+            .primitive_types = { .fill_triangles = true },
+            .buffer_info     = mesh_memory.buffer_info
+        },
         erhe::primitive::Normal_style::corner_normals
     );
 
@@ -266,25 +248,11 @@ void Material_preview::make_preview_scene()
         )
     );
 
-    const bool reverse_depth = erhe::application::g_configuration->graphics.reverse_depth;
-
-    auto* vertex_input = g_mesh_memory->get_vertex_input();
-
     using erhe::graphics::Vertex_input_state;
     using erhe::graphics::Input_assembly_state;
     using erhe::graphics::Rasterization_state;
     using erhe::graphics::Depth_stencil_state;
     using erhe::graphics::Color_blend_state;
-
-    m_pipeline_renderpass.pipeline.data = {
-        .name           = "Polygon Fill Opaque",
-        .shader_stages  = g_programs->circular_brushed_metal.get(),
-        .vertex_input   = vertex_input,
-        .input_assembly = Input_assembly_state::triangles,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(reverse_depth),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-        .color_blend    = Color_blend_state::color_blend_disabled
-    };
 
     auto renderpass = std::make_shared<Renderpass>("Material Preview Renderpass");
     renderpass->mesh_layers      = { Mesh_layer_id::content };
@@ -292,12 +260,10 @@ void Material_preview::make_preview_scene()
     renderpass->filter           = erhe::scene::Item_filter{};
     renderpass->passes           = { &m_pipeline_renderpass };
     m_composer.renderpasses.push_back(renderpass);
-
 }
 
 void Material_preview::render_preview(
     const std::shared_ptr<erhe::primitive::Material>& material
-    //const erhe::scene::Viewport&                      viewport
 )
 {
     erhe::graphics::Scoped_debug_group outer_debug_scope{"Material preview"};
@@ -308,9 +274,7 @@ void Material_preview::render_preview(
 
     m_mesh->mesh_data.primitives.front().material = material;
 
-    erhe::scene::Viewport viewport{
-        0, 0, m_width, m_height
-    };
+    const erhe::toolkit::Viewport viewport{0, 0, m_width, m_height};
 
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -321,27 +285,27 @@ void Material_preview::render_preview(
         m_clear_color[3]
     );
     gl::clear_stencil(0);
-    gl::clear_depth_f(*erhe::application::g_configuration->depth_clear_value_pointer());
+    gl::clear_depth_f(*m_context.graphics_instance->depth_clear_value_pointer());
 
     Viewport_config viewport_config;
 
     const auto& layers = m_scene_root->layers();
 
-    m_light_projections = erhe::renderer::Light_projections{
+    m_light_projections = erhe::scene_renderer::Light_projections{
         layers.light()->lights,
         m_camera.get(),
-        erhe::scene::Viewport{},
+        erhe::toolkit::Viewport{},
         std::shared_ptr<erhe::graphics::Texture>{},
         0
     };
 
-    const Render_context context
-    {
-        .scene_view      = this,
+    const Render_context context{
+        .editor_context  = m_context,
+        .scene_view      = *this,
+        .viewport_config = viewport_config,
+        .camera          = *m_camera.get(),
         .viewport_window = nullptr,
-        .viewport_config = &viewport_config,
-        .camera          = m_camera.get(),
-        .viewport        = erhe::scene::Viewport{
+        .viewport        = erhe::toolkit::Viewport{
             .x      = 0,
             .y      = 0,
             .width  = m_width,
@@ -369,12 +333,12 @@ auto Material_preview::get_camera() const -> std::shared_ptr<erhe::scene::Camera
     return m_camera;
 }
 
-auto Material_preview::get_rendergraph_node() -> std::shared_ptr<erhe::application::Rendergraph_node>
+auto Material_preview::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
 {
     return {};
 }
 
-auto Material_preview::get_light_projections() const -> const erhe::renderer::Light_projections*
+auto Material_preview::get_light_projections() const -> const erhe::scene_renderer::Light_projections*
 {
     return &m_light_projections;
 }
@@ -403,7 +367,7 @@ auto Material_preview::get_shadow_texture() const -> erhe::graphics::Texture*
 
 void Material_preview::show_preview()
 {
-    erhe::application::g_imgui_renderer->image(
+    m_context.imgui_renderer->image(
         m_color_texture,
         m_width,
         m_height,
@@ -414,4 +378,4 @@ void Material_preview::show_preview()
     );
 }
 
-}  // namespace erhe::application
+}  // namespace editor

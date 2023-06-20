@@ -1,27 +1,17 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
 namespace editor
 {
 
+class Editor_context;
+
 class Debug_draw
-    : public erhe::components::Component
-    , public erhe::physics::IDebug_draw
+    : public erhe::physics::IDebug_draw
 {
 public:
-    static constexpr std::string_view c_type_name{"Debug_draw"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Debug_draw();
-    ~Debug_draw() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Debug_draw(Editor_context& editor_context);
 
     // Implemnents IDebug_draw
     auto get_colors          () const -> Colors                                                override;
@@ -42,10 +32,9 @@ public:
     float line_width{4.0f};
 
 private:
-    int    m_debug_mode{0};
-    Colors m_colors;
+    Editor_context& m_context;
+    int             m_debug_mode{0};
+    Colors          m_colors;
 };
-
-extern Debug_draw* g_debug_draw;
 
 } // namespace editor

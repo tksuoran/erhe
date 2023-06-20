@@ -3,17 +3,18 @@
 #include "operations/ioperation.hpp"
 
 #include "erhe/physics/transform.hpp"
+#include "erhe/primitive/build_info.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 
-namespace erhe::primitive
-{
-    class Build_info;
+namespace erhe::primitive {
+    class Buffer_info;
 }
 
 namespace editor
 {
 
+class Editor_context;
 class Node_physics;
 class Node_raytrace;
 
@@ -24,15 +25,16 @@ public:
     class Parameters
     {
     public:
-        erhe::primitive::Build_info& build_info;
+        Editor_context&             context;
+        erhe::primitive::Build_info build_info;
     };
 
     explicit Merge_operation(Parameters&& parameters);
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
 private:
     class Entry

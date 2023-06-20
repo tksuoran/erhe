@@ -1,33 +1,35 @@
 #include "erhe/graphics/instance.hpp"
+
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/graphics_log.hpp"
+#include "erhe/graphics/sampler.hpp"
+#include "erhe/graphics/state/depth_stencil_state.hpp"
+#include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/verify.hpp"
+#include "erhe/toolkit/window.hpp"
 
 #if !defined(WIN32)
-# include <csignal>
+#   include <csignal>
 #endif
 
 #include <sstream>
 #include <vector>
-
-#define LOG_CATEGORY log_configuration
 
 typedef unsigned char GLubyte;
 
 namespace erhe::graphics
 {
 
-Instance::Info                                     Instance::info;
-Instance::Limits                                   Instance::limits;
-Instance::Implementation_defined                   Instance::implementation_defined;
-std::unordered_map<gl::Internal_format, Tile_size> Instance::sparse_tile_sizes;
-
-//std::vector<gl::Extension>       Instance::extensions;
 
 namespace
 {
+
+constexpr float float_zero_value{0.0f};
+constexpr float float_one_value {1.0f};
 
 auto to_int(const std::string& text) -> int
 {
@@ -91,16 +93,20 @@ auto get_string(gl::String_name string_name) -> std::string
     return (c_str != nullptr) ? std::string{c_str} : std::string{};
 }
 
-void Instance::initialize()
+//
+
+Instance::Instance(erhe::toolkit::Context_window& context_window)
+    : m_context_window{context_window}
+    , context_provider{*this, opengl_state_tracker}
 {
     std::vector<std::string> extensions;
     const auto gl_vendor      = (get_string)(gl::String_name::vendor);
     const auto gl_renderer    = (get_string)(gl::String_name::renderer);
     const auto gl_version_str = (get_string)(gl::String_name::version);
 
-    log_configuration->info("GL Vendor:     {}", gl_vendor);
-    log_configuration->info("GL Renderer:   {}", gl_renderer);
-    log_configuration->info("GL Version:    {}", gl_version_str.c_str());
+    log_startup->info("GL Vendor:     {}", gl_vendor);
+    log_startup->info("GL Renderer:   {}", gl_renderer);
+    log_startup->info("GL Version:    {}", gl_version_str.c_str());
 
     auto versions = split(gl_version_str, '.');
 
@@ -110,12 +116,12 @@ void Instance::initialize()
     info.gl_version = (major * 100) + (minor * 10);
 
     gl::get_integer_v(gl::Get_p_name::max_texture_size, &limits.max_texture_size);
-    log_configuration->info("max texture size: {}", limits.max_texture_size);
+    log_startup->info("max texture size: {}", limits.max_texture_size);
 
     gl::get_integer_v(gl::Get_p_name::max_vertex_attribs, &limits.max_vertex_attribs);
-    log_configuration->info("max vertex attribs: {}", limits.max_vertex_attribs);
+    log_startup->info("max vertex attribs: {}", limits.max_vertex_attribs);
 
-    log_configuration->trace("GL Extensions:");
+    log_startup->trace("GL Extensions:");
     {
         int num_extensions{0};
 
@@ -132,7 +138,7 @@ void Instance::initialize()
 
     {
         auto shading_language_version = (get_string)(gl::String_name::shading_language_version);
-        log_configuration->info("GLSL Version:  {}", shading_language_version);
+        log_startup->info("GLSL Version:  {}", shading_language_version);
         versions = split(shading_language_version, '.');
 
         major = !versions.empty() ? to_int(digits_only(versions[0])) : 0;
@@ -140,8 +146,8 @@ void Instance::initialize()
         info.glsl_version = (major * 100) + minor;
     }
 
-    log_configuration->info("glVersion:   {}", info.gl_version);
-    log_configuration->info("glslVersion: {}", info.glsl_version);
+    log_startup->info("glVersion:   {}", info.gl_version);
+    log_startup->info("glslVersion: {}", info.glsl_version);
 
     gl::command_info_init(info.glsl_version, extensions);
 
@@ -152,7 +158,7 @@ void Instance::initialize()
     gl::get_integer_v(gl::Get_p_name::max_framebuffer_samples,    &limits.max_framebuffer_samples);
     gl::get_integer_v(gl::Get_p_name::max_integer_samples,        &limits.max_integer_samples);
 
-    log_configuration->info(
+    log_startup->info(
         "max samples = {}, max color texture samples = {}, max depth texture samples = {}, "
         "max framebuffer samples = {}, max integer samples = {}",
         limits.max_samples,
@@ -172,7 +178,7 @@ void Instance::initialize()
     gl::get_integer_v(gl::Get_p_name::context_flags, &context_flags);
     if ((static_cast<unsigned int>(context_flags) & static_cast<unsigned int>(GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)) != 0) {
         info.forward_compatible = true;
-        log_configuration->info("forward compatible");
+        log_startup->info("forward compatible");
     }
 
     // GL 3.3 introduced context profile mask
@@ -180,11 +186,11 @@ void Instance::initialize()
     gl::get_integer_v(gl::Get_p_name::context_profile_mask, &context_profile_mask);
     if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_CORE_PROFILE_BIT)) != 0) {
         info.core_profile = true;
-        log_configuration->info("core profile");
+        log_startup->info("core profile");
     }
     if ((static_cast<unsigned int>(context_profile_mask) & static_cast<unsigned int>(GL_CONTEXT_COMPATIBILITY_PROFILE_BIT)) != 0) {
         info.compatibility_profile = true;
-        log_configuration->info("compatibility profile");
+        log_startup->info("compatibility profile");
     }
 
 
@@ -222,7 +228,7 @@ void Instance::initialize()
 
     implementation_defined.shader_storage_buffer_offset_alignment = static_cast<unsigned int>(shader_storage_buffer_offset_alignment);
     implementation_defined.uniform_buffer_offset_alignment        = static_cast<unsigned int>(uniform_buffer_offset_alignment);
-    log_configuration->info(
+    log_startup->info(
         "uniform block ("
         "max size = {}, "
         "offset alignment = {}. "
@@ -236,7 +242,7 @@ void Instance::initialize()
         limits.max_vertex_uniform_blocks,
         limits.max_fragment_uniform_blocks
     );
-    log_configuration->info(
+    log_startup->info(
         "shader storage block ("
         "offset alignment = {}"
         ", max bindings = {}"
@@ -252,13 +258,13 @@ void Instance::initialize()
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
         info.use_bindless_texture = true;
     }
-    log_configuration->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
+    log_startup->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_sparse_texture)) {
         info.use_sparse_texture = true;
         GLint max_sparse_texture_size{};
         gl::get_integer_v(gl::Get_p_name::max_sparse_texture_size_arb, &max_sparse_texture_size);
-        log_configuration->info("max sparse texture size : {}", max_sparse_texture_size);
+        log_startup->info("max sparse texture size : {}", max_sparse_texture_size);
 
         gl::Internal_format formats[] = {
             gl::Internal_format::r8,
@@ -323,7 +329,7 @@ void Instance::initialize()
                 .z = static_cast<int>(z_sizes[0]),
             };
 
-            log_configuration->info(
+            log_startup->info(
                 "    {} : num page sizes {} :{}",
                 gl::c_str(format),
                 num_virtual_page_sizes,
@@ -331,17 +337,225 @@ void Instance::initialize()
             );
         }
     }
-    log_configuration->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
+    log_startup->info("GL_ARB_sparse_texture supported : {}", info.use_sparse_texture);
 
     info.use_persistent_buffers = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
-    log_configuration->info("GL_ARB_buffer_storage supported : {}", info.use_sparse_texture);
+    log_startup->info("GL_ARB_buffer_storage supported : {}", info.use_sparse_texture);
 
     if (
         !gl::is_extension_supported(gl::Extension::Extension_GL_ARB_direct_state_access) &&
         (info.gl_version < 450)
     ) {
-        log_configuration->info("Direct state access is not supported by OpenGL driver. This is a fatal error.");
+        log_startup->info("Direct state access is not supported by OpenGL driver. This is a fatal error.");
     }
+
+    bool force_no_bindless          {false};
+    bool force_no_persistent_buffers{false};
+    bool capture_support            {false};
+    {
+        auto ini = erhe::configuration::get_ini("erhe.ini", "graphics");
+        ini->get("reverse_depth",   configuration.reverse_depth  );
+        ini->get("post_processing", configuration.post_processing);
+        ini->get("use_time_query",  configuration.use_time_query );
+        ini->get("force_no_bindless",           force_no_bindless);
+        ini->get("force_no_persistent_buffers", force_no_persistent_buffers);
+    }
+    {
+        auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
+        ini->get("capture_support", capture_support);
+    }
+
+    if (force_no_bindless || capture_support) {
+        if (info.use_bindless_texture) {
+            info.use_bindless_texture = false;
+            log_startup->warn("Force disabled GL_ARB_bindless_texture due to erhe.ini setting");
+        }
+    }
+
+    if (force_no_persistent_buffers) {
+        if (info.use_persistent_buffers) {
+            info.use_persistent_buffers = false;
+            log_startup->warn("Force disabled persistently mapped buffers due to erhe.ini setting");
+        }
+    }
+
+    shader_monitor.begin();
+}
+
+auto Instance::depth_clear_value_pointer() const -> const float*
+{
+    return configuration.reverse_depth ? &float_zero_value : &float_one_value;
+}
+
+auto Instance::depth_function(
+    const gl::Depth_function depth_function
+) const -> gl::Depth_function
+{
+    return configuration.reverse_depth ? reverse(depth_function) : depth_function;
+}
+
+auto Instance::get_handle(
+    const Texture& texture,
+    const Sampler& sampler
+) const -> uint64_t
+{
+    if (info.use_bindless_texture) {
+        return gl::get_texture_sampler_handle_arb(
+            texture.gl_name(),
+            sampler.gl_name()
+        );
+    } else {
+        const uint64_t texture_name  = static_cast<uint64_t>(texture.gl_name());
+        const uint64_t sampler_name  = static_cast<uint64_t>(sampler.gl_name());
+        const uint64_t handle        = texture_name | (sampler_name << 32);
+        return handle;
+    }
+}
+
+auto Instance::create_dummy_texture() -> std::shared_ptr<Texture>
+{
+    const erhe::graphics::Texture::Create_info create_info{
+        .instance = *this,
+        .width    = 2,
+        .height   = 2
+    };
+
+    auto texture = std::make_shared<Texture>(create_info);
+    texture->set_debug_label("dummy");
+    const std::array<uint8_t, 16> dummy_pixel{
+        0xee, 0x11, 0xdd, 0xff,
+        0xcc, 0x11, 0xbb, 0xff,
+        0xee, 0x11, 0xdd, 0xff,
+        0xcc, 0x11, 0xbb, 0xff
+    };
+    const gsl::span<const std::byte> image_data{
+        reinterpret_cast<const std::byte*>(&dummy_pixel[0]),
+        dummy_pixel.size()
+    };
+
+    texture->upload(
+        create_info.internal_format,
+        image_data,
+        create_info.width,
+        create_info.height
+    );
+
+    return texture;
+}
+
+
+void Instance::texture_unit_cache_reset(const unsigned int base_texture_unit)
+{
+    m_base_texture_unit = base_texture_unit;
+    m_texture_units.clear();
+}
+
+auto Instance::texture_unit_cache_allocate(
+    const uint64_t handle
+) -> std::optional<std::size_t>
+{
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+    const GLuint texture_name = erhe::graphics::get_texture_from_handle(handle);
+    const GLuint sampler_name = erhe::graphics::get_sampler_from_handle(handle);
+#endif
+
+    for (std::size_t texture_unit = 0, end = m_texture_units.size(); texture_unit < end; ++texture_unit) {
+        if (m_texture_units[texture_unit] == handle) {
+            SPDLOG_LOGGER_TRACE(
+                log_texture,
+                "cache hit texture unit {} for texture {}, sampler {}",
+                texture_unit,
+                texture_name,
+                sampler_name
+            );
+            return texture_unit;
+        }
+    }
+
+    const std::size_t result = m_texture_units.size();
+    m_texture_units.push_back(handle);
+    SPDLOG_LOGGER_TRACE(
+        log_texture,
+        "allocted texture unit {} for texture {}, sampler {}",
+        result,
+        texture_name,
+        sampler_name
+    );
+    return result;
+}
+
+auto Instance::texture_unit_cache_bind(const uint64_t fallback_handle) -> size_t
+{
+    const GLuint fallback_texture_name = erhe::graphics::get_texture_from_handle(fallback_handle);
+    const GLuint fallback_sampler_name = erhe::graphics::get_sampler_from_handle(fallback_handle);
+
+    GLuint i{};
+    GLuint end = std::min(
+        static_cast<GLuint>(m_texture_units.size()),
+        static_cast<GLuint>(limits.max_texture_image_units)
+    );
+
+    for (i = 0; i < end; ++i) {
+        const uint64_t handle       = m_texture_units[i];
+        const GLuint   texture_name = erhe::graphics::get_texture_from_handle(handle);
+        const GLuint   sampler_name = erhe::graphics::get_sampler_from_handle(handle);
+
+        if (handle != 0) {
+#if !defined(NDEBUG)
+            if (gl::is_texture(texture_name) == GL_TRUE) {
+                gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
+                SPDLOG_LOGGER_TRACE(
+                    log_texture,
+                    "texture unit {} + {} = {}: bound texture {}",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    texture_name
+                );
+            } else {
+                log_texture->warn(
+                    "texture unit {} + {} = {}: {} is not a texture",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    texture_name
+                );
+                gl::bind_texture_unit(m_base_texture_unit + i, erhe::graphics::get_texture_from_handle(fallback_handle));
+            }
+
+            if (
+                (sampler_name == 0) ||
+                (gl::is_sampler(sampler_name) == GL_TRUE)
+            ) {
+                gl::bind_sampler(m_base_texture_unit + i, sampler_name);
+                SPDLOG_LOGGER_TRACE(
+                    log_texture,
+                    "texture unit {} + {} = {}: bound sampler {}",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    sampler_name
+                );
+            } else {
+                gl::bind_sampler(m_base_texture_unit + i, erhe::graphics::get_sampler_from_handle(fallback_handle));
+                log_texture->warn(
+                    "texture unit {} + {} = {}: {} is not a sampler",
+                    m_base_texture_unit,
+                    i,
+                    m_base_texture_unit + i,
+                    sampler_name
+                );
+            }
+#else
+            gl::bind_texture_unit(m_base_texture_unit + i, texture_name);
+            gl::bind_sampler     (m_base_texture_unit + i, sampler_name);
+#endif
+        } else {
+            gl::bind_texture_unit(m_base_texture_unit + i, fallback_texture_name);
+            gl::bind_sampler     (m_base_texture_unit + i, fallback_sampler_name);
+        }
+    }
+    return m_texture_units.size();
 }
 
 } // namespace erhe::graphics

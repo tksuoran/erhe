@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/viewport.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
@@ -10,10 +10,9 @@
 #include <array>
 #include <string>
 
+
 namespace erhe::scene
 {
-
-class Viewport;
 
 class Camera_projection_transforms
 {
@@ -41,7 +40,7 @@ public:
     // Public API
     [[nodiscard]] auto projection           () -> Projection*;
     [[nodiscard]] auto projection           () const -> const Projection*;
-    [[nodiscard]] auto projection_transforms(const Viewport& viewport) const -> Camera_projection_transforms;
+    [[nodiscard]] auto projection_transforms(const erhe::toolkit::Viewport& viewport) const -> Camera_projection_transforms;
     [[nodiscard]] auto get_exposure         () const -> float;
     [[nodiscard]] auto get_shadow_range     () const -> float;
 

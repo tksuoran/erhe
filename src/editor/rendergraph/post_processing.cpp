@@ -1,19 +1,21 @@
 #include "rendergraph/post_processing.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/graphics/shader_monitor.hpp"
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/gpu_timer.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
+#include "erhe/graphics/shader_monitor.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -40,32 +42,37 @@ Post_processing::Offsets::Offsets(
 
 /// //////////////////////////////////////////
 
-Downsample_node::Downsample_node()
-{
-}
+//Downsample_node::Downsample_node()
+//{
+//}
 
 Downsample_node::Downsample_node(
-    const std::string& label,
-    const int          width,
-    const int          height,
-    const int          axis
+    erhe::graphics::Instance&       graphics_instance,
+    //erhe::rendergraph::Rendergraph& rendergraph,
+    const std::string&              label,
+    int                             width,
+    int                             height,
+    int                             axis
 )
     : axis{axis}
+    , texture{
+        std::make_shared<erhe::graphics::Texture>(
+            erhe::graphics::Texture::Create_info{
+                .instance        = graphics_instance,
+                .target          = gl::Texture_target::texture_2d,
+                .internal_format = gl::Internal_format::rgba16f, // TODO other formats
+                .sample_count    = 0,
+                .width           = width,
+                .height          = height
+            }
+        )
+    }
 {
     ERHE_VERIFY(width > 0);
     ERHE_VERIFY(height > 0);
     using erhe::graphics::Framebuffer;
     using erhe::graphics::Texture;
 
-    texture = std::make_shared<Texture>(
-        Texture::Create_info{
-            .target          = gl::Texture_target::texture_2d,
-            .internal_format = gl::Internal_format::rgba16f, // TODO other formats
-            .sample_count    = 0,
-            .width           = width,
-            .height          = height
-        }
-    );
     texture->set_debug_label(label);
 
     // TODO initial clear?
@@ -97,7 +104,7 @@ void Downsample_node::bind_framebuffer() const
     {
         static constexpr std::string_view c_invalidate_framebuffer{"invalidate framebuffer"};
         ERHE_PROFILE_SCOPE("viewport");
-        ERHE_PROFILE_GPU_SCOPE(c_invalidate_framebuffer)
+        //ERHE_PROFILE_GPU_SCOPE(c_invalidate_framebuffer)
 
         gl::viewport(0, 0, texture->width(), texture->height());
     }
@@ -112,23 +119,28 @@ void Downsample_node::bind_framebuffer() const
 /// //////////////////////////////////////////
 
 Post_processing_node::Post_processing_node(
-    const std::string_view name
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_context&                 editor_context,
+    const std::string_view          name
 )
-    : erhe::application::Rendergraph_node{name}
+    : erhe::rendergraph::Rendergraph_node{rendergraph, name}
+    , m_context{editor_context}
 {
-    register_input (
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
+    register_input(
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
         "viewport",
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
     register_output(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
         "viewport",
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 }
 
-auto Post_processing_node::update_downsample_nodes() -> bool
+auto Post_processing_node::update_downsample_nodes(
+    erhe::graphics::Instance& graphics_instance
+) -> bool
 {
     constexpr bool downsample_nodes_unchanged = true;
     constexpr bool downsample_nodes_changed   = false;
@@ -139,8 +151,8 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     //
     // Output *should* be multisample resolved
     const auto viewport = get_producer_output_viewport(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
     if (
@@ -182,7 +194,7 @@ auto Post_processing_node::update_downsample_nodes() -> bool
     );
 
     // First node is used the post processing input texture
-    m_downsample_nodes.emplace_back("Post Processing Input", width, height, -1);
+    m_downsample_nodes.emplace_back(graphics_instance, "Post Processing Input", width, height, -1);
 
     for (;;) {
         if ((width == 1) && (height == 1)) {
@@ -190,11 +202,11 @@ auto Post_processing_node::update_downsample_nodes() -> bool
         }
         if ((width >= height) && (width > 1)) {
             width = width / 2;
-            m_downsample_nodes.emplace_back("Post Processing Downsample X", width, height, 0);
+            m_downsample_nodes.emplace_back(graphics_instance, "Post Processing Downsample X", width, height, 0);
         }
         if ((height > width) && (height > 1)) {
             height = height / 2;
-            m_downsample_nodes.emplace_back("Post Processing Downsample Y", width, height, 1);
+            m_downsample_nodes.emplace_back(graphics_instance, "Post Processing Downsample Y", width, height, 1);
             if ((width + height) == 2) {
                 break;
             }
@@ -210,7 +222,7 @@ void Post_processing_node::viewport_toolbar()
 }
 
 [[nodiscard]] auto Post_processing_node::get_consumer_input_texture(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -225,7 +237,7 @@ void Post_processing_node::viewport_toolbar()
 
 // Overridden to provide framebuffer from the first downsample node
 [[nodiscard]] auto Post_processing_node::get_consumer_input_framebuffer(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
@@ -239,10 +251,10 @@ void Post_processing_node::viewport_toolbar()
 }
 
 [[nodiscard]] auto Post_processing_node::get_consumer_input_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     return get_producer_output_viewport(resource_routing, key, depth + 1);
 }
@@ -256,14 +268,16 @@ void Post_processing_node::execute_rendergraph_node()
     static constexpr std::string_view c_post_processing{"Post_processing"};
 
     ERHE_PROFILE_FUNCTION();
-    ERHE_PROFILE_GPU_SCOPE(c_post_processing)
+    //ERHE_PROFILE_GPU_SCOPE(c_post_processing)
 
-    const bool downsample_nodes_unchanged = update_downsample_nodes();
+    const bool downsample_nodes_unchanged = update_downsample_nodes(
+        *m_context.graphics_instance
+    );
     if (!downsample_nodes_unchanged) {
         return;
     }
 
-    g_post_processing->post_process(*this);
+    m_context.post_processing->post_process(*this);
 }
 
 [[nodiscard]] auto Post_processing_node::get_downsample_nodes() -> const std::vector<Downsample_node>&
@@ -274,15 +288,50 @@ void Post_processing_node::execute_rendergraph_node()
 /// //////////////////////////////////////////
 /// //////////////////////////////////////////
 
-Post_processing* g_post_processing{nullptr};
+auto Post_processing::make_program(
+    erhe::graphics::Instance&    graphics_instance,
+    const char*                  name,
+    const std::filesystem::path& fs_path
+) -> erhe::graphics::Shader_stages
+{
+    const std::vector<std::pair<std::string, std::string>> bindess_defines{
+        {"ERHE_BINDLESS_TEXTURE", "1"}
+    };
+    const std::vector<std::pair<std::string, std::string>> empty_defines{};
 
-Post_processing::Post_processing()
-    : Component{c_type_name}
-    , m_parameter_block{
-        "post_processing",
-        0,
-        erhe::graphics::Shader_resource::Type::uniform_block
-    }
+    const std::vector<erhe::graphics::Shader_stage_extension> bindless_extensions{
+        {gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"}
+    };
+    const std::vector<erhe::graphics::Shader_stage_extension> empty_extensions{};
+    const bool bindless_textures = graphics_instance.info.use_bindless_texture;
+
+    return erhe::graphics::Shader_stages{
+        erhe::graphics::Shader_stages_prototype{
+            erhe::graphics::Shader_stages_create_info{
+                .instance              = graphics_instance,
+                .name                  = name,
+                .defines               = bindless_textures ? bindess_defines : empty_defines,
+                .extensions            = bindless_textures ? bindless_extensions : empty_extensions,
+                .interface_blocks      = { &m_parameter_block },
+                .fragment_outputs      = &m_fragment_outputs,
+                .default_uniform_block = bindless_textures ? nullptr : &m_default_uniform_block,
+                .shaders = {
+                    { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
+                    { gl::Shader_type::fragment_shader, m_shader_path / fs_path}
+                },
+                .build                 = true
+            }
+        }
+    };
+    //// graphics_instance.shader_monitor.add(x_create_info,       m_downsample_x_shader_stages.get());
+}
+
+Post_processing::Post_processing(
+    erhe::graphics::Instance& graphics_instance,
+    Editor_context&           editor_context,
+    Programs&                 programs
+)
+    : m_context{editor_context}
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -290,184 +339,83 @@ Post_processing::Post_processing()
             .location = 0
         }
     }
+    , m_dummy_texture   {graphics_instance.create_dummy_texture()}
+    , m_linear_sampler  {programs.linear_sampler}
+    , m_nearest_sampler {programs.nearest_sampler}
+    , m_parameter_buffer{graphics_instance, "Post Processing Parameter Buffer"}
+    , m_parameter_block{
+        graphics_instance,
+        "post_processing",
+        0,
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_source_texture_count{
+        std::min(
+            std::size_t{24},
+            static_cast<std::size_t>(graphics_instance.limits.max_texture_image_units)
+        )
+    }
     , m_offsets{m_parameter_block, m_source_texture_count}
-{
-}
+    , m_empty_vertex_input{}
 
-Post_processing::~Post_processing()
-{
-    ERHE_VERIFY(g_post_processing == nullptr);
-}
-
-void Post_processing::deinitialize_component()
-{
-    ERHE_VERIFY(g_post_processing == this);
-    m_nodes.clear();
-    m_linear_sampler  = nullptr;
-    m_nearest_sampler = nullptr;
-    m_parameter_buffer.reset();
-    m_empty_vertex_input.reset();
-    m_downsample_x_shader_stages.reset();
-    m_downsample_y_shader_stages.reset();
-    m_compose_shader_stages.reset();
-    m_dummy_texture.reset();
-    m_downsample_source_texture = nullptr;
-    m_compose_source_textures   = nullptr;
-    m_downsample_x_pipeline.reset();
-    m_downsample_y_pipeline.reset();
-    m_compose_pipeline.reset();
-    m_gpu_timer.reset();
-    g_post_processing = nullptr;
-}
-
-void Post_processing::declare_required_components()
-{
-    require<erhe::application::Configuration      >();
-    require<erhe::application::Imgui_windows      >();
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Shader_monitor     >();
-    require<Programs>();
-}
-
-void Post_processing::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_post_processing == nullptr);
-
-    using erhe::graphics::Shader_stages;
-
-    const erhe::application::Scoped_gl_context gl_context;
-
-    m_linear_sampler  = g_programs->linear_sampler.get();
-    m_nearest_sampler = g_programs->nearest_sampler.get();
-
-    m_empty_vertex_input = std::make_unique<erhe::graphics::Vertex_input_state>();
-
-    {
-        ERHE_PROFILE_SCOPE("shader");
-
-        const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-        const std::filesystem::path vs_path         = shader_path / std::filesystem::path("post_processing.vert");
-        const std::filesystem::path x_fs_path       = shader_path / std::filesystem::path("downsample_x.frag");
-        const std::filesystem::path y_fs_path       = shader_path / std::filesystem::path("downsample_y.frag");
-        const std::filesystem::path compose_fs_path = shader_path / std::filesystem::path("compose.frag");
-
-        Shader_stages::Create_info x_create_info{
-            .name             = "downsample_x",
-            .interface_blocks = { &m_parameter_block },
-            .fragment_outputs = &m_fragment_outputs,
-            .shaders          = {
-                { gl::Shader_type::vertex_shader,   vs_path   },
-                { gl::Shader_type::fragment_shader, x_fs_path }
-            }
-        };
-        Shader_stages::Create_info y_create_info{
-            .name             = "downsample_y",
-            .interface_blocks = { &m_parameter_block },
-            .fragment_outputs = &m_fragment_outputs,
-            .shaders          = {
-                { gl::Shader_type::vertex_shader,   vs_path   },
-                { gl::Shader_type::fragment_shader, y_fs_path }
-            }
-        };
-        Shader_stages::Create_info compose_create_info{
-            .name             = "compose",
-            .interface_blocks = { &m_parameter_block },
-            .fragment_outputs = &m_fragment_outputs,
-            .shaders          = {
-                { gl::Shader_type::vertex_shader,   vs_path         },
-                { gl::Shader_type::fragment_shader, compose_fs_path }
-            }
-        };
-
-        if (erhe::graphics::Instance::info.use_bindless_texture) {
-            x_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-            y_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-            compose_create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-            x_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-            y_create_info      .extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-            compose_create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-        } else {
-            m_source_texture_count = std::min(
-                m_source_texture_count,
-                static_cast<size_t>(erhe::graphics::Instance::limits.max_texture_image_units)
-            );
-
-            m_downsample_source_texture = m_downsample_default_uniform_block.add_sampler(
-                "s_source",
-                gl::Uniform_type::sampler_2d,
-                0
-            );
-            m_compose_source_textures = m_compose_default_uniform_block.add_sampler(
+    , m_default_uniform_block{graphics_instance}
+    , m_downsample_source_texture_resource{
+        graphics_instance.info.use_bindless_texture
+            ? nullptr
+            : m_default_uniform_block.add_sampler("s_source", gl::Uniform_type::sampler_2d, 0)
+    }
+    , m_compose_source_textures_resource{
+        graphics_instance.info.use_bindless_texture
+            ? nullptr
+            : m_default_uniform_block.add_sampler(
                 "s_source_textures",
                 gl::Uniform_type::sampler_2d,
                 0,
                 m_source_texture_count
-            );
+            )
+    }
+    , m_shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
+    , m_downsample_x_shader_stages{make_program(graphics_instance, "downsample_x", std::filesystem::path("downsample_x.frag"))}
+    , m_downsample_y_shader_stages{make_program(graphics_instance, "downsample_y", std::filesystem::path("downsample_y.frag"))}
+    , m_compose_shader_stages     {make_program(graphics_instance, "compose",      std::filesystem::path("compose.frag"))}
 
-            m_dummy_texture = erhe::graphics::create_dummy_texture();
-            x_create_info.default_uniform_block       = &m_downsample_default_uniform_block;
-            y_create_info.default_uniform_block       = &m_downsample_default_uniform_block;
-            compose_create_info.default_uniform_block = &m_compose_default_uniform_block;
-        }
-
-        Shader_stages::Prototype x_prototype      {x_create_info};
-        Shader_stages::Prototype y_prototype      {y_create_info};
-        Shader_stages::Prototype compose_prototype{compose_create_info};
-        {
-            x_prototype.      compile_shaders();
-            y_prototype.      compile_shaders();
-            compose_prototype.compile_shaders();
-            x_prototype.      link_program();
-            y_prototype.      link_program();
-            compose_prototype.link_program();
-        }
-        m_downsample_x_shader_stages = std::make_unique<Shader_stages>(std::move(x_prototype));
-        m_downsample_y_shader_stages = std::make_unique<Shader_stages>(std::move(y_prototype));
-        m_compose_shader_stages      = std::make_unique<Shader_stages>(std::move(compose_prototype));
-        if (erhe::application::g_shader_monitor) {
-            erhe::application::g_shader_monitor->add(x_create_info,       m_downsample_x_shader_stages.get());
-            erhe::application::g_shader_monitor->add(y_create_info,       m_downsample_y_shader_stages.get());
-            erhe::application::g_shader_monitor->add(compose_create_info, m_compose_shader_stages.get());
+    , m_downsample_x_pipeline{
+        erhe::graphics::Pipeline_data{
+            .name           = "Post Procesisng Downsample X",
+            .shader_stages  = &m_downsample_x_shader_stages,
+            .vertex_input   = &m_empty_vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled,
         }
     }
+    , m_downsample_y_pipeline{
+        erhe::graphics::Pipeline_data{
+            .name           = "Post Processing Downsample Y",
+            .shader_stages  = &m_downsample_y_shader_stages,
+            .vertex_input   = &m_empty_vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled,
+        }
+    }
+    , m_compose_pipeline{
+        erhe::graphics::Pipeline_data{
+            .name           = "Post Processing Compose",
+            .shader_stages  = &m_compose_shader_stages,
+            .vertex_input   = &m_empty_vertex_input,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
+            .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
+            .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
+            .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled,
+        }
+    }
+    , m_gpu_timer{"Post_processing"}
 
-    m_downsample_x_pipeline.data =
-    {
-        .name           = "Post Procesisng Downsample X",
-        .shader_stages  = m_downsample_x_shader_stages.get(),
-        .vertex_input   = m_empty_vertex_input.get(),
-        .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
-        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-        .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled,
-    };
-    m_downsample_y_pipeline.data =
-    {
-        .name           = "Post Processing Downsample Y",
-        .shader_stages  = m_downsample_y_shader_stages.get(),
-        .vertex_input   = m_empty_vertex_input.get(),
-        .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
-        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-        .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled,
-    };
-    m_compose_pipeline.data =
-    {
-        .name           = "Post Processing Compose",
-        .shader_stages  = m_compose_shader_stages.get(),
-        .vertex_input   = m_empty_vertex_input.get(),
-        .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
-        .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
-        .depth_stencil  = erhe::graphics::Depth_stencil_state::depth_test_disabled_stencil_test_disabled,
-        .color_blend    = erhe::graphics::Color_blend_state::color_blend_disabled,
-    };
-
+{
     create_frame_resources();
-
-    m_gpu_timer = std::make_unique<erhe::graphics::Gpu_timer>("Post_processing");
-
-    g_post_processing = this;
 }
 
 void Post_processing::create_frame_resources()
@@ -485,10 +433,15 @@ void Post_processing::next_frame()
 }
 
 auto Post_processing::create_node(
-    const std::string_view name
+    erhe::rendergraph::Rendergraph& rendergraph,
+    const std::string_view          name
 ) -> std::shared_ptr<Post_processing_node>
 {
-    auto new_node = std::make_shared<Post_processing_node>(name);
+    auto new_node = std::make_shared<Post_processing_node>(
+        rendergraph,
+        m_context,
+        name
+    );
     m_nodes.push_back(new_node);
     return new_node;
 }
@@ -504,7 +457,7 @@ auto Post_processing::get_nodes() -> const std::vector<std::shared_ptr<Post_proc
 void Post_processing::post_process(Post_processing_node& node)
 {
     erhe::graphics::Scoped_debug_group pass_scope{"Post Processing"};
-    erhe::graphics::Scoped_gpu_timer   timer     {*m_gpu_timer.get()};
+    erhe::graphics::Scoped_gpu_timer   timer     {m_gpu_timer};
 
     const auto& downsample_nodes = node.get_downsample_nodes();
 
@@ -553,7 +506,7 @@ void Post_processing::downsample(
 )
 {
     ERHE_PROFILE_FUNCTION();
-    ERHE_PROFILE_GPU_SCOPE(c_downsample)
+    //ERHE_PROFILE_GPU_SCOPE(c_downsample)
 
     auto&             parameter_buffer   = m_parameter_buffer.current_buffer();
     auto&             parameter_writer   = m_parameter_buffer.writer();
@@ -566,9 +519,9 @@ void Post_processing::downsample(
     const gsl::span<float>    gpu_float_data{reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint_data {reinterpret_cast<uint32_t*>(start), word_count};
 
-    const uint64_t handle = erhe::graphics::get_handle(
+    const uint64_t handle = m_context.graphics_instance->get_handle(
         *source_texture,
-        *m_linear_sampler
+        m_linear_sampler
     );
     const uint32_t texture_handle[2] =
     {
@@ -590,7 +543,7 @@ void Post_processing::downsample(
 
     downsample_node.bind_framebuffer();
 
-    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
+    m_context.graphics_instance->opengl_state_tracker.execute(pipeline);
 
     {
         ERHE_PROFILE_SCOPE("bind parameter buffer");
@@ -604,18 +557,18 @@ void Post_processing::downsample(
         );
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture) {
+    if (m_context.graphics_instance->info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make input texture resident");
         gl::make_texture_handle_resident_arb(handle);
     } else {
         gl::bind_texture_unit(0, source_texture->gl_name());
-        gl::bind_sampler     (0, m_linear_sampler->gl_name());
+        gl::bind_sampler     (0, m_linear_sampler.gl_name());
     }
 
     {
         static constexpr std::string_view c_draw_arrays{"draw arrays"};
 
-        ERHE_PROFILE_GPU_SCOPE(c_draw_arrays)
+        //ERHE_PROFILE_GPU_SCOPE(c_draw_arrays)
         gl::draw_arrays(pipeline.data.input_assembly.primitive_topology, 0, 3);
     }
     {
@@ -623,7 +576,7 @@ void Post_processing::downsample(
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture) {
+    if (m_context.graphics_instance->info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make input texture non resident");
         gl::make_texture_handle_non_resident_arb(handle);
     }
@@ -636,8 +589,9 @@ void Post_processing::compose(Post_processing_node& node)
     erhe::graphics::Scoped_debug_group downsample_scope{"Compose"};
 
     ERHE_PROFILE_FUNCTION();
-    ERHE_PROFILE_GPU_SCOPE(c_compose)
+    //ERHE_PROFILE_GPU_SCOPE(c_compose)
 
+    auto&             graphics_instance  = *m_context.graphics_instance;
     auto&             parameter_buffer   = m_parameter_buffer.current_buffer();
     auto&             parameter_writer   = m_parameter_buffer.writer();
     const std::size_t entry_size         = m_parameter_block.size_bytes();
@@ -666,9 +620,9 @@ void Post_processing::compose(Post_processing_node& node)
         std::size_t texture_slot = 0;
         for (const Downsample_node& downsample_node : downsample_nodes) {
             const erhe::graphics::Texture* const texture = downsample_node.texture.get();
-            const uint64_t handle = erhe::graphics::get_handle(
+            const uint64_t handle = graphics_instance.get_handle(
                 *texture,
-                *m_linear_sampler
+                m_linear_sampler
             );
 
             const uint32_t texture_handle[2] =
@@ -678,11 +632,11 @@ void Post_processing::compose(Post_processing_node& node)
             };
             const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
-            if (erhe::graphics::Instance::info.use_bindless_texture) {
+            if (graphics_instance.info.use_bindless_texture) {
                 gl::make_texture_handle_resident_arb(handle);
             } else {
                 gl::bind_texture_unit(static_cast<GLuint>(texture_slot), texture->gl_name());
-                gl::bind_sampler     (static_cast<GLuint>(texture_slot), m_linear_sampler->gl_name());
+                gl::bind_sampler     (static_cast<GLuint>(texture_slot), m_linear_sampler.gl_name());
             }
 
             write<uint32_t>(gpu_uint_data, parameter_writer.write_offset + (texture_slot * uvec4_size) + m_offsets.source_texture,     texture_handle_cpu_data);
@@ -690,10 +644,10 @@ void Post_processing::compose(Post_processing_node& node)
             write<uint32_t>(gpu_uint_data, parameter_writer.write_offset + (texture_slot * uvec4_size) + m_offsets.source_texture + 3, 0);
             ++texture_slot;
         }
-        if (!erhe::graphics::Instance::info.use_bindless_texture) {
+        if (!graphics_instance.info.use_bindless_texture) {
             for (; texture_slot < m_source_texture_count; ++texture_slot) {
                 gl::bind_texture_unit(static_cast<GLuint>(texture_slot), m_dummy_texture->gl_name());
-                gl::bind_sampler     (static_cast<GLuint>(texture_slot), m_nearest_sampler->gl_name());
+                gl::bind_sampler     (static_cast<GLuint>(texture_slot), m_nearest_sampler.gl_name());
             }
         }
     }
@@ -701,13 +655,13 @@ void Post_processing::compose(Post_processing_node& node)
     parameter_writer.end();
 
     const auto viewport = node.get_producer_output_viewport(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
     const auto& output_framebuffer = node.get_producer_output_framebuffer(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
     const GLuint framebuffer_name = output_framebuffer ? output_framebuffer->gl_name() : 0;
 
@@ -728,7 +682,7 @@ void Post_processing::compose(Post_processing_node& node)
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 
     const auto& pipeline = m_compose_pipeline;
-    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
+    graphics_instance.opengl_state_tracker.execute(pipeline);
 
     {
         ERHE_PROFILE_SCOPE("bind parameter buffer");
@@ -751,14 +705,14 @@ void Post_processing::compose(Post_processing_node& node)
         gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);
     }
 
-    if (erhe::graphics::Instance::info.use_bindless_texture) {
+    if (graphics_instance.info.use_bindless_texture) {
         ERHE_PROFILE_SCOPE("make textures non-resident");
 
         for (const Downsample_node& downsample_node : downsample_nodes) {
             const erhe::graphics::Texture* const texture = downsample_node.texture.get();
-            const uint64_t handle = erhe::graphics::get_handle(
+            const uint64_t handle = graphics_instance.get_handle(
                 *texture,
-                *m_linear_sampler
+                m_linear_sampler
             );
 
             const uint32_t texture_handle[2] =
@@ -768,7 +722,7 @@ void Post_processing::compose(Post_processing_node& node)
             };
             const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
-            if (erhe::graphics::Instance::info.use_bindless_texture) {
+            if (graphics_instance.info.use_bindless_texture) {
                 gl::make_texture_handle_non_resident_arb(handle);
             }
         }

@@ -1,81 +1,283 @@
 ﻿#include "tools/tools.hpp"
 
-#include "editor_message_bus.hpp"
-#include "editor_scenes.hpp"
+#include "editor_context.hpp"
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
+#include "editor_rendering.hpp"
+#include "editor_scenes.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
 #include "tools/tool.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/controller_visualization.hpp"
 #   include "xr/headset_view.hpp"
+#   include "erhe/xr/headset.hpp"
 #endif
 
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"
 
+
 namespace editor {
 
-Tools* g_tools{nullptr};
+using Vertex_input_state   = erhe::graphics::Vertex_input_state;
+using Input_assembly_state = erhe::graphics::Input_assembly_state;
+using Rasterization_state  = erhe::graphics::Rasterization_state;
+using Depth_stencil_state  = erhe::graphics::Depth_stencil_state;
+using Color_blend_state    = erhe::graphics::Color_blend_state;
 
-Tools::Tools()
-    : erhe::components::Component{c_type_name}
+Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
+    erhe::graphics::Instance& graphics_instance,
+    Mesh_memory&              mesh_memory,
+    Programs&                 programs
+)
+#define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
+
+    // Tool pass one: For hidden tool parts, set stencil to 1.
+    // Only reads depth buffer, only writes stencil buffer.
+    : tool1_hidden_stencil{erhe::graphics::Pipeline{{
+        .name                    = "Tool pass 1: Tag depth hidden with stencil = 1",
+        .shader_stages           = &programs.tool,
+        .vertex_input            = &mesh_memory.vertex_input,
+        .input_assembly          = Input_assembly_state::triangles,
+        .rasterization           = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = false,
+            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::greater),
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::always,
+                .reference       = s_stencil_tool_mesh_hidden,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::always,
+                .reference       = s_stencil_tool_mesh_hidden,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+        },
+        .color_blend             = Color_blend_state::color_writes_disabled
+    }}}
+
+    // Tool pass two: For visible tool parts, set stencil to 2.
+    // Only reads depth buffer, only writes stencil buffer.
+    , tool2_visible_stencil{erhe::graphics::Pipeline{{
+        .name                    = "Tool pass 2: Tag visible tool parts with stencil = 2",
+        .shader_stages           = &programs.tool,
+        .vertex_input            = &mesh_memory.vertex_input,
+        .input_assembly          = erhe::graphics::Input_assembly_state::triangles,
+        .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = false,
+            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::always,
+                .reference       = s_stencil_tool_mesh_visible,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::always,
+                .reference       = s_stencil_tool_mesh_visible,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+        },
+        .color_blend             = Color_blend_state::color_writes_disabled
+    }}}
+
+    // Tool pass three: Set depth to fixed value (with depth range)
+    // Only writes depth buffer, depth test always.
+    , tool3_depth_clear{
+        erhe::graphics::Pipeline{
+            {
+                .name           = "Tool pass 3: Set depth to fixed value",
+                .shader_stages  = &programs.tool,
+                .vertex_input   = &mesh_memory.vertex_input,
+                .input_assembly = Input_assembly_state::triangles,
+                .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+                .depth_stencil  = Depth_stencil_state::depth_test_always_stencil_test_disabled,
+                .color_blend    = Color_blend_state::color_writes_disabled
+            }
+        },
+        [](){ gl::depth_range(0.0f, 0.0f); },
+        [](){ gl::depth_range(0.0f, 1.0f); }
+    }
+
+    // Tool pass four: Set depth to proper tool depth
+    // Normal depth buffer update with depth test.
+    , tool4_depth{erhe::graphics::Pipeline{{
+        .name           = "Tool pass 4: Set depth to proper tool depth",
+        .shader_stages  = &programs.tool,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .color_blend    = Color_blend_state::color_writes_disabled
+    }}}
+
+    // Tool pass five: Render visible tool parts
+    // Normal depth test, stencil test require 2, color writes enabled, no blending
+    , tool5_visible_color{erhe::graphics::Pipeline{{
+        .name                    = "Tool pass 5: Render visible tool parts",
+        .shader_stages           = &programs.tool,
+        .vertex_input            = &mesh_memory.vertex_input,
+        .input_assembly          = Input_assembly_state::triangles,
+        .rasterization           = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = true,
+            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::keep,
+                .function        = gl::Stencil_function::equal,
+                .reference       = s_stencil_tool_mesh_visible,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::keep,
+                .function        = gl::Stencil_function::equal,
+                .reference       = s_stencil_tool_mesh_visible,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+        },
+        .color_blend             = Color_blend_state::color_blend_disabled
+    }}}
+
+    // Tool pass six: Render hidden tool parts
+    // Normal depth test, stencil test requires 1, color writes enabled, blending
+    , tool6_hidden_color{erhe::graphics::Pipeline{{
+        .name                       = "Tool pass 6: Render hidden tool parts",
+        .shader_stages              = &programs.tool,
+        .vertex_input               = &mesh_memory.vertex_input,
+        .input_assembly             = Input_assembly_state::triangles,
+        .rasterization              = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil = {
+            .depth_test_enable      = true,
+            .depth_write_enable     = true,
+            .depth_compare_op       = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .stencil_test_enable    = true,
+            .stencil_front = {
+                .stencil_fail_op    = gl::Stencil_op::keep,
+                .z_fail_op          = gl::Stencil_op::keep,
+                .z_pass_op          = gl::Stencil_op::keep,
+                .function           = gl::Stencil_function::equal,
+                .reference          = s_stencil_tool_mesh_hidden,
+                .test_mask          = 0xffu,
+                .write_mask         = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op    = gl::Stencil_op::keep,
+                .z_fail_op          = gl::Stencil_op::keep,
+                .z_pass_op          = gl::Stencil_op::replace,
+                .function           = gl::Stencil_function::always,
+                .reference          = s_stencil_tool_mesh_hidden,
+                .test_mask          = 0xffu,
+                .write_mask         = 0xffu
+            },
+        },
+        .color_blend = {
+            .enabled                = true,
+            .rgb = {
+                .equation_mode      = gl::Blend_equation_mode::func_add,
+                .source_factor      = gl::Blending_factor::constant_alpha,
+                .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+            },
+            .alpha = {
+                .equation_mode      = gl::Blend_equation_mode::func_add,
+                .source_factor      = gl::Blending_factor::constant_alpha,
+                .destination_factor = gl::Blending_factor::one_minus_constant_alpha
+            },
+            .constant               = { 0.0f, 0.0f, 0.0f, 0.6f }
+        }
+    }}}
+#undef REVERSE_DEPTH
 {
 }
 
-Tools::~Tools() noexcept
+Tools::Tools(
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::scene::Scene_message_bus& scene_message_bus,
+    Editor_context&                 editor_context,
+    Editor_rendering&               editor_rendering,
+    Editor_scenes&                  editor_scenes,
+    Mesh_memory&                    mesh_memory,
+    Programs&                       programs
+)
+    : m_context              {editor_context}
+    , m_pipeline_renderpasses{graphics_instance, mesh_memory, programs}
 {
-    ERHE_VERIFY(g_tools == nullptr);
-}
-
-void Tools::deinitialize_component()
-{
-    ERHE_VERIFY(g_tools == this);
-    m_priority_tool = nullptr;
-    m_tools.clear();
-    m_background_tools.clear();
-    m_scene_root.reset();
-    g_tools = nullptr;
-}
-
-void Tools::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-    require<Editor_message_bus>();
-    require<Editor_scenes     >();
-}
-
-void Tools::initialize_component()
-{
-    ERHE_VERIFY(g_tools == nullptr);
-
     const auto tools_content_library = std::make_shared<Content_library>();
     tools_content_library->is_shown_in_ui = false;
     m_scene_root = std::make_shared<Scene_root>(
+        scene_message_bus,
         tools_content_library,
         "Tool scene"
     );
 
     // TODO Maybe this is not needed/useful?
-    g_editor_scenes->register_scene_root(m_scene_root);
+    editor_scenes.register_scene_root(m_scene_root);
 
     m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
-    g_tools = this;
-}
-
-void Tools::post_initialize()
-{
     for (const auto& tool : m_tools) {
         const auto priority = tool->get_priority();
         tool->handle_priority_update(priority + 1, priority);
     }
+
+    using Item_flags = erhe::scene::Item_flags;
+    auto tool = editor_rendering.make_renderpass("Tool");
+    tool->mesh_layers    = { Mesh_layer_id::tool };
+    tool->passes         = {
+        &m_pipeline_renderpasses.tool1_hidden_stencil,   // tag_depth_hidden_with_stencil
+        &m_pipeline_renderpasses.tool2_visible_stencil,  // tag_depth_visible_with_stencil
+        &m_pipeline_renderpasses.tool3_depth_clear,      // clear_depth
+        &m_pipeline_renderpasses.tool4_depth,            // depth_only
+        &m_pipeline_renderpasses.tool5_visible_color,    // require_stencil_tag_depth_visible
+        &m_pipeline_renderpasses.tool6_hidden_color      // require_stencil_tag_depth_hidden_and_blend,
+    };
+    tool->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
+    tool->filter         = erhe::scene::Item_filter{
+        .require_all_bits_set         = Item_flags::visible | Item_flags::tool,
+        .require_at_least_one_bit_set = 0,
+        .require_all_bits_clear       = 0
+    };
+    tool->override_scene_root = get_tool_scene_root();
+    tool->allow_shader_stages_override = false;
 }
 
 [[nodiscard]] auto Tools::get_tool_scene_root() -> std::shared_ptr<Scene_root>
@@ -95,7 +297,9 @@ void Tools::register_tool(Tool* tool)
     }
 }
 
-void Tools::render_tools(const Render_context& context)
+void Tools::render_viewport_tools(
+    const Render_context& context
+)
 {
     for (const auto& tool : m_background_tools) {
         tool->tool_render(context);
@@ -125,8 +329,6 @@ void Tools::set_priority_tool(Tool* priority_tool)
         log_tools->info("active tool reset");
     }
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (g_headset_view->config.openxr)
     {
         using namespace erhe::toolkit;
         const bool allow_secondary =
@@ -149,10 +351,9 @@ void Tools::set_priority_tool(Tool* priority_tool)
             }
         }
     }
-#endif
 
-    erhe::application::g_commands->sort_bindings();
-    g_editor_message_bus->send_message(
+    m_context.commands->sort_bindings();
+    m_context.editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_tool_select
         }
@@ -169,4 +370,4 @@ void Tools::set_priority_tool(Tool* priority_tool)
     return m_tools;
 }
 
-}  // namespace erhe::application
+}  // namespace editor

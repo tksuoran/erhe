@@ -301,12 +301,14 @@ void Scene::update_node_transforms()
 }
 
 Scene::Scene(
+    Scene_message_bus&     message_bus,
     const std::string_view name,
     Scene_host* const      host
 )
-    : Item       {name}
-    , m_host     {host}
-    , m_root_node{std::make_shared<erhe::scene::Node>("root")}
+    : Item         {name}
+    , m_message_bus{message_bus}
+    , m_host       {host}
+    , m_root_node  {std::make_shared<erhe::scene::Node>("root")}
 {
     enable_flag_bits(Item_flags::content);
     // The implicit root node has a valid (identity) transform
@@ -370,15 +372,13 @@ void Scene::register_node(
     ERHE_VERIFY(!node->parent().expired());
 
     if ((node->get_flag_bits() & Item_flags::no_message) == 0) {
-        if (erhe::scene::g_scene_message_bus != nullptr) {
-            g_scene_message_bus->send_message(
-                Scene_message{
-                    .event_type = Scene_event_type::node_added_to_scene,
-                    .scene      = this,
-                    .lhs        = node
-                }
-            );
-        }
+        m_message_bus.send_message(
+            Scene_message{
+                .event_type = Scene_event_type::node_added_to_scene,
+                .scene      = this,
+                .lhs        = node
+            }
+        );
     }
 }
 
@@ -404,15 +404,13 @@ void Scene::unregister_node(
     sanity_check();
 
     if ((node->get_flag_bits() & Item_flags::no_message) == 0) {
-        if (erhe::scene::g_scene_message_bus != nullptr) {
-            g_scene_message_bus->send_message(
-                Scene_message{
-                    .event_type = Scene_event_type::node_removed_from_scene,
-                    .scene      = this,
-                    .lhs        = node
-                }
-            );
-        }
+        m_message_bus.send_message(
+            Scene_message{
+                .event_type = Scene_event_type::node_removed_from_scene,
+                .scene      = this,
+                .lhs        = node
+            }
+        );
     }
 }
 

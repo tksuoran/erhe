@@ -1,7 +1,7 @@
 #include "frame_controller.hpp"
 #include "example_log.hpp"
 
-#include "erhe/application/controller.hpp"
+#include "erhe/toolkit/simulation_variable.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -42,7 +42,7 @@ Frame_controller::Frame_controller()
 
 auto Frame_controller::get_controller(
     const Control control
-) -> erhe::application::Controller&
+) -> erhe::toolkit::Simulation_variable&
 {
     switch (control) {
         case Control::translate_x: return translate_x;

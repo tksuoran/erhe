@@ -13,11 +13,11 @@
 #   include "xr/headset_view.hpp"
 #endif
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/imgui/imgui_viewport.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/windows/log_window.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/imgui/imgui_viewport.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/windows/log_window.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -43,30 +43,38 @@ namespace editor
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
-Imgui_viewport_window::Imgui_viewport_window()
-    : erhe::application::Imgui_window{"(default constructed Imgui_viewport_window)"}
-    , erhe::application::Texture_rendergraph_node{
-        erhe::application::Texture_rendergraph_node_create_info{
-            .name                 = std::string{"(default constructed Imgui_viewport_window)"},
-            .input_key            = erhe::application::Rendergraph_node_key::viewport,
-            .output_key           = erhe::application::Rendergraph_node_key::window,
-            .color_format         = gl::Internal_format{0},
-            .depth_stencil_format = gl::Internal_format{0}
-        }
-    }
-{
-}
+//Imgui_viewport_window::Imgui_viewport_window()
+//    : erhe::imgui::Imgui_window{
+//        "(default constructed Imgui_viewport_window)",
+//        "default_imgui_viewport"
+//    }
+//    , erhe::rendergraph::Texture_rendergraph_node{
+//        erhe::rendergraph::Texture_rendergraph_node_create_info{
+//            .name                 = std::string{"(default constructed Imgui_viewport_window)"},
+//            .input_key            = erhe::rendergraph::Rendergraph_node_key::viewport,
+//            .output_key           = erhe::rendergraph::Rendergraph_node_key::window,
+//            .color_format         = gl::Internal_format{0},
+//            .depth_stencil_format = gl::Internal_format{0}
+//        }
+//    }
+//{
+//}
 
 Imgui_viewport_window::Imgui_viewport_window(
+    erhe::imgui::Imgui_renderer&            imgui_renderer,
+    erhe::imgui::Imgui_windows&             imgui_windows,
+    erhe::rendergraph::Rendergraph&         rendergraph,
     const std::string_view                  name,
+    const char*                             ini_label,
     const std::shared_ptr<Viewport_window>& viewport_window
 )
-    : erhe::application::Imgui_window            {name}
-    , erhe::application::Texture_rendergraph_node{
-        erhe::application::Texture_rendergraph_node_create_info{
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, name, ini_label}
+    , erhe::rendergraph::Texture_rendergraph_node{
+        erhe::rendergraph::Texture_rendergraph_node_create_info{
+            .rendergraph          = rendergraph,
             .name                 = std::string{name},
-            .input_key            = erhe::application::Rendergraph_node_key::viewport,
-            .output_key           = erhe::application::Rendergraph_node_key::window,
+            .input_key            = erhe::rendergraph::Rendergraph_node_key::viewport,
+            .output_key           = erhe::rendergraph::Rendergraph_node_key::window,
             .color_format         = gl::Internal_format::rgba16f,
             .depth_stencil_format = gl::Internal_format::depth24_stencil8
         }
@@ -79,9 +87,9 @@ Imgui_viewport_window::Imgui_viewport_window(
     m_viewport.height = 0;
 
     register_input(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
         "viewport",
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
     // "rendertarget texture" is slot / pseudo-resource which allows use rendergraph
@@ -91,9 +99,9 @@ Imgui_viewport_window::Imgui_viewport_window(
     //
     // TODO Texture dependencies should be handled in a generic way.
     register_input(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
         "rendertarget texture",
-        erhe::application::Rendergraph_node_key::rendertarget_texture
+        erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
     );
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
@@ -103,10 +111,12 @@ Imgui_viewport_window::Imgui_viewport_window(
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
-        erhe::application::Resource_routing::None,
+        erhe::rendergraph::Resource_routing::None,
         "window",
-        erhe::application::Rendergraph_node_key::window
+        erhe::rendergraph::Rendergraph_node_key::window
     );
+
+    show();
 }
 
 [[nodiscard]] auto Imgui_viewport_window::viewport_window() const -> std::shared_ptr<Viewport_window>
@@ -147,35 +157,35 @@ void Imgui_viewport_window::on_end()
 }
 
 void Imgui_viewport_window::set_viewport(
-    erhe::application::Imgui_viewport* imgui_viewport
+    erhe::imgui::Imgui_viewport* imgui_viewport
 )
 {
     Imgui_window::set_viewport(imgui_viewport);
 }
 
 [[nodiscard]] auto Imgui_viewport_window::get_consumer_input_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
     static_cast<void>(key);
-    //ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::window); TODO
+    //ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::window); TODO
     return m_viewport;
 }
 
 [[nodiscard]] auto Imgui_viewport_window::get_producer_output_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
     static_cast<void>(key);
-    //ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::window); TODO
+    //ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::window); TODO
     return m_viewport;
 }
 
@@ -214,8 +224,8 @@ void Imgui_viewport_window::imgui()
     m_viewport.height = std::max(1, static_cast<int>(size.y));
 
     const auto& color_texture = get_consumer_input_texture(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
     if (color_texture) {
@@ -241,15 +251,17 @@ void Imgui_viewport_window::imgui()
             //ERHE_VERIFY(m_viewport.height == static_cast<int>(rect_max.y - rect_min.y));
 
             viewport_window->set_window_viewport(
-                static_cast<int>(rect_min.x),
-                static_cast<int>(rect_min.y),
-                m_viewport.width,
-                m_viewport.height
+                erhe::toolkit::Viewport{
+                    static_cast<int>(rect_min.x),
+                    static_cast<int>(rect_min.y),
+                    m_viewport.width,
+                    m_viewport.height
+                }
             );
         }
     } else {
         m_is_hovered = false;
-        viewport_window->set_window_viewport(0, 0, 0, 0);
+        viewport_window->set_window_viewport(erhe::toolkit::Viewport{});
     }
     viewport_window->set_is_hovered(m_is_hovered);
 

@@ -9,6 +9,7 @@
 
 namespace erhe::graphics
 {
+    class Instance;
     class Texture;
 }
 
@@ -28,6 +29,8 @@ public:
 auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format;
 
 auto load_png    (const std::filesystem::path& path) -> Image;
-auto load_texture(const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
+auto load_texture(
+    erhe::graphics::Instance&    graphics_instance,
+    const std::filesystem::path& path) -> std::shared_ptr<erhe::graphics::Texture>;
 
 }

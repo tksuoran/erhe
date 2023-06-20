@@ -77,8 +77,7 @@ auto load_png(const std::filesystem::path& path) -> Image
         !std::filesystem::exists(path) ||
         std::filesystem::is_empty(path)
     ) {
-        log_image->error("File `{}` not found (or empty)", path.string());
-        return {};
+        ERHE_FATAL("File `%s` not found (or empty)", path.string().c_str());
     }
 
     Image image;
@@ -117,6 +116,7 @@ auto load_png(const std::filesystem::path& path) -> Image
 }
 
 auto load_texture(
+    erhe::graphics::Instance&    graphics_instance,
     const std::filesystem::path& path
 ) -> std::shared_ptr<erhe::graphics::Texture>
 {
@@ -126,6 +126,7 @@ auto load_texture(
         return {};
     }
     erhe::graphics::Texture_create_info texture_create_info{
+        .instance        = graphics_instance,
         .internal_format = to_gl(image.info.format),
         .use_mipmaps     = (image.info.level_count > 1),
         .width           = image.info.width,

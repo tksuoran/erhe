@@ -6,21 +6,16 @@ add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe.ini
-    hextiles_application.cpp
-    hextiles_application.hpp
+    hextiles.cpp
+    hextiles.hpp
     coordinate.cpp
     coordinate.hpp
     file_util.cpp
     file_util.hpp
     hextiles_log.cpp
     hextiles_log.hpp
-    hextiles_view_client.cpp
-    hextiles_view_client.hpp
     game/game.cpp
     game/game.hpp
-    game/game_context.hpp
-    game/game_window.cpp
-    game/game_window.hpp
     game/player.cpp
     game/player.hpp
     game/unit.hpp
@@ -95,18 +90,21 @@ target_link_libraries(
     ${_target}
     PRIVATE
     etl::etl
-    erhe::application
-    erhe::components
+    erhe::commands
     erhe::concurrency
     erhe::geometry
     erhe::gl
     erhe::graphics
+    erhe::imgui
     erhe::log
     erhe::net
+    erhe::renderer
+    erhe::rendergraph
     erhe::toolkit
     erhe::ui
     imgui
     nlohmann_json::nlohmann_json
+    #taskflow
 )
 
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")

@@ -1,5 +1,5 @@
 #include "graphics/textures.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
 #include "graphics/image_transfer.hpp"
 
 #include "erhe/graphics/png_loader.hpp"
@@ -14,7 +14,6 @@ using erhe::log::Log;
 using std::shared_ptr;
 
 Textures::Textures()
-    : erhe::components::Component{c_name}
 {
 }
 
@@ -23,7 +22,7 @@ Textures::~Textures() = default;
 void Textures::connect()
 {
     m_image_transfer = require<Image_transfer>();
-    require<erhe::application::Gl_context_provider>();
+    require<erhe::graphics::Gl_context_provider>();
 
     Ensures(m_image_transfer);
 }
@@ -32,7 +31,7 @@ void Textures::initialize_component()
 {
     Expects(m_image_transfer);
 
-    const Scoped_gl_context gl_context{Component::get<erhe::application::Gl_context_provider>()};
+    const Scoped_gl_context gl_context{Component::get<erhe::graphics::Gl_context_provider>()};
 
     background = load(std::filesystem::path("res") / "images" / "background.png");
 }

@@ -3,92 +3,86 @@
 #include "renderers/composer.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/renderer//light_buffer.hpp"
-#include "erhe/renderer//pipeline_renderpass.hpp"
-#include "erhe/scene/viewport.hpp"
+#include "erhe/renderer/pipeline_renderpass.hpp"
+#include "erhe/toolkit/viewport.hpp"
+#include "erhe/scene_renderer/light_buffer.hpp"
 
 #include <gsl/gsl>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Framebuffer;
+    class Instance;
     class Renderbuffer;
     class Texture;
 }
-
-namespace erhe::primitive
-{
+namespace erhe::imgui {
+    class Imgui_renderer;
+    class Imgui_windows;
+}
+namespace erhe::primitive {
     class Material;
 }
-
-namespace erhe::renderer
-{
+namespace erhe::renderer {
     class Light_projections;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
     class Node;
+    class Scene_message_bus;
 }
 
 namespace editor
 {
 
+class Editor_context;
+class Editor_rendering;
 class Content_library;
+class Mesh_memory;
 class Scene_root;
+class Tools;
 
 class Material_preview
-    : public erhe::components::Component
-    , public Scene_view
+    : public Scene_view
 {
 public:
-    static constexpr std::string_view c_type_name{"Material_preview"};
-    static constexpr std::string_view c_title    {"Material preview"};
-    static constexpr uint32_t         c_type_hash{
-        compiletime_xxhash::xxh32(
-            c_type_name.data(),
-            c_type_name.size(),
-            {}
-        )
-    };
-
-    Material_preview ();
-    ~Material_preview() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Material_preview(
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::scene::Scene_message_bus& scene_message_bus,
+        Editor_context&                 editor_context,
+        Mesh_memory&                    mesh_memory,
+        Programs&                       programs
+    );
 
     // Implements Imgui_window
     //void imgui() override;
 
     // Implements Scene_view
-    auto get_scene_root       () const -> std::shared_ptr<Scene_root>                          override;
-    auto get_camera           () const -> std::shared_ptr<erhe::scene::Camera>                 override;
-    auto get_rendergraph_node ()       -> std::shared_ptr<erhe::application::Rendergraph_node> override;
-    auto get_light_projections() const -> const erhe::renderer::Light_projections*             override;
-    auto get_shadow_texture   () const -> erhe::graphics::Texture*                             override;
+    auto get_scene_root       () const -> std::shared_ptr<Scene_root>                    override;
+    auto get_camera           () const -> std::shared_ptr<erhe::scene::Camera>           override;
+    auto get_rendergraph_node ()       -> erhe::rendergraph::Rendergraph_node*           override;
+    auto get_light_projections() const -> const erhe::scene_renderer::Light_projections* override;
+    auto get_shadow_texture   () const -> erhe::graphics::Texture*                       override;
 
     // Public API
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;
 
     void render_preview(
         const std::shared_ptr<erhe::primitive::Material>& material
-        //const erhe::scene::Viewport&                      viewport
     );
     void show_preview();
 
 private:
-    void make_rendertarget();
-    void make_preview_scene();
+    void make_rendertarget (erhe::graphics::Instance& graphics_instance);
+    void make_preview_scene(
+        //erhe::graphics::Instance& graphics_instance,
+        Mesh_memory&              mesh_memory
+    );
     //// void generate_torus_geometry();
+
+    Editor_context& m_context;
 
     int                                           m_width{0};
     int                                           m_height{0};
@@ -97,7 +91,7 @@ private:
     std::shared_ptr<erhe::graphics::Texture>      m_color_texture;
     std::unique_ptr<erhe::graphics::Renderbuffer> m_depth_renderbuffer;
     std::shared_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
-    erhe::renderer::Light_projections             m_light_projections;
+    erhe::scene_renderer::Light_projections       m_light_projections;
     erhe::renderer::Pipeline_renderpass           m_pipeline_renderpass;
     Composer                                      m_composer;
 
@@ -119,7 +113,5 @@ private:
     int       m_stack_count{22};
     float     m_radius{1.0f};
 };
-
-extern Material_preview* g_material_preview;
 
 } // namespace editor

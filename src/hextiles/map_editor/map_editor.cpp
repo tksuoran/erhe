@@ -1,11 +1,12 @@
 #include "map_editor/map_editor.hpp"
+
 #include "map.hpp"
 #include "map_window.hpp"
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/commands/command_context.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/commands/input_arguments.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
@@ -15,14 +16,18 @@
 namespace hextiles
 {
 
-Map_primary_brush_command::Map_primary_brush_command()
-    : Command{"Map_editor.primary_brush"}
+Map_primary_brush_command::Map_primary_brush_command(
+    erhe::commands::Commands& commands,
+    Map_editor&               map_editor
+)
+    : Command   {commands, "Map_editor.primary_brush"}
+    , map_editor{map_editor}
 {
 }
 
 void Map_primary_brush_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive) {
+    if (get_command_state() != erhe::commands::State::Inactive) {
         return;
     }
 
@@ -31,85 +36,101 @@ void Map_primary_brush_command::try_ready()
 
 auto Map_primary_brush_command::try_call() -> bool
 {
-    if (get_command_state() == erhe::application::State::Ready) {
+    if (get_command_state() == erhe::commands::State::Ready) {
         set_active();
     }
 
-    if (get_command_state() != erhe::application::State::Active) {
+    if (get_command_state() != erhe::commands::State::Active) {
         return false;
     }
 
-    g_map_editor->primary_brush();
+    map_editor.primary_brush();
     return true;
 }
 
-auto Map_primary_brush_command::try_call_with_input(erhe::application::Input_arguments& input) -> bool
+auto Map_primary_brush_command::try_call_with_input(
+    erhe::commands::Input_arguments& input
+) -> bool
 {
-    g_map_editor->hover(input.vector2.absolute_value);
+    map_editor.hover(input.vector2.absolute_value);
     return try_call();
 }
 
-Map_hover_command::Map_hover_command()
-    : Command{"Map_editor.hover"}
+Map_hover_command::Map_hover_command(
+    erhe::commands::Commands& commands,
+    Map_editor&               map_editor
+)
+    : Command   {commands, "Map_editor.hover"}
+    , map_editor{map_editor}
 {
 }
 
-auto Map_hover_command::try_call_with_input(erhe::application::Input_arguments& input) -> bool
+auto Map_hover_command::try_call_with_input(
+    erhe::commands::Input_arguments& input
+) -> bool
 {
-    g_map_editor->hover(input.vector2.absolute_value);
+    map_editor.hover(input.vector2.absolute_value);
     return false;
 }
 
-Map_editor* g_map_editor{nullptr};
+Map_editor::Map_editor(
+    erhe::commands::Commands&    commands,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Map_window&                  map_window,
+    Menu_window&                 menu_window,
+    Tile_renderer&               tile_renderer,
+    Tiles&                       tiles
+)
+    : m_map_window   {map_window}
+    , m_menu_window  {menu_window}
+    , m_tile_renderer{tile_renderer}
+    , m_tiles        {tiles}
 
-Map_editor::Map_editor()
-    : Component{c_type_name}
+    , m_map_generator         {imgui_renderer, imgui_windows, *this, tiles}
+    , m_map_tool_window       {imgui_renderer, imgui_windows, *this, m_map_generator, map_window, menu_window, tile_renderer, tiles}
+    , m_terrain_palette_window{imgui_renderer, imgui_windows, *this}
+
+    , m_map_hover_command        {commands, *this}
+    , m_map_primary_brush_command{commands, *this}
+
 {
-}
-
-Map_editor::~Map_editor() noexcept
-{
-    ERHE_VERIFY(g_map_editor == nullptr);
-}
-
-void Map_editor::deinitialize_component()
-{
-    ERHE_VERIFY(g_map_editor == this);
-    m_map_hover_command.set_host(nullptr);
-    m_map_primary_brush_command.set_host(nullptr);
-    g_map_editor = nullptr;
-}
-
-void Map_editor::declare_required_components()
-{
-    require<erhe::application::Commands>();
-}
-
-void Map_editor::initialize_component()
-{
-    ERHE_VERIFY(g_map_editor == nullptr);
-
-    //m_pixel_lookup = std::make_unique<Pixel_lookup>();
-
     File_read_stream file{"res/hextiles/map_new"};
-    m_map = new Map; // TODO
+
+    m_map = new Map{}; // TODO
     m_map->read(file);
 
-    erhe::application::g_commands->register_command(&m_map_hover_command);
-    erhe::application::g_commands->register_command(&m_map_primary_brush_command);
-
-    erhe::application::g_commands->bind_command_to_mouse_motion(&m_map_hover_command);
-    erhe::application::g_commands->bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left, true);
+    commands.register_command(&m_map_hover_command);
+    commands.register_command(&m_map_primary_brush_command);
+    commands.bind_command_to_mouse_motion(&m_map_hover_command);
+    commands.bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left, true);
 
     m_map_hover_command.set_host(this);
     m_map_primary_brush_command.set_host(this);
+}
 
-    g_map_editor = this;
+void Map_editor::hide_windows()
+{
+    m_map_window.set_map(nullptr);
+    m_map_generator         .hide();
+    m_map_tool_window       .hide();
+    m_terrain_palette_window.hide();
+}
+
+void Map_editor::show_windows()
+{
+    m_map_window.set_map(m_map);
+    m_map_generator         .show();
+    m_map_tool_window       .show();
+    m_terrain_palette_window.show();
 }
 
 void Map_editor::hover(glm::vec2 position_in_root)
 {
-    const glm::vec2 window_position = g_map_window->to_content(position_in_root);
+    if (m_map_window.is_visible()) {
+        return;
+    }
+    const glm::vec2 window_position = m_map_window.to_content(position_in_root);
 
     m_hover_window_position = window_position;
 
@@ -118,7 +139,7 @@ void Map_editor::hover(glm::vec2 position_in_root)
         static_cast<pixel_t>(window_position.y)
     };
 
-    m_hover_tile_position = g_map_window->pixel_to_tile(hover_pixel_position);
+    m_hover_tile_position = m_map_window.pixel_to_tile(hover_pixel_position);
 }
 
 void Map_editor::primary_brush()
@@ -138,7 +159,7 @@ void Map_editor::primary_brush()
     std::function<void(Tile_coordinate)> update_op =
     [this] (Tile_coordinate position) -> void
     {
-        m_map->update_group_terrain(position);
+        update_group_terrain(m_tiles, *m_map, position);
     };
 
     m_map->hex_circle(tile_position, 0, m_brush_size - 1, set_terrain_op);
@@ -147,15 +168,15 @@ void Map_editor::primary_brush()
 
 void Map_editor::terrain_palette()
 {
-    auto& terrain_type = g_tiles->get_terrain_type(m_left_brush);
-    g_map_window->tile_image(m_left_brush, 3);
+    auto& terrain_type = m_tiles.get_terrain_type(m_left_brush);
+    m_map_window.tile_image(m_left_brush, 3);
     ImGui::SameLine();
     ImGui::Text("%s", terrain_type.name.c_str());
 
     terrain_tile_t terrain = 0;
     for (int ty = 0; ty < Base_tiles::height; ++ty) {
         for (int tx = 0; tx < Base_tiles::width; ++tx) {
-            const bool pressed = g_map_window->tile_image(terrain, 2);
+            const bool pressed = m_map_window.tile_image(terrain, 2);
             if (pressed) {
                 m_left_brush = terrain;
             }
@@ -170,7 +191,7 @@ void Map_editor::terrain_palette()
 
 void Map_editor::render()
 {
-    const auto& terrain_shapes = g_tile_renderer->get_terrain_shapes();
+    const auto& terrain_shapes = m_tile_renderer.get_terrain_shapes();
 
     if (
         !m_hover_tile_position.has_value() ||
@@ -181,10 +202,9 @@ void Map_editor::render()
 
     const auto&             location = m_hover_tile_position.value();
     const Pixel_coordinate& shape    = terrain_shapes[m_left_brush];
-    //const tile_t      tile     = m_tile_renderer->get_terrain_tile(m_left_brush);
-    const std::string text  = fmt::format("{}, {}", location.x, location.y);
-    g_map_window->blit (shape, location, 0x88888888u);
-    g_map_window->print(text, location);
+    const std::string       text     = fmt::format("{}, {}", location.x, location.y);
+    m_map_window.blit (shape, location, 0x88888888u);
+    m_map_window.print(text, location);
 }
 
 auto Map_editor::get_map() -> Map*

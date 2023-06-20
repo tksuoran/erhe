@@ -33,7 +33,7 @@ void Buffer::capability_check(const gl::Buffer_storage_mask storage_mask)
             gl::Buffer_storage_mask::map_persistent_bit
         )
     ) {
-        const bool in_core       = Instance::info.gl_version >= 440;
+        const bool in_core       = m_instance.info.gl_version >= 440;
         const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
         ERHE_VERIFY(in_core || has_extension);
     }
@@ -48,7 +48,7 @@ void Buffer::capability_check(const gl::Map_buffer_access_mask access_mask)
             gl::Map_buffer_access_mask::map_persistent_bit
         )
     ) {
-        const bool in_core       = Instance::info.gl_version >= 440;
+        const bool in_core       = m_instance.info.gl_version >= 440;
         const bool has_extension = gl::is_extension_supported(gl::Extension::Extension_GL_ARB_buffer_storage);
         ERHE_VERIFY(in_core || has_extension);
     }
@@ -77,7 +77,7 @@ void Buffer::allocate_storage()
         map_bytes(0, m_capacity_byte_count, m_access_mask);
     }
 
-    //// if (!Instance::info.use_persistent_buffers) {
+    //// if (!g_instance->info.use_persistent_buffers) {
     ////     m_cpu_copy.resize(m_capacity_byte_count);
     //// }
 
@@ -86,11 +86,13 @@ void Buffer::allocate_storage()
 }
 
 Buffer::Buffer(
+    Instance&                     instance,
     const gl::Buffer_target       target,
     const std::size_t             capacity_byte_count,
     const gl::Buffer_storage_mask storage_mask
 ) noexcept
-    : m_target             {target}
+    : m_instance           {instance}
+    , m_target             {target}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
 {
@@ -106,10 +108,12 @@ Buffer::Buffer(
 }
 
 Buffer::Buffer(
+    Instance&                     instance,
     const std::size_t             capacity_byte_count,
     const gl::Buffer_storage_mask storage_mask
 ) noexcept
-    : m_target             {0}
+    : m_instance           {instance}
+    , m_target             {0}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
 {
@@ -124,12 +128,14 @@ Buffer::Buffer(
 }
 
 Buffer::Buffer(
+    Instance&                        instance,
     const gl::Buffer_target          target,
     const std::size_t                capacity_byte_count,
     const gl::Buffer_storage_mask    storage_mask,
     const gl::Map_buffer_access_mask access_mask
 ) noexcept
-    : m_target             {target}
+    : m_instance           {instance}
+    , m_target             {target}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
     , m_access_mask        {access_mask}
@@ -147,13 +153,15 @@ Buffer::Buffer(
 }
 
 Buffer::Buffer(
+    Instance&                        instance,
     const gl::Buffer_target          target,
     const std::size_t                capacity_byte_count,
     const gl::Buffer_storage_mask    storage_mask,
     const gl::Map_buffer_access_mask access_mask,
     const std::string_view           debug_label
 ) noexcept
-    : m_target             {target}
+    : m_instance           {instance}
+    , m_target             {target}
     , m_capacity_byte_count{capacity_byte_count}
     , m_storage_mask       {storage_mask}
     , m_access_mask        {access_mask}
@@ -172,7 +180,8 @@ Buffer::Buffer(
     allocate_storage();
 }
 
-Buffer::Buffer()
+Buffer::Buffer(Instance& instance)
+    : m_instance{instance}
 {
 }
 
@@ -181,22 +190,24 @@ Buffer::~Buffer() noexcept
 }
 
 Buffer::Buffer(Buffer&& other) noexcept
+    : m_instance              {other.m_instance}
+    , m_handle                {std::move(other.m_handle)}
+    , m_debug_label           {std::move(other.m_debug_label)}
+    , m_target                {other.m_target}
+    , m_capacity_byte_count   {other.m_capacity_byte_count}
+    , m_next_free_byte        {other.m_next_free_byte}
+    , m_storage_mask          {other.m_storage_mask}
+    , m_access_mask           {other.m_access_mask}
+    , m_map                   {other.m_map}
+    , m_map_byte_offset       {other.m_map_byte_offset}
+    , m_map_buffer_access_mask{other.m_map_buffer_access_mask}
 {
-    m_handle                 = std::move(other.m_handle);
-    m_debug_label            = std::move(other.m_debug_label);
-    m_target                 = other.m_target;
-    m_capacity_byte_count    = other.m_capacity_byte_count;
-    m_next_free_byte         = other.m_next_free_byte;
-    m_storage_mask           = other.m_storage_mask;
-    m_access_mask            = other.m_access_mask;
-    m_map                    = other.m_map;
-    m_map_byte_offset        = other.m_map_byte_offset;
-    m_map_buffer_access_mask = other.m_map_buffer_access_mask;
     //// m_cpu_copy               = std::move(other.m_cpu_copy);
 }
 
 auto Buffer::operator=(Buffer&& other) noexcept -> Buffer&
 {
+    ERHE_VERIFY(&m_instance == &other.m_instance);
     m_handle                 = std::move(other.m_handle);
     m_debug_label            = std::move(other.m_debug_label);
     m_target                 = other.m_target;
@@ -261,7 +272,7 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
 {
     Expects(gl_name() != 0);
 
-    if (!Instance::info.use_persistent_buffers) {
+    if (!m_instance.info.use_persistent_buffers) {
         Expects(m_map.empty());
         //// ERHE_VERIFY(m_capacity_byte_count == m_cpu_copy.size());
         //auto* const map_pointer = reinterpret_cast<std::byte*>(m_cpu_copy.data());
@@ -311,7 +322,7 @@ void Buffer::end_write(
     Expects(!m_map.empty());
     Expects(gl_name() != 0);
 
-    if (!Instance::info.use_persistent_buffers) {
+    if (!m_instance.info.use_persistent_buffers) {
         if (byte_count > 0) {
             flush_bytes(byte_offset, byte_count);
         }

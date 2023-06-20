@@ -5,8 +5,8 @@
 #include "scene/scene_root.hpp"
 #include "tools/brushes/brush.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
@@ -24,54 +24,15 @@ namespace editor
 
 Content_library_window* g_content_library_window{nullptr};
 
-Content_library_window::Content_library_window()
-    : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
+Content_library_window::Content_library_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_scenes&               editor_scenes
+)
+    : Imgui_window   {imgui_renderer, imgui_windows, "Content Library", "content_library"}
+    , m_editor_scenes{editor_scenes}
 {
-}
-
-Content_library_window::~Content_library_window()
-{
-    ERHE_VERIFY(g_content_library_window == nullptr);
-}
-
-void Content_library_window::deinitialize_component()
-{
-    ERHE_VERIFY(g_content_library_window == this);
-    m_brushes.reset();
-    m_cameras.reset();
-    m_lights.reset();
-    m_meshes.reset();
-    m_materials.reset();
-    g_content_library_window = nullptr;
-}
-
-auto Content_library_window::selected_brush() const -> std::shared_ptr<Brush>
-{
-    return m_brushes.get_selected_entry();
-}
-
-auto Content_library_window::selected_material() const -> std::shared_ptr<erhe::primitive::Material>
-{
-    return m_materials.get_selected_entry();
-}
-
-void Content_library_window::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-    require<Editor_scenes>();
-}
-
-void Content_library_window::initialize_component()
-{
-    ERHE_VERIFY(g_content_library_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this, "content_library");
-    g_content_library_window = this;
-}
-
-void Content_library_window::post_initialize()
-{
-    const auto& scene_roots = g_editor_scenes->get_scene_roots();
+    const auto& scene_roots = editor_scenes.get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         const auto& content_library = scene_root->content_library();
         if (!content_library) {
@@ -91,6 +52,16 @@ void Content_library_window::post_initialize()
     }
 }
 
+auto Content_library_window::selected_brush() const -> std::shared_ptr<Brush>
+{
+    return m_brushes.get_selected_entry();
+}
+
+auto Content_library_window::selected_material() const -> std::shared_ptr<erhe::primitive::Material>
+{
+    return m_materials.get_selected_entry();
+}
+
 void Content_library_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -105,7 +76,7 @@ void Content_library_window::imgui()
 
     ERHE_PROFILE_FUNCTION();
 
-    const auto& scene_roots = g_editor_scenes->get_scene_roots();
+    const auto& scene_roots = m_editor_scenes.get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         const auto& content_library = scene_root->content_library();
         if (!content_library) {

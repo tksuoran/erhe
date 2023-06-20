@@ -3,6 +3,7 @@
 
 namespace editor {
 
+std::shared_ptr<spdlog::logger> log_startup;
 std::shared_ptr<spdlog::logger> log_brush;
 std::shared_ptr<spdlog::logger> log_controller_ray;
 std::shared_ptr<spdlog::logger> log_debug_visualization;
@@ -37,6 +38,7 @@ std::shared_ptr<spdlog::logger> log_tree;
 
 void initialize_logging()
 {
+    log_startup                    = erhe::log::make_logger("editor::startup"                   , spdlog::level::info);
     log_brush                      = erhe::log::make_logger("editor::brush"                     , spdlog::level::info);
     log_controller_ray             = erhe::log::make_logger("editor::controller_ray"            , spdlog::level::info, false);
     log_debug_visualization        = erhe::log::make_logger("editor::debug_visualization"       , spdlog::level::info, false);

@@ -10,8 +10,8 @@
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -20,33 +20,25 @@
 namespace hextiles
 {
 
-Map_tool_window* g_map_tool_window{nullptr};
-
-Map_tool_window::Map_tool_window()
-    : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
+Map_tool_window::Map_tool_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Map_editor&                  map_editor,
+    Map_generator&               map_generator,
+    Map_window&                  map_window,
+    Menu_window&                 menu_window,
+    Tile_renderer&               tile_renderer,
+    Tiles&                       tiles
+)
+    : Imgui_window   {imgui_renderer, imgui_windows, "Map Tool", "map_tool"}
+    , m_map_editor   {map_editor}
+    , m_map_generator{map_generator}
+    , m_map_window   {map_window}
+    , m_menu_window  {menu_window}
+    , m_tile_renderer{tile_renderer}
+    , m_tiles        {tiles}
 {
-}
-
-Map_tool_window::~Map_tool_window() noexcept
-{
-    ERHE_VERIFY(g_map_tool_window == this);
-    g_map_tool_window = nullptr;
-}
-
-void Map_tool_window::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-}
-
-void Map_tool_window::initialize_component()
-{
-    ERHE_VERIFY(g_map_tool_window == nullptr);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this, "map_tool");
     hide();
-
-    g_map_tool_window = this;
 }
 
 void Map_tool_window::imgui()
@@ -54,27 +46,27 @@ void Map_tool_window::imgui()
     constexpr ImVec2 button_size{100.0f, 0.0f};
 
     if (ImGui::Button("Back to Menu", button_size)) {
-        g_menu_window->show_menu();
+        m_menu_window.show_menu();
     }
     if (ImGui::Button("Generator", button_size)) {
-        g_map_generator->show();
+        m_map_generator.show();
     }
     if (ImGui::Button("Load Map")) {
         const auto path_opt = erhe::toolkit::select_file();
         if (path_opt.has_value()) {
             File_read_stream file{path_opt.value()};
-            g_map_editor->get_map()->read(file);
+            m_map_editor.get_map()->read(file);
         }
     }
     if (ImGui::Button("Save Map")) {
         const auto path_opt = erhe::toolkit::select_file();
         if (path_opt.has_value()) {
             File_write_stream file{path_opt.value()};
-            g_map_editor->get_map()->write(file);
+            m_map_editor.get_map()->write(file);
         }
     }
 
-    const auto hover_pos_opt = g_map_editor->get_hover_tile_position();
+    const auto hover_pos_opt = m_map_editor.get_hover_tile_position();
     if (hover_pos_opt.has_value()) {
         const auto hover_pos = hover_pos_opt.value();
         ImGui::Text("Hover pos = %d, %d", hover_pos.x, hover_pos.y);
@@ -105,28 +97,28 @@ void Map_tool_window::imgui()
 
 void Map_tool_window::tile_info(const Tile_coordinate tile_position)
 {
-    const auto&          map            = g_map_editor->get_map();
+    const auto&          map            = m_map_editor.get_map();
     const terrain_tile_t terrain_tile   = map->get_terrain_tile(tile_position);
-    const auto&          terrain_shapes = g_tile_renderer->get_terrain_shapes();
+    const auto&          terrain_shapes = m_tile_renderer.get_terrain_shapes();
     if (terrain_tile >= terrain_shapes.size()) {
         return;
     }
-    const auto terrain = g_tiles->get_terrain_from_tile(terrain_tile);
+    const auto terrain = m_tiles.get_terrain_from_tile(terrain_tile);
     if (terrain >= terrain_shapes.size()) {
         return;
     }
 
-    const auto& terrain_type = g_tiles->get_terrain_type(terrain);
+    const auto& terrain_type = m_tiles.get_terrain_type(terrain);
 
     ImGui::Text("Tile @ %d, %d %s", tile_position.x, tile_position.y, terrain_type.name.c_str());
     ImGui::Text("Terrain: %d, base: %d", terrain, terrain);
     ImGui::Text("City Size: %d", terrain_type.city_size);
 
-    g_map_window->tile_image(terrain_tile, 3);
+    m_map_window.tile_image(terrain_tile, 3);
     ImGui::SameLine();
 
-    const terrain_tile_t base_terrain_tile = g_tiles->get_terrain_tile_from_terrain(terrain);
-    g_map_window->tile_image(base_terrain_tile, 3);
+    const terrain_tile_t base_terrain_tile = m_tiles.get_terrain_tile_from_terrain(terrain);
+    m_map_window.tile_image(base_terrain_tile, 3);
 
     const int distance = map->distance(tile_position, Tile_coordinate{0, 0});
     ImGui::Text("Distance to 0,0: %d", distance);

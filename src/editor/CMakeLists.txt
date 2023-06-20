@@ -14,8 +14,6 @@ erhe_target_sources_grouped(
     graphics/icon_set.hpp
     graphics/image_transfer.cpp
     graphics/image_transfer.hpp
-    graphics/textures.cpp
-    graphics/textures.hpp
 
     operations/compound_operation.cpp
     operations/compound_operation.hpp
@@ -32,8 +30,6 @@ erhe_target_sources_grouped(
     operations/node_operation.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
-    operations/selection_change_operation.cpp
-    operations/selection_change_operation.hpp
 
     parsers/json_polyhedron.cpp
     parsers/json_polyhedron.hpp
@@ -103,10 +99,13 @@ erhe_target_sources_grouped(
     tools/brushes/brush_tool.hpp
     tools/brushes/create/create.cpp
     tools/brushes/create/create.hpp
+    tools/brushes/create/create_preview_settings.hpp
     tools/brushes/create/create_box.cpp
     tools/brushes/create/create_box.hpp
     tools/brushes/create/create_cone.cpp
     tools/brushes/create/create_cone.hpp
+    tools/brushes/create/create_shape.cpp
+    tools/brushes/create/create_shape.hpp
     tools/brushes/create/create_torus.cpp
     tools/brushes/create/create_torus.hpp
     tools/brushes/create/create_uv_sphere.cpp
@@ -162,6 +161,8 @@ erhe_target_sources_grouped(
     windows/animation_window.hpp
     windows/brdf_slice_window.cpp
     windows/brdf_slice_window.hpp
+    windows/commands_window.cpp
+    windows/commands_window.hpp
     windows/content_library_window.cpp
     windows/content_library_window.hpp
     windows/debug_view_window.cpp
@@ -170,6 +171,8 @@ erhe_target_sources_grouped(
     windows/imgui_viewport_window.hpp
     windows/layers_window.cpp
     windows/layers_window.hpp
+    windows/network_window.cpp
+    windows/network_window.hpp
     windows/node_tree_window.cpp
     windows/node_tree_window.hpp
     windows/operations.cpp
@@ -189,9 +192,10 @@ erhe_target_sources_grouped(
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
 
-    editor_application.cpp
-    editor_application.hpp
-    editor_components.cpp
+    editor.cpp
+    editor.hpp
+    editor_context.cpp
+    editor_context.hpp
     editor_log.cpp
     editor_log.hpp
     editor_message.hpp
@@ -201,15 +205,20 @@ erhe_target_sources_grouped(
     editor_rendering.hpp
     editor_scenes.cpp
     editor_scenes.hpp
-    editor_view_client.cpp
-    editor_view_client.hpp
+    editor_settings.cpp
+    editor_settings.hpp
+    input_state.cpp
+    input_state.hpp
     main.cpp
+    renderable.hpp
     rendertarget_mesh.cpp
     rendertarget_mesh.hpp
     rendertarget_imgui_viewport.cpp
     rendertarget_imgui_viewport.hpp
     task_queue.cpp
     task_queue.hpp
+    time.cpp
+    time.hpp
 
     res/icons/camera.svg
     res/icons/directional_light.svg
@@ -292,23 +301,32 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
         xr/theremin.cpp
         xr/theremin.hpp
     )
+else ()
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        xr/null_headset_view.cpp
+        xr/null_headset_view.hpp
+    )
 endif ()
 
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::application
-    erhe::components
+    erhe::commands
     erhe::concurrency
+    erhe::configuration
     erhe::geometry
     erhe::gl
     erhe::graphics
+    erhe::imgui
     erhe::log
     erhe::net
     erhe::physics
     erhe::primitive
     erhe::renderer
+    erhe::rendergraph
     erhe::scene
+    erhe::scene_renderer
     erhe::toolkit
     erhe::ui
     meshoptimizer
@@ -371,13 +389,14 @@ erhe_target_sources_grouped(
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::application
     erhe::log
     erhe::net
+    erhe::toolkit
     cxxopts
     mINI
     RectangleBinPack
     rapidjson
+    #taskflow
 )
 
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")

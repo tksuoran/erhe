@@ -1,7 +1,7 @@
 
 #include "brushes/brush_tool.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -12,8 +12,7 @@ namespace editor
 {
 
 Brush_palette::Brush_palette()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title}
+    : erhe::imgui::Imgui_window{c_title}
 {
 }
 
@@ -23,14 +22,14 @@ Brush_palette::~Brush_palette() noexcept
 
 void Brush_palette::declare_required_components()
 {
-    require<erhe::application::Imgui_windows>();
+    require<erhe::imgui::Imgui_windows>();
 }
 
 void Brush_palette::initialize_component()
 {
     ERHE_PROFILE_FUNCTION
 
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    get<erhe::imgui::Imgui_windows>()->register_imgui_window(this);
 }
 
 void Brush_palette::post_initialize()

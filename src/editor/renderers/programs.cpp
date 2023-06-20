@@ -3,244 +3,194 @@
 
 #include "editor_log.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/graphics/shader_monitor.hpp"
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/command_info.hpp"
+#include "erhe/graphics/shader_monitor.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/sampler.hpp"
-#include "erhe/renderer/camera_buffer.hpp"
-#include "erhe/renderer/light_buffer.hpp"
-#include "erhe/renderer/material_buffer.hpp"
-#include "erhe/renderer/primitive_buffer.hpp"
-#include "erhe/renderer/program_interface.hpp"
+#include "erhe/scene_renderer/camera_buffer.hpp"
+#include "erhe/scene_renderer/light_buffer.hpp"
+#include "erhe/scene_renderer/material_buffer.hpp"
+#include "erhe/scene_renderer/primitive_buffer.hpp"
+#include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace editor {
 
-IPrograms::~IPrograms() noexcept = default;
-
-class Programs_impl
-    : public IPrograms
+Programs::Shader_stages_builder::Shader_stages_builder(
+    erhe::graphics::Shader_stages&              shader_stages,
+    erhe::graphics::Instance&                   graphics_instance,
+    erhe::scene_renderer::Program_interface&    program_interface,
+    std::filesystem::path                       shader_path,
+    erhe::graphics::Shader_stages_create_info&& create_info
+)
+    : shader_stages{shader_stages}
+    , prototype{
+        program_interface.make_prototype(
+            graphics_instance,
+            shader_path,
+            std::move(create_info)
+        )
+    }
 {
-public:
-    Programs_impl()
-    {
-        ERHE_VERIFY(g_programs == nullptr);
-        g_programs = this;
+}
 
-        const erhe::application::Scoped_gl_context gl_context;
+Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& other) = default;
 
-        nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-            erhe::graphics::Sampler_create_info{
-                .min_filter  = gl::Texture_min_filter::nearest,
-                .mag_filter  = gl::Texture_mag_filter::nearest,
-                .debug_label = "Programs nearest"
-            }
-        );
 
-        linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-            erhe::graphics::Sampler_create_info{
-                .min_filter = gl::Texture_min_filter::linear,
-                .mag_filter = gl::Texture_mag_filter::linear,
-                .debug_label = "Programs linear"
-            }
-        );
-
-        linear_mipmap_linear_sampler = std::make_unique<erhe::graphics::Sampler>(
-            erhe::graphics::Sampler_create_info{
-                .min_filter = gl::Texture_min_filter::linear_mipmap_linear,
-                .mag_filter = gl::Texture_mag_filter::linear,
-                .debug_label = "Programs linear mipmap"
-            }
-        );
-
-        if (!erhe::graphics::Instance::info.use_bindless_texture) {
-            shadow_map_default_uniform_block = std::make_unique<erhe::graphics::Shader_resource>();
-            textured_default_uniform_block   = std::make_unique<erhe::graphics::Shader_resource>();
-
-            shadow_map_default_uniform_block->add_sampler(
+Programs::Programs(
+    erhe::graphics::Instance&                graphics_instance,
+    erhe::scene_renderer::Program_interface& program_interface
+)
+    : shader_path{
+        std::filesystem::path("res") / std::filesystem::path("shaders")
+    }
+    , default_uniform_block{graphics_instance}
+    , shadow_sampler{
+        graphics_instance.info.use_bindless_texture
+            ? nullptr
+            : default_uniform_block.add_sampler(
                 "s_shadow",
                 gl::Uniform_type::sampler_2d_array,
                 shadow_texture_unit
-            );
-            textured_default_uniform_block->add_sampler(
+            )
+    }
+    , texture_sampler{
+        graphics_instance.info.use_bindless_texture
+            ? nullptr
+            : default_uniform_block.add_sampler(
                 "s_texture",
                 gl::Uniform_type::sampler_2d,
                 base_texture_unit,
                 s_texture_unit_count
-            );
-        }
-        const auto* shadow_default_uniform_block = erhe::graphics::Instance::info.use_bindless_texture
-            ? nullptr
-            : shadow_map_default_uniform_block.get();
-        const auto* base_texture_default_uniform_block = erhe::graphics::Instance::info.use_bindless_texture
-            ? nullptr
-            : textured_default_uniform_block.get();
-
-        m_shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-
-        // Not available on Dell laptop.
-        //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
-
-        using CI = erhe::graphics::Shader_stages::Create_info;
-
-        std::vector<Program_prototype> prototypes;
-
-        prototypes.emplace_back(&standard                , make_prototype(CI{ .name = "standard"                , .default_uniform_block = shadow_default_uniform_block, .dump_interface = true } ));
-        prototypes.emplace_back(&anisotropic_slope       , make_prototype(CI{ .name = "anisotropic_slope"       , .default_uniform_block = shadow_default_uniform_block} ));
-        prototypes.emplace_back(&anisotropic_engine_ready, make_prototype(CI{ .name = "anisotropic_engine_ready", .default_uniform_block = shadow_default_uniform_block} ));
-        prototypes.emplace_back(&circular_brushed_metal  , make_prototype(CI{ .name = "circular_brushed_metal"  , .default_uniform_block = shadow_default_uniform_block} ));
-        prototypes.emplace_back(&brdf_slice              , make_prototype(CI{ .name = "brdf_slice"              , .default_uniform_block = shadow_default_uniform_block} ));
-        prototypes.emplace_back(&brush                   , make_prototype(CI{ .name = "brush"                   , .default_uniform_block = shadow_default_uniform_block} ));
-        prototypes.emplace_back(&textured                , make_prototype(CI{ .name = "textured"                , .default_uniform_block = base_texture_default_uniform_block } ));
-        prototypes.emplace_back(&sky                     , make_prototype(CI{ .name = "sky"                     , .default_uniform_block = base_texture_default_uniform_block } ));
-        prototypes.emplace_back(&wide_lines_draw_color   , make_prototype(CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}}));
-        prototypes.emplace_back(&wide_lines_vertex_color , make_prototype(CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}}));
-        prototypes.emplace_back(&points                  , make_prototype(CI{ .name = "points" } ));
-        prototypes.emplace_back(&depth                   , make_prototype(CI{ .name = "depth"  } ));
-        prototypes.emplace_back(&id                      , make_prototype(CI{ .name = "id"     } ));
-        prototypes.emplace_back(&tool                    , make_prototype(CI{ .name = "tool"   } ));
-        prototypes.emplace_back(&debug_depth             , make_prototype(CI{ .name = "visualize_depth", .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_normal            , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_NORMAL",             "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_tangent           , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_bitangent         , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_texcoord          , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_vertex_color_rgb  , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_vertex_color_alpha, make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_omega_o           , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_O",            "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_omega_i           , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_I",            "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_omega_g           , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-        prototypes.emplace_back(&debug_misc              , make_prototype(CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = shadow_default_uniform_block } ));
-
-        // Compile shaders
-        {
-            ERHE_PROFILE_SCOPE("compile shaders");
-
-            for (auto& entry : prototypes) {
-                entry.prototype->compile_shaders();
-            }
-        }
-
-        // Link programs
-        {
-            ERHE_PROFILE_SCOPE("link programs");
-
-            for (auto& entry : prototypes) {
-                if (!entry.prototype->link_program()) {
-                    entry.prototype.reset();
-                }
-            }
-        }
-
-        {
-            ERHE_PROFILE_SCOPE("post link");
-
-            for (auto& entry : prototypes) {
-                if (entry.prototype) {
-                    *entry.program = make_program(*entry.prototype.get());
-                }
-            }
-        }
-
-        g_programs = this;
-
+            )
     }
-
-    ~Programs_impl() noexcept override
-    {
-        ERHE_VERIFY(g_programs == this);
-        g_programs = nullptr;
+    , nearest_sampler{
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Programs nearest"
+        }
     }
+    , linear_sampler{
+        erhe::graphics::Sampler_create_info{
+            .min_filter = gl::Texture_min_filter::linear,
+            .mag_filter = gl::Texture_mag_filter::linear,
+            .debug_label = "Programs linear"
+        }
+    }
+    , linear_mipmap_linear_sampler{
+        erhe::graphics::Sampler_create_info{
+            .min_filter = gl::Texture_min_filter::linear_mipmap_linear,
+            .mag_filter = gl::Texture_mag_filter::linear,
+            .debug_label = "Programs linear mipmap"
+        }
+    }
+    , brdf_slice              {"brdf_slice-not_loaded"}
+    , brush                   {"brush-not_loaded"}
+    , standard                {"standard-not_loaded"}
+    , anisotropic_slope       {"anisotropic_slope-not_loaded"}
+    , anisotropic_engine_ready{"anisotropic_engine_ready-not_loaded"}
+    , circular_brushed_metal  {"circular_brushed_metal-not_loaded"}
+    , textured                {"textured-not_loaded"}
+    , sky                     {"sky-not_loaded"}
+    , wide_lines_draw_color   {"wide_lines_draw_color-not_loaded"}
+    , wide_lines_vertex_color {"wide_lines_vertex_color-not_loaded"}
+    , points                  {"points-not_loaded"}
+    , depth                   {"depth-not_loaded"}
+    , id                      {"id-not_loaded"}
+    , tool                    {"tool-not_loaded"}
+    , debug_depth             {"debug_depth-not_loaded"}
+    , debug_normal            {"debug_normal-not_loaded"}
+    , debug_tangent           {"debug_tangent-not_loaded"}
+    , debug_bitangent         {"debug_bitangent-not_loaded"}
+    , debug_texcoord          {"debug_texcoord-not_loaded"}
+    , debug_vertex_color_rgb  {"debug_vertex_color_rgb-not_loaded"}
+    , debug_vertex_color_alpha{"debug_vertex_color_alpha-not_loaded"}
+    , debug_omega_o           {"debug_omega_o-not_loaded"}
+    , debug_omega_i           {"debug_omega_i-not_loaded"}
+    , debug_omega_g           {"debug_omega_g-not_loaded"}
+    , debug_misc              {"debug_misc-not_loaded"}
 
-private:
-    class Program_prototype
+{
+
+    // Not available on Dell laptop.
+    //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
+
+    std::vector<Shader_stages_builder> prototypes;
+
+    using CI = erhe::graphics::Shader_stages_create_info;
+
+    auto add_shader = [
+        this,
+        &graphics_instance,
+        &program_interface,
+        &prototypes
+    ](
+        erhe::graphics::Shader_stages&              shader_stages,
+        erhe::graphics::Shader_stages_create_info&& create_info
+    )
     {
-    public:
-        Program_prototype();
-
-        Program_prototype(
-            std::unique_ptr<erhe::graphics::Shader_stages>*             program,
-            std::unique_ptr<erhe::graphics::Shader_stages::Prototype>&& prototype
+        prototypes.emplace_back(
+            shader_stages,
+            graphics_instance,
+            program_interface,
+            shader_path,
+            std::move(create_info)
         );
-
-        std::unique_ptr<erhe::graphics::Shader_stages>*           program{nullptr};
-        std::unique_ptr<erhe::graphics::Shader_stages::Prototype> prototype;
     };
 
-    void queue(Program_prototype& program_prototype);
+    add_shader(standard                , CI{ .instance = graphics_instance, .name = "standard"                , .default_uniform_block = &default_uniform_block, .dump_interface = true } );
+    add_shader(anisotropic_slope       , CI{ .instance = graphics_instance, .name = "anisotropic_slope"       , .default_uniform_block = &default_uniform_block } );
+    add_shader(anisotropic_engine_ready, CI{ .instance = graphics_instance, .name = "anisotropic_engine_ready", .default_uniform_block = &default_uniform_block } );
+    add_shader(circular_brushed_metal  , CI{ .instance = graphics_instance, .name = "circular_brushed_metal"  , .default_uniform_block = &default_uniform_block } );
+    add_shader(brdf_slice              , CI{ .instance = graphics_instance, .name = "brdf_slice"              , .default_uniform_block = &default_uniform_block } );
+    add_shader(brush                   , CI{ .instance = graphics_instance, .name = "brush"                   , .default_uniform_block = &default_uniform_block } );
+    add_shader(textured                , CI{ .instance = graphics_instance, .name = "textured"                , .default_uniform_block = &default_uniform_block } );
+    add_shader(sky                     , CI{ .instance = graphics_instance, .name = "sky"                     , .default_uniform_block = &default_uniform_block } );
+    add_shader(wide_lines_draw_color   , CI{ .instance = graphics_instance, .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}});
+    add_shader(wide_lines_vertex_color , CI{ .instance = graphics_instance, .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}});
+    add_shader(points                  , CI{ .instance = graphics_instance, .name = "points" } );
+    add_shader(depth                   , CI{ .instance = graphics_instance, .name = "depth"  } );
+    add_shader(id                      , CI{ .instance = graphics_instance, .name = "id"     } );
+    add_shader(tool                    , CI{ .instance = graphics_instance, .name = "tool"   } );
+    add_shader(debug_depth             , CI{ .instance = graphics_instance, .name = "visualize_depth", .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_normal            , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_NORMAL",             "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_tangent           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_bitangent         , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_texcoord          , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vertex_color_rgb  , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vertex_color_alpha, CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_omega_o           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_O",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_omega_i           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_I",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_omega_g           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_misc              , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
 
-    [[nodiscard]] auto make_prototype(
-        erhe::graphics::Shader_stages::Create_info create_info
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages::Prototype>;
+    // Compile shaders
+    {
+        ERHE_PROFILE_SCOPE("compile shaders");
 
-    [[nodiscard]] auto make_program(
-        erhe::graphics::Shader_stages::Prototype& prototype
-    ) -> std::unique_ptr<erhe::graphics::Shader_stages>;
+        for (auto& entry : prototypes) {
+            entry.prototype.compile_shaders();
+        }
+    }
 
-    std::filesystem::path m_shader_path;
-};
+    // Link programs
+    {
+        ERHE_PROFILE_SCOPE("link programs");
 
-using erhe::graphics::Shader_stages;
+        for (auto& entry : prototypes) {
+            entry.prototype.link_program();
+        }
+    }
 
-IPrograms* g_programs{nullptr};
+    {
+        ERHE_PROFILE_SCOPE("post link");
 
-Programs::Programs()
-    : erhe::components::Component{c_type_name}
-{
-}
-
-Programs::~Programs() noexcept
-{
-    ERHE_VERIFY(g_programs == nullptr);
-}
-
-void Programs::deinitialize_component()
-{
-    m_impl.reset();
-}
-
-void Programs::declare_required_components()
-{
-    require<erhe::application::Configuration      >();
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Shader_monitor     >();
-    require<erhe::renderer::Program_interface     >();
-    require<Mesh_memory>();
-}
-
-void Programs::initialize_component()
-{
-    m_impl = std::make_unique<Programs_impl>();
-}
-
-auto Programs_impl::make_prototype(
-    erhe::graphics::Shader_stages::Create_info create_info
-) -> std::unique_ptr<erhe::graphics::Shader_stages::Prototype>
-{
-    return erhe::renderer::g_program_interface->shader_resources->make_prototype(
-        m_shader_path,
-        create_info
-    );
-}
-
-auto Programs_impl::make_program(
-    erhe::graphics::Shader_stages::Prototype& prototype
-) -> std::unique_ptr<erhe::graphics::Shader_stages>
-{
-    return erhe::renderer::g_program_interface->shader_resources->make_program(prototype);
-}
-
-Programs_impl::Program_prototype::Program_prototype() = default;
-
-Programs_impl::Program_prototype::Program_prototype(
-    std::unique_ptr<erhe::graphics::Shader_stages>*             program,
-    std::unique_ptr<erhe::graphics::Shader_stages::Prototype>&& prototype
-)
-    : program  {program}
-    , prototype{std::move(prototype)}
-{
+        for (auto& entry : prototypes) {
+            entry.shader_stages.reload(std::move(entry.prototype));
+        }
+    }
 }
 
 }

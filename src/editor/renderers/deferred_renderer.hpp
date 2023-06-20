@@ -17,6 +17,7 @@ namespace graphics
 {
 class Uniform_buffer;
 class Uniform_buffer_range;
+class Viewport;
 } // namespace graphics
 
 namespace mesh
@@ -28,7 +29,6 @@ namespace scene
 {
 class Camera;
 class Light;
-class Viewport;
 } // namespace scene
 
 } // namespace renderstack

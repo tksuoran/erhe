@@ -1,14 +1,23 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
+#include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/shader_stages.hpp"
+#include "erhe/graphics/sampler.hpp"
 
+#include <filesystem>
 #include <memory>
 
 namespace erhe::graphics
 {
+    class Instance;
     class Sampler;
     class Shader_resource;
     class Shader_stages;
+}
+
+namespace erhe::scene_renderer
+{
+    class Program_interface;
 }
 
 namespace example {
@@ -23,52 +32,27 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Standard"
 };
 
-class IPrograms
+class Programs
 {
 public:
-    virtual ~IPrograms() noexcept;
+    Programs(
+        erhe::graphics::Instance&                graphics_instance,
+        erhe::scene_renderer::Program_interface& program_interface
+    );
 
     static constexpr std::size_t s_texture_unit_count = 15; // one reserved for shadows
 
     // Public members
-    std::unique_ptr<erhe::graphics::Shader_resource> default_uniform_block;   // for non-bindless textures
-
-    int                                              shadow_texture_unit{15};
-    int                                              base_texture_unit{0};
-    std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
-    std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
-    std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;
-
-    std::unique_ptr<erhe::graphics::Shader_stages> standard;
-    //std::unique_ptr<erhe::graphics::Shader_stages> sky;
+    int                              shadow_texture_unit{15};
+    int                              base_texture_unit{0};
+    std::filesystem::path            shader_path;
+    erhe::graphics::Shader_resource  default_uniform_block;   // for non-bindless textures
+    erhe::graphics::Shader_resource* shadow_sampler;
+    erhe::graphics::Shader_resource* texture_sampler;
+    erhe::graphics::Sampler          nearest_sampler;
+    erhe::graphics::Sampler          linear_sampler;
+    erhe::graphics::Sampler          linear_mipmap_linear_sampler;
+    erhe::graphics::Shader_stages    standard;
 };
-
-class Programs_impl;
-
-class Programs
-    : public erhe::components::Component
-{
-public:
-    static constexpr std::string_view c_type_name{"Programs"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Programs      ();
-    ~Programs     () noexcept override;
-    Programs      (const Programs&) = delete;
-    void operator=(const Programs&) = delete;
-    Programs      (Programs&&)      = delete;
-    void operator=(Programs&&)      = delete;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
-
-private:
-    std::unique_ptr<Programs_impl> m_impl;
-};
-
-extern IPrograms* g_programs;
 
 }

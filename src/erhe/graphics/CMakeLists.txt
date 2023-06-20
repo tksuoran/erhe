@@ -4,12 +4,10 @@ add_library(erhe::graphics ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    buffer.cpp
-    buffer.hpp
     buffer_transfer_queue.cpp
     buffer_transfer_queue.hpp
-    instance.cpp
-    instance.hpp
+    buffer.cpp
+    buffer.hpp
     debug.cpp
     debug.hpp
     fragment_output.cpp
@@ -18,12 +16,16 @@ erhe_target_sources_grouped(
     fragment_outputs.hpp
     framebuffer.cpp
     framebuffer.hpp
+    gl_context_provider.cpp
+    gl_context_provider.hpp
     gl_objects.cpp
     gl_objects.hpp
     gpu_timer.cpp
     gpu_timer.hpp
     graphics_log.cpp
     graphics_log.hpp
+    instance.cpp
+    instance.hpp
     opengl_state_tracker.cpp
     opengl_state_tracker.hpp
     pipeline.cpp
@@ -33,6 +35,8 @@ erhe_target_sources_grouped(
     renderbuffer.hpp
     sampler.cpp
     sampler.hpp
+    shader_monitor.cpp
+    shader_monitor.hpp
     shader_resource.cpp
     shader_resource.hpp
     shader_stages_create_info.cpp
@@ -40,16 +44,6 @@ erhe_target_sources_grouped(
     shader_stages.cpp
     shader_stages.hpp
     span.hpp
-    texture.cpp
-    texture.hpp
-    vertex_attribute_mapping.cpp
-    vertex_attribute_mapping.hpp
-    vertex_attribute_mappings.cpp
-    vertex_attribute_mappings.hpp
-    vertex_attribute.cpp
-    vertex_attribute.hpp
-    vertex_format.cpp
-    vertex_format.hpp
     state/color_blend_state.cpp
     state/color_blend_state.hpp
     state/depth_stencil_state.cpp
@@ -62,6 +56,16 @@ erhe_target_sources_grouped(
     state/vertex_input_state.hpp
     state/viewport_state.cpp
     state/viewport_state.hpp
+    texture.cpp
+    texture.hpp
+    vertex_attribute_mapping.cpp
+    vertex_attribute_mapping.hpp
+    vertex_attribute_mappings.cpp
+    vertex_attribute_mappings.hpp
+    vertex_attribute.cpp
+    vertex_attribute.hpp
+    vertex_format.cpp
+    vertex_format.hpp
 )
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
@@ -88,7 +92,8 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
-        erhe::components
+        concurrentqueue
+        erhe::configuration
         erhe::gl
         fmt::fmt
         glm::glm

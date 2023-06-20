@@ -23,8 +23,8 @@ protected:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
     // Public API
     void add_entry(Entry&& entry);
@@ -46,12 +46,11 @@ public:
     };
 
     explicit Node_transform_operation(const Parameters& parameters);
-    ~Node_transform_operation() noexcept override;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
 private:
     Parameters m_parameters;
@@ -69,8 +68,8 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
 private:
     std::shared_ptr<erhe::scene::Node_attachment> m_attachment;
@@ -92,8 +91,8 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
 private:
     std::shared_ptr<erhe::scene::Node> m_child_node;
@@ -118,8 +117,8 @@ public:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
 private:
     std::shared_ptr<erhe::scene::Node> m_child_node;

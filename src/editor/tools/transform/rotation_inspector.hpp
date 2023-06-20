@@ -7,9 +7,8 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/message_bus/message_bus.hpp"
 #include "erhe/physics/imotion_state.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
@@ -19,18 +18,13 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-namespace erhe::application
-{
+namespace erhe::imgui {
     class Value_edit_state;
 }
-
-namespace erhe::physics
-{
+namespace erhe::physics {
     enum class Motion_mode : unsigned int;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Mesh;
     class Node;
 }
@@ -41,8 +35,7 @@ namespace editor
 class Rotation_inspector
 {
 public:
-    enum class Representation : unsigned int
-    {
+    enum class Representation : unsigned int {
         e_quaternion   = 0,
         e_matrix       = 1,
         e_axis_angle   = 2,
@@ -50,16 +43,14 @@ public:
         e_count        = 4
     };
 
-    static constexpr const char* c_representation_strings[] =
-    {
+    static constexpr const char* c_representation_strings[] = {
         "Quaternion",
         "Matrix",
         "Axis-angle",
         "Euler Angles"
     };
 
-    enum class Euler_angle_order : unsigned int
-    {
+    enum class Euler_angle_order : unsigned int {
         e_xyz   =  0,
         e_yxz   =  1,
         e_xzx   =  2,
@@ -75,8 +66,7 @@ public:
         e_count = 12
     };
 
-    static constexpr const char* c_euler_strings[] =
-    {
+    static constexpr const char* c_euler_strings[] = {
         // Proper euler angles
         "XYX",
         "XZX",
@@ -108,7 +98,7 @@ public:
     void update_axis_angle_from_quaternion             ();
     void update_matrix_and_quaternion_from_euler_angles();
 
-    void imgui(erhe::application::Value_edit_state& value_edit_state, glm::quat rotation);
+    void imgui(erhe::imgui::Value_edit_state& value_edit_state, glm::quat rotation);
 
     [[nodiscard]] auto get_matrix     () -> glm::mat4;
     [[nodiscard]] auto get_quaternion () -> glm::quat;

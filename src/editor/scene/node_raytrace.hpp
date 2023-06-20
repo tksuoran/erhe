@@ -6,18 +6,10 @@
 
 #include <functional>
 
-namespace erhe::application
-{
-    class Line_renderer;
-}
-
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
-
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
     class IBuffer;
     class IGeometry;
     class IInstance;
@@ -25,9 +17,10 @@ namespace erhe::raytrace
     class Hit;
     class Ray;
 }
-
-namespace erhe::scene
-{
+namespace erhe::renderer {
+    class Line_renderer;
+}
+namespace erhe::scene {
     class Mesh;
 }
 
@@ -115,10 +108,10 @@ public:
 };
 
 void draw_ray_hit(
-    erhe::application::Line_renderer& line_renderer,
-    const erhe::raytrace::Ray&        ray,
-    const erhe::raytrace::Hit&        hit,
-    const Ray_hit_style&              style = {}
+    erhe::renderer::Line_renderer& line_renderer,
+    const erhe::raytrace::Ray&     ray,
+    const erhe::raytrace::Hit&     hit,
+    const Ray_hit_style&           style = {}
 );
 
 [[nodiscard]] auto project_ray(

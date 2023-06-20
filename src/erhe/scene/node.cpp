@@ -366,8 +366,7 @@ void Node::handle_remove_child(
     const auto i = std::remove_if(
         node_data.children.begin(),
         node_data.children.end(),
-        [child_node](const std::shared_ptr<Node>& node)
-        {
+        [child_node](const std::shared_ptr<Node>& node) {
             return node.get() == child_node;
         }
     );
@@ -392,8 +391,7 @@ void Node::handle_remove_attachment(
     const auto i = std::remove_if(
         node_data.attachments.begin(),
         node_data.attachments.end(),
-        [attachment_to_remove](const std::shared_ptr<Node_attachment>& entry)
-        {
+        [attachment_to_remove](const std::shared_ptr<Node_attachment>& entry) {
             return entry.get() == attachment_to_remove;
         }
     );

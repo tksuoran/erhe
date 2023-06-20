@@ -1,15 +1,12 @@
 #include "map.hpp"
 
+#include "hextiles.hpp"
 #include "tiles.hpp"
 
 #include <gsl/assert>
 
 namespace hextiles
 {
-
-Map::Map()
-{
-}
 
 auto Map::width() const -> int
 {
@@ -22,8 +19,8 @@ auto Map::height() const -> int
 }
 
 void Map::reset(
-    int width,
-    int height
+    const int width,
+    const int height
 )
 {
     Expects(width > 0);
@@ -207,11 +204,11 @@ void Map::hex_circle(
 
     for (int radius = r0; radius <= r1; ++radius) {
         auto position = center_position;
-        for (int s = 0; s < radius; ++s) {
+        for (int i = 0; i < radius; ++i) {
             position = wrap(position.neighbor(direction_north));
         }
         for (auto direction = direction_first; direction < direction_count; ++direction) {
-            for (int s = 0; s < radius; ++s) {
+            for (int i = 0; i < radius; ++i) {
                 position = wrap(position.neighbor((direction + offset) % direction_count));
                 op(position);
             }
@@ -237,84 +234,6 @@ auto Map::distance(
     return dx > dy * 2
         ? dx
         : dy + dx / 2;
-}
-
-void Map::update_group_terrain(Tile_coordinate position)
-{
-    const terrain_tile_t terrain_tile = get_terrain_tile(position);
-    const terrain_t      terrain      = g_tiles->get_terrain_from_tile(terrain_tile);
-    const auto&          terrain_type = g_tiles->get_terrain_type(terrain);
-    int                  group        = terrain_type.group;
-    if (group < 0) {
-        return;
-    }
-
-    uint32_t neighbor_mask;
-    bool promote;
-    bool demote;
-    size_t counter = 0u;
-    do {
-        promote = false;
-        demote  = false;
-        const Terrain_group& terrain_group = g_tiles->get_terrain_group(group);
-
-        neighbor_mask = 0u;
-        for (
-            direction_t direction = direction_first;
-            direction <= direction_last;
-            ++direction
-        ) {
-            const Tile_coordinate neighbor_position     = neighbor(position, direction);
-            const terrain_tile_t  neighbor_terrain_tile = get_terrain_tile(neighbor_position);
-            const terrain_t       neighbor_terrain      = g_tiles->get_terrain_from_tile(neighbor_terrain_tile);
-            const int neighbor_group = g_tiles->get_terrain_type(neighbor_terrain).group;
-            if (
-                (neighbor_group == group) ||
-                (
-                    (terrain_group.link_group[0] >= 0) &&
-                    (neighbor_group == terrain_group.link_group[0])
-                ) ||
-                (
-                    (terrain_group.link_group[1] >= 0) &&
-                    (neighbor_group == terrain_group.link_group[1])
-                ) ||
-                (
-                    (terrain_group.link_first[0] > 0) &&
-                    (terrain_group.link_last [0] > 0) &&
-                    (neighbor_terrain >= terrain_group.link_first[0]) &&
-                    (neighbor_terrain <= terrain_group.link_last [0])
-                ) ||
-                (
-                    (terrain_group.link_first[1] > 0) &&
-                    (terrain_group.link_last [1] > 0) &&
-                    (neighbor_terrain >= terrain_group.link_first[1]) &&
-                    (neighbor_terrain <= terrain_group.link_last [1])
-                )
-            ) {
-                neighbor_mask = neighbor_mask | (1u << direction);
-            }
-            if (
-                (terrain_group.demoted >= 0) &&
-                (neighbor_group != group) &&
-                (neighbor_group != terrain_group.demoted)
-            ) {
-                demote = true;
-            }
-        }
-        promote = (neighbor_mask == direction_mask_all) && (terrain_group.promoted > 0);
-        Expects((promote && demote) == false);
-        if (promote) {
-            group = terrain_group.promoted;
-        } else if (demote) {
-            group = terrain_group.demoted;
-        }
-    } while (
-        (promote || demote) &&
-        (++counter < 2U)
-    );
-
-    const terrain_tile_t updated_terrain_tile = g_tiles->get_terrain_group_tile(group, neighbor_mask);
-    set_terrain_tile(position, updated_terrain_tile);
 }
 
 } // namespace hextiles

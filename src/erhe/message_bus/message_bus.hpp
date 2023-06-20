@@ -14,14 +14,6 @@ template <typename Message_type>
 class Message_bus
 {
 public:
-    Message_bus()
-    {
-    }
-
-    ~Message_bus()
-    {
-    }
-
     void add_receiver(std::function<void(Message_type&)> message_receiver)
     {
         m_receivers.push_back(message_receiver);

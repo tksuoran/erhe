@@ -1,6 +1,8 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "rendertarget_imgui_viewport.hpp"
+
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "rendertarget_mesh.hpp"
 #include "scene/viewport_window.hpp"
@@ -12,14 +14,14 @@
 #   include "erhe/xr/xr_action.hpp"
 #endif
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_renderer.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/scoped_imgui_context.hpp"
-#include "erhe/application/application_view.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe/imgui/imgui_window.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/scoped_imgui_context.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <GLFW/glfw3.h> // TODO Fix dependency ?
 
@@ -30,30 +32,37 @@ namespace editor
 {
 
 Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
-    Rendertarget_mesh*     rendertarget_mesh,
-    const std::string_view name,
-    const bool             imgui_ini
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_context&                 editor_context,
+    Rendertarget_mesh*              rendertarget_mesh,
+    const std::string_view          name,
+    const bool                      imgui_ini
 )
-    : erhe::application::Imgui_viewport{
+    : erhe::imgui::Imgui_viewport{
+        rendergraph,
+        imgui_windows,
         name,
         imgui_ini,
-        erhe::application::g_imgui_renderer->get_font_atlas()
+        imgui_renderer.get_font_atlas()
     }
+    , m_context          {editor_context}
     , m_rendertarget_mesh{rendertarget_mesh}
 {
     register_output(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
         "rendertarget texture",
-        erhe::application::Rendergraph_node_key::rendertarget_texture
+        erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
     );
 
-    erhe::application::g_imgui_renderer->use_as_backend_renderer_on_context(m_imgui_context);
+    imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);
 
     ImGuiIO& io = m_imgui_context->IO;
     IM_ASSERT(io.BackendPlatformUserData == NULL && "Already initialized a platform backend!");
     io.ConfigFlags             = io.ConfigFlags & ~ImGuiConfigFlags_DockingEnable;
     io.DisplaySize             = ImVec2{m_rendertarget_mesh->width(), m_rendertarget_mesh->height()};
-    io.FontDefault             = erhe::application::g_imgui_renderer->vr_primary_font();
+    io.FontDefault             = imgui_renderer.vr_primary_font();
     io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
     io.MouseDrawCursor         = true;
     io.BackendPlatformUserData = this;
@@ -101,17 +110,18 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     m_rendertarget_mesh->update_headset();
-#endif
 
+    auto& headset_view = *m_context.headset_view;
+#endif
     const auto pointer = m_rendertarget_mesh->get_pointer();
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (!g_headset_view->config.openxr) // TODO Figure out better way to combine different input methods
+    if (!headset_view.config.openxr) // TODO Figure out better way to combine different input methods
 #endif
     {
         if (pointer.has_value()) {
             if (!has_cursor()) {
-                on_event(erhe::application::Cursor_enter_event{.entered = true});
+                on_event(erhe::imgui::Cursor_enter_event{.entered = true});
             }
             const auto position = pointer.value();
             if (
@@ -121,7 +131,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
                 m_last_mouse_x = position.x;
                 m_last_mouse_y = position.y;
                 on_event(
-                    erhe::application::Mouse_move_event{
+                    erhe::imgui::Mouse_move_event{
                         .x = position.x,
                         .y = position.y
                     }
@@ -130,11 +140,11 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
             }
         } else {
             if (has_cursor()) {
-                on_event(erhe::application::Cursor_enter_event{.entered = false});
+                on_event(erhe::imgui::Cursor_enter_event{.entered = false});
                 m_last_mouse_x = -FLT_MAX;
                 m_last_mouse_y = -FLT_MAX;
                 on_event(
-                    erhe::application::Mouse_move_event{
+                    erhe::imgui::Mouse_move_event{
                         .x = -FLT_MAX,
                         .y = -FLT_MAX
                     }
@@ -144,8 +154,8 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
     }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    if (g_headset_view->config.openxr) {
-        const auto* headset = g_headset_view->get_headset();
+    if (headset_view.config.openxr) {
+        const auto* headset = headset_view.get_headset();
         ERHE_VERIFY(headset != nullptr);
 
         const auto* node = m_rendertarget_mesh->get_node();
@@ -174,7 +184,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
                 const auto window_position_opt = m_rendertarget_mesh->world_to_window(world_position);
                 if (window_position_opt.has_value()) {
                     if (!has_cursor()) {
-                        on_event(erhe::application::Cursor_enter_event{.entered = true});
+                        on_event(erhe::imgui::Cursor_enter_event{.entered = true});
                     }
                     mouse_has_position = true;
                     const auto position = window_position_opt.value();
@@ -185,7 +195,7 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
                         m_last_mouse_x = position.x;
                         m_last_mouse_y = position.y;
                         on_event(
-                            erhe::application::Mouse_move_event{
+                            erhe::imgui::Mouse_move_event{
                                 .x = position.x,
                                 .y = position.y
                             }
@@ -195,11 +205,11 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
             }
             if (!mouse_has_position) {
                 if (has_cursor()) {
-                    on_event(erhe::application::Cursor_enter_event{.entered = false});
+                    on_event(erhe::imgui::Cursor_enter_event{.entered = false});
                     m_last_mouse_x = -FLT_MAX;
                     m_last_mouse_y = -FLT_MAX;
                     on_event(
-                        erhe::application::Mouse_move_event{
+                        erhe::imgui::Mouse_move_event{
                             .x = -FLT_MAX,
                             .y = -FLT_MAX
                         }
@@ -263,17 +273,17 @@ void Rendertarget_imgui_viewport::execute_rendergraph_node()
         return;
     }
 
-    erhe::application::Imgui_viewport& imgui_viewport = *this;
-    erhe::application::Scoped_imgui_context imgui_context{imgui_viewport};
+    erhe::imgui::Imgui_viewport& imgui_viewport = *this;
+    erhe::imgui::Scoped_imgui_context imgui_context{imgui_viewport};
 
     m_rendertarget_mesh->bind();
     m_rendertarget_mesh->clear(m_clear_color);
-    erhe::application::g_imgui_renderer->render_draw_data();
-    m_rendertarget_mesh->render_done();
+    m_context.imgui_renderer->render_draw_data();
+    m_rendertarget_mesh->render_done(m_context);
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_texture(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -285,7 +295,7 @@ auto Rendertarget_imgui_viewport::get_consumer_input_texture(
 }
 
 auto Rendertarget_imgui_viewport::get_producer_output_texture(
-    erhe::application::Resource_routing resource_routing,
+    erhe::rendergraph::Resource_routing resource_routing,
     int                                 key,
     int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -297,7 +307,7 @@ auto Rendertarget_imgui_viewport::get_producer_output_texture(
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
@@ -309,15 +319,15 @@ auto Rendertarget_imgui_viewport::get_consumer_input_framebuffer(
 }
 
 auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return erhe::scene::Viewport{
+    return erhe::toolkit::Viewport{
         .x      = 0,
         .y      = 0,
         .width  = static_cast<int>(m_rendertarget_mesh->width()),
@@ -327,15 +337,15 @@ auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
 }
 
 auto Rendertarget_imgui_viewport::get_producer_output_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return erhe::scene::Viewport{
+    return erhe::toolkit::Viewport{
         .x      = 0,
         .y      = 0,
         .width  = static_cast<int>(m_rendertarget_mesh->width()),
@@ -350,11 +360,11 @@ auto Rendertarget_imgui_viewport::get_producer_output_viewport(
 
 #if 0
     if (m_hand_tracker) {
-        m_rendertarget_node->update_headset(*m_headset_view.get());
+        m_rendertarget_node->update_headset(headset_view);
         const auto& pointer_finger_opt = m_rendertarget_node->get_pointer_finger();
         if (pointer_finger_opt.has_value()) {
             const auto& pointer_finger           = pointer_finger_opt.value();
-            m_headset_view->add_finger_input(pointer_finger);
+            headset_view.add_finger_input(pointer_finger);
             const auto  finger_world_position    = pointer_finger.finger_point;
             const auto  viewport_world_position  = pointer_finger.point;
             //const float distance                 = glm::distance(finger_world_position, viewport_world_position);
@@ -382,7 +392,7 @@ auto Rendertarget_imgui_viewport::get_producer_output_viewport(
                 }
             }
 
-            ////const float finger_press_threshold = m_headset_view->finger_to_viewport_distance_threshold();
+            ////const float finger_press_threshold = headset_view.finger_to_viewport_distance_threshold();
             ////if ((distance < finger_press_threshold * 0.98f) && (!m_last_mouse_finger)) {
             ////    m_last_mouse_finger = true;
             ////    ImGuiIO& io = m_imgui_context->IO;

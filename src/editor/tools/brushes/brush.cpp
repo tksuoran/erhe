@@ -1,4 +1,7 @@
 #include "tools/brushes/brush.hpp"
+
+#include "editor_context.hpp"
+#include "editor_settings.hpp"
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -145,7 +148,6 @@ void Brush::late_initialize()
     }
 
     if (
-        g_physics_window->config.static_enable &&
         !data.collision_shape &&
         !data.collision_shape_generator
     ) {

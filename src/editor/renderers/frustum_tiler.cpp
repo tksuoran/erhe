@@ -1,3 +1,4 @@
+#if 0
 #include "renderers/frustum_tiler.hpp"
 #include "editor_log.hpp"
 
@@ -298,9 +299,9 @@ auto Frustum_tiler::get_center(const std::vector<glm::vec2>& points) -> glm::vec
 }
 
 void Frustum_tiler::get_frustum_hull(
-    const glm::mat4&            light_clip_from_world,
-    const erhe::scene::Camera&  view_camera,
-    const erhe::scene::Viewport view_camera_viewport
+    const glm::mat4&              light_clip_from_world,
+    const erhe::scene::Camera&    view_camera,
+    const erhe::toolkit::Viewport view_camera_viewport
 )
 {
     static constexpr std::array<glm::vec3, 8> clip_space_points = {
@@ -443,10 +444,10 @@ auto Frustum_tiler::frustum_tile_intersection(Tile tile) const -> bool
 }
 
 void Frustum_tiler::update(
-    int                         texture_z,
-    const glm::mat4&            clip_from_world,
-    const erhe::scene::Camera&  view_camera,
-    const erhe::scene::Viewport view_camera_viewport
+    int                           texture_z,
+    const glm::mat4&              clip_from_world,
+    const erhe::scene::Camera&    view_camera,
+    const erhe::toolkit::Viewport view_camera_viewport
 )
 {
     if (
@@ -594,3 +595,4 @@ void Frustum_tiler::update(
 }
 
 } // namespace editor
+#endif

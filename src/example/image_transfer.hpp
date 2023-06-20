@@ -1,11 +1,16 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
 #include "erhe/graphics/gl_objects.hpp"
 
 #include <gsl/span>
 
 #include <memory>
+
+namespace erhe::graphics
+{
+    class Instance;
+    class Scoped_gl_context;
+}
 
 namespace example
 {
@@ -16,7 +21,7 @@ public:
     class Slot
     {
     public:
-        Slot();
+        explicit Slot(erhe::graphics::Instance& graphics_instance);
 
         [[nodiscard]] auto begin_span_for(
             const int                 width,
@@ -38,6 +43,7 @@ public:
         void map();
         void unmap();
 
+        erhe::graphics::Instance&  m_graphics_instance;
         gl::Buffer_storage_mask    m_storage_mask;
         gl::Map_buffer_access_mask m_access_mask;
 
@@ -46,14 +52,13 @@ public:
         erhe::graphics::Gl_buffer m_pbo;
     };
 
-    Image_transfer();
+    explicit Image_transfer(erhe::graphics::Instance& graphics_instance);
 
-    // Public API
     [[nodiscard]] auto get_slot() -> Slot&;
 
 private:
-    std::size_t                          m_index{0};
-    std::unique_ptr<std::array<Slot, 4>> m_slots;
+    std::size_t         m_index{0};
+    std::array<Slot, 4> m_slots;
 };
 
 } // namespace example

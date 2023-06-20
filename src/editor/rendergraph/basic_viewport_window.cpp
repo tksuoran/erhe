@@ -3,7 +3,7 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 
-#include "erhe/application/window.hpp"
+#include "erhe/toolkit/window.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 
 
@@ -13,18 +13,25 @@ namespace editor
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
 
-Basic_viewport_window::Basic_viewport_window()
-    : erhe::application::Sink_rendergraph_node{
-        std::string{"(default constructed Basic_viewport_window)"}
-    }
-{
-}
+//Basic_viewport_window::Basic_viewport_window(
+//    erhe::rendergraph::Rendergraph&         rendergraph,
+//    const std::string_view                  name,
+//    const std::shared_ptr<Viewport_window>& viewport_window
+//)
+//    : erhe::rendergraph::Sink_rendergraph_node{
+//        rendergraph,
+//        std::string{"(default constructed Basic_viewport_window)"}
+//    }
+//{
+//}
 
 Basic_viewport_window::Basic_viewport_window(
+    erhe::rendergraph::Rendergraph&         rendergraph,
     const std::string_view                  name,
     const std::shared_ptr<Viewport_window>& viewport_window
 )
-    : erhe::application::Sink_rendergraph_node{
+    : erhe::rendergraph::Sink_rendergraph_node{
+        rendergraph,
         std::string{name}
     }
     , m_viewport_window{viewport_window}
@@ -36,9 +43,9 @@ Basic_viewport_window::Basic_viewport_window(
     m_viewport.height = 0;
 
     register_input(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
         "viewport",
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
     // "window" is slot / pseudo-resource which allows use rendergraph connection
@@ -48,17 +55,10 @@ Basic_viewport_window::Basic_viewport_window(
     //
     // TODO Imgui_renderer should carry dependencies using Rendergraph.
     register_output(
-        erhe::application::Resource_routing::None,
+        erhe::rendergraph::Resource_routing::None,
         "window",
-        erhe::application::Rendergraph_node_key::window
+        erhe::rendergraph::Rendergraph_node_key::window
     );
-}
-
-Basic_viewport_window::~Basic_viewport_window()
-{
-    if (g_viewport_windows != nullptr) {
-        g_viewport_windows->erase(this);
-    }
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_viewport_window() const -> std::shared_ptr<Viewport_window>
@@ -67,33 +67,33 @@ Basic_viewport_window::~Basic_viewport_window()
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_consumer_input_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
     static_cast<void>(key);
-    //ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::window); TODO
+    //ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::window); TODO
     return get_viewport();
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_producer_output_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
     static_cast<void>(key);
-    //ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::window); TODO
+    //ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::window); TODO
     return get_viewport();
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_consumer_input_texture(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -105,7 +105,7 @@ Basic_viewport_window::~Basic_viewport_window()
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_producer_output_texture(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -117,7 +117,7 @@ Basic_viewport_window::~Basic_viewport_window()
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_consumer_input_framebuffer(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
@@ -129,7 +129,7 @@ Basic_viewport_window::~Basic_viewport_window()
 }
 
 [[nodiscard]] auto Basic_viewport_window::get_producer_output_framebuffer(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
 ) const -> std::shared_ptr<erhe::graphics::Framebuffer>
@@ -140,18 +140,18 @@ Basic_viewport_window::~Basic_viewport_window()
     return {};
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_viewport() const -> const erhe::scene::Viewport&
+[[nodiscard]] auto Basic_viewport_window::get_viewport() const -> const erhe::toolkit::Viewport&
 {
     return m_viewport;
 }
 
-void Basic_viewport_window::set_viewport(erhe::scene::Viewport viewport)
+void Basic_viewport_window::set_viewport(erhe::toolkit::Viewport viewport)
 {
     m_viewport = viewport;
 
     const auto viewport_window = m_viewport_window.lock();
     if (viewport_window) {
-        viewport_window->set_window_viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+        viewport_window->set_window_viewport(viewport);
     }
 }
 

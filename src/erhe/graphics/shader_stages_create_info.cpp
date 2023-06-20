@@ -33,7 +33,7 @@ auto glsl_token(gl::Attribute_type type) -> const char*
     }
 }
 
-auto Shader_stages::Create_info::attributes_source() const -> std::string
+auto Shader_stages_create_info::attributes_source() const -> std::string
 {
     std::stringstream sb;
 
@@ -55,7 +55,7 @@ auto Shader_stages::Create_info::attributes_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages::Create_info::fragment_outputs_source() const -> std::string
+auto Shader_stages_create_info::fragment_outputs_source() const -> std::string
 {
     std::stringstream sb;
 
@@ -68,7 +68,7 @@ auto Shader_stages::Create_info::fragment_outputs_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages::Create_info::struct_types_source() const -> std::string
+auto Shader_stages_create_info::struct_types_source() const -> std::string
 {
     std::stringstream sb;
 
@@ -85,7 +85,7 @@ auto Shader_stages::Create_info::struct_types_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages::Create_info::interface_blocks_source() const -> std::string
+auto Shader_stages_create_info::interface_blocks_source() const -> std::string
 {
     std::stringstream sb;
 
@@ -101,7 +101,7 @@ auto Shader_stages::Create_info::interface_blocks_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages::Create_info::interface_source() const -> std::string
+auto Shader_stages_create_info::interface_source() const -> std::string
 {
     std::stringstream sb;
     sb << attributes_source      ();
@@ -111,12 +111,12 @@ auto Shader_stages::Create_info::interface_source() const -> std::string
     return sb.str();
 }
 
-auto Shader_stages::Create_info::final_source(
+auto Shader_stages_create_info::final_source(
     const Shader_stage& shader
 ) const -> std::string
 {
     std::stringstream sb;
-    sb << "#version " << Instance::info.glsl_version << " core\n\n";
+    sb << "#version " << instance.info.glsl_version << " core\n\n";
 
     if (!pragmas.empty()) {
         sb << "// Pragmas\n";
@@ -199,7 +199,7 @@ auto Shader_stages::Create_info::final_source(
     return sb.str(); // shaders.emplace_back(type, source, sb.str());
 }
 
-void Shader_stages::Create_info::add_interface_block(
+void Shader_stages_create_info::add_interface_block(
     gsl::not_null<const Shader_resource*> interface_block
 )
 {

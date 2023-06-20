@@ -2,6 +2,7 @@
 
 #include "tools/hover_tool.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
@@ -15,9 +16,9 @@
 #include "tools/grid_tool.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/renderer/text_renderer.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/material.hpp"
@@ -35,48 +36,25 @@
 namespace editor
 {
 
-Hover_tool* g_hover_tool{nullptr};
-
-Hover_tool::Hover_tool()
-    : erhe::application::Imgui_window{c_title}
-    , erhe::components::Component{c_type_name}
+Hover_tool::Hover_tool(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
+    Editor_message_bus&          editor_message_bus,
+    Tools&                       tools
+)
+    : Tool                     {editor_context}
+    , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover"}
 {
-}
+    set_flags      (Tool_flags::background | Tool_flags::toolbox);
+    set_description("Hover Tool");
+    tools.register_tool(this);
 
-Hover_tool::~Hover_tool() noexcept
-{
-    ERHE_VERIFY(g_hover_tool == this);
-    g_hover_tool = nullptr;
-}
-
-void Hover_tool::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-    require<Editor_message_bus>();
-    require<Tools             >();
-}
-
-void Hover_tool::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_hover_tool == nullptr);
-
-    set_flags(Tool_flags::background);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this, "hover");
-
-    set_description(c_title);
-    set_flags      (Tool_flags::toolbox);
-    g_tools->register_tool(this);
-
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
             Tool::on_message(message);
         }
     );
-
-    g_hover_tool = this;
 }
 
 void Hover_tool::imgui()
@@ -171,11 +149,9 @@ void Hover_tool::tool_render(
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (context.scene_view == nullptr) {
-        return;
-    }
-
-    const auto& entry = context.scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
+    const auto& entry = context.scene_view.get_nearest_hover(
+        Hover_entry::content_bit | Hover_entry::grid_bit
+    );
 
     if (
         !entry.valid ||
@@ -184,7 +160,7 @@ void Hover_tool::tool_render(
         return;
     }
 
-    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
     if (entry.normal.has_value()) {
         const auto p0 = entry.position.value();
@@ -238,7 +214,7 @@ void Hover_tool::tool_render(
 
     const std::string text = entry.get_name();
 
-    erhe::application::g_text_renderer->print(
+    m_context.text_renderer->print(
         position_at_fixed_depth,
         text_color,
         text
@@ -253,7 +229,7 @@ void Hover_tool::tool_render(
         "Position in world: {}",
         entry.position.value()
     );
-    erhe::application::g_text_renderer->print(
+    m_context.text_renderer->print(
         position_at_fixed_depth_line_2,
         text_color,
         text_line_2
@@ -276,7 +252,7 @@ void Hover_tool::tool_render(
                     entry.mesh->get_name(),
                     local_position
                 );
-                erhe::application::g_text_renderer->print(
+                m_context.text_renderer->print(
                     position_at_fixed_depth_line_3,
                     text_color,
                     text_line_3.c_str()
@@ -292,7 +268,7 @@ void Hover_tool::tool_render(
             entry.grid->get_name(),
             local_position
         );
-        erhe::application::g_text_renderer->print(
+        m_context.text_renderer->print(
             position_at_fixed_depth_line_3,
             text_color,
             text_line_3.c_str() // erhe::physics::c_motion_mode_strings[motion_mode_index]

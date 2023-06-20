@@ -11,6 +11,7 @@ namespace editor
 {
 
 class Node_attach_operation;
+class Selection;
 
 class Scene_item_operation
     : public IOperation
@@ -43,18 +44,18 @@ public:
     class Parameters
     {
     public:
+        Editor_context&                    context;
         std::shared_ptr<erhe::scene::Node> node;
         std::shared_ptr<erhe::scene::Node> parent;
         Mode                               mode;
     };
 
     explicit Node_insert_remove_operation(const Parameters& parameters);
-    ~Node_insert_remove_operation() noexcept override;
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
 private:
     Mode                                                m_mode;

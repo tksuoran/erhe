@@ -2,16 +2,21 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
+
+namespace erhe::imgui {
+    class Imgui_windows;
+}
 
 namespace editor
 {
 
 class Grid;
+class Icon_set;
+class Tools;
 
 class Grid_hover_position
 {
@@ -21,8 +26,7 @@ public:
 };
 
 class Grid_tool
-    : public erhe::application::Imgui_window
-    , public erhe::components::Component
+    : public erhe::imgui::Imgui_window
     , public Tool
 {
 public:
@@ -40,18 +44,13 @@ public:
     };
     Config config;
 
-    static constexpr std::string_view c_type_name{"Grid_tool"};
-    static constexpr std::string_view c_title{"Grid"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Grid_tool ();
-    ~Grid_tool() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Grid_tool(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context,
+        Icon_set&                    icon_set,
+        Tools&                       tools
+    );
 
     // Implements Tool
     void tool_render(const Render_context& context)  override;
@@ -72,7 +71,5 @@ private:
     std::vector<std::shared_ptr<Grid>> m_grids;
     int                                m_grid_index{0};
 };
-
-extern Grid_tool* g_grid_tool;
 
 } // namespace editor

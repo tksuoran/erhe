@@ -6,8 +6,6 @@
 
 #include <gsl/span>
 
-//#include <functional>
-//#include <vector>
 #include "etl/vector.h"
 
 namespace hextiles
@@ -25,8 +23,6 @@ public:
 class Map
 {
 public:
-    Map();
-
     void reset           (int width, int height);
     void read            (File_read_stream& stream);
     void write           (File_write_stream& stream);
@@ -45,17 +41,14 @@ public:
         int                                                  r1,
         const std::function<void(Tile_coordinate position)>& op
     );
-    auto width () const -> int;
-    auto height() const -> int;
-
-    auto distance(const Tile_coordinate& lhs, const Tile_coordinate& rhs) -> int;
-
-    void update_group_terrain(Tile_coordinate position);
+    auto width               () const -> int;
+    auto height              () const -> int;
+    auto distance            (const Tile_coordinate& lhs, const Tile_coordinate& rhs) -> int;
 
 private:
-    uint16_t m_width {0u};
-    uint16_t m_height{0u};
-    etl::vector<Map_cell, 160 * 160> m_map; // 100 kB
+    uint16_t                         m_width {0u};
+    uint16_t                         m_height{0u};
+    etl::vector<Map_cell, 160 * 160> m_map; // ~100 kB
 };
 
 } // namespace hextiles

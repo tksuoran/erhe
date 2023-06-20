@@ -12,24 +12,30 @@
 namespace erhe::graphics
 {
 
+class Instance;
+
 class Buffer final
 {
 public:
-    Buffer ();
+    explicit Buffer(Instance& instance);
+
     ~Buffer() noexcept;
 
     Buffer(
+        Instance&               instance,
         gl::Buffer_target       target,
         std::size_t             capacity_bytes_count,
         gl::Buffer_storage_mask storage_mask
     ) noexcept;
 
     Buffer(
+        Instance&               instance,
         std::size_t             capacity_bytes_count,
         gl::Buffer_storage_mask storage_mask
     ) noexcept;
 
     Buffer(
+        Instance&                  instance,
         gl::Buffer_target          target,
         std::size_t                capacity_byte_count,
         gl::Buffer_storage_mask    storage_mask,
@@ -37,6 +43,7 @@ public:
     ) noexcept;
 
     Buffer(
+        Instance&                  instance,
         gl::Buffer_target          target,
         std::size_t                capacity_byte_count,
         gl::Buffer_storage_mask    storage_mask,
@@ -100,6 +107,7 @@ private:
     void capability_check(gl::Buffer_storage_mask storage_mask);
     void capability_check(gl::Map_buffer_access_mask access_mask);
 
+    Instance&                  m_instance;
     Gl_buffer                  m_handle;
     std::string                m_debug_label;
     gl::Buffer_target          m_target             {gl::Buffer_target::array_buffer};

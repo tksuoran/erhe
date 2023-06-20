@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
 #include "erhe/graphics/state/depth_stencil_state.hpp"
 #include "erhe/graphics/state/viewport_state.hpp"
@@ -23,23 +22,14 @@ class Pipeline;
 
 
 class OpenGL_state_tracker
-    : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_type_name{"erhe::graphics::OpenGL_state_tracker"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    OpenGL_state_tracker();
+    OpenGL_state_tracker(const OpenGL_state_tracker&) = delete;
+    void operator=      (const OpenGL_state_tracker&) = delete;
 
-    OpenGL_state_tracker ();
-    ~OpenGL_state_tracker() noexcept override;
-    OpenGL_state_tracker (const OpenGL_state_tracker&) = delete;
-    void operator=       (const OpenGL_state_tracker&) = delete;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void initialize_component() override;
-
-    void on_thread_exit () override;
-    void on_thread_enter() override;
+    void on_thread_exit ();
+    void on_thread_enter();
     void reset          ();
     void execute        (const Pipeline& pipeline, bool skip_shader_stages = false);
 
@@ -54,7 +44,5 @@ public:
     Color_blend_state_tracker    color_blend;
     // RODO Dynamic state
 };
-
-extern OpenGL_state_tracker* g_opengl_state_tracker;
 
 } // namespace erhe::graphics

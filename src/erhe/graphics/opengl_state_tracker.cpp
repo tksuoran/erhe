@@ -7,24 +7,7 @@
 namespace erhe::graphics
 {
 
-OpenGL_state_tracker* g_opengl_state_tracker{nullptr};
-
-OpenGL_state_tracker::OpenGL_state_tracker()
-    : erhe::components::Component{c_type_name}
-{
-}
-
-OpenGL_state_tracker::~OpenGL_state_tracker() noexcept
-{
-    ERHE_VERIFY(g_opengl_state_tracker == this);
-    g_opengl_state_tracker = nullptr;
-}
-
-void OpenGL_state_tracker::initialize_component()
-{
-    ERHE_VERIFY(g_opengl_state_tracker == nullptr);
-    g_opengl_state_tracker = this;
-}
+OpenGL_state_tracker::OpenGL_state_tracker() = default;
 
 void OpenGL_state_tracker::on_thread_exit()
 {

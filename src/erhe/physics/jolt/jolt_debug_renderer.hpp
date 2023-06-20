@@ -1,6 +1,5 @@
 #if 0 //pragma once
 
-#include "erhe/components/components.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
 #include <Jolt/Jolt.h>
@@ -20,7 +19,6 @@ public:
 
     void set_debug_draw(IDebug_draw* debug_draw);
 
-    // Implements Component
     //auto get_type_hash       () const -> uint32_t override { return hash; }
     //void connect             () override;
     //void initialize_component() override;

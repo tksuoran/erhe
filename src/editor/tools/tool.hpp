@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/application/commands/command.hpp"
+#include "erhe/commands/command.hpp"
 
 #include <glm/glm.hpp>
 
@@ -11,9 +11,11 @@
 namespace editor
 {
 
+class Editor_context;
 class Editor_message;
 class Render_context;
 class Scene_view;
+class Tools;
 
 class Tool_flags
 {
@@ -27,9 +29,10 @@ public:
 };
 
 class Tool
-    : public erhe::application::Command_host
+    : public erhe::commands::Command_host
 {
 public:
+    Tool(Editor_context& editor_context);
     ~Tool() noexcept override;
 
     // Implements Command_host
@@ -56,6 +59,8 @@ protected:
     void set_base_priority(int base_priority);
     void set_flags        (uint64_t flags);
     void set_icon         (glm::vec2 icon);
+
+    Editor_context& m_context;
 
 private:
     int                      m_base_priority     {0};

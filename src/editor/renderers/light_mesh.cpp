@@ -8,7 +8,7 @@
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/renderer/program_interface.hpp"
+#include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
@@ -22,20 +22,6 @@ using vec3 = glm::vec3;
 using vec4 = glm::vec4;
 
 Light_mesh::Light_mesh()
-    : Component{c_type_name}
-{
-}
-
-Light_mesh::~Light_mesh() noexcept
-{
-}
-
-void Light_mesh::declare_required_components()
-{
-    require<erhe::renderer::Program_interface>();
-}
-
-void Light_mesh::initialize_component()
 {
 #if 0
     erhe::graphics::Buffer_transfer_queue queue;

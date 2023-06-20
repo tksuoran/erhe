@@ -6,13 +6,10 @@
 
 #include <functional>
 
-namespace erhe::physics
-{
+namespace erhe::physics {
     class IWorld;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Scene_host;
 }
 

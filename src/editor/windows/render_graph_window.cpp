@@ -2,9 +2,9 @@
 #include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/rendergraph/rendergraph_node.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/rendergraph/rendergraph_node.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -14,8 +14,7 @@ namespace editor
 {
 
 Rendergraph_window::Rendergraph_window()
-    : erhe::components::Component    {c_label}
-    , erhe::application::Imgui_window{c_title, c_label}
+    : erhe::imgui::Imgui_window{c_title, c_label}
 {
 }
 
@@ -25,18 +24,18 @@ Rendergraph_window::~Rendergraph_window() noexcept
 
 void Rendergraph_window::declare_required_components()
 {
-    require<erhe::application::Imgui_windows>();
+    require<erhe::imgui::Imgui_windows>();
 }
 
 void Rendergraph_window::initialize_component()
 {
-    get<erhe::application::Imgui_windows>()->register_imgui_window(this);
+    get<erhe::imgui::Imgui_windows>()->register_imgui_window(this);
 }
 
 void Rendergraph_window::post_initialize()
 {
     m_editor_scenes = get<Editor_scenes>();
-    m_render_graph  = get<erhe::application::Rendergraph>();
+    m_render_graph  = get<erhe::rendergraph::Rendergraph>();
 }
 
 void Rendergraph_window::imgui()

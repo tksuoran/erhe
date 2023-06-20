@@ -3,10 +3,9 @@
 #include "editor_message.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/node.hpp"
 
@@ -14,8 +13,13 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::scene
-{
+namespace erhe::commands {
+    class Commands;
+}
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::scene {
     class Mesh;
     class Scene;
 }
@@ -23,36 +27,65 @@ namespace erhe::scene
 namespace editor
 {
 
-class Selection_tool_delete_command
-    : public erhe::application::Command
+class Editor_context;
+class Editor_message_bus;
+class Editor_scenes;
+class Editor_settings;
+class Icon_set;
+class Input_state;
+class Operation_stack;
+class Selection;
+class Selection_tool;
+class Tools;
+
+class Selection_delete_command
+    : public erhe::commands::Command
 {
 public:
-    Selection_tool_delete_command();
+    Selection_delete_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
-class Selection_tool_select_command
-    : public erhe::application::Command
+class Selection_select_command
+    : public erhe::commands::Command
 {
 public:
-    Selection_tool_select_command();
+    Selection_select_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     void try_ready() override;
     auto try_call () -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
-class Selection_tool_select_toggle_command
-    : public erhe::application::Command
+class Selection_select_toggle_command
+    : public erhe::commands::Command
 {
 public:
-    Selection_tool_select_toggle_command();
+    Selection_select_toggle_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     void try_ready() override;
     auto try_call () -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Range_selection
 {
 public:
-    Range_selection();
+    Range_selection(Selection& selection);
 
     void set_terminator(const std::shared_ptr<erhe::scene::Item>& item);
     void entry         (const std::shared_ptr<erhe::scene::Item>& item, bool attachments_expanded);
@@ -61,40 +94,59 @@ public:
     void reset         ();
 
 private:
+    Selection&                                      m_selection;
     std::shared_ptr<erhe::scene::Item>              m_primary_terminator;
     std::shared_ptr<erhe::scene::Item>              m_secondary_terminator;
     bool                                            m_edited{false};
     std::vector<std::shared_ptr<erhe::scene::Item>> m_entries;
 };
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+class Headset_view;
+#endif
+
 class Selection_tool
-    : public erhe::application::Imgui_window
-    , public erhe::components::Component
-    , public Tool
+    : public Tool
 {
 public:
-    static constexpr int              c_priority {3};
-    static constexpr std::string_view c_type_name{"Selection_tool"};
-    static constexpr std::string_view c_title    {"Selection tool"};
-    static constexpr uint32_t         c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr int c_priority{3};
 
-    Selection_tool ();
-    ~Selection_tool() noexcept override;
-
-    // Implements Component
-    auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Selection_tool(
+        Editor_context& editor_context,
+        Icon_set&       icon_set,
+        Tools&          tools
+    );
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
 
     // Implements Imgui_window
-    void imgui() override;
+    //void imgui() override;
+
+    void viewport_toolbar(bool& hovered);
+};
+
+class Selection
+    : public erhe::commands::Command_host
+{
+public:
+    Selection(
+        erhe::commands::Commands& commands,
+        Editor_context&           editor_context,
+        Editor_message_bus&       editor_message_bus
+    );
+
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    void setup_xr_bindings(
+        erhe::commands::Commands& commands,
+        Headset_view&             headset_view
+    );
+#endif
+
+    // Implements Imgui_window
+    //void imgui() override;
 
     // Public API
-    void viewport_toolbar(bool& hovered);
     [[nodiscard]] auto get_selection           () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
     [[nodiscard]] auto is_in_selection         (const std::shared_ptr<erhe::scene::Item>& item) const -> bool;
     [[nodiscard]] auto range_selection         () -> Range_selection&;
@@ -122,17 +174,18 @@ private:
         bool                                      clear_others
     );
 
-    Selection_tool_select_command        m_select_command;
-    Selection_tool_select_toggle_command m_select_toggle_command;
-    Selection_tool_delete_command        m_delete_command;
+    Editor_context&     m_context;
 
+    Selection_select_command        m_select_command;
+    Selection_select_toggle_command m_select_toggle_command;
+    Selection_delete_command        m_delete_command;
+
+    Scene_view*                                     m_hover_scene_view{nullptr};
     std::vector<std::shared_ptr<erhe::scene::Item>> m_selection;
     Range_selection                                 m_range_selection;
     std::shared_ptr<erhe::scene::Mesh>              m_hover_mesh;
     bool                                            m_hover_content{false};
     bool                                            m_hover_tool   {false};
 };
-
-extern Selection_tool* g_selection_tool;
 
 } // namespace editor

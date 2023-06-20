@@ -1,7 +1,9 @@
 #include "tools/hud.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_rendering.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -11,13 +13,13 @@
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 
-#include "erhe/application/commands/command_context.hpp"
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/rendergraph/rendergraph_node.hpp"
+#include "erhe/commands/input_arguments.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/iscene.hpp"
@@ -39,29 +41,33 @@ namespace editor
 using glm::vec3;
 
 #pragma region Commands
-Hud_drag_command::Hud_drag_command()
-    : Command{"Hud.drag"}
+Hud_drag_command::Hud_drag_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           context
+)
+    : Command  {commands, "Hud.drag"}
+    , m_context{context}
 {
 }
 
 void Hud_drag_command::try_ready()
 {
-    if (get_command_state() != erhe::application::State::Inactive) {
+    if (get_command_state() != erhe::commands::State::Inactive) {
         return;
     }
 
-    if (g_hud->try_begin_drag()) {
+    if (m_context.hud->try_begin_drag()) {
         set_active();
     }
 }
 
 auto Hud_drag_command::try_call() -> bool
 {
-    if (get_command_state() != erhe::application::State::Active) {
+    if (get_command_state() != erhe::commands::State::Active) {
         return false;
     }
 
-    g_hud->on_drag();
+    m_context.hud->on_drag();
 
     return true;
 }
@@ -69,81 +75,54 @@ auto Hud_drag_command::try_call() -> bool
 void Hud_drag_command::on_inactive()
 {
     if (
-        (get_command_state() == erhe::application::State::Ready ) ||
-        (get_command_state() == erhe::application::State::Active)
+        (get_command_state() == erhe::commands::State::Ready ) ||
+        (get_command_state() == erhe::commands::State::Active)
     ) {
-        g_hud->end_drag();
+        m_context.hud->end_drag();
     }
 }
 
-Toggle_hud_visibility_command::Toggle_hud_visibility_command()
-    : Command{"Hud.toggle_visibility"}
+Toggle_hud_visibility_command::Toggle_hud_visibility_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           context
+)
+    : Command  {commands, "Hud.toggle_visibility"}
+    , m_context{context}
 {
 }
 
 auto Toggle_hud_visibility_command::try_call() -> bool
 {
-    g_hud->toggle_visibility();
+    m_context.hud->toggle_visibility();
     return true;
 }
 #pragma endregion Commands
 
-Hud* g_hud{nullptr};
-
-Hud::Hud()
-    : erhe::components::Component         {c_type_name}
-    , erhe::application::Imgui_window     {c_title}
+Hud::Hud(
+    erhe::commands::Commands&       commands,
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_context&                 editor_context,
+    Editor_message_bus&             editor_message_bus,
+    Headset_view&                   headset_view,
+    Mesh_memory&                    mesh_memory,
+    Scene_builder&                  scene_builder,
+    Tools&                          tools
+)
+    : Tool                                {editor_context}
+    , erhe::imgui::Imgui_window           {imgui_renderer, imgui_windows, "Hud", "hud"}
+    , m_toggle_visibility_command         {commands, editor_context}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    , m_drag_float_redirect_update_command{m_drag_command}
-    , m_drag_float_enable_command         {m_drag_float_redirect_update_command, 0.3f, 0.1f}
-    , m_drag_bool_redirect_update_command {m_drag_command}
-    , m_drag_bool_enable_command          {m_drag_bool_redirect_update_command}
+    , m_drag_command                      {commands, editor_context}
+    , m_drag_float_redirect_update_command{commands, m_drag_command}
+    , m_drag_float_enable_command         {commands, m_drag_float_redirect_update_command, 0.3f, 0.1f}
+    , m_drag_bool_redirect_update_command {commands, m_drag_command}
+    , m_drag_bool_enable_command          {commands, m_drag_bool_redirect_update_command}
 #endif
 {
-}
-
-Hud::~Hud() noexcept
-{
-    ERHE_VERIFY(g_hud == nullptr);
-}
-
-void Hud::deinitialize_component()
-{
-    ERHE_VERIFY(g_hud == this);
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_drag_command.set_host(nullptr);
-#endif
-
-    m_rendertarget_mesh.reset();
-
-    m_rendertarget_node.reset();
-    m_rendertarget_imgui_viewport.reset();
-    g_hud = nullptr;
-}
-
-void Hud::declare_required_components()
-{
-    require<erhe::application::Commands           >();
-    require<erhe::application::Configuration      >();
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Imgui_windows      >();
-    require<erhe::application::Rendergraph        >();
-    require<Editor_message_bus>();
-    require<Scene_builder     >();
-    require<Tools             >();
-    require<Viewport_windows  >();
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    require<Headset_view      >();
-#endif
-}
-
-void Hud::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_hud == nullptr);
-    g_hud = this; // due to early out
-
-    auto ini = erhe::application::get_ini("erhe.ini", "hud");
+    auto ini = erhe::configuration::get_ini("erhe.ini", "hud");
     ini->get("enabled", config.enabled);
     ini->get("show",    config.show);
     ini->get("locked",  config.locked);
@@ -161,42 +140,41 @@ void Hud::initialize_component()
     m_z          = config.z;
 
     if (!m_enabled) {
+        hide();
         return;
     }
 
-    erhe::application::g_imgui_windows->register_imgui_window(this, "hud");
-
-    const erhe::application::Scoped_gl_context gl_context;
-
-    set_description(c_title);
+    set_description("Hud");
     set_flags      (Tool_flags::background);
-    g_tools->register_tool(this);
+    tools.register_tool(this);
 
-    auto& commands = *erhe::application::g_commands;
     commands.register_command   (&m_toggle_visibility_command);
     commands.bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    const auto* headset = g_headset_view->get_headset();
-    if (headset != nullptr)
-    {
+    const auto* headset = headset_view.get_headset();
+    if (headset != nullptr) {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.menu_click, erhe::application::Button_trigger::Button_pressed);
-        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.b_click,    erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.menu_click, erhe::commands::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_toggle_visibility_command, xr_right.b_click,    erhe::commands::Button_trigger::Button_pressed);
         commands.bind_command_to_xr_float_action  (&m_drag_float_enable_command, xr_right.squeeze_value);
         commands.bind_command_to_update           (&m_drag_float_redirect_update_command);
-        commands.bind_command_to_xr_boolean_action(&m_drag_bool_enable_command, xr_right.squeeze_click, erhe::application::Button_trigger::Any);
+        commands.bind_command_to_xr_boolean_action(&m_drag_bool_enable_command, xr_right.squeeze_click, erhe::commands::Button_trigger::Any);
         commands.bind_command_to_update           (&m_drag_bool_redirect_update_command);
     }
     m_drag_command.set_host(this);
+#else
+    static_cast<void>(headset_view);
 #endif
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
+        graphics_instance,
+        mesh_memory,
         config.width,
         config.height,
         config.ppm
     );
-    const auto& scene_root = g_scene_builder->get_scene_root();
+    auto scene_root = scene_builder.get_scene_root();
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
         erhe::scene::Item_flags::rendertarget |
@@ -219,18 +197,22 @@ void Hud::initialize_component()
     }
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
+        imgui_renderer,
+        imgui_windows,
+        rendergraph,
+        editor_context,
         m_rendertarget_mesh.get(),
-        "Hud Viewport"
+        "Hud Viewport",
+        false
     );
 
     m_rendertarget_imgui_viewport->set_menu_visible(true);
-    erhe::application::g_imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
+    imgui_windows.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
 
     set_visibility(m_is_visible);
 
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
             on_message(message);
         }
     );

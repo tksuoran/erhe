@@ -4,62 +4,47 @@
 #include "renderers/programs.hpp"
 #include "scene/node_raytrace_mask.hpp"
 
-#include "erhe/application/rendergraph/rendergraph_node.hpp"
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/commands/command_context.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/rendergraph/rendergraph_node.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/commands/input_arguments.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/viewport.hpp"
 
 #include <glm/glm.hpp>
 
 #include <memory>
 #include <optional>
 
-namespace erhe::application
-{
-    class Configuration;
-    class Imgui_viewport;
-    class Imgui_windows;
-    class Multisample_resolve_node;
-    class Rendergraph;
+namespace erhe::rendergraph {
     class Rendergraph_node;
-    class View;
 }
-
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
-
-namespace erhe::graphics
-{
-    class Framebuffer;
+namespace erhe::graphics {
     class Texture;
 }
-
-namespace erhe::renderer
-{
-    class Light_projections;
-}
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
     class Mesh;
+}
+namespace erhe::scene_renderer {
+    class Light_projections;
 }
 
 namespace editor
 {
 
+class Editor_context;
 class Editor_message;
+class Editor_message_bus;
 class Grid;
 class Node_raytrace;
-class Render_context;
 class Scene_root;
 class Shadow_render_node;
+class Viewport_window;
 
 class Hover_entry
 {
@@ -111,18 +96,19 @@ public:
     std::size_t                               local_index  {std::numeric_limits<std::size_t>::max()};
 };
 
-class Viewport_window;
-
 class Scene_view
 {
 public:
+    Scene_view(Editor_context& context);
+    virtual ~Scene_view() noexcept;
+
     // Virtual interface
     [[nodiscard]] virtual auto get_scene_root        () const -> std::shared_ptr<Scene_root> = 0;
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }
     [[nodiscard]] virtual auto get_shadow_texture    () const -> erhe::graphics::Texture*;
-    [[nodiscard]] virtual auto get_rendergraph_node  () -> std::shared_ptr<erhe::application::Rendergraph_node> = 0;
-    [[nodiscard]] virtual auto get_light_projections () const -> const erhe::renderer::Light_projections*;
+    [[nodiscard]] virtual auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node* = 0;
+    [[nodiscard]] virtual auto get_light_projections () const -> const erhe::scene_renderer::Light_projections*;
     [[nodiscard]] virtual auto as_viewport_window    () -> Viewport_window*;
     [[nodiscard]] virtual auto as_viewport_window    () const -> const Viewport_window*;
 
@@ -154,6 +140,8 @@ protected:
 
     std::optional<glm::mat4> m_world_from_control;
     std::optional<glm::mat4> m_control_from_world;
+
+    Editor_context& m_context;
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;

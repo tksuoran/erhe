@@ -7,12 +7,9 @@
 namespace editor
 {
 
-auto Render_context::get_camera_node() const  -> const erhe::scene::Node*
+auto Render_context::get_camera_node() const -> const erhe::scene::Node*
 {
-    if (scene_view == nullptr) {
-        return nullptr;
-    }
-    const auto& view_camera = scene_view->get_camera();
+    const auto& view_camera = scene_view.get_camera();
     if (!view_camera) {
         return nullptr;
     }

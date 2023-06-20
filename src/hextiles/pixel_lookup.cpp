@@ -1,6 +1,8 @@
 #include "pixel_lookup.hpp"
+
 #include "texture_util.hpp"
 #include "hextiles_log.hpp"
+#include "tiles.hpp"
 
 #include <bitset>
 #include <limits>

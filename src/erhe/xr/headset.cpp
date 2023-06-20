@@ -7,19 +7,17 @@
 namespace erhe::xr {
 
 Headset::Headset(
-    erhe::toolkit::Context_window* context_window,
+    erhe::toolkit::Context_window& context_window,
     const Xr_configuration&        configuration
 )
 {
-    ERHE_VERIFY(context_window != nullptr);
-
     m_xr_instance = std::make_unique<Xr_instance>(configuration);
     if (!m_xr_instance->is_available()) {
         m_xr_instance.reset();
         return;
     }
 
-    m_xr_session = std::make_unique<Xr_session>(*m_xr_instance.get(), *context_window);
+    m_xr_session = std::make_unique<Xr_session>(*m_xr_instance.get(), context_window);
 }
 
 Headset::~Headset() noexcept = default;

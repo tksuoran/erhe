@@ -8,31 +8,33 @@
 #include "terrain_type.hpp"
 #include "types.hpp"
 
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include "etl/vector.h"
+
+namespace erhe::imgui
+{
+    class Imgui_renderer;
+    class Imgui_windows;
+}
 
 namespace hextiles
 {
 
 class Map;
+class Map_editor;
+class Tiles;
 
 class Map_generator
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr const char* c_title{"Map Generator"};
-    static constexpr const char* c_type_name{"Map_generator"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
-
-    Map_generator();
-    ~Map_generator();
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void initialize_component() override;
+    Map_generator(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Map_editor&                  map_editor,
+        Tiles&                       tiles
+    );
 
     // Implements Imgui_window
     void imgui() override;
@@ -47,15 +49,16 @@ private:
     void generate_apply_rules_pass (Map& map);
     void generate_group_fix_pass   (Map& map);
 
-    Fbm_noise          m_noise;
-    Variations         m_elevation_generator;
-    Variations         m_temperature_generator;
-    Variations         m_humidity_generator;
-    Variations         m_variation_generator;
+    Map_editor& m_map_editor;
+    Tiles&      m_tiles;
+
+    Fbm_noise   m_noise;
+    Variations  m_elevation_generator;
+    Variations  m_temperature_generator;
+    Variations  m_humidity_generator;
+    Variations  m_variation_generator;
 
     etl::vector<Biome, max_biome_count> m_biomes;
 };
-
-extern Map_generator* g_map_generator;
 
 } // namespace hextiles

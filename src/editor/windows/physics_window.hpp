@@ -2,19 +2,22 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
-#include <memory>
+namespace erhe::imgui {
+    class Imgui_windows;
+}
 
 namespace editor
 {
 
+class Selection_tool;
+class Tools;
+class Viewport_windows;
+
 class Physics_window
-    : public erhe::components::Component
-    , public Tool
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
     class Config
@@ -25,20 +28,15 @@ public:
     };
     Config config;
 
-    static constexpr std::string_view c_type_name{"Physics_window"};
-    static constexpr std::string_view c_title{"Physics"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Physics_window ();
-    ~Physics_window() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    Physics_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context
+    );
 
     // Implements Tool
-    void tool_render(const Render_context& context) override;
+    //// TODO
+    //// void tool_render(const Render_context& context) override;
 
     // Implements Window
     void imgui() override;
@@ -65,9 +63,8 @@ public:
     [[nodiscard]] auto get_debug_draw_parameters() -> Debug_draw_parameters;
 
 private:
+    Editor_context&       m_context;
     Debug_draw_parameters m_debug_draw;
 };
-
-extern Physics_window* g_physics_window;
 
 } // namespace editor

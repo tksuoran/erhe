@@ -54,227 +54,17 @@ using uvec4 = glm::uvec4;
 using mat4 = glm::mat4;
 
 
-Primitive_builder::Primitive_builder(
-    const erhe::geometry::Geometry& geometry,
-    Build_info&                     build_info,
-    const Normal_style              normal_style
-)
-    : m_geometry    {geometry}
-    , m_build_info  {build_info}
-    , m_normal_style{normal_style}
-{
-}
-
-Primitive_builder::~Primitive_builder() noexcept
-{
-}
-
-void Primitive_builder::prepare_vertex_format(Build_info& build_info)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    if (build_info.buffer.vertex_format) {
-        return;
-    }
-
-    auto vf = std::make_shared<erhe::graphics::Vertex_format>();
-
-    build_info.buffer.vertex_format = vf;
-
-    const auto& format_info = build_info.format;
-    const auto& features    = format_info.features;
-
-    if (features.position) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage       = { Vertex_attribute::Usage_type::position },
-                .shader_type = gl::Attribute_type::float_vec3,
-                .data_type   = {
-                    .type      = format_info.position_type,
-                    .dimension = 3
-                }
-            }
-        );
-    }
-
-    if (features.normal) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::normal
-                },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = format_info.normal_type,
-                    .dimension = 3
-                }
-            }
-        );
-    }
-
-    if (features.normal_flat) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::normal,
-                    .index     = 1
-                },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = format_info.normal_flat_type,
-                    .dimension = 3
-                }
-            }
-        );
-    }
-
-    if (features.normal_smooth) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::normal,
-                    .index     = 2
-                },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = format_info.normal_smooth_type,
-                    .dimension = 3
-                }
-            }
-        );
-    }
-
-    if (features.tangent) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::tangent
-                },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = format_info.tangent_type,
-                    .dimension = 4
-                }
-            }
-        );
-    }
-
-    if (features.bitangent) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::bitangent
-                },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = format_info.bitangent_type,
-                    .dimension = 4
-                }
-            }
-        );
-    }
-
-    if (features.color) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::color
-                },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = format_info.color_type,
-                    .dimension = 4
-                }
-            }
-        );
-    }
-
-    if (features.id) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::id
-                },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type = {
-                    .type      = format_info.id_vec3_type,
-                    .dimension = 3
-                }
-            }
-        );
-
-        if (erhe::graphics::Instance::info.use_integer_polygon_ids) {
-            vf->add_attribute(
-                erhe::graphics::Vertex_attribute{
-                    .usage = {
-                        .type      = Vertex_attribute::Usage_type::id
-                    },
-                    .shader_type   = gl::Attribute_type::unsigned_int,
-                    .data_type = {
-                        .type      = gl::Vertex_attrib_type::unsigned_int,
-                        .dimension = 1
-                    }
-                }
-            );
-        }
-    }
-
-    if (features.texcoord) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::tex_coord
-                },
-                .shader_type   = gl::Attribute_type::float_vec2,
-                .data_type = {
-                    .type      = gl::Vertex_attrib_type::float_,
-                    .dimension = 2
-                }
-            }
-        );
-    }
-
-    if (features.joint_indices) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::joint_indices
-                },
-                .shader_type   = gl::Attribute_type::unsigned_int_vec4,
-                .data_type = {
-                    .type      = gl::Vertex_attrib_type::unsigned_byte,
-                    .dimension = 4
-                }
-            }
-        );
-    }
-
-    if (features.joint_weights) {
-        vf->add_attribute(
-            erhe::graphics::Vertex_attribute{
-                .usage = {
-                    .type      = Vertex_attribute::Usage_type::joint_weights
-                },
-                .shader_type   = gl::Attribute_type::float_vec4,
-                .data_type = {
-                    .type      = gl::Vertex_attrib_type::float_,
-                    .dimension = 4
-                }
-            }
-        );
-    }
-}
 
 Build_context_root::Build_context_root(
     const erhe::geometry::Geometry& geometry,
-    Build_info&                     build_info,
+    const Build_info&               build_info,
     Primitive_geometry*             primitive_geometry
 )
     : geometry          {geometry}
     , build_info        {build_info}
     , primitive_geometry{primitive_geometry}
-    , vertex_format     {build_info.buffer.vertex_format.get()}
-    , vertex_stride     {vertex_format->stride()}
+    , vertex_format     {build_info.buffer_info.vertex_format}
+    , vertex_stride     {vertex_format.stride()}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -291,18 +81,18 @@ void Build_context_root::get_mesh_info()
     Mesh_info& mi = mesh_info;
     mi.trace(log_primitive_builder);
 
-    const auto& features = build_info.format.features;
+    const Primitive_types& primitive_types = build_info.primitive_types;
 
     // Count vertices
     total_vertex_count = 0;
     total_vertex_count += mi.vertex_count_corners;
-    if (features.centroid_points) {
+    if (primitive_types.centroid_points) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} centroid point indices", mi.vertex_count_centroids);
         total_vertex_count += mi.vertex_count_centroids;
     }
 
     // Count indices
-    if (features.fill_triangles) {
+    if (primitive_types.fill_triangles) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} triangle fill indices", mi.index_count_fill_triangles);
         total_index_count += mi.index_count_fill_triangles;
         allocate_index_range(
@@ -314,7 +104,7 @@ void Build_context_root::get_mesh_info()
         primitive_geometry->primitive_id_to_polygon_id.resize(primitive_count);
     }
 
-    if (features.edge_lines) {
+    if (primitive_types.edge_lines) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} edge line indices", mi.index_count_edge_lines);
         total_index_count += mi.index_count_edge_lines;
         allocate_index_range(
@@ -324,7 +114,7 @@ void Build_context_root::get_mesh_info()
         );
     }
 
-    if (features.corner_points) {
+    if (primitive_types.corner_points) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} corner point indices", mi.index_count_corner_points);
         total_index_count += mi.index_count_corner_points;
         allocate_index_range(
@@ -334,7 +124,7 @@ void Build_context_root::get_mesh_info()
         );
     }
 
-    if (features.centroid_points) {
+    if (primitive_types.centroid_points) {
         SPDLOG_LOGGER_INFO(log_primitive_builder, "{} centroid point indices", mi.index_count_centroid_points);
         total_index_count += mi.index_count_centroid_points;
         allocate_index_range(
@@ -351,29 +141,32 @@ void Build_context_root::get_vertex_attributes()
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& format_info = build_info.format;
-    attributes.position      = Vertex_attribute_info(vertex_format, format_info.position_type,      3, Vertex_attribute::Usage_type::position,      0);
-    attributes.normal        = Vertex_attribute_info(vertex_format, format_info.normal_type,        3, Vertex_attribute::Usage_type::normal,        0); // content normals
-    attributes.normal_flat   = Vertex_attribute_info(vertex_format, format_info.normal_flat_type,   3, Vertex_attribute::Usage_type::normal,        1); // flat normals
-    attributes.normal_smooth = Vertex_attribute_info(vertex_format, format_info.normal_smooth_type, 3, Vertex_attribute::Usage_type::normal,        2); // smooth normals
-    attributes.tangent       = Vertex_attribute_info(vertex_format, format_info.tangent_type,       4, Vertex_attribute::Usage_type::tangent,       0);
-    attributes.bitangent     = Vertex_attribute_info(vertex_format, format_info.bitangent_type,     4, Vertex_attribute::Usage_type::bitangent,     0);
-    attributes.color         = Vertex_attribute_info(vertex_format, format_info.color_type,         4, Vertex_attribute::Usage_type::color,         0);
-    attributes.texcoord      = Vertex_attribute_info(vertex_format, format_info.texcoord_type,      2, Vertex_attribute::Usage_type::tex_coord,     0);
-    attributes.id_vec3       = Vertex_attribute_info(vertex_format, format_info.id_vec3_type,       3, Vertex_attribute::Usage_type::id,            0);
-    if (erhe::graphics::Instance::info.use_integer_polygon_ids)
-    {
-        attributes.attribute_id_uint = Vertex_attribute_info(vertex_format, format_info.id_uint_type, 1, Vertex_attribute::Usage_type::id, 0);
-    }
-    attributes.joint_indices = Vertex_attribute_info(vertex_format, format_info.joint_indices_type, 4, Vertex_attribute::Usage_type::joint_indices, 0);
-    attributes.joint_weights = Vertex_attribute_info(vertex_format, format_info.joint_weights_type, 4, Vertex_attribute::Usage_type::joint_weights, 0);
+    //const Attribute_types& attribute_types = build_info.primitive_types
+    attributes.position      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::position,  0);
+    attributes.normal        = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    0); // content normals
+    //attributes.normal_flat   = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    1); // flat normals
+    //attributes.normal_smooth = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    2); // smooth normals
+    attributes.tangent       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tangent,   0);
+    attributes.bitangent     = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::bitangent, 0);
+    attributes.color         = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::color,     0);
+    attributes.texcoord      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tex_coord, 0);
+    attributes.id_vec3       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::id,        0);
+    //// TODO
+    //// if (erhe::graphics::g_instance->info.use_integer_polygon_ids)
+    //// {
+    ////     attributes.attribute_id_uint = Vertex_attribute_info(vertex_format, format_info.id_uint_type, 1, Vertex_attribute::Usage_type::id, 0);
+    //// }
+    attributes.joint_indices = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::joint_indices, 0);
+    attributes.joint_weights = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::joint_weights, 0);
 }
 
 void Build_context_root::allocate_vertex_buffer()
 {
     Expects(total_vertex_count > 0);
 
-    primitive_geometry->vertex_buffer_range = build_info.buffer.buffer_sink->allocate_vertex_buffer(total_vertex_count, vertex_stride);
+    primitive_geometry->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
+        total_vertex_count, vertex_stride
+    );
 }
 
 void Build_context_root::allocate_index_buffer()
@@ -382,7 +175,7 @@ void Build_context_root::allocate_index_buffer()
 
     Expects(total_index_count > 0);
 
-    const gl::Draw_elements_type index_type     {build_info.buffer.index_type};
+    const gl::Draw_elements_type index_type     {build_info.buffer_info.index_type};
     const std::size_t            index_type_size{size_of_type(index_type)};
 
     log_primitive_builder->trace(
@@ -392,7 +185,7 @@ void Build_context_root::allocate_index_buffer()
         index_type_size
     );
 
-    primitive_geometry->index_buffer_range = build_info.buffer.buffer_sink->allocate_index_buffer(
+    primitive_geometry->index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
         total_index_count,
         index_type_size
     );
@@ -460,6 +253,17 @@ void Build_context_root::calculate_bounding_volume(
     );
 }
 
+Primitive_builder::Primitive_builder(
+    const erhe::geometry::Geometry& geometry,
+    const Build_info&               build_info,
+    const Normal_style              normal_style
+)
+    : m_geometry    {geometry}
+    , m_build_info  {build_info}
+    , m_normal_style{normal_style}
+{
+}
+
 auto Primitive_builder::build() -> Primitive_geometry
 {
     Primitive_geometry primitive_geometry;
@@ -477,7 +281,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
     SPDLOG_LOGGER_INFO(
         log_primitive_builder,
         "Primitive_builder::build(usage = {}, normal_style = {}) geometry = {}",
-        gl::c_str(m_build_info.buffer.usage),
+        gl::c_str(m_build_info.buffer_info.usage),
         c_str(m_normal_style),
         m_geometry.name
     );
@@ -490,32 +294,32 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
         primitive_geometry
     };
 
-    const auto& features = m_build_info.format.features;
+    const Primitive_types& primitive_types = m_build_info.primitive_types;
 
-    if (features.fill_triangles) {
+    if (primitive_types.fill_triangles) {
         build_context.build_polygon_fill();
     }
 
-    if (features.edge_lines) {
+    if (primitive_types.edge_lines) {
         build_context.build_edge_lines();
     }
 
-    if (features.centroid_points) {
+    if (primitive_types.centroid_points) {
         build_context.build_centroid_points();
     }
 }
 
 Build_context::Build_context(
     const erhe::geometry::Geometry& geometry,
-    Build_info&                     build_info,
+    const Build_info&               build_info,
     const Normal_style              normal_style,
     Primitive_geometry*             primitive_geometry
 )
     : root         {geometry, build_info, primitive_geometry}
     , normal_style {normal_style}
-    , vertex_writer{*this, build_info.buffer.buffer_sink}
-    , index_writer {*this, build_info.buffer.buffer_sink}
-    , property_maps{geometry, build_info.format}
+    , vertex_writer{*this, build_info.buffer_info.buffer_sink}
+    , index_writer {*this, build_info.buffer_info.buffer_sink}
+    , property_maps{geometry, build_info.primitive_types, build_info.buffer_info.vertex_format}
 {
     Expects(property_maps.point_locations != nullptr);
 
@@ -531,16 +335,13 @@ void Build_context::build_polygon_id()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.build_info.format.features.id) {
-        return;
-    }
-
-    if (
-        erhe::graphics::Instance::info.use_integer_polygon_ids &&
-        root.attributes.attribute_id_uint.is_valid()
-    ) {
-        vertex_writer.write(root.attributes.attribute_id_uint, polygon_index);
-    }
+    //// TODO
+    //// if (
+    ////     erhe::graphics::g_instance->info.use_integer_polygon_ids &&
+    ////     root.attributes.attribute_id_uint.is_valid()
+    //// ) {
+    ////     vertex_writer.write(root.attributes.attribute_id_uint, polygon_index);
+    //// }
 
     if (root.attributes.id_vec3.is_valid()) {
         const vec3 v = erhe::toolkit::vec3_from_uint(polygon_index);
@@ -562,10 +363,7 @@ void Build_context::build_vertex_position()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (
-        !root.build_info.format.features.position ||
-        !root.attributes.position.is_valid()
-    ) {
+    if (!root.attributes.position.is_valid()) {
         return;
     }
 
@@ -584,10 +382,12 @@ void Build_context::build_vertex_normal()
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (!root.attributes.normal.is_valid()) {
+        return;
+    }
+
     const vec3 polygon_normal = get_polygon_normal();
     vec3 normal{0.0f, 1.0f, 0.0f};
-
-    const auto& features = root.build_info.format.features;
 
     vec3 point_normal{0.0f, 1.0f, 0.0f};
     bool found_point_normal{false};
@@ -606,7 +406,7 @@ void Build_context::build_vertex_normal()
         normal = point_normal;
     }
 
-    if (features.normal && root.attributes.normal.is_valid()) {
+    if (root.attributes.normal.is_valid()) {
         switch (normal_style) {
             //using enum Normal_style;
             case Normal_style::none: {
@@ -638,31 +438,31 @@ void Build_context::build_vertex_normal()
         }
     }
 
-    if (features.normal_flat && root.attributes.normal_flat.is_valid()) {
-        vertex_writer.write(root.attributes.normal_flat, polygon_normal);
-        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} flat polygon normal {}", point_id, corner_id, polygon_normal);
-    }
-
-    if (features.normal_smooth && root.attributes.normal_smooth.is_valid()) {
-        vec3 smooth_point_normal{0.0f, 1.0f, 0.0f};
-
-        if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id)) {
-            smooth_point_normal = property_maps.point_normals_smooth->get(point_id);
-            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} smooth point normal {}", point_id, corner_id, smooth_point_normal);
-        } else {
-            SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} smooth unit y normal", point_id, corner_id);
-            used_fallback_smooth_normal = true;
-        }
-
-        vertex_writer.write(root.attributes.normal_smooth, smooth_point_normal);
-    }
+    // if (features.normal_flat && root.attributes.normal_flat.is_valid()) {
+    //     vertex_writer.write(root.attributes.normal_flat, polygon_normal);
+    //     SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} flat polygon normal {}", point_id, corner_id, polygon_normal);
+    // }
+    // 
+    // if (features.normal_smooth && root.attributes.normal_smooth.is_valid()) {
+    //     vec3 smooth_point_normal{0.0f, 1.0f, 0.0f};
+    // 
+    //     if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id)) {
+    //         smooth_point_normal = property_maps.point_normals_smooth->get(point_id);
+    //         SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} smooth point normal {}", point_id, corner_id, smooth_point_normal);
+    //     } else {
+    //         SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} smooth unit y normal", point_id, corner_id);
+    //         used_fallback_smooth_normal = true;
+    //     }
+    // 
+    //     vertex_writer.write(root.attributes.normal_smooth, smooth_point_normal);
+    // }
 }
 
 void Build_context::build_vertex_tangent()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.build_info.format.features.tangent || !root.attributes.tangent.is_valid()) {
+    if (!root.attributes.tangent.is_valid()) {
         return;
     }
 
@@ -697,7 +497,7 @@ void Build_context::build_vertex_bitangent()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.build_info.format.features.bitangent || !root.attributes.bitangent.is_valid()) {
+    if (!root.attributes.bitangent.is_valid()) {
         return;
     }
 
@@ -733,7 +533,7 @@ void Build_context::build_vertex_texcoord()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.build_info.format.features.texcoord || !root.attributes.texcoord.is_valid()) {
+    if (!root.attributes.texcoord.is_valid()) {
         return;
     }
 
@@ -767,10 +567,7 @@ void Build_context::build_vertex_joint_indices()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (
-        !root.build_info.format.features.joint_indices ||
-        !root.attributes.joint_indices.is_valid()
-    ) {
+    if (!root.attributes.joint_indices.is_valid()) {
         return;
     }
 
@@ -790,10 +587,7 @@ void Build_context::build_vertex_joint_weights()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (
-        !root.build_info.format.features.joint_weights ||
-        !root.attributes.joint_weights.is_valid()
-    ) {
+    if (!root.attributes.joint_weights.is_valid()) {
         return;
     }
 
@@ -833,11 +627,11 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.build_info.format.features.color || !root.attributes.color.is_valid()) {
+    if (!root.attributes.color.is_valid()) {
         return;
     }
 
-    vec4 color{root.build_info.format.constant_color};
+    vec4 color{root.build_info.constant_color};
     bool found{false};
     if (property_maps.corner_colors != nullptr) {
         found = property_maps.corner_colors->maybe_get(corner_id, color);
@@ -879,7 +673,7 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
 
 void Build_context::build_centroid_position()
 {
-    if (!root.build_info.format.features.centroid_points || !root.attributes.position.is_valid()) {
+    if (!root.build_info.primitive_types.centroid_points || !root.attributes.position.is_valid()) {
         return;
     }
 
@@ -893,9 +687,9 @@ void Build_context::build_centroid_position()
 
 void Build_context::build_centroid_normal()
 {
-    const auto& features = root.build_info.format.features;
+    //const auto& features = root.build_info.format.features;
 
-    if (!features.centroid_points) {
+    if (!root.build_info.primitive_types.centroid_points) {
         return;
     }
 
@@ -904,25 +698,25 @@ void Build_context::build_centroid_normal()
         property_maps.polygon_normals->maybe_get(polygon_id, normal);
     }
 
-    if (features.normal && root.attributes.normal.is_valid()) {
+    if (root.attributes.normal.is_valid()) {
         vertex_writer.write(root.attributes.normal, normal);
     }
 
-    if (features.normal_flat && root.attributes.normal_flat.is_valid()) {
-        vertex_writer.write(root.attributes.normal_flat, normal);
-    }
+    // if (root.attributes.normal_flat.is_valid()) {
+    //     vertex_writer.write(root.attributes.normal_flat, normal);
+    // }
 }
 
 void Build_context::build_corner_point_index()
 {
-    if (root.build_info.format.features.corner_points) {
+    if (root.build_info.primitive_types.corner_points) {
         index_writer.write_corner(vertex_index);
     }
 }
 
 void Build_context::build_triangle_fill_index()
 {
-    if (root.build_info.format.features.fill_triangles) {
+    if (root.build_info.primitive_types.fill_triangles) {
         if (previous_index != first_index) {
             index_writer.write_triangle(first_index, vertex_index, previous_index);
             root.primitive_geometry->primitive_id_to_polygon_id[primitive_index] = polygon_id;
@@ -945,10 +739,10 @@ void Build_context::build_polygon_fill()
     vertex_index  = 0;
     polygon_index = 0;
 
-    const bool any_normal_feature = root.build_info.format.features.normal =
-        root.build_info.format.features.normal      ||
-        root.build_info.format.features.normal_flat ||
-        root.build_info.format.features.normal_smooth;
+    //const bool any_normal_feature = root.build_info.format.features.normal =
+    //    root.build_info.format.features.normal      ||
+    //    root.build_info.format.features.normal_flat ||
+    //    root.build_info.format.features.normal_smooth;
 
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
     root.primitive_geometry->corner_to_vertex_id.resize(root.geometry.get_corner_count());
@@ -979,9 +773,7 @@ void Build_context::build_polygon_fill()
 
             build_polygon_id      ();
             build_vertex_position ();
-            if (any_normal_feature) {
-                build_vertex_normal();
-            }
+            build_vertex_normal   ();
             build_vertex_tangent  ();
             build_vertex_bitangent();
             build_vertex_texcoord ();
@@ -1020,7 +812,7 @@ void Build_context::build_edge_lines()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.build_info.format.features.edge_lines) {
+    if (!root.build_info.primitive_types.edge_lines) {
         return;
     }
 
@@ -1061,7 +853,7 @@ void Build_context::build_centroid_points()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.build_info.format.features.centroid_points) {
+    if (!root.build_info.primitive_types.centroid_points) {
         return;
     }
 
@@ -1082,7 +874,7 @@ void Build_context::build_centroid_points()
 
 void Build_context_root::allocate_index_range(
     const gl::Primitive_type primitive_type,
-    const std::size_t       index_count,
+    const std::size_t        index_count,
     Index_range&             out_range
 )
 {
@@ -1101,7 +893,7 @@ void Build_context_root::allocate_index_range(
 
 auto make_primitive(
     const erhe::geometry::Geometry& geometry,
-    Build_info&                     build_info,
+    const Build_info&               build_info,
     const Normal_style              normal_style
 ) -> Primitive_geometry
 {

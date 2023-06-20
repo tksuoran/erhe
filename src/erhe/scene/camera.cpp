@@ -57,7 +57,7 @@ void Camera::handle_node_scene_host_update(
     }
 }
 
-auto Camera::projection_transforms(const Viewport& viewport) const -> Camera_projection_transforms
+auto Camera::projection_transforms(const erhe::toolkit::Viewport& viewport) const -> Camera_projection_transforms
 {
     const auto clip_from_node = m_projection.clip_from_node_transform(viewport);
     const Node* node = get_node();

@@ -11,34 +11,27 @@
 
 #include <string_view>
 
-namespace erhe::components
-{
-    class Components;
-}
-
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Framebuffer;
+    class Instance;
     class Sampler;
     class Texture;
 }
-
-namespace erhe::primitive
-{
+namespace erhe::primitive {
     class Material;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Scene_host;
 }
 
 namespace editor
 {
 
+class Editor_context;
 class Editor_message;
 class Forward_renderer;
 class Hand_tracker;
+class Mesh_memory;
 class Node_raytrace;
 class Render_context;
 class Scene_root;
@@ -51,9 +44,11 @@ class Rendertarget_mesh
 {
 public:
     Rendertarget_mesh(
-        int   width,
-        int   height,
-        float pixels_per_meter
+        erhe::graphics::Instance& graphics_instance,
+        Mesh_memory&              mesh_memory,
+        int                       width,
+        int                       height,
+        float                     pixels_per_meter
     );
 
     // Implements Item
@@ -80,11 +75,11 @@ public:
     auto update_pointer(Scene_view* scene_view) -> bool;
     void bind          ();
     void clear         (glm::vec4 clear_color);
-    void render_done   (); // generates mipmaps, updates lod bias
+    void render_done   (Editor_context& context); // generates mipmaps, updates lod bias
 
 private:
-    void init_rendertarget(int width, int height);
-    void add_primitive    ();
+    void init_rendertarget(erhe::graphics::Instance& graphics_instance, int width, int height);
+    void add_primitive    (Mesh_memory& mesh_memory);
 
     float                                        m_pixels_per_meter{0.0f};
     float                                        m_local_width     {0.0f};
@@ -110,4 +105,4 @@ private:
 
 [[nodiscard]] auto get_rendertarget(const erhe::scene::Node* node) -> std::shared_ptr<Rendertarget_mesh>;
 
-} // namespace erhe::application
+} // namespace editor

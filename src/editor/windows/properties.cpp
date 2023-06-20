@@ -1,5 +1,6 @@
 #include "windows/properties.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
 #include "rendertarget_mesh.hpp"
@@ -14,9 +15,9 @@
 #include "scene/scene_root.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/windows/log_window.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/windows/log_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/physics/iworld.hpp"
@@ -49,30 +50,14 @@ namespace editor
 
 const float indent = 15.0f;
 
-Properties* g_properties{nullptr};
-
-Properties::Properties()
-    : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
+Properties::Properties(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context
+)
+    : Imgui_window{imgui_renderer, imgui_windows, "Properties", "properties"}
+    , m_context   {editor_context}
 {
-}
-
-Properties::~Properties() noexcept
-{
-    ERHE_VERIFY(g_properties == this);
-    g_properties = nullptr;
-}
-
-void Properties::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-}
-
-void Properties::initialize_component()
-{
-    ERHE_VERIFY(g_properties == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this, "properties");
-    g_properties = this;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -92,7 +77,7 @@ void Properties::camera_properties(erhe::scene::Camera& camera) const
     ) {
         ImGui::Indent(indent);
         ImGui::SetNextItemWidth(200);
-        erhe::application::make_combo(
+        erhe::imgui::make_combo(
             "Type",
             projection->projection_type,
             erhe::scene::Projection::c_type_strings,
@@ -211,7 +196,7 @@ void Properties::light_properties(erhe::scene::Light& light) const
 
     const ImGuiSliderFlags logarithmic = ImGuiSliderFlags_Logarithmic;
 
-    erhe::application::make_combo(
+    erhe::imgui::make_combo(
         "Type",
         light.type,
         erhe::scene::Light::c_type_strings,
@@ -430,9 +415,9 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
         if (ImGui::Checkbox(Item_flags::c_bit_labels[bit_position], &value)) {
             if (bit_mask == Item_flags::selected) {
                 if (value) {
-                    g_selection_tool->add_to_selection(item);
+                    m_context.selection->add_to_selection(item);
                 } else {
-                    g_selection_tool->remove_from_selection(item);
+                    m_context.selection->remove_from_selection(item);
                 }
             } else {
                 item->set_flag_bits(bit_mask, value);
@@ -539,7 +524,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
 void Properties::material_properties()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    const auto selected_material = g_content_library_window->selected_material();
+    const auto selected_material = m_context.content_library_window->selected_material();
     if (selected_material) {
         if (
             ImGui::TreeNodeEx(
@@ -552,8 +537,8 @@ void Properties::material_properties()
             if (ImGui::InputText("Name", &name)) {
                 selected_material->set_name(name);
             }
-            g_material_preview->render_preview(selected_material);
-            g_material_preview->show_preview();
+            m_context.material_preview->render_preview(selected_material);
+            m_context.material_preview->show_preview();
             ImGui::SliderFloat("Metallic",    &selected_material->metallic,     0.0f,  1.0f);
             ImGui::SliderFloat("Reflectance", &selected_material->reflectance,  0.35f, 1.0f);
             ImGui::SliderFloat("Roughness X", &selected_material->roughness.x,  0.1f,  0.8f);
@@ -572,11 +557,7 @@ void Properties::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    if (g_selection_tool == nullptr) {
-        return;
-    }
-
-    const auto& selection = g_selection_tool->get_selection();
+    const auto& selection = m_context.selection->get_selection();
     for (const auto& item : selection) {
         ERHE_VERIFY(item);
         item_properties(item);

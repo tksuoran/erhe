@@ -1,5 +1,6 @@
 #include "windows/layers_window.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
@@ -7,7 +8,7 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/light.hpp"
@@ -27,30 +28,14 @@ namespace editor
 
 using Light_type = erhe::scene::Light_type;
 
-Layers_window* g_layers_window{nullptr};
-
-Layers_window::Layers_window()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title}
+Layers_window::Layers_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&               editor_context
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Layers", "layers"}
+    , m_context                {editor_context}
 {
-}
-
-Layers_window::~Layers_window() noexcept
-{
-    ERHE_VERIFY(g_layers_window == this);
-    g_layers_window = nullptr;
-}
-
-void Layers_window::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-}
-
-void Layers_window::initialize_component()
-{
-    ERHE_VERIFY(g_layers_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this, "layers");
-    g_layers_window = this;
 }
 
 void Layers_window::imgui()
@@ -69,11 +54,11 @@ void Layers_window::imgui()
         ImGuiTreeNodeFlags_Leaf
     };
 
-    const auto& scene_roots        = g_editor_scenes->get_scene_roots();
-    const auto  mesh_icon          = g_icon_set->icons.mesh;
+    const auto& scene_roots        = m_context.editor_scenes->get_scene_roots();
+    const auto  mesh_icon          = m_context.icon_set->icons.mesh;
     const auto& icon_rasterization = get_scale_value() < 1.5f
-        ? g_icon_set->get_small_rasterization()
-        : g_icon_set->get_large_rasterization();
+        ? m_context.icon_set->get_small_rasterization()
+        : m_context.icon_set->get_large_rasterization();
 
     std::shared_ptr<erhe::scene::Item> item_clicked;
     for (const auto& scene_root : scene_roots) {
@@ -105,18 +90,18 @@ void Layers_window::imgui()
         }
     }
 
-    if (item_clicked && (g_selection_tool != nullptr)) {
+    if (item_clicked) {
         if (false) { // TODO shift or maybe ctrl?
             if (item_clicked->is_selected()) {
-                g_selection_tool->remove_from_selection(item_clicked);
+                m_context.selection->remove_from_selection(item_clicked);
             } else {
-                g_selection_tool->add_to_selection(item_clicked);
+                m_context.selection->add_to_selection(item_clicked);
             }
         } else {
             bool was_selected = item_clicked->is_selected();
-            g_selection_tool->clear_selection();
+            m_context.selection->clear_selection();
             if (!was_selected) {
-                g_selection_tool->add_to_selection(item_clicked);
+                m_context.selection->add_to_selection(item_clicked);
             }
         }
     }

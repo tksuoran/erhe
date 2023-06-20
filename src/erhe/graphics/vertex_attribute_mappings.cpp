@@ -11,12 +11,19 @@ namespace erhe::graphics
 using std::string;
 using std::string_view;
 
-Vertex_attribute_mappings::Vertex_attribute_mappings()
+Vertex_attribute_mappings::Vertex_attribute_mappings(
+    erhe::graphics::Instance& instance
+)
+    : m_instance{instance}
 {
 }
 
-Vertex_attribute_mappings::Vertex_attribute_mappings(std::initializer_list<Vertex_attribute_mapping> mappings)
-    : mappings{mappings}
+Vertex_attribute_mappings::Vertex_attribute_mappings(
+    erhe::graphics::Instance&                       instance,
+    std::initializer_list<Vertex_attribute_mapping> mappings
+)
+    : m_instance{instance}
+    , mappings  {mappings}
 {
 }
 
@@ -28,7 +35,7 @@ void Vertex_attribute_mappings::collect_attributes(
 {
     const unsigned int max_attribute_count = std::min(
         MAX_ATTRIBUTE_COUNT,
-        erhe::graphics::Instance::limits.max_vertex_attribs
+        m_instance.limits.max_vertex_attribs
     );
 
     if (vertex_buffer == nullptr) {

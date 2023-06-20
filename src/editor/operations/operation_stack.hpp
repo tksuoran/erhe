@@ -1,50 +1,90 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include <memory>
+#include <vector>
+
+namespace erhe::commands {
+    class CommandS;
+}
+namespace erhe::imgui {
+    class Imgui_windows;
+}
 
 namespace editor
 {
 
+class Editor_context;
+class Editor_message_bus;
 class IOperation;
+class Editor_context;
 class Operation_stack;
+class Selection_tool;
 
-class Operation_stack_impl;
-
-class IOperation_stack
+class Undo_command
+    : public erhe::commands::Command
 {
 public:
-    virtual ~IOperation_stack() noexcept;
+    Undo_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
+    auto try_call() -> bool override;
 
-    [[nodiscard]] virtual auto can_undo() const -> bool = 0;
-    [[nodiscard]] virtual auto can_redo() const -> bool = 0;
-    virtual void push(const std::shared_ptr<IOperation>& operation) = 0;
-    virtual void undo() = 0;
-    virtual void redo() = 0;
+private:
+    Editor_context& m_context;
+};
+
+class Redo_command
+    : public erhe::commands::Command
+{
+public:
+    Redo_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
+    auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Operation_stack
-    : public erhe::components::Component
+    : public erhe::imgui::Imgui_window
+    , public erhe::commands::Command_host
 {
 public:
-    static constexpr std::string_view c_type_name{"Operation_stack"};
-    static constexpr std::string_view c_title{"Operation Stack"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    Operation_stack(
+        erhe::commands::Commands&    commands,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context
+    );
 
-    Operation_stack ();
-    ~Operation_stack() noexcept override;
+    [[nodiscard]] auto can_undo() const -> bool;
+    [[nodiscard]] auto can_redo() const -> bool;
+    void push(const std::shared_ptr<IOperation>& operation);
+    void undo();
+    void redo();
 
-    // Implements Component
-    auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    // Implements Window
+    void imgui() override;
 
 private:
-    std::unique_ptr<Operation_stack_impl> m_impl;
-};
+    void imgui(
+        const char*                                     stack_label,
+        const std::vector<std::shared_ptr<IOperation>>& operations
+    );
 
-extern IOperation_stack* g_operation_stack;
+    Editor_context& m_context;
+
+    Undo_command m_undo_command;
+    Redo_command m_redo_command;
+
+    std::vector<std::shared_ptr<IOperation>> m_executed;
+    std::vector<std::shared_ptr<IOperation>> m_undone;
+};
 
 } // namespace editor

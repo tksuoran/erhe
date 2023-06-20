@@ -1,10 +1,15 @@
 #include "tools/transform/subtool.hpp"
+
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_view.hpp"
+#include "tools/tools.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
+
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -15,7 +20,10 @@ namespace editor
 
 using namespace glm;
 
-Subtool::Subtool() = default;
+Subtool::Subtool(Editor_context& editor_context)
+    : Tool{editor_context}
+{
+}
 
 Subtool::~Subtool() noexcept = default;
 
@@ -35,7 +43,7 @@ auto Subtool::get_axis_mask() const -> unsigned int
 
 void Subtool::end()
 {
-    g_transform_tool->record_transform_operation();
+    m_context.transform_tool->record_transform_operation();
     m_active = false;
 }
 
@@ -45,9 +53,9 @@ constexpr glm::mat4 mat4_identity{1.0f};
 
 };
 
-[[nodiscard]] auto Subtool::get_shared() const -> Transform_tool::Shared&
+[[nodiscard]] auto Subtool::get_shared() const -> Transform_tool_shared&
 {
-    return g_transform_tool->shared;
+    return m_context.transform_tool->shared;
 }
 
 auto Subtool::get_basis() const -> const glm::mat4&

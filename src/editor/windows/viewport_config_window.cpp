@@ -1,11 +1,12 @@
 #include "windows/viewport_config_window.hpp"
 
+#include "editor_context.hpp"
 #include "tools/hotbar.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/renderer/primitive_buffer.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/scene_renderer/primitive_buffer.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -15,39 +16,20 @@
 namespace editor
 {
 
-Viewport_config_window* g_viewport_config_window{nullptr};
-
-Viewport_config_window::Viewport_config_window()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title}
+Viewport_config_window::Viewport_config_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Viewport config", "viewport_config"}
+    , m_context                {editor_context}
 {
     config.render_style_not_selected.line_color = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
     config.render_style_not_selected.edge_lines = false;
 
     config.render_style_selected.edge_lines = false;
-}
 
-Viewport_config_window::~Viewport_config_window() = default;
-
-void Viewport_config_window::deinitialize_component()
-{
-    ERHE_VERIFY(g_viewport_config_window == this);
-    g_viewport_config_window = nullptr;
-}
-
-void Viewport_config_window::declare_required_components()
-{
-    require<erhe::application::Configuration>();
-    require<erhe::application::Imgui_windows>();
-}
-
-void Viewport_config_window::initialize_component()
-{
-    ERHE_VERIFY(g_viewport_config_window == nullptr);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this, "viewport_config");
-
-    auto ini = erhe::application::get_ini("erhe.ini", "viewport");
+    auto ini = erhe::configuration::get_ini("erhe.ini", "viewport");
     ini->get("polygon_fill",              polygon_fill);
     ini->get("edge_lines",                edge_lines);
     ini->get("edge_color",                edge_color);
@@ -80,7 +62,6 @@ void Viewport_config_window::initialize_component()
     config.selection_bounding_box    = selection_bounding_box;
     config.selection_bounding_sphere = selection_bounding_sphere;
     config.clear_color               = clear_color;
-    g_viewport_config_window = this;
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -106,13 +87,13 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
         ImGui::TreePop();
     }
 
-    using Primitive_interface_settings = erhe::renderer::Primitive_interface_settings;
+    using Primitive_interface_settings = erhe::scene_renderer::Primitive_interface_settings;
     if (ImGui::TreeNodeEx("Edge Lines", flags)) {
         ImGui::Checkbox("Visible", &render_style.edge_lines);
         if (render_style.edge_lines) {
             ImGui::SliderFloat("Width",          &render_style.line_width, 0.0f, 20.0f);
             ImGui::ColorEdit4 ("Constant Color", &render_style.line_color.x,     ImGuiColorEditFlags_Float);
-            erhe::application::make_combo(
+            erhe::imgui::make_combo(
                 "Color Source",
                 render_style.edge_lines_color_source,
                 Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
@@ -126,7 +107,7 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
         ImGui::Checkbox("Visible", &render_style.polygon_centroids);
         if (render_style.polygon_centroids) {
             ImGui::ColorEdit4("Constant Color", &render_style.centroid_color.x, ImGuiColorEditFlags_Float);
-            erhe::application::make_combo(
+            erhe::imgui::make_combo(
                 "Color Source",
                 render_style.polygon_centroids_color_source,
                 Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
@@ -139,7 +120,7 @@ void Viewport_config_window::render_style_ui(Render_style_data& render_style)
     if (ImGui::TreeNodeEx("Corner Points", flags)) {
         ImGui::Checkbox  ("Visible",        &render_style.corner_points);
         ImGui::ColorEdit4("Constant Color", &render_style.corner_color.x,   ImGuiColorEditFlags_Float);
-        erhe::application::make_combo(
+        erhe::imgui::make_combo(
             "Color Source",
             render_style.corner_points_color_source,
             Primitive_interface_settings::c_primitive_color_source_strings_data.data(),
@@ -180,8 +161,8 @@ void Viewport_config_window::imgui()
         }
 
         if (ImGui::TreeNodeEx("Debug Visualizations", flags)) {
-            erhe::application::make_combo("Light",  edit_data->debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
-            erhe::application::make_combo("Camera", edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+            erhe::imgui::make_combo("Light",  edit_data->debug_visualizations.light,  c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
+            erhe::imgui::make_combo("Camera", edit_data->debug_visualizations.camera, c_visualization_mode_strings, IM_ARRAYSIZE(c_visualization_mode_strings));
             ImGui::TreePop();
         }
     }
@@ -190,24 +171,25 @@ void Viewport_config_window::imgui()
 
     ImGui::SliderFloat("LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
 
-    if (g_hotbar != nullptr) {
+    {
         if (ImGui::TreeNodeEx("Hotbar", flags)) {
-            auto& color_inactive = g_hotbar->get_color(0);
-            auto& color_hover    = g_hotbar->get_color(1);
-            auto& color_active   = g_hotbar->get_color(2);
+            auto& hotbar = *m_context.hotbar;
+            auto& color_inactive = hotbar.get_color(0);
+            auto& color_hover    = hotbar.get_color(1);
+            auto& color_active   = hotbar.get_color(2);
             ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
             ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
 
-            auto position = g_hotbar->get_position();
+            auto position = hotbar.get_position();
             if (ImGui::DragFloat3("Position", &position.x, 0.1f)) {
-                g_hotbar->set_position(position);
+                hotbar.set_position(position);
             }
             ImGui::TreePop();
 
-            bool locked = g_hotbar->get_locked();
+            bool locked = hotbar.get_locked();
             if (ImGui::Checkbox("Locked", &locked)) {
-                g_hotbar->set_locked(locked);
+                hotbar.set_locked(locked);
             }
         }
     }

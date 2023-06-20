@@ -1,11 +1,15 @@
 #include "operations/node_operation.hpp"
+
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
+#include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/log/log_glm.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -38,7 +42,7 @@ auto Node_operation::describe() const -> std::string
     return ss.str();
 }
 
-void Node_operation::execute()
+void Node_operation::execute(Editor_context&)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -47,7 +51,7 @@ void Node_operation::execute()
     }
 }
 
-void Node_operation::undo()
+void Node_operation::undo(Editor_context&)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -67,10 +71,6 @@ Node_transform_operation::Node_transform_operation(
     const Parameters& parameters
 )
     : m_parameters{parameters}
-{
-}
-
-Node_transform_operation::~Node_transform_operation() noexcept
 {
 }
 
@@ -111,11 +111,11 @@ auto Node_transform_operation::describe() const -> std::string
     );
 }
 
-void Node_transform_operation::execute()
+void Node_transform_operation::execute(Editor_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
-    g_editor_message_bus->send_message(
+    context.editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
             .node         = m_parameters.node.get()
@@ -123,11 +123,11 @@ void Node_transform_operation::execute()
     );
 }
 
-void Node_transform_operation::undo()
+void Node_transform_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
     m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
-    g_editor_message_bus->send_message(
+    context.editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_node_touched_operation_stack,
             .node         = m_parameters.node.get()
@@ -159,7 +159,7 @@ Attach_operation::Attach_operation(
 {
 }
 
-void Attach_operation::execute()
+void Attach_operation::execute(Editor_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -176,13 +176,10 @@ void Attach_operation::execute()
         m_host_node_after->attach(m_attachment);
     }
 
-    if (g_selection_tool != nullptr)
-    {
-        g_selection_tool->sanity_check();
-    }
+    context.selection->sanity_check();
 }
 
-void Attach_operation::undo()
+void Attach_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -199,10 +196,7 @@ void Attach_operation::undo()
         m_host_node_before->attach(m_attachment);
     }
 
-    if (g_selection_tool != nullptr)
-    {
-        g_selection_tool->sanity_check();
-    }
+    context.selection->sanity_check();
 }
 
 // ----------------------------------------------------------------------------
@@ -235,7 +229,7 @@ Node_attach_operation::Node_attach_operation(
     ERHE_VERIFY(!place_before_node || !place_after_node);
 }
 
-void Node_attach_operation::execute()
+void Node_attach_operation::execute(Editor_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -254,12 +248,10 @@ void Node_attach_operation::execute()
         m_child_node->set_parent({});
     }
 
-    if (g_selection_tool != nullptr) {
-        g_selection_tool->sanity_check();
-    }
+    context.selection->sanity_check();
 }
 
-void Node_attach_operation::undo()
+void Node_attach_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -271,9 +263,7 @@ void Node_attach_operation::undo()
         m_child_node->set_parent({});
     }
 
-    if (g_selection_tool != nullptr) {
-        g_selection_tool->sanity_check();
-    }
+    context.selection->sanity_check();
 }
 
 // ----------------------------------------------------------------------------
@@ -303,7 +293,7 @@ auto Node_reposition_in_parent_operation::describe() const -> std::string
     );
 }
 
-void Node_reposition_in_parent_operation::execute()
+void Node_reposition_in_parent_operation::execute(Editor_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -325,12 +315,10 @@ void Node_reposition_in_parent_operation::execute()
 
     parent_children.insert(parent_children.begin() + after_index, m_child_node);
 
-    if (g_selection_tool != nullptr) {
-        g_selection_tool->sanity_check();
-    }
+    context.selection->sanity_check();
 }
 
-void Node_reposition_in_parent_operation::undo()
+void Node_reposition_in_parent_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -347,9 +335,7 @@ void Node_reposition_in_parent_operation::undo()
     parent_children.erase(parent_children.begin() + after_index);
     parent_children.insert(parent_children.begin() + m_before_index, m_child_node);
 
-    if (g_selection_tool != nullptr) {
-        g_selection_tool->sanity_check();
-    }
+    context.selection->sanity_check();
 }
 
 

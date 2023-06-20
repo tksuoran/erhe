@@ -117,8 +117,7 @@ auto Variations::make(
     const auto i = std::find_if(
         m_terrains.begin(),
         m_terrains.end(),
-        [base_terrain, variation_terrain](const Terrain_variation& entry)
-        {
+        [base_terrain, variation_terrain](const Terrain_variation& entry) {
             return
                 (entry.base_terrain      == base_terrain) &&
                 (entry.variation_terrain == variation_terrain);

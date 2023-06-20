@@ -1,11 +1,8 @@
-#include "tools/brushes/create/create.hpp"
-#include "tools/brushes/create/create_box.hpp"
-#include "tools/brushes/create/create_cone.hpp"
-#include "tools/brushes/create/create_torus.hpp"
-#include "tools/brushes/create/create_uv_sphere.hpp"
 
 #include "tools/tool.hpp"
 
+#include "editor_context.hpp"
+#include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -18,15 +15,17 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/brushes/brush.hpp"
 #include "tools/brushes/brush_tool.hpp"
+#include "tools/brushes/create/create_preview_settings.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe/imgui/imgui_window.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
@@ -45,80 +44,19 @@ namespace editor
 using Transform = erhe::scene::Transform;
 using Trs_transform = erhe::scene::Trs_transform;
 
-class Create_impl
-    : public erhe::application::Imgui_window
-    , public Tool
+Create::Create(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
+    Tools&                       tools
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Create", "create"}
+    , Tool{editor_context}
 {
-public:
-    static constexpr int c_priority{4};
-
-    Create_impl()
-        : erhe::application::Imgui_window{Create::c_title}
-    {
-        erhe::application::g_imgui_windows->register_imgui_window(this, "create");
-
-        set_base_priority(c_priority);
-        set_description  (Create::c_title);
-        set_flags        (Tool_flags::background);
-        g_tools->register_tool(this);
-    }
-
-    ~Create_impl() noexcept override = default;
-
-    // Implements Tool
-    void tool_render(const Render_context& context) override;
-
-    // Implements Imgui_window
-    void imgui() override;
-
-private:
-    void brush_create_button(const char* label, Brush_create* brush_create);
-
-    [[nodiscard]] auto find_parent() -> std::shared_ptr<erhe::scene::Node>;
-
-    erhe::primitive::Normal_style m_normal_style{erhe::primitive::Normal_style::point_normals};
-    float                         m_density     {1.0f};
-    bool                          m_preview_ideal_shape{false};
-    bool                          m_preview_shape{true};
-    Create_uv_sphere              m_create_uv_sphere;
-    Create_cone                   m_create_cone;
-    Create_torus                  m_create_torus;
-    Create_box                    m_create_box;
-    Brush_create*                 m_brush_create{nullptr};
-    std::string                   m_brush_name;
-    std::shared_ptr<Brush>        m_brush;
-};
-
-Create* g_create{nullptr};
-
-Create::Create()
-    : erhe::components::Component{c_type_name}
-{
-}
-
-Create::~Create() noexcept
-{
-    ERHE_VERIFY(g_create == nullptr);
-}
-
-void Create::deinitialize_component()
-{
-    ERHE_VERIFY(g_create == this);
-    m_impl.reset();
-    g_create = nullptr;
-}
-
-void Create::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-    require<Tools>();
-}
-
-void Create::initialize_component()
-{
-    ERHE_VERIFY(g_create == nullptr);
-    m_impl = std::make_unique<Create_impl>();
-    g_create = this;
+    set_base_priority  (c_priority);
+    set_description    ("Create");
+    set_flags          (Tool_flags::background);
+    tools.register_tool(this);
 }
 
 namespace
@@ -128,27 +66,23 @@ constexpr ImVec2 button_size{110.0f, 0.0f};
 
 }
 
-void Create_impl::brush_create_button(const char* label, Brush_create* brush_create)
+void Create::brush_create_button(const char* label, Create_shape* create_shape)
 {
-    if (ImGui::Button(label, button_size))
-    {
-        if (m_brush_create == brush_create)
-        {
-            m_brush_create = nullptr;
-        }
-        else
-        {
-            m_brush_create = brush_create;
+    if (ImGui::Button(label, button_size)) {
+        if (m_create_shape == create_shape) {
+            m_create_shape = nullptr;
+        } else {
+            m_create_shape = create_shape;
             m_brush_name = label;
         }
     }
 }
 
-auto Create_impl::find_parent() -> std::shared_ptr<erhe::scene::Node>
+auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 {
-    const auto selected_node   = g_selection_tool->get_first_selected_node();
-    const auto selected_scene  = g_selection_tool->get_first_selected_scene();
-    const auto viewport_window = g_viewport_windows->last_window();
+    const auto selected_node   = m_context.selection->get_first_selected_node();
+    const auto selected_scene  = m_context.selection->get_first_selected_scene();
+    const auto viewport_window = m_context.viewport_windows->last_window();
 
     Scene_view* scene_view = get_hover_scene_view();
     erhe::scene::Scene_host* scene_host = selected_node
@@ -172,7 +106,7 @@ auto Create_impl::find_parent() -> std::shared_ptr<erhe::scene::Node>
     return parent;
 }
 
-void Create_impl::imgui()
+void Create::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto parent = find_parent();
@@ -187,16 +121,16 @@ void Create_impl::imgui()
 
     ImGui::Text("Nodes");
     if (ImGui::Button("Empty Node", button_size)) {
-        g_scene_commands->create_new_empty_node(parent.get());
+        m_context.scene_commands->create_new_empty_node(parent.get());
     }
     if (ImGui::Button("Camera", button_size)) {
-        g_scene_commands->create_new_camera(parent.get());
+        m_context.scene_commands->create_new_camera(parent.get());
     }
     if (ImGui::Button("Light", button_size)) {
-        g_scene_commands->create_new_light(parent.get());
+        m_context.scene_commands->create_new_light(parent.get());
     }
     if (ImGui::Button("Rendertarget", button_size)) {
-        g_scene_commands->create_new_rendertarget(parent.get());
+        m_context.scene_commands->create_new_rendertarget(parent.get());
     }
 
     ImGui::Separator();
@@ -208,9 +142,9 @@ void Create_impl::imgui()
     brush_create_button("Torus",     &m_create_torus);
     brush_create_button("Box",       &m_create_box);
 
-    if (m_brush_create != nullptr) {
-        m_brush_create->imgui();
-        erhe::application::make_combo(
+    if (m_create_shape != nullptr) {
+        m_create_shape->imgui();
+        erhe::imgui::make_combo(
             "Normal Style",
             m_normal_style,
             erhe::primitive::c_normal_style_strings,
@@ -221,13 +155,17 @@ void Create_impl::imgui()
         const bool create_brush    = ImGui::Button("Create Brush", button_size);
         if (create_instance || create_brush) {
             Brush_data brush_create_info{
-                .name            = m_brush_name,
-                .build_info      = g_mesh_memory->build_info,
-                .normal_style    = m_normal_style,
-                .density         = m_density,
+                .context      = m_context,
+                .name         = m_brush_name,
+                .build_info   = erhe::primitive::Build_info{
+                    .primitive_types = { .fill_triangles = true, .edge_lines = true, .corner_points = true, .centroid_points = true },
+                    .buffer_info     = m_context.mesh_memory->buffer_info
+                },
+                .normal_style = m_normal_style,
+                .density      = m_density,
             };
 
-            m_brush = m_brush_create->create(brush_create_info);
+            m_brush = m_create_shape->create(brush_create_info);
             if (m_brush && create_instance) {
                 using Item_flags = erhe::scene::Item_flags;
                 const uint64_t node_flags =
@@ -244,25 +182,26 @@ void Create_impl::imgui()
 
                 const Instance_create_info brush_instance_create_info
                 {
-                    .node_flags       = node_flags,
-                    .mesh_flags       = mesh_flags,
-                    .scene_root       = scene_root,
-                    .world_from_node  = world_from_node,
-                    .material         = g_content_library_window->selected_material(),
-                    .scale            = 1.0
+                    .node_flags      = node_flags,
+                    .mesh_flags      = mesh_flags,
+                    .scene_root      = scene_root,
+                    .world_from_node = world_from_node,
+                    .material        = m_context.content_library_window->selected_material(),
+                    .scale           = 1.0
                 };
                 const auto instance_node = m_brush->make_instance(brush_instance_create_info);
 
                 auto op = std::make_shared<Node_insert_remove_operation>(
                     Node_insert_remove_operation::Parameters{
-                        .node   = instance_node,
-                        .parent = parent,
-                        .mode   = Scene_item_operation::Mode::insert
+                        .context = m_context,
+                        .node    = instance_node,
+                        .parent  = parent,
+                        .mode    = Scene_item_operation::Mode::insert
                     }
                 );
-                g_operation_stack->push(op);
+                m_context.operation_stack->push(op);
             }
-            m_brush_create = nullptr;
+            m_create_shape = nullptr;
         }
         if (m_brush && create_brush) {
             content_library->brushes.add(m_brush);
@@ -271,7 +210,7 @@ void Create_impl::imgui()
     }
 
     {
-        const auto& selection = g_selection_tool->get_selection();
+        const auto& selection = m_context.selection->get_selection();
         if (!selection.empty()) {
             std::shared_ptr<erhe::geometry::Geometry> source_geometry;
             for (const auto& node : selection) {
@@ -289,8 +228,8 @@ void Create_impl::imgui()
                 }
             }
             if (source_geometry) {
-                if (m_brush_create == nullptr) {
-                    erhe::application::make_combo(
+                if (m_create_shape == nullptr) {
+                    erhe::imgui::make_combo(
                         "Normal Style",
                         m_normal_style,
                         erhe::primitive::c_normal_style_strings,
@@ -302,8 +241,12 @@ void Create_impl::imgui()
                 ImGui::Text("Selected Primitive: %s", source_geometry->name.c_str());
                 if (ImGui::Button("Selected Mesh to Brush")) {
                     Brush_data brush_create_info{
+                        .context      = m_context,
                         .name         = m_brush_name,
-                        .build_info   = g_mesh_memory->build_info,
+                        .build_info   = erhe::primitive::Build_info{
+                            .primitive_types = { .fill_triangles = true, .edge_lines = true, .corner_points = true, .centroid_points = true },
+                            .buffer_info     = m_context.mesh_memory->buffer_info
+                        },
                         .normal_style = m_normal_style,
                         .geometry     = source_geometry,
                         .density      = m_density
@@ -322,7 +265,7 @@ void Create_impl::imgui()
 #endif
 }
 
-void Create_impl::tool_render(const Render_context& context)
+void Create::tool_render(const Render_context& context)
 {
     const auto parent = find_parent();
     if (!parent) {
@@ -337,28 +280,26 @@ void Create_impl::tool_render(const Render_context& context)
     const Trs_transform transform = parent
         ? parent->world_from_node_transform()
         : Trs_transform{};
-    if (m_brush_create != nullptr) {
+    if (m_create_shape != nullptr) {
         if (m_preview_ideal_shape) {
-            const Create_preview_settings preview_settings
-            {
+            const Create_preview_settings preview_settings{
                 .render_context = context,
                 .transform      = transform,
                 .major_color    = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f},
                 .minor_color    = glm::vec4{1.0f, 0.5f, 0.0f, 0.5f},
                 .ideal_shape    = true
             };
-            m_brush_create->render_preview(preview_settings);
+            m_create_shape->render_preview(preview_settings);
         }
         if (m_preview_shape) {
-            const Create_preview_settings preview_settings
-            {
+            const Create_preview_settings preview_settings{
                 .render_context = context,
                 .transform      = transform,
                 .major_color    = glm::vec4{0.5f, 1.0f, 0.0f, 1.0f},
                 .minor_color    = glm::vec4{0.5f, 1.0f, 0.0f, 0.5f},
                 .ideal_shape    = false
             };
-            m_brush_create->render_preview(preview_settings);
+            m_create_shape->render_preview(preview_settings);
         }
     }
 }
