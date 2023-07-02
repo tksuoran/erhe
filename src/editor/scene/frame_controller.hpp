@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/application/controller.hpp"
+#include "erhe/toolkit/simulation_variable.hpp"
 
 #include "erhe/scene/node.hpp"
 
@@ -8,15 +8,14 @@
 
 #include <memory>
 
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Node;
 }
 
 namespace editor
 {
 
-enum class Control : unsigned int
+enum class Variable : unsigned int
 {
     translate_x = 0,
     translate_y = 1,
@@ -49,21 +48,21 @@ public:
     void set_heading            (const float value);
     void get_transform_from_node(erhe::scene::Node* node);
 
-    [[nodiscard]] auto get_position  () const -> glm::vec3;
-    [[nodiscard]] auto get_elevation () const -> float;
-    [[nodiscard]] auto get_heading   () const -> float;
-    [[nodiscard]] auto get_axis_x    () const -> glm::vec3;
-    [[nodiscard]] auto get_axis_y    () const -> glm::vec3;
-    [[nodiscard]] auto get_axis_z    () const -> glm::vec3;
-    [[nodiscard]] auto get_controller(const Control control) -> erhe::application::Controller&;
+    [[nodiscard]] auto get_position () const -> glm::vec3;
+    [[nodiscard]] auto get_elevation() const -> float;
+    [[nodiscard]] auto get_heading  () const -> float;
+    [[nodiscard]] auto get_axis_x   () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_y   () const -> glm::vec3;
+    [[nodiscard]] auto get_axis_z   () const -> glm::vec3;
+    [[nodiscard]] auto get_variable (const Variable variable) -> erhe::toolkit::Simulation_variable&;
 
-    erhe::application::Controller rotate_x;
-    erhe::application::Controller rotate_y;
-    erhe::application::Controller rotate_z;
-    erhe::application::Controller translate_x;
-    erhe::application::Controller translate_y;
-    erhe::application::Controller translate_z;
-    erhe::application::Controller speed_modifier;
+    erhe::toolkit::Simulation_variable rotate_x;
+    erhe::toolkit::Simulation_variable rotate_y;
+    erhe::toolkit::Simulation_variable rotate_z;
+    erhe::toolkit::Simulation_variable translate_x;
+    erhe::toolkit::Simulation_variable translate_y;
+    erhe::toolkit::Simulation_variable translate_z;
+    erhe::toolkit::Simulation_variable speed_modifier;
 
 private:
     float     m_elevation       {0.0f};

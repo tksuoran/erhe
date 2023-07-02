@@ -1,12 +1,14 @@
 #include "tools/brushes/create/create_box.hpp"
+#include "tools/brushes/create/create.hpp"
+#include "tools/brushes/create/create_preview_settings.hpp"
 
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/brushes/brush.hpp"
 
-#include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/physics/icollision_shape.hpp"
@@ -24,20 +26,17 @@ void Create_box::render_preview(
 )
 {
     const Render_context& render_context = preview_settings.render_context;
-    if (render_context.scene_view == nullptr) {
+    const auto& view_camera = render_context.scene_view.get_camera();
+    if (!view_camera) {
         return;
     }
-
-    const auto& view_camera = render_context.scene_view->get_camera();
-    if (view_camera) {
-        auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
-        line_renderer.add_cube(
-            preview_settings.transform.get_matrix(),
-            preview_settings.major_color,
-            -0.5f * m_size,
-             0.5f * m_size
-        );
-    }
+    auto& line_renderer = get_line_renderer(preview_settings);
+    line_renderer.add_cube(
+        preview_settings.transform.get_matrix(),
+        preview_settings.major_color,
+        -0.5f * m_size,
+            0.5f * m_size
+    );
 }
 
 void Create_box::imgui()

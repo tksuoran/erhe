@@ -6,6 +6,8 @@
 
 namespace hextiles {
 
+extern std::shared_ptr<spdlog::logger> log_startup;
+extern std::shared_ptr<spdlog::logger> log_frame;
 extern std::shared_ptr<spdlog::logger> log_map_window;
 extern std::shared_ptr<spdlog::logger> log_map_generator;
 extern std::shared_ptr<spdlog::logger> log_map_editor;

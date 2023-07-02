@@ -3,9 +3,8 @@
 #include "tools/tool.hpp"
 #include "scene/node_raytrace.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/physics/imotion_state.hpp"
 
 #include <glm/glm.hpp>
@@ -13,28 +12,27 @@
 #include <functional>
 #include <memory>
 
-namespace erhe::raytrace
-{
-    class IScene;
-}
-
-namespace erhe::scene
-{
-    class Mesh;
-}
-
-namespace erhe::physics
-{
+namespace erhe::physics {
     class IConstraint;
     class IRigid_body;
     class IWorld;
+}
+namespace erhe::raytrace {
+    class IScene;
+}
+namespace erhe::scene {
+    class Mesh;
 }
 
 namespace editor
 {
 
 class Editor_message;
+class Editor_message_bus;
+class Headset_view;
+class Icon_set;
 class Node_physics;
+class Physics_tool;
 class Scene_root;
 
 enum class Physics_tool_mode : int
@@ -45,34 +43,37 @@ enum class Physics_tool_mode : int
 };
 
 class Physics_tool_drag_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Physics_tool_drag_command();
+    Physics_tool_drag_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     void try_ready  () override;
     auto try_call   () -> bool override;
     void on_inactive() override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Physics_tool
-    : public erhe::components::Component
-    , public erhe::physics::IMotion_state
+    : public erhe::physics::IMotion_state
     , public Tool
 {
 public:
-    static constexpr int              c_priority {2};
-    static constexpr std::string_view c_type_name{"Physics_tool"};
-    static constexpr std::string_view c_title    {"Physics Tool"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr int c_priority{2};
 
-    Physics_tool ();
-    ~Physics_tool() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Physics_tool(
+        erhe::commands::Commands& commands,
+        Editor_context&           editor_context,
+        Editor_message_bus&       editor_message_bus,
+        Headset_view&             headset_view,
+        Icon_set&                 icon_set,
+        Tools&                    tools
+    );
+    ~Physics_tool() noexcept;
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
@@ -105,16 +106,15 @@ private:
 
     [[nodiscard]] auto get_scene_root    () const -> Scene_root*;
     [[nodiscard]] auto get_raytrace_scene() const -> erhe::raytrace::IScene*;
-    [[nodiscard]] auto get_physics_world () const -> erhe::physics::IWorld*;
 
     // Commands
-    Physics_tool_drag_command                    m_drag_command;
+    Physics_tool_drag_command                 m_drag_command;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    erhe::application::Redirect_command          m_drag_redirect_update_command;
-    erhe::application::Drag_enable_float_command m_drag_enable_command;
+    erhe::commands::Redirect_command          m_drag_redirect_update_command;
+    erhe::commands::Drag_enable_float_command m_drag_enable_command;
 #endif
 
-    Physics_tool_mode                           m_mode{Physics_tool_mode::Drag};
+    Physics_tool_mode                           m_mode       {Physics_tool_mode::Drag};
     erhe::physics::Motion_mode                  m_motion_mode{erhe::physics::Motion_mode::e_kinematic_physical};
 
     std::shared_ptr<erhe::scene::Mesh>          m_hover_mesh;
@@ -125,6 +125,8 @@ private:
     glm::vec3                                   m_target_position_in_mesh{0.0f, 0.0f, 0.0f};
     glm::vec3                                   m_target_position_start  {0.0f, 0.0f, 0.0f};
     glm::vec3                                   m_target_position_end    {0.0f, 0.0f, 0.0f};
+
+    erhe::physics::IWorld*                      m_physics_world{nullptr};
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
     std::shared_ptr<erhe::physics::IRigid_body> m_constraint_world_point_rigid_body;
 
@@ -161,7 +163,5 @@ private:
         .hit_size      = 0.5f
     };
 };
-
-extern Physics_tool* g_physics_tool;
 
 } // namespace editor

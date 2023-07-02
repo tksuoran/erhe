@@ -16,15 +16,14 @@
 #include "tools/tools.hpp"
 #include "windows/imgui_viewport_window.hpp"
 
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_viewport.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/window_imgui_viewport.hpp"
-#include "erhe/application/rendergraph/multisample_resolve.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/view.hpp"
-#include "erhe/application/windows/log_window.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_viewport.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/window_imgui_viewport.hpp"
+#include "erhe/rendergraph/multisample_resolve.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/imgui/windows/log_window.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -61,8 +60,7 @@ auto Open_new_viewport_window_command::try_call() -> bool
 }
 
 Viewport_windows::Viewport_windows()
-    : erhe::components::Component       {c_type_name}
-    , m_open_new_viewport_window_command{*this}
+    : m_open_new_viewport_window_command{*this}
 {
 }
 
@@ -72,17 +70,16 @@ Viewport_windows::~Viewport_windows() noexcept
 
 void Viewport_windows::declare_required_components()
 {
-    require<erhe::application::Commands>();
-    m_configuration   = require<erhe::application::Configuration>();
-    m_imgui_windows   = require<erhe::application::Imgui_windows>();
-    m_render_graph    = require<erhe::application::Rendergraph  >();
+    require<erhe::commands::Commands>();
+    m_imgui_windows   = require<erhe::imgui::Imgui_windows>();
+    m_render_graph    = require<erhe::rendergraph::Rendergraph>();
     m_post_processing = require<Post_processing>();
-    m_shadow_renderer = require<Shadow_renderer >();
+    m_shadow_renderer = require<erhe::renderer::Shadow_renderer>();
 }
 
 void Viewport_windows::initialize_component()
 {
-    const auto commands = get<erhe::application::Commands>();
+    const auto commands = get<erhe::commands::Commands>();
     commands->register_command   (&m_open_new_viewport_window_command);
     commands->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
 }
@@ -120,27 +117,27 @@ auto Viewport_windows::create_window(
     {
         auto& shadow_render_node = shadow_render_nodes.front();
         m_render_graph->connect(
-            erhe::application::Rendergraph_node_key::shadow_maps,
+            erhe::rendergraph::Rendergraph_node_key::shadow_maps,
             shadow_render_node,
             new_viewport_window
         );
     }
 
-    auto multisample_resolve_node = std::make_shared<erhe::application::Multisample_resolve_node>(
+    auto multisample_resolve_node = std::make_shared<erhe::rendergraph::Multisample_resolve_node>(
         fmt::format("MSAA for {}", name),
         m_configuration->graphics.msaa_sample_count,
         "viewport",
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
     new_viewport_window->link_to(multisample_resolve_node);
     m_render_graph->register_node(multisample_resolve_node);
     m_render_graph->connect(
-        erhe::application::Rendergraph_node_key::viewport,
+        erhe::rendergraph::Rendergraph_node_key::viewport,
         new_viewport_window,
         multisample_resolve_node
     );
 
-    std::shared_ptr<erhe::application::Rendergraph_node> viewport_producer;
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> viewport_producer;
     if (enable_post_processing)
     {
         auto post_processing_node = std::make_shared<Post_processing_node>(
@@ -150,7 +147,7 @@ auto Viewport_windows::create_window(
         new_viewport_window->link_to(post_processing_node);
         m_render_graph->register_node(post_processing_node);
         m_render_graph->connect(
-            erhe::application::Rendergraph_node_key::viewport,
+            erhe::rendergraph::Rendergraph_node_key::viewport,
             multisample_resolve_node,
             post_processing_node
         );
@@ -177,12 +174,12 @@ auto Viewport_windows::create_imgui_viewport_window(
     m_imgui_windows->register_imgui_window(imgui_viewport_window.get());
     m_render_graph->register_node(imgui_viewport_window);
     m_render_graph->connect(
-        erhe::application::Rendergraph_node_key::viewport,
+        erhe::rendergraph::Rendergraph_node_key::viewport,
         viewport_window->get_final_output(),
         imgui_viewport_window
     );
     m_render_graph->connect(
-        erhe::application::Rendergraph_node_key::window,
+        erhe::rendergraph::Rendergraph_node_key::window,
         imgui_viewport_window,
         window_imgui_viewport
     );
@@ -279,14 +276,14 @@ void Viewport_windows::reset_hover()
     m_hover_stack.clear();
 }
 
-void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_viewport)
+void Viewport_windows::update_hover(erhe::imgui::Imgui_viewport* imgui_viewport)
 {
     ERHE_PROFILE_FUNCTION
 
     update_hover_from_imgui_windows(imgui_viewport);
 }
 
-void Viewport_windows::update_hover_from_imgui_windows(erhe::application::Imgui_viewport* imgui_viewport)
+void Viewport_windows::update_hover_from_imgui_windows(erhe::imgui::Imgui_viewport* imgui_viewport)
 {
     for (const auto& imgui_viewport_window : m_imgui_viewport_windows)
     {

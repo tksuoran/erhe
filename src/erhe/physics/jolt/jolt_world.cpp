@@ -243,12 +243,16 @@ void Jolt_world::update_fixed_step(const double dt)
 
     // If you want more accurate step results you can do multiple sub steps
     // within a collision step. Usually you would set this to 1.
-    const int cIntegrationSubSteps = 1;
+    //const int cIntegrationSubSteps = 1;
 
+    //float inDeltaTime, 
+    // int inCollisionSteps, 
+    // TempAllocator *inTempAllocator, 
+    // JobSystem *inJobSystem
     m_physics_system.Update(
         static_cast<float>(dt),
         cCollisionSteps,
-        cIntegrationSubSteps,
+        //cIntegrationSubSteps,
         &m_temp_allocator,
         &m_job_system
     );

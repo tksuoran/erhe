@@ -3,40 +3,27 @@
 #include "tools/transform/subtool.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/components/components.hpp"
-
 #include <string_view>
 
 namespace editor
 {
 
+class Icon_set;
+class Transform_tool;
+
 enum class Handle : unsigned int;
 
 class Rotate_tool
-    : public erhe::components::Component
-    , public Tool
-    , public Subtool
+    : public Subtool
 {
 public:
-    static constexpr int              c_priority {1};
-    static constexpr std::string_view c_type_name{"Rotate_tool"};
-    static constexpr std::string_view c_title    {"Rotate"};
-    static constexpr uint32_t         c_type_hash{
-        compiletime_xxhash::xxh32(
-            c_type_name.data(),
-            c_type_name.size(),
-            {}
-        )
-    };
+    static constexpr int c_priority{1};
 
-    Rotate_tool ();
+    Rotate_tool(
+        Editor_context& editor_context,
+        Icon_set&       icon_set
+    );
     ~Rotate_tool() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
 
     // Implements Tool
     void handle_priority_update(int old_priority, int new_priority) override;
@@ -64,7 +51,5 @@ private:
     float                    m_start_rotation_angle{0.0f};
     float                    m_current_angle       {0.0f};
 };
-
-extern Rotate_tool* g_rotate_tool;
 
 } // namespace editor

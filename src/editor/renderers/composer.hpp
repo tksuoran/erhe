@@ -16,7 +16,6 @@ class Composer
 {
 public:
     Composer(const std::string_view name);
-    ~Composer() noexcept override;
 
     // Implements Item
     [[nodiscard]] static auto static_type     () -> uint64_t;

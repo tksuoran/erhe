@@ -6,8 +6,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::application
-{
+namespace erhe::renderer {
     class Line_renderer_set;
 }
 
@@ -39,7 +38,7 @@ class Grid
     : public erhe::scene::Node_attachment
 {
 public:
-    Grid();
+    ~Grid() noexcept override;
 
     // Implements Node_attachment
     [[nodiscard]] auto get_type () const -> uint64_t    override;
@@ -57,7 +56,7 @@ public:
     ) -> std::optional<glm::vec3>;
 
     void render(const Render_context& context);
-    void imgui ();
+    void imgui (Editor_context& context);
 
     void set_cell_size  (float cell_size) { m_cell_size = cell_size; }
     void set_cell_div   (int cell_div) { m_cell_div = cell_div; }

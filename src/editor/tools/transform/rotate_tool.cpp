@@ -1,5 +1,6 @@
 #include "tools/transform/rotate_tool.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
@@ -8,8 +9,8 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -22,40 +23,20 @@ namespace editor
 
 using namespace glm;
 
-Rotate_tool* g_rotate_tool{nullptr};
-
-Rotate_tool::Rotate_tool()
-    : erhe::components::Component{c_type_name}
+Rotate_tool::Rotate_tool(
+    Editor_context& editor_context,
+    Icon_set&       icon_set
+)
+    : Subtool{editor_context}
 {
-}
-
-Rotate_tool::~Rotate_tool() noexcept
-{
-    ERHE_VERIFY(g_rotate_tool == nullptr);
-}
-
-void Rotate_tool::deinitialize_component()
-{
-    ERHE_VERIFY(g_rotate_tool == this);
-    g_rotate_tool = nullptr;
-}
-
-void Rotate_tool::declare_required_components()
-{
-    require<Icon_set>();
-    require<Tools   >();
-}
-
-void Rotate_tool::initialize_component()
-{
-    ERHE_VERIFY(g_rotate_tool == nullptr);
     set_base_priority(c_priority);
-    set_description  (c_title);
+    set_description  ("Rotate");
     set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
-    set_icon         (g_icon_set->icons.rotate);
-    g_tools->register_tool(this);
-    g_rotate_tool = this;
+    set_icon         (icon_set.icons.rotate);
+    //g_tools->register_tool(this);
 }
+
+Rotate_tool::~Rotate_tool() noexcept = default;
 
 void Rotate_tool::handle_priority_update(
     const int old_priority,
@@ -74,7 +55,7 @@ void Rotate_tool::imgui()
     ImGui::Checkbox("Rotate Snap Enable", &shared.settings.rotate_snap_enable);
     const float rotate_snap_values[] = {  5.0f, 10.0f, 15.0f, 20.0f, 30.0f, 45.0f, 60.0f, 90.0f };
     const char* rotate_snap_items [] = { "5",  "10",  "15",  "20",  "30",  "45",  "60",  "90" };
-    erhe::application::make_combo(
+    erhe::imgui::make_combo(
         "Rotate Snap",
         m_rotate_snap_index,
         rotate_snap_items,
@@ -190,16 +171,12 @@ void Rotate_tool::update_final()
 
     m_current_angle = angle;
 
-    g_transform_tool->adjust_rotation(m_center_of_rotation, glm::quat_cast(rotation));
+    m_context.transform_tool->adjust_rotation(m_center_of_rotation, glm::quat_cast(rotation));
 }
 
 void Rotate_tool::render(const Render_context& context)
 {
-    if (
-        (erhe::application::g_line_renderer_set == nullptr) ||
-        (!is_active()) ||
-        (context.camera == nullptr)
-    ) {
+    if (!is_active()) {
         return;
     }
 
@@ -222,7 +199,7 @@ void Rotate_tool::render(const Render_context& context)
     constexpr vec4 blue  {0.0f, 0.0f, 1.0f, 1.0f};
     constexpr vec4 orange{1.0f, 0.5f, 0.0f, 0.8f};
 
-    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
     {
         const int sector_count = shared.settings.rotate_snap_enable

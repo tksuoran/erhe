@@ -1,7 +1,9 @@
 #include "operations/merge_operation.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "operations/merge_operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -40,7 +42,8 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
     // TODO count meshes in selection
-    if (g_selection_tool->get_selection().size() < 2) {
+    auto& selected_items = m_parameters.context.selection->get_selection();
+    if (selected_items.size() < 2) {
         return;
     }
 
@@ -54,12 +57,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     bool        first_mesh                = true;
     mat4        reference_node_from_world = mat4{1};
     auto        normal_style              = Normal_style::none;
+    //erhe::primitive::Build_info build_
 
-    ERHE_VERIFY(g_selection_tool != nullptr);
+    m_selection_before = m_parameters.context.selection->get_selection();
 
-    m_selection_before = g_selection_tool->get_selection();
-
-    for (const auto& item : g_selection_tool->get_selection()) {
+    for (const auto& item : m_selection_before) {
         const auto& mesh = as_mesh(item);
         if (!mesh) {
             continue;
@@ -172,7 +174,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     );
 }
 
-void Merge_operation::execute()
+void Merge_operation::execute(Editor_context& context)
 {
     log_operations->trace("begin Op Execute {}", describe());
 
@@ -231,13 +233,13 @@ void Merge_operation::execute()
             entry.node->set_parent({});
         }
     }
-    g_selection_tool->set_selection(m_selection_after);
+    context.selection->set_selection(m_selection_after);
 
     scene.sanity_check();
     log_operations->trace("end Op Execute {}", describe());
 }
 
-void Merge_operation::undo()
+void Merge_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -291,7 +293,7 @@ void Merge_operation::undo()
             node->set_parent(entry.before_parent);
         }
     }
-    g_selection_tool->set_selection(m_selection_before);
+    context.selection->set_selection(m_selection_before);
 
     scene.sanity_check();
 }

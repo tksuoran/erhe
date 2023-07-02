@@ -13,6 +13,7 @@ erhe_target_sources_grouped(
     buffer_writer.hpp
     build_info.hpp
     enums.hpp
+    format_info.cpp
     format_info.hpp
     index_range.cpp
     index_range.hpp
@@ -42,8 +43,10 @@ target_link_libraries(${_target}
         Microsoft.GSL::GSL
     PUBLIC
         glm::glm
+        etl::etl
         erhe::geometry
         erhe::gl
+        erhe::graphics # TODO Get rid of this dependency?
         erhe::raytrace
 )
 

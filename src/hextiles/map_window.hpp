@@ -1,99 +1,146 @@
 #pragma once
 
+#include "hextiles.hpp"
 #include "coordinate.hpp"
+#include "pixel_lookup.hpp"
 #include "terrain_type.hpp"
 #include "tile_shape.hpp"
 #include "types.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/commands/command_context.hpp"
-#include "erhe/application/windows/framebuffer_window.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/commands/input_arguments.hpp"
+#include "erhe/imgui/windows/framebuffer_window.hpp"
 
-//#include <array>
 #include <numeric>
-//#include <string>
-//#include <vector>
+
+namespace erhe::commands
+{
+    class Commands;
+}
+namespace erhe::graphics
+{
+    class Instance;
+}
+namespace erhe::imgui
+{
+    class Imgui_renderer;
+    class Imgui_windows;
+}
+namespace erhe::renderer
+{
+    class Text_renderer;
+}
 
 
 namespace hextiles
 {
 
 class Map;
-class Pixel_lookup;
+class Map_window;
+class Tile_renderer;
 
 class Map_scroll_command final
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Map_scroll_command(float dx, float dy);
+    Map_scroll_command(
+        erhe::commands::Commands& commands,
+        Map_window&               map_window,
+        float                     dx,
+        float                     dy
+    );
     auto try_call() -> bool override;
 
 private:
-    glm::vec2 m_offset;
+    Map_window& m_map_window;
+    glm::vec2   m_offset;
 };
 
 class Map_free_zoom_command final
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Map_free_zoom_command();
-    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
+    Map_free_zoom_command(
+        erhe::commands::Commands& commands,
+        Map_window&               map_window
+    );
+
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Map_window& m_map_window;
 };
 
 class Map_mouse_scroll_command final
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Map_mouse_scroll_command();
+    Map_mouse_scroll_command(
+        erhe::commands::Commands& commands,
+        Map_window&               map_window
+    );
+
     void try_ready          () override;
-    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Map_window& m_map_window;
 };
 
 class Map_zoom_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    explicit Map_zoom_command(float scale);
+    Map_zoom_command(
+        erhe::commands::Commands& commands,
+        Map_window&               map_window,
+        float                     scale
+    );
     auto try_call() -> bool override;
 
 private:
-    float m_scale{1.0f};
+    Map_window& m_map_window;
+    float       m_scale{1.0f};
 };
 
 class Map_grid_cycle_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Map_grid_cycle_command();
+    Map_grid_cycle_command(
+        erhe::commands::Commands& commands,
+        Map_window&               map_window
+    );
+
     auto try_call() -> bool override;
+
+private:
+    Map_window& m_map_window;
 };
 
 class Map_window
-    : public erhe::components::Component
-    , public erhe::application::Framebuffer_window
+    : public erhe::imgui::Framebuffer_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Map_window"};
-    static constexpr std::string_view c_title{"Map"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Map_window ();
-    ~Map_window() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    Map_window(
+        erhe::commands::Commands&      commands,
+        erhe::graphics::Instance&      graphics_instance,
+        erhe::imgui::Imgui_renderer&   imgui_renderer,
+        erhe::imgui::Imgui_windows&    imgui_windows,
+        erhe::renderer::Text_renderer& text_renderer,
+        Tile_renderer&                 tile_renderer
+    );
 
     // Implements Framebuffer_window
     auto get_size(glm::vec2 available_size) const -> glm::vec2 override;
 
-    // Overrides Imgui_window
+    // Implements Imgui_window
+    void imgui               ()                     override; // overrides Framebuffer_window
     auto flags               () -> ImGuiWindowFlags override;
-    void on_begin            () override;
-    void on_end              () override;
-    auto want_keyboard_events() const -> bool override;
-    auto want_mouse_events   () const -> bool override;
+    void on_begin            ()                     override;
+    void on_end              ()                     override;
+    auto want_keyboard_events() const -> bool       override;
+    auto want_mouse_events   () const -> bool       override;
 
     // Public API
     void set_map(Map* map);
@@ -124,6 +171,11 @@ private:
     auto normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate;
 
     // Commands
+    erhe::graphics::Instance&      m_graphics_instance;
+    erhe::imgui::Imgui_renderer&   m_imgui_renderer;
+    erhe::renderer::Text_renderer& m_text_renderer;
+    Tile_renderer&                 m_tile_renderer;
+
     Map_free_zoom_command         m_free_zoom_command;
     Map_mouse_scroll_command      m_mouse_scroll_command;
     Map_scroll_command            m_scroll_left_command;
@@ -135,13 +187,11 @@ private:
     Map_grid_cycle_command        m_grid_cycle_command;
 
     Map*                          m_map         {nullptr};
-    std::unique_ptr<Pixel_lookup> m_pixel_lookup;
+    Pixel_lookup                  m_pixel_lookup;
     int                           m_grid        {2};
     float                         m_zoom        {1.0f};
     glm::vec2                     m_pixel_offset{0.0f, 0.0f};
     Tile_coordinate               m_center_tile {0, 0};
 };
-
-extern Map_window* g_map_window;
 
 } // namespace hextiles

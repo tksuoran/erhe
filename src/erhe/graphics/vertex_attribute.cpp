@@ -29,7 +29,7 @@ namespace erhe::graphics
     return !(*this == other);
 }
 
-[[nodiscard]] auto Vertex_attribute::stride() const -> size_t
+[[nodiscard]] auto Vertex_attribute::size() const -> size_t
 {
     return data_type.dimension * gl_helpers::size_of_type(data_type.type);
 }

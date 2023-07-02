@@ -2,14 +2,26 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
-namespace erhe::scene
-{
+#include <vector>
+
+namespace erhe::commands {
+    class Commands;
+}
+namespace erhe::graphics {
+    class Instance;
+}
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::rendergraph {
+    class Rendergraph;
+}
+namespace erhe::scene {
     class Camera;
     class Mesh;
     class Node;
@@ -18,48 +30,70 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_message_bus;
+class Hotbar;
+class Icon_set;
+class Mesh_memory;
 class Rendertarget_imgui_viewport;
 class Rendertarget_mesh;
-class Hotbar;
+class Scene_builder;
+class Scene_root;
+class Tools;
+class Viewport_windows;
+class Headset_view;
 
 class Toggle_menu_visibility_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Toggle_menu_visibility_command();
+    Toggle_menu_visibility_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Hotbar_trackpad_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Hotbar_trackpad_command();
-    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
+    Hotbar_trackpad_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Hotbar
-    : public erhe::application::Imgui_window
-    , public erhe::components::Component
+    : public erhe::imgui::Imgui_window
     , public Tool
 {
 public:
-    static constexpr std::string_view c_type_name{"Hotbar"};
-    static constexpr std::string_view c_title{"Hotbar"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Hotbar ();
-    ~Hotbar() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
-    void post_initialize            () override;
+    Hotbar(
+        erhe::commands::Commands&       commands,
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        erhe::imgui::Imgui_windows&     imgui_windows,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        Editor_context&                 editor_context,
+        Editor_message_bus&             editor_message_bus,
+        Headset_view&                   headset_view,
+        Icon_set&                       icon_set,
+        Mesh_memory&                    mesh_memory,
+        Scene_builder&                  scene_builder,
+        Tools&                          tools
+    );
 
     // Implements Tool
     void tool_render(const Render_context& context)  override;
+
+    void get_all_tools();
 
     // Implements Imgui_window
     [[nodiscard]] auto flags() -> ImGuiWindowFlags override;
@@ -67,7 +101,7 @@ public:
     void imgui   () override;
 
     // Public API
-    auto try_call         (erhe::application::Input_arguments& input) -> bool;
+    auto try_call         (erhe::commands::Input_arguments& input) -> bool;
     auto get_color        (int color) -> glm::vec4&;
     auto toggle_visibility() -> bool;
     void set_visibility   (bool value);
@@ -82,16 +116,28 @@ private:
     void tool_button          (uint32_t id, Tool* tool);
     void handle_slot_update   ();
 
-    void init_hotbar          ();
-    void init_radial_menu     ();
+    void init_hotbar(
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        erhe::imgui::Imgui_windows&     imgui_windows,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        Editor_context&                 editor_context,
+        Icon_set&                       icon_set,
+        Mesh_memory&                    mesh_memory,
+        Scene_root&                     scene_root
+    );
+    void init_radial_menu(
+        Mesh_memory& mesh_memory,
+        Scene_root&  scene_root
+    );
 
     [[nodiscard]] auto get_camera() const -> std::shared_ptr<erhe::scene::Camera>;
 
     // Commands
-    Toggle_menu_visibility_command               m_toggle_visibility_command;
+    Toggle_menu_visibility_command            m_toggle_visibility_command;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    Hotbar_trackpad_command                      m_trackpad_command;
-    erhe::application::Xr_vector2f_click_command m_trackpad_click_command;
+    Hotbar_trackpad_command                   m_trackpad_command;
+    erhe::commands::Xr_vector2f_click_command m_trackpad_click_command;
 #endif
 
     std::shared_ptr<erhe::scene::Node>              m_rendertarget_node;
@@ -120,7 +166,5 @@ private:
     glm::vec4 m_color_hover   {0.4f, 0.4f, 0.4f, 0.8f};
     glm::vec4 m_color_inactive{0.1f, 0.1f, 0.4f, 0.8f};
 };
-
-extern Hotbar* g_hotbar;
 
 } // namespace editor

@@ -203,8 +203,8 @@ inline void write_low(
 } // namespace
 
 Vertex_buffer_writer::Vertex_buffer_writer(
-    Build_context&              build_context,
-    gsl::not_null<Buffer_sink*> buffer_sink
+    Build_context& build_context,
+    Buffer_sink&   buffer_sink
 )
     : build_context{build_context}
     , buffer_sink  {buffer_sink}
@@ -217,7 +217,7 @@ Vertex_buffer_writer::Vertex_buffer_writer(
 
 Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
 {
-    buffer_sink->buffer_ready(*this);
+    buffer_sink.buffer_ready(*this);
 }
 
 auto Vertex_buffer_writer::start_offset() -> std::size_t
@@ -226,12 +226,12 @@ auto Vertex_buffer_writer::start_offset() -> std::size_t
 }
 
 Index_buffer_writer::Index_buffer_writer(
-    Build_context&              build_context,
-    gsl::not_null<Buffer_sink*> buffer_sink
+    Build_context& build_context,
+    Buffer_sink&   buffer_sink
 )
     : build_context  {build_context}
     , buffer_sink    {buffer_sink}
-    , index_type     {build_context.root.build_info.buffer.index_type}
+    , index_type     {build_context.root.build_info.buffer_info.index_type}
     , index_type_size{build_context.root.primitive_geometry->index_buffer_range.element_size}
 {
     Expects(build_context.root.primitive_geometry != nullptr);
@@ -241,27 +241,27 @@ Index_buffer_writer::Index_buffer_writer(
     index_data.resize(index_buffer_range.count * index_type_size);
     index_data_span = gsl::make_span(index_data);
 
-    const auto& features = build_context.root.build_info.format.features;
+    const auto& primitive_types = build_context.root.build_info.primitive_types;
 
-    if (features.corner_points) {
+    if (primitive_types.corner_points) {
         corner_point_index_data_span = index_data_span.subspan(
             primitive_geometry.corner_point_indices.first_index * index_type_size,
             mesh_info.index_count_corner_points * index_type_size
         );
     }
-    if (features.fill_triangles) {
+    if (primitive_types.fill_triangles) {
         triangle_fill_index_data_span = index_data_span.subspan(
             primitive_geometry.triangle_fill_indices.first_index * index_type_size,
             mesh_info.index_count_fill_triangles * index_type_size
         );
     }
-    if (features.edge_lines) {
+    if (primitive_types.edge_lines) {
         edge_line_index_data_span = index_data_span.subspan(
             primitive_geometry.edge_line_indices.first_index * index_type_size,
             mesh_info.index_count_edge_lines * index_type_size
         );
     }
-    if (features.centroid_points) {
+    if (primitive_types.centroid_points) {
         polygon_centroid_index_data_span = index_data_span.subspan(
             primitive_geometry.polygon_centroid_indices.first_index * index_type_size,
             mesh_info.polygon_count * index_type_size
@@ -271,7 +271,7 @@ Index_buffer_writer::Index_buffer_writer(
 
 Index_buffer_writer::~Index_buffer_writer() noexcept
 {
-    buffer_sink->buffer_ready(*this);
+    buffer_sink.buffer_ready(*this);
 }
 
 auto Index_buffer_writer::start_offset() -> std::size_t

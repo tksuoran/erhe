@@ -1,9 +1,7 @@
 #pragma once
 
 namespace erhe::scene {
-
-class Animation;
-
+    class Animation;
 }
 
 namespace editor {

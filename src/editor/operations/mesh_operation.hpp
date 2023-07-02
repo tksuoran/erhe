@@ -2,28 +2,23 @@
 
 #include "operations/ioperation.hpp"
 
+#include "erhe/primitive/build_info.hpp"
 #include "erhe/scene/mesh.hpp"
 
 #include <functional>
 #include <vector>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
-
-namespace erhe::primitive
-{
-    class Build_info;
-}
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Mesh;
 }
 
 namespace editor
 {
+
+class Editor_context;
 
 class Mesh_operation
     : public IOperation
@@ -32,7 +27,8 @@ public:
     class Parameters
     {
     public:
-        erhe::primitive::Build_info& build_info;
+        Editor_context&             context;
+        erhe::primitive::Build_info build_info;
     };
 
 protected:
@@ -49,8 +45,8 @@ protected:
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
-    void execute() override;
-    void undo   () override;
+    void execute(Editor_context& context) override;
+    void undo   (Editor_context& context) override;
 
     // Public API
     void add_entry(Entry&& entry);
@@ -58,7 +54,7 @@ protected:
         const std::function<erhe::geometry::Geometry(erhe::geometry::Geometry&)> operation
     );
 
-private:
+protected:
     Parameters         m_parameters;
     std::vector<Entry> m_entries;
 };

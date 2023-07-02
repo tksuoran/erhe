@@ -2,8 +2,7 @@
 
 #include "operations/compound_operation.hpp"
 
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
@@ -13,15 +12,24 @@
 #include <memory>
 #include <optional>
 
-namespace erhe::scene
-{
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::scene {
     class Node;
+    class Scene_message_bus;
 }
 
 namespace editor
 {
 
+class Editor_scenes;
+class Editor_settings;
+class Icon_set;
 class IOperation;
+class Operation_stack;
+class Scene_commands;
+class Selection_tool;
 
 enum class Placement : unsigned int
 {
@@ -44,29 +52,19 @@ public:
 };
 
 class Node_tree_window
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Node_tree"};
-    static constexpr std::string_view c_title{"Node Tree"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Node_tree_window ();
-    ~Node_tree_window() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Node_tree_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              context
+    );
 
     // Implements Imgui_window
     void imgui   () override;
     void on_begin() override;
     void on_end  () override;
-
-    [[nodiscard]] auto expand_attachments() const -> bool;
 
 private:
     void set_item_selection_terminator(const std::shared_ptr<erhe::scene::Item>& item);
@@ -122,12 +120,12 @@ private:
         std::shared_ptr<erhe::scene::Item>
     > m_tree_items_last_frame;
 
+    Editor_context&                    m_context;
+
     std::shared_ptr<IOperation>        m_operation;
     std::vector<std::function<void()>> m_operations;
 
-    bool                               m_expand_attachments{false};
-    bool                               m_show_all          {false};
-    bool                               m_toggled_open      {false};
+    bool                               m_toggled_open{false};
     std::weak_ptr<erhe::scene::Item>   m_last_focus_item;
     std::shared_ptr<erhe::scene::Item> m_popup_item;
     std::string                        m_popup_id_string;
@@ -135,7 +133,5 @@ private:
 
     erhe::scene::Item_filter           m_filter;
 };
-
-extern Node_tree_window* g_node_tree_window;
 
 } // namespace editor

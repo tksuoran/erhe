@@ -20,16 +20,16 @@ public:
     class Transfer_entry
     {
     public:
-Transfer_entry(
-    Buffer&                target,
-    const std::size_t      target_offset,
-    std::vector<uint8_t>&& data
-)
-    : target       {target}
-    , target_offset{target_offset}
-    , data         {data}
-{
-}
+        Transfer_entry(
+            Buffer&                target,
+            const std::size_t      target_offset,
+            std::vector<uint8_t>&& data
+        )
+            : target       {target}
+            , target_offset{target_offset}
+            , data         {data}
+        {
+        }
 
         Transfer_entry(Transfer_entry&) = delete;
         void operator=(Transfer_entry&) = delete;

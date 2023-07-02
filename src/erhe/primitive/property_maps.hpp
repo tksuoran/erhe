@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/primitive/format_info.hpp"
+#include "erhe/primitive/build_info.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/property_map_collection.hpp"
@@ -28,8 +28,9 @@ class Property_maps
 {
 public:
     Property_maps(
-        const erhe::geometry::Geometry& geometry,
-        const Format_info&              format_info
+        const erhe::geometry::Geometry&      geometry,
+        const Primitive_types&               primitive_types,
+        const erhe::graphics::Vertex_format& vertex_format 
     );
 
     template <typename Key_type, typename Value_type>

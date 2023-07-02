@@ -6,14 +6,14 @@
 #include "tile_shape.hpp"
 #include "unit_type.hpp"
 
-#include "erhe/application/renderers/buffer_writer.hpp"
-
-#include "erhe/components/components.hpp"
+#include "erhe/renderer/buffer_writer.hpp"
 
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/fragment_outputs.hpp"
 #include "erhe/graphics/pipeline.hpp"
+#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/state/color_blend_state.hpp"
 #include "erhe/graphics/state/depth_stencil_state.hpp"
 #include "erhe/graphics/state/input_assembly_state.hpp"
@@ -21,6 +21,8 @@
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/toolkit/viewport.hpp"
+
 #include <glm/glm.hpp>
 
 #include <array>
@@ -40,32 +42,26 @@ namespace erhe::graphics
     class Texture;
 }
 
-namespace erhe::scene
+namespace erhe::imgui
 {
-    class Viewport;
+    class Imgui_renderer;
+    class Imgui_windows;
 }
+
 
 namespace hextiles
 {
 
+class Tiles;
+
 class Tile_renderer
-    : public erhe::components::Component
 {
 public:
-    static constexpr const char* c_type_name{"Tile_renderer"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
-
-    Tile_renderer ();
-    ~Tile_renderer ();
-    Tile_renderer (const Tile_renderer&) = delete;
-    void operator=(const Tile_renderer&) = delete;
-    Tile_renderer (Tile_renderer&&)      = delete;
-    void operator=(Tile_renderer&&)      = delete;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    Tile_renderer(
+        erhe::graphics::Instance&    graphics_instance,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        Tiles&                       tiles
+    );
 
     // Public API
     [[nodiscard]] auto tileset_texture() const -> const std::shared_ptr<erhe::graphics::Texture>&;
@@ -80,6 +76,12 @@ public:
     [[nodiscard]] auto get_terrain_shapes() const -> const std::vector<Pixel_coordinate>&;
     [[nodiscard]] auto get_unit_shapes   () const -> const std::vector<Pixel_coordinate>&;
     [[nodiscard]] auto get_extra_shape   (int extra) const -> Pixel_coordinate;
+
+    auto terrain_image(const terrain_tile_t terrain_tile, const int scale) -> bool;
+    auto unit_image   (const unit_tile_t    unit_tile,    const int scale) -> bool;
+    void show_texture ();
+    void make_terrain_type_combo(const char* label, terrain_t& value);
+    void make_unit_type_combo   (const char* label, unit_t& value, const int player = 0);
 
     void blit(
         int      src_x,
@@ -96,10 +98,19 @@ public:
     void begin    ();
     void end      ();
 
-    void render    (erhe::scene::Viewport viewport);
+    void render    (erhe::toolkit::Viewport viewport);
     void next_frame();
 
 private:
+    auto make_prototype() const -> erhe::graphics::Shader_stages_prototype;
+    auto make_program(
+        erhe::graphics::Shader_stages_prototype&& prototype
+    ) const -> erhe::graphics::Shader_stages;
+
+    erhe::graphics::Instance&    m_graphics_instance;
+    erhe::imgui::Imgui_renderer& m_imgui_renderer;
+    Tiles&                       m_tiles;
+
     gsl::span<float>    m_gpu_float_data;
     gsl::span<uint32_t> m_gpu_uint_data;
     size_t              m_word_offset{0};
@@ -111,12 +122,13 @@ private:
     {
     public:
         Frame_resources(
-            const size_t                              vertex_count,
-            erhe::graphics::Shader_stages*            shader_stages,
+            erhe::graphics::Instance&                 graphics_instance,
+            size_t                                    vertex_count,
+            erhe::graphics::Shader_stages&            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
             erhe::graphics::Vertex_format&            vertex_format,
-            erhe::graphics::Buffer*                   index_buffer,
-            const size_t                              slot
+            erhe::graphics::Buffer&                   index_buffer,
+            size_t                                    slot
         );
 
         Frame_resources(const Frame_resources&) = delete;
@@ -149,28 +161,33 @@ private:
         int                                     y0
     );
 
-    erhe::graphics::Shader_resource                  m_default_uniform_block; // containing sampler uniforms for non bindless textures
-    erhe::graphics::Fragment_outputs                 m_fragment_outputs;
-    erhe::graphics::Vertex_attribute_mappings        m_attribute_mappings;
-    erhe::graphics::Vertex_format                    m_vertex_format;
-    std::shared_ptr<erhe::graphics::Buffer>          m_index_buffer;
-    std::unique_ptr<erhe::graphics::Shader_resource> m_projection_block;
-    std::unique_ptr<erhe::graphics::Shader_stages>   m_shader_stages;
-    size_t                                           m_u_clip_from_window_size  {0};
-    size_t                                           m_u_clip_from_window_offset{0};
-    size_t                                           m_u_texture_size           {0};
-    size_t                                           m_u_texture_offset         {0};
-    std::unique_ptr<erhe::graphics::Sampler>         m_nearest_sampler;
-    std::shared_ptr<erhe::graphics::Texture>         m_tileset_texture;
-    Image                                            m_tileset_image;
+    erhe::graphics::Shader_resource           m_default_uniform_block; // containing sampler uniforms for non-bindless textures
+    erhe::graphics::Shader_resource*          m_texture_sampler;       // non-bindless
+    erhe::graphics::Fragment_outputs          m_fragment_outputs;
+    erhe::graphics::Vertex_attribute_mappings m_attribute_mappings;
+    erhe::graphics::Vertex_format             m_vertex_format;
+    erhe::graphics::Buffer                    m_index_buffer;
+    erhe::graphics::Shader_resource           m_projection_block;
+    erhe::graphics::Shader_resource*          m_clip_from_window;
+    erhe::graphics::Shader_resource*          m_texture_handle;
 
-    std::deque<Frame_resources>      m_frame_resources;
-    size_t                           m_current_frame_resource_slot{0};
+    std::filesystem::path                     m_shader_path;
+    erhe::graphics::Shader_stages             m_shader_stages;
+    erhe::graphics::Sampler                   m_nearest_sampler;
+    size_t                                    m_u_clip_from_window_size  {0};
+    size_t                                    m_u_clip_from_window_offset{0};
+    size_t                                    m_u_texture_size           {0};
+    size_t                                    m_u_texture_offset         {0};
+    std::shared_ptr<erhe::graphics::Texture>  m_tileset_texture;
+    Image                                     m_tileset_image;
 
-    erhe::application::Buffer_writer m_vertex_writer;
-    erhe::application::Buffer_writer m_projection_writer;
-    size_t                           m_index_range_first{0};
-    size_t                           m_index_count      {0};
+    std::deque<Frame_resources>   m_frame_resources;
+    size_t                        m_current_frame_resource_slot{0};
+
+    erhe::renderer::Buffer_writer m_vertex_writer;
+    erhe::renderer::Buffer_writer m_projection_writer;
+    size_t                        m_index_range_first{0};
+    size_t                        m_index_count      {0};
 
     // Tile layout:
     // - 8 * 7 : terrain group tiles 8 x 8, 7 groups
@@ -179,11 +196,11 @@ private:
     // - 2 * 2 : explosion tiles 4 x 2, double width and height
     // -     2 : multiplayer tiles 6 x 2
     // - unit tiles 8 x 8
-    std::vector<Pixel_coordinate>    m_terrain_shapes;
-    std::vector<Pixel_coordinate>    m_multiplayer_shapes;
-    std::vector<Pixel_coordinate>    m_unit_shapes;
-    std::vector<Pixel_coordinate>    m_extra_shapes;
-    std::vector<Pixel_coordinate>    m_explosion_shapes;
+    std::vector<Pixel_coordinate> m_terrain_shapes;
+    std::vector<Pixel_coordinate> m_multiplayer_shapes;
+    std::vector<Pixel_coordinate> m_unit_shapes;
+    std::vector<Pixel_coordinate> m_extra_shapes;
+    std::vector<Pixel_coordinate> m_explosion_shapes;
 
     static constexpr int s_special_unit_tile_count  = 8;
     static constexpr int s_single_unit_tile_count   = max_player_count * Unit_group::width * Unit_group::height;
@@ -206,7 +223,5 @@ private:
         0  // city
     };
 };
-
-extern Tile_renderer* g_tile_renderer;
 
 } // namespace hextiles

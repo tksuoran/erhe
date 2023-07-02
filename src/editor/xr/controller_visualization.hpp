@@ -2,13 +2,10 @@
 
 #include <memory>
 
-namespace erhe::xr
-{
+namespace erhe::xr {
     class Xr_action_pose;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Mesh;
     class Node;
 }
@@ -24,8 +21,9 @@ class Controller_visualization
 {
 public:
     Controller_visualization(
-        Scene_root&        scene_root,
-        erhe::scene::Node* view_root
+        erhe::scene::Node* view_root,
+        Mesh_memory&       mesh_memory,
+        Scene_root&        scene_root
     );
 
     [[nodiscard]] auto get_node() const -> erhe::scene::Node*;

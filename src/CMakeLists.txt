@@ -27,6 +27,7 @@ endif ()
 add_subdirectory(mINI)
 add_subdirectory(rapidjson)
 add_subdirectory(RectangleBinPack)
+#add_subdirectory(taskflow)
 
 if (${ERHE_PNG_LIBRARY} STREQUAL "mango")
     add_subdirectory(spng)

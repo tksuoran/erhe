@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/application/controller.hpp"
+#include "erhe/toolkit/simulation_variable.hpp"
 
 #include "erhe/scene/node.hpp"
 
@@ -55,15 +55,15 @@ public:
     [[nodiscard]] auto get_axis_x    () const -> glm::vec3;
     [[nodiscard]] auto get_axis_y    () const -> glm::vec3;
     [[nodiscard]] auto get_axis_z    () const -> glm::vec3;
-    [[nodiscard]] auto get_controller(const Control control) -> erhe::application::Controller&;
+    [[nodiscard]] auto get_controller(const Control control) -> erhe::toolkit::Simulation_variable&;
 
-    erhe::application::Controller rotate_x;
-    erhe::application::Controller rotate_y;
-    erhe::application::Controller rotate_z;
-    erhe::application::Controller translate_x;
-    erhe::application::Controller translate_y;
-    erhe::application::Controller translate_z;
-    erhe::application::Controller speed_modifier;
+    erhe::toolkit::Simulation_variable rotate_x;
+    erhe::toolkit::Simulation_variable rotate_y;
+    erhe::toolkit::Simulation_variable rotate_z;
+    erhe::toolkit::Simulation_variable translate_x;
+    erhe::toolkit::Simulation_variable translate_y;
+    erhe::toolkit::Simulation_variable translate_z;
+    erhe::toolkit::Simulation_variable speed_modifier;
 
 private:
     float     m_elevation       {0.0f};

@@ -1,11 +1,12 @@
 #include "graphics/icon_rasterization.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_renderer.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -15,23 +16,23 @@
 
 namespace editor {
 
-
-Icon_rasterization::Icon_rasterization()
-{
-}
-
 Icon_rasterization::Icon_rasterization(
-    const int size,
-    const int column_count,
-    const int row_count
+    erhe::graphics::Instance&    graphics_instance,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    Programs&                    programs,
+    const int                    size,
+    const int                    column_count,
+    const int                    row_count
 )
-    : m_icon_width    {size}
+    : m_imgui_renderer{imgui_renderer}
+    , m_icon_width    {size}
     , m_icon_height   {size}
     , m_icon_uv_width {static_cast<float>(1.0) / static_cast<float>(column_count)}
     , m_icon_uv_height{static_cast<float>(1.0) / static_cast<float>(row_count)}
 {
     m_texture = std::make_shared<erhe::graphics::Texture>(
         erhe::graphics::Texture_create_info{
+            .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::rgba8,
             .use_mipmaps     = true,
@@ -41,9 +42,9 @@ Icon_rasterization::Icon_rasterization(
     );
     m_texture->set_debug_label("Icon_set");
 
-    m_texture_handle = erhe::graphics::get_handle(
+    m_texture_handle = graphics_instance.get_handle(
         *m_texture.get(),
-        *g_programs->linear_sampler.get()
+        programs.linear_sampler
     );
 }
 
@@ -148,7 +149,7 @@ void Icon_rasterization::icon(
 #else
     ERHE_PROFILE_FUNCTION();
 
-    erhe::application::g_imgui_renderer->image(
+    m_imgui_renderer.image(
         m_texture,
         m_icon_width,
         m_icon_height,
@@ -175,9 +176,8 @@ auto Icon_rasterization::icon_button(
     return false;
 #else
     ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(erhe::application::g_imgui_renderer != nullptr);
 
-    const bool result = erhe::application::g_imgui_renderer->image_button(
+    const bool result = m_imgui_renderer.image_button(
         id,
         m_texture,
         m_icon_width,
@@ -193,4 +193,4 @@ auto Icon_rasterization::icon_button(
 #endif
 }
 
-}
+} // namespace editor

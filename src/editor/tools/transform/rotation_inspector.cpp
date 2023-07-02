@@ -9,8 +9,8 @@
 #include "renderers/render_context.hpp"
 #include "windows/operations.hpp"
 
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/message_bus/message_bus.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -57,12 +57,12 @@ Rotation_inspector::Rotation_inspector()
     m_euler_angles[2] = 0.0f;
 }
 
-void Rotation_inspector::set_representation(Representation representation)
+void Rotation_inspector::set_representation(const Representation representation)
 {
     m_representation = representation;
 }
 
-void Rotation_inspector::set_euler_order(Euler_angle_order euler_angle_order)
+void Rotation_inspector::set_euler_order(const Euler_angle_order euler_angle_order)
 {
     m_euler_angle_order = euler_angle_order;
 }
@@ -200,8 +200,8 @@ void Rotation_inspector::update_matrix_and_quaternion_from_euler_angles()
 }
 
 void Rotation_inspector::imgui(
-    erhe::application::Value_edit_state& value_edit_state,
-    const glm::quat                      rotation
+    erhe::imgui::Value_edit_state& value_edit_state,
+    const glm::quat                rotation
 )
 {
     if (!m_active)
@@ -210,7 +210,7 @@ void Rotation_inspector::imgui(
     }
     // ImGui::TextUnformatted(m_active ? "Active" : "Not active");
     ImGui::SetNextItemWidth(100.0f);
-    erhe::application::make_combo(
+    erhe::imgui::make_combo(
         "Mode",
         m_representation,
         Rotation_inspector::c_representation_strings,
@@ -219,7 +219,7 @@ void Rotation_inspector::imgui(
 
     if (m_representation == Representation::e_euler_angles) {
         ImGui::SetNextItemWidth(100.0f);
-        erhe::application::make_combo(
+        erhe::imgui::make_combo(
             "Order",
             m_euler_angle_order,
             Rotation_inspector::c_euler_strings,
@@ -250,7 +250,7 @@ void Rotation_inspector::imgui(
         case Representation::e_quaternion:
         {
             value_edit_state.combine(
-                erhe::application::make_scalar_button(
+                erhe::imgui::make_scalar_button(
                     &m_quaternion.w,
                     -1.0f, // TODO
                      1.0f, // TODO
@@ -261,7 +261,7 @@ void Rotation_inspector::imgui(
                 )
             );
             value_edit_state.combine(
-                erhe::application::make_scalar_button(
+                erhe::imgui::make_scalar_button(
                     &m_quaternion.x,
                     -1.0f, // TODO
                      1.0f, // TODO
@@ -272,7 +272,7 @@ void Rotation_inspector::imgui(
                 )
             );
             value_edit_state.combine(
-                erhe::application::make_scalar_button(
+                erhe::imgui::make_scalar_button(
                     &m_quaternion.y,
                     -1.0f, // TODO
                      1.0f, // TODO
@@ -283,7 +283,7 @@ void Rotation_inspector::imgui(
                 )
             );
             value_edit_state.combine(
-                erhe::application::make_scalar_button(
+                erhe::imgui::make_scalar_button(
                     &m_quaternion.z,
                     -1.0f, // TODO
                      1.0f, // TODO
@@ -311,7 +311,7 @@ void Rotation_inspector::imgui(
             const ImVec4 red{1.0f, 0.0f, 0.0f, 1.0f};
 
             value_edit_state.combine(
-                erhe::application::make_angle_button(
+                erhe::imgui::make_angle_button(
                     m_euler_angles[0],
                     10.0f * -glm::pi<float>(),
                     10.0f *  glm::pi<float>(),
@@ -323,7 +323,7 @@ void Rotation_inspector::imgui(
             );
             if (warn) { ImGui::SameLine(); ImGui::TextColored(red, "Gimbal"); }
             value_edit_state.combine(
-                erhe::application::make_angle_button(
+                erhe::imgui::make_angle_button(
                     m_euler_angles[1],
                     10.0f * -glm::half_pi<float>(),
                     10.0f *  glm::half_pi<float>(),
@@ -336,7 +336,7 @@ void Rotation_inspector::imgui(
             if (warn) { ImGui::SameLine(); ImGui::TextColored(red, "Lock"); }
             if (warn) { ImGui::BeginDisabled(); }
             value_edit_state.combine(
-                erhe::application::make_angle_button(
+                erhe::imgui::make_angle_button(
                     m_euler_angles[2],
                     10.0f * -glm::pi<float>(),
                     10.0f *  glm::pi<float>(),
@@ -357,7 +357,7 @@ void Rotation_inspector::imgui(
         case Representation::e_axis_angle:
         {
             value_edit_state.combine(
-                erhe::application::make_angle_button(
+                erhe::imgui::make_angle_button(
                     m_angle,
                     10.0f * -glm::pi<float>(),
                     10.0f *  glm::pi<float>(),
@@ -369,7 +369,7 @@ void Rotation_inspector::imgui(
             );
 
             value_edit_state.combine(
-                erhe::application::make_scalar_button(
+                erhe::imgui::make_scalar_button(
                     &m_axis.x,
                     -1.0f, // TODO
                      1.0f, // TODO
@@ -380,7 +380,7 @@ void Rotation_inspector::imgui(
                 )
             );
             value_edit_state.combine(
-                erhe::application::make_scalar_button(
+                erhe::imgui::make_scalar_button(
                     &m_axis.y,
                     -1.0f, // TODO
                      1.0f, // TODO
@@ -391,7 +391,7 @@ void Rotation_inspector::imgui(
                 )
             );
             value_edit_state.combine(
-                erhe::application::make_scalar_button(
+                erhe::imgui::make_scalar_button(
                     &m_axis.z,
                     -1.0f, // TODO
                      1.0f, // TODO

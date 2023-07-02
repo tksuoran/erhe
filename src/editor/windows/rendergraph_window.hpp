@@ -1,34 +1,31 @@
 #pragma once
 
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include <memory>
 
-namespace ImNodes::Ez
-{
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace ImNodes::Ez {
     struct Context;
 }
 
 namespace editor
 {
 
+class Editor_context;
+
 class Rendergraph_window
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Rendergraph"};
-    static constexpr std::string_view c_title{"Render Graph"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Rendergraph_window ();
+    Rendergraph_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context
+    );
     ~Rendergraph_window() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -37,11 +34,11 @@ public:
 private:
     void imnodes_demo();
 
+    Editor_context&    m_context;
+
     float                 m_image_size{100.0f};
     float                 m_curve_strength{10.0f};
     ImNodes::Ez::Context* m_imnodes_context{nullptr};
 };
-
-extern Rendergraph_window* g_rendergraph_window;
 
 } // namespace editor

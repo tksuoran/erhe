@@ -2,6 +2,7 @@
 
 #include "rendertarget_mesh.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
@@ -17,8 +18,7 @@
 #   include "xr/headset_view.hpp"
 #endif
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/application_view.hpp"
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
@@ -29,7 +29,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe/renderer/forward_renderer.hpp"
+#include "erhe/scene_renderer/forward_renderer.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
@@ -47,17 +47,19 @@ namespace editor
 {
 
 Rendertarget_mesh::Rendertarget_mesh(
-    const int   width,
-    const int   height,
-    const float pixels_per_meter
+    erhe::graphics::Instance& graphics_instance,
+    Mesh_memory&              mesh_memory,
+    const int                 width,
+    const int                 height,
+    const float               pixels_per_meter
 )
     : erhe::scene::Mesh {"Rendertarget Node"}
     , m_pixels_per_meter{pixels_per_meter}
 {
     enable_flag_bits(erhe::scene::Item_flags::rendertarget | erhe::scene::Item_flags::translucent);
 
-    init_rendertarget(width, height);
-    add_primitive();
+    init_rendertarget(graphics_instance, width, height);
+    add_primitive(mesh_memory);
 }
 
 auto Rendertarget_mesh::static_type() -> uint64_t
@@ -84,8 +86,9 @@ auto Rendertarget_mesh::type_name() const -> const char*
 }
 
 void Rendertarget_mesh::init_rendertarget(
-    const int width,
-    const int height
+    erhe::graphics::Instance& graphics_instance,
+    const int                 width,
+    const int                 height
 )
 {
     using Texture     = erhe::graphics::Texture;
@@ -93,6 +96,7 @@ void Rendertarget_mesh::init_rendertarget(
 
     m_texture = std::make_shared<Texture>(
         Texture::Create_info{
+            .instance        = graphics_instance,
             .target          = gl::Texture_target::texture_2d,
             .internal_format = gl::Internal_format::srgb8_alpha8,
             .use_mipmaps     = true,
@@ -130,7 +134,7 @@ void Rendertarget_mesh::init_rendertarget(
     m_framebuffer->set_debug_label("Rendertarget Node");
 }
 
-void Rendertarget_mesh::add_primitive()
+void Rendertarget_mesh::add_primitive(Mesh_memory& mesh_memory)
 {
     m_material = std::make_shared<erhe::primitive::Material>(
         "Rendertarget Node",
@@ -155,7 +159,10 @@ void Rendertarget_mesh::add_primitive()
 
     auto primitive = erhe::primitive::make_primitive(
         *shared_geometry.get(),
-        g_mesh_memory->build_info
+        erhe::primitive::Build_info{
+            .primitive_types{ .fill_triangles = true },
+            .buffer_info = mesh_memory.buffer_info
+        }
     );
 
     mesh_data.primitives.emplace_back(
@@ -165,7 +172,7 @@ void Rendertarget_mesh::add_primitive()
         }
     );
 
-    g_mesh_memory->gl_buffer_transfer_queue->flush();
+    mesh_memory.gl_buffer_transfer_queue.flush();
 
     enable_flag_bits(
         erhe::scene::Item_flags::visible      |
@@ -374,16 +381,16 @@ void Rendertarget_mesh::clear(glm::vec4 clear_color)
     gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
 }
 
-void Rendertarget_mesh::render_done()
+void Rendertarget_mesh::render_done(Editor_context& context)
 {
     gl::generate_texture_mipmap(m_texture->gl_name());
 
-    if (g_viewport_config_window->rendertarget_mesh_lod_bias != m_sampler->lod_bias) {
+    if (context.viewport_config_window->rendertarget_mesh_lod_bias != m_sampler->lod_bias) {
         m_sampler = std::make_shared<erhe::graphics::Sampler>(
             erhe::graphics::Sampler_create_info{
                 .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
                 .mag_filter  = gl::Texture_mag_filter::nearest,
-                .lod_bias    = g_viewport_config_window->rendertarget_mesh_lod_bias,
+                .lod_bias    = context.viewport_config_window->rendertarget_mesh_lod_bias,
                 .debug_label = "Rendertarget_mesh"
             }
         );

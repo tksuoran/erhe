@@ -9,50 +9,31 @@ namespace erhe::graphics
 
 using std::string;
 
+Shader_stage::Shader_stage(gl::Shader_type type, const std::string_view source)
+    : type  {type}
+    , source{source}
+{
+}
+
+Shader_stage::Shader_stage(gl::Shader_type type, const std::filesystem::path path)
+    : type{type}
+    , path{path}
+{
+}
+
+auto Shader_stages::name() const -> const std::string&
+{
+    return m_name;
+}
+
 auto Shader_stages::gl_name() const -> unsigned int
 {
     return m_handle.gl_name();
 }
 
-auto Shader_stages::format(const string& source) -> string
+Shader_stages::Shader_stages(const std::string& failed_name)
 {
-    int         line{1};
-    const char* head = source.c_str();
-
-    std::stringstream sb;
-    sb << fmt::format("{:>3}: ", line);
-
-    for (;;) {
-        char c = *head;
-        ++head;
-        if (c == '\r') {
-            continue;
-        }
-        if (c == 0) {
-            break;
-        }
-
-        if (c == '\n') {
-            ++line;
-            sb << fmt::format("\n{:>3}: ", line);
-            continue;
-        }
-        sb << c;
-    }
-    return sb.str();
-}
-
-Shader_stages::Shader_stages(Prototype&& prototype)
-{
-    Expects(prototype.is_valid());
-    Expects(prototype.m_handle.gl_name() != 0);
-    Expects(!prototype.m_shaders.empty());
-
-    m_name             = prototype.name();
-    m_handle           = std::move(prototype.m_handle);
-    m_attached_shaders = std::move(prototype.m_shaders);
-
-    std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
+    std::string label = fmt::format("(P:{}) {} - compilation failed", gl_name(), failed_name);
     gl::object_label(
         gl::Object_identifier::program,
         gl_name(),
@@ -61,7 +42,30 @@ Shader_stages::Shader_stages(Prototype&& prototype)
     );
 }
 
-void Shader_stages::reload(Prototype&& prototype)
+Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
+{
+    Expects(prototype.m_handle.gl_name() != 0);
+    Expects(!prototype.m_shaders.empty());
+
+    m_name             = prototype.name();
+    m_handle           = std::move(prototype.m_handle);
+    m_attached_shaders = std::move(prototype.m_shaders);
+
+    std::string label = fmt::format(
+        "(P:{}) {}{}",
+        gl_name(),
+        m_name,
+        prototype.is_valid() ? "" : " (Failed)"
+    );
+    gl::object_label(
+        gl::Object_identifier::program,
+        gl_name(),
+        static_cast<GLsizei>(label.length()),
+        label.c_str()
+    );
+}
+
+void Shader_stages::reload(Shader_stages_prototype&& prototype)
 {
     if (
         !prototype.is_valid()               ||

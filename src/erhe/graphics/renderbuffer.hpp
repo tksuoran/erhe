@@ -7,16 +7,20 @@
 namespace erhe::graphics
 {
 
+class Instance;
+
 class Renderbuffer
 {
 public:
     Renderbuffer(
+        Instance&           instance,
         gl::Internal_format internal_format,
         unsigned int        width,
         unsigned int        height
     );
 
     Renderbuffer(
+        Instance&           instance,
         gl::Internal_format internal_format,
         unsigned int        sample_count,
         unsigned int        width,

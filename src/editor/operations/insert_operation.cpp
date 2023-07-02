@@ -1,5 +1,8 @@
 #include "operations/insert_operation.hpp"
+
+#include "editor_context.hpp"
 #include "operations/node_operation.hpp"
+#include "operations/operation_stack.hpp"
 
 #include "editor_log.hpp"
 #include "scene/node_physics.hpp"
@@ -32,11 +35,12 @@ Node_insert_remove_operation::Node_insert_remove_operation(
 )
     : m_mode{parameters.mode}
 {
+    auto& selection = *parameters.context.selection;
     m_node             = parameters.node,
-    m_selection_before = g_selection_tool->get_selection();
+    m_selection_before = selection.get_selection();
 
     if (parameters.mode == Mode::insert) {
-        m_selection_after = g_selection_tool->get_selection();
+        m_selection_after = selection.get_selection();
         m_after_parent    = parameters.parent;
     }
 
@@ -61,11 +65,9 @@ Node_insert_remove_operation::Node_insert_remove_operation(
     }
 }
 
-Node_insert_remove_operation::~Node_insert_remove_operation() noexcept
-{
-}
-
-void Node_insert_remove_operation::execute()
+void Node_insert_remove_operation::execute(
+    Editor_context& context
+)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -94,7 +96,7 @@ void Node_insert_remove_operation::execute()
     }
 
     for (auto& child_parent_change : m_parent_changes) {
-        child_parent_change->execute();
+        child_parent_change->execute(context);
     }
 
     m_node->set_parent(m_after_parent);
@@ -106,12 +108,12 @@ void Node_insert_remove_operation::execute()
         }
     }
 
-    if (g_selection_tool != nullptr) {
-        g_selection_tool->set_selection(m_selection_after);
-    }
+    context.selection->set_selection(m_selection_after);
 }
 
-void Node_insert_remove_operation::undo()
+void Node_insert_remove_operation::undo(
+    Editor_context& context
+)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -142,12 +144,10 @@ void Node_insert_remove_operation::undo()
         ++i
     ) {
         auto& child_parent_change = *i;
-        child_parent_change->undo();
+        child_parent_change->undo(context);
     }
 
-    if (g_selection_tool != nullptr) {
-        g_selection_tool->set_selection(m_selection_before);
-    }
+    context.selection->set_selection(m_selection_before);
 }
 
 } // namespace editor

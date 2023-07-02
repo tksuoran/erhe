@@ -1,14 +1,16 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
+#include "erhe/graphics/sampler.hpp"
+#include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/shader_stages.hpp"
 
 #include <memory>
 
-namespace erhe::graphics
-{
-    class Sampler;
-    class Shader_resource;
-    class Shader_stages;
+namespace erhe::graphics {
+    class Instance;
+}
+namespace erhe::scene_renderer {
+    class Program_interface;
 }
 
 namespace editor {
@@ -51,75 +53,69 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Debug Miscellaneous"
 };
 
-class IPrograms
+class Programs
 {
 public:
-    virtual ~IPrograms() noexcept;
-
     static constexpr std::size_t s_texture_unit_count = 15; // for non bindless textures
 
+    Programs(
+        erhe::graphics::Instance&                graphics_instance,
+        erhe::scene_renderer::Program_interface& program_interface
+    );
+
     // Public members
-    std::unique_ptr<erhe::graphics::Shader_resource> shadow_map_default_uniform_block; // for non-bindless textures
-    std::unique_ptr<erhe::graphics::Shader_resource> textured_default_uniform_block;   // for non-bindless textures
-    int                                              shadow_texture_unit{15};
-    int                                              base_texture_unit{0};
-    std::unique_ptr<erhe::graphics::Sampler>         nearest_sampler;
-    std::unique_ptr<erhe::graphics::Sampler>         linear_sampler;
-    std::unique_ptr<erhe::graphics::Sampler>         linear_mipmap_linear_sampler;
+    int                              shadow_texture_unit{15};
+    int                              base_texture_unit{0};
+    std::filesystem::path            shader_path;
+    erhe::graphics::Shader_resource  default_uniform_block; // for non-bindless textures
+    erhe::graphics::Shader_resource* shadow_sampler;
+    erhe::graphics::Shader_resource* texture_sampler;
 
-    std::unique_ptr<erhe::graphics::Shader_stages> brdf_slice;
-    std::unique_ptr<erhe::graphics::Shader_stages> brush;
-    std::unique_ptr<erhe::graphics::Shader_stages> standard;
-    std::unique_ptr<erhe::graphics::Shader_stages> anisotropic_slope;
-    std::unique_ptr<erhe::graphics::Shader_stages> anisotropic_engine_ready;
-    std::unique_ptr<erhe::graphics::Shader_stages> circular_brushed_metal;
-    std::unique_ptr<erhe::graphics::Shader_stages> textured;
-    std::unique_ptr<erhe::graphics::Shader_stages> sky;
-    std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_draw_color;
-    std::unique_ptr<erhe::graphics::Shader_stages> wide_lines_vertex_color;
-    std::unique_ptr<erhe::graphics::Shader_stages> points;
-    std::unique_ptr<erhe::graphics::Shader_stages> depth;
-    std::unique_ptr<erhe::graphics::Shader_stages> id;
-    std::unique_ptr<erhe::graphics::Shader_stages> tool;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_depth;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_normal;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_tangent;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_bitangent;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_texcoord;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_vertex_color_rgb;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_vertex_color_alpha;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_o;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_i;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_omega_g;
-    std::unique_ptr<erhe::graphics::Shader_stages> debug_misc;
+    erhe::graphics::Sampler          nearest_sampler;
+    erhe::graphics::Sampler          linear_sampler;
+    erhe::graphics::Sampler          linear_mipmap_linear_sampler;
+
+    erhe::graphics::Shader_stages    brdf_slice;
+    erhe::graphics::Shader_stages    brush;
+    erhe::graphics::Shader_stages    standard;
+    erhe::graphics::Shader_stages    anisotropic_slope;
+    erhe::graphics::Shader_stages    anisotropic_engine_ready;
+    erhe::graphics::Shader_stages    circular_brushed_metal;
+    erhe::graphics::Shader_stages    textured;
+    erhe::graphics::Shader_stages    sky;
+    erhe::graphics::Shader_stages    wide_lines_draw_color;
+    erhe::graphics::Shader_stages    wide_lines_vertex_color;
+    erhe::graphics::Shader_stages    points;
+    erhe::graphics::Shader_stages    depth;
+    erhe::graphics::Shader_stages    id;
+    erhe::graphics::Shader_stages    tool;
+    erhe::graphics::Shader_stages    debug_depth;
+    erhe::graphics::Shader_stages    debug_normal;
+    erhe::graphics::Shader_stages    debug_tangent;
+    erhe::graphics::Shader_stages    debug_bitangent;
+    erhe::graphics::Shader_stages    debug_texcoord;
+    erhe::graphics::Shader_stages    debug_vertex_color_rgb;
+    erhe::graphics::Shader_stages    debug_vertex_color_alpha;
+    erhe::graphics::Shader_stages    debug_omega_o;
+    erhe::graphics::Shader_stages    debug_omega_i;
+    erhe::graphics::Shader_stages    debug_omega_g;
+    erhe::graphics::Shader_stages    debug_misc;
+
+    class Shader_stages_builder
+    {
+    public:
+        Shader_stages_builder(
+            erhe::graphics::Shader_stages&              shader_stages,
+            erhe::graphics::Instance&                   graphics_instance,
+            erhe::scene_renderer::Program_interface&    program_interface,
+            std::filesystem::path                       shader_path,
+            erhe::graphics::Shader_stages_create_info&& create_info
+        );
+        Shader_stages_builder(Shader_stages_builder&& other);
+
+        erhe::graphics::Shader_stages&          shader_stages;
+        erhe::graphics::Shader_stages_prototype prototype;
+    };
 };
 
-class Programs_impl;
-
-class Programs
-    : public erhe::components::Component
-{
-public:
-    static constexpr std::string_view c_type_name{"Programs"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Programs      ();
-    ~Programs     () noexcept override;
-    Programs      (const Programs&) = delete;
-    void operator=(const Programs&) = delete;
-    Programs      (Programs&&)      = delete;
-    void operator=(Programs&&)      = delete;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
-
-private:
-    std::unique_ptr<Programs_impl> m_impl;
-};
-
-extern IPrograms* g_programs;
-
-}
+} // namespace editor

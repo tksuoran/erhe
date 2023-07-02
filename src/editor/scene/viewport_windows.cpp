@@ -2,9 +2,11 @@
 
 #include "scene/viewport_windows.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
+#include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
@@ -18,17 +20,18 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/imgui_viewport_window.hpp"
+#include "windows/settings.hpp"
 
-#include "erhe/application/application_view.hpp"
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_viewport.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/window_imgui_viewport.hpp"
-#include "erhe/application/rendergraph/multisample_resolve.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/windows/log_window.hpp"
-#include "erhe/application/window.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe/imgui/imgui_viewport.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/window_imgui_viewport.hpp"
+#include "erhe/rendergraph/multisample_resolve.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/imgui/windows/log_window.hpp"
+#include "erhe/toolkit/window.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
@@ -37,7 +40,7 @@
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/log/log_glm.hpp"
-#include "erhe/renderer/shadow_renderer.hpp"
+#include "erhe/scene_renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
@@ -62,75 +65,42 @@ using erhe::graphics::Renderbuffer;
 using erhe::graphics::Texture;
 
 #pragma region Commands
-Open_new_viewport_window_command::Open_new_viewport_window_command()
-    : Command{"Viewport_windows.open_new_viewport_window"}
+Open_new_viewport_window_command::Open_new_viewport_window_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           editor_context
+)
+    : Command  {commands, "Viewport_windows.open_new_viewport_window"}
+    , m_context{editor_context}
 {
 }
 
 auto Open_new_viewport_window_command::try_call() -> bool
 {
-    g_viewport_windows->open_new_imgui_viewport_window();
+    m_context.viewport_windows->open_new_imgui_viewport_window();
     return true;
 }
 #pragma endregion Commands
 
-Viewport_windows* g_viewport_windows{nullptr};
-
-Viewport_windows::Viewport_windows()
-    : erhe::components::Component{c_type_name}
+Viewport_windows::Viewport_windows(
+    erhe::commands::Commands& commands,
+    Editor_context&           editor_context,
+    Editor_message_bus&       editor_message_bus
+)
+    : m_open_new_viewport_window_command{commands, editor_context}
+    , m_context                         {editor_context}
 {
-}
-
-Viewport_windows::~Viewport_windows() noexcept
-{
-    ERHE_VERIFY(g_viewport_windows == nullptr);
-}
-
-void Viewport_windows::deinitialize_component()
-{
-    ERHE_VERIFY(g_viewport_windows == this);
-    m_open_new_viewport_window_command.set_host(nullptr);
-    m_basic_viewport_windows.clear();
-    m_imgui_viewport_windows.clear();
-    m_viewport_windows.clear();
-    m_hover_stack.clear();
-    m_hover_window.reset();
-    m_last_window.reset();
-    g_viewport_windows = nullptr;
-}
-
-void Viewport_windows::declare_required_components()
-{
-    require<erhe::application::Commands     >();
-    require<erhe::application::Configuration>();
-    require<erhe::application::Imgui_windows>();
-    require<erhe::application::Rendergraph  >();
-    require<erhe::application::Window       >();
-    require<erhe::renderer::Shadow_renderer >();
-    require<Editor_message_bus>();
-    require<Post_processing   >();
-}
-
-void Viewport_windows::initialize_component()
-{
-    ERHE_VERIFY(g_viewport_windows == nullptr);
-
     Command_host::set_description("Viewport_windows");
 
-    auto& commands = *erhe::application::g_commands;
-    commands.register_command            (&m_open_new_viewport_window_command);
-    commands.bind_command_to_key         (&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+    commands.register_command   (&m_open_new_viewport_window_command);
+    commands.bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
 
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
             on_message(message);
         }
     );
 
     m_open_new_viewport_window_command.set_host(this);
-
-    g_viewport_windows = this;
 }
 
 void Viewport_windows::on_message(Editor_message& message)
@@ -145,8 +115,9 @@ void Viewport_windows::handle_graphics_settings_changed()
 {
     std::lock_guard<std::mutex> lock{m_mutex};
 
+    const int msaa_sample_count = m_context.settings_window->get_msaa_sample_count();
     for (const auto& viewport_window : m_viewport_windows) {
-        viewport_window->reconfigure(erhe::application::g_configuration->graphics.msaa_sample_count);
+        viewport_window->reconfigure(msaa_sample_count);
     }
 }
 
@@ -155,8 +126,7 @@ void Viewport_windows::erase(Viewport_window* viewport_window)
     const auto i = std::remove_if(
         m_viewport_windows.begin(),
         m_viewport_windows.end(),
-        [viewport_window](const auto& entry)
-        {
+        [viewport_window](const auto& entry) {
             return entry.get() == viewport_window;
         }
     );
@@ -168,8 +138,7 @@ void Viewport_windows::erase(Basic_viewport_window* basic_viewport_window)
     const auto i = std::remove_if(
         m_basic_viewport_windows.begin(),
         m_basic_viewport_windows.end(),
-        [basic_viewport_window](const auto& entry)
-        {
+        [basic_viewport_window](const auto& entry) {
             return entry.get() == basic_viewport_window;
         }
     );
@@ -177,6 +146,13 @@ void Viewport_windows::erase(Basic_viewport_window* basic_viewport_window)
 }
 
 auto Viewport_windows::create_viewport_window(
+    erhe::graphics::Instance&                   graphics_instance,
+    erhe::rendergraph::Rendergraph&             rendergraph,
+    erhe::scene_renderer::Shadow_renderer&      shadow_renderer,
+    Editor_rendering&                           editor_rendering,
+    Tools&                                      tools,
+    Viewport_config_window&                     viewport_config_window,
+
     const std::string_view                      name,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera,
@@ -185,7 +161,12 @@ auto Viewport_windows::create_viewport_window(
 ) -> std::shared_ptr<Viewport_window>
 {
     const auto new_viewport_window = std::make_shared<Viewport_window>(
+        m_context,
+        rendergraph,
+        tools,
+        viewport_config_window,
         name,
+        nullptr, // no ini for viewport windows for now
         scene_root,
         camera
     );
@@ -194,62 +175,66 @@ auto Viewport_windows::create_viewport_window(
     {
         m_viewport_windows.push_back(new_viewport_window);
     }
-    erhe::application::g_rendergraph->register_node(new_viewport_window);
+    //// g_rendergraph->register_node(new_viewport_window);
 
-    if (erhe::renderer::g_shadow_renderer->config.enabled) {
+    if (shadow_renderer.config.enabled) {
         //// TODO: Share Shadow_render_node for each unique (scene, camera) pair
-        const auto shadow_render_node = g_editor_rendering->create_shadow_node_for_scene_view(
+        const auto shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(
+            graphics_instance,
+            rendergraph,
+            shadow_renderer,
             *new_viewport_window.get()
         );
-        erhe::application::g_rendergraph->connect(
-            erhe::application::Rendergraph_node_key::shadow_maps,
-            shadow_render_node,
-            new_viewport_window
+        rendergraph.connect(
+            erhe::rendergraph::Rendergraph_node_key::shadow_maps,
+            shadow_render_node.get(),
+            new_viewport_window.get()
         );
 
         //// const auto& shadow_render_nodes = Shadow_render_node::get_all_nodes();
         //// if (!shadow_render_nodes.empty())
         //// {
         ////     auto& shadow_render_node = shadow_render_nodes.front();
-        ////     m_rendergraph->connect(
-        ////         erhe::application::Rendergraph_node_key::shadow_maps,
+        ////     g_rendergraph->connect(
+        ////         erhe::rendergraph::Rendergraph_node_key::shadow_maps,
         ////         shadow_render_node,
         ////         new_viewport_window
         ////     );
         //// }
     }
 
-    std::shared_ptr<erhe::application::Rendergraph_node> previous_node;
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> previous_node;
     if (msaa_sample_count > 1) {
-        auto multisample_resolve_node = std::make_shared<erhe::application::Multisample_resolve_node>(
+        auto multisample_resolve_node = std::make_shared<erhe::rendergraph::Multisample_resolve_node>(
+            rendergraph,
             fmt::format("MSAA for {}", name),
-            erhe::application::g_configuration->graphics.msaa_sample_count,
+            msaa_sample_count,
             "viewport",
-            erhe::application::Rendergraph_node_key::viewport
+            erhe::rendergraph::Rendergraph_node_key::viewport
         );
         new_viewport_window->link_to(multisample_resolve_node);
-        erhe::application::g_rendergraph->register_node(multisample_resolve_node);
-        erhe::application::g_rendergraph->connect(
-            erhe::application::Rendergraph_node_key::viewport,
-            new_viewport_window,
-            multisample_resolve_node
+        rendergraph.connect(
+            erhe::rendergraph::Rendergraph_node_key::viewport,
+            new_viewport_window.get(),
+            multisample_resolve_node.get()
         );
         previous_node = multisample_resolve_node;
     } else {
         previous_node = new_viewport_window;
     }
 
-    std::shared_ptr<erhe::application::Rendergraph_node> viewport_producer;
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> viewport_producer;
     if (enable_post_processing) {
         auto post_processing_node = std::make_shared<Post_processing_node>(
+            rendergraph,
+            m_context,
             fmt::format("Post processing for {}", name)
         );
         new_viewport_window->link_to(post_processing_node);
-        erhe::application::g_rendergraph->register_node(post_processing_node);
-        erhe::application::g_rendergraph->connect(
-            erhe::application::Rendergraph_node_key::viewport,
-            previous_node,
-            post_processing_node
+        rendergraph.connect(
+            erhe::rendergraph::Rendergraph_node_key::viewport,
+            previous_node.get(),
+            post_processing_node.get()
         );
         new_viewport_window->set_final_output(post_processing_node);
     } else {
@@ -259,19 +244,20 @@ auto Viewport_windows::create_viewport_window(
 }
 
 auto Viewport_windows::create_basic_viewport_window(
+    erhe::rendergraph::Rendergraph&         rendergraph,
     const std::shared_ptr<Viewport_window>& viewport_window
 ) -> std::shared_ptr<Basic_viewport_window>
 {
     auto new_basic_viewport_window = std::make_shared<Basic_viewport_window>(
+        rendergraph,
         fmt::format("Basic_viewport_window for '{}'", viewport_window->get_name()),
         viewport_window
     );
     m_basic_viewport_windows.push_back(new_basic_viewport_window);
-    erhe::application::g_rendergraph->register_node(new_basic_viewport_window);
-    erhe::application::g_rendergraph->connect(
-        erhe::application::Rendergraph_node_key::viewport,
+    rendergraph.connect(
+        erhe::rendergraph::Rendergraph_node_key::viewport,
         viewport_window->get_final_output(),
-        new_basic_viewport_window
+        new_basic_viewport_window.get()
     );
 
     layout_basic_viewport_windows();
@@ -281,11 +267,11 @@ auto Viewport_windows::create_basic_viewport_window(
 
 void Viewport_windows::layout_basic_viewport_windows()
 {
+    const int window_width    = m_context.context_window->get_width();
+    const int window_height   = m_context.context_window->get_height();
     const int count           = static_cast<int>(m_basic_viewport_windows.size());
     const int a               = std::max<int>(1, static_cast<int>(std::sqrt(count)));
     const int b               = count / a;
-    const int window_width    = erhe::application::g_window->get_context_window()->get_width();
-    const int window_height   = erhe::application::g_window->get_context_window()->get_height();
     const int x_count         = (window_width >= window_height) ? std::max(a, b) : std::min(a, b);
     const int y_count         = (window_width >= window_height) ? std::min(a, b) : std::max(a, b);
     const int viewport_width  = window_width  / x_count;
@@ -294,7 +280,7 @@ void Viewport_windows::layout_basic_viewport_windows()
     int y = 0;
     for (const auto& basic_viewport_window : m_basic_viewport_windows) {
         basic_viewport_window->set_viewport(
-            erhe::scene::Viewport{
+            erhe::toolkit::Viewport{
                 .x      = x * window_width,
                 .y      = y * window_height,
                 .width  = viewport_width,
@@ -310,30 +296,32 @@ void Viewport_windows::layout_basic_viewport_windows()
 }
 
 auto Viewport_windows::create_imgui_viewport_window(
+    erhe::imgui::Imgui_renderer&            imgui_renderer,
+    erhe::imgui::Imgui_windows&             imgui_windows,
+    erhe::rendergraph::Rendergraph&         rendergraph,
     const std::shared_ptr<Viewport_window>& viewport_window
 ) -> std::shared_ptr<Imgui_viewport_window>
 {
-    const auto& window_imgui_viewport = erhe::application::g_imgui_windows->get_window_viewport();
+    const auto& window_imgui_viewport = imgui_windows.get_window_viewport();
 
     auto imgui_viewport_window = std::make_shared<Imgui_viewport_window>(
+        imgui_renderer,
+        imgui_windows,
+        rendergraph,
         fmt::format("Viewport {}", m_imgui_viewport_windows.size()),
+        nullptr,
         viewport_window
     );
     m_imgui_viewport_windows.push_back(imgui_viewport_window);
-    erhe::application::g_imgui_windows->register_imgui_window(
-        imgui_viewport_window.get(),
-        true
-    );
-    erhe::application::g_rendergraph->register_node(imgui_viewport_window);
-    erhe::application::g_rendergraph->connect(
-        erhe::application::Rendergraph_node_key::viewport,
+    rendergraph.connect(
+        erhe::rendergraph::Rendergraph_node_key::viewport,
         viewport_window->get_final_output(),
-        imgui_viewport_window
+        imgui_viewport_window.get()
     );
-    erhe::application::g_rendergraph->connect(
-        erhe::application::Rendergraph_node_key::window,
-        imgui_viewport_window,
-        window_imgui_viewport
+    rendergraph.connect(
+        erhe::rendergraph::Rendergraph_node_key::window,
+        imgui_viewport_window.get(),
+        window_imgui_viewport.get()
     );
     return imgui_viewport_window;
 }
@@ -344,49 +332,80 @@ auto Viewport_windows::open_new_viewport_window(
 {
     const std::string name = fmt::format("Viewport {}", m_viewport_windows.size());
 
+    const int msaa_sample_count = m_context.settings_window->get_msaa_sample_count();
     if (scene_root) {
-        if (g_selection_tool != nullptr) {
-            for (const auto& entry : g_selection_tool->get_selection()) {
-                if (is_camera(entry)) {
-                    const auto camera = as_camera(entry);
-                    return create_viewport_window(
-                        name,
-                        scene_root,
-                        camera,
-                        erhe::application::g_configuration->graphics.msaa_sample_count
-                    );
-                }
+        for (const auto& entry : m_context.selection->get_selection()) {
+            if (is_camera(entry)) {
+                const auto camera = as_camera(entry);
+                return create_viewport_window(
+                    *m_context.graphics_instance,
+                    *m_context.rendergraph,
+                    *m_context.shadow_renderer,
+                    *m_context.editor_rendering,
+                    *m_context.tools,
+                    *m_context.viewport_config_window,
+
+                    name,
+                    scene_root,
+                    camera,
+                    msaa_sample_count
+                );
             }
         }
         // Case for when no camera found in selection
         if (!scene_root->scene().get_cameras().empty()) {
             const auto& camera = scene_root->scene().get_cameras().front();
             return create_viewport_window(
+                *m_context.graphics_instance,
+                *m_context.rendergraph,
+                *m_context.shadow_renderer,
+                *m_context.editor_rendering,
+                *m_context.tools,
+                *m_context.viewport_config_window,
+
                 name,
                 scene_root,
                 camera,
-                erhe::application::g_configuration->graphics.msaa_sample_count
+                msaa_sample_count
             );
         }
     }
 
     // Case for when no cameras found in scene
     return create_viewport_window(
+        *m_context.graphics_instance,
+        *m_context.rendergraph,
+        *m_context.shadow_renderer,
+        *m_context.editor_rendering,
+        *m_context.tools,
+        *m_context.viewport_config_window,
+
         name,
         {},
         nullptr,
-        erhe::application::g_configuration->graphics.msaa_sample_count
+        msaa_sample_count
     );
 }
 
 void Viewport_windows::open_new_imgui_viewport_window()
 {
-    auto        viewport_window = open_new_viewport_window();
-    const auto& configuration   = *erhe::application::g_configuration;
-    if (configuration.imgui.window_viewport) {
-        create_imgui_viewport_window(viewport_window);
+    bool window_viewport{true};
+    auto ini = erhe::configuration::get_ini("erhe.ini", "imgui");
+    ini->get("window_viewport", window_viewport);
+
+    auto viewport_window = open_new_viewport_window();
+    if (window_viewport) {
+        create_imgui_viewport_window(
+            *m_context.imgui_renderer,
+            *m_context.imgui_windows,
+            *m_context.rendergraph,
+            viewport_window
+        );
     } else {
-        create_basic_viewport_window(viewport_window);
+        create_basic_viewport_window(
+            *m_context.rendergraph,
+            viewport_window
+        );
     }
 }
 
@@ -412,7 +431,9 @@ void Viewport_windows::open_new_imgui_viewport_window()
 //    }
 //}
 
-void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_viewport)
+void Viewport_windows::update_hover(
+    erhe::imgui::Imgui_viewport* imgui_viewport
+)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -421,7 +442,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
 
     // Pull mouse position
     {
-        const auto mouse_position = erhe::application::g_view->mouse_position();
+        const auto mouse_position = m_context.input_state->mouse_position;
         for (auto& imgui_viewport_window : m_imgui_viewport_windows) {
             if (imgui_viewport_window->is_hovered()) {
                 imgui_viewport_window->on_mouse_move(mouse_position);
@@ -442,7 +463,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
         : m_hover_stack.back().lock();
 
     if (old_window != m_hover_window) {
-        g_editor_message_bus->send_message(
+        m_context.editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
                 .scene_view   = m_hover_window.get()
@@ -452,7 +473,7 @@ void Viewport_windows::update_hover(erhe::application::Imgui_viewport* imgui_vie
 }
 
 void Viewport_windows::update_hover_from_imgui_viewport_windows(
-    erhe::application::Imgui_viewport* imgui_viewport
+    erhe::imgui::Imgui_viewport* imgui_viewport
 )
 {
     for (const auto& imgui_viewport_window : m_imgui_viewport_windows) {
@@ -475,11 +496,7 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
 
 void Viewport_windows::update_hover_from_basic_viewport_windows()
 {
-    glm::vec2 pointer_window_position{0.0f, 0.0f};
-    erhe::application::g_window->get_context_window()->get_cursor_position(
-        pointer_window_position.x,
-        pointer_window_position.y
-    );
+    glm::vec2 pointer_window_position = m_context.input_state->mouse_position;
 
     m_hover_stack.clear();
     for (const auto& basic_viewport_window : m_basic_viewport_windows) {
@@ -488,7 +505,7 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
             continue;
         }
 
-        const erhe::scene::Viewport& viewport = basic_viewport_window->get_viewport();
+        const erhe::toolkit::Viewport& viewport = basic_viewport_window->get_viewport();
         const bool is_hoverered = viewport.hit_test(
             static_cast<int>(std::round(pointer_window_position.x)),
             static_cast<int>(std::round(pointer_window_position.y))
@@ -539,7 +556,7 @@ void Viewport_windows::viewport_toolbar(
 )
 {
     ImGui::PushID("Viewport_windows::viewport_toolbar");
-    const auto& rasterization = g_icon_set->get_small_rasterization();
+    const auto& rasterization = m_context.icon_set->get_small_rasterization();
 
     static constexpr std::string_view open_config{"open_config"};
     static constexpr uint32_t viewport_open_config_id{
@@ -548,14 +565,14 @@ void Viewport_windows::viewport_toolbar(
 
     const bool button_pressed = rasterization.icon_button(
         ERHE_HASH("open_config"),
-        g_icon_set->icons.three_dots
+        m_context.icon_set->icons.three_dots
     );
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
     if (button_pressed) {
-        g_viewport_config_window->show();
-        g_viewport_config_window->edit_data = viewport_window.get_config();
+        m_context.viewport_config_window->show();
+        m_context.viewport_config_window->edit_data = viewport_window.get_config();
     }
     ImGui::PopID();
 }

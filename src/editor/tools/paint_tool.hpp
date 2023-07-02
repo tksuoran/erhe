@@ -3,9 +3,8 @@
 #include "tools/tool.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/geometry/types.hpp"
 
 #include <glm/glm.hpp>
@@ -13,21 +12,31 @@
 #include <memory>
 #include <optional>
 
-namespace erhe::scene
-{
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::scene {
     class Mesh;
 }
 
 namespace editor
 {
 
+class Paint_tool;
+
 class Paint_vertex_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Paint_vertex_command();
+    Paint_vertex_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     void try_ready() override;
     auto try_call () -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 enum class Paint_mode
@@ -44,31 +53,30 @@ static constexpr const char* c_paint_mode_strings[] =
     "Polygon"
 };
 
+class Editor_message_bus;
+class Editor_scenes;
+class Icon_set;
+class Mesh_memory;
+class Selection_tool;
+class Headset_view;
+
 class Paint_tool
-    : public erhe::application::Imgui_window
-    , public erhe::components::Component
+    : public erhe::imgui::Imgui_window
     , public Tool
 {
 public:
-    static constexpr int              c_priority {4};
-    static constexpr std::string_view c_type_name{"Paint_tool"};
-    static constexpr std::string_view c_title{"Paint Tool"};
-    static constexpr uint32_t c_type_hash{
-        compiletime_xxhash::xxh32(
-            c_type_name.data(),
-            c_type_name.size(),
-            {}
-        )
-    };
+    static constexpr int c_priority{4};
 
-    Paint_tool ();
-    ~Paint_tool() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Paint_tool(
+        erhe::commands::Commands&    commands,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context,
+        Editor_message_bus&          editor_message_bus,
+        Headset_view&                headset_view,
+        Icon_set&                    icon_set,
+        Tools&                       tools
+    );
 
     // Implements Imgui_window
     void imgui() override;
@@ -93,9 +101,9 @@ private:
         const glm::vec4                           color
     );
 
-    Paint_vertex_command                   m_paint_vertex_command;
-    erhe::application::Redirect_command    m_drag_redirect_update_command;
-    erhe::application::Drag_enable_command m_drag_enable_command;
+    Paint_vertex_command                m_paint_vertex_command;
+    erhe::commands::Redirect_command    m_drag_redirect_update_command;
+    erhe::commands::Drag_enable_command m_drag_enable_command;
 
     Paint_mode              m_paint_mode{Paint_mode::Point};
     glm::vec4               m_color     {1.0f, 1.0f, 1.0f, 1.0f};
@@ -104,7 +112,5 @@ private:
     std::optional<uint32_t> m_corner_id;
     std::vector<glm::vec4>  m_ngon_colors;
 };
-
-extern Paint_tool* g_paint_tool;
 
 } // namespace editor

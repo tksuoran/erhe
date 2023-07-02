@@ -29,8 +29,8 @@ class Vertex_buffer_writer
 {
 public:
     Vertex_buffer_writer(
-        Build_context&              build_context,
-        gsl::not_null<Buffer_sink*> buffer_sink
+        Build_context& build_context,
+        Buffer_sink&   buffer_sink
     );
     virtual ~Vertex_buffer_writer() noexcept;
 
@@ -43,12 +43,12 @@ public:
 
     [[nodiscard]] auto start_offset() -> std::size_t;
 
-    Build_context&              build_context;
-    gsl::not_null<Buffer_sink*> buffer_sink;
-    Buffer_range                buffer_range;
-    std::vector<std::uint8_t>   vertex_data;
-    gsl::span<std::uint8_t>     vertex_data_span;
-    std::size_t                 vertex_write_offset{0};
+    Build_context&            build_context;
+    Buffer_sink&              buffer_sink;
+    Buffer_range              buffer_range;
+    std::vector<std::uint8_t> vertex_data;
+    gsl::span<std::uint8_t>   vertex_data_span;
+    std::size_t               vertex_write_offset{0};
 };
 
 /// Writes 8/16/32 -bit indices to byte buffer/memory
@@ -58,8 +58,8 @@ class Index_buffer_writer
 {
 public:
     Index_buffer_writer(
-        Build_context&              build_context,
-        gsl::not_null<Buffer_sink*> buffer_sink
+        Build_context& build_context,
+        Buffer_sink&   buffer_sink
     );
     virtual ~Index_buffer_writer() noexcept;
 
@@ -72,7 +72,7 @@ public:
     [[nodiscard]] auto start_offset  () -> std::size_t;
 
     Build_context&               build_context;
-    gsl::not_null<Buffer_sink*>  buffer_sink;
+    Buffer_sink&                 buffer_sink;
     Buffer_range                 buffer_range;
     const gl::Draw_elements_type index_type;
     const std::size_t            index_type_size{0};

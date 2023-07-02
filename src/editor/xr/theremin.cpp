@@ -1,5 +1,6 @@
 #include "theremin.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -11,9 +12,9 @@
 #include "xr/hand_tracker.hpp"
 #include "xr/headset_view.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -146,33 +147,18 @@ auto frequency_to_midi_note(const float f) -> int
 
 } // anonymous namespace
 
-Theremin* g_theremin{nullptr};
-
-Theremin::Theremin()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_description}
+Theremin::Theremin(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Hand_tracker&                hand_tracker,
+    Editor_context&              editor_context
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, "Thereming", "theremin"}
+    , m_context{editor_context}
     //// , m_audio_config             {}
     //// , m_audio_device             {}
 {
-}
-
-Theremin::~Theremin()
-{
-    ERHE_VERIFY(g_theremin == this);
-    g_theremin = nullptr;
-    //// ma_device_uninit(&m_audio_device);
-}
-
-void Theremin::declare_required_components()
-{
-    require<Hand_tracker>();
-    require<Grid_tool>();
-    require<Tools>();
-}
-
-void Theremin::initialize_component()
-{
-    ERHE_VERIFY(g_theremin == nullptr);
+    imgui_windows.register_imgui_window(this);
     //// m_audio_config = ma_device_config_init(ma_device_type_playback);
     //// m_audio_config.playback.format   = ma_format_f32;
     //// m_audio_config.playback.channels = 1;
@@ -188,23 +174,21 @@ void Theremin::initialize_component()
     ////     ma_device_start(&m_audio_device);
     //// }
 
-    g_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    g_hand_tracker->set_color(Hand_name::Left, Finger_name::index,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    g_hand_tracker->set_color(Hand_name::Left, Finger_name::middle, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    g_hand_tracker->set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
-    g_hand_tracker->set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    hand_tracker.set_color(Hand_name::Left, Finger_name::thumb,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    hand_tracker.set_color(Hand_name::Left, Finger_name::index,  ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    hand_tracker.set_color(Hand_name::Left, Finger_name::middle, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    hand_tracker.set_color(Hand_name::Left, Finger_name::ring,   ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
+    hand_tracker.set_color(Hand_name::Left, Finger_name::little, ImVec4{0.3f, 0.3f, 0.3f, 1.0f});
 
+    //// Register renderable
     //// get<Tools>()->register_background_tool(this);
-
-    g_theremin = this;
 }
 
 void Theremin::set_antenna_distance(const float distance)
 {
     m_antenna_distance = distance;
     m_frequency = m_antenna_distance_scale / distance;
-    if (m_snap_to_note)
-    {
+    if (m_snap_to_note) {
         const int midi_note = frequency_to_midi_note(m_frequency);
         m_frequency = midi_note_to_frequency(midi_note);
     }
@@ -260,27 +244,27 @@ void Theremin::generate(
     }
 }
 
-void Theremin::tool_render(const Render_context& context)
+void Theremin::render(const Render_context& context)
 {
     static_cast<void>(context);
 
-    if (!g_headset_view || !m_enable_audio) {
+    if (!m_enable_audio) {
         return;
     }
 
-    auto&      line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
     //const auto camera        = m_headset_view->get_camera();
     //if (!camera) {
     //    return;
     //}
-    const auto& root_node = g_headset_view->get_root_node();
+    const auto& root_node = m_context.headset_view->get_root_node();
     if (!root_node) {
         return;
     }
 
     const auto  transform  = root_node->world_from_node();
-    const auto& left_hand  = g_hand_tracker->get_hand(Hand_name::Left);
-    const auto& right_hand = g_hand_tracker->get_hand(Hand_name::Right);
+    const auto& left_hand  = m_context.hand_tracker->get_hand(Hand_name::Left);
+    const auto& right_hand = m_context.hand_tracker->get_hand(Hand_name::Right);
 
     constexpr glm::vec4 green     {0.0f, 1.0f, 0.0f, 1.0f};
     constexpr glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
@@ -310,8 +294,8 @@ void Theremin::tool_render(const Render_context& context)
         finger_distance_color.z,
         1.0f
     };
-    g_hand_tracker->set_color(Hand_name::Left, Finger_name::thumb, volume_color);
-    g_hand_tracker->set_color(Hand_name::Left, Finger_name::index, volume_color);
+    m_context.hand_tracker->set_color(Hand_name::Left, Finger_name::thumb, volume_color);
+    m_context.hand_tracker->set_color(Hand_name::Left, Finger_name::index, volume_color);
 
     m_right_finger_distance = right_hand.distance(
         XR_HAND_JOINT_THUMB_TIP_EXT,
@@ -362,7 +346,7 @@ void Theremin::tool_render(const Render_context& context)
                 i <= Finger_name::little;
                 ++i
             ) {
-                g_hand_tracker->set_color(
+                m_context.hand_tracker->set_color(
                     Hand_name::Right,
                     i,
                     (i == finger)

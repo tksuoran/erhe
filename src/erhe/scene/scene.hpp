@@ -3,6 +3,7 @@
 #include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/item.hpp"
 #include "erhe/scene/scene_message.hpp"
+#include "erhe/scene/scene_message_bus.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <glm/glm.hpp>
@@ -51,7 +52,7 @@ public:
 class Light_layer
 {
 public:
-    explicit Light_layer(
+    Light_layer(
         const std::string_view name,
         Layer_id               id
     );
@@ -77,9 +78,10 @@ class Scene
     : public Item
 {
 public:
-    explicit Scene(
-        const std::string_view name,
-        Scene_host*            host = nullptr
+    Scene(
+        erhe::scene::Scene_message_bus& scene_message_bus,
+        const std::string_view          name,
+        Scene_host*                     host = nullptr
     );
 
     ~Scene();
@@ -126,6 +128,7 @@ public:
     void unregister_light (const std::shared_ptr<Light>& light);
 
 private:
+    Scene_message_bus&                        m_message_bus;
     Scene_host*                               m_host       {nullptr};
     std::shared_ptr<erhe::scene::Node>        m_root_node;
     std::vector<std::shared_ptr<Node>>        m_flat_node_vector;

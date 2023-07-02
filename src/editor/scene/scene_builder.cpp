@@ -26,19 +26,20 @@
 #include "windows/debug_view_window.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #include "windows/physics_window.hpp"
+#include "windows/settings.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/window_imgui_viewport.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/rendergraph/rendergraph_node.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/window_imgui_viewport.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/rendergraph/rendergraph_node.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/disc.hpp"
@@ -55,7 +56,7 @@
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
-#include "erhe/renderer/shadow_renderer.hpp"
+#include "erhe/scene_renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -101,95 +102,85 @@ using glm::vec4;
 
 constexpr bool global_instantiate = true;
 
-Scene_builder* g_scene_builder{nullptr};
-
-Scene_builder::Scene_builder()
-    : Component{c_type_name}
+Scene_builder::Config::Config()
 {
+    auto ini = erhe::configuration::get_ini("erhe.ini", "scene");
+    ini->get("directional_light_intensity", directional_light_intensity);
+    ini->get("directional_light_radius",    directional_light_radius);
+    ini->get("directional_light_height",    directional_light_height);
+    ini->get("directional_light_count",     directional_light_count);
+    ini->get("spot_light_intensity",        spot_light_intensity);
+    ini->get("spot_light_radius",           spot_light_radius);
+    ini->get("spot_light_height",           spot_light_height);
+    ini->get("spot_light_count",            spot_light_count);
+    ini->get("floor_size",                  floor_size);
+    ini->get("instance_count",              instance_count);
+    ini->get("instance_gap",                instance_gap);
+    ini->get("object_scale",                object_scale);
+    ini->get("mass_scale",                  mass_scale);
+    ini->get("detail",                      detail);
+    ini->get("gltf_files",                  gltf_files);
+    ini->get("obj_files",                   obj_files);
+    ini->get("floor",                       floor);
+    ini->get("sphere",                      sphere);
+    ini->get("torus",                       torus);
+    ini->get("cylinder",                    cylinder);
+    ini->get("cone",                        cone);
+    ini->get("platonic_solids",             platonic_solids);
+    ini->get("johnson_solids",              johnson_solids);
 }
 
-Scene_builder::~Scene_builder() noexcept
+Scene_builder::Scene_builder(
+    erhe::graphics::Instance&              graphics_instance,
+    erhe::imgui::Imgui_renderer&           imgui_renderer,
+    erhe::imgui::Imgui_windows&            imgui_windows,
+    erhe::rendergraph::Rendergraph&        rendergraph,
+    erhe::scene::Scene_message_bus&        scene_message_bus,
+    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
+    Editor_context&                        editor_context,
+    Editor_rendering&                      editor_rendering,
+    Editor_scenes&                         editor_scenes,
+    Mesh_memory&                           mesh_memory,
+    Settings_window&                       settings_window,
+    Tools&                                 tools,
+    Viewport_config_window&                viewport_config_window,
+    Viewport_windows&                      viewport_windows
+)
+    : m_context{editor_context}
 {
-    ERHE_VERIFY(g_scene_builder == nullptr);
-}
-
-void Scene_builder::deinitialize_component()
-{
-    ERHE_VERIFY(g_scene_builder == this);
-    m_floor_brush.reset();
-    m_table_brush.reset();
-    m_scene_brushes.clear();
-    m_collision_shapes.clear();
-    m_primary_viewport_window.reset();
-    m_scene_root.reset();
-    g_scene_builder = nullptr;
-}
-
-void Scene_builder::declare_required_components()
-{
-    require<erhe::application::Configuration      >();
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Imgui_windows      >();
-    require<erhe::application::Rendergraph        >();
-    require<erhe::renderer::Shadow_renderer       >();
-    require<Debug_view_window>();
-    require<Editor_rendering >();
-    require<Editor_scenes    >();
-    require<Fly_camera_tool  >();
-    require<Mesh_memory      >();
-    require<Viewport_windows >();
-}
-
-void Scene_builder::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_scene_builder == nullptr);
-
-    auto ini = erhe::application::get_ini("erhe.ini", "scene");
-    ini->get("directional_light_intensity", config.directional_light_intensity);
-    ini->get("directional_light_radius",    config.directional_light_radius);
-    ini->get("directional_light_height",    config.directional_light_height);
-    ini->get("directional_light_count",     config.directional_light_count);
-    ini->get("spot_light_intensity",        config.spot_light_intensity);
-    ini->get("spot_light_radius",           config.spot_light_radius);
-    ini->get("spot_light_height",           config.spot_light_height);
-    ini->get("spot_light_count",            config.spot_light_count);
-    ini->get("floor_size",                  config.floor_size);
-    ini->get("instance_count",              config.instance_count);
-    ini->get("instance_gap",                config.instance_gap);
-    ini->get("object_scale",                config.object_scale);
-    ini->get("mass_scale",                  config.mass_scale);
-    ini->get("detail",                      config.detail);
-    ini->get("gltf_files",                  config.gltf_files);
-    ini->get("obj_files",                   config.obj_files);
-    ini->get("floor",                       config.floor);
-    ini->get("sphere",                      config.sphere);
-    ini->get("torus",                       config.torus);
-    ini->get("cylinder",                    config.cylinder);
-    ini->get("cone",                        config.cone);
-    ini->get("platonic_solids",             config.platonic_solids);
-    ini->get("johnson_solids",              config.johnson_solids);
-
-    const erhe::application::Scoped_gl_context gl_context;
-
     auto content_library = std::make_shared<Content_library>();
     add_default_materials(content_library->materials);
 
     m_scene_root = std::make_shared<Scene_root>(
+        scene_message_bus,
         content_library,
         "Scene"
     );
 
-    setup_scene();
+    setup_cameras(
+        graphics_instance,
+        imgui_renderer,
+        imgui_windows,
+        rendergraph,
+        shadow_renderer,
+        editor_rendering,
+        settings_window,
+        tools,
+        viewport_config_window,
+        viewport_windows
+    );
+    setup_lights   ();
+    make_brushes   (mesh_memory);
+    make_mesh_nodes();
+    add_room       ();
 
-    g_editor_scenes->register_scene_root(m_scene_root);
-
-    g_scene_builder = this;
+    editor_scenes.register_scene_root(m_scene_root);
 }
 
 void Scene_builder::add_rendertarget_viewports(int count)
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
+    static_cast<void>(count);
+#if defined(ERHE_GUI_LIBRARY_IMGUI) && 0 //// TODO
     const auto& test_scene_root = get_scene_root();
 
     if (count >= 1) {
@@ -216,7 +207,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
             "Rendertarget ImGui Viewport 1"
         );
 
-        erhe::application::g_imgui_windows->register_imgui_viewport(imgui_viewport_1);
+        g_imgui_windows->register_imgui_viewport(imgui_viewport_1);
 
         g_grid_tool->set_viewport(imgui_viewport_1.get());
         g_grid_tool->show();
@@ -269,13 +260,13 @@ void Scene_builder::add_rendertarget_viewports(int count)
             rendertarget_mesh_2.get(),
             "Rendertarget ImGui Viewport 2"
         );
-        erhe::application::g_imgui_windows->register_imgui_viewport(imgui_viewport_2);
+        g_imgui_windows->register_imgui_viewport(imgui_viewport_2);
 
         secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
         secondary_imgui_viewport_window->show();
 
-        erhe::application::g_rendergraph->connect(
-            erhe::application::Rendergraph_node_key::window,
+        g_rendergraph->connect(
+            erhe::rendergraph::Rendergraph_node_key::window,
             secondary_imgui_viewport_window,
             imgui_viewport_2
         );
@@ -310,7 +301,18 @@ auto Scene_builder::make_camera(
     return camera;
 }
 
-void Scene_builder::setup_cameras()
+void Scene_builder::setup_cameras(
+    erhe::graphics::Instance&              graphics_instance,
+    erhe::imgui::Imgui_renderer&           imgui_renderer,
+    erhe::imgui::Imgui_windows&            imgui_windows,
+    erhe::rendergraph::Rendergraph&        rendergraph,
+    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
+    Editor_rendering&                      editor_rendering,
+    Settings_window&                       settings_window,
+    Tools&                                 tools,
+    Viewport_config_window&                viewport_config_window,
+    Viewport_windows&                      viewport_windows
+)
 {
     const auto& camera_a = make_camera(
         "Camera A",
@@ -329,37 +331,53 @@ void Scene_builder::setup_cameras()
     camera_b->set_wireframe_color(glm::vec4{0.3f, 0.6f, 1.00f, 1.0f});
 #endif
 
-    if (!erhe::application::g_configuration->window.show) {
+    //// TODO Read these from ini
+    const bool enable_post_processing = true;
+    const bool window_show             = true;
+    const bool window_viewport         = true;
+    if (!window_show) {
         return;
     }
 
-    m_primary_viewport_window = g_viewport_windows->create_viewport_window(
+    const int msaa_sample_count = settings_window.get_msaa_sample_count();
+    m_primary_viewport_window = viewport_windows.create_viewport_window(
+        graphics_instance,
+        rendergraph,
+        shadow_renderer,
+        editor_rendering,
+        tools,
+        viewport_config_window,
+
         "Primary Viewport",
         m_scene_root,
         camera_a,
         std::min(
             2,
-            erhe::application::g_configuration->graphics.msaa_sample_count
+            msaa_sample_count
         ), //// TODO Fix rendergraph
-        erhe::application::g_configuration->graphics.post_processing
+        enable_post_processing
     );
-
-    if (erhe::application::g_configuration->imgui.window_viewport) {
+    
+    if (window_viewport) {
         //auto primary_imgui_viewport_window =
-        g_viewport_windows->create_imgui_viewport_window(
+        viewport_windows.create_imgui_viewport_window(
+            imgui_renderer,
+            imgui_windows,
+            rendergraph,
             m_primary_viewport_window
         );
     } else {
-        g_viewport_windows->create_basic_viewport_window(
+        viewport_windows.create_basic_viewport_window(
+            rendergraph,
             m_primary_viewport_window
         );
     }
 }
 
-auto Scene_builder::build_info() -> erhe::primitive::Build_info&
-{
-    return g_mesh_memory->build_info;
-};
+//auto Scene_builder::build_info() -> erhe::primitive::Build_info&
+//{
+//    return g_mesh_memory->build_info;
+//};
 
 auto Scene_builder::make_brush(
     Brush_data&& brush_create_info,
@@ -377,48 +395,64 @@ auto Scene_builder::make_brush(
 }
 
 auto Scene_builder::make_brush(
+    Mesh_memory&               mesh_memory,
     erhe::geometry::Geometry&& geometry,
     const bool                 instantiate_to_scene
 ) -> std::shared_ptr<Brush>
 {
     return make_brush(
         Brush_data{
-            .build_info      = build_info(),
-            .normal_style    = Normal_style::polygon_normals,
-            .geometry        = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
-            .density         = config.mass_scale,
+            .context      = m_context,
+            .build_info   = build_info(mesh_memory),
+            .normal_style = Normal_style::polygon_normals,
+            .geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
+            .density      = config.mass_scale,
         },
         instantiate_to_scene
     );
+}
 
+auto Scene_builder::build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Build_info
+{
+    return erhe::primitive::Build_info{
+        .primitive_types = {
+            .fill_triangles  = true,
+            .edge_lines      = true,
+            .corner_points   = true,
+            .centroid_points = true
+        },
+        .buffer_info = mesh_memory.buffer_info
+    };
 }
 
 auto Scene_builder::make_brush(
+    Mesh_memory&                                     mesh_memory,
     const std::shared_ptr<erhe::geometry::Geometry>& geometry,
     const bool                                       instantiate_to_scene
 ) -> std::shared_ptr<Brush>
 {
     return make_brush(
         Brush_data{
-            .build_info      = build_info(),
-            .normal_style    = Normal_style::polygon_normals,
-            .geometry        = geometry,
-            .density         = config.mass_scale,
+            .context      = m_context,
+            .build_info   = build_info(mesh_memory),
+            .normal_style = Normal_style::polygon_normals,
+            .geometry     = geometry,
+            .density      = config.mass_scale,
         },
         instantiate_to_scene
     );
-
 }
 
-void Scene_builder::make_brushes()
+void Scene_builder::make_brushes(
+    Mesh_memory& mesh_memory
+)
 {
     ERHE_PROFILE_FUNCTION();
 
     std::unique_ptr<ITask_queue> execution_queue;
 
-    const auto& configuration = *erhe::application::g_configuration;
-
-    if (configuration.threading.parallel_initialization) {
+    const bool parallel_initialization = false; //// TODO
+    if (parallel_initialization) {
         const std::size_t thread_count = std::min(
             8U,
             std::max(std::thread::hardware_concurrency() - 0, 1U)
@@ -438,7 +472,7 @@ void Scene_builder::make_brushes()
         m_collision_shapes.push_back(floor_box_shape);
 
         execution_queue->enqueue(
-            [this, &floor_box_shape, &configuration]()
+            [this, &floor_box_shape, &mesh_memory]()
             {
                 ERHE_PROFILE_SCOPE("Floor brush");
 
@@ -450,7 +484,8 @@ void Scene_builder::make_brushes()
 
                 m_floor_brush = std::make_unique<Brush>(
                     Brush_data{
-                        .build_info      = build_info(),
+                        .context         = m_context,
+                        .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::polygon_normals,
                         .geometry        = floor_geometry,
                         .density         = 0.0f,
@@ -486,7 +521,7 @@ void Scene_builder::make_brushes()
                     //"res/models/Suzanne.gltf"
                 };
                 for (auto* path : files_names) {
-                    parse_gltf(m_scene_root, build_info(), path);
+                    parse_gltf(m_scene_root, build_info(mesh_memory), path);
                 }
             }
         //);
@@ -495,7 +530,7 @@ void Scene_builder::make_brushes()
 
     if (config.obj_files) {
         execution_queue->enqueue(
-            [this, &configuration]()
+            [this, &mesh_memory]()
             {
                 ERHE_PROFILE_SCOPE("parse .obj files");
 
@@ -520,9 +555,9 @@ void Scene_builder::make_brushes()
                         geometry->transform(scale_t);
                         geometry->flip_reversed_polygons();
                         make_brush(
-                            Brush_data
-                            {
-                                .build_info   = build_info(),
+                            Brush_data {
+                                .context      = m_context,
+                                .build_info   = build_info(mesh_memory),
                                 .normal_style = Normal_style::polygon_normals,
                                 .geometry     = geometry,
                                 .density      = config.mass_scale
@@ -537,21 +572,22 @@ void Scene_builder::make_brushes()
 
     if (config.platonic_solids) {
         execution_queue->enqueue(
-            [this, &configuration]()
+            [this, &mesh_memory]()
             {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
                 constexpr bool instantiate = global_instantiate;
                 const auto scale = config.object_scale;
 
-                make_brush(make_dodecahedron (scale), instantiate);
-                make_brush(make_icosahedron  (scale), instantiate);
-                make_brush(make_octahedron   (scale), instantiate);
-                make_brush(make_tetrahedron  (scale), instantiate);
-                make_brush(make_cuboctahedron(scale), instantiate);
+                make_brush(mesh_memory, make_dodecahedron (scale), instantiate);
+                make_brush(mesh_memory, make_icosahedron  (scale), instantiate);
+                make_brush(mesh_memory, make_octahedron   (scale), instantiate);
+                make_brush(mesh_memory, make_tetrahedron  (scale), instantiate);
+                make_brush(mesh_memory, make_cuboctahedron(scale), instantiate);
                 make_brush(
                     Brush_data{
-                        .build_info      = build_info(),
+                        .context         = m_context,
+                        .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::polygon_normals,
                         .geometry        = std::make_shared<erhe::geometry::Geometry>(make_cube(scale)),
                         .density         = config.mass_scale,
@@ -567,14 +603,15 @@ void Scene_builder::make_brushes()
 
     if (config.sphere) {
         execution_queue->enqueue(
-            [this, &configuration]()
+            [this, &mesh_memory]()
             {
                 ERHE_PROFILE_SCOPE("Sphere");
                 constexpr bool instantiate = global_instantiate;
 
                 make_brush(
                     Brush_data{
-                        .build_info      = build_info(),
+                        .context         = m_context,
+                        .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::corner_normals,
                         .geometry        = std::make_shared<erhe::geometry::Geometry>(
                             make_sphere(
@@ -596,7 +633,7 @@ void Scene_builder::make_brushes()
 
     if (config.torus) {
         execution_queue->enqueue(
-            [this, &configuration]()
+            [this, &mesh_memory]()
             {
                 ERHE_PROFILE_SCOPE("Torus");
 
@@ -664,7 +701,8 @@ void Scene_builder::make_brushes()
                 );
                 make_brush(
                     Brush_data{
-                        .build_info                  = build_info(),
+                        .context                     = m_context,
+                        .build_info                  = build_info(mesh_memory),
                         .normal_style                = Normal_style::corner_normals,
                         .geometry                    = torus_geometry,
                         .density                     = config.mass_scale,
@@ -680,7 +718,7 @@ void Scene_builder::make_brushes()
 
     if (config.cylinder) {
         execution_queue->enqueue(
-            [this, &configuration]()
+            [this, &mesh_memory]()
             {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
@@ -699,7 +737,8 @@ void Scene_builder::make_brushes()
 
                 make_brush(
                     Brush_data{
-                        .build_info      = build_info(),
+                        .context         = m_context,
+                        .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::corner_normals,
                         .geometry        = std::make_shared<erhe::geometry::Geometry>(
                             std::move(cylinder_geometry)
@@ -718,7 +757,7 @@ void Scene_builder::make_brushes()
 
     if (config.cone) {
         execution_queue->enqueue(
-            [this, &configuration]()
+            [this, &mesh_memory]()
             {
                 ERHE_PROFILE_SCOPE("Cone");
 
@@ -735,7 +774,8 @@ void Scene_builder::make_brushes()
 
                 make_brush(
                     Brush_data{
-                        .build_info   = build_info(),
+                        .context      = m_context,
+                        .build_info   = build_info(mesh_memory),
                         .normal_style = Normal_style::corner_normals,
                         .geometry     = std::make_shared<erhe::geometry::Geometry>(
                             std::move(cone_geometry)
@@ -768,7 +808,7 @@ void Scene_builder::make_brushes()
              8 * std::max(1, config.detail)
         );
         ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
-        auto rotate_ring_pg = make_primitive(ring_geometry, build_info());
+        auto rotate_ring_pg = make_primitive(ring_geometry, build_info(mesh_memory));
         const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
             std::move(ring_geometry)
         );
@@ -825,8 +865,7 @@ void Scene_builder::make_brushes()
         library = Json_library("res/polyhedra/johnson.json");
         for (const auto& key_name : library.names) {
             execution_queue->enqueue(
-                [this, &library, &key_name, &configuration]()
-                {
+                [this, &mesh_memory, &library, &key_name]() {
                     auto geometry = library.make_geometry(key_name);
                     if (geometry.get_polygon_count() == 0) {
                         return;
@@ -839,8 +878,9 @@ void Scene_builder::make_brushes()
 
                     make_brush(
                         Brush_data{
+                            .context            = m_context,
                             .name               = shared_geometry->name,
-                            .build_info         = build_info(),
+                            .build_info         = build_info(mesh_memory),
                             .normal_style       = Normal_style::polygon_normals,
                             .geometry_generator = [shared_geometry](){ return shared_geometry; },
                             .density            = config.mass_scale
@@ -854,15 +894,13 @@ void Scene_builder::make_brushes()
 
     execution_queue->wait();
 
-    buffer_transfer_queue().flush();
+    mesh_memory.gl_buffer_transfer_queue.flush();
 }
 
-auto Scene_builder::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
-{
-    Expects(g_mesh_memory->gl_buffer_transfer_queue);
-
-    return *g_mesh_memory->gl_buffer_transfer_queue.get();
-}
+//auto Scene_builder::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
+//{
+//    return m_mesh_memory.gl_buffer_transfer_queue;
+//}
 
 void Scene_builder::add_room()
 {
@@ -1051,7 +1089,7 @@ void Scene_builder::make_mesh_nodes()
     }
 }
 
-void Scene_builder::make_cube_benchmark()
+void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1060,7 +1098,7 @@ void Scene_builder::make_cube_benchmark()
     auto& material_library = m_scene_root->content_library()->materials;
     auto  material         = material_library.make("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
     auto  cube             = make_cube(0.1f);
-    auto  cube_pg          = make_primitive(cube, build_info(), Normal_style::polygon_normals);
+    auto  cube_pg          = make_primitive(cube, build_info(mesh_memory), Normal_style::polygon_normals);
 
     constexpr float scale   = 0.5f;
     constexpr int   x_count = 20;
@@ -1277,17 +1315,6 @@ void Scene_builder::animate_lights(const double time_d)
 
         light_index++;
     }
-}
-
-void Scene_builder::setup_scene()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    setup_cameras();
-    setup_lights();
-    make_brushes();
-    make_mesh_nodes();
-    add_room();
 }
 
 [[nodiscard]] auto Scene_builder::get_scene_root() const -> std::shared_ptr<Scene_root>

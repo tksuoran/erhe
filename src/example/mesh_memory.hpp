@@ -1,8 +1,12 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/graphics/buffer.hpp"
+#include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/primitive/build_info.hpp"
+#include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/enums.hpp"
 
 #include <memory>
@@ -11,6 +15,7 @@ namespace erhe::graphics
 {
     class Buffer;
     class Buffer_transfer_queue;
+    class Instance;
     class Shader_resource;
     class Vertex_format;
     class Vertex_input_state;
@@ -21,50 +26,37 @@ namespace erhe::primitive
     class Gl_buffer_sink;
 }
 
+namespace erhe::scene_renderer
+{
+    class Program_interface;
+}
+
 namespace example
 {
 
-class IMesh_memory
-{
-public:
-    virtual ~IMesh_memory() noexcept;
-
-    [[nodiscard]] virtual auto gl_vertex_format   () const -> erhe::graphics::Vertex_format& = 0;
-    [[nodiscard]] virtual auto gl_index_type      () const -> gl::Draw_elements_type = 0;
-    [[nodiscard]] virtual auto get_vertex_input   () const -> const erhe::graphics::Vertex_input_state* = 0;
-    [[nodiscard]] virtual auto get_vertex_input   () -> erhe::graphics::Vertex_input_state* = 0;
-    [[nodiscard]] virtual auto get_vertex_data_in () -> erhe::graphics::Shader_resource& = 0;
-    [[nodiscard]] virtual auto get_vertex_data_out() -> erhe::graphics::Shader_resource& = 0;
-
-    std::unique_ptr<erhe::graphics::Buffer_transfer_queue> gl_buffer_transfer_queue;
-    std::unique_ptr<erhe::primitive::Gl_buffer_sink>       gl_buffer_sink;
-    std::shared_ptr<erhe::graphics::Buffer>                gl_vertex_buffer;
-    std::shared_ptr<erhe::graphics::Buffer>                gl_index_buffer;
-    erhe::primitive::Build_info                            build_info;
-};
-
-class Mesh_memory_impl;
 
 class Mesh_memory
-    : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_type_name{"Mesh_memory"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    Mesh_memory(
+        erhe::graphics::Instance&                graphics_instance,
+        erhe::scene_renderer::Program_interface& program_interface
+    );
 
-    Mesh_memory ();
-    ~Mesh_memory() noexcept override;
-
-    // Implements Component
-    auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    erhe::graphics::Instance&             graphics_instance;
+    erhe::graphics::Vertex_format         vertex_format;
+    erhe::graphics::Buffer                gl_vertex_buffer;
+    erhe::graphics::Buffer                gl_index_buffer;
+    erhe::primitive::Buffer_info          buffer_info;
+    erhe::graphics::Buffer_transfer_queue gl_buffer_transfer_queue;
+    erhe::primitive::Gl_buffer_sink       gl_buffer_sink;
+    erhe::graphics::Vertex_input_state    vertex_input;
+    //erhe::graphics::Shader_resource       vertex_data_in;   // For SSBO read
+    //erhe::graphics::Shader_resource       vertex_data_out;  // For SSBO write
 
 private:
-    std::unique_ptr<Mesh_memory_impl> m_impl;
+    [[nodiscard]] auto get_vertex_buffer_size() const -> int;
+    [[nodiscard]] auto get_index_buffer_size() const -> int;
 };
-
-extern IMesh_memory* g_mesh_memory;
 
 } // namespace example

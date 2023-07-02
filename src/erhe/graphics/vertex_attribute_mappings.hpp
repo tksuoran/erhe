@@ -14,14 +14,21 @@ namespace erhe::graphics
 {
 
 class Buffer;
+class Instance;
 class Vertex_input_state;
 class Vertex_format;
 
 class Vertex_attribute_mappings final
 {
 public:
-    Vertex_attribute_mappings();
-    explicit Vertex_attribute_mappings(const std::initializer_list<Vertex_attribute_mapping>);
+    explicit Vertex_attribute_mappings(
+        erhe::graphics::Instance& instance
+    );
+
+    Vertex_attribute_mappings(
+        erhe::graphics::Instance&                             instance,
+        const std::initializer_list<Vertex_attribute_mapping> mappings
+    );
 
     void collect_attributes(
         std::vector<Vertex_input_attribute>& attributes,
@@ -30,6 +37,9 @@ public:
     ) const;
 
     std::vector<Vertex_attribute_mapping> mappings;
+
+private:
+    erhe::graphics::Instance& m_instance;
 };
 
 } // namespace erhe::graphics

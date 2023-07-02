@@ -1,6 +1,7 @@
 #include "image_transfer.hpp"
 
-#include "erhe/application/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
@@ -10,21 +11,26 @@
 namespace example
 {
 
-Image_transfer* g_image_transfer{nullptr};
-
-
-Image_transfer::Image_transfer()
+Image_transfer::Image_transfer(
+    erhe::graphics::Instance& graphics_instance
+)
+    : m_slots{
+        Slot{graphics_instance},
+        Slot{graphics_instance},
+        Slot{graphics_instance},
+        Slot{graphics_instance}
+    }
 {
-    m_slots = std::make_unique<std::array<Slot, 4>>();
 }
 
 auto Image_transfer::get_slot() -> Slot&
 {
-    m_index = (m_index + 1) % m_slots->size();
-    return m_slots->at(m_index);
+    m_index = (m_index + 1) % m_slots.size();
+    return m_slots.at(m_index);
 }
 
-Image_transfer::Slot::Slot()
+Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
+    : m_graphics_instance{graphics_instance}
 {
     Expects(m_pbo.gl_name() != 0);
 
@@ -35,7 +41,7 @@ Image_transfer::Slot::Slot()
         gl::Map_buffer_access_mask::map_flush_explicit_bit    |
         gl::Map_buffer_access_mask::map_write_bit;
 
-    if (erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (graphics_instance.info.use_persistent_buffers) {
         m_storage_mask = m_storage_mask | gl::Buffer_storage_mask::map_persistent_bit;
         m_access_mask  = m_access_mask  | gl::Map_buffer_access_mask::map_persistent_bit;
     }
@@ -48,7 +54,7 @@ Image_transfer::Slot::Slot()
         gl::Buffer_storage_mask::map_persistent_bit
     );
 
-    if (erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (graphics_instance.info.use_persistent_buffers) {
         map();
     }
 }
@@ -77,7 +83,7 @@ void Image_transfer::Slot::unmap()
 
 void Image_transfer::Slot::end()
 {
-    if (!erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (!m_graphics_instance.info.use_persistent_buffers) {
         unmap();
     }
 }
@@ -95,7 +101,7 @@ auto Image_transfer::Slot::begin_span_for(
     auto byte_count = row_stride * span_height;
     Expects(byte_count >= 1);
     Expects(byte_count <= m_capacity);
-    if (!erhe::graphics::Instance::info.use_persistent_buffers) {
+    if (!m_graphics_instance.info.use_persistent_buffers) {
         map();
     }
 

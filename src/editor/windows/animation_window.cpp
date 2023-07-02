@@ -1,6 +1,7 @@
 #include "windows/animation_window.hpp"
 #include "windows/animation_curve.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
 #include "editor_message_bus.hpp"
@@ -11,7 +12,7 @@
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/animation.hpp"
 #include "erhe/scene/scene.hpp"
@@ -31,35 +32,17 @@
 namespace editor
 {
 
-Animation_window* g_animation_window{nullptr};
-
-Animation_window::Animation_window()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title}
+Animation_window::Animation_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
+    Editor_message_bus&          editor_message_bus
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Animation", "animation"}
+    , m_context                {editor_context}
 {
-}
-
-Animation_window::~Animation_window() noexcept
-{
-    ERHE_VERIFY(g_animation_window == this);
-    g_animation_window = nullptr;
-}
-
-void Animation_window::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-    require<Editor_message_bus>();
-}
-
-void Animation_window::initialize_component()
-{
-    ERHE_VERIFY(g_animation_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this, "animations");
-    g_animation_window = this;
-
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
             using namespace erhe::toolkit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 if (message.scene_view != nullptr) {
@@ -135,7 +118,7 @@ void Animation_window::imgui()
 
     for (auto& animation : content_library->animations.entries()) {
         animation->apply(m_time);
-        g_editor_message_bus->send_message(
+        m_context.editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_animation_update
             }

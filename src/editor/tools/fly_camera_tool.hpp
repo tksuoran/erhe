@@ -1,89 +1,87 @@
 #pragma once
 
+#include "time.hpp"
 #include "tools/tool.hpp"
 #include "scene/frame_controller.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/application_view.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
-#include "erhe/toolkit/view.hpp" // keycode
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
+#include "erhe/toolkit/window_event_handler.hpp" // keycode
 
-#define ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE 1
-
-#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
-#   include "erhe/toolkit/space_mouse.hpp"
-#endif
-
-namespace erhe::scene
-{
+namespace erhe::commands {
+    class Commands;
+}
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::scene {
     class Camera;
 }
 
 namespace editor
 {
 
-#if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
-class Fly_camera_space_mouse_listener
-    : public erhe::toolkit::Space_mouse_listener
-{
-public:
-    Fly_camera_space_mouse_listener();
-    ~Fly_camera_space_mouse_listener() noexcept;
-
-    auto is_active     () -> bool                                 override;
-    void set_active    (const bool value)                         override;
-    void on_translation(const int tx, const int ty, const int tz) override;
-    void on_rotation   (const int rx, const int ry, const int rz) override;
-    void on_button     (const int id)                             override;
-
-private:
-    bool m_is_active{false};
-};
-#endif
+class Editor_message_bus;
+class Fly_camera_tool;
+class Tools;
+class Viewport_windows;
 
 class Fly_camera_turn_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Fly_camera_turn_command();
+    Fly_camera_turn_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     void try_ready          () override;
-    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Fly_camera_zoom_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Fly_camera_zoom_command();
+    Fly_camera_zoom_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     void try_ready          () override;
-    auto try_call_with_input(erhe::application::Input_arguments& input) -> bool override;
+    auto try_call_with_input(erhe::commands::Input_arguments& input) -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Fly_camera_move_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
     Fly_camera_move_command(
-        Control                            control,
-        erhe::application::Controller_item item,
-        bool                               active
+        erhe::commands::Commands&                  commands,
+        Editor_context&                            context,
+        Variable                                   variable,
+        erhe::toolkit::Simulation_variable_control control,
+        bool                                       active
     );
 
     auto try_call() -> bool override;
 
 private:
-    Control                            m_control;
-    erhe::application::Controller_item m_item;
-    bool                               m_active;
+    Editor_context&                            m_context;
+    Variable                                   m_variable;
+    erhe::toolkit::Simulation_variable_control m_control;
+    bool                                       m_active;
 };
 
 class Fly_camera_tool
-    : public erhe::components::Component
-    , public erhe::components::IUpdate_fixed_step
-    , public erhe::components::IUpdate_once_per_frame
+    : public erhe::imgui::Imgui_window
     , public Tool
-    , public erhe::application::Imgui_window
+    , public Update_fixed_step
+    , public Update_once_per_frame
 {
 public:
     class Config
@@ -97,30 +95,23 @@ public:
     };
     Config config;
 
-    static constexpr int              c_priority {5};
-    static constexpr std::string_view c_type_name{"Fly_camera_tool"};
-    static constexpr std::string_view c_title    {"Fly Camera"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    static constexpr int c_priority{5};
 
-    Fly_camera_tool ();
-    ~Fly_camera_tool() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Fly_camera_tool(
+        erhe::commands::Commands&    commands,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context,
+        Editor_message_bus&          editor_message_bus,
+        Time&                        time,
+        Tools&                       tools
+    );
 
     // Implements Window
     void imgui() override;
 
-    // Implements IUpdate_fixed_step
-    void update_fixed_step(const erhe::components::Time_context& time_context) override;
-
-    // Implements IUpdate_once_per_frame
-    void update_once_per_frame(const erhe::components::Time_context& time_context) override;
-
-    // Public API
+    void update_fixed_step    (const Time_context& time_context) override;
+    void update_once_per_frame(const Time_context& time_context) override;
 
     [[nodiscard]] auto get_camera() const -> erhe::scene::Camera*;
     void set_camera (erhe::scene::Camera* camera);
@@ -130,9 +121,9 @@ public:
     // Commands
     auto try_ready() -> bool;
     auto try_move(
-        Control                            control,
-        erhe::application::Controller_item item,
-        bool                               active
+        Variable                                   variable,
+        erhe::toolkit::Simulation_variable_control item,
+        bool                                       active
     ) -> bool;
     auto turn_relative(float dx, float dy) -> bool;
     auto zoom         (float delta) -> bool;
@@ -167,7 +158,5 @@ private:
     erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
 #endif
 };
-
-extern Fly_camera_tool* g_fly_camera_tool;
 
 } // namespace editor

@@ -1,7 +1,9 @@
 #pragma once
 
+//#include "tools/brushes/brush.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <imgui/imgui.h>
 
@@ -9,23 +11,18 @@
 #include <mutex>
 #include <vector>
 
-namespace erhe::graphics
-{
-class Texture;
+namespace erhe::graphics {
+    class Texture;
 };
-
-namespace erhe::primitive
-{
-class Material;
+namespace erhe::primitive {
+    class Material;
 };
-
-namespace erhe::scene
-{
-class Animation;
-class Camera;
-class Light;
-class Mesh;
-class Skin;
+namespace erhe::scene {
+    class Animation;
+    class Camera;
+    class Light;
+    class Mesh;
+    class Skin;
 };
 
 namespace editor
@@ -61,6 +58,8 @@ private:
 class Content_library
 {
 public:
+    ~Content_library() noexcept;
+
     bool                               is_shown_in_ui{true};
     Library<Brush>                     brushes;
     Library<erhe::scene::Animation>    animations;

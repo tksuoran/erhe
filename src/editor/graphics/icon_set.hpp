@@ -2,25 +2,20 @@
 
 #include "graphics/icon_rasterization.hpp"
 
-#include "erhe/components/components.hpp"
-
 #include <glm/glm.hpp>
 
 #include <filesystem>
 
+namespace erhe::graphics {
+    class Texture;
+}
+namespace erhe::scene {
+    enum class Light_type : unsigned int;
+}
+
 namespace lunasvg
 {
     class Document;
-}
-
-namespace erhe::graphics
-{
-    class Texture;
-}
-
-namespace erhe::scene
-{
-    enum class Light_type : unsigned int;
 }
 
 namespace editor {
@@ -74,49 +69,44 @@ public:
 };
 
 class Icon_set
-    : public erhe::components::Component
 {
 public:
     class Config
     {
     public:
+        Config();
+
         int small_icon_size {16};
         int large_icon_size {32};
         int hotbar_icon_size{128};
     };
-    Config config;
 
-    static constexpr std::string_view c_type_name{"Icon_set"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Icon_set();
-    ~Icon_set();
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Icon_set(
+        erhe::graphics::Instance&    graphics_instance,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        Programs&                    programs
+    );
 
     [[nodiscard]] auto load    (const std::filesystem::path& path) -> glm::vec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;
-
-    Icons icons;
 
     [[nodiscard]] auto get_small_rasterization () const -> const Icon_rasterization&;
     [[nodiscard]] auto get_large_rasterization () const -> const Icon_rasterization&;
     [[nodiscard]] auto get_hotbar_rasterization() const -> const Icon_rasterization&;
 
-private:
-    std::optional<Icon_rasterization> m_small;
-    std::optional<Icon_rasterization> m_large;
-    std::optional<Icon_rasterization> m_hotbar;
-    int                               m_row_count   {0};
-    int                               m_column_count{0};
-    int                               m_row         {0};
-    int                               m_column      {1};
-};
+    Config config;
 
-extern Icon_set* g_icon_set;
+private:
+    int                m_row_count   {0};
+    int                m_column_count{0};
+    int                m_row         {0};
+    int                m_column      {1};
+    Icon_rasterization m_small;
+    Icon_rasterization m_large;
+    Icon_rasterization m_hotbar;
+
+public:
+    Icons icons;
+};
 
 }

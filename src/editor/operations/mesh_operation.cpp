@@ -1,5 +1,6 @@
 #include "operations/mesh_operation.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
@@ -37,7 +38,7 @@ Mesh_operation::~Mesh_operation() noexcept
 {
 }
 
-void Mesh_operation::execute()
+void Mesh_operation::execute(Editor_context&)
 {
     log_operations->trace("Op Execute {}", describe());
 
@@ -53,7 +54,7 @@ void Mesh_operation::execute()
     }
 }
 
-void Mesh_operation::undo()
+void Mesh_operation::undo(Editor_context&)
 {
     log_operations->trace("Op Undo {}", describe());
 
@@ -75,11 +76,12 @@ void Mesh_operation::make_entries(
     > operation
 )
 {
-    const auto& selection = g_selection_tool->get_selection();
-    if (selection.empty()) {
+    Selection& selection = *m_parameters.context.selection;
+    const auto& selected_items = selection.get_selection();
+    if (selected_items.empty()) {
         return;
     }
-    const auto first_node = g_selection_tool->get_first_selected_node();
+    const auto first_node = selection.get_first_selected_node();
     if (!first_node) {
         return;
     }
@@ -88,7 +90,7 @@ void Mesh_operation::make_entries(
     const auto& scene = scene_root->scene();
     scene.sanity_check();
 
-    for (auto& item : g_selection_tool->get_selection()) {
+    for (auto& item : selected_items) {
         const auto& mesh = as_mesh(item);
         if (!mesh) {
             continue;

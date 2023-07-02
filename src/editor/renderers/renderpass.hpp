@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe/renderer/enums.hpp"
-#include "erhe/renderer/primitive_buffer.hpp"
+#include "erhe/scene_renderer/primitive_buffer.hpp"
 
 #include "erhe/primitive/enums.hpp"
 #include "erhe/scene/item.hpp"
@@ -10,13 +10,10 @@
 #include <initializer_list>
 #include <string_view>
 
-namespace erhe::renderer
-{
+namespace erhe::renderer {
     class Pipeline_renderpass;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     using Layer_id = uint64_t;
 }
 
@@ -32,7 +29,6 @@ class Renderpass
 {
 public:
     Renderpass(const std::string_view name);
-    ~Renderpass() noexcept override;
 
     void render(const Render_context& context) const;
 
@@ -51,7 +47,7 @@ public:
 
     std::function<void()>                                                  begin;
     std::function<void()>                                                  end; 
-    std::function<const Render_style_data*(const Render_context& context)> get_render_style;
+    std::function<const Render_style_data&(const Render_context& context)> get_render_style;
 };
 
 } // namespace editor

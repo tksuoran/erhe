@@ -2,44 +2,25 @@
 
 #include "map_editor/map_editor.hpp"
 
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 
 namespace hextiles
 {
 
-Terrain_palette_window* g_terrain_palette_window{nullptr};
-
-Terrain_palette_window::Terrain_palette_window()
-    : erhe::components::Component{c_type_name}
-    , Imgui_window               {c_title}
+Terrain_palette_window::Terrain_palette_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Map_editor&                  map_editor
+)
+    : Imgui_window{imgui_renderer, imgui_windows, "Terrain Palette", "terrain_palete"}
+    , m_map_editor{map_editor}
 {
-}
-
-Terrain_palette_window::~Terrain_palette_window() noexcept
-{
-    ERHE_VERIFY(g_terrain_palette_window == this);
-    g_terrain_palette_window = nullptr;
-}
-
-void Terrain_palette_window::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-}
-
-void Terrain_palette_window::initialize_component()
-{
-    ERHE_VERIFY(g_terrain_palette_window == nullptr);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this, "terrain_palette");
     hide();
-
-    g_terrain_palette_window = this;
 }
 
 void Terrain_palette_window::imgui()
 {
-    g_map_editor->terrain_palette();
+    m_map_editor.terrain_palette();
 }
 
 } // namespace hextiles

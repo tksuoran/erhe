@@ -70,8 +70,7 @@ auto Server::poll(const int timeout_ms) -> bool
         std::remove_if(
             m_clients.begin(),
             m_clients.end(),
-            [](Socket& client)
-            {
+            [](Socket& client) {
                 return client.get_state() == Socket::State::CLOSED;
             }
         ),

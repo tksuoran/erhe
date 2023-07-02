@@ -1,7 +1,6 @@
 #pragma once
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
 
 #include <memory>
 #include <string_view>
@@ -9,59 +8,83 @@
 
 class btCollisionShape;
 
-
-namespace erhe::scene
-{
+namespace erhe::commands {
+    class Commands;
+}
+namespace erhe::imgui { 
+    class Imgui_renderer;
+    class Imgui_windows;
+}
+namespace erhe::rendergraph {
+    class Rendergraph;
+}
+namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
     class Node;
 }
 
-namespace editor
-{
+namespace editor {
 
+class Editor_context;
+class Headset_view;
+class Operation_stack;
 class Rendertarget_mesh;
+class Scene_commands;
 class Scene_root;
+class Selection_tool;
+class Viewport_windows;
 
 class Create_new_camera_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Create_new_camera_command();
+    Create_new_camera_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Create_new_empty_node_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Create_new_empty_node_command();
+    Create_new_empty_node_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Create_new_light_command
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    Create_new_light_command();
+    Create_new_light_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
     auto try_call() -> bool override;
+
+private:
+    Editor_context& m_context;
 };
 
 class Scene_commands
-    : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_type_name{"Scene_commands"};
-    static constexpr uint32_t         c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Scene_commands ();
-    ~Scene_commands() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    Scene_commands(
+        erhe::commands::Commands& commands,
+        Editor_context&           editor_context
+    );
 
     // Public API
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
@@ -71,12 +94,11 @@ public:
     auto get_scene_root         (erhe::scene::Node* parent) const -> Scene_root*;
 
 private:
-    // Commands
+    Editor_context& m_context;
+
     Create_new_camera_command     m_create_new_camera_command;
     Create_new_empty_node_command m_create_new_empty_node_command;
     Create_new_light_command      m_create_new_light_command;
 };
-
-extern Scene_commands* g_scene_commands;
 
 } // namespace editor

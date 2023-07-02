@@ -800,10 +800,10 @@ auto Xr_session::render_frame(std::function<bool(Render_view&)> render_view_call
     static constexpr std::string_view c_id_views{"HS views"};
     static constexpr std::string_view c_id_view{"HS view"};
 
-    ERHE_PROFILE_GPU_SCOPE(c_id_views);
+    //ERHE_PROFILE_GPU_SCOPE(c_id_views);
     for (uint32_t i = 0; i < view_count_output; ++i) {
         ERHE_PROFILE_SCOPE("view render");
-        ERHE_PROFILE_GPU_SCOPE(c_id_view);
+        //ERHE_PROFILE_GPU_SCOPE(c_id_view);
 
         auto& swapchain = m_view_swapchains[i];
         auto acquired_color_swapchain_image_opt = swapchain.color_swapchain.acquire();

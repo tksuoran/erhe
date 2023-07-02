@@ -1,17 +1,22 @@
 #pragma once
 
-#include "editor_message.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/message_bus/message_bus.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
-#include <string_view>
+#include <vector>
+
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::scene_renderer {
+    class Shadow_renderer;
+}
 
 namespace editor
 {
+
+class Editor_context;
 
 class Settings
 {
@@ -24,25 +29,22 @@ public:
     bool        bindless_textures {false};
 };
 
+// TODO: Rename to Graphics_settings
 class Settings_window
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Settings_window"};
-    static constexpr std::string_view c_title{"Settings"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Settings_window();
-    ~Settings_window();
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    Settings_window(
+        erhe::imgui::Imgui_renderer&           imgui_renderer,
+        erhe::imgui::Imgui_windows&            imgui_windows,
+        erhe::scene_renderer::Shadow_renderer& shadow_renderer,
+        Editor_context&                        editor_context
+    );
 
     // Implements Imgui_window
     void imgui() override;
+
+    [[nodiscard]] auto get_msaa_sample_count() -> int { return m_msaa_sample_count; }
 
 private:
     void read_ini     ();
@@ -50,6 +52,8 @@ private:
     void apply_limits (Settings& settings);
     void show_settings(Settings& settings);
     void use_settings (const Settings& settings);
+
+    Editor_context& m_context;
 
     std::vector<const char*> m_msaa_sample_count_entry_s_strings;
     std::vector<int        > m_msaa_sample_count_entry_values;
@@ -62,8 +66,8 @@ private:
     std::vector<Settings>    m_settings;
     int                      m_settings_index{0};
     std::string              m_used_settings;
-};
 
-extern Settings_window* g_settings_window;
+    int                      m_msaa_sample_count{0};
+};
 
 } // namespace editor

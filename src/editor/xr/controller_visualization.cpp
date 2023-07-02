@@ -17,8 +17,9 @@ namespace editor
 {
 
 Controller_visualization::Controller_visualization(
-    Scene_root&        scene_root,
-    erhe::scene::Node* view_root
+    erhe::scene::Node* view_root,
+    Mesh_memory&       mesh_memory,
+    Scene_root&        scene_root
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -37,7 +38,11 @@ Controller_visualization::Controller_visualization(
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
     auto controller_pg = erhe::primitive::make_primitive(
         controller_geometry,
-        g_mesh_memory->build_info
+        erhe::primitive::Build_info{
+            .primitive_types = {.fill_triangles = true },
+            .buffer_info = mesh_memory.buffer_info
+        },
+        erhe::primitive::Normal_style::corner_normals
     );
 
     erhe::primitive::Primitive primitive{

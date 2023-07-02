@@ -3,12 +3,13 @@
 
 #include "renderers/programs.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_renderer.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>
@@ -16,55 +17,28 @@
 
 namespace editor {
 
-Icon_set* g_icon_set{nullptr};
-
-Icon_set::Icon_set()
-    : erhe::components::Component{c_type_name}
+Icon_set::Config::Config()
 {
+    auto ini = erhe::configuration::get_ini("erhe.ini", "icons");
+    ini->get("small_icon_size",  small_icon_size);
+    ini->get("large_icon_size",  large_icon_size);
+    ini->get("hotbar_icon_size", hotbar_icon_size);
 }
 
-Icon_set::~Icon_set()
+Icon_set::Icon_set(
+    erhe::graphics::Instance&    graphics_instance,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    Programs&                    programs
+)
+    : config        {}
+    , m_row_count   {16}
+    , m_column_count{16}
+    , m_row         {0}
+    , m_column      {0}
+    , m_small       {graphics_instance, imgui_renderer, programs, config.small_icon_size,  m_column_count, m_row_count}
+    , m_large       {graphics_instance, imgui_renderer, programs, config.large_icon_size,  m_column_count, m_row_count}
+    , m_hotbar      {graphics_instance, imgui_renderer, programs, config.hotbar_icon_size, m_column_count, m_row_count}
 {
-    ERHE_VERIFY(g_icon_set == nullptr);
-}
-
-void Icon_set::deinitialize_component()
-{
-    ERHE_VERIFY(g_icon_set == this);
-    const erhe::application::Scoped_gl_context gl_context;
-    m_small.reset();
-    m_large.reset();
-    m_hotbar.reset();
-    g_icon_set = nullptr;
-}
-
-void Icon_set::declare_required_components()
-{
-    require<erhe::application::Configuration>();
-    require<erhe::application::Gl_context_provider>();
-    require<Programs>();
-}
-
-void Icon_set::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_icon_set == nullptr);
-
-    auto ini = erhe::application::get_ini("erhe.ini", "icons");
-    ini->get("small_icon_size",  config.small_icon_size);
-    ini->get("large_icon_size",  config.large_icon_size);
-    ini->get("hotbar_icon_size", config.hotbar_icon_size);
-
-    m_row_count    = 16;
-    m_column_count = 16;
-    m_row          = 0;
-    m_column       = 0;
-
-    const erhe::application::Scoped_gl_context gl_context;
-
-    m_small  = Icon_rasterization(config.small_icon_size,  m_column_count, m_row_count);
-    m_large  = Icon_rasterization(config.large_icon_size,  m_column_count, m_row_count);
-    m_hotbar = Icon_rasterization(config.hotbar_icon_size, m_column_count, m_row_count);
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
@@ -106,8 +80,6 @@ void Icon_set::initialize_component()
     icons.vive_menu         = load(icon_directory / "vive_menu.svg");
     icons.vive_trackpad     = load(icon_directory / "vive_trackpad.svg");
     icons.vive_trigger      = load(icon_directory / "vive_trigger.svg");
-
-    g_icon_set = this;
 }
 
 auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
@@ -125,9 +97,9 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
     const float u = static_cast<float>(m_column) / static_cast<float>(m_column_count);
     const float v = static_cast<float>(m_row   ) / static_cast<float>(m_row_count);
 
-    m_small ->rasterize(*document.get(), m_column, m_row);
-    m_large ->rasterize(*document.get(), m_column, m_row);
-    m_hotbar->rasterize(*document.get(), m_column, m_row);
+    m_small .rasterize(*document.get(), m_column, m_row);
+    m_large .rasterize(*document.get(), m_column, m_row);
+    m_hotbar.rasterize(*document.get(), m_column, m_row);
 
     ++m_column;
     if (m_column >= m_column_count) {
@@ -155,17 +127,17 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
 
 [[nodiscard]] auto Icon_set::get_small_rasterization() const -> const Icon_rasterization&
 {
-    return m_small.value();
+    return m_small;
 }
 
 [[nodiscard]] auto Icon_set::get_large_rasterization() const -> const Icon_rasterization&
 {
-    return m_large.value();
+    return m_large;
 }
 
 [[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
 {
-    return m_hotbar.value();
+    return m_hotbar;
 }
 
-}
+} // namespace editor

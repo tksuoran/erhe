@@ -1,15 +1,17 @@
 #pragma once
 
+#include "erhe/toolkit/viewport.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
 #include <cstdint>
 
+
 namespace erhe::scene
 {
 
 class Transform;
-class Viewport;
 
 class Projection
 {
@@ -41,7 +43,9 @@ public:
         "Generic Frustum"
     };
 
-    [[nodiscard]] auto clip_from_node_transform(const Viewport viewport) const -> Transform;
+    [[nodiscard]] auto clip_from_node_transform(
+        const erhe::toolkit::Viewport viewport
+    ) const -> Transform;
 
     auto get_projection_matrix(
         const float viewport_aspect_ration,
@@ -65,7 +69,7 @@ public:
         float down;
     };
 
-    [[nodiscard]] auto get_fov_sides(const Viewport viewport) const -> Fov_sides;
+    [[nodiscard]] auto get_fov_sides(const erhe::toolkit::Viewport viewport) const -> Fov_sides;
 
     Type  projection_type{Type::perspective_vertical};
     float z_near         {  0.03f};

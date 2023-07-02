@@ -1,36 +1,31 @@
 #pragma once
 
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
-#include <glm/glm.hpp>
-
-#include <memory>
+namespace erhe::imgui {
+    class Imgui_windows;
+}
 
 namespace editor
 {
 
+class Editor_context;
+
 class Layers_window
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Layers_window"};
-    static constexpr std::string_view c_title{"Layers"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Layers_window ();
-    ~Layers_window() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    Layers_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context
+    );
 
     // Implements Imgui_window
     void imgui() override;
-};
 
-extern Layers_window* g_layers_window;
+private:
+    Editor_context& m_context;
+};
 
 } // namespace editor

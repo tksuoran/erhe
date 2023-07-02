@@ -329,10 +329,38 @@ template <typename T>
     }
 }
 
+[[nodiscard]] auto format_source(const std::string& source) -> std::string
+{
+    int         line{1};
+    const char* head = source.c_str();
+
+    std::stringstream sb;
+    sb << fmt::format("{:>3}: ", line);
+
+    for (;;) {
+        char c = *head;
+        ++head;
+        if (c == '\r') {
+            continue;
+        }
+        if (c == 0) {
+            break;
+        }
+
+        if (c == '\n') {
+            ++line;
+            sb << fmt::format("\n{:>3}: ", line);
+            continue;
+        }
+        sb << c;
+    }
+    return sb.str();
 }
 
-[[nodiscard]] auto Shader_stages::Prototype::compile(
-    const Shader_stages::Create_info::Shader_stage& shader
+} // anonymous namespace
+
+[[nodiscard]] auto Shader_stages_prototype::compile(
+    const Shader_stage& shader
 ) -> Gl_shader
 {
     Gl_shader gl_shader{shader.type};
@@ -354,7 +382,7 @@ template <typename T>
 
     log_glsl->trace(
         "Shader_stage source:\n{}\n",
-        format(m_create_info.final_source(shader))
+        format_source(m_create_info.final_source(shader))
     );
 
     gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
@@ -365,9 +393,9 @@ template <typename T>
     return gl_shader;
 }
 
-[[nodiscard]] auto Shader_stages::Prototype::post_compile(
-    const Shader_stages::Create_info::Shader_stage& shader,
-    Gl_shader&                                      gl_shader
+[[nodiscard]] auto Shader_stages_prototype::post_compile(
+    const Shader_stage& shader,
+    Gl_shader&          gl_shader
 ) -> bool
 {
     ERHE_VERIFY(m_state == state_shader_compilation_started);
@@ -385,7 +413,7 @@ template <typename T>
         std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
         gl::get_shader_info_log(gl_name, length, nullptr, &log[0]);
         const std::string source{m_create_info.final_source(shader)};
-        const std::string f_source = format(source);
+        const std::string f_source = format_source(source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
         log_glsl->error("{}", f_source);
@@ -396,15 +424,19 @@ template <typename T>
     return true;
 }
 
-Shader_stages::Prototype::Prototype(
-    const Shader_stages::Create_info& create_info
+Shader_stages_prototype::Shader_stages_prototype(
+    const Shader_stages_create_info& create_info
 )
-    : m_create_info{create_info}
+    : m_create_info          {create_info}
+    , m_default_uniform_block{create_info.instance}
 {
     Expects(m_handle.gl_name() != 0);
+    if (create_info.build) {
+        post_link();
+    }
 }
 
-void Shader_stages::Prototype::compile_shaders()
+void Shader_stages_prototype::compile_shaders()
 {
     ERHE_VERIFY(m_state == state_init);
     for (const auto& shader : m_create_info.shaders) {
@@ -415,7 +447,7 @@ void Shader_stages::Prototype::compile_shaders()
     }
 }
 
-auto Shader_stages::Prototype::link_program() -> bool
+auto Shader_stages_prototype::link_program() -> bool
 {
     if (m_state == state_fail) {
         return false;
@@ -441,26 +473,12 @@ auto Shader_stages::Prototype::link_program() -> bool
         gl::attach_shader(gl_name, m_shaders[i].gl_name());
     }
 
-    if (!m_create_info.transform_feedback_varyings.empty()) {
-        std::vector<char const *> c_array{m_create_info.transform_feedback_varyings.size()};
-        for (size_t i = 0; i < m_create_info.transform_feedback_varyings.size(); ++i) {
-            c_array[i] = m_create_info.transform_feedback_varyings[i].c_str();
-        }
-
-        gl::transform_feedback_varyings(
-            gl_name,
-            static_cast<GLsizei>(c_array.size()),
-            c_array.data(),
-            m_create_info.transform_feedback_buffer_mode
-        );
-    }
-
     gl::link_program(gl_name);
     m_state = state_program_link_started;
     return true;
 }
 
-void Shader_stages::Prototype::post_link()
+void Shader_stages_prototype::post_link()
 {
     if (m_state == state_fail) {
         return;
@@ -515,7 +533,7 @@ void Shader_stages::Prototype::post_link()
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
         for (const auto& s : m_create_info.shaders) {
-            const std::string f_source = format(m_create_info.final_source(s));
+            const std::string f_source = format_source(m_create_info.final_source(s));
             log_glsl->error("\n{}", f_source);
         }
         log_program->error("Shader_stages linking failed:");
@@ -525,26 +543,26 @@ void Shader_stages::Prototype::post_link()
         m_state = state_ready;
         log_program->trace("Shader_stages linking succeeded:");
         for (const auto& s : m_create_info.shaders) {
-            const std::string f_source = format(m_create_info.final_source(s));
+            const std::string f_source = format_source(m_create_info.final_source(s));
             log_glsl->trace("\n{}", f_source);
         }
         if (m_create_info.dump_reflection) {
             dump_reflection();
         }
         if (m_create_info.dump_interface) {
-            const std::string f_source = format(m_create_info.interface_source());
+            const std::string f_source = format_source(m_create_info.interface_source());
             log_glsl->info("\n{}", f_source);
         }
         if (m_create_info.dump_final_source) {
             for (const auto& s : m_create_info.shaders) {
-                const std::string f_source = format(m_create_info.final_source(s));
+                const std::string f_source = format_source(m_create_info.final_source(s));
                 log_glsl->info("\n{}", f_source);
             }
         }
     }
 }
 
-[[nodiscard]] auto Shader_stages::Prototype::is_valid() -> bool
+[[nodiscard]] auto Shader_stages_prototype::is_valid() -> bool
 {
     if ((m_state != state_ready) && (m_state != state_fail)) {
         post_link();
@@ -595,7 +613,7 @@ auto is_array_and_nonzero(const std::string& name)
     return true;
 }
 
-void Shader_stages::Prototype::dump_reflection() const
+void Shader_stages_prototype::dump_reflection() const
 {
     const int gl_name = m_handle.gl_name();
 
@@ -792,31 +810,6 @@ void Shader_stages::Prototype::dump_reflection() const
     //const int buffer_size = std::max(active_uniform_max_length, active_uniform_block_max_name_length);
     //std::vector<char> buffer(static_cast<size_t>(buffer_size) + 1);
 
-    if (transform_feedback_varyings > 0) {
-        ERHE_VERIFY(transform_feedback_varying_max_length > 0);
-        std::string        buffer_(static_cast<size_t>(transform_feedback_varying_max_length) + 1, 0);
-        GLsizei            length {0};
-        GLsizei            size2  {0};
-        gl::Attribute_type type2;
-        for (unsigned int i = 0; i < static_cast<unsigned int>(transform_feedback_varyings); ++i) {
-            gl::get_transform_feedback_varying(
-                gl_name,
-                i,
-                transform_feedback_varying_max_length,
-                &length,
-                &size2,
-                &type2,
-                &buffer_[0]
-            );
-
-            if (size2 > 1) {
-                log_program->info("transform feedback varying {} {} {}[{}]", i, gl::c_str(type2), &buffer_[0], size2);
-            } else {
-                log_program->info("Transform feedback varying {} {} {}", i, gl::c_str(type2), &buffer_[0]);
-            }
-        }
-    }
-
     // For each interface block,
     // ask GL driver locations of those uniforms, and place to uniform map for the program (prototype)
     /// for (const auto& i : create_info.interface_blocks) {
@@ -838,12 +831,12 @@ void Shader_stages::Prototype::dump_reflection() const
     /// }
 }
 
-auto Shader_stages::Prototype::create_info() const -> const Shader_stages::Create_info&
+auto Shader_stages_prototype::create_info() const -> const Shader_stages_create_info&
 {
     return m_create_info;
 }
 
-auto Shader_stages::Prototype::name() const -> const std::string&
+auto Shader_stages_prototype::name() const -> const std::string&
 {
     return m_create_info.name;
 }

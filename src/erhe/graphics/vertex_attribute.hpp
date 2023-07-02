@@ -52,7 +52,7 @@ public:
 
     [[nodiscard]] static auto desc(Usage_type usage) -> const char*;
 
-    [[nodiscard]] auto stride    () const -> size_t;
+    [[nodiscard]] auto size      () const -> std::size_t;
     [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool;
     [[nodiscard]] auto operator!=(const Vertex_attribute& other) const -> bool;
 
@@ -61,6 +61,173 @@ public:
     Data_type          data_type;
     std::size_t        offset {0};
     unsigned int       divisor{0};
+
+    [[nodiscard]] static auto position_float2() -> erhe::graphics::Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+        };
+    }
+    [[nodiscard]] static auto position_float3() -> erhe::graphics::Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec3,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 3
+            }
+        };
+    }
+    [[nodiscard]] static auto position_float4() -> erhe::graphics::Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::position
+            },
+            .shader_type   = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 4
+            }
+        };
+    }
+    [[nodiscard]] static auto normal_float3() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::normal
+            },
+            .shader_type   = gl::Attribute_type::float_vec3,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 3
+            }
+        };
+    }
+    [[nodiscard]] static auto tangent_float3() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::tangent
+            },
+            .shader_type   = gl::Attribute_type::float_vec3,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 3
+            }
+        };
+    }
+    [[nodiscard]] static auto bitangent_float3() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::bitangent
+            },
+            .shader_type   = gl::Attribute_type::float_vec3,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 3
+            }
+        };
+    }
+    [[nodiscard]] static auto texcoord0_float2() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::tex_coord,
+                .index     = 0
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+        };
+    }
+    [[nodiscard]] static auto texcoord1_float2() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::tex_coord,
+                .index     = 1
+            },
+            .shader_type   = gl::Attribute_type::float_vec2,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 2
+            }
+        };
+    }
+    [[nodiscard]] static auto color_ubyte4() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type       = Usage_type::color
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
+        };
+    }
+    [[nodiscard]] static auto color_float4() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type       = Usage_type::color
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type       = gl::Vertex_attrib_type::float_,
+                .normalized = true,
+                .dimension  = 4
+            }
+        };
+    }
+    [[nodiscard]] static auto joint_indices0_ubyte4() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type       = Usage_type::joint_indices,
+                .index      = 0
+
+            },
+            .shader_type    = gl::Attribute_type::unsigned_int_vec4,
+            .data_type = {
+                .type       = gl::Vertex_attrib_type::unsigned_byte,
+                .normalized = true,
+                .dimension  = 4
+            }
+        };
+    }
+    [[nodiscard]] static auto joint_weights0_float4() -> Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type       = Usage_type::joint_weights,
+                .index      = 0
+
+            },
+            .shader_type    = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type       = gl::Vertex_attrib_type::float_,
+                .normalized = true,
+                .dimension  = 4
+            }
+        };
+    }
 };
 
 template<typename Enum>

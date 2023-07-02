@@ -1,8 +1,8 @@
 #pragma once
 
+#include "renderable.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/components/components.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/xr/xr.hpp"
 
@@ -11,21 +11,20 @@
 
 #include <optional>
 
-namespace erhe::xr
-{
+namespace erhe::xr {
     class Headset;
 }
-
-namespace erhe::application
-{
+namespace erhe::renderer {
     class Line_renderer;
 }
 
 namespace editor
 {
 
-enum class Hand_name : unsigned int
-{
+class Editor_rendering;
+class Headset_view;
+
+enum class Hand_name : unsigned int {
     Left  = 0,
     Right = 1
 };
@@ -79,14 +78,14 @@ public:
     auto distance (const XrHandJointEXT lhs, const XrHandJointEXT rhs) const -> std::optional<float>;
     auto is_active() const -> bool;
     auto is_valid (const XrHandJointEXT joint) const -> bool;
-    void draw     (erhe::application::Line_renderer& line_renderer, const glm::mat4 transform);
+    void draw     (erhe::renderer::Line_renderer& line_renderer, const glm::mat4 transform);
     void set_color(const std::size_t finger, const ImVec4 color);
 
 private:
     void draw_joint_line_strip(
         const glm::mat4                    transform,
         const std::vector<XrHandJointEXT>& joint_names,
-        erhe::application::Line_renderer&  line_renderer
+        erhe::renderer::Line_renderer&  line_renderer
     ) const;
 
     XrHandEXT                                                          m_hand;
@@ -96,30 +95,17 @@ private:
 };
 
 class Hand_tracker
-    : public erhe::components::Component
-    , public Tool
+    : public Renderable
 {
 public:
-    static constexpr std::string_view c_type_name  {"Hand_tracker"};
-    static constexpr std::string_view c_description{"Hand_tracker"};
-    static constexpr uint32_t c_type_hash{
-        compiletime_xxhash::xxh32(
-            c_type_name.data(),
-            c_type_name.size(),
-            {}
-        )
-    };
+    Hand_tracker(
+        Editor_context&   editor_context,
+        Editor_rendering& editor_rendering
+    );
+    ~Hand_tracker() noexcept override;
 
-    Hand_tracker();
-    ~Hand_tracker();
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-
-    // Implements Tool
-    void tool_render(const Render_context& context) override;
+    // Implements Renderable
+    void render(const Render_context& context) override;
 
     // Public API
     void update_hands(erhe::xr::Headset& headset);
@@ -132,12 +118,12 @@ public:
     );
 
 private:
+    Editor_context& m_context;
+
     Hand m_left_hand;
     Hand m_right_hand;
 
     bool m_show_hands{true};
 };
-
-extern Hand_tracker* g_hand_tracker;
 
 } // namespace editor

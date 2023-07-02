@@ -4,15 +4,16 @@
 
 #include "windows/rendergraph_window.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/application/imgui/imgui_renderer.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/ImNodesEz.h"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/rendergraph/rendergraph_node.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/ImNodesEz.h"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/gl_helpers.hpp"
@@ -32,32 +33,21 @@
 namespace editor
 {
 
-Rendergraph_window* g_rendergraph_window{nullptr};
-
-Rendergraph_window::Rendergraph_window()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title}
+Rendergraph_window::Rendergraph_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Render Graph", "rendergraph"}
+    , m_context                {editor_context}
 {
 }
 
 Rendergraph_window::~Rendergraph_window() noexcept
 {
-    ERHE_VERIFY(g_rendergraph_window == this);
     ImNodes::Ez::FreeContext(m_imnodes_context);
-    g_rendergraph_window = nullptr;
 }
 
-void Rendergraph_window::declare_required_components()
-{
-    require<erhe::application::Imgui_windows>();
-}
-
-void Rendergraph_window::initialize_component()
-{
-    ERHE_VERIFY(g_rendergraph_window == nullptr);
-    erhe::application::g_imgui_windows->register_imgui_window(this, "rendergraph");
-    g_rendergraph_window = this;
-}
 
 auto Rendergraph_window::flags() -> ImGuiWindowFlags
 {
@@ -69,10 +59,10 @@ namespace {
 auto get_connection_color(const int key) -> ImVec4
 {
     switch (key) {
-        case erhe::application::Rendergraph_node_key::window:              return ImVec4{0.4f, 0.5f, 0.8f, 1.0f};
-        case erhe::application::Rendergraph_node_key::viewport:            return ImVec4{0.8f, 1.0f, 0.2f, 1.0f};
-        case erhe::application::Rendergraph_node_key::shadow_maps:         return ImVec4{0.6f, 0.6f, 0.6f, 1.0f};
-        case erhe::application::Rendergraph_node_key::depth_visualization: return ImVec4{0.1f, 0.8f, 0.8f, 1.0f};
+        case erhe::rendergraph::Rendergraph_node_key::window:              return ImVec4{0.4f, 0.5f, 0.8f, 1.0f};
+        case erhe::rendergraph::Rendergraph_node_key::viewport:            return ImVec4{0.8f, 1.0f, 0.2f, 1.0f};
+        case erhe::rendergraph::Rendergraph_node_key::shadow_maps:         return ImVec4{0.6f, 0.6f, 0.6f, 1.0f};
+        case erhe::rendergraph::Rendergraph_node_key::depth_visualization: return ImVec4{0.1f, 0.8f, 0.8f, 1.0f};
         default: return ImVec4{1.0f, 0.0f, 1.0f, 1.0f};
     }
 }
@@ -142,32 +132,31 @@ void Rendergraph_window::imgui()
     }
 #endif
 
+    auto& rendergraph = *m_context.rendergraph;
+
     ImGui::SetNextItemWidth(200.0f);
     ImGui::SliderFloat("Image Size", &m_image_size, 4.0f, 1000.0f);
     ImGui::SetNextItemWidth(200.0f);
     ImGui::SliderFloat("Curve Strength", &m_curve_strength, 0.0f, 100.0f);
     ImGui::SetNextItemWidth(400.0f);
-    const bool x_gap_changed = ImGui::SliderFloat("X Gap", &erhe::application::g_rendergraph->x_gap, 0.0f, 200.0f);
+    const bool x_gap_changed = ImGui::SliderFloat("X Gap", &rendergraph.x_gap, 0.0f, 200.0f);
     ImGui::SetNextItemWidth(400.0f);
-    const bool y_gap_changed = ImGui::SliderFloat("Y Gap", &erhe::application::g_rendergraph->y_gap, 0.0f, 200.0f);
+    const bool y_gap_changed = ImGui::SliderFloat("Y Gap", &rendergraph.y_gap, 0.0f, 200.0f);
     if (ImGui::Button("Automatic Layout") || x_gap_changed || y_gap_changed) {
-        erhe::application::g_rendergraph->automatic_layout(m_image_size);
+        rendergraph.automatic_layout(m_image_size);
     }
 
     if (m_imnodes_context == nullptr) {
         m_imnodes_context = ImNodes::Ez::CreateContext();
     }
     ImNodes::Ez::SetContext(m_imnodes_context);
-
     ImNodes::Ez::BeginCanvas();
 
     ImNodes::CanvasState* canvas_state = ImNodes::GetCurrentCanvas();
-
     const float zoom = canvas_state->Zoom;
+    const auto& render_graph_nodes = rendergraph.get_nodes();
 
-    const auto& render_graph_nodes = erhe::application::g_rendergraph->get_nodes();
-
-    for (const auto& node : render_graph_nodes) {
+    for (auto* node : render_graph_nodes) {
         if (node->is_enabled()) {
             ImGui::Text("Execute render graph node '%s'", node->get_name().c_str());
         } else {
@@ -176,7 +165,7 @@ void Rendergraph_window::imgui()
     }
 
     ImNodes::Ez::PushStyleVar(ImNodesStyleVar_CurveStrength, m_curve_strength);
-    for (const auto& node : render_graph_nodes) {
+    for (auto* node : render_graph_nodes) {
         // Start rendering node
         const auto   glm_position = node->get_position();
         const ImVec2 start_position{glm_position.x, glm_position.y};
@@ -184,7 +173,7 @@ void Rendergraph_window::imgui()
         ImVec2       position = start_position;
         bool         selected = start_selected;
         const std::string label = fmt::format("{}: {} ", node->get_depth(), node->get_name());
-        if (ImNodes::Ez::BeginNode(node.get(), label.c_str(), &position, &selected)) {
+        if (ImNodes::Ez::BeginNode(node, label.c_str(), &position, &selected)) {
             const auto& inputs  = node->get_inputs();
             const auto& outputs = node->get_outputs();
 
@@ -193,7 +182,7 @@ void Rendergraph_window::imgui()
                 input_slot_infos.push_back(
                     ImNodes::Ez::SlotInfo{
                         .title = input.label.c_str(),
-                        .kind = input.key
+                        .kind  = input.key
                     }
                 );
             }
@@ -202,7 +191,7 @@ void Rendergraph_window::imgui()
 
             // Custom node content may go here
             for (const auto& output : outputs) {
-                if (output.resource_routing == erhe::application::Resource_routing::None) {
+                if (output.resource_routing == erhe::rendergraph::Resource_routing::None) {
                     ImGui::Text("<%s>", output.label.c_str());
                     continue;
                 }
@@ -220,7 +209,7 @@ void Rendergraph_window::imgui()
                 ) {
                     const float aspect = static_cast<float>(texture->width()) / static_cast<float>(texture->height());
                     ImGui::Text("%s:", output.label.c_str());
-                    erhe::application::g_imgui_renderer->image(
+                    m_imgui_renderer.image(
                         texture,
                         static_cast<int>(zoom * aspect * m_image_size),
                         static_cast<int>(zoom * m_image_size),
@@ -280,19 +269,18 @@ void Rendergraph_window::imgui()
 
             // Render output connections of this node
             for (const auto& output : outputs) {
-                for (const auto& consumer_node : output.consumer_nodes) {
-                    const auto consumer = consumer_node.lock();
-                    if (!consumer) {
+                for (auto* consumer : output.consumer_nodes) {
+                    if (consumer != nullptr) {
                         continue;
                     }
-                    const erhe::application::Rendergraph_consumer_connector* consumer_input =
+                    const erhe::rendergraph::Rendergraph_consumer_connector* consumer_input =
                         consumer->get_input(output.resource_routing, output.key);
 
                     ImNodes::Ez::PushStyleColor(ImNodesStyleCol_Connection, get_connection_color(output.key));
                     const bool connection_ok = ImNodes::Connection(
-                        consumer.get(),
+                        consumer,
                         consumer_input->label.c_str(),
-                        node.get(),
+                        node,
                         output.label.c_str()
                     );
                     ImNodes::Ez::PopStyleColor(1);

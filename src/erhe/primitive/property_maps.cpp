@@ -15,8 +15,9 @@ using vec4 = glm::vec4;
 using uvec4 = glm::uvec4;
 
 Property_maps::Property_maps(
-    const erhe::geometry::Geometry& geometry,
-    const Format_info&              format_info
+    const erhe::geometry::Geometry&      geometry,
+    const Primitive_types&               primitive_types,
+    const erhe::graphics::Vertex_format& vertex_format 
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -50,19 +51,21 @@ Property_maps::Property_maps(
         return;
     }
 
-    if (format_info.features.id) {
+    using Usage_type = erhe::graphics::Vertex_attribute::Usage_type;
+    if (vertex_format.find_attribute_maybe(Usage_type::id) != nullptr) {
         polygon_ids_vector3 = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_ids_vec3);
         log_primitive_builder->trace("created polygon_ids_vec3");
 
-        if (erhe::graphics::Instance::info.use_integer_polygon_ids) {
-            polygon_ids_uint32 = polygon_attributes.create<unsigned int>(erhe::geometry::c_polygon_ids_uint);
-            log_primitive_builder->trace("created polygon_ids_uint");
-        }
+        //// TODO
+        //// if (erhe::graphics::g_instance->info.use_integer_polygon_ids) {
+        ////     polygon_ids_uint32 = polygon_attributes.create<unsigned int>(erhe::geometry::c_polygon_ids_uint);
+        ////     log_primitive_builder->trace("created polygon_ids_uint");
+        //// }
     }
 
     // TODO This should be done externally before calling primitive builder
 #if 1
-    if (format_info.features.normal) {
+    if (vertex_format.find_attribute_maybe(Usage_type::normal) != nullptr) {
         if (polygon_normals == nullptr) {
             polygon_normals = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_normals);
         }
@@ -82,34 +85,36 @@ Property_maps::Property_maps(
         }
     }
 
-    if (format_info.features.normal_smooth && (point_normals_smooth == nullptr)) {
-        log_primitive_builder->trace("computing point_normals_smooth");
-        point_normals_smooth = point_attributes.create<vec3>(erhe::geometry::c_point_normals_smooth);
-        geometry.for_each_point_const(
-            [this, &geometry](auto& i)
-            {
-                vec3 normal_sum{0.0f, 0.0f, 0.0f};
-                i.point.for_each_corner_const(
-                    geometry,
-                    [this, &geometry, &normal_sum](auto& j)
-                    {
-                        const erhe::geometry::Polygon_id polygon_id = j.corner.polygon_id;
-                        if (polygon_normals->has(polygon_id)) {
-                            normal_sum += polygon_normals->get(polygon_id);
-                        } else {
-                            //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons", __func__);
-                            const auto& polygon = geometry.polygons[polygon_id];
-                            const vec3  normal  = polygon.compute_normal(geometry, *point_locations);
-                            normal_sum += normal;
-                        }
-                    }
-                );
-                point_normals_smooth->put(i.point_id, normalize(normal_sum));
-            }
-        );
-    }
+    // if (
+    //     vertex_format.find_attribute_maybe(Usage_type::n) != nullptr) {
+    //     && (point_normals_smooth == nullptr)) {
+    //     log_primitive_builder->trace("computing point_normals_smooth");
+    //     point_normals_smooth = point_attributes.create<vec3>(erhe::geometry::c_point_normals_smooth);
+    //     geometry.for_each_point_const(
+    //         [this, &geometry](auto& i)
+    //         {
+    //             vec3 normal_sum{0.0f, 0.0f, 0.0f};
+    //             i.point.for_each_corner_const(
+    //                 geometry,
+    //                 [this, &geometry, &normal_sum](auto& j)
+    //                 {
+    //                     const erhe::geometry::Polygon_id polygon_id = j.corner.polygon_id;
+    //                     if (polygon_normals->has(polygon_id)) {
+    //                         normal_sum += polygon_normals->get(polygon_id);
+    //                     } else {
+    //                         //log_primitive_builder.warn("{} - smooth normals have been requested, but polygon normals have missing polygons", __func__);
+    //                         const auto& polygon = geometry.polygons[polygon_id];
+    //                         const vec3  normal  = polygon.compute_normal(geometry, *point_locations);
+    //                         normal_sum += normal;
+    //                     }
+    //                 }
+    //             );
+    //             point_normals_smooth->put(i.point_id, normalize(normal_sum));
+    //         }
+    //     );
+    // }
 
-    if (format_info.features.centroid_points) {
+    if (primitive_types.centroid_points) {
         if (polygon_centroids == nullptr) {
             polygon_centroids = polygon_attributes.create<vec3>(erhe::geometry::c_polygon_centroids);
         }

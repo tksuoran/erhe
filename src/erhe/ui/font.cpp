@@ -50,11 +50,13 @@ Font::~Font() noexcept
 
 #if defined(ERHE_FONT_RASTERIZATION_LIBRARY_FREETYPE) && defined(ERHE_TEXT_LAYOUT_LIBRARY_HARFBUZZ)
 Font::Font(
+    erhe::graphics::Instance&    graphics_instance,
     const std::filesystem::path& path,
     const unsigned int           size,
     const float                  outline_thickness
 )
-    : m_path             {path}
+    : m_graphics_instance{graphics_instance}
+    , m_path             {path}
     , m_bolding          {(size > 10) ? 0.5f : 0.0f}
     , m_outline_thickness{outline_thickness}
 {
@@ -452,6 +454,7 @@ void Font::post_process()
     auto internal_format = gl::Internal_format::rg8;
 
     const Texture::Create_info create_info{
+        .instance        = m_graphics_instance,
         .target          = gl::Texture_target::texture_2d,
         .internal_format = internal_format,
         .use_mipmaps     = false,

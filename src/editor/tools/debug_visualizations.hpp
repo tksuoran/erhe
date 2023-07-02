@@ -1,9 +1,8 @@
 #pragma once
 
-#include "tools/tool.hpp"
+#include "renderable.hpp"
 
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
@@ -11,8 +10,10 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::scene
-{
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
@@ -22,34 +23,35 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_context;
+class Editor_message_bus;
+class Editor_rendering;
 class Scene_root;
+class Scene_view;
 
 class Debug_visualizations
-    : public erhe::application::Imgui_window
-    , public erhe::components::Component
-    , public Tool
+    : public erhe::imgui::Imgui_window
+    , public Renderable
 {
 public:
-    static constexpr int              c_priority {3};
-    static constexpr std::string_view c_type_name{"Debug_visualizations"};
-    static constexpr std::string_view c_title    {"Debug visualizations"};
-    static constexpr uint32_t         c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
+    Debug_visualizations(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context,
+        Editor_message_bus&          editor_message_bus,
+        Editor_rendering&            editor_rendering
+    );
 
-    Debug_visualizations ();
-    ~Debug_visualizations() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-
-    // Implements Tool
-    void tool_render(const Render_context& context) override;
+    // Implements Renderable
+    void render(const Render_context& context) override;
 
     // Implements Imgui_window
     void imgui() override;
 
 private:
+    [[nodiscard]] auto get_selected_camera(
+        const Render_context& render_context
+    ) -> std::shared_ptr<erhe::scene::Camera>;
 
     class Light_visualization_context
     {
@@ -100,6 +102,8 @@ private:
         const std::string_view label_text
     );
 
+    Editor_context& m_context;
+    Scene_view*     m_hover_scene_view{nullptr};
     erhe::toolkit::Bounding_volume_combiner m_selection_bounding_volume;
 
     float m_gap      {0.003f};
@@ -151,7 +155,5 @@ private:
     float     m_corner_label_line_width  {1.5f};
     //// std::vector<std::string> m_lines;
 };
-
-extern Debug_visualizations* g_debug_visualizations;
 
 } // namespace editor

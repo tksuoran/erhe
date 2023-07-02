@@ -7,47 +7,31 @@ add_library(erhe::renderer ALIAS ${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
 
-    camera_buffer.cpp
-    camera_buffer.hpp
+    buffer_writer.cpp
+    buffer_writer.hpp
     draw_indirect_buffer.cpp
     draw_indirect_buffer.hpp
-    forward_renderer.cpp
-    forward_renderer.hpp
-    joint_buffer.cpp
-    joint_buffer.hpp
-    light_buffer.cpp
-    light_buffer.hpp
-    material_buffer.cpp
-    material_buffer.hpp
+    line_renderer.cpp
+    line_renderer.hpp
+    multi_buffer.cpp
+    multi_buffer.hpp
     pipeline_renderpass.cpp
     pipeline_renderpass.hpp
-    primitive_buffer.cpp
-    primitive_buffer.hpp
-    program_interface.cpp
-    program_interface.hpp
-    shadow_renderer.cpp
-    shadow_renderer.hpp
-
-
     renderer_log.cpp
     renderer_log.hpp
-    #renderer_message.hpp
-    #renderer_message_bus.cpp
-    #renderer_message_bus.hpp
+    text_renderer.cpp
+    text_renderer.hpp
 )
 
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::application # TODO move used features to somewhere else
-    erhe::components
-    erhe::concurrency
-    erhe::gl
-    erhe::graphics
-    erhe::log
-    erhe::primitive
-    erhe::scene
-    erhe::toolkit
+        erhe::concurrency
+        erhe::gl
+        erhe::graphics
+        erhe::log
+        #erhe::primitive
+        erhe::toolkit
 )
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")

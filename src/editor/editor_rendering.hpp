@@ -1,69 +1,155 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
+#include "graphics/icon_set.hpp"
+#include "renderers/composer.hpp"
+#include "renderers/id_renderer.hpp"
+#include "renderers/mesh_memory.hpp"
+#include "renderers/programs.hpp"
 #include "renderers/renderpass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
+#include "rendergraph/post_processing.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/renderer/pipeline_renderpass.hpp"
+#include "erhe/renderer/text_renderer.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/scene_renderer/forward_renderer.hpp"
+#include "erhe/scene_renderer/program_interface.hpp"
+#include "erhe/scene_renderer/shadow_renderer.hpp"
 
 #include <memory>
+
+namespace erhe::commands {
+    class Commands;
+}
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::toolkit {
+    class Context_window;
+}
 
 namespace editor
 {
 
+class Editor_context;
+class Editor_message_bus;
 class Editor_rendering;
+class Headset_view;
+class Mesh_memory;
+class Programs;
 class Render_context;
+class Renderable;
 class Scene_view;
 class Shadow_render_node;
+class Tools;
+class Viewport_windows;
 
-
-class IEditor_rendering
+class Capture_frame_command
+    : public erhe::commands::Command
 {
 public:
-    virtual ~IEditor_rendering() noexcept;
-    virtual void trigger_capture     () = 0;
-    virtual void render              () = 0;
-    virtual void render_viewport_main(const Render_context& context, bool has_pointer) = 0;
-    virtual void render_composer     (const Render_context& context) = 0;
-    virtual void render_id           (const Render_context& context) = 0;
-    virtual void begin_frame         () = 0;
-    virtual void end_frame           () = 0;
-    virtual auto create_shadow_node_for_scene_view(Scene_view& scene_view)       -> std::shared_ptr<Shadow_render_node> = 0;
-    virtual auto get_shadow_node_for_view         (const Scene_view* scene_view) -> std::shared_ptr<Shadow_render_node> = 0;
-    virtual auto get_all_shadow_nodes             () -> const std::vector<std::shared_ptr<Shadow_render_node>>& = 0;
-};
-
-class Editor_rendering_impl;
-
-class Editor_rendering
-    : public erhe::components::Component
-{
-public:
-    static constexpr std::string_view c_type_name{"Editor_rendering"};
-    static constexpr uint32_t c_type_hash{
-        compiletime_xxhash::xxh32(
-            c_type_name.data(),
-            c_type_name.size(),
-            {}
-        )
-    };
-
-    Editor_rendering ();
-    ~Editor_rendering() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
-    void post_initialize            () override;
-
-    [[nodiscard]] auto create_shadow_node_for_scene_view(Scene_view& scene_view)       -> std::shared_ptr<Shadow_render_node>;
-    [[nodiscard]] auto get_shadow_node_for_view         (const Scene_view* scene_view) -> std::shared_ptr<Shadow_render_node>;
-    [[nodiscard]] auto get_all_shadow_nodes             () -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
+    Capture_frame_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
+    auto try_call() -> bool override;
 
 private:
-    std::unique_ptr<Editor_rendering_impl> m_impl;
+    Editor_context& m_context;
 };
 
-extern IEditor_rendering* g_editor_rendering;
+class Pipeline_renderpasses
+{
+public:
+    Pipeline_renderpasses(
+        erhe::graphics::Instance& graphics_instance,
+        Mesh_memory&              mesh_memory,
+        Programs&                 programs
+    );
+
+    erhe::graphics::Vertex_input_state  m_empty_vertex_input;
+    erhe::renderer::Pipeline_renderpass polygon_fill_standard_opaque;
+    erhe::renderer::Pipeline_renderpass polygon_fill_standard_translucent;
+    erhe::renderer::Pipeline_renderpass line_hidden_blend;
+    erhe::renderer::Pipeline_renderpass brush_back;
+    erhe::renderer::Pipeline_renderpass brush_front;
+    erhe::renderer::Pipeline_renderpass edge_lines;
+    erhe::renderer::Pipeline_renderpass corner_points;
+    erhe::renderer::Pipeline_renderpass polygon_centroids;
+    erhe::renderer::Pipeline_renderpass rendertarget_meshes;
+    erhe::renderer::Pipeline_renderpass sky;
+};
+
+class Editor_rendering
+{
+public:
+    Editor_rendering(
+        erhe::commands::Commands& commands,
+        erhe::graphics::Instance& graphics_instance,
+        Editor_context&           editor_context,
+        Editor_message_bus&       editor_message_bus,
+        Mesh_memory&              mesh_memory,
+        Programs&                 programs
+    );
+
+    [[nodiscard]] auto create_shadow_node_for_scene_view(
+        erhe::graphics::Instance&              graphics_instance,
+        erhe::rendergraph::Rendergraph&        rendergraph,
+        erhe::scene_renderer::Shadow_renderer& shadow_renderer,
+        Scene_view&                            scene_view
+    ) -> std::shared_ptr<Shadow_render_node>;
+
+    [[nodiscard]] auto get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>;
+    [[nodiscard]] auto get_all_shadow_nodes    () -> const std::vector<std::shared_ptr<Shadow_render_node>>&;
+
+    void set_tool_scene_root        (Scene_root* tool_scene_root);
+    void trigger_capture            ();
+    void render                     ();
+    void render_viewport_main       (const Render_context& context);
+    void render_viewport_renderables(const Render_context& context);
+    void render_composer            (const Render_context& context);
+    void render_id                  (const Render_context& context);
+    void begin_frame                ();
+    void end_frame                  ();
+
+    void add   (Renderable* renderable);
+    void remove(Renderable* renderable);
+
+    Scene_root* tool_scene_root{nullptr};
+
+    auto make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>;
+
+private:
+    void handle_graphics_settings_changed();
+
+    [[nodiscard]] auto get_pipeline_renderpass(
+        const Renderpass&          renderpass,
+        erhe::renderer::Blend_mode blend_mode
+    ) -> erhe::renderer::Pipeline_renderpass*;
+
+    [[nodiscard]] auto width () const -> int;
+    [[nodiscard]] auto height() const -> int;
+
+    Editor_context&           m_context;
+
+    // Commands
+    Capture_frame_command     m_capture_frame_command;
+
+    Pipeline_renderpasses     m_pipeline_renderpasses;
+    Composer                  m_composer;
+
+    erhe::graphics::Gpu_timer m_content_timer;
+    erhe::graphics::Gpu_timer m_selection_timer;
+    erhe::graphics::Gpu_timer m_gui_timer;
+    erhe::graphics::Gpu_timer m_brush_timer;
+    erhe::graphics::Gpu_timer m_tools_timer;
+
+    bool                      m_trigger_capture{false};
+    std::vector<std::shared_ptr<Shadow_render_node>> m_all_shadow_render_nodes;
+
+    std::mutex               m_renderables_mutex;
+    std::vector<Renderable*> m_renderables;
+};
 
 static constexpr unsigned int s_stencil_edge_lines               =  1u; // 0 inc
 static constexpr unsigned int s_stencil_tool_mesh_hidden         =  2u;

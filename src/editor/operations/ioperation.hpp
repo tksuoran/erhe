@@ -1,23 +1,19 @@
 #pragma once
 
-#include <memory>
 #include <string>
-
-namespace erhe::components
-{
-    class Components;
-}
 
 namespace editor
 {
+
+class Editor_context;
 
 class IOperation
 {
 public:
     virtual ~IOperation() noexcept;
 
-    virtual void execute () = 0;
-    virtual void undo    () = 0;
+    virtual void execute (Editor_context& context) = 0;
+    virtual void undo    (Editor_context& context) = 0;
     virtual auto describe() const -> std::string = 0;
 };
 

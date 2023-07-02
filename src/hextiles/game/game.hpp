@@ -4,17 +4,26 @@
 #include "types.hpp"
 #include "game/player.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include "etl/string.h"
 #include "etl/vector.h"
-//#include <string>
+
+namespace erhe::imgui
+{
+    class Imgui_windows;
+}
 
 namespace hextiles
 {
 
+class Game;
 class Map;
+class Map_window;
+class Menu_window;
+class Tile_renderer;
+class Tiles;
 class Unit;
 
 struct Game_create_parameters
@@ -29,11 +38,16 @@ struct Game_create_parameters
 };
 
 class Move_unit_command final
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    explicit Move_unit_command(const direction_t direction)
-        : Command    {"move_unit"}
+    Move_unit_command(
+        erhe::commands::Commands& commands,
+        Game&                     game,
+        const direction_t         direction
+    )
+        : Command    {commands, "move_unit"}
+        , m_game     {game}
         , m_direction{direction}
     {
     }
@@ -42,15 +56,21 @@ public:
     auto try_call() -> bool override;
 
 private:
+    Game&       m_game;
     direction_t m_direction;
 };
 
 class Select_unit_command final
-    : public erhe::application::Command
+    : public erhe::commands::Command
 {
 public:
-    explicit Select_unit_command(const int direction)
-        : Command    {"select_unit"}
+    Select_unit_command(
+        erhe::commands::Commands& commands,
+        Game&                     game,
+        const int                 direction
+    )
+        : Command    {commands, "select_unit"}
+        , m_game     {game}
         , m_direction{direction}
     {
     }
@@ -59,26 +79,40 @@ public:
     auto try_call() -> bool override;
 
 private:
-    int m_direction;
+    Game& m_game;
+    int   m_direction;
 };
 
 class Game
-    : public erhe::components::Component
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr const char* c_type_name{"Game"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
+    Game(
+        erhe::commands::Commands&    commands,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Map_window&                  map_window,
+        Menu_window&                 menu_window,
+        Tile_renderer&               tile_renderer,
+        Tiles&                       tiles
+    );
 
-    Game();
-    ~Game();
+    void imgui                  () override;
+    void player_imgui           ();
+    void city_imgui             ();
+    void unit_imgui             ();
+    void animate_current_unit   ();
+    void update_player          ();
+    void move_player_unit       (direction_t direction);
+    void select_player_unit     (int direction);
+    void apply_player_fog_of_war();
+    void update_player_units    ();
+    void update_player_cities   ();
 
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    auto flags() -> ImGuiWindowFlags override;
 
     // Implements IUpdate_once_per_frame
-    //void update_once_per_frame(const erhe::components::Time_context&) override;
+    //void update_once_per_frame(const Time_context&) override;
 
     // Public API
     [[nodiscard]] auto make_unit         (unit_t unit_type, Tile_coordinate location) -> Unit;
@@ -98,6 +132,11 @@ private:
     void add_player           (const etl::string<max_name_length>& name, Tile_coordinate start_city);
     void update_current_player();
 
+    Map_window&    m_map_window;
+    Menu_window&   m_menu_window;
+    Tile_renderer& m_tile_renderer;
+    Tiles&         m_tiles;
+
     // Commands
     Move_unit_command   m_move_unit_n_command;
     Move_unit_command   m_move_unit_ne_command;
@@ -115,7 +154,5 @@ private:
     etl::vector<Tile_coordinate, max_city_count> m_cities;
     etl::vector<Player, max_player_count>        m_players;
 };
-
-extern Game* g_game;
 
 } // namespace hextiles

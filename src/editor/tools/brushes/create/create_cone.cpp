@@ -1,12 +1,15 @@
 #include "tools/brushes/create/create_cone.hpp"
 
+#include "tools/brushes/create/create.hpp"
+#include "tools/brushes/create/create_preview_settings.hpp"
+
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/brushes/brush.hpp"
 
-#include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/physics/icollision_shape.hpp"
@@ -16,7 +19,7 @@
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
-namespace editor
+namespace editor                                                    
 {
 
 void Create_cone::render_preview(
@@ -29,7 +32,7 @@ void Create_cone::render_preview(
         return;
     }
 
-    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = get_line_renderer(preview_settings);
     line_renderer.add_cone(
         preview_settings.transform,
         preview_settings.major_color,

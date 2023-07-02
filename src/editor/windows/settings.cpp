@@ -1,15 +1,16 @@
 #include "windows/settings.hpp"
 
+#include "editor_context.hpp"
 #include "editor_message_bus.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/graphics/instance.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/renderer/shadow_renderer.hpp"
+#include "erhe/scene_renderer/shadow_renderer.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "mini/ini.h"
 
@@ -23,36 +24,15 @@
 namespace editor
 {
 
-Settings_window* g_settings_window{nullptr};
-
-Settings_window::Settings_window()
-    : erhe::components::Component    {c_type_name}
-    , erhe::application::Imgui_window{c_title}
+Settings_window::Settings_window(
+    erhe::imgui::Imgui_renderer&           imgui_renderer,
+    erhe::imgui::Imgui_windows&            imgui_windows,
+    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
+    Editor_context&                        editor_context
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Settings", "settings"}
+    , m_context                {editor_context}
 {
-}
-
-Settings_window::~Settings_window()
-{
-    ERHE_VERIFY(g_settings_window == this);
-    g_settings_window = nullptr;
-}
-
-void Settings_window::declare_required_components()
-{
-    require<erhe::application::Configuration      >();
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Imgui_windows      >();
-    require<erhe::renderer::Shadow_renderer       >();
-}
-
-void Settings_window::initialize_component()
-{
-    ERHE_VERIFY(g_settings_window == nullptr);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this, "settings");
-
-    const erhe::application::Scoped_gl_context gl_context;
-
     int num_sample_counts{0};
     gl::get_internalformat_iv(
         gl::Texture_target::texture_2d_multisample,
@@ -111,20 +91,18 @@ void Settings_window::initialize_component()
     read_ini();
 
     // Override configuration
-    auto& shadow_config = erhe::renderer::g_shadow_renderer->config;
+    auto& shadow_config = shadow_renderer.config;
     for (std::size_t i = 0, end = m_settings.size(); i < end; ++i) {
         const auto& settings = m_settings.at(i);
         if (settings.name == m_used_settings) {
             shadow_config.enabled                    = settings.shadow_enable;
             shadow_config.shadow_map_resolution      = settings.shadow_resolution;
             shadow_config.shadow_map_max_light_count = settings.shadow_light_count;
-            erhe::application::g_configuration->graphics.msaa_sample_count = settings.msaa_sample_count;
+            m_msaa_sample_count = settings.msaa_sample_count;
             m_settings_index = static_cast<int>(i);
             break;
         }
     }
-
-    g_settings_window = this;
 }
 
 void Settings_window::show_settings(Settings& settings)
@@ -145,13 +123,13 @@ void Settings_window::use_settings(const Settings& settings)
 {
     m_used_settings = settings.name;
 
-    auto& shadow_config = erhe::renderer::g_shadow_renderer->config;
+    auto& shadow_config = m_context.shadow_renderer->config;
     shadow_config.enabled                    = settings.shadow_enable;
     shadow_config.shadow_map_resolution      = settings.shadow_resolution;
     shadow_config.shadow_map_max_light_count = settings.shadow_light_count;
-    erhe::application::g_configuration->graphics.msaa_sample_count = settings.msaa_sample_count;
+    m_msaa_sample_count = settings.msaa_sample_count;
 
-    g_editor_message_bus->send_message(
+    m_context.editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_graphics_settings
         }
@@ -169,10 +147,10 @@ void Settings_window::read_ini()
                 const auto& section = i.second;
                 Settings settings;
                 settings.name = section.get("name");
-                erhe::application::ini_get(section, "shadow_enable",      settings.shadow_enable     );
-                erhe::application::ini_get(section, "msaa_sample_count",  settings.msaa_sample_count );
-                erhe::application::ini_get(section, "shadow_resolution",  settings.shadow_resolution );
-                erhe::application::ini_get(section, "shadow_light_count", settings.shadow_light_count);
+                erhe::configuration::ini_get(section, "shadow_enable",      settings.shadow_enable     );
+                erhe::configuration::ini_get(section, "msaa_sample_count",  settings.msaa_sample_count );
+                erhe::configuration::ini_get(section, "shadow_resolution",  settings.shadow_resolution );
+                erhe::configuration::ini_get(section, "shadow_light_count", settings.shadow_light_count);
                 apply_limits(settings);
                 m_settings.push_back(settings);
             }
@@ -273,7 +251,7 @@ void Settings_window::imgui()
         ImGui::SliderInt    ("Shadow Light Count", &settings.shadow_light_count, 1, m_max_depth_layers);
         ImGui::EndDisabled  ();
 
-        // ImGui::BeginDisabled(!erhe::graphics::Instance::info.use_bindless_texture);
+        // ImGui::BeginDisabled(!erhe::graphics::g_instance->info.use_bindless_texture);
         // ImGui::Checkbox     ("Bindless Textures", &settings.bindless_textures);
         // ImGui::EndDisabled  ();
 

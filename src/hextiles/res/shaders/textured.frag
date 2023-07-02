@@ -3,12 +3,9 @@ in flat uvec2 v_texture;
 
 float srgb_to_linear(float x)
 {
-    if (x <= 0.04045)
-    {
+    if (x <= 0.04045) {
         return x / 12.92;
-    }
-    else
-    {
+    } else {
         return pow((x + 0.055) / 1.055, 2.4);
     }
 }
@@ -23,9 +20,37 @@ vec4 srgb_to_linear(vec4 v)
     );
 }
 
+vec4 sample_texture(vec2 texcoord)
+{
+#if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_texture = sampler2D(v_texture);
+    return texture(s_texture, v_texcoord);
+#else
+    return texture(s_texture[v_texture.x], v_texcoord);
+#endif
+}
+
+vec4 sample_texture_lod_bias(vec2 texcoord, float lod_bias)
+{
+#if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_texture = sampler2D(v_texture);
+    return texture(s_texture, texcoord, lod_bias);
+#else
+    return texture(s_texture[v_texture.x], texcoord, lod_bias);
+#endif
+}
+
+vec2 get_texture_size()
+{
+#if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_texture = sampler2D(v_texture);
+    return textureSize(s_texture, 0);
+#else
+    return textureSize(s_texture[v_texture.x], 0);
+#endif
+}
+
 void main()
 {
-    sampler2D s_texture = sampler2D(v_texture);
-    //out_color = srgb_to_linear(texture(s_texture, v_texcoord));
-    out_color = texture(s_texture, v_texcoord);
+    out_color = sample_texture(v_texcoord);
 }

@@ -2,6 +2,7 @@
 
 #include "scene/viewport_window.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
@@ -22,13 +23,13 @@
 #   include "xr/headset_view.hpp"
 #endif
 
-#include "erhe/application/windows/log_window.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_viewport.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/rendergraph/multisample_resolve.hpp"
+#include "erhe/imgui/windows/log_window.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_viewport.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/rendergraph/multisample_resolve.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -37,7 +38,7 @@
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/renderer/shadow_renderer.hpp"
+#include "erhe/scene_renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
@@ -67,60 +68,66 @@ using erhe::graphics::Texture;
 int Viewport_window::s_serial = 0;
 
 Viewport_window::Viewport_window(
+    Editor_context&                             editor_context,
+    erhe::rendergraph::Rendergraph&             rendergraph,
+    Tools&                                      tools,
+    Viewport_config_window&                     viewport_config_window,
     const std::string_view                      name,
+    const char*                                 ini_label,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
-    : erhe::application::Rendergraph_node{name}
-    , m_viewport_config                  {g_viewport_config_window->config}
-    , m_name                             {name}
-    , m_scene_root                       {scene_root}
-    , m_tool_scene_root                  {g_tools->get_tool_scene_root()}
-    , m_camera                           {camera}
+    : Scene_view          {editor_context}
+    , Rendergraph_node    {rendergraph, name}
+    , m_viewport_config   {viewport_config_window.config}
+    , m_name              {name}
+    , m_ini_label         {ini_label}
+    , m_scene_root        {scene_root}
+    , m_tool_scene_root   {tools.get_tool_scene_root()}
+    , m_camera            {camera}
 {
     register_input(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
         "shadow_maps",
-        erhe::application::Rendergraph_node_key::shadow_maps
+        erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
     register_input(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
         "rendertarget texture",
-        erhe::application::Rendergraph_node_key::rendertarget_texture
+        erhe::rendergraph::Rendergraph_node_key::rendertarget_texture
     );
     register_output(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
         "viewport",
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 }
 
 Viewport_window::~Viewport_window()
 {
-    if (g_viewport_windows != nullptr) {
-        g_viewport_windows->erase(this);
-    }
+    m_context.viewport_windows->erase(this);
 }
 
 auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shader_stages*
 {
+    auto& programs = *m_context.programs;
     switch (m_shader_stages_variant) {
-        case Shader_stages_variant::standard:                 return g_programs->standard.get();
-        case Shader_stages_variant::anisotropic_slope:        return g_programs->anisotropic_slope.get();
-        case Shader_stages_variant::anisotropic_engine_ready: return g_programs->anisotropic_engine_ready.get();
-        case Shader_stages_variant::circular_brushed_metal:   return g_programs->circular_brushed_metal.get();
-        case Shader_stages_variant::debug_depth:              return g_programs->debug_depth.get();
-        case Shader_stages_variant::debug_normal:             return g_programs->debug_normal.get();
-        case Shader_stages_variant::debug_tangent:            return g_programs->debug_tangent.get();
-        case Shader_stages_variant::debug_bitangent:          return g_programs->debug_bitangent.get();
-        case Shader_stages_variant::debug_texcoord:           return g_programs->debug_texcoord.get();
-        case Shader_stages_variant::debug_vertex_color_rgb:   return g_programs->debug_vertex_color_rgb.get();
-        case Shader_stages_variant::debug_vertex_color_alpha: return g_programs->debug_vertex_color_alpha.get();
-        case Shader_stages_variant::debug_omega_o:            return g_programs->debug_omega_o.get();
-        case Shader_stages_variant::debug_omega_i:            return g_programs->debug_omega_i.get();
-        case Shader_stages_variant::debug_omega_g:            return g_programs->debug_omega_g.get();
-        case Shader_stages_variant::debug_misc:               return g_programs->debug_misc.get();
-        default:                                              return g_programs->standard.get();
+        case Shader_stages_variant::standard:                 return &programs.standard;
+        case Shader_stages_variant::anisotropic_slope:        return &programs.anisotropic_slope;
+        case Shader_stages_variant::anisotropic_engine_ready: return &programs.anisotropic_engine_ready;
+        case Shader_stages_variant::circular_brushed_metal:   return &programs.circular_brushed_metal;
+        case Shader_stages_variant::debug_depth:              return &programs.debug_depth;
+        case Shader_stages_variant::debug_normal:             return &programs.debug_normal;
+        case Shader_stages_variant::debug_tangent:            return &programs.debug_tangent;
+        case Shader_stages_variant::debug_bitangent:          return &programs.debug_bitangent;
+        case Shader_stages_variant::debug_texcoord:           return &programs.debug_texcoord;
+        case Shader_stages_variant::debug_vertex_color_rgb:   return &programs.debug_vertex_color_rgb;
+        case Shader_stages_variant::debug_vertex_color_alpha: return &programs.debug_vertex_color_alpha;
+        case Shader_stages_variant::debug_omega_o:            return &programs.debug_omega_o;
+        case Shader_stages_variant::debug_omega_i:            return &programs.debug_omega_i;
+        case Shader_stages_variant::debug_omega_g:            return &programs.debug_omega_g;
+        case Shader_stages_variant::debug_misc:               return &programs.debug_misc;
+        default:                                              return &programs.standard;
     }
 }
 
@@ -129,12 +136,12 @@ void Viewport_window::execute_rendergraph_node()
     ERHE_PROFILE_FUNCTION();
 
     const auto& output_viewport = get_producer_output_viewport(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
     const auto& output_framebuffer = get_producer_output_framebuffer(
-        erhe::application::Resource_routing::Resource_provided_by_consumer,
-        erhe::application::Rendergraph_node_key::viewport
+        erhe::rendergraph::Resource_routing::Resource_provided_by_consumer,
+        erhe::rendergraph::Rendergraph_node_key::viewport
     );
 
     const GLint output_framebuffer_name = output_framebuffer
@@ -148,12 +155,7 @@ void Viewport_window::execute_rendergraph_node()
         return;
     }
 
-    auto scene_root = m_scene_root.lock();
-    if (!scene_root) {
-        return;
-    }
-
-    g_editor_message_bus->send_message(
+    m_context.editor_message_bus->send_message(
         Editor_message{
             .update_flags = Message_flag_bit::c_flag_bit_render_scene_view,
             .scene_view   = this
@@ -162,16 +164,17 @@ void Viewport_window::execute_rendergraph_node()
 
     const Render_context context
     {
-        .scene_view             = this,
+        .editor_context         = m_context,
+        .scene_view             = *this,
+        .viewport_config        = m_viewport_config,
+        .camera                 = *m_camera.lock().get(),
         .viewport_window        = this,
-        .viewport_config        = &m_viewport_config,
-        .camera                 = m_camera.lock().get(),
         .viewport               = output_viewport,
         .override_shader_stages = get_override_shader_stages()
     };
 
-    if (m_is_hovered && g_id_renderer->config.enabled) {
-        g_editor_rendering->render_id(context);
+    if (m_is_hovered && m_context.id_renderer->enabled) {
+        m_context.editor_rendering->render_id(context);
     }
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, output_framebuffer_name);
@@ -181,32 +184,45 @@ void Viewport_window::execute_rendergraph_node()
         }
     }
 
-    g_editor_rendering->render_viewport_main(context, m_is_hovered);
+    gl::enable(gl::Enable_cap::scissor_test);
+    gl::scissor(context.viewport.x, context.viewport.y, context.viewport.width, context.viewport.height);
+
+    auto scene_root = m_scene_root.lock();
+    if (!scene_root || m_camera.expired()) {
+        gl::clear_color(0.1f, 0.1f, 0.1f, 1.0f);
+        gl::clear      (gl::Clear_buffer_mask::color_buffer_bit);
+        gl::disable    (gl::Enable_cap::scissor_test);
+        return;
+    }
+
+    m_context.editor_rendering->render_viewport_main(context);
+
+    m_context.line_renderer_set->begin();
+    m_context.tools            ->render_viewport_tools(context);
+    m_context.editor_rendering ->render_viewport_renderables(context);
+    m_context.line_renderer_set->end();
+    m_context.line_renderer_set->render(context.viewport, context.camera);
+
+    m_context.text_renderer->render(context.viewport);
+    gl::disable(gl::Enable_cap::scissor_test);
 }
 
 void Viewport_window::reconfigure(const int sample_count)
 {
-    const auto resolve_node = m_multisample_resolve_node.lock();
-    if (resolve_node) {
-        resolve_node->reconfigure(sample_count);
+    if (m_multisample_resolve_node != nullptr) {
+        m_multisample_resolve_node->reconfigure(sample_count);
     }
 }
 
 void Viewport_window::set_window_viewport(
-    const int x,
-    const int y,
-    const int width,
-    const int height
+    erhe::toolkit::Viewport viewport
 )
 {
-    m_window_viewport.x          = x;
-    m_window_viewport.y          = y;
-    m_window_viewport.width      = width;
-    m_window_viewport.height     = height;
+    m_window_viewport = viewport;
     m_projection_viewport.x      = 0;
     m_projection_viewport.y      = 0;
-    m_projection_viewport.width  = width;
-    m_projection_viewport.height = height;
+    m_projection_viewport.width  = viewport.width;
+    m_projection_viewport.height = viewport.height;
 }
 
 void Viewport_window::set_is_hovered(const bool is_hovered)
@@ -230,12 +246,12 @@ auto Viewport_window::is_hovered() const -> bool
     return m_scene_root.lock();
 }
 
-auto Viewport_window::window_viewport() const -> const erhe::scene::Viewport&
+auto Viewport_window::window_viewport() const -> const erhe::toolkit::Viewport&
 {
     return m_window_viewport;
 }
 
-auto Viewport_window::projection_viewport() const -> const erhe::scene::Viewport&
+auto Viewport_window::projection_viewport() const -> const erhe::toolkit::Viewport&
 {
     return m_projection_viewport;
 }
@@ -245,9 +261,9 @@ auto Viewport_window::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
     return m_camera.lock();
 }
 
-auto Viewport_window::get_rendergraph_node() -> std::shared_ptr<erhe::application::Rendergraph_node>
+auto Viewport_window::get_rendergraph_node() -> erhe::rendergraph::Rendergraph_node*
 {
-    return shared_from_this();
+    return this;
 }
 
 auto Viewport_window::as_viewport_window() -> Viewport_window*
@@ -353,7 +369,7 @@ void Viewport_window::update_hover()
         scene_root->update_pointer_for_rendertarget_meshes(this);
     }
 
-    if (g_id_renderer->config.enabled) {
+    if (m_context.id_renderer->enabled) {
         update_hover_with_id_render();
     } else {
         update_hover_with_raytrace();
@@ -370,7 +386,7 @@ void Viewport_window::update_hover_with_id_render()
         return;
     }
     const auto position_in_viewport = m_position_in_viewport.value();
-    const auto id_query = g_id_renderer->get(
+    const auto id_query = m_context.id_renderer->get(
         static_cast<int>(position_in_viewport.x),
         static_cast<int>(position_in_viewport.y)
     );
@@ -483,12 +499,10 @@ auto Viewport_window::position_in_world_viewport_depth(
 
 auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
 {
-    const std::weak_ptr<Rendergraph_node>& input_node_weak = get_consumer_input_node(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
-        erhe::application::Rendergraph_node_key::shadow_maps
+    Rendergraph_node* input_node = get_consumer_input_node(
+        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
-    const std::shared_ptr<Rendergraph_node>& input_node_shared = input_node_weak.lock();
-    Rendergraph_node*   input_node = input_node_shared.get();
     Shadow_render_node* shadow_render_node = reinterpret_cast<Shadow_render_node*>(input_node);
     return shadow_render_node;
 }
@@ -501,31 +515,20 @@ auto Viewport_window::get_config() -> Viewport_config*
 auto Viewport_window::viewport_toolbar() -> bool
 {
     bool hovered = false;
-    if (g_viewport_windows != nullptr) {
-        g_viewport_windows->viewport_toolbar(*this, hovered);
-    }
+    m_context.viewport_windows->viewport_toolbar(*this, hovered);
+
     //// TODO Tool_flags::viewport_toolbar
-    if (g_selection_tool != nullptr) {
-        g_selection_tool->viewport_toolbar(hovered);
-    }
-    if (g_transform_tool != nullptr) {
-        g_transform_tool->viewport_toolbar(hovered);
-    }
-
-    if (g_grid_tool != nullptr) {
-        g_grid_tool->viewport_toolbar(hovered);
-    }
-
-    if (g_physics_window != nullptr) {
-        g_physics_window->viewport_toolbar(hovered);
-    }
+    m_context.selection_tool->viewport_toolbar(hovered);
+    m_context.transform_tool->viewport_toolbar(hovered);
+    m_context.grid_tool->viewport_toolbar(hovered);
+    //// TODO m_physics_window.viewport_toolbar(hovered);
 
     const float  rounding        {3.0f};
     const ImVec4 background_color{0.20f, 0.26f, 0.25f, 0.72f};
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
-    erhe::application::make_text_with_background("Scene:", rounding, background_color);
+    erhe::imgui::make_text_with_background("Scene:", rounding, background_color);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
@@ -533,7 +536,7 @@ auto Viewport_window::viewport_toolbar() -> bool
     auto       old_scene_root = m_scene_root;
     auto       scene_root     = get_scene_root();
     ImGui::SetNextItemWidth(110.0f);
-    const bool combo_used     = g_editor_scenes->scene_combo("##Scene", scene_root, false);
+    const bool combo_used     = m_context.editor_scenes->scene_combo("##Scene", scene_root, false);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
@@ -557,7 +560,7 @@ auto Viewport_window::viewport_toolbar() -> bool
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
-    erhe::application::make_text_with_background("Camera:", rounding, background_color);
+    erhe::imgui::make_text_with_background("Camera:", rounding, background_color);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
@@ -572,7 +575,7 @@ auto Viewport_window::viewport_toolbar() -> bool
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(110.0f);
-    erhe::application::make_text_with_background("Shader:", rounding, background_color);
+    erhe::imgui::make_text_with_background("Shader:", rounding, background_color);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
@@ -597,31 +600,31 @@ auto Viewport_window::viewport_toolbar() -> bool
     return hovered;
 }
 
-void Viewport_window::link_to(std::weak_ptr<erhe::application::Multisample_resolve_node> node)
+void Viewport_window::link_to(std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> node)
 {
     m_multisample_resolve_node = node;
 }
 
-void Viewport_window::link_to(std::weak_ptr<Post_processing_node> node)
+void Viewport_window::link_to(std::shared_ptr<Post_processing_node> node)
 {
     m_post_processing_node = node;
 }
 
-auto Viewport_window::get_post_processing_node() -> std::shared_ptr<Post_processing_node>
+auto Viewport_window::get_post_processing_node() -> Post_processing_node*
 {
-    return m_post_processing_node.lock();
+    return m_post_processing_node.get();
 }
 
 void Viewport_window::set_final_output(
-    std::weak_ptr<erhe::application::Rendergraph_node> node
+    std::shared_ptr<erhe::rendergraph::Rendergraph_node> node
 )
 {
     m_final_output = node;
 }
 
-auto Viewport_window::get_final_output() -> std::weak_ptr<erhe::application::Rendergraph_node>
+auto Viewport_window::get_final_output() -> erhe::rendergraph::Rendergraph_node*
 {
-    return m_final_output;
+    return m_final_output.get();
 }
 
 auto Viewport_window::get_closest_point_on_line(

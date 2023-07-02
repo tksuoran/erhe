@@ -1,5 +1,6 @@
 #include "tools/transform/transform_tool.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
@@ -25,14 +26,14 @@
 #include "tools/transform/scale_tool.hpp"
 #include "windows/operations.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/commands/command_binding.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
-#include "erhe/application/renderers/text_renderer.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/commands/command_binding.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/renderer/text_renderer.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
@@ -84,29 +85,33 @@ using Trs_transform = erhe::scene::Trs_transform;
 
 #pragma region Commands
 
-Transform_tool_drag_command::Transform_tool_drag_command()
-    : Command{"Transform_tool.drag"}
+Transform_tool_drag_command::Transform_tool_drag_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           editor_context
+)
+    : Command  {commands, "Transform_tool.drag"}
+    , m_context{editor_context}
 {
 }
 
 void Transform_tool_drag_command::try_ready()
 {
-    if (g_transform_tool->on_drag_ready()) {
+    if (m_context.transform_tool->on_drag_ready()) {
         set_ready();
     }
 }
 
 auto Transform_tool_drag_command::try_call() -> bool
 {
-    if (get_command_state() == erhe::application::State::Ready) {
+    if (get_command_state() == erhe::commands::State::Ready) {
         set_active();
     }
 
-    if (get_command_state() != erhe::application::State::Active) {
+    if (get_command_state() != erhe::commands::State::Active) {
         return false; // We might be ready, but not consuming event yet
     }
 
-    const bool still_active = g_transform_tool->on_drag();
+    const bool still_active = m_context.transform_tool->on_drag();
     if (!still_active) {
         set_inactive();
     }
@@ -117,99 +122,58 @@ void Transform_tool_drag_command::on_inactive()
 {
     log_trs_tool->trace("TRS on_inactive");
 
-    if (get_command_state() != erhe::application::State::Inactive) {
-        g_transform_tool->end_drag();
+    if (get_command_state() != erhe::commands::State::Inactive) {
+        m_context.transform_tool->end_drag();
     }
 }
 
 #pragma endregion Commands
 
-Transform_tool* g_transform_tool{nullptr};
-
-Transform_tool::Transform_tool()
-    : Imgui_window                  {c_title}
-    , erhe::components::Component   {c_type_name}
-    , m_drag_redirect_update_command{m_drag_command}
-    , m_drag_enable_command         {m_drag_redirect_update_command}
+Transform_tool::Transform_tool(
+    erhe::commands::Commands&    commands,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
+    Editor_message_bus&          editor_message_bus,
+    Headset_view&                headset_view,
+    Mesh_memory&                 mesh_memory,
+    Tools&                       tools
+)
+    : Tool                          {editor_context}
+    , Imgui_window                  {imgui_renderer, imgui_windows, "Transform", "transform"}
+    , m_drag_command                {commands, editor_context}
+    , m_drag_redirect_update_command{commands, m_drag_command}
+    , m_drag_enable_command         {commands, m_drag_redirect_update_command}
 {
-}
-
-Transform_tool::~Transform_tool() noexcept
-{
-    ERHE_VERIFY(g_transform_tool == nullptr);
-}
-
-void Transform_tool::deinitialize_component()
-{
-    ERHE_VERIFY(g_transform_tool == this);
-    m_drag_command.set_host(nullptr);
-    shared.entries.clear();
-    shared.visualization.reset();
-    m_tool_node.reset();
-
-    g_transform_tool = nullptr;
-}
-
-void Transform_tool::declare_required_components()
-{
-    require<erhe::application::Commands           >();
-    require<erhe::application::Configuration      >();
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Imgui_windows      >();
-    require<Editor_message_bus>();
-    require<Editor_scenes >();
-    require<Mesh_memory   >();
-    require<Selection_tool>();
-    require<Tools         >();
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    require<Headset_view  >();
-#endif
-}
-
-void Transform_tool::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_transform_tool == nullptr);
-    g_transform_tool = this; // visualizations needs config
-
-    auto ini = erhe::application::get_ini("erhe.ini", "transform_tool");
+    auto ini = erhe::configuration::get_ini("erhe.ini", "transform_tool");
     auto& settings = shared.settings;
     ini->get("scale",          settings.gizmo_scale);
     ini->get("show_translate", settings.show_translate);
     ini->get("show_rotate",    settings.show_rotate);
 
-    const erhe::application::Scoped_gl_context gl_context;
-
-    const auto& tool_scene_root = g_tools->get_tool_scene_root();
-    if (!tool_scene_root) {
-        return;
-    }
-    shared.visualization.emplace(*this);
+    shared.visualization.emplace(editor_context, mesh_memory, tools);
 
     set_base_priority(c_priority);
-    set_description  (c_title);
+    set_description  ("Transform");
+    tools.register_tool(this);
 
-    g_tools->register_tool(this);
-
-    erhe::application::g_imgui_windows->register_imgui_window(this, "transform");
-
-    auto& commands = *erhe::application::g_commands;
     commands.register_command(&m_drag_command);
     commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    const auto* headset = g_headset_view->get_headset();
+    const auto* headset = headset_view.get_headset();
     if (headset != nullptr) {
         auto& xr_right = headset->get_actions_right();
-        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click, erhe::application::Button_trigger::Any);
-        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.a_click,       erhe::application::Button_trigger::Any);
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.trigger_click, erhe::commands::Button_trigger::Any);
+        commands.bind_command_to_xr_boolean_action(&m_drag_enable_command, xr_right.a_click,       erhe::commands::Button_trigger::Any);
         commands.bind_command_to_update           (&m_drag_redirect_update_command);
     }
+#else
+    static_cast<void>(headset_view);
 #endif
 
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
             on_message(message);
         }
     );
@@ -243,9 +207,7 @@ void Transform_tool::on_message(Editor_message& message)
 
 void Transform_tool::viewport_toolbar(bool& hovered)
 {
-    if (g_icon_set != nullptr) {
-        shared.visualization->viewport_toolbar(hovered);
-    }
+    shared.visualization->viewport_toolbar(hovered);
 }
 
 auto Transform_tool::is_transform_tool_active() const -> bool
@@ -269,9 +231,9 @@ void Transform_tool::imgui()
         ImGui::BeginDisabled();
     }
     if (
-        erhe::application::make_button(
+        erhe::imgui::make_button(
             "Local",
-            (settings.local) ? erhe::application::Item_mode::active : erhe::application::Item_mode::normal,
+            (settings.local) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
             button_size
         )
     ) {
@@ -279,9 +241,9 @@ void Transform_tool::imgui()
     }
     ImGui::SameLine();
     if (
-        erhe::application::make_button(
+        erhe::imgui::make_button(
             "Global",
-            (!settings.local) ? erhe::application::Item_mode::active : erhe::application::Item_mode::normal,
+            (!settings.local) ? erhe::imgui::Item_mode::active : erhe::imgui::Item_mode::normal,
             button_size
         )
     ) {
@@ -327,7 +289,7 @@ void Transform_tool::imgui()
 
 void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
-    const auto& selection = g_selection_tool->get_selection();
+    const auto& selection = m_context.selection->get_selection();
 
     vec3 cumulative_world_translation{0.0f, 0.0f, 0.0f};
     quat cumulative_world_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
@@ -352,7 +314,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         ++node_count;
         if (node_filter == nullptr) {
             shared.entries.push_back(
-                Entry{
+                Transform_entry{
                     .node                    = node,
                     .parent_from_node_before = node->parent_from_node_transform(),
                     .world_from_node_before  = node->world_from_node_transform()
@@ -518,9 +480,9 @@ void Transform_tool::update_hover()
     m_hover_tool = [&]() -> Subtool* {
         switch (get_handle_tool(m_hover_handle)) {
             case Handle_tool::e_handle_tool_none     : return nullptr;
-            case Handle_tool::e_handle_tool_translate: return g_move_tool;
-            case Handle_tool::e_handle_tool_rotate   : return g_rotate_tool;
-            case Handle_tool::e_handle_tool_scale    : return g_scale_tool;
+            case Handle_tool::e_handle_tool_translate: return m_context.move_tool;
+            case Handle_tool::e_handle_tool_rotate   : return m_context.rotate_tool;
+            case Handle_tool::e_handle_tool_scale    : return m_context.scale_tool;
             default                                  : return nullptr;
         }
     }();
@@ -673,9 +635,8 @@ auto Transform_tool::get_handle(erhe::scene::Mesh* mesh) const -> Handle
 
 
 #pragma region Render
-namespace {
 
-void render_rays(erhe::scene::Node& node)
+void Transform_tool::render_rays(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -695,7 +656,7 @@ void render_rays(erhe::scene::Node& node)
         { 0.0f,  0.0f, -1.0f}
     };
 
-    auto& line_renderer = *erhe::application::g_line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
     auto& raytrace_scene = scene_root->raytrace_scene();
 
@@ -713,8 +674,7 @@ void render_rays(erhe::scene::Node& node)
 
         erhe::raytrace::Hit hit;
         if (project_ray(&raytrace_scene, mesh.get(), ray, hit)) {
-            Ray_hit_style ray_hit_style
-            {
+            Ray_hit_style ray_hit_style {
                 .ray_color     = vec4{1.0f, 0.0f, 1.0f, 1.0f},
                 .ray_thickness = 8.0f,
                 .ray_length    = 0.5f,
@@ -728,17 +688,11 @@ void render_rays(erhe::scene::Node& node)
     }
 }
 
-}
-
 void Transform_tool::tool_render(
     const Render_context& context
 )
 {
     ERHE_PROFILE_FUNCTION();
-
-    if (context.camera == nullptr) {
-        return;
-    }
 
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
@@ -750,7 +704,7 @@ void Transform_tool::tool_render(
             render_rays(*node.get());
         }
     }
-    g_rotate_tool->render(context);
+    m_context.rotate_tool->render(context);
 }
 #pragma endregion Render
 
@@ -773,11 +727,6 @@ void Transform_tool::update_transforms()
     shared.visualization->update_transforms();
 }
 
-auto Transform_tool::get_tool_scene_root() -> std::shared_ptr<Scene_root>
-{
-    return g_tools->get_tool_scene_root();
-}
-
 void Transform_tool::touch()
 {
     if (!shared.touched) {
@@ -795,7 +744,7 @@ void Transform_tool::record_transform_operation()
     log_trs_tool->trace("creating transform operation");
 
     Compound_operation::Parameters compompound_parameters;
-    for (auto& entry : g_transform_tool->shared.entries) {
+    for (auto& entry : shared.entries) {
         auto node_operation = std::make_shared<Node_transform_operation>(
             Node_transform_operation::Parameters{
                 .node                    = entry.node,
@@ -805,7 +754,7 @@ void Transform_tool::record_transform_operation()
         );
         compompound_parameters.operations.push_back(node_operation);
     }
-    g_operation_stack->push(
+    m_context.operation_stack->push(
         std::make_shared<Compound_operation>(
             std::move(compompound_parameters)
         )
@@ -833,7 +782,7 @@ void Transform_tool::transform_properties()
     vec3 translation = transform.get_translation();
     vec3 skew        = transform.get_skew       ();
 
-    using namespace erhe::application;
+    using namespace erhe::imgui;
     Value_edit_state translate_edit_state;
     if (ImGui::TreeNodeEx("Translation", ImGuiTreeNodeFlags_DefaultOpen)) {
         translate_edit_state.combine(make_scalar_button(&translation.x, 0.0f, 0.0f, 0xff8888ffu, 0xff222266u, "X", "##T.X"));
@@ -893,4 +842,5 @@ void Transform_tool::transform_properties()
     }
 }
 
-}
+} // namespace editor
+

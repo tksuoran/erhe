@@ -6,8 +6,8 @@ add_executable(${_target})
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
 
-    example_application.cpp
-    example_application.hpp
+    example.cpp
+    example.hpp
     example_log.cpp
     example_log.hpp
 
@@ -41,20 +41,19 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::application
-    erhe::components
-    erhe::concurrency
+    #erhe::concurrency
     erhe::gl
     erhe::graphics
     erhe::log
     erhe::primitive
     erhe::renderer
     erhe::scene
+    erhe::scene_renderer
     erhe::toolkit
     erhe::ui
     mINI
-    RectangleBinPack
-    rapidjson
+    #RectangleBinPack
+    #rapidjson
 )
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")

@@ -1,4 +1,6 @@
 #include "renderers/renderpass.hpp"
+
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
@@ -10,7 +12,7 @@
 
 #include "erhe/graphics/debug.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/renderer/forward_renderer.hpp"
+#include "erhe/scene_renderer/forward_renderer.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 namespace editor
@@ -20,8 +22,6 @@ Renderpass::Renderpass(const std::string_view name)
     : erhe::scene::Item{name}
 {
 }
-
-Renderpass::~Renderpass() = default;
 
 [[nodiscard]] auto Renderpass::static_type() -> uint64_t
 {
@@ -47,19 +47,9 @@ void Renderpass::render(const Render_context& context) const
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (
-        (erhe::renderer::g_forward_renderer == nullptr) ||
-        (context.scene_view                 == nullptr) ||
-        (context.camera                     == nullptr) ||
-        (context.viewport_config            == nullptr)
-    ) {
-        log_frame->error("Missing forward renderer / scene viewport / camera / viewport config - cannot render");
-        return;
-    }
-
     const auto scene_root = this->override_scene_root
         ? override_scene_root
-        : context.scene_view->get_scene_root();
+        : context.scene_view.get_scene_root();
     if (!scene_root) {
         log_frame->error("Missing scene root - cannot render");
         return;
@@ -68,7 +58,7 @@ void Renderpass::render(const Render_context& context) const
     erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport content"};
 
     const Render_style_data* render_style = this->get_render_style
-        ? this->get_render_style(context)
+        ? &this->get_render_style(context)
         : nullptr;
 
     const auto& layers           = scene_root->layers();
@@ -99,9 +89,9 @@ void Renderpass::render(const Render_context& context) const
 
     if (this->mesh_layers.empty()) {
         //log_frame->trace("render_fullscreen");
-        erhe::renderer::g_forward_renderer->render_fullscreen(
-            erhe::renderer::Forward_renderer::Render_parameters{
-                .camera                 = context.camera,
+        context.editor_context.forward_renderer->render_fullscreen(
+            erhe::scene_renderer::Forward_renderer::Render_parameters{
+                .camera                 = &context.camera,
                 .light_projections      = nullptr,
                 .lights                 = {},
                 .skins                  = {},
@@ -111,7 +101,7 @@ void Renderpass::render(const Render_context& context) const
                 .primitive_mode         = this->primitive_mode,
                 .primitive_settings     = (render_style != nullptr)
                     ? render_style->get_primitive_settings(this->primitive_mode)
-                    : erhe::renderer::Primitive_interface_settings{},
+                    : erhe::scene_renderer::Primitive_interface_settings{},
                 .shadow_texture         = nullptr,
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr
@@ -140,14 +130,13 @@ void Renderpass::render(const Render_context& context) const
         //}
         //log_frame->info("primitive_mode = {}", c_str(primitive_mode));
         //log_frame->info("filter = {}", filter.describe());
-        erhe::renderer::g_forward_renderer->render(
-            erhe::renderer::Forward_renderer::Render_parameters{
-                .vertex_input_state     = g_mesh_memory->get_vertex_input(),
-                .index_type             = g_mesh_memory->gl_index_type(),
+        context.editor_context.forward_renderer->render(
+            erhe::scene_renderer::Forward_renderer::Render_parameters{
+                .index_type             = context.editor_context.mesh_memory->buffer_info.index_type,
 
                 .ambient_light          = layers.light()->ambient_light,
-                .camera                 = context.camera,
-                .light_projections      = context.scene_view->get_light_projections(),
+                .camera                 = &context.camera,
+                .light_projections      = context.scene_view.get_light_projections(),
                 .lights                 = layers.light()->lights,
                 .skins                  = scene->get_skins(),
                 .materials              = materials,
@@ -156,8 +145,8 @@ void Renderpass::render(const Render_context& context) const
                 .primitive_mode         = this->primitive_mode,
                 .primitive_settings     = (render_style != nullptr)
                     ? render_style->get_primitive_settings(this->primitive_mode)
-                    : erhe::renderer::Primitive_interface_settings{},
-                .shadow_texture         = context.scene_view->get_shadow_texture(),
+                    : erhe::scene_renderer::Primitive_interface_settings{},
+                .shadow_texture         = context.scene_view.get_shadow_texture(),
                 .viewport               = context.viewport,
                 .filter                 = this->filter,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr

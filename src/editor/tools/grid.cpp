@@ -1,17 +1,19 @@
 #include "tools/grid.hpp"
 
+#include "editor_context.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -25,9 +27,7 @@ namespace editor
 
 using glm::vec3;
 
-Grid::Grid()
-{
-}
+Grid::~Grid() noexcept = default;
 
 [[nodiscard]] auto Grid::get_type() const -> uint64_t
 {
@@ -101,7 +101,7 @@ void Grid::render(const Render_context& context)
         return;
     }
 
-    const erhe::scene::Node* camera_node = context.camera->get_node();
+    const erhe::scene::Node* camera_node = context.camera.get_node();
     ERHE_VERIFY(camera_node != nullptr);
     const glm::mat4 m = world_from_grid();
 
@@ -109,11 +109,11 @@ void Grid::render(const Render_context& context)
     const float minor_step = m_cell_size / static_cast<float>(m_cell_div);
     int cell;
     auto& major_renderer = m_see_hidden_major
-        ? *erhe::application::g_line_renderer_set->visible.at(1).get()
-        : *erhe::application::g_line_renderer_set->hidden .at(1).get();
+        ? *context.editor_context.line_renderer_set->visible.at(1).get()
+        : *context.editor_context.line_renderer_set->hidden .at(1).get();
     auto& minor_renderer = m_see_hidden_minor
-        ? *erhe::application::g_line_renderer_set->visible.at(0).get()
-        : *erhe::application::g_line_renderer_set->hidden .at(0).get();
+        ? *context.editor_context.line_renderer_set->visible.at(0).get()
+        : *context.editor_context.line_renderer_set->hidden .at(0).get();
     major_renderer.set_thickness(m_major_width);
     minor_renderer.set_thickness(m_minor_width);
     major_renderer.set_line_color(m_major_color);
@@ -168,7 +168,7 @@ void Grid::render(const Render_context& context)
     );
 }
 
-void Grid::imgui()
+void Grid::imgui(Editor_context& context)
 {
     ImGui::InputText  ("Name",             &m_name);
     ImGui::Separator();
@@ -186,7 +186,7 @@ void Grid::imgui()
     ImGui::ColorEdit4 ("Major Color",      &m_major_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Minor Color",      &m_minor_color.x, ImGuiColorEditFlags_Float);
 
-    erhe::application::make_combo(
+    erhe::imgui::make_combo(
         "Plane",
         m_plane_type,
         grid_plane_type_strings,
@@ -231,7 +231,7 @@ void Grid::imgui()
                 }
             }
         }
-        const auto& host_node = g_selection_tool->get_first_selected_node();
+        const auto& host_node = context.selection->get_first_selected_node();
         if (host_node) {
             const std::string label = fmt::format("Attach to {}", host_node->get_name());
             if (ImGui::Button(label.c_str())) {

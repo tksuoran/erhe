@@ -37,18 +37,18 @@ class Material;
 class Vertex_attributes
 {
 public:
-    Vertex_attribute_info position         ;
-    Vertex_attribute_info normal           ;
-    Vertex_attribute_info normal_flat      ;
-    Vertex_attribute_info normal_smooth    ;
-    Vertex_attribute_info tangent          ;
-    Vertex_attribute_info bitangent        ;
-    Vertex_attribute_info color            ;
-    Vertex_attribute_info texcoord         ;
-    Vertex_attribute_info id_vec3          ;
-    Vertex_attribute_info attribute_id_uint;
-    Vertex_attribute_info joint_indices    ;
-    Vertex_attribute_info joint_weights    ;
+    Vertex_attribute_info position     ;
+    Vertex_attribute_info normal       ;
+    //Vertex_attribute_info normal_flat  ;
+    //Vertex_attribute_info normal_smooth;
+    Vertex_attribute_info tangent      ;
+    Vertex_attribute_info bitangent    ;
+    Vertex_attribute_info color        ;
+    Vertex_attribute_info texcoord     ;
+    Vertex_attribute_info id_vec3      ;
+    //// TODO Vertex_attribute_info attribute_id_uint;
+    Vertex_attribute_info joint_indices;
+    Vertex_attribute_info joint_weights;
 };
 
 class Build_context_root
@@ -56,7 +56,7 @@ class Build_context_root
 public:
     Build_context_root(
         const erhe::geometry::Geometry& geometry,
-        Build_info&                     build_info,
+        const Build_info&               build_info,
         Primitive_geometry*             primitive_geometry
     );
 
@@ -71,16 +71,16 @@ public:
         Index_range&             out_range
     );
 
-    const erhe::geometry::Geometry& geometry;
-    Build_info&                     build_info;
-    Primitive_geometry*             primitive_geometry{nullptr};
-    std::size_t                     next_index_range_start{0};
-    Vertex_attributes               attributes;
-    erhe::geometry::Mesh_info       mesh_info;
-    erhe::graphics::Vertex_format*  vertex_format     {nullptr};
-    std::size_t                     vertex_stride     {0};
-    std::size_t                     total_vertex_count{0};
-    std::size_t                     total_index_count {0};
+    const erhe::geometry::Geometry&      geometry;
+    const Build_info&                    build_info;
+    Primitive_geometry*                  primitive_geometry{nullptr};
+    std::size_t                          next_index_range_start{0};
+    Vertex_attributes                    attributes;
+    erhe::geometry::Mesh_info            mesh_info;
+    const erhe::graphics::Vertex_format& vertex_format;
+    std::size_t                          vertex_stride     {0};
+    std::size_t                          total_vertex_count{0};
+    std::size_t                          total_index_count {0};
 };
 
 class Build_context
@@ -88,7 +88,7 @@ class Build_context
 public:
     Build_context(
         const erhe::geometry::Geometry& geometry,
-        Build_info&                     build_info,
+        const Build_info&               build_info,
         const Normal_style              normal_style,
         Primitive_geometry*             primitive_geometry
     );
@@ -143,33 +143,24 @@ private:
 class Primitive_builder final
 {
 public:
-    // Controls what kind of mesh should be built from geometry
-
-    Primitive_builder() = delete;
-
     Primitive_builder(
         const erhe::geometry::Geometry& geometry,
-        Build_info&                     build_info,
+        const Build_info&               build_info,
         const Normal_style              normal_style
     );
-
-    ~Primitive_builder() noexcept;
 
     [[nodiscard]] auto build() -> Primitive_geometry;
 
     void build(Primitive_geometry* primitive_geometry);
 
-    static void prepare_vertex_format(Build_info& build_info);
-
-private:
     const erhe::geometry::Geometry& m_geometry;
-    Build_info&                     m_build_info;
-    Normal_style                    m_normal_style;
+    const Build_info&               m_build_info;
+    const Normal_style              m_normal_style;
 };
 
 [[nodiscard]] auto make_primitive(
     const erhe::geometry::Geometry& geometry,
-    Build_info&                     build_info,
+    const Build_info&               build_info,
     const Normal_style              normal_style = Normal_style::corner_normals
 ) -> Primitive_geometry;
 

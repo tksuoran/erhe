@@ -10,8 +10,6 @@ Composer::Composer(const std::string_view name)
 {
 }
 
-Composer::~Composer() = default;
-
 [[nodiscard]] auto Composer::static_type() -> uint64_t
 {
     return erhe::scene::Item_type::composer;

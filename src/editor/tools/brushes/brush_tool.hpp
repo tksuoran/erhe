@@ -1,37 +1,106 @@
 #pragma once
 
-#include "erhe/components/components.hpp"
+#include "tools/tool.hpp"
+#include "scene/scene_view.hpp"
 
 #include <memory>
+#include <mutex>
 
 namespace editor
 {
 
-class Brush_tool_impl;
-class Tool;
+class Brush_tool;
+class Content_library_window;
+class Editor_message;
+class Editor_message_bus;
+class Editor_scenes;
+class Icon_set;
+class Operation_stack;
+class Operations;
+class Render_context;
+class Tools;
+class Headset_view;
 
-class Brush_tool
-    : public erhe::components::Component
+class Brush_tool_preview_command
+    : public erhe::commands::Command
 {
 public:
-    static constexpr int         c_priority {4};
-    static constexpr const char* c_type_name{"Brush_tool"};
-    static constexpr const char* c_title    {"Brush Tool"};
-    static constexpr uint32_t    c_type_hash = compiletime_xxhash::xxh32(c_type_name, compiletime_strlen(c_type_name), {});
-
-    Brush_tool ();
-    ~Brush_tool() noexcept override;
-
-    // Implements erhe::components::Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Brush_tool_preview_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
+    auto try_call() -> bool override;
 
 private:
-    std::unique_ptr<Brush_tool_impl> m_impl;
+    Editor_context& m_context;
 };
 
-extern Brush_tool* g_brush_tool;
+class Brush_tool_insert_command
+    : public erhe::commands::Command
+{
+public:
+    Brush_tool_insert_command(
+        erhe::commands::Commands& commands,
+        Editor_context&           context
+    );
+    void try_ready() override;
+    auto try_call () -> bool override;
+
+private:
+    Editor_context& m_context;
+};
+
+class Brush_tool
+    : public Tool
+{
+public:
+    static constexpr int c_priority{4};
+
+    Brush_tool(
+        erhe::commands::Commands& commands,
+        Editor_context&           editor_context,
+        Editor_message_bus&       editor_message_bus,
+        Headset_view&             headset_view,
+        Icon_set&                 icon_set,
+        Tools&                    tools
+    );
+
+    // Implements Tool
+    void tool_render           (const Render_context& context) override;
+    void tool_properties       () override;
+    void handle_priority_update(int old_priority, int new_priority) override;
+
+    // Commands
+    auto try_insert_ready() -> bool;
+    auto try_insert      () -> bool;
+    void on_motion       ();
+
+private:
+    void on_message                (Editor_message& editor_message);
+    void update_mesh               ();
+    void do_insert_operation       ();
+    void add_brush_mesh            ();
+    void remove_brush_mesh         ();
+    void update_mesh_node_transform();
+
+    [[nodiscard]] auto get_hover_mesh_transform() -> glm::mat4; // Places brush in parent (hover) mesh
+    [[nodiscard]] auto get_hover_grid_transform() -> glm::mat4;
+
+    Brush_tool_preview_command m_preview_command;
+    Brush_tool_insert_command  m_insert_command;
+
+    std::mutex                          m_brush_mutex;
+    bool                                m_snap_to_hover_polygon{true};
+    bool                                m_snap_to_grid         {true};
+    bool                                m_debug_visualization  {false};
+    Hover_entry                         m_hover;
+    std::shared_ptr<erhe::scene::Mesh>  m_brush_mesh;
+    std::shared_ptr<erhe::scene::Node>  m_brush_node;
+    bool                                m_with_physics   {true};
+    float                               m_scale          {1.0f};
+    float                               m_transform_scale{1.0f};
+    int                                 m_polygon_offset {0};
+    int                                 m_corner_offset  {0};
+};
 
 } // namespace editor

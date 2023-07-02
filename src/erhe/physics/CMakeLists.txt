@@ -99,7 +99,6 @@ target_link_libraries(
     ${_target}
     PUBLIC
         ${impl_link_libraries}
-        erhe::components
         erhe::geometry
         erhe::log
         erhe::primitive

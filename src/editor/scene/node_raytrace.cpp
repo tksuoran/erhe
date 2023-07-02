@@ -2,7 +2,7 @@
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
@@ -45,63 +45,34 @@ Raytrace_primitive::Raytrace_primitive(
     const std::shared_ptr<erhe::geometry::Geometry>& geometry
 )
 {
-    // Just float vec3 position
-    auto vertex_format = std::make_shared<erhe::graphics::Vertex_format>(
-        std::initializer_list<erhe::graphics::Vertex_attribute>{
-            erhe::graphics::Vertex_attribute{
-                .usage =
-                {
-                    .type      = erhe::graphics::Vertex_attribute::Usage_type::position
-                },
-                .shader_type   = gl::Attribute_type::float_vec3,
-                .data_type =
-                {
-                    .type      = gl::Vertex_attrib_type::float_,
-                    .dimension = 3
-                }
-            }
-        }
-    );
-
-    //const auto   index_type   = gl::Draw_elements_type::unsigned_int;
+    const erhe::graphics::Vertex_format vertex_format{
+        erhe::graphics::Vertex_attribute::position_float3()
+    };
     const std::size_t index_stride = 4;
-
     const erhe::geometry::Mesh_info mesh_info = geometry->get_mesh_info();
-
     vertex_buffer = erhe::raytrace::IBuffer::create_shared(
         geometry->name + "_vertex",
-        mesh_info.vertex_count_corners * vertex_format->stride()
+        mesh_info.vertex_count_corners * vertex_format.stride()
     );
     index_buffer = erhe::raytrace::IBuffer::create_shared(
         geometry->name + "_index",
         mesh_info.index_count_fill_triangles * index_stride
     );
-
     erhe::primitive::Raytrace_buffer_sink buffer_sink{
         *vertex_buffer.get(),
         *index_buffer.get()
     };
-
-    erhe::primitive::Build_info build_info{&buffer_sink};
-    build_info.buffer.index_type = gl::Draw_elements_type::unsigned_int;
-
-    // Just triangle indices and position
-    build_info.format.features = {
-        .fill_triangles  = true,
-        .edge_lines      = false,
-        .corner_points   = false,
-        .centroid_points = false,
-        .position        = true,
-        .normal          = false,
-        .normal_flat     = false,
-        .normal_smooth   = false,
-        .tangent         = false,
-        .bitangent       = false,
-        .color           = false,
-        .texcoord        = false,
-        .id              = false
+    const erhe::primitive::Build_info build_info{
+        .primitive_types = {
+            .fill_triangles = true,
+        },
+        .buffer_info = {
+            .normal_style  = erhe::primitive::Normal_style::corner_normals,
+            .index_type    = gl::Draw_elements_type::unsigned_int,
+            .vertex_format = vertex_format,
+            .buffer_sink   = buffer_sink
+        }
     };
-    build_info.buffer.vertex_format = vertex_format;
 
     primitive_geometry = make_primitive(
         *geometry.get(),
@@ -422,10 +393,10 @@ auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrac
 }
 
 void draw_ray_hit(
-    erhe::application::Line_renderer& line_renderer,
-    const erhe::raytrace::Ray&        ray,
-    const erhe::raytrace::Hit&        hit,
-    const Ray_hit_style&              style
+    erhe::renderer::Line_renderer& line_renderer,
+    const erhe::raytrace::Ray&     ray,
+    const erhe::raytrace::Hit&     hit,
+    const Ray_hit_style&           style
 )
 {
     void* user_data     = hit.instance->get_user_data();

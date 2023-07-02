@@ -1,11 +1,10 @@
 #pragma once
 
+#include "hextiles.hpp"
 #include "coordinate.hpp"
 #include "terrain_type.hpp"
 #include "unit_type.hpp"
 #include "types.hpp"
-
-#include "erhe/components/components.hpp"
 
 #include <memory>
 #include <vector>
@@ -14,18 +13,9 @@ namespace hextiles
 {
 
 class Tiles
-    : public erhe::components::Component
 {
 public:
-    static constexpr std::string_view c_type_name{"Tiles"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Tiles ();
-    ~Tiles() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void initialize_component() override;
+    Tiles();
 
     // Public API
     auto get_terrain_from_tile             (terrain_tile_t terrain_tile) const -> terrain_t;
@@ -63,6 +53,8 @@ public:
     void load_terrain_replacement_rule_defs();
     void save_terrain_replacement_rule_defs();
 
+    void make_terrain_type_combo(const char* label, terrain_t& value);
+
 private:
     void load_terrain_defs_v4();
     void load_terrain_defs_v5();
@@ -84,6 +76,12 @@ private:
     std::vector<Unit_type>                m_unit_types;
 };
 
-extern Tiles* g_tiles;
+class Map;
+
+void update_group_terrain(
+    Tiles&          tiles,
+    Map&            map,
+    Tile_coordinate position
+);
 
 } // namespace hextiles

@@ -1,16 +1,14 @@
 #include "tools/transform/move_tool.hpp"
 
-#include "editor_log.hpp"
+#include "editor_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
-#include "tools/tools.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
-#include "tools/transform/rotate_tool.hpp"
 
-#include "erhe/application/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -25,42 +23,19 @@ namespace editor
 
 using namespace glm;
 
-Move_tool* g_move_tool{nullptr};
-
-Move_tool::Move_tool()
-    : erhe::components::Component{c_type_name}
+Move_tool::Move_tool(
+    Editor_context& editor_context,
+    Icon_set&       icon_set
+)
+    : Subtool{editor_context}
 {
-}
-
-Move_tool::~Move_tool() noexcept
-{
-    ERHE_VERIFY(g_move_tool == nullptr);
-}
-
-void Move_tool::deinitialize_component()
-{
-    ERHE_VERIFY(g_move_tool == this);
-    g_move_tool = nullptr;
-}
-
-void Move_tool::declare_required_components()
-{
-    require<Icon_set>();
-    require<Tools   >();
-}
-
-void Move_tool::initialize_component()
-{
-    ERHE_VERIFY(g_move_tool == nullptr);
-
     set_base_priority(c_priority);
-    set_description  (c_title);
+    set_description  ("Move Tool");
     set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
-    set_icon         (g_icon_set->icons.move);
-    g_tools->register_tool(this);
-
-    g_move_tool = this;
+    set_icon         (icon_set.icons.move);
 }
+
+Move_tool::~Move_tool() noexcept = default;
 
 void Move_tool::handle_priority_update(
     const int old_priority,
@@ -79,7 +54,7 @@ void Move_tool::imgui()
     ImGui::Checkbox("Translate Snap Enable", &shared.settings.translate_snap_enable);
     const float translate_snap_values[] = {  0.001f,  0.01f,  0.1f,  0.2f,  0.25f,  0.5f,  1.0f,  2.0f,  5.0f,  10.0f,  100.0f };
     const char* translate_snap_items [] = { "0.001", "0.01", "0.1", "0.2", "0.25", "0.5", "1.0", "2.0", "5.0", "10.0", "100.0" };
-    erhe::application::make_combo(
+    erhe::imgui::make_combo(
         "Translate Snap",
         m_translate_snap_index,
         translate_snap_items,
@@ -105,9 +80,7 @@ auto Move_tool::begin(
     return (axis_mask != 0) && (scene_view != nullptr);
 }
 
-auto Move_tool::update(
-    Scene_view* scene_view
-) -> bool
+auto Move_tool::update(Scene_view* scene_view) -> bool
 {
     if (scene_view == nullptr) {
         return false;
@@ -169,7 +142,7 @@ void Move_tool::update(const vec3 drag_position_in_world)
     const vec3 translation_vector  = drag_position_in_world - shared.initial_drag_position_in_world;
     const vec3 snapped_translation = snap(translation_vector);
 
-    g_transform_tool->adjust_translation(snapped_translation);
+    m_context.transform_tool->adjust_translation(snapped_translation);
 }
 
 } // namespace editor

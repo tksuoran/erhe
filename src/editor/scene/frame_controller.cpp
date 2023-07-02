@@ -1,7 +1,7 @@
 #include "scene/frame_controller.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/application/controller.hpp"
+#include "erhe/toolkit/simulation_variable.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
@@ -40,17 +40,16 @@ Frame_controller::Frame_controller()
     update();
 }
 
-auto Frame_controller::get_controller(
-    const Control control
-) -> erhe::application::Controller&
+auto Frame_controller::get_variable(const Variable control) 
+-> erhe::toolkit::Simulation_variable&
 {
     switch (control) {
-        case Control::translate_x: return translate_x;
-        case Control::translate_y: return translate_y;
-        case Control::translate_z: return translate_z;
-        case Control::rotate_x   : return rotate_x;
-        case Control::rotate_y   : return rotate_y;
-        case Control::rotate_z   : return rotate_z;
+        case Variable::translate_x: return translate_x;
+        case Variable::translate_y: return translate_y;
+        case Variable::translate_z: return translate_z;
+        case Variable::rotate_x   : return rotate_x;
+        case Variable::rotate_y   : return rotate_y;
+        case Variable::rotate_z   : return rotate_z;
         default: {
             ERHE_FATAL("bad control %04x", static_cast<unsigned int>(control));
         }

@@ -1,15 +1,16 @@
 #pragma once
 
-#include "erhe/application/imgui/imgui_window.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
-#include "erhe/components/components.hpp"
 #include "erhe/scene/transform.hpp"
 
 #include <vector>
 #include <memory>
 
-namespace erhe::scene
-{
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
@@ -21,25 +22,19 @@ namespace erhe::scene
 namespace editor
 {
 
+class Editor_context;
 class Node_physics;
 class Rendertarget_mesh;
 
 class Properties
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Properties"};
-    static constexpr std::string_view c_title{"Properties"};
-    static constexpr uint32_t         c_type_hash{compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {})};
-
-    Properties ();
-    ~Properties() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    Properties(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              editor_context
+    );
 
     // Implements Imgui_window
     void imgui   () override;
@@ -56,8 +51,8 @@ private:
     void node_physics_properties(Node_physics& node_physics) const;
     void item_flags             (const std::shared_ptr<erhe::scene::Item>& item);
     void item_properties        (const std::shared_ptr<erhe::scene::Item>& item);
-};
 
-extern Properties* g_properties;
+    Editor_context& m_context;
+};
 
 } // namespace editor

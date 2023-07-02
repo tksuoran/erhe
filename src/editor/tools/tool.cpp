@@ -6,6 +6,11 @@
 namespace editor
 {
 
+Tool::Tool(Editor_context& editor_context)
+    : m_context{editor_context}
+{
+}
+
 Tool::~Tool() noexcept
 {
     m_hover_scene_view = nullptr;
@@ -32,6 +37,11 @@ auto Tool::get_base_priority() const -> int
 auto Tool::get_priority_boost() const -> int
 {
     return m_priority_boost;
+}
+
+void Tool::set_hover_scene_view(Scene_view* scene_view)
+{
+    m_hover_scene_view = scene_view;
 }
 
 auto Tool::get_hover_scene_view() const -> Scene_view*

@@ -1,11 +1,11 @@
 #include "tile_renderer.hpp"
-#include "texture_util.hpp"
+
 #include "tiles.hpp"
-#include "tile_shape.hpp"
+#include "hextiles.hpp"
 #include "hextiles_log.hpp"
 
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/graphics/shader_monitor.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/shader_monitor.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -19,9 +19,11 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/log/log_glm.hpp"
-#include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -51,20 +53,23 @@ static constexpr gl::Map_buffer_access_mask access_mask{
 using erhe::graphics::Shader_stages;
 
 Tile_renderer::Frame_resources::Frame_resources(
+    erhe::graphics::Instance&                 graphics_instance,
     const size_t                              vertex_count,
-    erhe::graphics::Shader_stages*            shader_stages,
+    erhe::graphics::Shader_stages&            shader_stages,
     erhe::graphics::Vertex_attribute_mappings attribute_mappings,
     erhe::graphics::Vertex_format&            vertex_format,
-    erhe::graphics::Buffer*                   index_buffer,
+    erhe::graphics::Buffer&                   index_buffer,
     const size_t                              slot
 )
     : vertex_buffer{
+        graphics_instance,
         gl::Buffer_target::array_buffer,
         vertex_format.stride() * vertex_count,
         storage_mask,
         access_mask
     }
     , projection_buffer{
+        graphics_instance,
         gl::Buffer_target::uniform_buffer,
         1024, // TODO
         storage_mask,
@@ -75,13 +80,13 @@ Tile_renderer::Frame_resources::Frame_resources(
             attribute_mappings,
             vertex_format,
             &vertex_buffer,
-            index_buffer
+            &index_buffer
         )
     }
     , pipeline{
-        {
+        erhe::graphics::Pipeline_data{
             .name           = "Map renderer",
-            .shader_stages  = shader_stages,
+            .shader_stages  = &shader_stages,
             .vertex_input   = &vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
@@ -94,10 +99,81 @@ Tile_renderer::Frame_resources::Frame_resources(
     projection_buffer.set_debug_label(fmt::format("Map Renderer Projection {}", slot));
 }
 
-Tile_renderer* g_tile_renderer{nullptr};
+constexpr size_t uint32_primitive_restart{0xffffffffu};
+constexpr size_t per_quad_vertex_count   {4}; // corner count
+constexpr size_t per_quad_index_count    {per_quad_vertex_count + 1}; // Plus one for primitive restart
+constexpr size_t max_quad_count          {1'000'000}; // each quad consumes 4 indices
+constexpr size_t index_count             {max_quad_count * per_quad_index_count};
+constexpr size_t index_stride            {4};
 
-Tile_renderer::Tile_renderer()
-    : Component{c_type_name}
+auto Tile_renderer::make_prototype() const
+-> erhe::graphics::Shader_stages_prototype
+{
+    erhe::graphics::Shader_stages_create_info create_info{
+        .instance                  = m_graphics_instance,
+        .name                      = "tile",
+        .interface_blocks          = { &m_projection_block },
+        .vertex_attribute_mappings = &m_attribute_mappings,
+        .fragment_outputs          = &m_fragment_outputs,
+        .default_uniform_block     = m_graphics_instance.info.use_bindless_texture
+            ? nullptr
+            : &m_default_uniform_block,
+        .shaders = {
+            { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path{"tile.vert"} },
+            { gl::Shader_type::fragment_shader, m_shader_path / std::filesystem::path{"tile.frag"} }
+        },
+        .dump_interface    = true,
+        .dump_final_source = true
+    };
+
+    if (m_graphics_instance.info.gl_version < 430) {
+        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_storage_buffer_object));
+        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_storage_buffer_object"});
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_shader_storage_buffer_object"});
+    }
+    if (m_graphics_instance.info.gl_version < 460) {
+        ERHE_VERIFY(gl::is_extension_supported(gl::Extension::Extension_GL_ARB_shader_draw_parameters));
+        create_info.extensions.push_back({gl::Shader_type::vertex_shader,   "GL_ARB_shader_draw_parameters"});
+        create_info.defines.push_back({"gl_DrawID", "gl_DrawIDARB"});
+    }
+
+    if (m_graphics_instance.info.use_bindless_texture) {
+        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
+        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
+    }
+
+    return erhe::graphics::Shader_stages_prototype{create_info};
+}
+
+auto Tile_renderer::make_program(
+    erhe::graphics::Shader_stages_prototype&& prototype
+) const -> erhe::graphics::Shader_stages
+{
+    if (!prototype.is_valid()) {
+        log_startup->error("current directory is {}", std::filesystem::current_path().string());
+        log_startup->error("Compiling shader program {} failed", prototype.name());
+        return erhe::graphics::Shader_stages{prototype.name()};
+    }
+
+    return erhe::graphics::Shader_stages{std::move(prototype)};
+}
+
+Tile_renderer::Tile_renderer(
+    erhe::graphics::Instance&    graphics_instance,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    Tiles&                       tiles
+)
+    : m_graphics_instance    {graphics_instance}
+    , m_imgui_renderer       {imgui_renderer}
+    , m_tiles                {tiles}
+
+    , m_default_uniform_block{graphics_instance}
+    , m_texture_sampler{
+        graphics_instance.info.use_bindless_texture
+            ? nullptr
+            : m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, 0)
+    }
+
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",
@@ -106,138 +182,51 @@ Tile_renderer::Tile_renderer()
         }
     }
     , m_attribute_mappings{
-        erhe::graphics::Vertex_attribute_mapping{
-            .layout_location = 0,
-            .shader_type     = gl::Attribute_type::float_vec2,
-            .name            = "a_position",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::position
-            }
-        },
-        erhe::graphics::Vertex_attribute_mapping{
-            .layout_location = 1,
-            .shader_type     = gl::Attribute_type::float_vec4,
-            .name            = "a_color",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::color
-            }
-        },
-        erhe::graphics::Vertex_attribute_mapping{
-#if 1
-            .layout_location = 2,
-            .shader_type     = gl::Attribute_type::float_vec2,
-            .name            = "a_texcoord",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
-            }
-#else
-            .layout_location = 2,
-            .shader_type     = gl::Attribute_type::unsigned_int_vec2,
-            .name            = "a_tile_corner",
-            .src_usage =
-            {
-                .type        = erhe::graphics::Vertex_attribute::Usage_type::custom
-            }
-#endif
+        graphics_instance,
+        {
+            erhe::graphics::Vertex_attribute_mapping::a_position_float_vec2(),
+            erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
+            erhe::graphics::Vertex_attribute_mapping::a_texcoord_float_vec2(),
         }
     }
     , m_vertex_format{
-        erhe::graphics::Vertex_attribute{
-            .usage =
-            {
-                .type     = erhe::graphics::Vertex_attribute::Usage_type::position
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
-        },
-        erhe::graphics::Vertex_attribute{
-            .usage =
-            {
-                .type       = erhe::graphics::Vertex_attribute::Usage_type::color
-            },
-            .shader_type    = gl::Attribute_type::float_vec4,
-            .data_type =
-            {
-                .type       = gl::Vertex_attrib_type::unsigned_byte,
-                .normalized = true,
-                .dimension  = 4
-            }
-        },
-        erhe::graphics::Vertex_attribute{
-#if 1
-            .usage =
-            {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::tex_coord
-            },
-            .shader_type   = gl::Attribute_type::float_vec2,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::float_,
-                .dimension = 2
-            }
-#else
-            .usage =
-            {
-                .type      = erhe::graphics::Vertex_attribute::Usage_type::custom
-            },
-            .shader_type   = gl::Attribute_type::unsigned_int_vec2,
-            .data_type =
-            {
-                .type      = gl::Vertex_attrib_type::unsigned_int,
-                .dimension = 2
-            }
-#endif
-        }
+        erhe::graphics::Vertex_attribute::position_float2 (),
+        erhe::graphics::Vertex_attribute::color_ubyte4    (),
+        erhe::graphics::Vertex_attribute::texcoord0_float2()
     }
-{
-}
-
-Tile_renderer::~Tile_renderer()
-{
-    ERHE_VERIFY(g_tile_renderer == this);
-    g_tile_renderer = nullptr;
-}
-
-void Tile_renderer::declare_required_components()
-{
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Shader_monitor     >();
-}
-
-static constexpr std::string_view c_text_renderer_initialize_component{"Tile_renderer::initialize_component()"};
-
-void Tile_renderer::initialize_component()
-{
-    ERHE_VERIFY(g_tile_renderer == nullptr);
-
-    const erhe::application::Scoped_gl_context gl_context;
-
-    erhe::graphics::Scoped_debug_group pass_scope{c_text_renderer_initialize_component};
-
-    m_projection_block = std::make_unique<erhe::graphics::Shader_resource>("projection", 0, erhe::graphics::Shader_resource::Type::uniform_block);
-
-    constexpr size_t uint32_primitive_restart{0xffffffffu};
-    constexpr size_t per_quad_vertex_count   {4}; // corner count
-    constexpr size_t per_quad_index_count    {per_quad_vertex_count + 1}; // Plus one for primitive restart
-    constexpr size_t max_quad_count          {1'000'000}; // each quad consumes 4 indices
-    constexpr size_t index_count             {max_quad_count * per_quad_index_count};
-    constexpr size_t index_stride            {4};
-
-    m_index_buffer = std::make_unique<erhe::graphics::Buffer>(
+    , m_index_buffer{
+        graphics_instance,
         gl::Buffer_target::element_array_buffer,
         index_stride * index_count,
         gl::Buffer_storage_mask::map_write_bit
-    );
-
+    }
+    , m_nearest_sampler{
+        erhe::graphics::Sampler_create_info{
+            .min_filter  = gl::Texture_min_filter::nearest,
+            .mag_filter  = gl::Texture_mag_filter::nearest,
+            .debug_label = "Tile_renderer"
+        }
+    }
+    , m_projection_block{
+        graphics_instance,
+        "projection",
+        0,
+        erhe::graphics::Shader_resource::Type::uniform_block
+    }
+    , m_clip_from_window         {m_projection_block.add_mat4 ("clip_from_window")}
+    , m_texture_handle           {m_projection_block.add_uvec2("texture")}
+    , m_u_clip_from_window_size  {m_clip_from_window->size_bytes()}
+    , m_u_clip_from_window_offset{m_clip_from_window->offset_in_parent()}
+    , m_u_texture_size           {m_texture_handle->size_bytes()}
+    , m_u_texture_offset         {m_texture_handle->offset_in_parent()}
+    , m_shader_path              {std::filesystem::path{"res"} / std::filesystem::path{"shaders"}}
+    , m_shader_stages            {make_program(make_prototype())}
+    , m_vertex_writer            {graphics_instance}
+    , m_projection_writer        {graphics_instance}
+        
+{
     erhe::graphics::Scoped_buffer_mapping<uint32_t> index_buffer_map{
-        *m_index_buffer.get(),
+        m_index_buffer,
         0,
         index_count,
         gl::Map_buffer_access_mask::map_write_bit
@@ -257,65 +246,12 @@ void Tile_renderer::initialize_component()
         offset += 5;
     }
 
-    m_nearest_sampler = std::make_unique<erhe::graphics::Sampler>(
-        erhe::graphics::Sampler_create_info{
-            .min_filter  = gl::Texture_min_filter::nearest,
-            .mag_filter  = gl::Texture_mag_filter::nearest,
-            .debug_label = "Tile_renderer"
-        }
-    );
-
-    const auto clip_from_window = m_projection_block->add_mat4 ("clip_from_window");
-    const auto texture_handle   = m_projection_block->add_uvec2("texture");
-    m_u_clip_from_window_size   = clip_from_window->size_bytes();
-    m_u_clip_from_window_offset = clip_from_window->offset_in_parent();
-    m_u_texture_size            = texture_handle->size_bytes();
-    m_u_texture_offset          = texture_handle->offset_in_parent();
-
-    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-    const std::filesystem::path vs_path = shader_path / std::filesystem::path("tile.vert");
-    const std::filesystem::path fs_path = shader_path / std::filesystem::path("tile.frag");
-    Shader_stages::Create_info create_info{
-        .name                      = "tile",
-        .interface_blocks          = { m_projection_block.get() },
-        .vertex_attribute_mappings = &m_attribute_mappings,
-        .fragment_outputs          = &m_fragment_outputs,
-        .shaders = {
-            { gl::Shader_type::vertex_shader,   vs_path },
-            { gl::Shader_type::fragment_shader, fs_path }
-        }
-    };
-
-    if (erhe::graphics::Instance::info.use_bindless_texture) {
-        create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
-        create_info.defines.emplace_back("ERHE_BINDLESS_TEXTURE", "1");
-    } else {
-        m_default_uniform_block.add_sampler(
-            "s_texture",
-            gl::Uniform_type::sampler_2d,
-            0
-        );
-        create_info.default_uniform_block = &m_default_uniform_block;
-    }
-
-    Shader_stages::Prototype prototype{create_info};
-    m_shader_stages = std::make_unique<Shader_stages>(std::move(prototype));
-    if (erhe::application::g_shader_monitor != nullptr) {
-        erhe::application::g_shader_monitor->add(create_info, m_shader_stages.get());
-    }
-
     create_frame_resources(max_quad_count * per_quad_vertex_count);
 
     compose_tileset_texture();
-
-    g_tile_renderer = this;
 }
 
-//// void Tile_renderer::post_initialize()
-//// {
-////     m_pipeline_state_tracker = get<erhe::graphics::OpenGL_state_tracker>();
-////     m_tiles                  = get<Tiles>();
-//// }
+static constexpr std::string_view c_text_renderer_initialize_component{"Tile_renderer::initialize_component()"};
 
 void Tile_renderer::compose_tileset_texture()
 {
@@ -437,6 +373,7 @@ void Tile_renderer::compose_tileset_texture()
 
     // Texture will be created with additional per-player colored unit tiles
     erhe::graphics::Texture_create_info texture_create_info{
+        .instance        = m_graphics_instance,
         .target          = gl::Texture_target::texture_2d,
         .internal_format = to_gl(m_tileset_image.info.format),
         .use_mipmaps     = false,
@@ -476,12 +413,12 @@ void Tile_renderer::compose_tileset_texture()
         int y0 = ty0_special_unit_tiles * Tile_shape::height;
         for (int i = 0; i < max_player_count; ++i) {
             Player_unit_colors player_colors;
-            for (size_t s = 0; s < player_color_shade_count; ++s) {
-                const glm::vec4 color = m_tileset_image.get_pixel(x0 + s, y0 + i);
-                player_colors.shades[s] = color;
+            for (size_t j = 0; j < player_color_shade_count; ++j) {
+                const glm::vec4 color = m_tileset_image.get_pixel(x0 + j, y0 + i);
+                player_colors.shades[j] = color;
                 log_tiles->info(
                     "Player {} Shade {} Color: {}, {}, {}, {}",
-                    i, s,
+                    i, j,
                     color.r, color.g, color.b, color.a
                 );
             }
@@ -709,11 +646,12 @@ void Tile_renderer::create_frame_resources(size_t vertex_count)
 {
     for (size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_frame_resources.emplace_back(
+            m_graphics_instance,
             vertex_count,
-            m_shader_stages.get(),
+            m_shader_stages,
             m_attribute_mappings,
             m_vertex_format,
-            m_index_buffer.get(),
+            m_index_buffer,
             slot
         );
     }
@@ -780,10 +718,10 @@ void Tile_renderer::blit(
     const float u1 = static_cast<float>(src_x + width ) / static_cast<float>(m_tileset_texture->width());
     const float v1 = static_cast<float>(src_y + height) / static_cast<float>(m_tileset_texture->height());
 
-    const float& x0= dst_x0;
-    const float& y0= dst_y0;
-    const float& x1= dst_x1;
-    const float& y1= dst_y1;
+    const float& x0 = dst_x0;
+    const float& y0 = dst_y0;
+    const float& x1 = dst_x1;
+    const float& y1 = dst_y1;
 
     m_gpu_float_data[m_word_offset++] = x0;
     m_gpu_float_data[m_word_offset++] = y0;
@@ -824,7 +762,7 @@ void Tile_renderer::end()
 
 static constexpr std::string_view c_tile_renderer_render{"Tile_renderer::render()"};
 
-void Tile_renderer::render(erhe::scene::Viewport viewport)
+void Tile_renderer::render(erhe::toolkit::Viewport viewport)
 {
     if (m_index_count == 0) {
         return;
@@ -832,9 +770,9 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
 
     erhe::graphics::Scoped_debug_group pass_scope{c_tile_renderer_render};
 
-    const auto handle = erhe::graphics::get_handle(
+    const auto handle = m_graphics_instance.get_handle(
         *m_tileset_texture.get(),
-        *m_nearest_sampler.get()
+        m_nearest_sampler
     );
     //m_tileset_texture->get_handle();
 
@@ -877,21 +815,21 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
     //gl::invalidate_tex_image()
     gl::enable  (gl::Enable_cap::primitive_restart_fixed_index);
     gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    erhe::graphics::g_opengl_state_tracker->execute(pipeline);
+    m_graphics_instance.opengl_state_tracker.execute(pipeline);
 
     gl::bind_buffer_range(
         projection_buffer->target(),
-        static_cast<GLuint>    (m_projection_block->binding_point()),
+        static_cast<GLuint>    (m_projection_block.binding_point()),
         static_cast<GLuint>    (projection_buffer->gl_name()),
         static_cast<GLintptr>  (m_projection_writer.range.first_byte_offset),
         static_cast<GLsizeiptr>(m_projection_writer.range.byte_count)
     );
 
-    if (erhe::graphics::Instance::info.use_bindless_texture) {
+    if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_resident_arb(handle);
     } else {
         gl::bind_texture_unit(0, m_tileset_texture->gl_name());
-        gl::bind_sampler     (0, m_nearest_sampler->gl_name());
+        gl::bind_sampler     (0, m_nearest_sampler.gl_name());
     }
 
     gl::draw_elements(
@@ -901,7 +839,7 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
         reinterpret_cast<const void*>(m_index_range_first * 4)
     );
 
-    if (erhe::graphics::Instance::info.use_bindless_texture) {
+    if (m_graphics_instance.info.use_bindless_texture) {
         gl::make_texture_handle_non_resident_arb(handle);
     }
 
@@ -909,6 +847,142 @@ void Tile_renderer::render(erhe::scene::Viewport viewport)
 
     m_index_range_first += m_index_count;
     m_index_count = 0;
+}
+
+auto Tile_renderer::terrain_image(
+    const terrain_tile_t terrain_tile,
+    const int            scale
+) -> bool
+{
+    const Pixel_coordinate& texel = get_terrain_shape(terrain_tile);
+    const glm::vec2 uv0{
+        static_cast<float>(texel.x) / static_cast<float>(m_tileset_texture->width()),
+        static_cast<float>(texel.y) / static_cast<float>(m_tileset_texture->height()),
+    };
+    const glm::vec2 uv1 = uv0 + glm::vec2{
+        static_cast<float>(Tile_shape::full_width) / static_cast<float>(m_tileset_texture->width()),
+        static_cast<float>(Tile_shape::height) / static_cast<float>(m_tileset_texture->height()),
+    };
+
+    return m_imgui_renderer.image(
+        m_tileset_texture,
+        Tile_shape::full_width * scale,
+        Tile_shape::height * scale,
+        uv0,
+        uv1,
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
+}
+
+auto Tile_renderer::unit_image(
+    const unit_tile_t unit_tile,
+    const int         scale
+) -> bool
+{
+    const auto&     texel = get_unit_shape(unit_tile);
+    const glm::vec2 uv0{
+        static_cast<float>(texel.x) / static_cast<float>(m_tileset_texture->width()),
+        static_cast<float>(texel.y) / static_cast<float>(m_tileset_texture->height()),
+    };
+    const glm::vec2 uv1 = uv0 + glm::vec2{
+        static_cast<float>(Tile_shape::full_width) / static_cast<float>(m_tileset_texture->width()),
+        static_cast<float>(Tile_shape::height    ) / static_cast<float>(m_tileset_texture->height()),
+    };
+
+    return m_imgui_renderer.image(
+        m_tileset_texture,
+        Tile_shape::full_width * scale,
+        Tile_shape::height * scale,
+        uv0,
+        uv1,
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
+}
+
+void Tile_renderer::show_texture()
+{
+    const glm::vec2 uv0{0.0f, 0.0f};
+    const glm::vec2 uv1{1.0f, 1.0f};
+
+    m_imgui_renderer.image(
+        m_tileset_texture,
+        m_tileset_texture->width(),
+        m_tileset_texture->height(),
+        uv0,
+        uv1,
+        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
+        false
+    );
+}
+
+void Tile_renderer::make_terrain_type_combo(const char* label, terrain_t& value)
+{
+    auto&       preview_terrain = m_tiles.get_terrain_type(value);
+    const char* preview_value   = preview_terrain.name.c_str();
+
+    ImGui::SetNextItemWidth(100.0f);
+    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge)) {
+        const terrain_t end = static_cast<unit_t>(m_tiles.get_terrain_type_count());
+        for (terrain_t i = 0; i < end; i++) {
+            terrain_tile_t terrain_tile = m_tiles.get_terrain_tile_from_terrain(i);
+            auto&          terrain_type = m_tiles.get_terrain_type(i);
+            const auto     id           = fmt::format("##{}-{}", label, i);
+            ImGui::PushID(id.c_str());
+            bool is_selected = (value == i);
+            if (terrain_image(terrain_tile, 1)) {
+                value = i;
+            }
+            ImGui::SameLine();
+            if (ImGui::Selectable(terrain_type.name.c_str(), is_selected)) {
+                value = i;
+            }
+
+            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+}
+
+void Tile_renderer::make_unit_type_combo(
+    const char* label,
+    unit_t&     value,
+    const int   player
+)
+{
+    auto&       preview_unit  = m_tiles.get_unit_type(value);
+    const char* preview_value = preview_unit.name.c_str();
+
+    ImGui::SetNextItemWidth(100.0f);
+    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge)) {
+        const unit_t end = static_cast<unit_t>(m_tiles.get_unit_type_count());
+        for (unit_t i = 0; i < end; i++) {
+            unit_tile_t unit_tile = get_single_unit_tile(player, i);
+            Unit_type&  unit_type = m_tiles.get_unit_type(i);
+            const auto  id        = fmt::format("##{}-{}", label, i);
+            ImGui::PushID(id.c_str());
+            bool is_selected = (value == i);
+            if (unit_image(unit_tile, 1)) {
+                value = i;
+            }
+            ImGui::SameLine();
+            if (ImGui::Selectable(unit_type.name.c_str(), is_selected)) {
+                value = i;
+            }
+
+            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
 }
 
 } // namespace hextiles
@@ -1030,7 +1104,7 @@ void Tile_renderer::blit_tile(
             for (size_t s = 0; s < player_color_shade_count; ++s) {
                 const glm::vec4 color = m_tileset_image.get_pixel(x0 + s, y0 + i);
                 player_colors.shades[s] = color;
-                log_tiles.info(
+                log_c.tiles->info(
                     "Player {} Shader {} Color: {}, {}, {}, {}",
                     i, s,
                     color.r, color.g, color.b, color.a

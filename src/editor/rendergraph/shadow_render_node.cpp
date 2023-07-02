@@ -1,20 +1,24 @@
 #include "rendergraph/shadow_render_node.hpp"
-#include "renderers/mesh_memory.hpp"
+
+#include "editor_context.hpp"
 #include "editor_log.hpp"
+#include "renderers/mesh_memory.hpp"
 
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/renderer/shadow_renderer.hpp"
+#include "erhe/scene_renderer/shadow_renderer.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -26,32 +30,36 @@ using erhe::graphics::Texture;
 
 
 Shadow_render_node::Shadow_render_node(
-    Scene_view& scene_view,
-    const int   resolution,
-    const int   light_count,
-    const bool  reverse_depth
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_context&                 editor_context,
+    Scene_view&                     scene_view,
+    const int                       resolution,
+    const int                       light_count
 )
-    : erhe::application::Rendergraph_node{
-        "shadow_maps" // TODO fmt::format("Shadow render {}", viewport_window->name())
-    }
+    // TODO fmt::format("Shadow render {}", viewport_window->name())
+    : erhe::rendergraph::Rendergraph_node{rendergraph, "shadow_maps"} 
+    , m_context   {editor_context}
     , m_scene_view{scene_view}
 {
     register_output(
-        erhe::application::Resource_routing::Resource_provided_by_producer,
+        erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
         "shadow_maps",
-        erhe::application::Rendergraph_node_key::shadow_maps
+        erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
 
-    reconfigure(resolution, light_count, reverse_depth);
+    reconfigure(graphics_instance, resolution, light_count);
 }
 
 void Shadow_render_node::reconfigure(
-    const int  resolution,
-    const int  light_count,
-    const bool reverse_depth
+    erhe::graphics::Instance& graphics_instance,
+    const int                 resolution,
+    const int                 light_count
 )
 {
     log_render->info("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
+
+    const bool reverse_depth = graphics_instance.configuration.reverse_depth;
     {
         ERHE_PROFILE_SCOPE("allocating shadow map array texture");
 
@@ -59,11 +67,11 @@ void Shadow_render_node::reconfigure(
 
         if (light_count > 0) {
             m_texture = std::make_shared<Texture>(
-                Texture::Create_info
-                {
+                erhe::graphics::Texture_create_info {
+                    .instance        = graphics_instance,
                     .target          = gl::Texture_target::texture_2d_array,
                     .internal_format = gl::Internal_format::depth_component32f,
-                    //.sparse          = erhe::graphics::Instance::info.use_sparse_texture,
+                    //.sparse          = erhe::graphics::g_instance->info.use_sparse_texture,
                     .width           = resolution,
                     .height          = resolution,
                     .depth           = light_count
@@ -122,10 +130,10 @@ void Shadow_render_node::execute_rendergraph_node()
 
     scene_root->sort_lights();
 
-    erhe::renderer::g_shadow_renderer->render(
-        erhe::renderer::Shadow_renderer::Render_parameters{
-            .vertex_input_state    = g_mesh_memory->get_vertex_input(),
-            .index_type            = g_mesh_memory->gl_index_type(),
+    m_context.shadow_renderer->render(
+        erhe::scene_renderer::Shadow_renderer::Render_parameters{
+            .vertex_input_state    = &m_context.mesh_memory->vertex_input,
+            .index_type            = m_context.mesh_memory->buffer_info.index_type,
 
             .view_camera           = camera.get(),
             ////.view_camera_viewport  = m_viewport_window->projection_viewport(),
@@ -140,7 +148,7 @@ void Shadow_render_node::execute_rendergraph_node()
 }
 
 [[nodiscard]] auto Shadow_render_node::get_producer_output_texture(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     int                                       depth
 ) const -> std::shared_ptr<erhe::graphics::Texture>
@@ -152,14 +160,14 @@ void Shadow_render_node::execute_rendergraph_node()
 }
 
 [[nodiscard]] auto Shadow_render_node::get_producer_output_viewport(
-    const erhe::application::Resource_routing resource_routing,
+    const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::scene::Viewport
+) const -> erhe::toolkit::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
-    ERHE_VERIFY(key == erhe::application::Rendergraph_node_key::shadow_maps);
+    ERHE_VERIFY(key == erhe::rendergraph::Rendergraph_node_key::shadow_maps);
     return m_viewport;
 }
 
@@ -173,7 +181,7 @@ void Shadow_render_node::execute_rendergraph_node()
     return m_scene_view;
 }
 
-[[nodiscard]] auto Shadow_render_node::get_light_projections() -> erhe::renderer::Light_projections&
+[[nodiscard]] auto Shadow_render_node::get_light_projections() -> erhe::scene_renderer::Light_projections&
 {
     return m_light_projections;
 }
@@ -183,7 +191,7 @@ auto Shadow_render_node::get_texture() const -> std::shared_ptr<erhe::graphics::
     return m_texture;
 }
 
-auto Shadow_render_node::get_viewport() const -> erhe::scene::Viewport
+auto Shadow_render_node::get_viewport() const -> erhe::toolkit::Viewport
 {
     return m_viewport;
 }
@@ -198,7 +206,7 @@ auto Shadow_render_node::get_viewport() const -> erhe::scene::Viewport
 
 
 #if 0
-        if (erhe::graphics::Instance::info.use_sparse_texture) {
+        if (erhe::graphics::g_instance->info.use_sparse_texture) {
             // commit the whole texture for now
             gl::texture_page_commitment_ext(
                 m_texture->gl_name(),

@@ -13,6 +13,7 @@
 namespace erhe::graphics
 {
 
+class Instance;
 class Vertex_attribute;
 
 // Shader resource represents data or data structure that can
@@ -64,13 +65,15 @@ public:
     [[nodiscard]] static auto c_str(Precision v) -> const char*;
 
     // Struct definition
-    explicit Shader_resource(
+    Shader_resource(
+        Instance&              instance,
         const std::string_view struct_type_name,
         Shader_resource*       parent = nullptr
     );
 
     // Struct member
     Shader_resource(
+        Instance&                        instance,
         const std::string_view           struct_member_name,
         gsl::not_null<Shader_resource*>  struct_type,
         const std::optional<std::size_t> array_size = {},
@@ -79,6 +82,7 @@ public:
 
     // Block (uniform block or shader storage block)
     Shader_resource(
+        Instance&                        instance,
         const std::string_view           block_name,
         int                              binding_point,
         Type                             block_type,
@@ -87,6 +91,7 @@ public:
 
     // Basic type
     Shader_resource(
+        Instance&                        instance,
         std::string_view                 basic_name,
         gl::Uniform_type                 basic_type,
         const std::optional<std::size_t> array_size = {},
@@ -95,6 +100,7 @@ public:
 
     // Sampler
     Shader_resource(
+        Instance&                        instance,
         const std::string_view           sampler_name,
         gsl::not_null<Shader_resource*>  parent,
         int                              location,
@@ -103,8 +109,8 @@ public:
         const std::optional<int>         dedicated_texture_unit = {}
     );
 
-    // Constructor with no arguments creates default uniform block
-    Shader_resource();
+    // Constructor for creating  default uniform block
+    Shader_resource(Instance& instance);
 
     ~Shader_resource() noexcept;
 
@@ -112,11 +118,11 @@ public:
 
     Shader_resource(Shader_resource&& other) = default;
 
-    [[nodiscard]] auto is_array                    () const -> bool;
-    [[nodiscard]] auto type                        () const -> Type;
-    [[nodiscard]] auto name                        () const -> const std::string&;
-    [[nodiscard]] auto array_size                  () const -> std::optional<std::size_t>;
-    [[nodiscard]] auto basic_type                  () const -> gl::Uniform_type;
+    [[nodiscard]] auto is_array        () const -> bool;
+    [[nodiscard]] auto type            () const -> Type;
+    [[nodiscard]] auto name            () const -> const std::string&;
+    [[nodiscard]] auto array_size      () const -> std::optional<std::size_t>;
+    [[nodiscard]] auto basic_type      () const -> gl::Uniform_type;
 
     // Only? for uniforms in default uniform block
     // For default uniform block, this is the next available location.
@@ -219,6 +225,8 @@ private:
     void align_offset_to(const unsigned int alignment);
 
     void indent(std::stringstream& ss, const int indent_level) const;
+
+    Instance&                  m_instance;
 
     // Any shader type declaration
     Type                       m_type{Type::default_uniform_block};

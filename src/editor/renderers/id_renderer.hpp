@@ -1,12 +1,12 @@
 #pragma once
 
-#include "erhe/renderer/camera_buffer.hpp"
+#include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/renderer/draw_indirect_buffer.hpp"
-#include "erhe/renderer/primitive_buffer.hpp"
+#include "erhe/scene_renderer/camera_buffer.hpp"
+#include "erhe/scene_renderer/primitive_buffer.hpp"
 
-#include "erhe/components/components.hpp"
 #include "erhe/graphics/pipeline.hpp"
-#include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/viewport.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -16,33 +16,31 @@
 
 typedef struct __GLsync *GLsync;
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Framebuffer;
     class Gpu_timer;
+    class Instance;
     class Renderbuffer;
     class Texture;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
     class Mesh;
+}
+namespace erhe::scene_renderer {
+    class Program_interface;
 }
 
 namespace editor
 {
 
+class Programs;
+class Mesh_memory;
+
 class Id_renderer
-    : public erhe::components::Component
 {
 public:
-    class Config
-    {
-    public:
-        bool enabled{true};
-    };
-    Config config;
+    bool enabled{true};
 
     class Id_query_result
     {
@@ -55,35 +53,30 @@ public:
         bool                               valid               {false};
     };
 
-    static constexpr std::string_view c_type_name{"Id_renderer"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Id_renderer ();
-    ~Id_renderer() noexcept override;
-
-    // Implements Component
-    auto get_type_hash              () const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
+    Id_renderer(
+        erhe::graphics::Instance&                graphics_instance,
+        erhe::scene_renderer::Program_interface& program_interface,
+        Mesh_memory&                             mesh_memory,
+        Programs&                                programs
+    );
 
     // Public API
     class Render_parameters
     {
     public:
-        const erhe::scene::Viewport& viewport;
-        const erhe::scene::Camera*   camera;
+        const erhe::toolkit::Viewport& viewport;
+        const erhe::scene::Camera&     camera;
         const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
         const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
         const int                    x;
         const int                    y;
     };
     void render(const Render_parameters& parameters);
+    void next_frame();
 
     [[nodiscard]] auto get(const int x, const int y, uint32_t& id, float& depth) -> bool;
     [[nodiscard]] auto get(const int x, const int y) -> Id_query_result;
 
-    void next_frame();
 
 private:
     static constexpr std::size_t s_frame_resources_count = 4;
@@ -100,7 +93,10 @@ private:
             Read_complete
         };
 
-        explicit Id_frame_resources(const std::size_t slot);
+        Id_frame_resources(
+            erhe::graphics::Instance& graphics_instance,
+            const std::size_t         slot
+        );
 
         Id_frame_resources(const Id_frame_resources& other) = delete;
         auto operator=    (const Id_frame_resources&) -> Id_frame_resources& = delete;
@@ -119,9 +115,13 @@ private:
 
     [[nodiscard]] auto current_id_frame_resources() -> Id_frame_resources&;
     void create_id_frame_resources();
-    void update_framebuffer       (const erhe::scene::Viewport viewport);
+    void update_framebuffer       (const erhe::toolkit::Viewport viewport);
 
-    erhe::scene::Viewport                         m_viewport{0, 0, 0, 0, true};
+    erhe::graphics::Instance&                     m_graphics_instance;
+    Mesh_memory&                                  m_mesh_memory;
+
+    bool                                          m_enabled{true};
+    erhe::toolkit::Viewport                       m_viewport{0, 0, 0, 0, true};
 
     erhe::graphics::Pipeline                      m_pipeline;
     erhe::graphics::Pipeline                      m_selective_depth_clear_pipeline;
@@ -132,7 +132,7 @@ private:
     std::unique_ptr<erhe::graphics::Framebuffer>  m_framebuffer;
     std::vector<Id_frame_resources>               m_id_frame_resources;
     std::size_t                                   m_current_id_frame_resource_slot{0};
-    std::unique_ptr<erhe::graphics::Gpu_timer>    m_gpu_timer;
+    erhe::graphics::Gpu_timer                     m_gpu_timer;
 
     class Range
     {
@@ -152,11 +152,9 @@ private:
     bool               m_use_renderbuffers{true};
     bool               m_use_textures     {false};
 
-    std::unique_ptr<erhe::renderer::Camera_buffer       > m_camera_buffers;
-    std::unique_ptr<erhe::renderer::Draw_indirect_buffer> m_draw_indirect_buffers;
-    std::unique_ptr<erhe::renderer::Primitive_buffer    > m_primitive_buffers;
+    erhe::scene_renderer::Camera_buffer    m_camera_buffers;
+    erhe::renderer::Draw_indirect_buffer   m_draw_indirect_buffers;
+    erhe::scene_renderer::Primitive_buffer m_primitive_buffers;
 };
-
-extern Id_renderer* g_id_renderer;
 
 }

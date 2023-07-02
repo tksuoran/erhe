@@ -1,7 +1,6 @@
 #pragma once
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
 

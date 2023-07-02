@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/graphics/instance.hpp"
+//#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/gl_objects.hpp"
 
 #include <gsl/span>
@@ -13,6 +13,7 @@ namespace erhe::graphics
 {
 
 class Buffer;
+class Instance;
 class Sampler;
 
 class Texture_create_info
@@ -26,6 +27,7 @@ public:
 
     [[nodiscard]] auto calculate_level_count() const -> int;
 
+    Instance&           instance;
     gl::Texture_target  target                {gl::Texture_target::texture_2d};
     gl::Internal_format internal_format       {gl::Internal_format::rgba8};
     bool                use_mipmaps           {false};
@@ -98,7 +100,7 @@ public:
     [[nodiscard]] auto gl_name             () const -> GLuint;
     [[nodiscard]] auto get_handle          () const -> uint64_t;
     [[nodiscard]] auto is_sparse           () const -> bool;
-    [[nodiscard]] auto get_sparse_tile_size() const -> Tile_size;
+    //// [[nodiscard]] auto get_sparse_tile_size() const -> Tile_size;
 
 private:
     Gl_texture          m_handle;
@@ -114,11 +116,6 @@ private:
     int                 m_depth                 {0};
     Buffer*             m_buffer                {nullptr};
 };
-
-[[nodiscard]] auto get_handle(
-    const Texture& texture,
-    const Sampler& sampler
-) -> uint64_t;
 
 [[nodiscard]] auto get_texture_from_handle(uint64_t handle) -> GLuint;
 [[nodiscard]] auto get_sampler_from_handle(uint64_t handle) -> GLuint;
@@ -146,26 +143,7 @@ public:
     gl::Pixel_type&     type
 ) -> bool;
 
-[[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
-
 [[nodiscard]] auto format_texture_handle(uint64_t handle) -> std::string;
 
-// For non-bindless textures
-class Texture_unit_cache
-{
-public:
-    Texture_unit_cache();
-
-    void reset(unsigned int base_texture_unit);
-    auto allocate_texture_unit(uint64_t handle) -> std::optional<std::size_t>;
-
-    auto bind(uint64_t fallback_handle) -> std::size_t;
-
-private:
-    unsigned int          m_base_texture_unit;
-    std::vector<uint64_t> m_texture_units;
-};
-
-extern Texture_unit_cache s_texture_unit_cache;
 
 } // namespace erhe::graphics

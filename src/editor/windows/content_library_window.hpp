@@ -2,34 +2,29 @@
 
 #include "scene/content_library.hpp"
 
-#include "erhe/application/imgui/imgui_window.hpp"
-
-#include "erhe/components/components.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include <memory>
 #include <thread>
 
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+
 namespace editor
 {
 
+class Editor_scenes;
+
 class Content_library_window
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"Content_library_window"};
-    static constexpr std::string_view c_title{"Content Library"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    Content_library_window();
-    ~Content_library_window() override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-    void deinitialize_component     () override;
-    void post_initialize            () override;
+    Content_library_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_scenes&               editor_scenes
+    );
 
     // Implements Imgui_window
     void imgui() override;
@@ -39,6 +34,8 @@ public:
     [[nodiscard]] auto selected_material() const -> std::shared_ptr<erhe::primitive::Material>;
 
 private:
+    Editor_scenes& m_editor_scenes;
+
     template <typename T>
     class Item_list
     {
@@ -112,7 +109,5 @@ private:
     Item_list<erhe::primitive::Material> m_materials;
     //// Item_list<erhe::graphics::Texture>   m_textures;
 };
-
-extern Content_library_window* g_content_library_window;
 
 } // namespace editor

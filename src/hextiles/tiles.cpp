@@ -1,13 +1,16 @@
 #include "tiles.hpp"
+
+#include "hextiles.hpp"
 #include "hextiles_log.hpp"
 #include "file_util.hpp"
+#include "map.hpp"
 #include "tile_shape.hpp"
 #include "types.hpp"
 
-#include <nlohmann/json.hpp>
 
 #include <gsl/assert>
 #include <gsl/util>
+#include <nlohmann/json.hpp>
 
 #include <cassert>
 #include <sstream>
@@ -15,30 +18,13 @@
 namespace hextiles
 {
 
-Tiles* g_tiles{nullptr};
-
 Tiles::Tiles()
-    : Component{c_type_name}
 {
-}
-
-Tiles::~Tiles() noexcept
-{
-    ERHE_VERIFY(g_tiles == this);
-    g_tiles = nullptr;
-}
-
-void Tiles::initialize_component()
-{
-    ERHE_VERIFY(g_tiles == nullptr);
-
     // Multishape groups
     load_terrain_defs();
     load_terrain_group_defs();
     load_terrain_replacement_rule_defs();
     load_unit_defs();
-
-    g_tiles = this;
 }
 
 using json = nlohmann::json;
@@ -924,6 +910,88 @@ void Tiles::add_terrain_replacement_rule()
     rule.secondary.push_back(terrain_t{0});
     rule.secondary.push_back(terrain_t{0});
     m_terrain_replacement_rules.push_back(rule);
+}
+
+void update_group_terrain(
+    Tiles&          tiles,
+    Map&            map,
+    Tile_coordinate position
+)
+{
+    const terrain_tile_t terrain_tile = map.get_terrain_tile(position);
+    const terrain_t      terrain      = tiles.get_terrain_from_tile(terrain_tile);
+    const auto&          terrain_type = tiles.get_terrain_type(terrain);
+    int                  group        = terrain_type.group;
+    if (group < 0) {
+        return;
+    }
+
+    uint32_t neighbor_mask;
+    bool promote;
+    bool demote;
+    size_t counter = 0u;
+    do {
+        promote = false;
+        demote  = false;
+        const Terrain_group& terrain_group = tiles.get_terrain_group(group);
+
+        neighbor_mask = 0u;
+        for (
+            direction_t direction = direction_first;
+            direction <= direction_last;
+            ++direction
+        ) {
+            const Tile_coordinate neighbor_position     = map.neighbor(position, direction);
+            const terrain_tile_t  neighbor_terrain_tile = map.get_terrain_tile(neighbor_position);
+            const terrain_t       neighbor_terrain      = tiles.get_terrain_from_tile(neighbor_terrain_tile);
+            const int neighbor_group = tiles.get_terrain_type(neighbor_terrain).group;
+            if (
+                (neighbor_group == group) ||
+                (
+                    (terrain_group.link_group[0] >= 0) &&
+                    (neighbor_group == terrain_group.link_group[0])
+                ) ||
+                (
+                    (terrain_group.link_group[1] >= 0) &&
+                    (neighbor_group == terrain_group.link_group[1])
+                ) ||
+                (
+                    (terrain_group.link_first[0] > 0) &&
+                    (terrain_group.link_last [0] > 0) &&
+                    (neighbor_terrain >= terrain_group.link_first[0]) &&
+                    (neighbor_terrain <= terrain_group.link_last [0])
+                ) ||
+                (
+                    (terrain_group.link_first[1] > 0) &&
+                    (terrain_group.link_last [1] > 0) &&
+                    (neighbor_terrain >= terrain_group.link_first[1]) &&
+                    (neighbor_terrain <= terrain_group.link_last [1])
+                )
+            ) {
+                neighbor_mask = neighbor_mask | (1u << direction);
+            }
+            if (
+                (terrain_group.demoted >= 0) &&
+                (neighbor_group != group) &&
+                (neighbor_group != terrain_group.demoted)
+            ) {
+                demote = true;
+            }
+        }
+        promote = (neighbor_mask == direction_mask_all) && (terrain_group.promoted > 0);
+        Expects((promote && demote) == false);
+        if (promote) {
+            group = terrain_group.promoted;
+        } else if (demote) {
+            group = terrain_group.demoted;
+        }
+    } while (
+        (promote || demote) &&
+        (++counter < 2U)
+    );
+
+    const terrain_tile_t updated_terrain_tile = tiles.get_terrain_group_tile(group, neighbor_mask);
+    map.set_terrain_tile(position, updated_terrain_tile);
 }
 
 } // namespace hextiles

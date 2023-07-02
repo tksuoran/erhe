@@ -9,13 +9,13 @@
 #include "tools/tools.hpp"
 #include "windows/physics_window.hpp"
 
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_renderer.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/time.hpp"
-#include "erhe/application/application_view.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "time.hpp"
+#include "erhe/toolkit/window_event_handler.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/physics/iworld.hpp"
@@ -40,7 +40,7 @@ Editor_view_client::~Editor_view_client() noexcept
 
 void Editor_view_client::declare_required_components()
 {
-    require<erhe::application::View>();
+    //// require<View>();
 }
 
 void Editor_view_client::initialize_component()
@@ -48,7 +48,7 @@ void Editor_view_client::initialize_component()
     ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(g_editor_view_client == nullptr);
 
-    erhe::application::g_view->set_client(this);
+    g_view->set_client(this);
     g_editor_view_client = this;
 }
 
@@ -62,7 +62,7 @@ void Editor_view_client::update_fixed_step(const erhe::components::Time_context&
     }
 }
 
-void Editor_view_client::update(erhe::application::View& view)
+void Editor_view_client::update(View& view)
 {
     static_cast<void>(view);
     {
@@ -71,16 +71,16 @@ void Editor_view_client::update(erhe::application::View& view)
         // animate_lights(time_context.time);
     }
 
-    erhe::application::g_time->update_once_per_frame();
+    g_time->update_once_per_frame();
 
     g_editor_rendering->begin_frame();
     g_editor_scenes->update_node_transforms();
     g_editor_scenes->update_network();
-    erhe::application::g_imgui_windows ->imgui_windows();
-    erhe::application::g_rendergraph   ->execute      ();
-    erhe::application::g_imgui_renderer->next_frame   ();
+    erhe::imgui::g_imgui_windows ->imgui_windows();
+    m_rendergraph->execute();
+    erhe::imgui::g_imgui_renderer->next_frame   ();
     g_editor_rendering->end_frame();
-    erhe::application::g_commands->on_update();
+    erhe::commands::g_commands->on_update();
  }
 
 } // namespace hextiles

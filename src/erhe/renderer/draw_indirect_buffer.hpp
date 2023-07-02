@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/application/renderers/multi_buffer.hpp"
+#include "erhe/renderer/multi_buffer.hpp"
 #include "erhe/primitive/enums.hpp"
 
 namespace erhe::scene
@@ -15,15 +15,17 @@ namespace erhe::renderer
 class Draw_indirect_buffer_range
 {
 public:
-    erhe::application::Buffer_range range;
-    std::size_t                     draw_indirect_count{0};
+    Buffer_range range;
+    std::size_t  draw_indirect_count{0};
 };
 
 class Draw_indirect_buffer
-    : public erhe::application::Multi_buffer
+    : public Multi_buffer
 {
 public:
-    explicit Draw_indirect_buffer(std::size_t max_draw_count);
+    explicit Draw_indirect_buffer(
+        erhe::graphics::Instance& graphics_instance
+    );
 
     // Can discard return value
     auto update(
@@ -32,11 +34,12 @@ public:
         const erhe::scene::Item_filter&                            filter
     ) -> Draw_indirect_buffer_range;
 
-    void debug_properties_window();
+    //// void debug_properties_window();
 
 private:
     bool m_max_index_count_enable{false};
     int  m_max_index_count       {256};
+    int  m_max_draw_count        {8000};
 };
 
 } // namespace erhe::renderer

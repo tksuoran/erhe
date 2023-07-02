@@ -1,34 +1,43 @@
 #pragma once
 
+#include "hextiles.hpp"
 #include "coordinate.hpp"
 
-#include "erhe/application/commands/command.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-
-#include "erhe/components/components.hpp"
+#include "erhe/commands/command.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include "etl/string.h"
 #include "etl/vector.h"
 
+namespace erhe::imgui
+{
+    class Imgui_windows;
+}
+
 namespace hextiles
 {
 
+class Game;
+class Map_editor;
+class Map_window;
+class Menu_window;
+class Tile_renderer;
+class Tiles;
+
 class New_game_window
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
+    : public erhe::imgui::Imgui_window
 {
 public:
-    static constexpr std::string_view c_type_name{"New_game_window"};
-    static constexpr std::string_view c_title{"New Game"};
-    static constexpr uint32_t c_type_hash = compiletime_xxhash::xxh32(c_type_name.data(), c_type_name.size(), {});
-
-    New_game_window ();
-    ~New_game_window() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
+    New_game_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Game&                        game,
+        Map_editor&                  map_editor,
+        Map_window&                  map_window,
+        Menu_window&                 menu_window,
+        Tile_renderer&               tile_renderer,
+        Tiles&                       tiles
+    );
 
     // Implements Imgui_window
     void imgui() override;
@@ -39,6 +48,13 @@ private:
     void place_cities              ();
     void select_player_start_cities();
     void create                    ();
+
+    Game&          m_game;
+    Map_editor&    m_map_editor;
+    Map_window&    m_map_window;
+    Menu_window&   m_menu_window;
+    Tile_renderer& m_tile_renderer;
+    Tiles&         m_tiles;
 
     etl::vector<etl::string<max_name_length>, max_player_count> m_player_names;
     etl::vector<size_t, max_city_count>       m_start_cities;
@@ -62,7 +78,5 @@ private:
     etl::vector<size_t, max_player_count> m_player_start_cities;
     int                                   m_minimum_player_start_city_distance{10};
 };
-
-extern New_game_window* g_new_game_window;
 
 } // namespace hextiles

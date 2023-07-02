@@ -1,7 +1,9 @@
 #include "tools/hotbar.hpp"
 
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_rendering.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/content_library.hpp"
@@ -19,14 +21,14 @@
 #endif
 #include "windows/operations.hpp"
 
-#include "erhe/application/commands/commands.hpp"
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/graphics/gl_context_provider.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_renderer.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/rendergraph/rendergraph.hpp"
-#include "erhe/application/rendergraph/rendergraph_node.hpp"
+#include "erhe/commands/commands.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/geometry/shapes/disc.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
@@ -73,89 +75,61 @@ namespace editor
 using glm::vec3;
 
 #pragma region Commmands
-Toggle_menu_visibility_command::Toggle_menu_visibility_command()
-    : Command{"Hotbar.toggle_visibility"}
+Toggle_menu_visibility_command::Toggle_menu_visibility_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           context
+)
+    : Command  {commands, "Hotbar.toggle_visibility"}
+    , m_context{context}
 {
 }
 
 auto Toggle_menu_visibility_command::try_call() -> bool
 {
-    g_hotbar->toggle_visibility();
+    m_context.hotbar->toggle_visibility();
     return true;
 }
 
-Hotbar_trackpad_command::Hotbar_trackpad_command()
-    : Command{"Hotbar.trackpad"}
+Hotbar_trackpad_command::Hotbar_trackpad_command(
+    erhe::commands::Commands& commands,
+    Editor_context&           context
+)
+    : Command  {commands, "Hotbar.trackpad"}
+    , m_context{context}
 {
 }
 
 auto Hotbar_trackpad_command::try_call_with_input(
-    erhe::application::Input_arguments& input
+    erhe::commands::Input_arguments& input
 ) -> bool
 {
-    return g_hotbar->try_call(input);
+    return m_context.hotbar->try_call(input);
 }
 #pragma endregion Commands
 
-Hotbar* g_hotbar{nullptr};
-
-Hotbar::Hotbar()
-    : erhe::application::Imgui_window{c_title}
-    , erhe::components::Component    {c_type_name}
+Hotbar::Hotbar(
+    erhe::commands::Commands&       commands,
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_context&                 editor_context,
+    Editor_message_bus&             editor_message_bus,
+    Headset_view&                   headset_view,
+    Icon_set&                       icon_set,
+    Mesh_memory&                    mesh_memory,
+    Scene_builder&                  scene_builder,
+    Tools&                          tools
+)
+    : Tool                       {editor_context}
+    , erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", "hotbar"}
+    , m_toggle_visibility_command{commands, editor_context}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-    , m_trackpad_command             {}
-    , m_trackpad_click_command       {m_trackpad_command}
+    , m_trackpad_command         {commands, editor_context}
+    , m_trackpad_click_command   {commands, m_trackpad_command}
 #endif
 {
-}
-
-Hotbar::~Hotbar() noexcept
-{
-    ERHE_VERIFY(g_hotbar == nullptr);
-}
-
-void Hotbar::deinitialize_component()
-{
-    ERHE_VERIFY(g_hotbar == this);
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    m_trackpad_click_command.set_host(nullptr);
-    m_trackpad_command.set_host(nullptr);
-#endif
-
-    m_rendertarget_mesh.reset();
-
-    m_rendertarget_node.reset();
-
-    m_rendertarget_imgui_viewport.reset();
-    m_slots.clear();
-    g_hotbar = nullptr;
-}
-
-void Hotbar::declare_required_components()
-{
-    require<erhe::application::Commands           >();
-    require<erhe::application::Configuration      >();
-    require<erhe::application::Gl_context_provider>();
-    require<erhe::application::Imgui_windows      >();
-    require<erhe::application::Rendergraph        >();
-    require<Editor_message_bus>();
-    require<Scene_builder     >();
-    require<Viewport_windows  >();
-    require<Icon_set          >();
-    require<Tools             >();
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-    require<Headset_view      >();
-#endif
-}
-
-void Hotbar::initialize_component()
-{
-    ERHE_PROFILE_FUNCTION();
-    ERHE_VERIFY(g_hotbar == nullptr);
-
-    g_hotbar = this;
-
-    auto ini = erhe::application::get_ini("erhe.ini", "hotbar");
+    auto ini = erhe::configuration::get_ini("erhe.ini", "hotbar");
     ini->get("enabled",    m_enabled);
     ini->get("show",       m_show);
     ini->get("use_radial", m_use_radial);
@@ -164,62 +138,73 @@ void Hotbar::initialize_component()
     ini->get("z",          m_z);
 
     if (!m_enabled) {
+        hide();
         return;
     }
 
-    auto& commands = *erhe::application::g_commands;
     commands.register_command   (&m_toggle_visibility_command);
     commands.bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_space, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);
-    const auto* headset = g_headset_view->get_headset();
+    const auto* headset = headset_view.get_headset();
     if (headset != nullptr)
     {
         auto& xr_right = headset->get_actions_right();
         m_trackpad_click_command.bind(xr_right.trackpad);
-        commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click, erhe::application::Button_trigger::Button_pressed);
+        commands.bind_command_to_xr_boolean_action(&m_trackpad_click_command, xr_right.trackpad_click, erhe::commands::Button_trigger::Button_pressed);
         m_trackpad_click_command.set_host(this);
         m_trackpad_command.set_host(this);
     }
+#else
+    static_cast<void>(headset_view);
 #endif
 
-    const erhe::application::Scoped_gl_context gl_context;
-
-    set_description(c_title);
+    set_description("Hotbar");
     set_flags      (Tool_flags::background);
-    g_tools->register_tool(this);
+    tools.register_tool(this);
 
     set_visibility(m_show);
 
+    auto* scene_root_ptr = scene_builder.get_scene_root().get();
+    auto& scene_root = *scene_root_ptr;
     if (m_use_radial) {
-        init_radial_menu();
+        hide();
+        init_radial_menu(mesh_memory, scene_root);
     } else {
-        erhe::application::g_imgui_windows->register_imgui_window(this, nullptr);
         this->Imgui_window::m_show_in_menu = false;
-        init_hotbar();
+        init_hotbar(graphics_instance, imgui_renderer, imgui_windows, rendergraph, editor_context, icon_set, mesh_memory, scene_root);
     }
 
-    g_editor_message_bus->add_receiver(
-        [&](Editor_message& message)
-        {
+    editor_message_bus.add_receiver(
+        [&](Editor_message& message) {
             on_message(message);
         }
     );
 }
 
-void Hotbar::init_hotbar()
+void Hotbar::init_hotbar(
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_context&                 editor_context,
+    Icon_set&                       icon_set,
+    Mesh_memory&                    mesh_memory,
+    Scene_root&                     scene_root
+)
 {
-    const auto& scene_root         = g_scene_builder->get_scene_root();
-    const auto& icon_rasterization = g_icon_set->get_hotbar_rasterization();
+    const auto& icon_rasterization = icon_set.get_hotbar_rasterization();
     const int   icon_size          = icon_rasterization.get_size();
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
+        graphics_instance,
+        mesh_memory,
         icon_size * 8,
         icon_size,
         4000.0f
     );
-    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
+    m_rendertarget_mesh->mesh_data.layer_id = scene_root.layers().rendertarget()->id;
 
     m_rendertarget_mesh->enable_flag_bits(
         erhe::scene::Item_flags::visible     |
@@ -227,6 +212,10 @@ void Hotbar::init_hotbar()
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
+        imgui_renderer,
+        imgui_windows,
+        rendergraph,
+        editor_context,
         m_rendertarget_mesh.get(),
         "Hotbar Viewport",
         false
@@ -243,12 +232,15 @@ void Hotbar::init_hotbar()
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
     // Also registers rendertarget node
-    erhe::application::g_imgui_windows->register_imgui_viewport(m_rendertarget_imgui_viewport);
+    imgui_windows.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
 
     this->set_viewport(m_rendertarget_imgui_viewport.get());
 }
 
-void Hotbar::init_radial_menu()
+void Hotbar::init_radial_menu(
+    Mesh_memory& mesh_memory,
+    Scene_root&  scene_root
+)
 {
     const float outer_radius = 1.0f;
     const float inner_radius = 0.125f;
@@ -274,7 +266,14 @@ void Hotbar::init_radial_menu()
         )
     );
 
-    auto primitive_geometry = erhe::primitive::make_primitive(*disc_geometry_shared.get(), g_mesh_memory->build_info);
+    auto primitive_geometry = erhe::primitive::make_primitive(
+        *disc_geometry_shared.get(),
+        erhe::primitive::Build_info{
+            .primitive_types = { .fill_triangles = true },
+            .buffer_info     = mesh_memory.buffer_info
+        }
+    );
+
     auto raytrace_primitive = std::make_shared<Raytrace_primitive>(disc_geometry_shared);
 
     m_radial_menu_background_mesh = std::make_shared<erhe::scene::Mesh>(
@@ -287,12 +286,11 @@ void Hotbar::init_radial_menu()
         }
     );
 
-    const auto& scene_root = g_scene_builder->get_scene_root();
-    auto*       scene      = scene_root->get_hosted_scene();
+    auto*       scene      = scene_root.get_hosted_scene();
     const auto  root_node  = scene->get_root_node();
     ERHE_VERIFY(scene != nullptr);
     ERHE_VERIFY(root_node);
-    m_radial_menu_background_mesh->mesh_data.layer_id = scene_root->layers().content()->id;
+    m_radial_menu_background_mesh->mesh_data.layer_id = scene_root.layers().content()->id;
 
     m_radial_menu_background_mesh->enable_flag_bits(
         erhe::scene::Item_flags::content     |
@@ -316,11 +314,11 @@ void Hotbar::init_radial_menu()
     // }
 }
 
-void Hotbar::post_initialize()
+void Hotbar::get_all_tools()
 {
     m_slot_first = 0;
     m_slot_last  = 0;
-    const auto& tools = g_tools->get_tools();
+    const auto& tools = m_context.tools->get_tools();
     for (Tool* tool : tools) {
         const auto opt_icon = tool->get_icon();
         if (!opt_icon.has_value()) {
@@ -344,27 +342,28 @@ void Hotbar::on_message(Editor_message& message)
     }
 
     using namespace erhe::toolkit;
+    auto& rendergraph = *m_context.rendergraph;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (message.scene_view != old_scene_view) {
             if (m_use_radial) {
                 update_node_transform();
             } else {
-                using Rendergraph_node = erhe::application::Rendergraph_node;
-                auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
-                auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : std::shared_ptr<Rendergraph_node>{};
+                using Rendergraph_node = erhe::rendergraph::Rendergraph_node;
+                auto old_node = (old_scene_view     != nullptr) ? old_scene_view    ->get_rendergraph_node() : nullptr;
+                auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : nullptr;
                 if (old_node != new_node) {
                     if (old_node) {
-                        erhe::application::g_rendergraph->disconnect(
-                            erhe::application::Rendergraph_node_key::rendertarget_texture,
-                            m_rendertarget_imgui_viewport,
+                        rendergraph.disconnect(
+                            erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
+                            m_rendertarget_imgui_viewport.get(),
                             old_node
                         );
                     }
                     set_visibility(static_cast<bool>(new_node));
                     if (new_node) {
-                        erhe::application::g_rendergraph->connect(
-                            erhe::application::Rendergraph_node_key::rendertarget_texture,
-                            m_rendertarget_imgui_viewport,
+                        rendergraph.connect(
+                            erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
+                            m_rendertarget_imgui_viewport.get(),
                             new_node
                         );
                     }
@@ -386,13 +385,13 @@ auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>
 {
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     {
-        const auto& headset_view = g_headset_view;
-        if (headset_view) {
-            return headset_view->get_camera();
+        const auto& headset_view = *m_context.headset_view;
+        if (headset_view.config.openxr) {
+            return headset_view.get_camera();
         }
     }
 #endif
-    const auto viewport_window = g_viewport_windows->hover_window();
+    const auto viewport_window = m_context.viewport_windows->hover_window();
     if (!viewport_window) {
         return {};
     }
@@ -488,11 +487,11 @@ void Hotbar::handle_slot_update()
 {
     if ((m_slot >= m_slot_first) && (m_slot <= m_slot_last)) {
         Tool* new_tool = m_slots.at(m_slot);
-        g_tools->set_priority_tool(new_tool);
+        m_context.tools->set_priority_tool(new_tool);
     }
 }
 
-auto Hotbar::try_call(erhe::application::Input_arguments& input) -> bool
+auto Hotbar::try_call(erhe::commands::Input_arguments& input) -> bool
 {
     if (!m_enabled) {
         return false;
@@ -555,7 +554,7 @@ void Hotbar::tool_button(const uint32_t id, Tool* tool)
 {
     const glm::vec4 background_color  {0.0f, 0.0f, 0.0f, 0.0f};
     const glm::vec4 tint_color        {1.0f, 1.0f, 1.0f, 1.0f};
-    const auto&     icon_rasterization{g_icon_set->get_hotbar_rasterization()};
+    const auto&     icon_rasterization{m_context.icon_set->get_hotbar_rasterization()};
     const bool      is_boosted        {tool->get_priority_boost() > 0};
     const auto      opt_icon          {tool->get_icon()};
 
@@ -583,7 +582,7 @@ void Hotbar::tool_button(const uint32_t id, Tool* tool)
     }
 
     if (is_pressed) {
-        g_tools->set_priority_tool(is_boosted ? nullptr : tool);
+        m_context.tools->set_priority_tool(is_boosted ? nullptr : tool);
     }
 }
 

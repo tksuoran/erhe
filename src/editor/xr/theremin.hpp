@@ -1,8 +1,7 @@
 #pragma once
 
-#include "tools/tool.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
+#include "renderable.hpp"
+#include "erhe/imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 //// #include <miniaudio.h>
@@ -11,35 +10,30 @@
 #include <memory>
 #include <optional>
 
+namespace erhe::imgui {
+    class Imgui_windows;
+}
+
 namespace editor
 {
 
+class Editor_context;
+class Hand_tracker;
+
 class Theremin
-    : public erhe::components::Component
-    , public erhe::application::Imgui_window
-    , public Tool
+    : public erhe::imgui::Imgui_window
+    , public Renderable
 {
 public:
-    static constexpr std::string_view c_type_name  {"Theremin_tool"};
-    static constexpr std::string_view c_description{"Theremin tool"};
-    static constexpr uint32_t c_type_hash{
-        compiletime_xxhash::xxh32(
-            c_type_name.data(),
-            c_type_name.size(),
-            {}
-        )
-    };
+    Theremin(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Hand_tracker&                hand_tracker,
+        Editor_context&              editor_context
+    );
 
-    Theremin ();
-    ~Theremin() noexcept override;
-
-    // Implements Component
-    [[nodiscard]] auto get_type_hash() const -> uint32_t override { return c_type_hash; }
-    void declare_required_components() override;
-    void initialize_component       () override;
-
-    // Implements Tool
-    void tool_render(const Render_context& context) override;
+    // Implements Renderable
+    void render(const Render_context& context) override;
 
     // Implements Imgui_window
     void imgui() override;
@@ -63,6 +57,8 @@ public:
 private:
     auto normalized_finger_distance() const -> float;
 
+    Editor_context& m_context;
+
     bool                 m_enable_audio          {false};   // master on/off switch
     float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna
     float                m_antenna_distance_scale{100.0f}; // adjusts right hand antenna distance scaling
@@ -85,7 +81,5 @@ private:
     bool                 m_right_click{false};
 
 };
-
-extern Theremin* g_theremin;
 
 } // namespace editor

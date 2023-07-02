@@ -1,12 +1,14 @@
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
-#include "erhe/scene/viewport.hpp"
+#include "erhe/toolkit/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 namespace erhe::scene
 {
 
-auto Projection::clip_from_node_transform(const Viewport viewport) const -> Transform
+auto Projection::clip_from_node_transform(
+    const erhe::toolkit::Viewport viewport
+) const -> Transform
 {
     const auto aspect_ratio = viewport.aspect_ratio();
     const auto m = get_projection_matrix(aspect_ratio, viewport.reverse_depth);
@@ -130,7 +132,9 @@ auto Projection::get_projection_matrix(
     }
 }
 
-auto Projection::get_fov_sides(const Viewport viewport) const -> Fov_sides
+auto Projection::get_fov_sides(
+    const erhe::toolkit::Viewport viewport
+) const -> Fov_sides
 {
     switch (projection_type) {
         //using enum Projection::Type;

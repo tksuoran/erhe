@@ -1,8 +1,18 @@
 #pragma once
 
 #include "erhe/gl/wrapper_enums.hpp"
+#include "erhe/graphics/shader_monitor.hpp"
+#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/opengl_state_tracker.hpp"
 
+#include <memory>
+#include <optional>
 #include <unordered_map>
+
+namespace erhe::toolkit
+{
+    class Context_window;
+}
 
 namespace erhe::graphics
 {
@@ -15,11 +25,25 @@ public:
     int z{0};
 };
 
+class Texture;
+class Sampler;
+
 class Instance
 {
 public:
-    // static inline constexpr bool reverse_depth = true;
-    // static inline constexpr float depth_clear_value = reverse_depth ? 0.0f : 1.0f;
+    Instance      (erhe::toolkit::Context_window& context_window);
+    Instance      (const Instance&) = delete;
+    void operator=(const Instance&) = delete;
+    Instance      (Instance&&)      = delete;
+    void operator=(Instance&&)      = delete;
+
+    [[nodiscard]] auto get_handle(const Texture& texture, const Sampler& sampler) const -> uint64_t;
+    [[nodiscard]] auto create_dummy_texture() -> std::shared_ptr<Texture>;
+
+    // Texture unit cache for bindless emulation
+    void texture_unit_cache_reset   (unsigned int base_texture_unit);
+    auto texture_unit_cache_allocate(uint64_t handle) -> std::optional<std::size_t>;
+    auto texture_unit_cache_bind    (uint64_t fallback_handle) -> std::size_t;
 
     class Info
     {
@@ -77,16 +101,41 @@ public:
         unsigned int uniform_buffer_offset_alignment       {256};
     };
 
-    static Info                   info;
-    static Limits                 limits;
-    static Implementation_defined implementation_defined;
+    class Configuration
+    {
+    public:
+        bool reverse_depth  {true};  // TODO move to editor
+        bool post_processing{true};  // TODO move to editor
+        bool use_time_query {true};
+        //bool force_no_bindless          {false}; // TODO move to erhe::graphics
+        //bool force_no_persistent_buffers{false}; // TODO move to erhe::graphics
+        //bool initial_clear              {true};
+        //int  msaa_sample_count          {4};     // TODO move to editor
+    };
 
-    static std::unordered_map<gl::Internal_format, Tile_size> sparse_tile_sizes;
+    // Public API
+    [[nodiscard]] auto depth_clear_value_pointer() const -> const float *; // reverse_depth ? 0.0f : 1.0f;
+    [[nodiscard]] auto depth_function           (const gl::Depth_function depth_function) const -> gl::Depth_function;
+
+    Shader_monitor         shader_monitor;
+    OpenGL_state_tracker   opengl_state_tracker;
+    Gl_context_provider    context_provider;
+    Info                   info;
+    Limits                 limits;
+    Implementation_defined implementation_defined;
+    Configuration          configuration;
+
+    std::unordered_map<gl::Internal_format, Tile_size> sparse_tile_sizes;
 
     using PFN_generic          = void (*) ();
     using PFN_get_proc_address = PFN_generic (*) (const char*);
 
-    static void initialize();
+private:
+    erhe::toolkit::Context_window& m_context_window;
+
+    // Texture unit cache for bindless emulation
+    unsigned int          m_base_texture_unit;
+    std::vector<uint64_t> m_texture_units;
 };
 
 } // namespace erhe::graphics

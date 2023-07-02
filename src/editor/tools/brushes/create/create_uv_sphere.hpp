@@ -1,28 +1,12 @@
 #pragma once
 
-#include "tools/tool.hpp"
-#include "tools/brushes/create/create.hpp"
-
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_window.hpp"
-#include "erhe/components/components.hpp"
-#include "erhe/primitive/enums.hpp"
-#include "erhe/scene/transform.hpp"
-
-#include <glm/glm.hpp>
-
-#include <memory>
-
-namespace erhe::scene
-{
-    class Node;
-}
+#include "tools/brushes/create/create_shape.hpp"
 
 namespace editor
 {
 
 class Create_uv_sphere
-    : public Brush_create
+    : public Create_shape
 {
 public:
     void render_preview(const Create_preview_settings& preview_settings) override;

@@ -6,6 +6,7 @@
 namespace erhe::graphics
 {
     class Buffer;
+    class Instance;
     class Sampler;
     class Texture;
     class Vertex_format;
@@ -34,19 +35,9 @@ class Image_transfer;
 class Parse_context
 {
 public:
-    Parse_context(
-        erhe::graphics::Vertex_format& vertex_format,
-        Image_transfer&                image_transfer,
-        erhe::scene::Scene&            scene
-    )
-        : vertex_format {vertex_format}
-        , image_transfer{image_transfer}
-        , scene         {scene}
-    {
-    }
-
-    erhe::primitive::Gl_buffer_sink*                        buffer_sink{nullptr};
-    erhe::graphics::Vertex_format&                          vertex_format;
+    erhe::graphics::Instance&                               graphics_instance;
+    erhe::primitive::Gl_buffer_sink&                        buffer_sink;
+    const erhe::graphics::Vertex_format&                    vertex_format;
     erhe::scene::Scene&                                     scene;
     Image_transfer&                                         image_transfer;
     std::filesystem::path                                   path;

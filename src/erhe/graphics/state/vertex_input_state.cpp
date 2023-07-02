@@ -168,10 +168,10 @@ void Vertex_input_state::update()
     Expects(m_gl_vertex_array.has_value());
     Expects(gl_name() > 0);
 
-    const unsigned int max_attribute_count = std::min(
-        MAX_ATTRIBUTE_COUNT,
-        erhe::graphics::Instance::limits.max_vertex_attribs
-    );
+    //// const unsigned int max_attribute_count = std::min(
+    ////     MAX_ATTRIBUTE_COUNT,
+    ////     erhe::graphics::g_instance->limits.max_vertex_attribs
+    //// );
 
     {
         const auto ibo_gl_name = (m_data.index_buffer != nullptr)
@@ -187,10 +187,10 @@ void Vertex_input_state::update()
             log_vertex_attribute_mappings->error("bad vertex input state: vbo == nullptr");
             continue;
         }
-        if (attribute.layout_location >= max_attribute_count) {
-            log_vertex_attribute_mappings->error("bad vertex input state: layout location >= max attribute count");
-            continue;
-        }
+        //// if (attribute.layout_location >= max_attribute_count) {
+        ////     log_vertex_attribute_mappings->error("bad vertex input state: layout location >= max attribute count");
+        ////     continue;
+        //// }
 
         gl::vertex_array_vertex_buffer(
             gl_name(),

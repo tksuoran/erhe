@@ -11,34 +11,25 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe::application
-{
-class Configuration;
+namespace erhe::geometry {
+    class Geometry;
 }
-
-namespace erhe::geometry
-{
-class Geometry;
+namespace erhe::primitive {
+    class Material;
 }
-
-namespace erhe::primitive
-{
-class Material;
-}
-
-namespace erhe::scene
-{
-class Mesh;
-class Node;
+namespace erhe::scene {
+    class Mesh;
+    class Node;
 }
 
 namespace editor
 {
 
-class Icon_set;
+class Editor_context;
 class Mesh_memory;
 class Raytrace_primitive;
 class Scene_view;
+class Tools;
 class Transform_tool;
 
 enum class Handle : unsigned int;
@@ -46,7 +37,11 @@ enum class Handle : unsigned int;
 class Handle_visualizations
 {
 public:
-    explicit Handle_visualizations(Transform_tool& transform_tool);
+    Handle_visualizations(
+        Editor_context& editor_context,
+        Mesh_memory&    mesh_memory,
+        Tools&          tools
+    );
 
     enum class Mode : unsigned int
     {
@@ -58,6 +53,11 @@ public:
     class Part
     {
     public:
+        Part(
+            Mesh_memory&                                     mesh_memory,
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry
+        );
+
         std::shared_ptr<erhe::geometry::Geometry> geometry;
         erhe::primitive::Primitive_geometry       primitive_geometry;
         std::shared_ptr<Raytrace_primitive>       raytrace_primitive;
@@ -66,31 +66,30 @@ public:
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;
     [[nodiscard]] auto get_handle_material  (Handle handle, Mode mode) -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_handle_visibility(Handle handle) const -> bool;
-    void initialize       ();
     void viewport_toolbar (bool& hovered);
     void update_visibility();
     void update_for_view  (Scene_view* scene_view);
     void update_transforms(); //const uint64_t serial);
 
-    void update_mesh_visibility(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh
-    );
+    void update_mesh_visibility(const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
     void set_anchor(const erhe::scene::Trs_transform& world_from_anchor);
 
 private:
-    [[nodiscard]] auto make_arrow_cylinder() -> Part;
-    [[nodiscard]] auto make_arrow_cone    () -> Part;
-    [[nodiscard]] auto make_box           (bool uniform) -> Part;
-    [[nodiscard]] auto make_rotate_ring   () -> Part;
+    [[nodiscard]] auto make_arrow_cylinder(Mesh_memory& mesh_memory) -> Part;
+    [[nodiscard]] auto make_arrow_cone    (Mesh_memory& mesh_memory) -> Part;
+    [[nodiscard]] auto make_box           (Mesh_memory& mesh_memory, bool uniform) -> Part;
+    [[nodiscard]] auto make_rotate_ring   (Mesh_memory& mesh_memory) -> Part;
 
     [[nodiscard]] auto make_material(
+        Tools&           tools,
         const char*      name,
         const glm::vec3& color,
         Mode             mode = Mode::Normal
     ) -> std::shared_ptr<erhe::primitive::Material>;
 
     [[nodiscard]] auto make_mesh(
+        Tools&                                            tools,
         const std::string_view                            name,
         const std::shared_ptr<erhe::primitive::Material>& material,
         const Part&                                       part
@@ -103,8 +102,8 @@ private:
         const std::shared_ptr<erhe::primitive::Material>& ready
     ) -> std::shared_ptr<erhe::primitive::Material>;
 
-    Transform_tool& m_transform_tool;
-    float           m_scale         {1.0f};
+    Editor_context& m_context;
+    float           m_scale {1.0f};
 
     std::map<erhe::scene::Mesh*, Handle>             m_handles;
     erhe::scene::Trs_transform                       m_world_from_anchor;

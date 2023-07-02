@@ -23,9 +23,9 @@ enum class Light_type : unsigned int
 class Light_projection_parameters
 {
 public:
-    const Camera* view_camera        {nullptr};
-    ////Viewport      view_camera_viewport;
-    Viewport      shadow_map_viewport{};
+    const Camera*                view_camera{nullptr};
+    erhe::toolkit::Viewport     shadow_map_viewport{};
+    ////erhe::toolkit::Viewport view_camera_viewport;
 };
 
 class Light;

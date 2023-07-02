@@ -5,22 +5,33 @@
 #include <cstdint>
 #include <memory>
 
+namespace erhe::graphics {
+    class Instance;
+    class Texture;
+}
+namespace erhe::imgui {
+    class Imgui_renderer;
+}
 namespace lunasvg
 {
     class Document;
 }
 
-namespace erhe::graphics {
-    class Texture;
-}
-
 namespace editor {
+
+class Programs;
 
 class Icon_rasterization
 {
 public:
-    Icon_rasterization();
-    Icon_rasterization(int size, int column_count, int row_count);
+    Icon_rasterization(
+        erhe::graphics::Instance&    graphics_instance,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        Programs&                    programs,
+        int                          size,
+        int                          column_count,
+        int                          row_count
+    );
 
     void rasterize(
         lunasvg::Document& document,
@@ -45,6 +56,8 @@ public:
 
 private:
     [[nodiscard]] auto uv1(const glm::vec2& uv0) const -> glm::vec2;
+
+    erhe::imgui::Imgui_renderer& m_imgui_renderer;
 
     std::shared_ptr<erhe::graphics::Texture> m_texture;
     uint64_t                                 m_texture_handle{0};

@@ -1,5 +1,6 @@
 #include "tools/grid_tool.hpp"
 
+#include "editor_context.hpp"
 #include "editor_rendering.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
@@ -7,10 +8,10 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/application/configuration.hpp"
-#include "erhe/application/imgui/imgui_helpers.hpp"
-#include "erhe/application/imgui/imgui_windows.hpp"
-#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -28,46 +29,23 @@ namespace editor
 
 using glm::vec3;
 
-
-Grid_tool* g_grid_tool{nullptr};
-
-Grid_tool::Grid_tool()
-    : erhe::application::Imgui_window{c_title}
-    , erhe::components::Component    {c_type_name}
+Grid_tool::Grid_tool(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
+    Icon_set&                    icon_set,
+    Tools&                       tools
+)
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Grid", "grid"}
+    , Tool                     {editor_context}
 {
-}
-
-Grid_tool::~Grid_tool() noexcept
-{
-    ERHE_VERIFY(g_grid_tool == nullptr);
-}
-
-void Grid_tool::deinitialize_component()
-{
-    ERHE_VERIFY(g_grid_tool == this);
-    m_grids.clear();
-    g_grid_tool = nullptr;
-}
-
-void Grid_tool::declare_required_components()
-{
-    require<erhe::application::Configuration>();
-    require<erhe::application::Imgui_windows>();
-    require<Icon_set>();
-    require<Tools   >();
-}
-
-void Grid_tool::initialize_component()
-{
-    ERHE_VERIFY(g_grid_tool == nullptr);
-
-    set_description(c_title);
+    set_description("Grid");
     set_flags      (Tool_flags::background);
-    set_icon       (g_icon_set->icons.grid);
-    g_tools->register_tool(this);
-    erhe::application::g_imgui_windows->register_imgui_window(this, "grid");
+    set_icon       (icon_set.icons.grid);
 
-    auto ini = erhe::application::get_ini("erhe.ini", "grid");
+    tools.register_tool(this);
+
+    auto ini = erhe::configuration::get_ini("erhe.ini", "grid");
     ini->get("enabled",     config.enabled);
     ini->get("major_color", config.major_color);
     ini->get("minor_color", config.minor_color);
@@ -90,8 +68,6 @@ void Grid_tool::initialize_component()
     grid->set_minor_width(config.minor_width);
 
     m_grids.push_back(grid);
-
-    g_grid_tool = this;
 }
 
 void Grid_tool::tool_render(
@@ -99,14 +75,6 @@ void Grid_tool::tool_render(
 )
 {
     ERHE_PROFILE_FUNCTION();
-
-    if (erhe::application::g_line_renderer_set == nullptr) {
-        return;
-    }
-
-    if (context.camera == nullptr) {
-        return;
-    }
 
     if (!m_enable) {
         return;
@@ -122,11 +90,11 @@ void Grid_tool::viewport_toolbar(bool& hovered)
 {
     ImGui::SameLine();
 
-    const bool grid_pressed = erhe::application::make_button(
+    const bool grid_pressed = erhe::imgui::make_button(
         "G",
         (m_enable)
-            ? erhe::application::Item_mode::active
-            : erhe::application::Item_mode::normal
+            ? erhe::imgui::Item_mode::active
+            : erhe::imgui::Item_mode::normal
     );
     if (ImGui::IsItemHovered()) {
         hovered = true;
@@ -142,7 +110,7 @@ void Grid_tool::viewport_toolbar(bool& hovered)
     }
 }
 
-auto get_plane_transform(Grid_plane_type plane_type) -> glm::mat4
+auto get_plane_transform(const Grid_plane_type plane_type) -> glm::mat4
 {
     switch (plane_type) {
         case Grid_plane_type::XY: {
@@ -194,7 +162,7 @@ void Grid_tool::imgui()
 
     if (!m_grids.empty()) {
         m_grid_index = std::min(m_grid_index, static_cast<int>(grid_names.size() - 1));
-        m_grids[m_grid_index]->imgui();
+        m_grids[m_grid_index]->imgui(m_context);
     }
 
     ImGui::NewLine();
@@ -224,19 +192,21 @@ auto Grid_tool::update_hover(
     };
     float min_distance = std::numeric_limits<float>::max();
 
-    if (m_enable) {
-        for (auto& grid : m_grids) {
-            const auto position_in_world_opt = grid->intersect_ray(ray_origin_in_world, ray_direction_in_world);
-            if (!position_in_world_opt.has_value()) {
-                continue;
-            }
-            const glm::vec3 position_in_world = position_in_world_opt.value();
-            const float     distance          = glm::distance(ray_origin_in_world, position_in_world);
-            if (distance < min_distance) {
-                min_distance    = distance;
-                result.position = position_in_world;
-                result.grid     = grid.get();
-            }
+    if (!m_enable) {
+        return result;
+    }
+
+    for (auto& grid : m_grids) {
+        const auto position_in_world_opt = grid->intersect_ray(ray_origin_in_world, ray_direction_in_world);
+        if (!position_in_world_opt.has_value()) {
+            continue;
+        }
+        const glm::vec3 position_in_world = position_in_world_opt.value();
+        const float     distance          = glm::distance(ray_origin_in_world, position_in_world);
+        if (distance < min_distance) {
+            min_distance    = distance;
+            result.position = position_in_world;
+            result.grid     = grid.get();
         }
     }
     return result;

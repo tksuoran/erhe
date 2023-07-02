@@ -1,9 +1,12 @@
 #include "xr/hand_tracker.hpp"
 
-#include "xr/headset_view.hpp"
+#include "editor_context.hpp"
+#include "editor_rendering.hpp"
 #include "tools/tools.hpp"
+#include "xr/headset_view.hpp"
 
-#include "erhe/application/renderers/line_renderer.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "renderers/render_context.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -56,7 +59,7 @@ const std::vector<XrHandJointEXT> little_joints = {
 };
 
 } // anonymous namespace
-
+ND
 Hand::Hand(const XrHandEXT hand)
     : m_hand{hand}
 {
@@ -99,7 +102,6 @@ auto to_finger(const XrHandJointEXT joint) -> size_t
         default:                                    return Finger_name::palm;
     }
 }
-
 
 void Hand::update(erhe::xr::Headset& headset)
 {
@@ -330,8 +332,8 @@ void Hand::set_color(const std::size_t finger, const ImVec4 color)
 }
 
 void Hand::draw(
-    erhe::application::Line_renderer& line_renderer,
-    const glm::mat4                   transform
+    erhe::renderer::Line_renderer& line_renderer,
+    const glm::mat4                transform
 )
 {
     if (!m_is_active) {
@@ -361,7 +363,7 @@ void Hand::draw(
 void Hand::draw_joint_line_strip(
     const glm::mat4                    transform,
     const std::vector<XrHandJointEXT>& joint_names,
-    erhe::application::Line_renderer&  line_renderer
+    erhe::renderer::Line_renderer&     line_renderer
 ) const
 {
     ERHE_PROFILE_FUNCTION();
@@ -390,7 +392,7 @@ void Hand::draw_joint_line_strip(
         line_renderer.add_lines(
             transform,
             {
-                erhe::application::Line4{
+                erhe::renderer::Line4{
                     glm::vec4{
                         joint_a.location.pose.position.x,
                         joint_a.location.pose.position.y,
@@ -409,33 +411,22 @@ void Hand::draw_joint_line_strip(
     }
 }
 
-Hand_tracker* g_hand_tracker{nullptr};
-
-Hand_tracker::Hand_tracker()
-    : erhe::components::Component{c_type_name}
-    , m_left_hand                {XR_HAND_LEFT_EXT}
-    , m_right_hand               {XR_HAND_RIGHT_EXT}
+Hand_tracker::Hand_tracker(
+    Editor_context&   editor_context,
+    Editor_rendering& editor_rendering
+)
+    : m_context   {editor_context}
+    , m_left_hand {XR_HAND_LEFT_EXT}
+    , m_right_hand{XR_HAND_RIGHT_EXT}
 {
+    editor_rendering.add(this);
+    //set_flags      (Tool_flags::background);
+    //set_description("Hand_tracker");
 }
 
-Hand_tracker::~Hand_tracker()
+Hand_tracker::~Hand_tracker() noexcept
 {
-    ERHE_VERIFY(g_hand_tracker == this);
-    g_hand_tracker = nullptr;
-}
-
-void Hand_tracker::declare_required_components()
-{
-    require<Tools>();
-}
-
-void Hand_tracker::initialize_component()
-{
-    ERHE_VERIFY(g_hand_tracker == nullptr);
-    set_flags      (Tool_flags::background);
-    set_description(c_description);
-    g_tools->register_tool(this);
-    g_hand_tracker = this;
+    m_context.editor_rendering->remove(this);
 }
 
 void Hand_tracker::update_hands(erhe::xr::Headset& headset)
@@ -472,25 +463,19 @@ void Hand_tracker::set_color(
     get_hand(hand_name).set_color(finger_name, color);
 }
 
-void Hand_tracker::tool_render(const Render_context& context)
+void Hand_tracker::render(const Render_context&)
 {
-    static_cast<void>(context);
-
     if (!m_show_hands) {
         return;
     }
 
-    if (g_headset_view == nullptr) {
-        return;
-    }
-
-    const auto root_node = g_headset_view->get_root_node();
+    const auto root_node = m_context.headset_view->get_root_node();
     if (!root_node) {
         return;
     }
 
     const auto transform     = root_node->world_from_node();
-    auto&      line_renderer = *erhe::application::g_line_renderer_set->hidden.at(3).get();
+    auto&      line_renderer = *m_context.line_renderer_set->hidden.at(3).get();
 
     m_left_hand .draw(line_renderer, transform);
     m_right_hand.draw(line_renderer, transform);
