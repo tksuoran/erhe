@@ -92,7 +92,6 @@ Headset_view::Headset_view(
 )
     : Scene_view{editor_context}
 {
-
     auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
     ini->get("openxr",            config.openxr);
     ini->get("quad_view",         config.quad_view);
@@ -103,6 +102,7 @@ Headset_view::Headset_view(
     ini->get("composition_alpha", config.composition_alpha);
 
     m_scene_root = scene_builder.get_scene_root();
+    editor_rendering.add(this);
 
     setup_root_camera();
 
@@ -160,25 +160,15 @@ Headset_view::Headset_view(
         m_shadow_render_node.get(),
         m_rendergraph_node.get()
     );
-
-    //// TODO Create windows directly to correct viewport?
-    ////
-    //// Move all imgui windows that have window viewport to hud viewport
-    //// const auto viewport        = hud.get_rendertarget_imgui_viewport();
-    //// const auto window_viewport = imgui_windows.get_window_viewport();
-    //// if (viewport) {
-    ////     auto& windows = imgui_windows.get_windows();
-    ////     for (auto window : windows) {
-    ////         if (window->get_viewport() == window_viewport.get()) {
-    ////             window->set_viewport(viewport.get());
-    ////         }
-    ////     }
-    //// }
 }
 
 void Headset_view::render(const Render_context&)
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (!config.openxr) {
+        return;
+    }
 
     auto& line_renderer = *m_context.line_renderer_set->visible.at(2).get();
 
@@ -264,16 +254,6 @@ auto Headset_view::get_headset_view_resources(
             render_view.slot,
             render_view.color_texture
         );
-        resource->viewport_window = std::make_shared<Viewport_window>(
-            m_context,
-            *m_context.rendergraph,
-            *m_context.tools,
-            *m_context.viewport_config_window,
-            label,
-            nullptr,
-            m_scene_root,
-            resource->camera
-        );
         m_view_resources.push_back(resource);
         return resource;
     }
@@ -346,24 +326,17 @@ void Headset_view::render_headset()
                 log_headset->error("view framebuffer status = {}", gl::c_str(status));
             }
 
-            const erhe::toolkit::Viewport viewport
-            {
+            const erhe::toolkit::Viewport viewport {
                 .x             = 0,
                 .y             = 0,
                 .width         = static_cast<int>(render_view.width),
                 .height        = static_cast<int>(render_view.height),
                 .reverse_depth = graphics_instance.configuration.reverse_depth
             };
-            gl::viewport(0, 0, render_view.width, render_view.height);
 
             graphics_instance.opengl_state_tracker.shader_stages.reset();
             graphics_instance.opengl_state_tracker.color_blend.execute(Color_blend_state::color_blend_disabled);
-            gl::viewport(
-                viewport.x,
-                viewport.y,
-                viewport.width,
-                viewport.height
-            );
+            gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
             gl::enable(gl::Enable_cap::framebuffer_srgb);
 
             //// auto* squeeze_click = m_headset->get_actions_right().squeeze_click;
@@ -376,14 +349,7 @@ void Headset_view::render_headset()
             //// }
             //// else
             {
-                const glm::vec4 clear_color{0.0f, 0.0f, 0.0f, 0.0f};
-
-                gl::clear_color(
-                    clear_color[0],
-                    clear_color[1],
-                    clear_color[2],
-                    clear_color[3]
-                );
+                gl::clear_color(0.0f, 0.0f, 0.0f, 0.0f);
                 gl::clear_depth_f(*graphics_instance.depth_clear_value_pointer());
                 gl::clear(
                     gl::Clear_buffer_mask::color_buffer_bit |
@@ -391,7 +357,6 @@ void Headset_view::render_headset()
                 );
 
                 Viewport_config viewport_config;
-
                 Render_context render_context {
                     .editor_context  = m_context,
                     .scene_view      = *this,
@@ -401,12 +366,11 @@ void Headset_view::render_headset()
                 };
 
                 m_context.editor_rendering->render_composer(render_context);
-
-                //ERHE_PROFILE_GPU_SCOPE(c_id_headset_render_content)
-                //m_line_renderer_set.begin();
-                m_context.tools->render_viewport_tools(render_context);
-                //m_line_renderer_set.render(viewport, render_context.camera);
-                //m_line_renderer_set.end();
+                m_context.line_renderer_set->begin();
+                m_context.tools            ->render_viewport_tools(render_context);
+                m_context.editor_rendering ->render_viewport_renderables(render_context);
+                m_context.line_renderer_set->end();
+                m_context.line_renderer_set->render(render_context.viewport, render_context.camera);
             }
 
             return true;

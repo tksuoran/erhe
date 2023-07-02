@@ -54,6 +54,7 @@
 
 #include "erhe/commands/commands.hpp"
 #include "erhe/commands/commands_log.hpp"
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/gl_log.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -66,6 +67,7 @@
 #   include "erhe/imgui/imgui_log.hpp"
 #   include "erhe/imgui/imgui_renderer.hpp"
 #   include "erhe/imgui/imgui_windows.hpp"
+#   include "erhe/imgui/window_imgui_viewport.hpp"
 #   include "erhe/imgui/windows/log_window.hpp"
 #   include "erhe/imgui/windows/performance_window.hpp"
 #   include "erhe/imgui/windows/pipelines.hpp"
@@ -97,6 +99,39 @@ class Editor
     : public erhe::toolkit::Window_event_handler
 {
 public:
+
+    [[nodiscard]] auto create_window() -> erhe::toolkit::Context_window
+    {
+        {
+            auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
+            ini->get("openxr", m_openxr);
+        }
+
+        erhe::toolkit::Window_configuration configuration{
+            .gl_major          = 4,
+            .gl_minor          = 6,
+            .width             = 1920,
+            .height            = 1080,
+            .msaa_sample_count = 0,
+            .title             = erhe::toolkit::format_window_title("erhe editor by Timo Suoranta")
+        };
+
+        bool show             = true;
+        bool fullscreen       = false;
+        bool use_transparency = false;
+        auto ini = erhe::configuration::get_ini("erhe.ini", "window");
+        ini->get("show",              show);
+        ini->get("fullscreen",        fullscreen);
+        ini->get("fuse_transparency", use_transparency);
+        ini->get("gl_major",          configuration.gl_major);
+        ini->get("gl_minor",          configuration.gl_minor);
+        ini->get("width",             configuration.width);
+        ini->get("height",            configuration.height);
+        ini->get("swap_interval",     configuration.swap_interval);
+
+        return erhe::toolkit::Context_window{configuration};
+    }
+
     Editor()
         : m_editor_settings   {}
         , m_commands          {}
@@ -106,16 +141,7 @@ public:
         , m_time              {}
         , m_editor_context    {}
 
-        , m_context_window{
-            erhe::toolkit::Window_configuration{
-                .gl_major          = 4,
-                .gl_minor          = 6,
-                .width             = 1920,
-                .height            = 1080,
-                .msaa_sample_count = 0,
-                .title             = "erhe HexTiles by Timo Suoranta"
-            }
-        }
+        , m_context_window{create_window()}
         , m_graphics_instance     {m_context_window}
         , m_imgui_renderer        {m_graphics_instance}
         , m_image_transfer        {m_graphics_instance}
@@ -244,10 +270,30 @@ public:
         gl::enable      (gl::Enable_cap::framebuffer_srgb);
 
         auto& root_event_handler = m_context_window.get_root_window_event_handler();
-        root_event_handler.attach(&m_input_state, 4);
         root_event_handler.attach(this, 3);
-        root_event_handler.attach(&m_imgui_windows, 2);
-        root_event_handler.attach(&m_commands, 1);
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        if (m_headset_view.config.openxr)
+        {
+            // TODO Create windows directly to correct viewport?
+            // Move all imgui windows that have window viewport to hud viewport
+            const auto viewport        = m_hud.get_rendertarget_imgui_viewport();
+            const auto window_viewport = m_imgui_windows.get_window_viewport();
+            if (viewport) {
+                auto& windows = m_imgui_windows.get_windows();
+                for (auto window : windows) {
+                    if (window->get_viewport() == window_viewport.get()) {
+                        window->set_viewport(viewport.get());
+                    }
+                }
+            }
+        }
+        else
+#endif
+        {
+            root_event_handler.attach(&m_input_state, 4);
+            root_event_handler.attach(&m_imgui_windows, 2);
+            root_event_handler.attach(&m_commands, 1);
+        }
 
         if (
             m_editor_settings.physics_static_enable &&
@@ -323,21 +369,19 @@ public:
 
     auto on_idle() -> bool override
     {
-        // TODO something nicer
+        // TODO Something nicer?
         m_mesh_memory.gl_buffer_transfer_queue.flush();
-        // animate_lights(time_context.time);
 
         m_time.update();
-
         m_editor_rendering.begin_frame();
-        m_editor_scenes.update_node_transforms();
-        ////m_editor_scenes.update_network();
         m_imgui_windows.imgui_windows();
         m_rendergraph.execute();
         m_imgui_renderer.next_frame();
         m_editor_rendering.end_frame();
         m_commands.on_idle();
-        m_context_window.swap_buffers();
+        if (!m_openxr) {
+            m_context_window.swap_buffers();
+        }
 
         ERHE_PROFILE_FRAME_END
 
@@ -432,7 +476,8 @@ public:
     Physics_tool                            m_physics_tool;
     Selection_tool                          m_selection_tool;
 
-    bool                           m_close_requested{false};
+    bool m_close_requested{false};
+    bool m_openxr         {false};
 };
 
 void run_editor()
@@ -453,8 +498,17 @@ void run_editor()
     erhe::scene_renderer::initialize_logging();
     erhe::toolkit::initialize_logging();
     erhe::ui::initialize_logging();
-    erhe::toolkit::initialize_frame_capture();
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    erhe::xr::initialize_logging();
+#endif
     editor::initialize_logging();
+
+    bool enable_renderdoc_capture_support{false};
+    auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
+    ini->get("capture_support", enable_renderdoc_capture_support);
+    if (enable_renderdoc_capture_support) {
+        erhe::toolkit::initialize_frame_capture();
+    }
 
     Editor editor{};
     editor.run();

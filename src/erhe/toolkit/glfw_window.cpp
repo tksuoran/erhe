@@ -465,7 +465,7 @@ auto Context_window::open(
     }
 
     if (m_glfw_window == nullptr) {
-        printf("Failed to open GLFW window for GL %d.%d\n", configuration.gl_major, configuration.gl_minor);
+        log_window->error("Failed to open GLFW window for GL {}.{}.", configuration.gl_major, configuration.gl_minor);
         if (s_window_count == 0) {
             glfwTerminate();
         }
@@ -516,7 +516,9 @@ auto Context_window::open(
 
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
-        glfwShowWindow(window);
+        if (configuration.show) {
+            glfwShowWindow(window);
+        }
         glfwMakeContextCurrent(window);
         log_window->info("Setting swap interval to {}", configuration.swap_interval);
         glfwSwapInterval(configuration.swap_interval);

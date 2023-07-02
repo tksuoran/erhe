@@ -79,6 +79,7 @@ private:
 class Headset_view
     : public Scene_view
     , public std::enable_shared_from_this<Headset_view>
+    , public Renderable
 {
 public:
     class Config
@@ -107,15 +108,14 @@ public:
 
     // Public API
     void render_headset  ();
-
     void begin_frame     ();
-    void add_finger_input(const Finger_point& finger_point);
     void end_frame       ();
 
-    [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
-    [[nodiscard]] auto get_headset           () const -> erhe::xr::Headset*;
+    void add_finger_input(const Finger_point& finger_point);
 
-    [[nodiscard]] auto get_root_node() const -> std::shared_ptr<erhe::scene::Node>;
+    [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
+    [[nodiscard]] auto get_headset                          () const -> erhe::xr::Headset*;
+    [[nodiscard]] auto get_root_node                        () const -> std::shared_ptr<erhe::scene::Node>;
 
     void render(const Render_context&);
 

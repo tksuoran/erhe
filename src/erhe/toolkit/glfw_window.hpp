@@ -29,6 +29,7 @@ constexpr Mouse_cursor Mouse_cursor_COUNT      = 10;
 class Window_configuration
 {
 public:
+    bool             show                    {true};
     bool             fullscreen              {false};
     bool             use_finish              {false};
     bool             framebuffer_transparency{false};

@@ -153,12 +153,11 @@ Theremin::Theremin(
     Hand_tracker&                hand_tracker,
     Editor_context&              editor_context
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, "Thereming", "theremin"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Thereming", "theremin"}
     , m_context{editor_context}
     //// , m_audio_config             {}
     //// , m_audio_device             {}
 {
-    imgui_windows.register_imgui_window(this);
     //// m_audio_config = ma_device_config_init(ma_device_type_playback);
     //// m_audio_config.playback.format   = ma_format_f32;
     //// m_audio_config.playback.channels = 1;

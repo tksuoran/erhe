@@ -1,5 +1,6 @@
 #pragma once
 
+#include "renderable.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 
@@ -55,6 +56,7 @@ public:
 class Headset_view
     : public Scene_view
     , public std::enable_shared_from_this<Headset_view>
+    , public Renderable
 {
 public:
     Headset_view(
@@ -69,18 +71,18 @@ public:
     );
 
     // Public API
-    void render_headset  ();
+    void render_headset();
+    void begin_frame   ();
+    void end_frame     ();
 
-    void begin_frame     ();
     //void add_finger_input(const Finger_point& finger_point);
-    void end_frame       ();
 
     [[nodiscard]] auto finger_to_viewport_distance_threshold() const -> float;
-    [[nodiscard]] auto get_headset           () const -> void*;
+    [[nodiscard]] auto get_headset                          () const -> void*;
+    [[nodiscard]] auto get_root_node                        () const -> std::shared_ptr<erhe::scene::Node>;
 
-    [[nodiscard]] auto get_root_node() const -> std::shared_ptr<erhe::scene::Node>;
-
-    void render(const Render_context&);
+    // Implements Renderable
+    void render(const Render_context& render_context) override;
 
     // Implements Scene_view
     [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>                    override;

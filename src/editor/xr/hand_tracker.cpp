@@ -59,7 +59,7 @@ const std::vector<XrHandJointEXT> little_joints = {
 };
 
 } // anonymous namespace
-ND
+
 Hand::Hand(const XrHandEXT hand)
     : m_hand{hand}
 {

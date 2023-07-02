@@ -43,7 +43,6 @@ public:
 
     int                                          width;
     int                                          height;
-    std::shared_ptr<Viewport_window>             viewport_window;
     std::shared_ptr<erhe::graphics::Texture>     color_texture;
     std::shared_ptr<erhe::graphics::Texture>     depth_texture;
     std::shared_ptr<erhe::graphics::Framebuffer> framebuffer;
