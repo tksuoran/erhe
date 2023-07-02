@@ -31,7 +31,7 @@ public:
 class Sampler
 {
 public:
-    Sampler(const Sampler_create_info& create_info);
+    explicit Sampler(const Sampler_create_info& create_info);
     ~Sampler() noexcept = default;
 
     [[nodiscard]] auto gl_name() const -> unsigned int

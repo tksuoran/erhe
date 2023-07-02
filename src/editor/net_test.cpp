@@ -32,7 +32,7 @@ class Server_peer
 {
 public:
     Server_peer() = default;
-    Server_peer(erhe::net::Server* server)
+    explicit Server_peer(erhe::net::Server* server)
         : m_server{server}
     {
     }
@@ -60,7 +60,7 @@ class Client_peer
 {
 public:
     Client_peer() = default;
-    Client_peer(erhe::net::Client* client)
+    explicit Client_peer(erhe::net::Client* client)
         : m_client{client}
     {
     }
@@ -86,7 +86,7 @@ private:
 class Window
 {
 public:
-    Window(Peer* peer)
+    explicit Window(Peer* peer)
         : m_peer{peer}
     {
     }

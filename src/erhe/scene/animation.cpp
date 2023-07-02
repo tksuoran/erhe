@@ -70,7 +70,7 @@ void Animation_sampler::set(
 class Cubic_constants
 {
 public:
-    Cubic_constants(const float t)
+    explicit Cubic_constants(const float t)
     {
         const float t2 = t * t;
         const float t3 = t2 * t;

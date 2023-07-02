@@ -28,7 +28,7 @@ class Renderpass
     : public erhe::scene::Item
 {
 public:
-    Renderpass(const std::string_view name);
+    explicit Renderpass(const std::string_view name);
 
     void render(const Render_context& context) const;
 

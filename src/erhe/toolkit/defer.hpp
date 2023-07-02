@@ -8,7 +8,7 @@ namespace erhe::toolkit
 class Defer
 {
 public:
-    Defer(Defer&& rvalue)
+    explicit Defer(Defer&& rvalue)
     {
         m_callback = std::move(rvalue.m_callback);
         rvalue.m_callback = nullptr;
@@ -18,7 +18,7 @@ public:
     {
     }
 
-    Defer(const std::function<void()>& func) noexcept
+    explicit Defer(const std::function<void()>& func) noexcept
     {
         m_callback = func;
     }

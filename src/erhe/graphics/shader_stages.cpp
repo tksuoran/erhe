@@ -82,8 +82,8 @@ void Shader_stages::reload(Shader_stages_prototype&& prototype)
     gl::object_label(
         gl::Object_identifier::program,
         gl_name(),
-        static_cast<GLsizei>(m_name.length()),
-        m_name.c_str()
+        static_cast<GLsizei>(label.length()),
+        label.c_str()
     );
 }
 

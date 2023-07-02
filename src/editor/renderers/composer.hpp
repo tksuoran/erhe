@@ -15,7 +15,7 @@ class Composer
     : public erhe::scene::Item
 {
 public:
-    Composer(const std::string_view name);
+    explicit Composer(const std::string_view name);
 
     // Implements Item
     [[nodiscard]] static auto static_type     () -> uint64_t;

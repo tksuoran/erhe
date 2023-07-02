@@ -476,7 +476,7 @@ void Post_processing::post_process(Post_processing_node& node)
             const Downsample_node&               downsample_node        = downsample_nodes.at(i + 1);
             const erhe::graphics::Texture* const source_texture         = source_downsample_node.texture.get();
             const int width  = source_texture->width();
-            const int height = source_texture->width();
+            const int height = source_texture->height();
 
             if ((width  == 1) && (height == 1)) {
                 break;
@@ -523,8 +523,7 @@ void Post_processing::downsample(
         *source_texture,
         m_linear_sampler
     );
-    const uint32_t texture_handle[2] =
-    {
+    const uint32_t texture_handle[2] = {
         static_cast<uint32_t>((handle & 0xffffffffu)),
         static_cast<uint32_t>(handle >> 32u)
     };

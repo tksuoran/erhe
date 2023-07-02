@@ -31,10 +31,7 @@ auto to_lower(std::string data) -> std::string
     return data;
 }
 
-auto split(
-    const std::string& s,
-    const char         delimeter
-) -> std::vector<std::string>
+auto split(const std::string& s, const char delimeter) -> std::vector<std::string>
 {
     std::vector<std::string> result;
     std::stringstream        ss{s};
@@ -47,10 +44,7 @@ auto split(
     return result;
 }
 
-auto trim(
-    const std::string& str,
-    const std::string& whitespace
-) -> std::string
+auto trim(const std::string& str, const std::string& whitespace) -> std::string
 {
     const auto strBegin = str.find_first_not_of(whitespace);
     if (strBegin == std::string::npos) {

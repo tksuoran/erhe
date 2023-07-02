@@ -38,7 +38,7 @@ class Render_style
 {
 public:
     Render_style();
-    Render_style(const std::string_view name);
+    explicit Render_style(const std::string_view name);
     ~Render_style() noexcept override;
 
     Render_style_data data;

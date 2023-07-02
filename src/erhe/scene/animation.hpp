@@ -43,7 +43,7 @@ class Animation_sampler
 {
 public:
     Animation_sampler();
-    Animation_sampler(Animation_interpolation_mode interpolation_mode);
+    explicit Animation_sampler(Animation_interpolation_mode interpolation_mode);
     ~Animation_sampler() noexcept;
 
     void set(

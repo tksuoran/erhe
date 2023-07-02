@@ -1,7 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "gltf.hpp"
-#include "example_log.hpp"
+#include "gltf_log.hpp"
 #include "image_transfer.hpp"
 
 #include "erhe/gl/wrapper_functions.hpp"
@@ -45,7 +45,7 @@ extern "C" {
 
 #include <vector>
 
-namespace example {
+namespace erhe::gltf {
 
 namespace {
 

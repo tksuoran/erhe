@@ -78,7 +78,6 @@ auto Item_filter::describe() const -> std::string
             ss << ", ";
         }
         ss << "require_at_least_one_bit_clear = " << Item_flags::to_string(this->require_at_least_one_bit_clear);
-        first = false;
     }
     return ss.str();
 }

@@ -41,7 +41,6 @@ endif ()
 target_link_libraries(
     ${_target}
     PRIVATE
-    #erhe::concurrency
     erhe::gl
     erhe::graphics
     erhe::log
@@ -52,8 +51,6 @@ target_link_libraries(
     erhe::toolkit
     erhe::ui
     mINI
-    #RectangleBinPack
-    #rapidjson
 )
 
 if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")

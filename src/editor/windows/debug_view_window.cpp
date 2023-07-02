@@ -104,11 +104,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
     if (input_node == nullptr) {
-        return;
-    }
-
-    Shadow_render_node* shadow_render_node = reinterpret_cast<Shadow_render_node*>(input_node);
-    if (shadow_render_node == nullptr) {
         SPDLOG_LOGGER_TRACE(
             log_render,
             "Depth_to_color_rendergraph_node::execute_rendergraph_node() - skipped: shadow_maps input is not connected"
@@ -116,6 +111,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
+    Shadow_render_node* shadow_render_node = reinterpret_cast<Shadow_render_node*>(input_node);
     const auto& shadow_texture = shadow_render_node->get_texture();
     if (!shadow_texture) {
         SPDLOG_LOGGER_TRACE(

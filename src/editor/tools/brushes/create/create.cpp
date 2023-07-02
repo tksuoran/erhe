@@ -277,9 +277,7 @@ void Create::tool_render(const Render_context& context)
         return;
     }
 
-    const Trs_transform transform = parent
-        ? parent->world_from_node_transform()
-        : Trs_transform{};
+    const Trs_transform transform = parent->world_from_node_transform();
     if (m_create_shape != nullptr) {
         if (m_preview_ideal_shape) {
             const Create_preview_settings preview_settings{
