@@ -931,7 +931,6 @@ void update_group_terrain(
     bool demote;
     size_t counter = 0u;
     do {
-        promote = false;
         demote  = false;
         const Terrain_group& terrain_group = tiles.get_terrain_group(group);
 

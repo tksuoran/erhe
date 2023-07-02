@@ -32,7 +32,7 @@ class Tool
     : public erhe::commands::Command_host
 {
 public:
-    Tool(Editor_context& editor_context);
+    explicit Tool(Editor_context& editor_context);
     ~Tool() noexcept override;
 
     // Implements Command_host

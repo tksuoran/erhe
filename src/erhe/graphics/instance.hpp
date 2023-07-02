@@ -31,7 +31,7 @@ class Sampler;
 class Instance
 {
 public:
-    Instance      (erhe::toolkit::Context_window& context_window);
+    explicit Instance(erhe::toolkit::Context_window& context_window);
     Instance      (const Instance&) = delete;
     void operator=(const Instance&) = delete;
     Instance      (Instance&&)      = delete;

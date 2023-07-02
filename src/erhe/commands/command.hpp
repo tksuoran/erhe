@@ -84,7 +84,7 @@ class Helper_command
     : public Command
 {
 public:
-    Helper_command(Commands& commands, Command& target_command, const std::string name);
+    Helper_command(Commands& commands, Command& target_command, const std::string& name);
     auto get_priority      () const -> int override;
     auto is_enabled        () const -> bool override;
     auto get_command_state () const -> State override;

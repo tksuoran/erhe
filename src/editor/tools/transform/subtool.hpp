@@ -20,7 +20,7 @@ class Subtool
     : public Tool
 {
 public:
-    Subtool(Editor_context& editor_context);
+    explicit Subtool(Editor_context& editor_context);
     ~Subtool() noexcept override;
 
     [[nodiscard]] virtual auto begin (unsigned int axis_mask, Scene_view* scene_view) -> bool = 0;

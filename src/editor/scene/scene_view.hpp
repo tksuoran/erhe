@@ -99,7 +99,7 @@ public:
 class Scene_view
 {
 public:
-    Scene_view(Editor_context& context);
+    explicit Scene_view(Editor_context& context);
     virtual ~Scene_view() noexcept;
 
     // Virtual interface

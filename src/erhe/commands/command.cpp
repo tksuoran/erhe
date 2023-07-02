@@ -195,7 +195,7 @@ auto Command::get_priority() const -> int
 
 //
 
-Helper_command::Helper_command(Commands& commands, Command& target_command, std::string name)
+Helper_command::Helper_command(Commands& commands, Command& target_command, const std::string& name)
     : Command         {commands, name}
     , m_target_command{target_command}
 {

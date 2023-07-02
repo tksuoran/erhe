@@ -25,7 +25,7 @@ public:
 class Buffer_writer
 {
 public:
-    Buffer_writer(erhe::graphics::Instance& instance);
+    explicit Buffer_writer(erhe::graphics::Instance& instance);
 
     Buffer_range range;
     std::size_t  map_offset  {0};

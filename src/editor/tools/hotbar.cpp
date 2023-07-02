@@ -342,7 +342,6 @@ void Hotbar::on_message(Editor_message& message)
     }
 
     using namespace erhe::toolkit;
-    auto& rendergraph = *m_context.rendergraph;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (message.scene_view != old_scene_view) {
             if (m_use_radial) {
@@ -353,7 +352,7 @@ void Hotbar::on_message(Editor_message& message)
                 auto new_node = (message.scene_view != nullptr) ? message.scene_view->get_rendergraph_node() : nullptr;
                 if (old_node != new_node) {
                     if (old_node) {
-                        rendergraph.disconnect(
+                        m_context.rendergraph->disconnect(
                             erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
                             m_rendertarget_imgui_viewport.get(),
                             old_node
@@ -361,7 +360,7 @@ void Hotbar::on_message(Editor_message& message)
                     }
                     set_visibility(static_cast<bool>(new_node));
                     if (new_node) {
-                        rendergraph.connect(
+                        m_context.rendergraph->connect(
                             erhe::rendergraph::Rendergraph_node_key::rendertarget_texture,
                             m_rendertarget_imgui_viewport.get(),
                             new_node

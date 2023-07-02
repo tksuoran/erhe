@@ -157,7 +157,7 @@ Map_window::Map_window(
     erhe::renderer::Text_renderer& text_renderer,
     Tile_renderer&                 tile_renderer
 )
-    : Framebuffer_window    {graphics_instance, imgui_renderer, "Map", "map"}
+    : Framebuffer_window    {graphics_instance, imgui_renderer, imgui_windows, "Map", "map"}
     , m_graphics_instance   {graphics_instance}
     , m_imgui_renderer      {imgui_renderer}
     , m_text_renderer       {text_renderer}

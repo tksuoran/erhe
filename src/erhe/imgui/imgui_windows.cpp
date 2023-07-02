@@ -186,8 +186,8 @@ void Imgui_windows::imgui_windows()
                     continue;
                 }
                 bool hidden = true;
-                bool toolbar_hovered = false;
                 if (imgui_window->is_visible()) {
+                    bool toolbar_hovered = false;
                     auto window_id = fmt::format("##window-{}", ++i);
                     ImGui::PushID(window_id.c_str());
                     const auto is_window_visible = imgui_window->begin();

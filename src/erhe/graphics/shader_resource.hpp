@@ -110,12 +110,9 @@ public:
     );
 
     // Constructor for creating  default uniform block
-    Shader_resource(Instance& instance);
-
+    explicit Shader_resource(Instance& instance);
     ~Shader_resource() noexcept;
-
     Shader_resource(const Shader_resource& other) = delete;
-
     Shader_resource(Shader_resource&& other) = default;
 
     [[nodiscard]] auto is_array        () const -> bool;

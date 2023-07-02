@@ -16,14 +16,15 @@ auto str(const bool value) -> const char*
 
 auto to_lower(std::string data) -> std::string
 {
-    data = data.substr(0, data.find(' '));
-    data = data.substr(0, data.find('\t'));
+    const std::string::size_type space_pos = data.find_first_of(std::string{" \t"});
+    if (space_pos != std::string::npos) {
+        data.resize(space_pos);
+    }
     std::transform(
         data.begin(),
         data.end(),
         data.begin(),
-        [](unsigned char c)
-        {
+        [](unsigned char c) {
             return std::tolower(c);
         }
     );

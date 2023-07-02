@@ -85,7 +85,7 @@ private:
 class Range_selection
 {
 public:
-    Range_selection(Selection& selection);
+    explicit Range_selection(Selection& selection);
 
     void set_terminator(const std::shared_ptr<erhe::scene::Item>& item);
     void entry         (const std::shared_ptr<erhe::scene::Item>& item, bool attachments_expanded);

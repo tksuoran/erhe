@@ -63,7 +63,7 @@ private:
 class Scoped_gl_context
 {
 public:
-    Scoped_gl_context (Gl_context_provider& context_provider);
+    explicit Scoped_gl_context(Gl_context_provider& context_provider);
     ~Scoped_gl_context() noexcept;
     Scoped_gl_context (const Scoped_gl_context&) = delete;
     auto operator=    (const Scoped_gl_context&) = delete;

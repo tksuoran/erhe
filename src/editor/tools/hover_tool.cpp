@@ -160,9 +160,8 @@ void Hover_tool::tool_render(
         return;
     }
 
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
-
     if (entry.normal.has_value()) {
+        auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
         const auto p0 = entry.position.value();
         const auto p1 = entry.position.value() + entry.normal.value();
         line_renderer.set_thickness(10.0f);

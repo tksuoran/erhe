@@ -20,7 +20,7 @@ public:
 class Update_time_base
 {
 public:
-    Update_time_base(Time& time);
+    explicit Update_time_base(Time& time);
     virtual ~Update_time_base() noexcept;
 
 protected:
