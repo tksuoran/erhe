@@ -1164,7 +1164,6 @@ private:
 
             sorted_vertex_indices    .resize(vertex_count);
             point_id_from_gltf_index .resize(vertex_count);
-            corner_id_from_gltf_index.resize(vertex_count);
 
             std::fill(
                 sorted_vertex_indices.begin(),
@@ -1175,11 +1174,6 @@ private:
                 point_id_from_gltf_index.begin(),
                 point_id_from_gltf_index.end(),
                 std::numeric_limits<Point_id>::max()
-            );
-            std::fill(
-                corner_id_from_gltf_index.begin(),
-                corner_id_from_gltf_index.end(),
-                std::numeric_limits<Corner_id>::max()
             );
             for (cgltf_size index : used_indices) {
                 sorted_vertex_indices[index - min_index] = index;
@@ -1245,6 +1239,7 @@ private:
 
             geometry->reserve_polygons(triangle_count);
             corner_id_start = geometry->m_next_corner_id;
+            gltf_index_from_corner_id.resize(3 * accessor->count);
             for (cgltf_size i = 0; i < accessor->count;) {
                 const cgltf_size v0         = cgltf_accessor_read_index(accessor, i++);
                 const cgltf_size v1         = cgltf_accessor_read_index(accessor, i++);
@@ -1256,13 +1251,14 @@ private:
                 const Corner_id  c0         = geometry->make_polygon_corner(polygon_id, p0);
                 const Corner_id  c1         = geometry->make_polygon_corner(polygon_id, p1);
                 const Corner_id  c2         = geometry->make_polygon_corner(polygon_id, p2);
-                corner_id_from_gltf_index[v0 - min_index] = c0;
-                corner_id_from_gltf_index[v1 - min_index] = c1;
-                corner_id_from_gltf_index[v2 - min_index] = c2;
+                gltf_index_from_corner_id[c0 - corner_id_start] = v0;
+                gltf_index_from_corner_id[c1 - corner_id_start] = v1;
+                gltf_index_from_corner_id[c2 - corner_id_start] = v2;
                 SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v0, c0, polygon_id);
                 SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v1, c1, polygon_id);
                 SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v2, c2, polygon_id);
             }
+            corner_id_end = geometry->m_next_corner_id;
         }
         void parse_vertex_data()
         {
@@ -1287,82 +1283,91 @@ private:
                 );
 
                 const cgltf_size component_count = cgltf_num_components(accessor->type);
-
-                if (is_float(accessor->component_type)) {
+                if (is_per_point(attribute->type)) {
                     for (cgltf_size j = 0; j < accessor->count; ++j) {
-                        cgltf_float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                        cgltf_accessor_read_float(accessor, j, &value[0], component_count);
-                        put_attribute<cgltf_float>(attribute, j, value);
+                        const auto point_id = point_id_from_gltf_index.at(j - min_index);
+                        if (point_id == std::numeric_limits<Point_id>::max()) {
+                            continue;
+                        }
+
+                        if (is_float(accessor->component_type)) {
+                            cgltf_float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                            cgltf_accessor_read_float(accessor, j, &value[0], component_count);
+                            put_point_attribute<cgltf_float>(attribute, point_id, value);
+                        } else {
+                            cgltf_uint value[4] = { 0, 0, 0, 0 };
+                            cgltf_accessor_read_uint(accessor, j, &value[0], component_count);
+                            put_point_attribute<cgltf_uint>(attribute, point_id, value);
+                        }
                     }
                 } else {
-                    for (cgltf_size j = 0; j < accessor->count; ++j) {
-                        cgltf_uint value[4] = { 0, 0, 0, 0 };
-                        cgltf_accessor_read_uint(accessor, j, &value[0], component_count);
-                        put_attribute<cgltf_uint>(attribute, j, value);
+                    for (erhe::geometry::Corner_id corner_id = corner_id_start; corner_id != corner_id_end; ++corner_id) {
+                        const cgltf_size j = gltf_index_from_corner_id.at(corner_id - corner_id_start);
+                        if (is_float(accessor->component_type)) {
+                            cgltf_float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                            cgltf_accessor_read_float(accessor, j, &value[0], component_count);
+                            put_corner_attribute<cgltf_float>(attribute, corner_id, value);
+                        } else {
+                            cgltf_uint value[4] = { 0, 0, 0, 0 };
+                            cgltf_accessor_read_uint(accessor, j, &value[0], component_count);
+                            put_corner_attribute<cgltf_uint>(attribute, corner_id, value);
+                        }
                     }
                 }
             }
         }
 
         template <typename T>
-        [[nodiscard]] void put_attribute(
-            const cgltf_attribute* attribute,
-            cgltf_size             index,
-            T                      value[4]
+        [[nodiscard]] void put_point_attribute(
+            const cgltf_attribute*   attribute,
+            erhe::geometry::Point_id point_id,
+            T                        value[4]
         )
         {
-            const auto point_id  = point_id_from_gltf_index.at(index - min_index);
-            const auto corner_id = corner_id_from_gltf_index.at(index - min_index);
-
             switch (attribute->type) {
-                case cgltf_attribute_type::cgltf_attribute_type_invalid: {
-                    log_gltf->warn("Invalid glTF attribute type");
-                    break;
-                }
-
                 case cgltf_attribute_type::cgltf_attribute_type_position: {
-                    if (point_id != std::numeric_limits<Point_id>::max()) {
-                        point_locations[attribute->index]->put(point_id, glm::vec3{value[0], value[1], value[2]});
-                    }
+                    point_locations[attribute->index]->put(point_id, glm::vec3{value[0], value[1], value[2]});
                     break;
                 }
+                case cgltf_attribute_type::cgltf_attribute_type_joints: {
+                    point_joint_indices[attribute->index]->put(point_id, glm::uvec4{value[0], value[1], value[2], value[3]});
+                    break;
+                }
+                case cgltf_attribute_type::cgltf_attribute_type_weights: {
+                    point_joint_weights[attribute->index]->put(point_id, glm::vec4{value[0], value[1], value[2], value[3]});
+                    break;
+                }
+                default: {
+                    log_gltf->warn("Unsupported glTF attribute type {}", attribute->type);
+                    break;
+                }
+            }
+        }
 
+        template <typename T>
+        [[nodiscard]] void put_corner_attribute(
+            const cgltf_attribute*    attribute,
+            erhe::geometry::Corner_id corner_id,
+            T                         value[4]
+        )
+        {
+            switch (attribute->type) {
                 case cgltf_attribute_type::cgltf_attribute_type_normal: {
-                    if (corner_id != std::numeric_limits<Point_id>::max()) {
-                        corner_normals[attribute->index]->put(corner_id, glm::vec3{value[0], value[1], value[2]});
-                    }
+                    corner_normals[attribute->index]->put(corner_id, glm::vec3{value[0], value[1], value[2]});
                     break; 
                 }
 
                 case cgltf_attribute_type::cgltf_attribute_type_tangent: {
-                    if (corner_id != std::numeric_limits<Point_id>::max()) {
-                        corner_tangents[attribute->index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
-                    }
+                    corner_tangents[attribute->index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
                     break;
                 }
 
                 case cgltf_attribute_type::cgltf_attribute_type_texcoord: {
-                    if (corner_id != std::numeric_limits<Point_id>::max()) {
-                        corner_texcoords[attribute->index]->put(corner_id, glm::vec2{value[0], value[1]}); break;
-                    }
+                    corner_texcoords[attribute->index]->put(corner_id, glm::vec2{value[0], value[1]}); break;
                     break;
                 }
                 case cgltf_attribute_type::cgltf_attribute_type_color: {
-                    if (corner_id != std::numeric_limits<Point_id>::max()) {
-                        corner_colors[attribute->index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
-                    }
-                    break;
-                }
-                case cgltf_attribute_type::cgltf_attribute_type_joints: {
-                    if (point_id != std::numeric_limits<Point_id>::max()) {
-                        point_joint_indices[attribute->index]->put(point_id, glm::uvec4{value[0], value[1], value[2], value[3]});
-                    }
-                    break;
-                }
-                case cgltf_attribute_type::cgltf_attribute_type_weights: {
-                    if (point_id != std::numeric_limits<Point_id>::max()) {
-                        point_joint_weights[attribute->index]->put(point_id, glm::vec4{value[0], value[1], value[2], value[3]});
-                    }
+                    corner_colors[attribute->index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
                     break;
                 }
                 default: {
@@ -1382,8 +1387,7 @@ private:
         std::vector<erhe::geometry::Point_id>     point_id_from_gltf_index {};
         erhe::geometry::Corner_id                 corner_id_start          {};
         erhe::geometry::Corner_id                 corner_id_end            {};
-        std::vector<erhe::geometry::Corner_id>    corner_id_from_gltf_index{};
-        //// std::shared_ptr<Raytrace_primitive>       erhe_raytrace_primitive      {};
+        std::vector<cgltf_size>                   gltf_index_from_corner_id{};
 
         std::vector<Property_map<erhe::geometry::Corner_id, glm::vec3>*> corner_normals     ;
         std::vector<Property_map<erhe::geometry::Corner_id, glm::vec4>*> corner_tangents    ;

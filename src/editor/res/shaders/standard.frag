@@ -20,8 +20,7 @@ float sample_light_visibility(
     sampler2DArray s_shadow = sampler2DArray(light_block.shadow_texture);
 #endif
 
-    //Light light = light_block.lights[light_index];
-    Light light = light_block.lights[1];
+    Light light = light_block.lights[light_index];
     vec4  position_in_light_texture_homogeneous = light.texture_from_world * position;
 
     vec4  position_in_light_texture = position_in_light_texture_homogeneous / position_in_light_texture_homogeneous.w;
