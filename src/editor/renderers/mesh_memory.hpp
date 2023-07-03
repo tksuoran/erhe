@@ -41,10 +41,10 @@ public:
     erhe::graphics::Vertex_format         vertex_format;
     erhe::graphics::Buffer                gl_vertex_buffer;
     erhe::graphics::Buffer                gl_index_buffer;
+    erhe::primitive::Gl_buffer_sink       gl_buffer_sink;
     erhe::primitive::Buffer_info          buffer_info;
     //erhe::primitive::Build_info           build_info;
     erhe::graphics::Buffer_transfer_queue gl_buffer_transfer_queue;
-    erhe::primitive::Gl_buffer_sink       gl_buffer_sink;
     erhe::graphics::Vertex_input_state    vertex_input;
     //erhe::graphics::Shader_resource       vertex_data_in;   // For SSBO read
     //erhe::graphics::Shader_resource       vertex_data_out;  // For SSBO write

@@ -99,8 +99,7 @@ void animation_curve(erhe::scene::Animation& animation)
     static const char* translation_components[] = { "Tx", "Ty", "Tz"       };
     static const char* rotation_components   [] = { "Qx", "Qy", "Qz", "Qw" };
     static const char* scale_components      [] = { "Sx", "Sy", "Sz"       };
-    switch (channel.path)
-    {
+    switch (channel.path) {
         case erhe::scene::Animation_path::TRANSLATION: ImGui::Combo("Component", &component_index, translation_components, 3, 3); break;
         case erhe::scene::Animation_path::ROTATION:    ImGui::Combo("Component", &component_index, rotation_components,    4, 4); break;
         case erhe::scene::Animation_path::SCALE:       ImGui::Combo("Component", &component_index, scale_components,       3, 3); break;

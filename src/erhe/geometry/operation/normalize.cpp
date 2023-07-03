@@ -53,8 +53,7 @@ Normalize::Normalize(
     destination.m_edge_property_map_collection    = source.m_edge_property_map_collection   .clone();
 
     auto* positions = destination.point_attributes().find<glm::vec3>(c_point_locations);
-    destination.for_each_point_const([&](auto& i)
-    {
+    destination.for_each_point_const([&](auto& i) {
         // TODO Figure out when and how this can happen
         if (positions->has(i.point_id)) {
             const glm::vec3 old_position = positions->get(i.point_id);
@@ -73,8 +72,7 @@ auto normalize(Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("normalize({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Normalize operation{source, result};
         }
     };

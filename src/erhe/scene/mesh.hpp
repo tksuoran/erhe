@@ -22,7 +22,7 @@ using Layer_id = uint64_t;
 class Mesh_data
 {
 public:
-    Layer_id                                layer_id;
+    Layer_id                                layer_id{0xff};
     std::vector<erhe::primitive::Primitive> primitives;
     float                                   point_size{3.0f};
     float                                   line_width{1.0f};

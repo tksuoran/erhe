@@ -50,6 +50,11 @@ Mesh_memory::Mesh_memory(
         get_index_buffer_size(),
         storage_mask
     }
+    , gl_buffer_sink{
+        gl_buffer_transfer_queue,
+        gl_vertex_buffer,
+        gl_index_buffer
+    }
     , buffer_info{
         .index_type    = gl::Draw_elements_type::unsigned_int,
         .vertex_format = vertex_format,
@@ -70,11 +75,6 @@ Mesh_memory::Mesh_memory(
     //    .constant_color{0.5f, 0.5f, 0.5f, 1.0f},
     //    .
     //}
-    , gl_buffer_sink{
-        gl_buffer_transfer_queue,
-        gl_vertex_buffer,
-        gl_index_buffer
-    }
     , vertex_input{
         erhe::graphics::Vertex_input_state_data::make(
             program_interface.attribute_mappings,

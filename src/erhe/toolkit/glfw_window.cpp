@@ -363,7 +363,6 @@ Context_window::Context_window(const Window_configuration& configuration)
     : m_root_window_event_handler{this}
 {
     const bool ok = open(configuration);
-
     ERHE_VERIFY(ok);
 }
 

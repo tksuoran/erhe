@@ -507,7 +507,8 @@ void Node::handle_scene_host_update(
 {
     ERHE_VERIFY(old_scene_host != new_scene_host);
 
-    // TODO Danger - what if this causes node to be destructed?
+    ERHE_VERIFY(old_scene_host == node_data.host);
+
     for (const auto& attachment : node_data.attachments) {
         attachment->handle_node_scene_host_update(old_scene_host, new_scene_host);
     }
@@ -524,6 +525,12 @@ void Node::handle_scene_host_update(
             std::static_pointer_cast<Node>(shared_from_this())
         );
     }
+
+    for (const auto& child : node_data.children) {
+        child->handle_scene_host_update(old_scene_host, new_scene_host);
+    }
+    // Set by new_scene_host->register_node()
+    ERHE_VERIFY(node_data.host == new_scene_host);
 }
 
 void Node::handle_transform_update(const uint64_t serial) const

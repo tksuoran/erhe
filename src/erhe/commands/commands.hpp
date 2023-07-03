@@ -45,7 +45,7 @@ class Commands
     : public erhe::toolkit::Window_event_handler
 {
 public:
-    Commands ();
+    Commands();
     ~Commands() noexcept override;
 
     // Public API

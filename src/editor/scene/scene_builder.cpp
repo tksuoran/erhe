@@ -170,7 +170,7 @@ Scene_builder::Scene_builder(
         viewport_windows
     );
     setup_lights   ();
-    make_brushes   (mesh_memory);
+    make_brushes   (graphics_instance, mesh_memory);
     make_mesh_nodes();
     add_room       ();
 
@@ -444,7 +444,8 @@ auto Scene_builder::make_brush(
 }
 
 void Scene_builder::make_brushes(
-    Mesh_memory& mesh_memory
+    erhe::graphics::Instance& graphics_instance, 
+    Mesh_memory&              mesh_memory
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -472,8 +473,7 @@ void Scene_builder::make_brushes(
         m_collision_shapes.push_back(floor_box_shape);
 
         execution_queue->enqueue(
-            [this, &floor_box_shape, &mesh_memory]()
-            {
+            [this, &floor_box_shape, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Floor brush");
 
                 auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
@@ -521,7 +521,12 @@ void Scene_builder::make_brushes(
                     //"res/models/Suzanne.gltf"
                 };
                 for (auto* path : files_names) {
-                    parse_gltf(m_scene_root, build_info(mesh_memory), path);
+                    parse_gltf(
+                        graphics_instance,
+                        build_info(mesh_memory),
+                        *m_scene_root.get(),
+                        path
+                    );
                 }
             }
         //);
@@ -530,8 +535,7 @@ void Scene_builder::make_brushes(
 
     if (config.obj_files) {
         execution_queue->enqueue(
-            [this, &mesh_memory]()
-            {
+            [this, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("parse .obj files");
 
                 constexpr bool instantiate = true;
@@ -572,8 +576,7 @@ void Scene_builder::make_brushes(
 
     if (config.platonic_solids) {
         execution_queue->enqueue(
-            [this, &mesh_memory]()
-            {
+            [this, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
                 constexpr bool instantiate = global_instantiate;
@@ -603,8 +606,7 @@ void Scene_builder::make_brushes(
 
     if (config.sphere) {
         execution_queue->enqueue(
-            [this, &mesh_memory]()
-            {
+            [this, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Sphere");
                 constexpr bool instantiate = global_instantiate;
 
@@ -633,8 +635,7 @@ void Scene_builder::make_brushes(
 
     if (config.torus) {
         execution_queue->enqueue(
-            [this, &mesh_memory]()
-            {
+            [this, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Torus");
 
                 constexpr bool instantiate = global_instantiate;
@@ -718,8 +719,7 @@ void Scene_builder::make_brushes(
 
     if (config.cylinder) {
         execution_queue->enqueue(
-            [this, &mesh_memory]()
-            {
+            [this, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
                 constexpr bool instantiate = global_instantiate;
@@ -757,8 +757,7 @@ void Scene_builder::make_brushes(
 
     if (config.cone) {
         execution_queue->enqueue(
-            [this, &mesh_memory]()
-            {
+            [this, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Cone");
 
                 constexpr bool instantiate = global_instantiate;

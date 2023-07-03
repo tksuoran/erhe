@@ -3,8 +3,6 @@
 namespace editor
 {
 
-Editor_message_bus::Editor_message_bus()
-{
-}
+Editor_message_bus::Editor_message_bus() = default;
 
 } // namespace editor

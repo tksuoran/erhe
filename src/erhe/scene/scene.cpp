@@ -279,8 +279,7 @@ void Scene::sort_transform_nodes()
     std::sort(
         m_flat_node_vector.begin(),
         m_flat_node_vector.end(),
-        [](const auto& lhs, const auto& rhs)
-        {
+        [](const auto& lhs, const auto& rhs) {
             return lhs->get_depth() < rhs->get_depth();
         }
     );

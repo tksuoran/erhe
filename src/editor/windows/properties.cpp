@@ -248,6 +248,19 @@ void Properties::skin_properties(erhe::scene::Skin& skin) const
     ImGui::TreePop();
 }
 
+auto layer_name(erhe::scene::Layer_id layer_id) -> const char*
+{
+    switch (layer_id) {
+        case Mesh_layer_id::brush       : return "brush";
+        case Mesh_layer_id::content     : return "content";
+        case Mesh_layer_id::sky         : return "sky";
+        case Mesh_layer_id::controller  : return "controller";
+        case Mesh_layer_id::tool        : return "tool";
+        case Mesh_layer_id::rendertarget: return "rendertarget";
+        default:                          return "?";
+    }
+}
+
 void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 {
     ERHE_PROFILE_FUNCTION();
@@ -262,6 +275,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
         return;
     }
     auto& material_library = scene_root->content_library()->materials;
+    ImGui::Text("Layer ID: %u %s", static_cast<unsigned int>(mesh_data.layer_id), layer_name(mesh_data.layer_id));
 
     int primitive_index = 0;
     for (auto& primitive : mesh_data.primitives) {

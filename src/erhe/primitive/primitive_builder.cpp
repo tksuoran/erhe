@@ -486,7 +486,7 @@ void Build_context::build_vertex_tangent()
 #endif
     }
     if (!found) {
-        SPDLOG_LOGGER_WARN(log_primitive_builder, "point_id {} corner {} unit x tangent", point_id, corner_id);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point_id {} corner {} unit x tangent", point_id, corner_id);
         used_fallback_tangent = true;
     }
 
@@ -522,7 +522,7 @@ void Build_context::build_vertex_bitangent()
 #endif
     }
     if (!found) {
-        SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} unit z bitangent", point_id, corner_id);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} unit z bitangent", point_id, corner_id);
         used_fallback_bitangent = true;
     }
 
@@ -556,7 +556,7 @@ void Build_context::build_vertex_texcoord()
 #endif
     }
     if (!found) {
-        SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} default texcoord", point_id, corner_id);
+        SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} default texcoord", point_id, corner_id);
         used_fallback_texcoord = true;
     }
 

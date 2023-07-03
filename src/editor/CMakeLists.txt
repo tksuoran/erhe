@@ -317,6 +317,7 @@ target_link_libraries(
     erhe::configuration
     erhe::geometry
     erhe::gl
+    erhe::gltf
     erhe::graphics
     erhe::imgui
     erhe::log

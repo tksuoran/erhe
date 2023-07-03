@@ -5,6 +5,7 @@
 #include "image_transfer.hpp"
 
 #include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/geometry/geometry.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/png_loader.hpp"
@@ -13,8 +14,9 @@
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/log/log_glm.hpp"
-#include "erhe/primitive/buffer_sink.hpp"
+#include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/material.hpp"
+
 #include "erhe/scene/animation.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/projection.hpp"
@@ -48,6 +50,21 @@ extern "C" {
 namespace erhe::gltf {
 
 namespace {
+
+[[nodiscard]] auto is_float(const cgltf_component_type component_type)
+{
+    switch (component_type) {
+        case cgltf_component_type_invalid:  return false;
+        case cgltf_component_type_r_8:      return false;
+        case cgltf_component_type_r_8u:     return false;
+        case cgltf_component_type_r_16:     return false;
+        case cgltf_component_type_r_16u:    return false;
+        case cgltf_component_type_r_32u:    return false;
+        case cgltf_component_type_r_32f:    return true;
+        case cgltf_component_type_max_enum: return false;
+        default: return false;
+    }
+}
 
 [[nodiscard]] const char* c_str(const cgltf_result value)
 {
@@ -323,10 +340,22 @@ class Gltf_parser
 public:
     const cgltf_size null_index{std::numeric_limits<cgltf_size>::max()};
 
-    explicit Gltf_parser(Parse_context& context)
-        : m_context{context}
+    explicit Gltf_parser(
+        Gltf_data&                                gltf_data,
+        erhe::graphics::Instance&                 graphics_instance,
+        Image_transfer&                           image_transfer,
+        const std::shared_ptr<erhe::scene::Node>& root_node,
+        erhe::scene::Layer_id                     mesh_layer_id,
+        std::filesystem::path                     path
+    )
+        : m_data_out         {gltf_data}
+        , m_graphics_instance{graphics_instance}
+        , m_image_transfer   {image_transfer}
+        , m_root_node        {root_node}
+        , m_mesh_layer_id    {mesh_layer_id}
+        , m_path             {path}
     {
-        if (!open(context.path)) {
+        if (!open(path)) {
             return;
         }
 
@@ -339,59 +368,62 @@ public:
             log_gltf->error("No data loaded to parse glTF");
             return;
         }
-        m_default_material = std::make_shared<erhe::primitive::Material>(
-            "Default",
-            glm::vec3{0.500f, 0.500f, 0.500f},
-            glm::vec2{1.0f, 1.0f},
-            0.0f
-        );
 
-        m_images.resize(m_data->images_count);
+        m_data_out.images.resize(m_data->images_count);
         for (cgltf_size i = 0; i < m_data->images_count; ++i) {
             parse_image(i);
         }
 
-        m_samplers.resize(m_data->samplers_count);
+        m_data_out.samplers.resize(m_data->samplers_count);
         for (cgltf_size i = 0; i < m_data->samplers_count; ++i) {
             parse_sampler(i);
         }
 
-        m_materials.resize(m_data->materials_count);
+        m_data_out.materials.resize(m_data->materials_count);
         for (cgltf_size i = 0; i < m_data->materials_count; ++i) {
             parse_material(i);
         }
 
-        m_cameras.resize(m_data->cameras_count);
+        m_data_out.cameras.resize(m_data->cameras_count);
         for (cgltf_size i = 0; i < m_data->cameras_count; ++i) {
             parse_camera(i);
         }
 
-        m_lights.resize(m_data->lights_count);
+        m_data_out.lights.resize(m_data->lights_count);
         for (cgltf_size i = 0; i < m_data->lights_count; ++i) {
             parse_light(i);
         }
 
-        m_meshes.resize(m_data->meshes_count);
+        m_data_out.meshes.resize(m_data->meshes_count);
         for (cgltf_size i = 0; i < m_data->meshes_count; ++i) {
             parse_mesh(i);
         }
 
-        m_skins.resize(m_data->skins_count);
-        for (cgltf_size i = 0; i < m_data->skins_count; ++i) {
-            parse_skin(i);
+        m_data_out.nodes.resize(m_data->nodes_count);
+        if (m_data->scene != nullptr) {
+            for (cgltf_size i = 0; i < m_data->scene->nodes_count; ++i) {
+                parse_node(m_data->scene->nodes[i], m_root_node);
+            }
+        //} else {
+        //    for (cgltf_size i = 0; i < m_data->scenes_count; ++i) {
+        //        const cgltf_scene* scene = &m_data->scenes[i];
+        //        for (cgltf_size j = 0; i < scene->nodes_count; ++i) {
+        //            parse_node(scene->nodes[j], m_root_node);
+        //        }
+        //        break; // only first scene for now
+        //    }
         }
 
-        const auto root = m_context.scene.get_root_node();
-        m_nodes.resize(m_data->nodes_count);
-        for (cgltf_size i = 0; i < m_data->nodes_count; ++i) {
-            parse_node(&m_data->nodes[i], root);
+        m_data_out.skins.resize(m_data->skins_count);
+        for (cgltf_size i = 0; i < m_data->skins_count; ++i) {
+            parse_skin(i);
         }
 
         for (cgltf_size i = 0; i < m_data->nodes_count; ++i) {
             fix_pointers(i);
         }
 
-        m_animations.reserve(m_data->animations_count);
+        m_data_out.animations.reserve(m_data->animations_count);
         for (cgltf_size i = 0; i < m_data->animations_count; ++i) {
             parse_animation(i);
         }
@@ -400,8 +432,7 @@ public:
 private:
     auto open(const std::filesystem::path& path) -> bool
     {
-        const cgltf_options parse_options
-        {
+        const cgltf_options parse_options{
             .type             = cgltf_file_type_invalid, // auto
             .json_token_count = 0, // 0 == auto
             .memory = {
@@ -483,9 +514,9 @@ private:
         );
 
         auto erhe_animation = std::make_shared<erhe::scene::Animation>(animation_name);
-        m_context.animations.push_back(erhe_animation);
+        m_data_out.animations.push_back(erhe_animation);
         erhe_animation->samplers.resize(animation->samplers_count);
-        for (cgltf_size sampler_index = 0; animation_index < animation->samplers_count; ++sampler_index) {
+        for (cgltf_size sampler_index = 0; sampler_index < animation->samplers_count; ++sampler_index) {
             cgltf_animation_sampler& sampler = animation->samplers[sampler_index];
             auto& erhe_sampler = erhe_animation->samplers[sampler_index];
             if (sampler.input == nullptr) {
@@ -496,7 +527,7 @@ private:
                 log_gltf->warn("Animation `{}` sampler {} has nullptr output", animation_name, sampler_index);
                 continue;
             }
-            log_gltf->info(
+            log_gltf->trace(
                 "Animation `{}` sampler index = {}, "
                 "input type = {}, output type = {}, "
                 "interpolation = {}, "
@@ -558,9 +589,9 @@ private:
                 continue;
             }
             erhe::scene::Animation_path path = to_erhe(channel.target_path);
-            const auto& target_node = m_nodes.at(channel.target_node - m_data->nodes);
+            const auto& target_node = m_data_out.nodes.at(channel.target_node - m_data->nodes);
             const cgltf_size sampler_index = channel.sampler - animation->samplers;
-            log_gltf->info(
+            log_gltf->trace(
                 "Channel {} target = {}, pos = {} path = {}, sampler index = {}",
                 channel_index,
                 target_node->get_name(),
@@ -598,7 +629,7 @@ private:
                     : 0
             };
         }
-        m_animations[animation_index] = erhe_animation;
+        m_data_out.animations[animation_index] = erhe_animation;
     }
     auto load_image_file(
         const std::filesystem::path& path
@@ -631,10 +662,10 @@ private:
             return {};
         }
 
-        auto& slot = m_context.image_transfer.get_slot();
+        auto& slot = m_image_transfer.get_slot();
 
         erhe::graphics::Texture_create_info texture_create_info{
-            .instance        = m_context.graphics_instance,
+            .instance        = m_graphics_instance,
             .internal_format = to_gl(image_info.format),
             .use_mipmaps     = true, //(image_info.level_count > 1),
             .width           = image_info.width,
@@ -677,7 +708,7 @@ private:
         return texture;
     }
     auto load_png_buffer(
-	    const cgltf_buffer_view* buffer_view
+        const cgltf_buffer_view* buffer_view
     ) -> std::shared_ptr<erhe::graphics::Texture>
     {
         const cgltf_size  buffer_view_index = buffer_view - m_data->buffer_views;
@@ -696,10 +727,10 @@ private:
             return {};
         }
 
-        auto& slot = m_context.image_transfer.get_slot();
+        auto& slot = m_image_transfer.get_slot();
 
         erhe::graphics::Texture_create_info texture_create_info{
-            .instance        = m_context.graphics_instance,
+            .instance        = m_graphics_instance,
             .internal_format = to_gl(image_info.format),
             .use_mipmaps     = true, //(image_info.level_count > 1),
             .width           = image_info.width,
@@ -750,7 +781,7 @@ private:
         std::shared_ptr<erhe::graphics::Texture> erhe_texture;
         if (image->uri != nullptr) {
             std::filesystem::path uri{image->uri};
-            erhe_texture = load_image_file(m_context.path.replace_filename(uri));
+            erhe_texture = load_image_file(m_path.replace_filename(uri));
             if (!erhe_texture) {
                 erhe_texture = load_image_file(image->uri);
             }
@@ -759,9 +790,9 @@ private:
         }
         if (erhe_texture) {
             erhe_texture->set_debug_label(image_name);
-            m_context.images.push_back(erhe_texture);
+            m_data_out.images.push_back(erhe_texture);
         }
-        m_images[image_index] = erhe_texture;
+        m_data_out.images[image_index] = erhe_texture;
     }
     void parse_sampler(const cgltf_size sampler_index)
     {
@@ -774,13 +805,13 @@ private:
         create_info.mag_filter     = static_cast<gl::Texture_mag_filter>(sampler->mag_filter);
         create_info.wrap_mode[0]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_s);
         create_info.wrap_mode[1]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_t);
-        create_info.max_anisotropy = m_context.graphics_instance.limits.max_texture_max_anisotropy;
+        create_info.max_anisotropy = m_graphics_instance.limits.max_texture_max_anisotropy;
         create_info.debug_label    = sampler_name;
 
         auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(create_info);
         erhe_sampler->set_debug_label(sampler_name);
-        m_samplers[sampler_index] = erhe_sampler;
-        m_context.samplers.push_back(erhe_sampler);
+        m_data_out.samplers[sampler_index] = erhe_sampler;
+        m_data_out.samplers.push_back(erhe_sampler);
     }
     void parse_material(const cgltf_size material_index)
     {
@@ -793,23 +824,22 @@ private:
         );
 
         auto new_material = std::make_shared<erhe::primitive::Material>(material_name);
-        m_context.materials.push_back(new_material);
-        m_materials[material_index] = new_material;
+        m_data_out.materials[material_index] = new_material;
         if (material->has_pbr_metallic_roughness) {
             const cgltf_pbr_metallic_roughness& pbr_metallic_roughness = material->pbr_metallic_roughness;
             if (pbr_metallic_roughness.base_color_texture.texture != nullptr) {
                 const cgltf_texture* texture       = pbr_metallic_roughness.base_color_texture.texture;
                 const cgltf_size     image_index   = texture->image   - m_data->images;
                 const cgltf_size     sampler_index = texture->sampler - m_data->samplers;
-                new_material->base_color_texture = m_images  [image_index];
-                new_material->base_color_sampler = m_samplers[sampler_index];
+                new_material->base_color_texture = m_data_out.images  [image_index];
+                new_material->base_color_sampler = m_data_out.samplers[sampler_index];
             }
             if (pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
                 const cgltf_texture* texture       = pbr_metallic_roughness.metallic_roughness_texture.texture;
                 const cgltf_size     image_index   = texture->image   - m_data->images;
                 const cgltf_size     sampler_index = texture->sampler - m_data->samplers;
-                new_material->metallic_roughness_texture = m_images  [image_index];
-                new_material->metallic_roughness_sampler = m_samplers[sampler_index];
+                new_material->metallic_roughness_texture = m_data_out.images  [image_index];
+                new_material->metallic_roughness_sampler = m_data_out.samplers[sampler_index];
             }
             new_material->base_color = glm::vec4{
                 pbr_metallic_roughness.base_color_factor[0],
@@ -875,15 +905,6 @@ private:
         };
         erhe_node->set_parent_from_node(matrix);
     }
-    //void parse_buffer(const cgltf_size buffer_index)
-    //{
-    //    cgltf_buffer* buffer = &m_data->buffers[buffer_index];
-    //
-    //    auto erhe_buffer = std::make_shared<erhe::graphics::Buffer>(buffer->size, static_cast<gl::Buffer_storage_mask>(0));
-    //    auto span = erhe_buffer->begin_write(0, buffer->size);
-    //    memcpy(span.data(), buffer->data, buffer->size);
-    //    erhe_buffer->end_write(0, buffer->size);
-    //}
     void parse_camera(const cgltf_size camera_index)
     {
         const cgltf_camera* camera = &m_data->cameras[camera_index];
@@ -891,8 +912,7 @@ private:
         log_gltf->trace("Camera: camera index = {}, name = {}", camera_index, camera_name);
 
         auto erhe_camera = std::make_shared<erhe::scene::Camera>(camera_name);
-        m_context.cameras.push_back(erhe_camera);
-        m_cameras[camera_index] = erhe_camera;
+        m_data_out.cameras[camera_index] = erhe_camera;
         erhe_camera->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
         auto* projection = erhe_camera->projection();
         switch (camera->type) {
@@ -912,7 +932,7 @@ private:
                 break;
             }
 
-            case cgltf_camera_type::cgltf_camera_type_orthographic:  {
+            case cgltf_camera_type::cgltf_camera_type_orthographic: {
                 const cgltf_camera_orthographic& orthographic = camera->data.orthographic;
                 log_gltf->trace("Camera.xmag:              {}", orthographic.xmag);
                 log_gltf->trace("Camera.ymag:              {}", orthographic.ymag);
@@ -939,8 +959,7 @@ private:
         log_gltf->trace("Light: camera index = {}, name = {}", light_index, light_name);
 
         auto erhe_light = std::make_shared<erhe::scene::Light>(light_name);
-        m_context.lights.push_back(erhe_light);
-        m_lights[light_index] = erhe_light;
+        m_data_out.lights[light_index] = erhe_light;
         erhe_light->color = glm::vec3{
             light->color[0],
             light->color[1],
@@ -955,33 +974,74 @@ private:
         erhe_light->layer_id = 0;
         erhe_light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     }
-    void parse_primitive(
-        const std::shared_ptr<erhe::scene::Mesh>& erhe_mesh,
-        const cgltf_mesh*                         mesh,
-        const cgltf_size                          primitive_index
-    )
+
+    class Primitive_to_geometry
     {
-        const cgltf_primitive* primitive = &mesh->primitives[primitive_index];
-
-        auto name = (mesh->name != nullptr)
-            ? fmt::format("{}[{}]", mesh->name, primitive_index)
-            : fmt::format("primitive[{}]", primitive_index);
-
-        log_gltf->trace("Primitive type: {}", c_str(primitive->type));
-
-        erhe::primitive::Primitive_geometry erhe_gl_primitive;
-
-        // Index buffer
+    public:
+        Primitive_to_geometry(const cgltf_primitive* primitive)
+            : primitive{primitive}
+            , geometry {std::make_shared<erhe::geometry::Geometry>()}
         {
-            const cgltf_accessor* const    accessor     = primitive->indices;
-            const cgltf_buffer_view* const buffer_view  = accessor->buffer_view;
-            const cgltf_buffer* const      buffer       = buffer_view->buffer;
-            const cgltf_size               buffer_index = buffer - m_data->buffers;
+            std::unordered_map<cgltf_attribute_type, cgltf_int> attribute_max_index;
+            for (cgltf_size i = 0; i < primitive->attributes_count; ++i) {
+                const cgltf_attribute* const attribute = &primitive->attributes[i];
+                auto j = attribute_max_index.find(attribute->type);
+                if (j != attribute_max_index.end()) {
+                    j->second = std::max(j->second, attribute->index);
+                } else {
+                    attribute_max_index[attribute->type] = attribute->index;
+                }
+            }
+            for (auto [attribute_type, last_index] : attribute_max_index) {
+                switch (attribute_type) {
+                    case cgltf_attribute_type_position: point_locations    .resize(last_index + 1); break;
+                    case cgltf_attribute_type_normal:   corner_normals     .resize(last_index + 1); break;
+                    case cgltf_attribute_type_tangent:  corner_tangents    .resize(last_index + 1); break;
+                    case cgltf_attribute_type_texcoord: corner_texcoords   .resize(last_index + 1); break;
+                    case cgltf_attribute_type_color:    corner_colors      .resize(last_index + 1); break;
+                    case cgltf_attribute_type_joints:   point_joint_indices.resize(last_index + 1); break;
+                    case cgltf_attribute_type_weights:  point_joint_weights.resize(last_index + 1); break;
+                    default: continue;
+                }
+            }
+            for (cgltf_size i = 0; i < primitive->attributes_count; ++i) {
+                const cgltf_attribute* const attribute = &primitive->attributes[i];
+                switch (attribute->type) {
+                    case cgltf_attribute_type_position: point_locations    [attribute->index] = geometry->point_attributes ().create<vec3 >(erhe::geometry::c_point_locations    ); break;
+                    case cgltf_attribute_type_normal:   corner_normals     [attribute->index] = geometry->corner_attributes().create<vec3 >(erhe::geometry::c_corner_normals     ); break;
+                    case cgltf_attribute_type_tangent:  corner_tangents    [attribute->index] = geometry->corner_attributes().create<vec4 >(erhe::geometry::c_corner_tangents    ); break;
+                    case cgltf_attribute_type_texcoord: corner_texcoords   [attribute->index] = geometry->corner_attributes().create<vec2 >(erhe::geometry::c_corner_texcoords   ); break;
+                    case cgltf_attribute_type_color:    corner_colors      [attribute->index] = geometry->corner_attributes().create<vec4 >(erhe::geometry::c_corner_colors      ); break;
+                    case cgltf_attribute_type_joints:   point_joint_indices[attribute->index] = geometry->point_attributes ().create<uvec4>(erhe::geometry::c_point_joint_indices); break;
+                    case cgltf_attribute_type_weights:  point_joint_weights[attribute->index] = geometry->point_attributes ().create<vec4 >(erhe::geometry::c_point_joint_weights); break;
+                    default: continue;
+                }
+            }
+
+            get_used_indices();
+            make_points();
+            switch (primitive->type) {
+                case cgltf_primitive_type::cgltf_primitive_type_triangles: {
+                    parse_triangles();
+                    break;
+                }
+                default: {
+                    log_gltf->warn("Unsupported glTF primitive type {}", c_str(primitive->type));
+                    break;
+                }
+            }
+            parse_vertex_data();
+            geometry->make_point_corners();
+            geometry->build_edges();
+        }
+        void get_used_indices()
+        {
+            const cgltf_accessor* const    accessor    = primitive->indices;
+            const cgltf_buffer_view* const buffer_view = accessor->buffer_view;
 
             log_gltf->trace(
-                "Index buffer index = {}, component type = {}, type = {}, "
+                "Index buffer component type = {}, type = {}, "
                 "count = {}, accessor offset = {}, buffer view_offset = {}",
-                buffer_index,
                 c_str(accessor->component_type),
                 c_str(accessor->type),
                 accessor->count,
@@ -989,11 +1049,8 @@ private:
                 buffer_view->offset
             );
 
-            const cgltf_size  index_stride            = 4; // always 32-bit unsigned integer
-            const std::size_t index_buffer_byte_count = primitive->indices->count * index_stride;
-
-            std::vector<uint32_t> read_indices(primitive->indices->count);
-            const cgltf_size unpack_count = cgltf_accessor_unpack_indices(accessor, &read_indices[0], primitive->indices->count);
+            used_indices.resize(primitive->indices->count);
+            const cgltf_size unpack_count = cgltf_accessor_unpack_indices(accessor, &used_indices[0], primitive->indices->count);
             if (unpack_count != primitive->indices->count) {
                 log_gltf->error(
                     "cgltf_accessor_unpack_indices() failed: expected {}, got {}",
@@ -1003,84 +1060,221 @@ private:
                 return;
             }
 
-            //std::vector<uint32_t> flip_indices(primitive->indices->count);
-            //switch (primitive->type) {
-            //    case cgltf_primitive_type::cgltf_primitive_type_points:     break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_lines:      break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_line_loop:  break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_line_strip: break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_triangles: {
-            //        for (cgltf_size i = 0; i < primitive->indices->count; i += 3) {
-            //            flip_indices[i + 2] = read_indices[i + 0];
-            //            flip_indices[i + 1] = read_indices[i + 1];
-            //            flip_indices[i + 0] = read_indices[i + 2];
-            //        }
-            //        break;
-            //    }
-            //    case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   break;
-            //    default: break;
-            //}
-            //
-            std::vector<uint8_t> data(index_buffer_byte_count);
-            //memcpy(data.data(), flip_indices.data(), data.size());
-            memcpy(data.data(), read_indices.data(), data.size());
+            // Remove duplicates
+            std::sort(used_indices.begin(), used_indices.end());
+            used_indices.erase(
+                std::unique(
+                    used_indices.begin(),
+                    used_indices.end()
+                ),
+                used_indices.end()
+            );
 
-            erhe::primitive::Buffer_range index_range = m_context.buffer_sink.allocate_index_buffer(primitive->indices->count, index_stride);
-            m_context.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(data));
-            //allocate_index_buffer(primitive->indices->count, 4);
-            //auto span = m_context.index_buffer->begin_write(index_buffer_byte_offset, index_buffer_byte_count);
-            //memcpy(
-            //    span.data(),
-            //    temp.data(),
-            //    index_buffer_byte_count
-            //);
-            //m_context.index_buffer->end_write(index_buffer_byte_offset, index_buffer_byte_count);
-
-            erhe_gl_primitive.index_buffer_range.byte_offset       = index_range.byte_offset;
-            erhe_gl_primitive.index_buffer_range.count             = primitive->indices->count;
-            erhe_gl_primitive.index_buffer_range.element_size      = index_stride;
-            erhe_gl_primitive.triangle_fill_indices.primitive_type = to_erhe(primitive->type);
-            erhe_gl_primitive.triangle_fill_indices.first_index    = 0;
-            erhe_gl_primitive.triangle_fill_indices.index_count    = primitive->indices->count;
+            // First and last index
+            max_index = cgltf_size{0};
+            min_index = std::numeric_limits<cgltf_size>::max();
+            for (const cgltf_size index : used_indices) {
+                min_index = std::min(index, min_index);
+                max_index = std::max(index, max_index);
+            }
         }
-
-        // Vertex buffer
+        void make_points()
         {
-            const cgltf_size  vertex_count             = primitive->attributes[0].data->count;
-            const std::size_t vertex_buffer_byte_count = vertex_count * m_context.vertex_format.stride();
-            erhe::primitive::Buffer_range vertex_range = m_context.buffer_sink.allocate_vertex_buffer(vertex_count, m_context.vertex_format.stride());
+            cgltf_attribute* position_attribute{nullptr};
+            cgltf_int min_attribute_index = std::numeric_limits<cgltf_int>::max();
+            for (cgltf_size i = 0; i < primitive->attributes_count; ++i) {
+                cgltf_attribute* attribute = &primitive->attributes[i];
+                if (
+                    (attribute->type == cgltf_attribute_type::cgltf_attribute_type_position) &&
+                    (attribute->index < min_attribute_index)
+                ) {
+                    position_attribute = attribute;
+                    min_attribute_index = attribute->index;
+                }
+            }
+            if (position_attribute == nullptr) {
+                log_gltf->warn("No vertex position attribute found");
+                return;
+            }
 
-            std::vector<uint8_t> data(vertex_buffer_byte_count);
-            uint8_t* span_start = data.data();
+            // Get vertex positions and calculate bounding box
+            vertex_positions.clear();
+            cgltf_accessor* accessor = position_attribute->data;
 
-            erhe_gl_primitive.vertex_buffer_range.byte_offset  = vertex_range.byte_offset;
-            erhe_gl_primitive.vertex_buffer_range.count        = vertex_count;
-            erhe_gl_primitive.vertex_buffer_range.element_size = m_context.vertex_format.stride();
+            const cgltf_size num_components = std::min(
+                cgltf_size{3},
+                cgltf_num_components(accessor->type)
+            );
+            vec3 min_corner{std::numeric_limits<float>::max(),    std::numeric_limits<float>::max(),    std::numeric_limits<float>::max()};
+            vec3 max_corner{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
+            const cgltf_size vertex_count = max_index - min_index + 1;
+            vertex_positions.resize(vertex_count);
+            switch (accessor->type) {
+                case cgltf_type::cgltf_type_scalar:
+                case cgltf_type::cgltf_type_vec2:
+                case cgltf_type::cgltf_type_vec3:
+                case cgltf_type::cgltf_type_vec4: {
+                    for (cgltf_size index : used_indices) {
+                        cgltf_float v[3] = { 0.0f, 0.0f, 0.0f };
+                        cgltf_accessor_read_float(accessor, index, &v[0], num_components);
+                        const auto position = glm::vec3{v[0], v[1], v[2]};
+                        vertex_positions.at(index - min_index) = position;
+                        min_corner = glm::min(min_corner, position);
+                        max_corner = glm::max(max_corner, position);
+                    }
+                    break;
+                }
+                default: {
+                    log_gltf->warn("Unsupported glTF position attribute accessor type");
+                    return;
+                }
+            }
 
-            for (cgltf_size attribute_index = 0; attribute_index < primitive->attributes_count; ++attribute_index) {
-                const cgltf_attribute* const attribute = &primitive->attributes[attribute_index];
+            // Sort vertices
+            std::set<glm::vec3::length_type> available_axis = { 0, 1, 2 };
+            std::set<glm::vec3::length_type> used_axis;
 
-                const auto erhe_usage_opt = to_erhe(attribute->type);
-                if (!erhe_usage_opt.has_value()) {
+            const vec3 bounding_box_size0 = max_corner - min_corner;
+            const auto axis0 = erhe::toolkit::max_axis_index<float>(bounding_box_size0);
+            available_axis.erase(axis0);
+            used_axis.insert(axis0);
+            vec3 bounding_box_size1 = bounding_box_size0;
+            bounding_box_size1[axis0] = 0.0f;
+
+            auto axis1 = erhe::toolkit::max_axis_index<float>(bounding_box_size1);
+            if (used_axis.count(axis1) > 0) {
+                axis1 = *available_axis.begin();
+            }
+            available_axis.erase(axis1);
+            used_axis.insert(axis1);
+
+            vec3 bounding_box_size2 = bounding_box_size1;
+            bounding_box_size2[axis1] = 0.0f;
+            auto axis2 = erhe::toolkit::max_axis_index<float>(bounding_box_size2);
+            if (used_axis.count(axis2) > 0) {
+                axis2 = * available_axis.begin();
+            }
+            available_axis.erase(axis2);
+            used_axis.insert(axis2);
+
+            log_gltf->trace("Bounding box   = {}", bounding_box_size0);
+            log_gltf->trace("Primary   axis = {}", "XYZ"[axis0]);
+            log_gltf->trace("Secondary axis = {}", "XYZ"[axis1]);
+            log_gltf->trace("Tertiary  axis = {}", "XYZ"[axis2]);
+
+            sorted_vertex_indices    .resize(vertex_count);
+            point_id_from_gltf_index .resize(vertex_count);
+            corner_id_from_gltf_index.resize(vertex_count);
+
+            std::fill(
+                sorted_vertex_indices.begin(),
+                sorted_vertex_indices.end(),
+                std::numeric_limits<cgltf_size>::max()
+            );
+            std::fill(
+                point_id_from_gltf_index.begin(),
+                point_id_from_gltf_index.end(),
+                std::numeric_limits<Point_id>::max()
+            );
+            std::fill(
+                corner_id_from_gltf_index.begin(),
+                corner_id_from_gltf_index.end(),
+                std::numeric_limits<Corner_id>::max()
+            );
+            for (cgltf_size index : used_indices) {
+                sorted_vertex_indices[index - min_index] = index;
+            }
+
+            std::sort(
+                sorted_vertex_indices.begin(),
+                sorted_vertex_indices.end(),
+                [this, axis0, axis1, axis2](const cgltf_size lhs_index, const cgltf_size rhs_index) {
+                    if (rhs_index == std::numeric_limits<cgltf_size>::max()) {
+                        return true;
+                    }
+                    const vec3 position_lhs = vertex_positions[lhs_index - min_index];
+                    const vec3 position_rhs = vertex_positions[rhs_index - min_index];
+                    if (position_lhs[axis0] != position_rhs[axis0]) {
+                        return position_lhs[axis0] < position_rhs[axis0];
+                    }
+                    if (position_lhs[axis1] != position_rhs[axis1]) {
+                        return position_lhs[axis1] < position_rhs[axis1];
+                    }
+                    return position_lhs[axis2] < position_rhs[axis2];
+                }
+            );
+
+            // Create points for each unique vertex
+            vec3 previous_position{
+                std::numeric_limits<float>::lowest(),
+                std::numeric_limits<float>::lowest(),
+                std::numeric_limits<float>::lowest()
+            };
+            erhe::geometry::Point_id point_id{0};
+            std::size_t point_share_count{0};
+            for (cgltf_size index : sorted_vertex_indices) {
+                if (index == std::numeric_limits<cgltf_size>::max()) {
                     continue;
                 }
-
-                const auto erhe_usage = erhe_usage_opt.value();
-                const erhe::graphics::Vertex_attribute* erhe_attribute = m_context.vertex_format.find_attribute_maybe(
-                    erhe_usage, attribute->index
-                );
-                if (erhe_attribute == nullptr) {
-                    continue;
+                const vec3 position = vertex_positions[index - min_index];
+                if (position != previous_position) {
+                    point_id = geometry->make_point();
+                    previous_position = position;
+                } else {
+                    ++point_share_count;
                 }
-        
+                point_id_from_gltf_index[index - min_index] = point_id;
+            }
+            log_gltf->trace(
+                "point count = {}, point share count = {}",
+                geometry->get_point_count(),
+                point_share_count
+            );
+        }
+        void parse_triangles()
+        {
+            const cgltf_accessor* accessor = primitive->indices;
+            const cgltf_size triangle_count = accessor->count / 3;
+
+            log_gltf->trace(
+                "index count = {}, unique vertex count = {}, triangle count = {}",
+                accessor->count,
+                used_indices.size(),
+                triangle_count
+            );
+
+            geometry->reserve_polygons(triangle_count);
+            corner_id_start = geometry->m_next_corner_id;
+            for (cgltf_size i = 0; i < accessor->count;) {
+                const cgltf_size v0         = cgltf_accessor_read_index(accessor, i++);
+                const cgltf_size v1         = cgltf_accessor_read_index(accessor, i++);
+                const cgltf_size v2         = cgltf_accessor_read_index(accessor, i++);
+                const Point_id   p0         = point_id_from_gltf_index.at(v0 - min_index);
+                const Point_id   p1         = point_id_from_gltf_index.at(v1 - min_index);
+                const Point_id   p2         = point_id_from_gltf_index.at(v2 - min_index);
+                const Polygon_id polygon_id = geometry->make_polygon();
+                const Corner_id  c0         = geometry->make_polygon_corner(polygon_id, p0);
+                const Corner_id  c1         = geometry->make_polygon_corner(polygon_id, p1);
+                const Corner_id  c2         = geometry->make_polygon_corner(polygon_id, p2);
+                corner_id_from_gltf_index[v0 - min_index] = c0;
+                corner_id_from_gltf_index[v1 - min_index] = c1;
+                corner_id_from_gltf_index[v2 - min_index] = c2;
+                SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v0, c0, polygon_id);
+                SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v1, c1, polygon_id);
+                SPDLOG_LOGGER_TRACE(log_parsers, "vertex {} corner {} for polygon {}", v2, c2, polygon_id);
+            }
+        }
+        void parse_vertex_data()
+        {
+            for (cgltf_size i = 0; i < primitive->attributes_count; ++i) {
+                const cgltf_attribute* const attribute = &primitive->attributes[i];
                 const cgltf_accessor* accessor = attribute->data;
 
                 log_gltf->trace(
                     "Primitive attribute[{}]: name = {}, attribute type = {}[{}], "
                     "component type = {}, accessor type = {}, normalized = {}, count = {}, "
                     "stride = {}, accessor offset = {}",
-                    attribute_index,
+                    i,
                     attribute->name,
                     c_str(attribute->type), // semantics
                     attribute->index,
@@ -1094,90 +1288,174 @@ private:
 
                 const cgltf_size component_count = cgltf_num_components(accessor->type);
 
-                switch (erhe_attribute->data_type.type) {
-                    case gl::Vertex_attrib_type::float_: {
-                        for (cgltf_size i = 0; i < accessor->count; ++i) {
-                            cgltf_float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                            cgltf_accessor_read_float(accessor, i, &value[0], component_count);
-                            float* dest = reinterpret_cast<float*>(span_start + erhe_attribute->offset + i * m_context.vertex_format.stride());
-                            for (cgltf_size c = 0; c < erhe_attribute->data_type.dimension; ++c) {
-                                dest[c] = value[c];
-                            }
-                            cgltf_accessor_read_float(
-                                accessor,
-                                i,
-                                reinterpret_cast<float*>(span_start + erhe_attribute->offset + i * m_context.vertex_format.stride()),
-                                erhe_attribute->data_type.dimension
-                            );
-                        }
-                        break;
+                if (is_float(accessor->component_type)) {
+                    for (cgltf_size j = 0; j < accessor->count; ++j) {
+                        cgltf_float value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                        cgltf_accessor_read_float(accessor, j, &value[0], component_count);
+                        put_attribute<cgltf_float>(attribute, j, value);
                     }
-
-                    case gl::Vertex_attrib_type::unsigned_byte: {
-                        for (cgltf_size i = 0; i < accessor->count; ++i) {
-                            cgltf_uint value[4] = { 0, 0, 0, 0 };
-                            cgltf_accessor_read_uint(accessor, i, &value[0], component_count);
-                            uint8_t* dest = reinterpret_cast<uint8_t*>(span_start + erhe_attribute->offset + i * m_context.vertex_format.stride());
-                            for (cgltf_size c = 0; c < erhe_attribute->data_type.dimension; ++c) {
-                                ERHE_VERIFY((value[c] & ~0xffu) == 0);
-                                dest[c] = value[c] & 0xffu;
-                            }
-                        }
-                        break;
-                    }
-                    case gl::Vertex_attrib_type::byte: {
-                        for (cgltf_size i = 0; i < accessor->count; ++i) {
-                            cgltf_uint value[4] = { 0, 0, 0, 0 };
-                            cgltf_accessor_read_uint(accessor, i, &value[0], component_count);
-                            int8_t* dest = reinterpret_cast<int8_t*>(span_start + erhe_attribute->offset + i * m_context.vertex_format.stride());
-                            for (cgltf_size c = 0; c < erhe_attribute->data_type.dimension; ++c) {
-                                ERHE_VERIFY((value[c] & ~0xffu) == 0);
-                                dest[c] = value[c] & 0xffu;
-                            }
-                        }
-                        break;
-                    }
-                    case gl::Vertex_attrib_type::unsigned_short: {
-                        for (cgltf_size i = 0; i < accessor->count; ++i) {
-                            cgltf_uint value[4] = { 0, 0, 0, 0 };
-                            cgltf_accessor_read_uint(accessor, i, &value[0], component_count);
-                            uint16_t* dest = reinterpret_cast<uint16_t*>(span_start + erhe_attribute->offset + i * m_context.vertex_format.stride());
-                            for (cgltf_size c = 0; c < erhe_attribute->data_type.dimension; ++c) {
-                                ERHE_VERIFY((value[c] & ~0xffffu) == 0);
-                                dest[c] = value[c] & 0xffffu;
-                            }
-                        }
-                        break;
-                    }
-                    case gl::Vertex_attrib_type::short_: {
-                        for (cgltf_size i = 0; i < accessor->count; ++i) {
-                            cgltf_uint value[4] = { 0, 0, 0, 0 };
-                            cgltf_accessor_read_uint(accessor, i, &value[0], component_count);
-                            int16_t* dest = reinterpret_cast<int16_t*>(span_start + erhe_attribute->offset + i * m_context.vertex_format.stride());
-                            for (cgltf_size c = 0; c < erhe_attribute->data_type.dimension; ++c) {
-                                ERHE_VERIFY((value[c] & ~0xffffu) == 0);
-                                dest[c] = value[c] & 0xffffu;
-                            }
-                        }
-                        break;
-                    }
-                    default: {
-                        // TODO
-                        break;
+                } else {
+                    for (cgltf_size j = 0; j < accessor->count; ++j) {
+                        cgltf_uint value[4] = { 0, 0, 0, 0 };
+                        cgltf_accessor_read_uint(accessor, j, &value[0], component_count);
+                        put_attribute<cgltf_uint>(attribute, j, value);
                     }
                 }
             }
-
-            m_context.buffer_sink.enqueue_vertex_data(vertex_range.byte_offset, std::move(data));
         }
 
-        const cgltf_size material_index = primitive->material - m_data->materials;
+        template <typename T>
+        [[nodiscard]] void put_attribute(
+            const cgltf_attribute* attribute,
+            cgltf_size             index,
+            T                      value[4]
+        )
+        {
+            const auto point_id  = point_id_from_gltf_index.at(index - min_index);
+            const auto corner_id = corner_id_from_gltf_index.at(index - min_index);
+
+            switch (attribute->type) {
+                case cgltf_attribute_type::cgltf_attribute_type_invalid: {
+                    log_gltf->warn("Invalid glTF attribute type");
+                    break;
+                }
+
+                case cgltf_attribute_type::cgltf_attribute_type_position: {
+                    if (point_id != std::numeric_limits<Point_id>::max()) {
+                        point_locations[attribute->index]->put(point_id, glm::vec3{value[0], value[1], value[2]});
+                    }
+                    break;
+                }
+
+                case cgltf_attribute_type::cgltf_attribute_type_normal: {
+                    if (corner_id != std::numeric_limits<Point_id>::max()) {
+                        corner_normals[attribute->index]->put(corner_id, glm::vec3{value[0], value[1], value[2]});
+                    }
+                    break; 
+                }
+
+                case cgltf_attribute_type::cgltf_attribute_type_tangent: {
+                    if (corner_id != std::numeric_limits<Point_id>::max()) {
+                        corner_tangents[attribute->index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
+                    }
+                    break;
+                }
+
+                case cgltf_attribute_type::cgltf_attribute_type_texcoord: {
+                    if (corner_id != std::numeric_limits<Point_id>::max()) {
+                        corner_texcoords[attribute->index]->put(corner_id, glm::vec2{value[0], value[1]}); break;
+                    }
+                    break;
+                }
+                case cgltf_attribute_type::cgltf_attribute_type_color: {
+                    if (corner_id != std::numeric_limits<Point_id>::max()) {
+                        corner_colors[attribute->index]->put(corner_id, glm::vec4{value[0], value[1], value[2], value[3]});
+                    }
+                    break;
+                }
+                case cgltf_attribute_type::cgltf_attribute_type_joints: {
+                    if (point_id != std::numeric_limits<Point_id>::max()) {
+                        point_joint_indices[attribute->index]->put(point_id, glm::uvec4{value[0], value[1], value[2], value[3]});
+                    }
+                    break;
+                }
+                case cgltf_attribute_type::cgltf_attribute_type_weights: {
+                    if (point_id != std::numeric_limits<Point_id>::max()) {
+                        point_joint_weights[attribute->index]->put(point_id, glm::vec4{value[0], value[1], value[2], value[3]});
+                    }
+                    break;
+                }
+                default: {
+                    log_gltf->warn("Unsupported glTF attribute type {}", attribute->type);
+                    break;
+                }
+            }
+        }
+
+        const cgltf_primitive*                    primitive                {nullptr};
+        std::shared_ptr<erhe::geometry::Geometry> geometry                 {};
+        cgltf_size                                min_index                {0};
+        cgltf_size                                max_index                {0};
+        std::vector<uint32_t>                     used_indices             {};
+        std::vector<glm::vec3>                    vertex_positions         {};
+        std::vector<cgltf_size>                   sorted_vertex_indices    {};
+        std::vector<erhe::geometry::Point_id>     point_id_from_gltf_index {};
+        erhe::geometry::Corner_id                 corner_id_start          {};
+        erhe::geometry::Corner_id                 corner_id_end            {};
+        std::vector<erhe::geometry::Corner_id>    corner_id_from_gltf_index{};
+        //// std::shared_ptr<Raytrace_primitive>       erhe_raytrace_primitive      {};
+
+        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec3>*> corner_normals     ;
+        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec4>*> corner_tangents    ;
+        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec4>*> corner_bitangents  ;
+        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec2>*> corner_texcoords   ;
+        std::vector<Property_map<erhe::geometry::Corner_id, glm::vec4>*> corner_colors      ;
+        std::vector<Property_map<erhe::geometry::Corner_id, uint32_t>* > corner_indices     ;
+        std::vector<Property_map<erhe::geometry::Point_id, glm::vec3>* > point_locations    ;
+        std::vector<Property_map<erhe::geometry::Point_id, glm::uvec4>*> point_joint_indices;
+        std::vector<Property_map<erhe::geometry::Point_id, glm::vec4>* > point_joint_weights;
+    };
+
+    class Geometry_entry
+    {
+    public:
+        cgltf_size                                index_accessor;
+        std::vector<cgltf_size>                   attribute_accessors;
+        std::shared_ptr<erhe::geometry::Geometry> geometry;
+    };
+    std::vector<Geometry_entry> m_geometries;
+    void load_new_primitive_geometry(const cgltf_primitive* primitive, Geometry_entry& geometry_entry)
+    {
+        Primitive_to_geometry primitive_to_geometry{primitive};
+        geometry_entry.geometry = primitive_to_geometry.geometry;
+        m_data_out.geometries.push_back(primitive_to_geometry.geometry);
+    }
+    auto get_primitive_geometry(const cgltf_primitive* primitive, Geometry_entry& geometry_entry)
+    {
+        geometry_entry.index_accessor = static_cast<cgltf_size>(primitive->indices - m_data->accessors);
+        geometry_entry.attribute_accessors.clear();
+        for (cgltf_size i = 0; i < primitive->attributes_count; ++i) {
+            const cgltf_accessor* accessor = primitive->attributes[i].data;
+            const cgltf_size attribute_accessor_index = accessor - m_data->accessors;
+            geometry_entry.attribute_accessors.push_back(attribute_accessor_index);
+        }
+
+        for (const auto& entry : m_geometries) {
+            if (entry.index_accessor != geometry_entry.index_accessor) continue;
+            if (entry.attribute_accessors.size() != geometry_entry.attribute_accessors.size()) continue;
+            for (std::size_t i = 0, end = entry.attribute_accessors.size(); i < end; ++i) {
+                if (entry.attribute_accessors[i] != geometry_entry.attribute_accessors[i]) continue;
+            }
+            // Found existing entry
+            geometry_entry = entry;
+            return;
+        }
+
+        load_new_primitive_geometry(primitive, geometry_entry);
+    }
+
+    void parse_primitive(
+        const std::shared_ptr<erhe::scene::Mesh>& erhe_mesh,
+        const cgltf_mesh*                         mesh,
+        const cgltf_size                          primitive_index
+    )
+    {
+        const cgltf_primitive* primitive = &mesh->primitives[primitive_index];
+
+        std::string name = (mesh->name != nullptr)
+            ? fmt::format("{}[{}]", mesh->name, primitive_index)
+            : fmt::format("primitive[{}] {}", primitive_index, c_str(primitive->type));
+
+        Geometry_entry geometry_entry;
+        get_primitive_geometry(primitive, geometry_entry);
+
         erhe_mesh->mesh_data.primitives.push_back(
-            erhe::primitive::Primitive
-            {
-                .material              = m_materials.at(material_index),
-                .gl_primitive_geometry = erhe_gl_primitive,
-                .normal_style          = erhe::primitive::Normal_style::corner_normals
+            erhe::primitive::Primitive{
+                .material        = (primitive->material != nullptr)
+                    ? m_data_out.materials.at(primitive->material - m_data->materials)
+                    : std::shared_ptr<erhe::primitive::Material>{},
+                .source_geometry = geometry_entry.geometry,
+                .normal_style    = erhe::primitive::Normal_style::corner_normals
             }
         );
     }
@@ -1188,8 +1466,7 @@ private:
         log_gltf->info("Skin: skin index = {}, name = {}", skin_index, skin_name);
 
         auto erhe_skin = std::make_shared<erhe::scene::Skin>(skin_name);
-        m_context.skins.push_back(erhe_skin);
-        m_skins[skin_index] = erhe_skin;
+        m_data_out.skins[skin_index] = erhe_skin;
         erhe_skin->enable_flag_bits(
             Item_flags::content    |
             Item_flags::show_in_ui |
@@ -1200,7 +1477,7 @@ private:
         for (cgltf_size i = 0; i < skin->joints_count; ++i) {
             if (skin->joints[i] != nullptr) {
                 const cgltf_size joint_node_index = skin->joints[i] - m_data->nodes;
-                auto& erhe_joint_node = m_nodes.at(joint_node_index);
+                auto& erhe_joint_node = m_data_out.nodes.at(joint_node_index);
                 ERHE_VERIFY(erhe_joint_node);
                 erhe_skin->skin_data.joints[i] = erhe_joint_node;
             }
@@ -1220,7 +1497,7 @@ private:
         }
         if (skin->skeleton != nullptr) {
             const cgltf_size skeleton_node_index = skin->skeleton - m_data->nodes;
-            erhe_skin->skin_data.skeleton = m_nodes.at(skeleton_node_index);
+            erhe_skin->skin_data.skeleton = m_data_out.nodes.at(skeleton_node_index);
         } else {
             erhe_skin->skin_data.skeleton.reset();;
         }
@@ -1232,8 +1509,8 @@ private:
         log_gltf->trace("Mesh: mesh index = {}, name = {}", mesh_index, mesh_name);
 
         auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
-        m_context.meshes.push_back(erhe_mesh);
-        m_meshes[mesh_index] = erhe_mesh;
+        erhe_mesh->mesh_data.layer_id = m_mesh_layer_id;
+        m_data_out.meshes[mesh_index] = erhe_mesh;
         erhe_mesh->enable_flag_bits(
             Item_flags::content     |
             Item_flags::visible     |
@@ -1245,25 +1522,23 @@ private:
         for (cgltf_size i = 0; i < mesh->primitives_count; ++i) {
             parse_primitive(erhe_mesh, mesh, i);
         }
-
-        erhe_mesh->mesh_data.layer_id = 0;
     }
     void parse_node(
-        const cgltf_node*                  node,
-        std::shared_ptr<erhe::scene::Node> erhe_parent
+        const cgltf_node*                         node,
+        const std::shared_ptr<erhe::scene::Node>& parent
     )
     {
         const cgltf_size node_index = node - m_data->nodes;
         const std::string node_name = safe_resource_name(node->name, "node", node_index);
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node_name);
         auto erhe_node = std::make_shared<erhe::scene::Node>(node_name);
-        erhe_node->set_parent(erhe_parent);
         erhe_node->enable_flag_bits(
             Item_flags::content |
             Item_flags::visible |
             Item_flags::show_in_ui
         );
-        m_nodes[node_index] = erhe_node;
+        m_data_out.nodes[node_index] = erhe_node;
+        erhe_node->set_parent(parent);
         parse_node_transform(node, erhe_node);
 
         for (cgltf_size i = 0; i < node->children_count; ++i) {
@@ -1273,59 +1548,56 @@ private:
     void fix_pointers(const cgltf_size node_index)
     {
         const cgltf_node* node = &m_data->nodes[node_index];
-        auto& erhe_node = m_nodes.at(node_index);
+        auto& erhe_node = m_data_out.nodes.at(node_index);
         for (cgltf_size i = 0; i < node->children_count; ++i) {
             cgltf_node* child_node       = node->children[i];
             cgltf_size  child_node_index = child_node - m_data->nodes;
-            auto& erhe_child_node        = m_nodes.at(child_node_index);
+            auto& erhe_child_node        = m_data_out.nodes.at(child_node_index);
             erhe_child_node->set_parent(erhe_node);
         }
 
         if (node->camera != nullptr) {
             const cgltf_size camera_index = node->camera - m_data->cameras;
-            erhe_node->attach(m_cameras[camera_index]);
+            erhe_node->attach(m_data_out.cameras[camera_index]);
         }
 
         if (node->light != nullptr) {
             const cgltf_size light_index = node->light - m_data->lights;
-            erhe_node->attach(m_lights[light_index]);
+            erhe_node->attach(m_data_out.lights[light_index]);
         }
 
         if (node->mesh != nullptr) {
             const cgltf_size mesh_index = node->mesh - m_data->meshes;
-            erhe_node->attach(m_meshes[mesh_index]);
+            erhe_node->attach(m_data_out.meshes[mesh_index]);
         }
 
         if (node->skin != nullptr) {
             const cgltf_size skin_index = node->skin - m_data->skins;
-            erhe_node->attach(m_skins[skin_index]);
+            erhe_node->attach(m_data_out.skins[skin_index]);
         }
     }
 
-    Parse_context&                                          m_context;
-
-    cgltf_data*                                             m_data{nullptr};
-
-    std::shared_ptr<erhe::primitive::Material>              m_default_material;
-    std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
-    std::vector<std::shared_ptr<erhe::scene::Mesh>>         m_meshes;
-    std::vector<std::shared_ptr<erhe::scene::Animation>>    m_animations;
-    std::vector<std::shared_ptr<erhe::scene::Camera>>       m_cameras;
-    std::vector<std::shared_ptr<erhe::scene::Light>>        m_lights;
-    std::vector<std::shared_ptr<erhe::scene::Skin>>         m_skins;
-    std::vector<std::shared_ptr<erhe::graphics::Texture>>   m_images;
-    std::vector<std::shared_ptr<erhe::graphics::Sampler>>   m_samplers;
-
-    // Scene context
-    std::vector<std::shared_ptr<erhe::scene::Node>>         m_nodes;
-
-    //std::vector<Scene> m_scenes;
+    Gltf_data&                         m_data_out;
+    erhe::graphics::Instance&          m_graphics_instance;
+    Image_transfer&                    m_image_transfer;
+    std::shared_ptr<erhe::scene::Node> m_root_node;
+    erhe::scene::Layer_id              m_mesh_layer_id;
+    std::filesystem::path              m_path;
+    cgltf_data*                        m_data{nullptr};
 };
 
-void parse_gltf(Parse_context& context)
+[[nodiscard]] auto parse_gltf(
+    erhe::graphics::Instance&                 graphics_instance,
+    Image_transfer&                           image_transfer,
+    const std::shared_ptr<erhe::scene::Node>& root_node,
+    erhe::scene::Layer_id                     mesh_layer_id,
+    std::filesystem::path                     path
+) -> Gltf_data
 {
-    Gltf_parser parser{context};
+    Gltf_data result;
+    Gltf_parser parser{result, graphics_instance, image_transfer, root_node, mesh_layer_id, path};
     parser.parse_and_build();
+    return result;
 }
 
 } // namespace example

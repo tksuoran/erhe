@@ -160,5 +160,4 @@ void Raytrace_buffer_sink::buffer_ready(Index_buffer_writer& writer) const
     memcpy(offset_span.data(), data.data(), data.size());
 }
 
-
 } // namespace erhe::primitive

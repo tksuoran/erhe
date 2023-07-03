@@ -77,14 +77,14 @@ Viewport_window::Viewport_window(
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
-    : Scene_view          {editor_context}
-    , Rendergraph_node    {rendergraph, name}
-    , m_viewport_config   {viewport_config_window.config}
-    , m_name              {name}
-    , m_ini_label         {ini_label}
-    , m_scene_root        {scene_root}
-    , m_tool_scene_root   {tools.get_tool_scene_root()}
-    , m_camera            {camera}
+    : Scene_view       {editor_context}
+    , Rendergraph_node {rendergraph, name}
+    , m_viewport_config{viewport_config_window.config}
+    , m_name           {name}
+    , m_ini_label      {ini_label}
+    , m_scene_root     {scene_root}
+    , m_tool_scene_root{tools.get_tool_scene_root()}
+    , m_camera         {camera}
 {
     register_input(
         erhe::rendergraph::Resource_routing::Resource_provided_by_producer,

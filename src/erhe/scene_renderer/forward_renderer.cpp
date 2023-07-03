@@ -53,7 +53,7 @@ Forward_renderer::Forward_renderer(
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
-            .debug_label = "Forward_renderer nearest"
+            .debug_label = "Forward_aer nearest"
         }
     }
 {

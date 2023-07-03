@@ -5,6 +5,7 @@
 #include <gsl/span>
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace erhe::graphics

@@ -211,6 +211,9 @@ void Trs_transform::set(const mat4& matrix)
     m_matrix         = matrix;
     m_inverse_matrix = glm::inverse(matrix);
     decompose();
+
+    glm::mat4 check_matrix = erhe::toolkit::compose(m_scale, m_rotation, m_translation, m_skew);
+
 }
 
 void Trs_transform::set(const mat4& matrix, const mat4& inverse_matrix)

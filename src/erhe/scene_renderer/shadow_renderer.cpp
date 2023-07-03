@@ -114,7 +114,6 @@ Shadow_renderer::Shadow_renderer(
     //prototype->link_program();
 
     m_pipeline_cache_entries.resize(8);
-
 }
 
 auto Shadow_renderer::get_pipeline(

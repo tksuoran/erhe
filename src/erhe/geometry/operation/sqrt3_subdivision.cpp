@@ -27,8 +27,7 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
 {
     ERHE_PROFILE_FUNCTION();
 
-    source.for_each_point_const([&](auto& i)
-    {
+    source.for_each_point_const([&](auto& i) {
         const float    alpha            = (4.0f - 2.0f * std::cos(2.0f * glm::pi<float>() / i.point.corner_count)) / 9.0f;
         const float    alpha_per_n      = alpha / static_cast<float>(i.point.corner_count);
         const float    alpha_complement = 1.0f - alpha;
@@ -38,10 +37,8 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
 
     make_polygon_centroids();
 
-    source.for_each_polygon_const([&](auto& i)
-    {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j)
-        {
+    source.for_each_polygon_const([&](auto& i) {
+        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
             const Point_id src_point_id      = j.corner.point_id;
             const Point_id src_next_point_id = j.next_corner.point_id;
 
@@ -51,8 +48,7 @@ Sqrt3_subdivision::Sqrt3_subdivision(Geometry& src, Geometry& destination)
             }
             const auto& edge = edge_opt.value();
             Polygon_id opposite_polygon_id = i.polygon_id;
-            edge.for_each_polygon_const(source, [&](auto& k)
-            {
+            edge.for_each_polygon_const(source, [&](auto& k) {
                 if (k.polygon_id != i.polygon_id) {
                     opposite_polygon_id = k.polygon_id;
                     return k.break_iteration();
@@ -75,8 +71,7 @@ auto sqrt3_subdivision(Geometry& source) -> Geometry
 {
     return Geometry(
         fmt::format("sqrt3({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Sqrt3_subdivision operation{source, result};
         }
     );

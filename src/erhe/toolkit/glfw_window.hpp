@@ -41,7 +41,7 @@ public:
     int              swap_interval           {1};
     float            sleep_time              {0.0f};
     float            wait_time               {0.01f};
-    std::string_view title                   {};
+    std::string      title                   {};
     Context_window*  share                   {nullptr};
 };
 

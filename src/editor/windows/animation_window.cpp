@@ -60,7 +60,6 @@ Animation_window::Animation_window(
 
 void Animation_window::imgui()
 {
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
     auto content_library = m_content_library.lock();
@@ -79,6 +78,7 @@ void Animation_window::imgui()
 
     for (auto& animation : content_library->animations.entries()) {
         ImGui::BulletText("%s", animation->get_name().c_str());
+
 #if 0
         ImGui::Indent(10.0f);
         {
@@ -129,8 +129,6 @@ void Animation_window::imgui()
     if (root) {
         root->get_hosted_scene()->update_node_transforms();
     }
-
-#endif
 }
 
 } // namespace editor

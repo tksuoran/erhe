@@ -168,7 +168,7 @@ private:
     );
     void animate_lights     (const double time_d);
     void add_room           ();
-    void make_brushes       (Mesh_memory& mesh_memory);
+    void make_brushes       (erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory);
     void make_mesh_nodes    ();
     void make_cube_benchmark(Mesh_memory& mesh_memory);
     void setup_lights       ();

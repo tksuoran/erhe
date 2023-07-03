@@ -121,9 +121,6 @@ Editor_rendering::Editor_rendering(
         .require_all_bits_clear       = Item_flags::opaque
     };
 
-    const auto& render_style_selected = [](const Render_context& context) -> const Render_style_data& {
-        return context.viewport_config.render_style_selected;
-    };
     const auto& render_style_not_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_not_selected;
     };
@@ -136,6 +133,11 @@ Editor_rendering::Editor_rendering(
     opaque_fill_not_selected->filter           = opaque_not_selected_filter;
     opaque_fill_not_selected->get_render_style = render_style_not_selected;
     opaque_fill_not_selected->passes           = { get_pipeline_renderpass(*opaque_fill_not_selected.get(), Blend_mode::opaque) };
+
+#if 0
+    const auto& render_style_selected = [](const Render_context& context) -> const Render_style_data& {
+        return context.viewport_config.render_style_selected;
+    };
 
     auto opaque_fill_selected = make_renderpass("Content fill opaque selected");
     opaque_fill_selected->mesh_layers      = { Mesh_layer_id::content, Mesh_layer_id::controller };
@@ -211,6 +213,7 @@ Editor_rendering::Editor_rendering(
         .require_all_bits_clear       = 0
     };
     rendertarget->allow_shader_stages_override = false;
+#endif
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {

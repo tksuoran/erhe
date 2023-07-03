@@ -16,8 +16,7 @@ Vertex_attribute_info::Vertex_attribute_info(
 )
 {
     attribute = vertex_format.find_attribute_maybe(semantic, semantic_index);
-    if (attribute != nullptr)
-    {
+    if (attribute != nullptr) {
         data_type = attribute->data_type.type;
         offset    = attribute->offset;
         size      = attribute->size();

@@ -26,8 +26,7 @@ void Weld::find_point_merge_candidates()
     std::vector<glm::vec3> points;
     points.resize(source.get_point_count());
     source.for_each_point_const(
-        [&](const auto& i)
-        {
+        [&](const auto& i) {
             points[i.point_id] = point_locations->get(i.point_id);
         }
     );
@@ -37,8 +36,7 @@ void Weld::find_point_merge_candidates()
     octree.initialize(points);
 
     source.for_each_point_const(
-        [&](const auto& i)
-        {
+        [&](const auto& i) {
             if (m_point_id_merge_candidates[i.point_id] != i.point_id) {
                 //// log_merge->info("Point {} is already marked to be merged", i.point_id);
                 return; // continue already marked
@@ -116,11 +114,7 @@ void Weld::sort_polygons()
     std::sort(
         m_polygon_id_sorted.begin(),
         m_polygon_id_sorted.end(),
-        [this](
-            const Polygon_id& lhs,
-            const Polygon_id& rhs
-        )
-        {
+        [this](const Polygon_id& lhs, const Polygon_id& rhs) {
             Polygon&      lhs_polygon         = source.polygons       [lhs];
             Corner_id     lhs_first_corner_id = source.polygon_corners[lhs_polygon.first_polygon_corner_id];
             const Corner& lhs_first_corner    = source.corners        [lhs_first_corner_id];
@@ -346,24 +340,21 @@ Weld::Weld(
 
     // Copy used points
     point_old_to_new.reserve(m_used_point_count);
-    source.for_each_point_const([&](auto& i)
-    {
+    source.for_each_point_const([&](auto& i) {
         if (m_point_id_used[i.point_id]) {
             make_new_point_from_point(i.point_id);
         }
     });
 
     // Copy used polygons
-    source.for_each_polygon_const([&](auto& i)
-    {
+    source.for_each_polygon_const([&](auto& i) {
         if (m_polygon_id_remove[i.polygon_id]) {
             return;
         }
 
         const Polygon_id new_polygon_id = make_new_polygon_from_polygon(i.polygon_id);
 
-        i.polygon.for_each_corner_const(source, [&](auto& j)
-        {
+        i.polygon.for_each_corner_const(source, [&](auto& j) {
             const Point_id  old_point_id0 = j.corner.point_id;
             const Point_id  old_point_id  = m_point_id_merge_candidates[old_point_id0];
             const Point_id  new_point_id  = point_old_to_new[old_point_id];
@@ -379,8 +370,7 @@ auto weld(Geometry& source) -> Geometry
 {
     return Geometry(
         fmt::format("weld({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Weld operation{source, result};
         }
     );

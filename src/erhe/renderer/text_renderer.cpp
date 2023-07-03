@@ -172,7 +172,6 @@ Text_renderer::Text_renderer(
     }
     , m_vertex_writer        {graphics_instance}
     , m_projection_writer    {graphics_instance}
-
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -180,7 +179,7 @@ Text_renderer::Text_renderer(
     ini->get("enabled",   config.enabled);
     ini->get("font_size", config.font_size);
 
-    if (!config.enabled) {                                 
+    if (!config.enabled) {
         log_startup->info("Text renderer disabled due to erhe.ini setting");
         return;
     }

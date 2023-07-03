@@ -55,8 +55,6 @@ void Renderpass::render(const Render_context& context) const
         return;
     }
 
-    erhe::graphics::Scoped_debug_group outer_debug_scope{"Viewport content"};
-
     const Render_style_data* render_style = this->get_render_style
         ? &this->get_render_style(context)
         : nullptr;
@@ -88,7 +86,7 @@ void Renderpass::render(const Render_context& context) const
     //}
 
     if (this->mesh_layers.empty()) {
-        //log_frame->trace("render_fullscreen");
+        log_frame->trace("render_fullscreen");
         context.editor_context.forward_renderer->render_fullscreen(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .camera                 = &context.camera,
@@ -115,21 +113,22 @@ void Renderpass::render(const Render_context& context) const
             const auto mesh_layer = scene->get_mesh_layer_by_id(id);
             if (mesh_layer) {
                 mesh_spans.push_back(mesh_layer->meshes);
-            //    log_frame->info("adding mesh layer {} with {} meshes", mesh_layer->name, mesh_layer->meshes.size());
-            //} else {
-            //    log_frame->warn("mesh layer not found for id {}", id);
+                log_frame->trace("adding mesh layer {} with {} meshes", mesh_layer->name, mesh_layer->meshes.size());
+            } else {
+                log_frame->warn("mesh layer not found for id {}", id);
             }
         }
         if (mesh_spans.empty()) {
             return;
         }
 
-        //log_frame->info("calling render with {} passes", passes.size());
-        //for (const auto& pass : passes) {
-        //    log_frame->info("pass using pipeline = {}", pass->pipeline.data.name);
-        //}
-        //log_frame->info("primitive_mode = {}", c_str(primitive_mode));
-        //log_frame->info("filter = {}", filter.describe());
+        log_frame->trace("calling render with {} passes", passes.size());
+        for (const auto& pass : passes) {
+            log_frame->trace("pass using pipeline = {}", pass->pipeline.data.name);
+        }
+        log_frame->trace("primitive_mode = {}", c_str(primitive_mode));
+        log_frame->trace("filter = {}", filter.describe());
+
         context.editor_context.forward_renderer->render(
             erhe::scene_renderer::Forward_renderer::Render_parameters{
                 .index_type             = context.editor_context.mesh_memory->buffer_info.index_type,

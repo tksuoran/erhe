@@ -58,6 +58,7 @@
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/gl_log.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/gltf/gltf_log.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/instance.hpp"
@@ -167,6 +168,22 @@ public:
         , m_selection             {m_commands,          m_editor_context,    m_editor_message_bus}
         , m_operation_stack       {m_commands,          m_imgui_renderer,    m_imgui_windows, m_editor_context}
         , m_scene_commands        {m_commands,          m_editor_context}
+        , m_animation_window      {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus}
+        , m_commands_window       {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_layers_window         {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_network_window        {m_imgui_renderer, m_imgui_windows, m_editor_context, m_time}
+        , m_node_tree_window      {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_operations            {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_physics_window        {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_post_processing_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_properties            {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_rendergraph_window    {m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_tool_properties_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_viewport_config_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
+        , m_log_window            {m_commands, m_imgui_renderer, m_imgui_windows}
+        , m_performance_window    {m_imgui_renderer, m_imgui_windows}
+        , m_pipelines             {m_imgui_renderer, m_imgui_windows}
+
         , m_tools{
             m_graphics_instance, m_scene_message_bus, m_editor_context, m_editor_rendering,
             m_editor_scenes,     m_mesh_memory,       m_programs
@@ -218,32 +235,18 @@ public:
             m_icon_set,    m_mesh_memory,       m_scene_builder,      m_tools
         }
         , m_hover_tool       {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_tools}
-        , m_animation_window {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus}
+
         , m_brdf_slice_window{
             m_imgui_renderer,   m_imgui_windows,          m_rendergraph,
             m_forward_renderer, m_content_library_window, m_programs
         }
-        , m_commands_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_debug_draw            {m_editor_context}
         , m_debug_view_window     {
             m_imgui_renderer, m_imgui_windows,    m_rendergraph, m_forward_renderer,
             m_editor_context, m_editor_rendering, m_mesh_memory, m_programs
         }
         , m_debug_visualizations  {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus, m_editor_rendering}
-        , m_layers_window         {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_material_preview      {m_graphics_instance, m_scene_message_bus, m_editor_context, m_mesh_memory, m_programs}
-        , m_network_window        {m_imgui_renderer, m_imgui_windows, m_editor_context, m_time}
-        , m_node_tree_window      {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_operations            {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_physics_window        {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_post_processing_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_properties            {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_rendergraph_window    {m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_tool_properties_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_viewport_config_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_log_window            {m_commands, m_imgui_renderer, m_imgui_windows}
-        , m_performance_window    {m_imgui_renderer, m_imgui_windows}
-        , m_pipelines             {m_imgui_renderer, m_imgui_windows}
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         , m_theremin              {m_imgui_renderer, m_imgui_windows,  m_hand_tracker,       m_editor_context}
@@ -430,6 +433,22 @@ public:
     Selection                               m_selection;
     Operation_stack                         m_operation_stack;
     Scene_commands                          m_scene_commands;
+    Animation_window                        m_animation_window;
+    Commands_window                         m_commands_window;
+    Layers_window                           m_layers_window;
+    Network_window                          m_network_window;
+    Node_tree_window                        m_node_tree_window;
+    Operations                              m_operations;
+    Physics_window                          m_physics_window;
+    Post_processing_window                  m_post_processing_window;
+    Properties                              m_properties;
+    Rendergraph_window                      m_rendergraph_window;
+    Tool_properties_window                  m_tool_properties_window;
+    Viewport_config_window                  m_viewport_config_window;
+    erhe::imgui::Log_window                 m_log_window;
+    erhe::imgui::Performance_window         m_performance_window;
+    erhe::imgui::Pipelines                  m_pipelines;
+
     Tools                                   m_tools;
     Scene_builder                           m_scene_builder;
     Headset_view                            m_headset_view;
@@ -443,26 +462,11 @@ public:
     Hud                                     m_hud;
     Hotbar                                  m_hotbar;
     Hover_tool                              m_hover_tool;
-    Animation_window                        m_animation_window;
     Brdf_slice_window                       m_brdf_slice_window;
-    Commands_window                         m_commands_window;
     Debug_draw                              m_debug_draw;
     Debug_view_window                       m_debug_view_window;
     Debug_visualizations                    m_debug_visualizations;
-    Layers_window                           m_layers_window;
     Material_preview                        m_material_preview;
-    Network_window                          m_network_window;
-    Node_tree_window                        m_node_tree_window;
-    Operations                              m_operations;
-    Physics_window                          m_physics_window;
-    Post_processing_window                  m_post_processing_window;
-    Properties                              m_properties;
-    Rendergraph_window                      m_rendergraph_window;
-    Tool_properties_window                  m_tool_properties_window;
-    Viewport_config_window                  m_viewport_config_window;
-    erhe::imgui::Log_window                 m_log_window;
-    erhe::imgui::Performance_window         m_performance_window;
-    erhe::imgui::Pipelines                  m_pipelines;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Theremin                                m_theremin;
 #endif
@@ -485,6 +489,7 @@ void run_editor()
     erhe::log::initialize_log_sinks();
     gl::initialize_logging();
     erhe::commands::initialize_logging();
+    erhe::gltf::initialize_logging();
     erhe::geometry::initialize_logging();
     erhe::graphics::initialize_logging();
     erhe::imgui::initialize_logging();
@@ -514,30 +519,4 @@ void run_editor()
     editor.run();
 }
 
-
 } // namespace editor
-
-#if 0
-auto Editor::on_idle() -> bool
-{
-    // TODO something nicer
-    m_scene_builder.buffer_transfer_queue().flush();
-    // animate_lights(time_context.time);
-
-    m_time.update_once_per_frame();
-
-    m_editor_rendering.begin_frame();
-    m_editor_scenes.update_node_transforms();
-    m_editor_scenes.update_network();
-    m_imgui_windows.imgui_windows();
-    m_rendergraph.execute();
-    imgui_renderer.next_frame();
-    m_editor_rendering.end_frame();
-    commands.on_idle();
-    m_context_window.swap_buffers();
-
-    return true;
-}
-
-
-#endif
