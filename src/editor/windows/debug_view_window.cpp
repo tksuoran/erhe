@@ -422,6 +422,8 @@ void Debug_view_window::imgui()
     const auto& light_projection_transforms = light_projections.light_projection_transforms;
     const int count = static_cast<int>(light_projection_transforms.size());
     int& light_index = input_texture_node->get_light_index();
+    ImGui::Text("Light");
+    ImGui::SameLine();
     for (int i = 0; i < count; ++i) {
         const auto& light_projection_transform = light_projection_transforms.at(i);
         if (light_projection_transform.light == nullptr) {

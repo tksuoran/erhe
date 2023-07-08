@@ -2,6 +2,7 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
+#include "editor_rendering.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/render_style.hpp"
@@ -148,7 +149,9 @@ void Renderpass::render(const Render_context& context) const
                 .shadow_texture         = context.scene_view.get_shadow_texture(),
                 .viewport               = context.viewport,
                 .filter                 = this->filter,
-                .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr
+                .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
+                .debug_joint_indices    = context.editor_context.editor_rendering->debug_joint_indices,
+                .debug_joint_colors     = context.editor_context.editor_rendering->debug_joint_colors
             }
         );
     }

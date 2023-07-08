@@ -6,6 +6,8 @@ out flat uint v_material_index;
 out float     v_tangent_scale;
 out float     v_line_width;
 
+out vec4      v_bone_color;
+
 void main()
 {
     mat4 world_from_node         ;
@@ -14,6 +16,7 @@ void main()
     if (primitive.primitives[gl_DrawID].skinning_factor < 0.5) {
         world_from_node          = primitive.primitives[gl_DrawID].world_from_node;
         world_from_node_cofactor = primitive.primitives[gl_DrawID].world_from_node_cofactor;
+        v_bone_color = vec4(0.3, 0.0, 0.0, 1.0);
     } else {
         world_from_node =
             a_weights.x * joint.joints[int(a_joints.x)].world_from_bind +
@@ -25,6 +28,11 @@ void main()
             a_weights.y * joint.joints[int(a_joints.y)].world_from_bind_cofactor +
             a_weights.z * joint.joints[int(a_joints.z)].world_from_bind_cofactor +
             a_weights.w * joint.joints[int(a_joints.w)].world_from_bind_cofactor;
+        v_bone_color =
+            a_weights.x * joint.debug_joint_colors[int(a_joints.x)] +
+            a_weights.y * joint.debug_joint_colors[int(a_joints.y)] +
+            a_weights.z * joint.debug_joint_colors[int(a_joints.z)] +
+            a_weights.w * joint.debug_joint_colors[int(a_joints.w)];
     }
 
     mat4 clip_from_world = camera.cameras[0].clip_from_world;

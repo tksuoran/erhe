@@ -221,6 +221,31 @@ Editor_rendering::Editor_rendering(
             }
         }
     );
+
+    debug_joint_colors.push_back(glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}); //  0
+    debug_joint_colors.push_back(glm::vec4{1.0f, 0.0f, 0.0f, 1.0f}); //  1
+    debug_joint_colors.push_back(glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}); //  2
+    debug_joint_colors.push_back(glm::vec4{0.0f, 0.0f, 1.0f, 1.0f}); //  3
+    debug_joint_colors.push_back(glm::vec4{1.0f, 1.0f, 0.0f, 1.0f}); //  4
+    debug_joint_colors.push_back(glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}); //  5
+    debug_joint_colors.push_back(glm::vec4{1.0f, 0.0f, 1.0f, 1.0f}); //  6
+    debug_joint_colors.push_back(glm::vec4{1.0f, 1.0f, 1.0f, 1.0f}); //  7
+    debug_joint_colors.push_back(glm::vec4{0.5f, 0.0f, 0.0f, 1.0f}); //  8
+    debug_joint_colors.push_back(glm::vec4{0.0f, 0.5f, 0.0f, 1.0f}); //  9
+    debug_joint_colors.push_back(glm::vec4{0.0f, 0.0f, 0.5f, 1.0f}); // 10
+    debug_joint_colors.push_back(glm::vec4{0.5f, 0.5f, 0.0f, 1.0f}); // 11
+    debug_joint_colors.push_back(glm::vec4{0.0f, 0.5f, 0.5f, 1.0f}); // 12
+    debug_joint_colors.push_back(glm::vec4{0.5f, 0.0f, 0.5f, 1.0f}); // 13
+    debug_joint_colors.push_back(glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}); // 14
+    debug_joint_colors.push_back(glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}); // 15
+    debug_joint_colors.push_back(glm::vec4{1.0f, 0.0f, 0.5f, 1.0f}); // 16
+    debug_joint_colors.push_back(glm::vec4{0.5f, 1.0f, 0.0f, 1.0f}); // 17
+    debug_joint_colors.push_back(glm::vec4{0.0f, 1.0f, 0.5f, 1.0f}); // 18
+    debug_joint_colors.push_back(glm::vec4{0.5f, 0.0f, 1.0f, 1.0f}); // 19
+    debug_joint_colors.push_back(glm::vec4{0.0f, 0.5f, 1.0f, 1.0f}); // 20
+    debug_joint_colors.push_back(glm::vec4{1.0f, 1.0f, 0.5f, 1.0f}); // 21
+    debug_joint_colors.push_back(glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}); // 22
+    debug_joint_colors.push_back(glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}); // 23
 }
 
 auto Editor_rendering::create_shadow_node_for_scene_view(
@@ -523,6 +548,22 @@ auto Editor_rendering::width() const -> int
 auto Editor_rendering::height() const -> int
 {
     return m_context.context_window->get_height();
+}
+
+void Editor_rendering::imgui()
+{
+    int index = static_cast<int>(debug_joint_indices.x);
+    ImGui::SliderInt("Debug Joint Index", &index, 0, 200); // TODO correct range
+    debug_joint_indices.x = index;
+
+    for (
+        int joint_index = 0, end = static_cast<int>(debug_joint_colors.size());
+        joint_index < end;
+        ++joint_index
+    ) {
+        std::string label = fmt::format("Joint {}", joint_index);
+        ImGui::ColorEdit4(label.c_str(), &debug_joint_colors[joint_index].x, ImGuiColorEditFlags_Float);
+    }
 }
 
 void Editor_rendering::begin_frame()

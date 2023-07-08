@@ -1397,6 +1397,12 @@ private:
     {
         Primitive_to_geometry primitive_to_geometry{primitive};
         geometry_entry.geometry = primitive_to_geometry.geometry;
+        if (primitive_to_geometry.corner_tangents.empty()) {
+            if (primitive_to_geometry.corner_texcoords.empty()) {
+                primitive_to_geometry.geometry->generate_polygon_texture_coordinates();
+            }
+            primitive_to_geometry.geometry->compute_tangents();
+        }
         m_data_out.geometries.push_back(primitive_to_geometry.geometry);
     }
     auto get_primitive_geometry(const cgltf_primitive* primitive, Geometry_entry& geometry_entry)

@@ -860,15 +860,6 @@ private:
         };
         erhe_node->set_parent_from_node(matrix);
     }
-    //void parse_buffer(const cgltf_size buffer_index)
-    //{
-    //    cgltf_buffer* buffer = &m_data->buffers[buffer_index];
-    //
-    //    auto erhe_buffer = std::make_shared<erhe::graphics::Buffer>(buffer->size, static_cast<gl::Buffer_storage_mask>(0));
-    //    auto span = erhe_buffer->begin_write(0, buffer->size);
-    //    memcpy(span.data(), buffer->data, buffer->size);
-    //    erhe_buffer->end_write(0, buffer->size);
-    //}
     void parse_camera(const cgltf_size camera_index)
     {
         const cgltf_camera* camera = &m_data->cameras[camera_index];
@@ -988,39 +979,11 @@ private:
                 return;
             }
 
-            //std::vector<uint32_t> flip_indices(primitive->indices->count);
-            //switch (primitive->type) {
-            //    case cgltf_primitive_type::cgltf_primitive_type_points:     break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_lines:      break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_line_loop:  break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_line_strip: break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_triangles: {
-            //        for (cgltf_size i = 0; i < primitive->indices->count; i += 3) {
-            //            flip_indices[i + 2] = read_indices[i + 0];
-            //            flip_indices[i + 1] = read_indices[i + 1];
-            //            flip_indices[i + 0] = read_indices[i + 2];
-            //        }
-            //        break;
-            //    }
-            //    case cgltf_primitive_type::cgltf_primitive_type_triangle_strip: break;
-            //    case cgltf_primitive_type::cgltf_primitive_type_triangle_fan:   break;
-            //    default: break;
-            //}
-            //
             std::vector<uint8_t> data(index_buffer_byte_count);
-            //memcpy(data.data(), flip_indices.data(), data.size());
             memcpy(data.data(), read_indices.data(), data.size());
 
             erhe::primitive::Buffer_range index_range = m_context.buffer_sink.allocate_index_buffer(primitive->indices->count, index_stride);
             m_context.buffer_sink.enqueue_index_data(index_range.byte_offset, std::move(data));
-            //allocate_index_buffer(primitive->indices->count, 4);
-            //auto span = m_context.index_buffer->begin_write(index_buffer_byte_offset, index_buffer_byte_count);
-            //memcpy(
-            //    span.data(),
-            //    temp.data(),
-            //    index_buffer_byte_count
-            //);
-            //m_context.index_buffer->end_write(index_buffer_byte_offset, index_buffer_byte_count);
 
             erhe_gl_primitive.index_buffer_range.byte_offset       = index_range.byte_offset;
             erhe_gl_primitive.index_buffer_range.count             = primitive->indices->count;
@@ -1158,8 +1121,7 @@ private:
 
         const cgltf_size material_index = primitive->material - m_data->materials;
         erhe_mesh->mesh_data.primitives.push_back(
-            erhe::primitive::Primitive
-            {
+            erhe::primitive::Primitive{
                 .material              = m_materials.at(material_index),
                 .gl_primitive_geometry = erhe_gl_primitive,
                 .normal_style          = erhe::primitive::Normal_style::corner_normals
@@ -1288,9 +1250,7 @@ private:
     }
 
     Parse_context&                                          m_context;
-
     cgltf_data*                                             m_data{nullptr};
-
     std::shared_ptr<erhe::primitive::Material>              m_default_material;
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_materials;
     std::vector<std::shared_ptr<erhe::scene::Mesh>>         m_meshes;
@@ -1300,11 +1260,7 @@ private:
     std::vector<std::shared_ptr<erhe::scene::Skin>>         m_skins;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>   m_images;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   m_samplers;
-
-    // Scene context
     std::vector<std::shared_ptr<erhe::scene::Node>>         m_nodes;
-
-    //std::vector<Scene> m_scenes;
 };
 
 void parse_gltf(Parse_context& context)

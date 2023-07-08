@@ -275,6 +275,32 @@ float get_spot_attenuation(vec3 point_to_light, vec3 spot_direction, float outer
     return 0.0;
 }
 
+float srgb_to_linear(float x)
+{
+    if (x <= 0.04045) {
+        return x / 12.92;
+    } else {
+        return pow((x + 0.055) / 1.055, 2.4);
+    }
+}
+
+vec3 srgb_to_linear(vec3 V)
+{
+    return vec3(
+        srgb_to_linear(V.r),
+        srgb_to_linear(V.g),
+        srgb_to_linear(V.b)
+    );
+}
+
+vec2 srgb_to_linear(vec2 V)
+{
+    return vec2(
+        srgb_to_linear(V.r),
+        srgb_to_linear(V.g)
+    );
+}
+
 void main()
 {
     vec3 view_position_in_world = vec3(
@@ -374,4 +400,7 @@ void main()
     float exposure = camera.cameras[0].exposure;
     out_color.rgb = color * exposure * material.opacity;
     out_color.a = material.opacity;
+
+    //out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * T0);
+
 }

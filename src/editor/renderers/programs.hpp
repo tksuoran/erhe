@@ -28,6 +28,11 @@ enum class Shader_stages_variant : int
     debug_texcoord,
     debug_vertex_color_rgb,
     debug_vertex_color_alpha,
+    debug_vdotn,
+    debug_ldotn,
+    debug_hdotv,
+    debug_joint_indices,
+    debug_joint_weights,
     debug_omega_o,
     debug_omega_i,
     debug_omega_g,
@@ -47,6 +52,11 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Debug TexCoord",
     "Debug Vertex Color RGB",
     "Debug Vertex Color Alpha",
+    "Debug V.N",
+    "Debug L.N",
+    "Debug H.V",
+    "Debug Joint Indices",
+    "Debug Joint Weights",
     "Debug Omega o",
     "Debug Omega i",
     "Debug Omega g",
@@ -96,6 +106,11 @@ public:
     erhe::graphics::Reloadable_shader_stages debug_texcoord;
     erhe::graphics::Reloadable_shader_stages debug_vertex_color_rgb;
     erhe::graphics::Reloadable_shader_stages debug_vertex_color_alpha;
+    erhe::graphics::Reloadable_shader_stages debug_vdotn;
+    erhe::graphics::Reloadable_shader_stages debug_ldotn;
+    erhe::graphics::Reloadable_shader_stages debug_hdotv;
+    erhe::graphics::Reloadable_shader_stages debug_joint_indices;
+    erhe::graphics::Reloadable_shader_stages debug_joint_weights;
     erhe::graphics::Reloadable_shader_stages debug_omega_o;
     erhe::graphics::Reloadable_shader_stages debug_omega_i;
     erhe::graphics::Reloadable_shader_stages debug_omega_g;

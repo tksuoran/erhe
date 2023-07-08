@@ -16,6 +16,8 @@
 #include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/scene_renderer/shadow_renderer.hpp"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 
 namespace erhe::commands {
@@ -118,6 +120,11 @@ public:
     Scene_root* tool_scene_root{nullptr};
 
     auto make_renderpass(const std::string_view name) -> std::shared_ptr<Renderpass>;
+
+    void imgui();
+
+    glm::uvec4             debug_joint_indices{0, 0, 0, 0};
+    std::vector<glm::vec4> debug_joint_colors;
 
 private:
     void handle_graphics_settings_changed();

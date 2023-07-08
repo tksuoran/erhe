@@ -5,6 +5,7 @@ in mat3      v_TBN;
 in flat uint v_material_index;
 in float     v_tangent_scale;
 in float     v_line_width;
+in vec4      v_bone_color;
 
 float srgb_to_linear(float x)
 {
@@ -88,6 +89,25 @@ void main()
 #endif
 #if defined(ERHE_DEBUG_BITANGENT)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B0);
+#endif
+#if defined(ERHE_DEBUG_VDOTN)
+    float V_dot_N = dot(V, N);
+    out_color.rgb = srgb_to_linear(vec3(V_dot_N));
+#endif
+#if defined(ERHE_DEBUG_LDOTN)
+    float L_dot_N = dot(L, N);
+    out_color.rgb = srgb_to_linear(vec3(L_dot_N));
+#endif
+#if defined(ERHE_DEBUG_HDOTV)
+    vec3  H       = normalize(L + V);
+    float H_dot_N = dot(H, N);
+    out_color.rgb = srgb_to_linear(vec3(H_dot_N));
+#endif
+#if defined(ERHE_DEBUG_JOINT_INDICES)
+    out_color.rgb = srgb_to_linear(vec3(1.0));
+#endif
+#if defined(ERHE_DEBUG_JOINT_WEIGHTS)
+    out_color.rgb = srgb_to_linear(v_bone_color.rgb);
 #endif
 #if defined(ERHE_DEBUG_OMEGA_O)
     out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * wo);

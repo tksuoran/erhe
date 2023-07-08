@@ -128,7 +128,14 @@ void animation_curve(erhe::scene::Animation& animation)
 
     ImVec2 canvas = ImGui::GetContentRegionAvail();
     ImRect bb{Window->DC.CursorPos, Window->DC.CursorPos + canvas};
-    float aspect = bb.GetWidth() / bb.GetHeight();
+    const float width  = bb.GetWidth();
+    const float height = bb.GetHeight();
+    float aspect = (width != 0.0f && height != 0.0f)
+        ? bb.GetWidth() / bb.GetHeight() 
+        : 1.0f;
+    if (!std::isfinite(aspect)) {
+        aspect = 1.0f;
+    }
     ImRect view{-1.0f * aspect, 1.0f, 1.0f * aspect, -1.0}; 
     view.Min.x *= zoom_scale;
     view.Min.y *= zoom_scale;

@@ -123,6 +123,11 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
         case Shader_stages_variant::debug_texcoord:           return &programs.debug_texcoord.shader_stages;
         case Shader_stages_variant::debug_vertex_color_rgb:   return &programs.debug_vertex_color_rgb.shader_stages;
         case Shader_stages_variant::debug_vertex_color_alpha: return &programs.debug_vertex_color_alpha.shader_stages;
+        case Shader_stages_variant::debug_vdotn:              return &programs.debug_vdotn.shader_stages;
+        case Shader_stages_variant::debug_ldotn:              return &programs.debug_ldotn.shader_stages;
+        case Shader_stages_variant::debug_hdotv:              return &programs.debug_hdotv.shader_stages;
+        case Shader_stages_variant::debug_joint_indices:      return &programs.debug_joint_indices.shader_stages;
+        case Shader_stages_variant::debug_joint_weights:      return &programs.debug_joint_weights.shader_stages;
         case Shader_stages_variant::debug_omega_o:            return &programs.debug_omega_o.shader_stages;
         case Shader_stages_variant::debug_omega_i:            return &programs.debug_omega_i.shader_stages;
         case Shader_stages_variant::debug_omega_g:            return &programs.debug_omega_g.shader_stages;

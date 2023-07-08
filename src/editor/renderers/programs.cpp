@@ -106,13 +106,16 @@ Programs::Programs(
     , debug_texcoord          {"debug_texcoord-not_loaded"}
     , debug_vertex_color_rgb  {"debug_vertex_color_rgb-not_loaded"}
     , debug_vertex_color_alpha{"debug_vertex_color_alpha-not_loaded"}
+    , debug_vdotn             {"debug_v_dot_n-not_loaded"}
+    , debug_ldotn             {"debug_v_dot_n-not_loaded"}
+    , debug_hdotv             {"debug_h_dot_v-not_loaded"}
+    , debug_joint_indices     {"debug_joint_indices-not_loaded"}
+    , debug_joint_weights     {"debug_joint_weights-not_loaded"}
     , debug_omega_o           {"debug_omega_o-not_loaded"}
     , debug_omega_i           {"debug_omega_i-not_loaded"}
     , debug_omega_g           {"debug_omega_g-not_loaded"}
     , debug_misc              {"debug_misc-not_loaded"}
-
 {
-
     // Not available on Dell laptop.
     //standard      = make_program("standard", {}, {{gl::Shader_type::fragment_shader, "GL_NV_fragment_shader_barycentric"}});
 
@@ -160,6 +163,11 @@ Programs::Programs(
     add_shader(debug_texcoord          , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vertex_color_rgb  , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vertex_color_alpha, CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vdotn             , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VDOTN",              "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_ldotn             , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_LDOTN",              "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_hdotv             , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_HDOTV",              "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_joint_indices     , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_JOINT_INDICES",      "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_joint_weights     , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_JOINT_WEIGHTS",      "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_omega_o           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_O",            "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_omega_i           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_I",            "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_omega_g           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = &default_uniform_block } );

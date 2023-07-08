@@ -1,6 +1,7 @@
 #include "windows/viewport_config_window.hpp"
 
 #include "editor_context.hpp"
+#include "editor_rendering.hpp"
 #include "tools/hotbar.hpp"
 
 #include "erhe/configuration/configuration.hpp"
@@ -139,6 +140,8 @@ void Viewport_config_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
+
+    m_context.editor_rendering->imgui();
 
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |

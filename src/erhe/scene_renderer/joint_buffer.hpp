@@ -21,6 +21,15 @@ public:
     std::size_t world_from_bind_cofactor;   // mat4 16 * 4 bytes
 };
 
+class Joint_block
+{
+public:
+    std::size_t  debug_joint_indices;
+    std::size_t  debug_joint_colors;
+    Joint_struct joint;
+    std::size_t  joint_struct;
+};
+
 class Joint_interface
 {
 public:
@@ -30,7 +39,7 @@ public:
 
     erhe::graphics::Shader_resource joint_block;
     erhe::graphics::Shader_resource joint_struct;
-    Joint_struct                    offsets;
+    Joint_block                     offsets;
     std::size_t                     max_joint_count{200};
 };
 
@@ -44,6 +53,8 @@ public:
     );
 
     auto update(
+        const glm::uvec4&                                          debug_joint_indices,
+        const gsl::span<glm::vec4>&                                debug_joint_colors,
         const gsl::span<const std::shared_ptr<erhe::scene::Skin>>& skins
     ) -> erhe::renderer::Buffer_range;
 

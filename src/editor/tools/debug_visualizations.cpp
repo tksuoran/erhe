@@ -211,7 +211,7 @@ void Debug_visualizations::skin_visualization(
     if (skin == nullptr) {
         return;
     }
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+    auto& line_renderer = *m_context.line_renderer_set->visible.at(2).get();
 
     const auto* node = skin->get_node();
     if (node == nullptr) {

@@ -138,7 +138,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto naterial_range = m_material_buffers.update(materials);
     m_material_buffers.bind(naterial_range);
 
-    const auto joint_range = m_joint_buffers.update(skins);
+    const auto joint_range = m_joint_buffers.update(
+        parameters.debug_joint_indices,
+        parameters.debug_joint_colors,
+        skins
+    );
     m_joint_buffers.bind(joint_range);
 
     // This must be done even if lights is empty.

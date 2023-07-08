@@ -73,6 +73,8 @@ public:
         const erhe::toolkit::Viewport&                                     viewport;
         const erhe::scene::Item_filter                                     filter{};
         const erhe::graphics::Shader_stages*                               override_shader_stages{nullptr};
+        const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};
+        const gsl::span<glm::vec4>&                                        debug_joint_colors{};
     };
 
     void render(const Render_parameters& parameters);
