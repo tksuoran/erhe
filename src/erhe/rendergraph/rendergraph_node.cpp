@@ -21,6 +21,7 @@ Rendergraph_node::Rendergraph_node(
 
 Rendergraph_node::~Rendergraph_node() noexcept
 {
+    log_tail->trace("~Rendergraph_node() {} {}", type_name(), get_name());
     m_rendergraph.unregister_node(this);
 }
 

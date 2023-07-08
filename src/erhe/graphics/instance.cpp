@@ -132,6 +132,7 @@ Instance::Instance(erhe::toolkit::Context_window& context_window)
             for (unsigned int i = 0; i < static_cast<unsigned int>(num_extensions); ++i) {
                 const auto* extension_str = gl::get_string_i(gl::String_name::extensions, i);
                 auto e = std::string(reinterpret_cast<const char*>(extension_str));
+                log_startup->trace("    {}", e);
                 extensions.push_back(e);
             }
         }

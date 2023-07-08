@@ -12,7 +12,6 @@ extern std::shared_ptr<spdlog::logger> log_debug_visualization;
 extern std::shared_ptr<spdlog::logger> log_draw;
 extern std::shared_ptr<spdlog::logger> log_fly_camera;
 extern std::shared_ptr<spdlog::logger> log_framebuffer;
-extern std::shared_ptr<spdlog::logger> log_gl;
 extern std::shared_ptr<spdlog::logger> log_headset;
 extern std::shared_ptr<spdlog::logger> log_id_render;
 extern std::shared_ptr<spdlog::logger> log_materials;

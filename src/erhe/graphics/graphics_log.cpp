@@ -36,7 +36,7 @@ void initialize_logging()
     log_threads                   = erhe::log::make_logger("graphics::threads",          spdlog::level::info);
     log_vertex_attribute_mappings = erhe::log::make_logger("graphics::vertex_attribute", spdlog::level::info);
     log_vertex_stream             = erhe::log::make_logger("graphics::vertex_stream",    spdlog::level::info);
-    log_startup                   = erhe::log::make_logger("graphics::startup",          spdlog::level::info);
+    log_startup                   = erhe::log::make_logger("graphics::startup",          spdlog::level::trace);
 }
 
 } // namespace erhe::graphics

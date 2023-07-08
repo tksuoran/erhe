@@ -8,8 +8,8 @@ std::shared_ptr<spdlog::logger> log_frame;
 
 void initialize_logging()
 {
-    log_tail  = erhe::log::make_logger("tail",  spdlog::level::info);
-    log_frame = erhe::log::make_logger("frame", spdlog::level::info, false);
+    log_tail  = erhe::log::make_logger("tail",  spdlog::level::trace);
+    log_frame = erhe::log::make_logger("frame", spdlog::level::trace, false);
 }
 
 } // namespace erhe::rendergraph

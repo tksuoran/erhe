@@ -12,6 +12,12 @@ namespace erhe::rendergraph {
 Rendergraph::Rendergraph(erhe::graphics::Instance& graphics_instance)
     : m_graphics_instance{graphics_instance}
 {
+    log_tail->info("Rendergraph::Rendergraph()");
+}
+
+Rendergraph::~Rendergraph()
+{
+    log_tail->info("Rendergraph::~Rendergraph()");
 }
 
 [[nodiscard]] auto Rendergraph::get_nodes() const -> const std::vector<Rendergraph_node*>&

@@ -18,6 +18,7 @@ class Rendergraph final
 {
 public:
     explicit Rendergraph(erhe::graphics::Instance& graphics_instance);
+    ~Rendergraph();
 
     // Public API
     [[nodiscard]] auto get_nodes() const -> const std::vector<Rendergraph_node*>&;
