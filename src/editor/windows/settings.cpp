@@ -1,6 +1,7 @@
 #include "windows/settings.hpp"
 
 #include "editor_context.hpp"
+#include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 
 #include "erhe/configuration/configuration.hpp"
@@ -28,7 +29,8 @@ Settings_window::Settings_window(
     erhe::imgui::Imgui_renderer&           imgui_renderer,
     erhe::imgui::Imgui_windows&            imgui_windows,
     erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-    Editor_context&                        editor_context
+    Editor_context&                        editor_context,
+    Editor_message_bus&                    editor_message_bus
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Settings", "settings"}
     , m_context                {editor_context}
@@ -91,15 +93,17 @@ Settings_window::Settings_window(
     read_ini();
 
     // Override configuration
-    auto& shadow_config = shadow_renderer.config;
     for (std::size_t i = 0, end = m_settings.size(); i < end; ++i) {
         const auto& settings = m_settings.at(i);
         if (settings.name == m_used_settings) {
-            shadow_config.enabled                    = settings.shadow_enable;
-            shadow_config.shadow_map_resolution      = settings.shadow_resolution;
-            shadow_config.shadow_map_max_light_count = settings.shadow_light_count;
-            m_msaa_sample_count = settings.msaa_sample_count;
-            m_settings_index = static_cast<int>(i);
+            use_settings(shadow_renderer, settings);
+            // Queue instead of instant send
+            editor_message_bus.queue_message(
+                Editor_message{
+                    .update_flags = Message_flag_bit::c_flag_bit_graphics_settings
+                }
+            );
+
             break;
         }
     }
@@ -119,29 +123,41 @@ void Settings_window::apply_limits(Settings& settings)
     settings.shadow_light_count = std::min(settings.shadow_light_count, 128);
 }
 
-void Settings_window::use_settings(const Settings& settings)
+void Settings_window::use_settings(
+    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
+    const Settings&                        settings
+)
 {
+    log_startup->info("Sending graphics_settings editor message using settings {}", settings.name);
     m_used_settings = settings.name;
 
-    auto& shadow_config = m_context.shadow_renderer->config;
+    auto& shadow_config = shadow_renderer.config;
     shadow_config.enabled                    = settings.shadow_enable;
     shadow_config.shadow_map_resolution      = settings.shadow_resolution;
     shadow_config.shadow_map_max_light_count = settings.shadow_light_count;
     m_msaa_sample_count = settings.msaa_sample_count;
-
-    m_context.editor_message_bus->send_message(
-        Editor_message{
-            .update_flags = Message_flag_bit::c_flag_bit_graphics_settings
-        }
-    );
 }
 
 void Settings_window::read_ini()
 {
     {
+        mINI::INIFile file("user.ini");
+        mINI::INIStructure ini;
+        if (file.read(ini)) {
+            log_startup->info("Reading preset from user.ini");
+            const auto& section = ini["user"];
+            if (section.has("used_preset")) {
+                m_used_settings = section.get("used_preset");
+                log_startup->info("Parsed used_preset from user.ini: value = '{}'", m_used_settings);
+            }
+        }
+    }
+
+    {
         mINI::INIFile file("presets.ini");
         mINI::INIStructure ini;
         if (file.read(ini)) {
+            log_startup->info("Reading settings from presets.ini");
             m_settings.clear();
             for (const auto& i : ini) {
                 const auto& section = i.second;
@@ -153,17 +169,6 @@ void Settings_window::read_ini()
                 erhe::configuration::ini_get(section, "shadow_light_count", settings.shadow_light_count);
                 apply_limits(settings);
                 m_settings.push_back(settings);
-            }
-        }
-    }
-
-    {
-        mINI::INIFile file("user.ini");
-        mINI::INIStructure ini;
-        if (file.read(ini)) {
-            const auto& section = ini["user"];
-            if (section.has("used_preset")) {
-                m_used_settings = section.get("used_preset");
             }
         }
     }
@@ -276,7 +281,12 @@ void Settings_window::imgui()
 
     ImGui::SameLine();
     if (ImGui::Button("Use Preset", button_size)) {
-        use_settings(m_settings.at(m_settings_index));
+        use_settings(*m_context.shadow_renderer, m_settings.at(m_settings_index));
+        m_context.editor_message_bus->send_message(
+            Editor_message{
+                .update_flags = Message_flag_bit::c_flag_bit_graphics_settings
+            }
+        );
     }
 
     ImGui::Separator();
@@ -288,6 +298,11 @@ void Settings_window::imgui()
         write_ini();
     }
 #endif
+}
+
+auto Settings_window::get_msaa_sample_count() -> int
+{
+    return m_msaa_sample_count;
 }
 
 } // namespace editor

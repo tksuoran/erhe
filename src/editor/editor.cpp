@@ -162,7 +162,7 @@ public:
         , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
-        , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_shadow_renderer, m_editor_context}
+        , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_shadow_renderer, m_editor_context, m_editor_message_bus}
         , m_viewport_windows      {m_commands,          m_editor_context,    m_editor_message_bus}
         , m_editor_rendering      {m_commands,          m_graphics_instance, m_editor_context, m_editor_message_bus, m_mesh_memory, m_programs}
         , m_selection             {m_commands,          m_editor_context,    m_editor_message_bus}
@@ -372,6 +372,7 @@ public:
 
     auto on_idle() -> bool override
     {
+        m_editor_message_bus.update(); // Flushes queued messages
         m_graphics_instance.shader_monitor.update_once_per_frame();
         m_mesh_memory.gl_buffer_transfer_queue.flush();
         m_time.update();

@@ -351,7 +351,7 @@ void Scene_builder::setup_cameras(
         "Primary Viewport",
         m_scene_root,
         camera_a,
-        std::min(
+        std::max(
             2,
             msaa_sample_count
         ), //// TODO Fix rendergraph

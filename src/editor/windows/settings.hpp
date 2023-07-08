@@ -17,6 +17,7 @@ namespace editor
 {
 
 class Editor_context;
+class Editor_message_bus;
 
 class Settings
 {
@@ -38,20 +39,24 @@ public:
         erhe::imgui::Imgui_renderer&           imgui_renderer,
         erhe::imgui::Imgui_windows&            imgui_windows,
         erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-        Editor_context&                        editor_context
+        Editor_context&                        editor_context,
+        Editor_message_bus&                    editor_message_bus
     );
 
     // Implements Imgui_window
     void imgui() override;
 
-    [[nodiscard]] auto get_msaa_sample_count() -> int { return m_msaa_sample_count; }
+    [[nodiscard]] auto get_msaa_sample_count() -> int;
 
 private:
     void read_ini     ();
     void write_ini    ();
     void apply_limits (Settings& settings);
     void show_settings(Settings& settings);
-    void use_settings (const Settings& settings);
+    void use_settings (
+        erhe::scene_renderer::Shadow_renderer& shadow_renderer,
+        const Settings&                        settings
+    );
 
     Editor_context& m_context;
 

@@ -517,7 +517,7 @@ void Jolt_rigid_body::set_mass_properties(
     if (motion_properties == nullptr) {
         return;
     }
-    motion_properties->SetMassProperties(m_mass_properties);
+    motion_properties->SetMassProperties(JPH::EAllowedDOFs::All, m_mass_properties);
 }
 
 auto Jolt_rigid_body::get_debug_label() const -> const char*
