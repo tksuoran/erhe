@@ -139,8 +139,8 @@ Transform_tool::Transform_tool(
     Mesh_memory&                 mesh_memory,
     Tools&                       tools
 )
-    : Tool                          {editor_context}
-    , Imgui_window                  {imgui_renderer, imgui_windows, "Transform", "transform"}
+    : Imgui_window                  {imgui_renderer, imgui_windows, "Transform", "transform"}
+    , Tool                          {editor_context}
     , m_drag_command                {commands, editor_context}
     , m_drag_redirect_update_command{commands, m_drag_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}

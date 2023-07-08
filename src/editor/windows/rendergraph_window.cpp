@@ -270,7 +270,7 @@ void Rendergraph_window::imgui()
             // Render output connections of this node
             for (const auto& output : outputs) {
                 for (auto* consumer : output.consumer_nodes) {
-                    if (consumer != nullptr) {
+                    if (consumer == nullptr) {
                         continue;
                     }
                     const erhe::rendergraph::Rendergraph_consumer_connector* consumer_input =

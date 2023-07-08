@@ -167,17 +167,17 @@ private:
     erhe::graphics::Vertex_attribute_mappings m_attribute_mappings;
     erhe::graphics::Vertex_format             m_vertex_format;
     erhe::graphics::Buffer                    m_index_buffer;
+    erhe::graphics::Sampler                   m_nearest_sampler;
     erhe::graphics::Shader_resource           m_projection_block;
     erhe::graphics::Shader_resource*          m_clip_from_window;
     erhe::graphics::Shader_resource*          m_texture_handle;
 
-    std::filesystem::path                     m_shader_path;
-    erhe::graphics::Shader_stages             m_shader_stages;
-    erhe::graphics::Sampler                   m_nearest_sampler;
     size_t                                    m_u_clip_from_window_size  {0};
     size_t                                    m_u_clip_from_window_offset{0};
     size_t                                    m_u_texture_size           {0};
     size_t                                    m_u_texture_offset         {0};
+    std::filesystem::path                     m_shader_path;
+    erhe::graphics::Shader_stages             m_shader_stages;
     std::shared_ptr<erhe::graphics::Texture>  m_tileset_texture;
     Image                                     m_tileset_image;
 

@@ -63,10 +63,6 @@ Shadow_renderer::Shadow_renderer(
             }
         )
     }
-    , m_light_buffers        {graphics_instance, program_interface.light_interface}
-    , m_draw_indirect_buffers{graphics_instance}
-    , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
-    , m_gpu_timer            {"Shadow_renderer"}
     , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest,
@@ -74,6 +70,10 @@ Shadow_renderer::Shadow_renderer(
             .debug_label = "Shadow_renderer"
         }
     }
+    , m_draw_indirect_buffers{graphics_instance}
+    , m_light_buffers        {graphics_instance, program_interface.light_interface}
+    , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
+    , m_gpu_timer            {"Shadow_renderer"}
 {
     ERHE_PROFILE_FUNCTION();
 

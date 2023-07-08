@@ -42,10 +42,6 @@ Post_processing::Offsets::Offsets(
 
 /// //////////////////////////////////////////
 
-//Downsample_node::Downsample_node()
-//{
-//}
-
 Downsample_node::Downsample_node(
     erhe::graphics::Instance&       graphics_instance,
     //erhe::rendergraph::Rendergraph& rendergraph,
@@ -54,8 +50,7 @@ Downsample_node::Downsample_node(
     int                             height,
     int                             axis
 )
-    : axis{axis}
-    , texture{
+    : texture{
         std::make_shared<erhe::graphics::Texture>(
             erhe::graphics::Texture::Create_info{
                 .instance        = graphics_instance,
@@ -67,6 +62,7 @@ Downsample_node::Downsample_node(
             }
         )
     }
+    , axis{axis}
 {
     ERHE_VERIFY(width > 0);
     ERHE_VERIFY(height > 0);

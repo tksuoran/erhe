@@ -369,81 +369,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-    , sky{
-        erhe::graphics::Pipeline{
-            {
-                .name           = "Sky",
-                .shader_stages  = &programs.sky.shader_stages,
-                .vertex_input   = &mesh_memory.vertex_input,
-                .input_assembly = Input_assembly_state::triangles,
-                .rasterization  = Rasterization_state::cull_mode_none,
-                .depth_stencil  = Depth_stencil_state{
-                    .depth_test_enable   = true,
-                    .depth_write_enable  = false,
-                    .depth_compare_op    = gl::Depth_function::equal, // Depth buffer must be cleared to the far plane value
-                    .stencil_test_enable = false
-                },
-                .color_blend    = Color_blend_state::color_blend_disabled
-            }
-        },
-        [](){ gl::depth_range(0.0f, 0.0f); },
-        [](){ gl::depth_range(0.0f, 1.0f); }
-    }
-    , edge_lines{erhe::graphics::Pipeline{{
-        .name           = "Edge Lines",
-        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::lines,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
-        //.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
-        .depth_stencil = {
-            .depth_test_enable   = true,
-            .depth_write_enable  = true,
-            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
-            .stencil_test_enable = true,
-            .stencil_front = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::incr,
-                .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
-            },
-            .stencil_back = {
-                .stencil_fail_op = gl::Stencil_op::keep,
-                .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::incr,
-                .function        = gl::Stencil_function::equal,
-                .reference       = 0,
-                .test_mask       = 0xffu,
-                .write_mask      = 0xffu
-            }
-        },
-
-        .color_blend    = Color_blend_state::color_blend_premultiplied
-    }}}
-
-    , corner_points{erhe::graphics::Pipeline{{
-        .name           = "Corner Points",
-        .shader_stages  = &programs.points.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::points,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
-        .color_blend    = Color_blend_state::color_blend_disabled
-    }}}
-
-    , polygon_centroids{erhe::graphics::Pipeline{{
-        .name           = "Polygon Centroids",
-        .shader_stages  = &programs.points.shader_stages,
-        .vertex_input   = &mesh_memory.vertex_input,
-        .input_assembly = Input_assembly_state::points,
-        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
-        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
-        .color_blend    = Color_blend_state::color_blend_disabled
-    }}}
-
     , line_hidden_blend{erhe::graphics::Pipeline{{
         .name                       = "Hidden lines with blending",
         .shader_stages              = &programs.wide_lines_draw_color.shader_stages,
@@ -490,7 +415,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .constant = { 0.0f, 0.0f, 0.0f, 0.2f }
         }
     }}}
-
     , brush_back{erhe::graphics::Pipeline{{
         .name           = "Brush back faces",
         .shader_stages  = &programs.brush.shader_stages,
@@ -500,7 +424,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
-
     , brush_front{erhe::graphics::Pipeline{{
         .name           = "Brush front faces",
         .shader_stages  = &programs.brush.shader_stages,
@@ -510,7 +433,58 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
+    , edge_lines{erhe::graphics::Pipeline{{
+        .name           = "Edge Lines",
+        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::lines,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        //.depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(reverse_depth),
+        .depth_stencil = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = true,
+            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::incr,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::incr,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            }
+        },
 
+        .color_blend    = Color_blend_state::color_blend_premultiplied
+    }}}
+    , corner_points{erhe::graphics::Pipeline{{
+        .name           = "Corner Points",
+        .shader_stages  = &programs.points.shader_stages,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::points,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .color_blend    = Color_blend_state::color_blend_disabled
+    }}}
+    , polygon_centroids{erhe::graphics::Pipeline{{
+        .name           = "Polygon Centroids",
+        .shader_stages  = &programs.points.shader_stages,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::points,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
+        .color_blend    = Color_blend_state::color_blend_disabled
+    }}}
     , rendertarget_meshes{erhe::graphics::Pipeline{{
         .name           = "Rendertarget Meshes",
         .shader_stages  = &programs.textured.shader_stages,
@@ -520,6 +494,26 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
+    , sky{
+        erhe::graphics::Pipeline{
+            {
+                .name           = "Sky",
+                .shader_stages  = &programs.sky.shader_stages,
+                .vertex_input   = &mesh_memory.vertex_input,
+                .input_assembly = Input_assembly_state::triangles,
+                .rasterization  = Rasterization_state::cull_mode_none,
+                .depth_stencil  = Depth_stencil_state{
+                    .depth_test_enable   = true,
+                    .depth_write_enable  = false,
+                    .depth_compare_op    = gl::Depth_function::equal, // Depth buffer must be cleared to the far plane value
+                    .stencil_test_enable = false
+                },
+                .color_blend    = Color_blend_state::color_blend_disabled
+            }
+        },
+        [](){ gl::depth_range(0.0f, 0.0f); },
+        [](){ gl::depth_range(0.0f, 1.0f); }
+    }
 
     // m_content_timer   = std::make_unique<erhe::graphics::Gpu_timer>("Content");
     //m_selection_timer = std::make_unique<erhe::graphics::Gpu_timer>("Selection");

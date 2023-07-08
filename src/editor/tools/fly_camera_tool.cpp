@@ -185,9 +185,9 @@ Fly_camera_tool::Fly_camera_tool(
     Time&                        time,
     Tools&                       tools
 )
-    : Tool                            {editor_context}
+    : Update_time_base                {time}
     , erhe::imgui::Imgui_window       {imgui_renderer, imgui_windows, "Fly Camera", "fly_camera"}
-    , Update_time_base                {time}
+    , Tool                            {editor_context}
     , m_turn_command                  {commands, editor_context}
     , m_zoom_command                  {commands, editor_context}
     , m_move_up_active_command        {commands, editor_context, Variable::translate_y, erhe::toolkit::Simulation_variable_control::more, true }

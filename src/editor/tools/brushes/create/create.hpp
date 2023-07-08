@@ -25,8 +25,8 @@ class Brush;
 class Render_context;
 
 class Create
-    : public Tool
-    , public erhe::imgui::Imgui_window
+    : public erhe::imgui::Imgui_window
+    , public Tool
 {
 public:
     static constexpr int c_priority{4};

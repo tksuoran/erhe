@@ -274,8 +274,8 @@ Debug_view_window::Debug_view_window(
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Debug View", "debug_view"}
     , m_context                {editor_context}
-    , m_node                   {rendergraph}
     , m_depth_to_color_node    {rendergraph, forward_renderer, mesh_memory, programs}
+    , m_node                   {rendergraph}
 {
     rendergraph.connect(
         erhe::rendergraph::Rendergraph_node_key::depth_visualization,

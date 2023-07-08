@@ -19,8 +19,8 @@ namespace editor
 class Editor_context;
 
 class Network_window
-    : public erhe::imgui::Imgui_window
-    , public Update_once_per_frame
+    : public Update_once_per_frame
+    , public erhe::imgui::Imgui_window
 {
 public:
     Network_window(
