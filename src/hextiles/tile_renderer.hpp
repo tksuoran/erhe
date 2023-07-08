@@ -102,7 +102,7 @@ public:
     void next_frame();
 
 private:
-    auto make_prototype() const -> erhe::graphics::Shader_stages_prototype;
+    auto make_prototype(erhe::graphics::Instance& graphics_instance) const -> erhe::graphics::Shader_stages_prototype;
     auto make_program(
         erhe::graphics::Shader_stages_prototype&& prototype
     ) const -> erhe::graphics::Shader_stages;

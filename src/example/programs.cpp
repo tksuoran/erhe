@@ -61,7 +61,6 @@ Programs::Programs(
                 graphics_instance,
                 shader_path,
                 erhe::graphics::Shader_stages_create_info{
-                    .instance          = graphics_instance,
                     .name              = "standard",
                     .default_uniform_block = graphics_instance.info.use_bindless_texture
                         ? nullptr

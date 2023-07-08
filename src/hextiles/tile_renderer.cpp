@@ -106,11 +106,10 @@ constexpr size_t max_quad_count          {1'000'000}; // each quad consumes 4 in
 constexpr size_t index_count             {max_quad_count * per_quad_index_count};
 constexpr size_t index_stride            {4};
 
-auto Tile_renderer::make_prototype() const
+auto Tile_renderer::make_prototype(erhe::graphics::Instance& graphics_instance) const
 -> erhe::graphics::Shader_stages_prototype
 {
     erhe::graphics::Shader_stages_create_info create_info{
-        .instance                  = m_graphics_instance,
         .name                      = "tile",
         .interface_blocks          = { &m_projection_block },
         .vertex_attribute_mappings = &m_attribute_mappings,
@@ -142,7 +141,7 @@ auto Tile_renderer::make_prototype() const
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
-    return erhe::graphics::Shader_stages_prototype{create_info};
+    return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};
 }
 
 auto Tile_renderer::make_program(
@@ -220,7 +219,7 @@ Tile_renderer::Tile_renderer(
     , m_u_texture_size           {m_texture_handle->size_bytes()}
     , m_u_texture_offset         {m_texture_handle->offset_in_parent()}
     , m_shader_path              {std::filesystem::path{"res"} / std::filesystem::path{"shaders"}}
-    , m_shader_stages            {make_program(make_prototype())}
+    , m_shader_stages            {make_program(make_prototype(graphics_instance))}
     , m_vertex_writer            {graphics_instance}
     , m_projection_writer        {graphics_instance}
         
