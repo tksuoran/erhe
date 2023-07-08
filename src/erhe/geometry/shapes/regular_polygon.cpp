@@ -14,8 +14,7 @@ auto make_triangle(const double r) -> Geometry
     const double b = sqrt(3.0) / 6.0; // 0.28867513
     return Geometry{
         "triangle",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r *  0.5), 0.0f, 0.0f, 1.0f);
             geometry.make_point(static_cast<float>(r *  a), static_cast<float>(r *  0.0), 0.0f, 1.0f, 1.0f);
             geometry.make_point(static_cast<float>(r * -b), static_cast<float>(r * -0.5), 0.0f, 1.0f, 0.0f);
@@ -41,8 +40,7 @@ auto make_quad(const double edge) -> Geometry
     // make_point((float)(r * -0.707106781f), (float)(r *  0.707106781f), 0.0f, 0.0f, 1.0f);
     return Geometry{
         "quad",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             geometry.make_point(static_cast<float>(edge * -0.5), static_cast<float>(edge * -0.5), 0.0f, 0.0f, 0.0f);
             geometry.make_point(static_cast<float>(edge *  0.5), static_cast<float>(edge * -0.5), 0.0f, 1.0f, 0.0f);
             geometry.make_point(static_cast<float>(edge *  0.5), static_cast<float>(edge *  0.5), 0.0f, 1.0f, 1.0f);
@@ -70,8 +68,7 @@ auto make_rectangle(
 
     return Geometry{
         "rectangle",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             geometry.make_point(static_cast<float>(width * -0.5), static_cast<float>(height * -0.5), 0.0f, 0.0f, 0.0f);
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height * -0.5), 0.0f, 1.0f, 0.0f);
             geometry.make_point(static_cast<float>(width *  0.5), static_cast<float>(height *  0.5), 0.0f, 1.0f, 1.0f);

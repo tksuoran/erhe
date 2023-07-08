@@ -1,4 +1,6 @@
 #include "erhe/graphics/shader_stages.hpp"
+
+#include "erhe/graphics/instance.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 
 #include <fmt/format.h>
@@ -8,6 +10,39 @@ namespace erhe::graphics
 {
 
 using std::string;
+
+auto Reloadable_shader_stages::make_prototype(
+    Instance& graphics_instance
+) -> Shader_stages_prototype
+{
+    erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+    return prototype;
+}
+
+Reloadable_shader_stages::Reloadable_shader_stages(
+    const std::string& non_functional_name
+)
+    : create_info  {}
+    , shader_stages{non_functional_name}
+{
+}
+
+Reloadable_shader_stages::Reloadable_shader_stages(
+    Instance&                        graphics_instance,
+    const Shader_stages_create_info& create_info
+)
+    : create_info  {create_info}
+    , shader_stages{make_prototype(graphics_instance)}
+{
+}
+
+Reloadable_shader_stages::Reloadable_shader_stages(
+    Shader_stages_prototype&& prototype
+)
+    : create_info  {prototype.create_info()}
+    , shader_stages{std::move(prototype)}
+{
+}
 
 Shader_stage::Shader_stage(gl::Shader_type type, const std::string_view source)
     : type  {type}

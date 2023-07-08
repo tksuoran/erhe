@@ -47,7 +47,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only reads depth buffer, only writes stencil buffer.
     : tool1_hidden_stencil{erhe::graphics::Pipeline{{
         .name                    = "Tool pass 1: Tag depth hidden with stencil = 1",
-        .shader_stages           = &programs.tool,
+        .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
         .rasterization           = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -82,7 +82,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Only reads depth buffer, only writes stencil buffer.
     , tool2_visible_stencil{erhe::graphics::Pipeline{{
         .name                    = "Tool pass 2: Tag visible tool parts with stencil = 2",
-        .shader_stages           = &programs.tool,
+        .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = erhe::graphics::Input_assembly_state::triangles,
         .rasterization           = erhe::graphics::Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -119,7 +119,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
         erhe::graphics::Pipeline{
             {
                 .name           = "Tool pass 3: Set depth to fixed value",
-                .shader_stages  = &programs.tool,
+                .shader_stages  = &programs.tool.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,
                 .input_assembly = Input_assembly_state::triangles,
                 .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -135,7 +135,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth buffer update with depth test.
     , tool4_depth{erhe::graphics::Pipeline{{
         .name           = "Tool pass 4: Set depth to proper tool depth",
-        .shader_stages  = &programs.tool,
+        .shader_stages  = &programs.tool.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -147,7 +147,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth test, stencil test require 2, color writes enabled, no blending
     , tool5_visible_color{erhe::graphics::Pipeline{{
         .name                    = "Tool pass 5: Render visible tool parts",
-        .shader_stages           = &programs.tool,
+        .shader_stages           = &programs.tool.shader_stages,
         .vertex_input            = &mesh_memory.vertex_input,
         .input_assembly          = Input_assembly_state::triangles,
         .rasterization           = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -182,7 +182,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
     // Normal depth test, stencil test requires 1, color writes enabled, blending
     , tool6_hidden_color{erhe::graphics::Pipeline{{
         .name                       = "Tool pass 6: Render hidden tool parts",
-        .shader_stages              = &programs.tool,
+        .shader_stages              = &programs.tool.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::triangles,
         .rasterization              = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),

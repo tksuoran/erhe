@@ -14,6 +14,7 @@ class Shader_stages;
 class Shader_monitor
 {
 public:
+    Shader_monitor(Instance& instance);
     ~Shader_monitor() noexcept;
 
     void begin();
@@ -23,9 +24,10 @@ public:
     // Public API
     void set_enabled(bool enabled);
     void add(
-        erhe::graphics::Shader_stages_create_info     create_info,
-        gsl::not_null<erhe::graphics::Shader_stages*> program
+        Shader_stages_create_info     create_info,
+        gsl::not_null<Shader_stages*> program
     );
+    void add(Reloadable_shader_stages& reloadable_shader_stages);
 
 private:
     void set_run(bool value)
@@ -78,6 +80,7 @@ private:
         std::set<Reload_entry, Compare_object> reload_entries;
     };
 
+    Instance&                             m_graphics_instance;
     bool                                  m_run{false};
     std::map<std::filesystem::path, File> m_files;
     std::mutex                            m_mutex;

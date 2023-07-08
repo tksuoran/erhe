@@ -327,6 +327,7 @@ void main()
         vec3  point_to_light = light.direction_and_outer_spot_cos.xyz;
         vec3  L              = normalize(point_to_light);   // Direction from surface point to light
         float N_dot_L        = clamped_dot(N, L);
+        //color = vec3(N_dot_V);
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
             color += intensity * brdf(

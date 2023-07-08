@@ -23,6 +23,7 @@ public:
             , secondary{secondary}
         {
         }
+
         void swap(T lhs, T rhs)
         {
             if (primary == lhs) {

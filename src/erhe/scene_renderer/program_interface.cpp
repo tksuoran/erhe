@@ -7,6 +7,7 @@
 #include "erhe/graphics/shader_monitor.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/scene_renderer/scene_renderer_log.hpp"
+#include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"
@@ -38,8 +39,7 @@ Program_interface::Program_interface(
                 .layout_location = 0,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_position_texcoord",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type = Vertex_attribute::Usage_type::position | Vertex_attribute::Usage_type::tex_coord
                 }
             },
@@ -47,8 +47,7 @@ Program_interface::Program_interface(
                 .layout_location = 0,
                 .shader_type     = gl::Attribute_type::float_vec3,
                 .name            = "a_position",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type = Vertex_attribute::Usage_type::position
                 }
             },
@@ -56,8 +55,7 @@ Program_interface::Program_interface(
                 .layout_location = 1,
                 .shader_type     = gl::Attribute_type::float_vec3,
                 .name            = "a_normal",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type = Vertex_attribute::Usage_type::normal
                 }
             },
@@ -65,8 +63,7 @@ Program_interface::Program_interface(
                 .layout_location = 2,
                 .shader_type     = gl::Attribute_type::float_vec3,
                 .name            = "a_normal_flat",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::normal,
                     .index = 1
                 }
@@ -75,8 +72,7 @@ Program_interface::Program_interface(
                 .layout_location = 3,
                 .shader_type     = gl::Attribute_type::float_vec3,
                 .name            = "a_normal_smooth",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::normal,
                     .index = 2
                 }
@@ -85,8 +81,7 @@ Program_interface::Program_interface(
                 .layout_location = 4,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_tangent",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::tangent,
                 }
             },
@@ -94,8 +89,7 @@ Program_interface::Program_interface(
                 .layout_location = 5,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_bitangent",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::bitangent,
                 }
             },
@@ -103,8 +97,7 @@ Program_interface::Program_interface(
                 .layout_location = 6,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_color",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::color,
                 }
             },
@@ -112,8 +105,7 @@ Program_interface::Program_interface(
                 .layout_location = 7,
                 .shader_type     = gl::Attribute_type::float_vec2,
                 .name            = "a_texcoord",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::tex_coord,
                 }
             },
@@ -121,8 +113,7 @@ Program_interface::Program_interface(
                 .layout_location = 8,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_id",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::id,
                 }
             },
@@ -139,8 +130,7 @@ Program_interface::Program_interface(
                 .layout_location = 10,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_weights",
-                .src_usage       =
-                {
+                .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::joint_weights,
                 }
             }
@@ -157,7 +147,17 @@ Program_interface::Program_interface(
 auto Program_interface::make_prototype(
     erhe::graphics::Instance&                   graphics_instance,
     const std::filesystem::path&                shader_path,
-    erhe::graphics::Shader_stages_create_info&& create_info
+    erhe::graphics::Shader_stages_create_info&& in_create_info
+) -> erhe::graphics::Shader_stages_prototype
+{
+    erhe::graphics::Shader_stages_create_info create_info = std::move(in_create_info);
+    return make_prototype(graphics_instance, shader_path, create_info);
+}
+
+auto Program_interface::make_prototype(
+    erhe::graphics::Instance&                  graphics_instance,
+    const std::filesystem::path&               shader_path,
+    erhe::graphics::Shader_stages_create_info& create_info
 ) -> erhe::graphics::Shader_stages_prototype
 {
     ERHE_PROFILE_FUNCTION();
@@ -207,37 +207,20 @@ auto Program_interface::make_prototype(
         create_info.extensions.push_back({gl::Shader_type::fragment_shader, "GL_ARB_bindless_texture"});
     }
 
-    const auto check_file = [](const std::filesystem::path& path) {
-        std::error_code error_code;
-        const bool exists = std::filesystem::exists(path, error_code);
-        if (error_code || !exists) {
-            return false;
-        }
-        const bool is_empty = std::filesystem::is_empty(path, error_code);
-        if (error_code || is_empty) {
-            return false;
-        }
-        const bool is_regular_file = std::filesystem::is_regular_file(path, error_code);
-        if (error_code || !is_regular_file) {
-            return false;
-        }
-        return true;
-    };
-
-    if (check_file(cs_path)) {
+    if (erhe::toolkit::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", cs_path, true)) {
         create_info.shaders.emplace_back(gl::Shader_type::compute_shader,  cs_path);
     }
-    if (check_file(fs_path)) {
+    if (erhe::toolkit::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", fs_path, true)) {
         create_info.shaders.emplace_back(gl::Shader_type::fragment_shader, fs_path);
     }
-    if (check_file(gs_path)) {
+    if (erhe::toolkit::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", gs_path, true)) {
         create_info.shaders.emplace_back(gl::Shader_type::geometry_shader, gs_path);
     }
-    if (check_file(vs_path)) {
+    if (erhe::toolkit::check_is_existing_non_empty_regular_file("Program_interface::make_prototype", vs_path, true)) {
         create_info.shaders.emplace_back(gl::Shader_type::vertex_shader,   vs_path);
     }
 
-    return erhe::graphics::Shader_stages_prototype{create_info};
+    return erhe::graphics::Shader_stages_prototype{graphics_instance, create_info};
 }
 
 auto Program_interface::make_program(

@@ -209,8 +209,7 @@ auto make_disc(
 
     return Geometry{
         "disc",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count, 0, slice_count, 0, stack_count};
             builder.build();
         }
@@ -232,8 +231,7 @@ auto make_disc(
 
     return Geometry{
         "disc",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             Disc_builder builder{geometry, outer_radius, inner_radius, slice_count, stack_count, slice_begin, slice_end, stack_begin, stack_end};
             builder.build();
         }

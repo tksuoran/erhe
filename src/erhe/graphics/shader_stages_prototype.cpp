@@ -371,7 +371,7 @@ template <typename T>
     ERHE_VERIFY((m_state == state_init) || (m_state == state_shader_compilation_started));
     const auto gl_name = gl_shader.gl_name();
 
-    const std::string source{m_create_info.final_source(shader)};
+    const std::string source{m_create_info.final_source(m_graphics_instance, shader)};
     if (source.empty()) {
         m_state = state_fail;
         return gl_shader;
@@ -382,7 +382,7 @@ template <typename T>
 
     log_glsl->trace(
         "Shader_stage source:\n{}\n",
-        format_source(m_create_info.final_source(shader))
+        format_source(m_create_info.final_source(m_graphics_instance, shader))
     );
 
     gl::shader_source(gl_name, static_cast<GLsizei>(sources.size()), sources.data(), nullptr);
@@ -412,7 +412,7 @@ template <typename T>
         gl::get_shader_iv(gl_name, gl::Shader_parameter_name::info_log_length, &length);
         std::string log(static_cast<std::string::size_type>(length) + 1, '\0');
         gl::get_shader_info_log(gl_name, length, nullptr, &log[0]);
-        const std::string source{m_create_info.final_source(shader)};
+        const std::string source{m_create_info.final_source(m_graphics_instance, shader)};
         const std::string f_source = format_source(source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
@@ -425,10 +425,26 @@ template <typename T>
 }
 
 Shader_stages_prototype::Shader_stages_prototype(
+    Instance&                   graphics_instance,
+    Shader_stages_create_info&& create_info
+)
+    : m_graphics_instance    {graphics_instance}
+    , m_create_info          {create_info}
+    , m_default_uniform_block{graphics_instance}
+{
+    Expects(m_handle.gl_name() != 0);
+    if (create_info.build) {
+        post_link();
+    }
+}
+
+Shader_stages_prototype::Shader_stages_prototype(
+    Instance&                        graphics_instance,
     const Shader_stages_create_info& create_info
 )
-    : m_create_info          {create_info}
-    , m_default_uniform_block{create_info.instance}
+    : m_graphics_instance    {graphics_instance}
+    , m_create_info          {create_info}
+    , m_default_uniform_block{graphics_instance}
 {
     Expects(m_handle.gl_name() != 0);
     if (create_info.build) {
@@ -533,7 +549,7 @@ void Shader_stages_prototype::post_link()
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
         for (const auto& s : m_create_info.shaders) {
-            const std::string f_source = format_source(m_create_info.final_source(s));
+            const std::string f_source = format_source(m_create_info.final_source(m_graphics_instance, s));
             log_glsl->error("\n{}", f_source);
         }
         log_program->error("Shader_stages linking failed:");
@@ -543,7 +559,7 @@ void Shader_stages_prototype::post_link()
         m_state = state_ready;
         log_program->trace("Shader_stages linking succeeded:");
         for (const auto& s : m_create_info.shaders) {
-            const std::string f_source = format_source(m_create_info.final_source(s));
+            const std::string f_source = format_source(m_create_info.final_source(m_graphics_instance, s));
             log_glsl->trace("\n{}", f_source);
         }
         if (m_create_info.dump_reflection) {
@@ -555,7 +571,7 @@ void Shader_stages_prototype::post_link()
         }
         if (m_create_info.dump_final_source) {
             for (const auto& s : m_create_info.shaders) {
-                const std::string f_source = format_source(m_create_info.final_source(s));
+                const std::string f_source = format_source(m_create_info.final_source(m_graphics_instance, s));
                 log_glsl->info("\n{}", f_source);
             }
         }

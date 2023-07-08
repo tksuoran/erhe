@@ -599,8 +599,7 @@ auto make_conical_frustum(
 
     return Geometry{
         "conical frustum",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             Conical_frustum_builder builder{
                 geometry,
                 min_x,
@@ -630,8 +629,7 @@ auto make_cone(
 
     return Geometry{
         "cone",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             Conical_frustum_builder builder{
                 geometry,
                 min_x,          // min x
@@ -662,8 +660,7 @@ auto make_cylinder(
 
     return Geometry{
         "cylinder",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             Conical_frustum_builder builder{
                 geometry,
                 min_x,

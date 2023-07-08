@@ -127,18 +127,15 @@ void Geometry::make_point_corners()
     ++m_serial;
 
     Point_corner_id next_point_corner = 0;
-    for_each_point([&](auto& i)
-    {
+    for_each_point([&](auto& i) {
         i.point.first_point_corner_id = next_point_corner;
         i.point.corner_count = 0; // reset in case this has been done before
         next_point_corner += i.point.reserved_corner_count;
     });
     m_next_point_corner_reserve = next_point_corner;
     point_corners.resize(static_cast<size_t>(m_next_point_corner_reserve));
-    for_each_polygon([&](auto& i)
-    {
-        i.polygon.for_each_corner(*this, [&](auto& j)
-        {
+    for_each_polygon([&](auto& i) {
+        i.polygon.for_each_corner(*this, [&](auto& j) {
             //ERHE_VERIFY(j.corner_id != std::numeric_limits<Corner_id>::max());
             //ERHE_VERIFY(j.corner_id < m_next_corner_id);
             const Point_id  point_id        = j.corner.point_id;
@@ -173,14 +170,12 @@ void Geometry::sort_point_corners()
     point_corner_infos.reserve(20);
 
     bool failures{false};
-    for_each_point([&](auto& i)
-    {
+    for_each_point([&](auto& i) {
         if (i.point.corner_count < 2) {
             return;
         }
         point_corner_infos.clear();
-        i.point.for_each_corner(*this, [&](auto& j)
-        {
+        i.point.for_each_corner(*this, [&](auto& j) {
             Corner_id        prev_corner_id   = 0;
             const Corner_id  middle_corner_id = j.corner_id; //point_corners[j.point_corner_id];
             Corner_id        next_corner_id   = 0;
@@ -188,8 +183,7 @@ void Geometry::sort_point_corners()
             const Polygon_id polygon_id       = middle_corner.polygon_id;
             const Polygon&   polygon          = polygons[polygon_id];
             bool             found            = false;
-            polygon.for_each_corner_neighborhood_const(*this, [&](auto& k)
-            {
+            polygon.for_each_corner_neighborhood_const(*this, [&](auto& k) {
                 if (k.corner_id == middle_corner_id) {
                     prev_corner_id = k.prev_corner_id;
                     next_corner_id = k.next_corner_id;

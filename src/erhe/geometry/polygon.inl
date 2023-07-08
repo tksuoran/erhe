@@ -22,8 +22,7 @@ void Polygon::copy_to_corners(
     const T polygon_value = polygon_attribute.get(this_polygon_id);
     for_each_corner_const(
         geometry,
-        [&corner_attribute, polygon_value](auto& i)
-        {
+        [&corner_attribute, polygon_value](auto& i) {
             corner_attribute.put(i.corner_id, polygon_value);
         }
     );

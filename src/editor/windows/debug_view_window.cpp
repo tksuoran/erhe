@@ -61,7 +61,7 @@ Depth_to_color_rendergraph_node::Depth_to_color_rendergraph_node(
         erhe::graphics::Pipeline{
             erhe::graphics::Pipeline_data{
                 .name           = "Debug_view",
-                .shader_stages  = &programs.debug_depth,
+                .shader_stages  = &programs.debug_depth.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,

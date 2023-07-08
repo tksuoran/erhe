@@ -96,7 +96,8 @@ auto get_string(gl::String_name string_name) -> std::string
 //
 
 Instance::Instance(erhe::toolkit::Context_window& context_window)
-    : m_context_window{context_window}
+    : shader_monitor  {*this}
+    , m_context_window{context_window}
     , context_provider{*this, opengl_state_tracker}
 {
     std::vector<std::string> extensions;

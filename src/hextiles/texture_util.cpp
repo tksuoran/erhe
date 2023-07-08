@@ -2,6 +2,7 @@
 #include "hextiles_log.hpp"
 
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
@@ -73,11 +74,9 @@ void Image::put_pixel(size_t x, size_t y, glm::vec4 color)
 
 auto load_png(const std::filesystem::path& path) -> Image
 {
-    if (
-        !std::filesystem::exists(path) ||
-        std::filesystem::is_empty(path)
-    ) {
-        ERHE_FATAL("File `%s` not found (or empty)", path.string().c_str());
+    const bool is_ok = erhe::toolkit::check_is_existing_non_empty_regular_file("load_png", path);
+    if (!is_ok) {
+        return {};
     }
 
     Image image;

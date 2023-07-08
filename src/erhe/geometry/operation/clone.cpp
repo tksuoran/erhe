@@ -61,8 +61,7 @@ auto clone(
 {
     return Geometry{
         fmt::format("clone({})", source.name),
-        [&source, transform](auto& result)
-        {
+        [&source, transform](auto& result) {
             Clone operation{source, result, transform};
         }
     };

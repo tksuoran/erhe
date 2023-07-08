@@ -112,22 +112,22 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
 {
     auto& programs = *m_context.programs;
     switch (m_shader_stages_variant) {
-        case Shader_stages_variant::standard:                 return &programs.standard;
-        case Shader_stages_variant::anisotropic_slope:        return &programs.anisotropic_slope;
-        case Shader_stages_variant::anisotropic_engine_ready: return &programs.anisotropic_engine_ready;
-        case Shader_stages_variant::circular_brushed_metal:   return &programs.circular_brushed_metal;
-        case Shader_stages_variant::debug_depth:              return &programs.debug_depth;
-        case Shader_stages_variant::debug_normal:             return &programs.debug_normal;
-        case Shader_stages_variant::debug_tangent:            return &programs.debug_tangent;
-        case Shader_stages_variant::debug_bitangent:          return &programs.debug_bitangent;
-        case Shader_stages_variant::debug_texcoord:           return &programs.debug_texcoord;
-        case Shader_stages_variant::debug_vertex_color_rgb:   return &programs.debug_vertex_color_rgb;
-        case Shader_stages_variant::debug_vertex_color_alpha: return &programs.debug_vertex_color_alpha;
-        case Shader_stages_variant::debug_omega_o:            return &programs.debug_omega_o;
-        case Shader_stages_variant::debug_omega_i:            return &programs.debug_omega_i;
-        case Shader_stages_variant::debug_omega_g:            return &programs.debug_omega_g;
-        case Shader_stages_variant::debug_misc:               return &programs.debug_misc;
-        default:                                              return &programs.standard;
+        case Shader_stages_variant::standard:                 return &programs.standard.shader_stages;
+        case Shader_stages_variant::anisotropic_slope:        return &programs.anisotropic_slope.shader_stages;
+        case Shader_stages_variant::anisotropic_engine_ready: return &programs.anisotropic_engine_ready.shader_stages;
+        case Shader_stages_variant::circular_brushed_metal:   return &programs.circular_brushed_metal.shader_stages;
+        case Shader_stages_variant::debug_depth:              return &programs.debug_depth.shader_stages;
+        case Shader_stages_variant::debug_normal:             return &programs.debug_normal.shader_stages;
+        case Shader_stages_variant::debug_tangent:            return &programs.debug_tangent.shader_stages;
+        case Shader_stages_variant::debug_bitangent:          return &programs.debug_bitangent.shader_stages;
+        case Shader_stages_variant::debug_texcoord:           return &programs.debug_texcoord.shader_stages;
+        case Shader_stages_variant::debug_vertex_color_rgb:   return &programs.debug_vertex_color_rgb.shader_stages;
+        case Shader_stages_variant::debug_vertex_color_alpha: return &programs.debug_vertex_color_alpha.shader_stages;
+        case Shader_stages_variant::debug_omega_o:            return &programs.debug_omega_o.shader_stages;
+        case Shader_stages_variant::debug_omega_i:            return &programs.debug_omega_i.shader_stages;
+        case Shader_stages_variant::debug_omega_g:            return &programs.debug_omega_g.shader_stages;
+        case Shader_stages_variant::debug_misc:               return &programs.debug_misc.shader_stages;
+        default:                                              return &programs.standard.shader_stages;
     }
 }
 

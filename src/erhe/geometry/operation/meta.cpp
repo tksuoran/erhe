@@ -26,10 +26,8 @@ Meta::Meta(Geometry& src, Geometry& destination)
     make_polygon_centroids();
     make_edge_midpoints();
 
-    source.for_each_polygon_const([&](auto& i)
-    {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j)
-        {
+    source.for_each_polygon_const([&](auto& i) {
+        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
             const Point_id   a                      = j.prev_corner.point_id;
             const Point_id   b                      = j.corner     .point_id;
             const Point_id   c                      = j.next_corner.point_id;
@@ -62,8 +60,7 @@ auto meta(Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("meta({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Meta operation{source, result};
         }
     };

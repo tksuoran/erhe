@@ -117,7 +117,7 @@ Id_renderer::Id_renderer(
 
     , m_pipeline{erhe::graphics::Pipeline_data{
         .name           = "ID Renderer",
-        .shader_stages  = &programs.id,
+        .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -127,7 +127,7 @@ Id_renderer::Id_renderer(
 
     , m_selective_depth_clear_pipeline{erhe::graphics::Pipeline_data{
         .name           = "ID Renderer selective depth clear",
-        .shader_stages  = &programs.id,
+        .shader_stages  = &programs.id.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),

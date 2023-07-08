@@ -63,7 +63,7 @@ Brdf_slice_rendergraph_node::Brdf_slice_rendergraph_node(
         erhe::graphics::Pipeline{
             erhe::graphics::Pipeline_data{
                 .name           = "Brdf_slice",
-                .shader_stages  = &programs.brdf_slice,
+                .shader_stages  = &programs.brdf_slice.shader_stages,
                 .vertex_input   = &m_empty_vertex_input,
                 .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
                 .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,

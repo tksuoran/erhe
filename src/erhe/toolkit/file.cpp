@@ -13,33 +13,68 @@
 namespace erhe::toolkit
 {
 
-auto read(const std::filesystem::path& path) -> std::optional<std::string>
+[[nodiscard]] auto check_is_existing_non_empty_regular_file(
+    const std::string_view       description,
+    const std::filesystem::path& path,
+    const bool                   silent_if_not_exists
+) -> bool
 {
     std::error_code error_code;
     const bool exists = std::filesystem::exists(path, error_code);
     if (error_code) {
-        log_file->warn("std::filesystem::exists('{}') returned error code {}", path.string(), error_code.value());
-        return {};
+        log_file->warn(
+            "{}: std::filesystem::exists('{}') returned error code {}: {}",
+            description,
+            path.string(),
+            error_code.value(),
+            error_code.message()
+        );
+        return false;
     }
     if (!exists) {
-        log_file->warn("File '{}' not found", path.string());
-        return {};
+        if (!silent_if_not_exists) {
+            log_file->warn("{}: File '{}' not found", description, path.string());
+        }
+        return false;
     }
     const bool is_regular_file = std::filesystem::is_regular_file(path, error_code);
     if (error_code) {
-        log_file->warn("std::filesystem::is_regular_file('{}') returned error code {}", path.string(), error_code.value());
-        return {};
+        log_file->warn(
+            "{}: std::filesystem::is_regular_file('{}') returned error code {}: {}",
+            description,
+            path.string(),
+            error_code.value(),
+            error_code.message()
+        );
+        return false;
     }
     if (!is_regular_file) {
-        log_file->warn("File '{}' is not regular file", path.string());
-        return {};
+        log_file->warn("{}: File '{}' is not regular file", description, path.string());
+        return false;
     }
     const bool is_empty = std::filesystem::is_empty(path, error_code);
     if (error_code) {
-        log_file->warn("std::filesystem::is_empty('{}') returned error code {}", path.string(), error_code.value());
+        log_file->warn(
+            "{}: std::filesystem::is_empty('{}') returned error code {}",
+            path.string(),
+            error_code.value(),
+            error_code.message()
+        );
         return {};
     }
     if (is_empty) {
+        return false;
+    }
+    return true;
+}
+
+auto read(
+    const std::string_view       description,
+    const std::filesystem::path& path
+) -> std::optional<std::string>
+{
+    const bool file_is_ok = check_is_existing_non_empty_regular_file(description, path);
+    if (!file_is_ok) {
         return {};
     }
 
@@ -51,7 +86,7 @@ auto read(const std::filesystem::path& path) -> std::optional<std::string>
         std::fopen(path.c_str(), "rb");
 #endif
     if (file == nullptr) {
-        log_file->error("Could not open file '{}' for reading", path.string());
+        log_file->error("{}: Could not open file '{}' for reading", description, path.string());
         return {};
     }
 
@@ -61,7 +96,7 @@ auto read(const std::filesystem::path& path) -> std::optional<std::string>
     do {
         const auto read_byte_count = std::fread(result.data() + bytes_read, 1, bytes_to_read, file);
         if (read_byte_count == 0) {
-            log_file->error("Error reading file '{}'", path.string());
+            log_file->error("{}: Error reading file '{}'", description, path.string());
             return {};
         }
         bytes_read += read_byte_count;

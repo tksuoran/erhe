@@ -78,18 +78,16 @@ void Weld::rotate_polygons_to_least_point_first()
         std::vector<Corner_id> copy_of_polygon_corners;
 
         // Find corner with smallest Point_id
-        {
-            for (uint32_t j = 0; j < polygon.corner_count; ++j) {
-                Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
-                const Corner_id   corner_id         = source.polygon_corners[polygon_corner_id];
-                const Corner&     corner            = source.corners[corner_id];
-                const Point_id    point_id0         = corner.point_id;
-                const Point_id    point_id          = m_point_id_merge_candidates[point_id0];
-                copy_of_polygon_corners.push_back(corner_id);
-                if (point_id < min_point_id) {
-                    min_point_id = point_id;
-                    min_point_slot = j;
-                }
+        for (uint32_t j = 0; j < polygon.corner_count; ++j) {
+            Polygon_corner_id polygon_corner_id = polygon.first_polygon_corner_id + j;
+            const Corner_id   corner_id         = source.polygon_corners[polygon_corner_id];
+            const Corner&     corner            = source.corners[corner_id];
+            const Point_id    point_id0         = corner.point_id;
+            const Point_id    point_id          = m_point_id_merge_candidates[point_id0];
+            copy_of_polygon_corners.push_back(corner_id);
+            if (point_id < min_point_id) {
+                min_point_id = point_id;
+                min_point_slot = j;
             }
         }
 

@@ -220,7 +220,6 @@ Text_renderer::Text_renderer(
         const std::filesystem::path vs_path = shader_path / std::filesystem::path("text.vert");
         const std::filesystem::path fs_path = shader_path / std::filesystem::path("text.frag");
         erhe::graphics::Shader_stages_create_info create_info{
-            .instance                  = graphics_instance,
             .name                      = "text",
             .interface_blocks          = { &m_projection_block },
             .vertex_attribute_mappings = &m_attribute_mappings,
@@ -243,9 +242,11 @@ Text_renderer::Text_renderer(
             create_info.default_uniform_block = &m_default_uniform_block;
         }
 
-        erhe::graphics::Shader_stages_prototype prototype{create_info};
+        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
         if (!prototype.is_valid()) {
             log_startup->error("Text renderer shader compilation failed");
+            config.enabled = false;
+            m_font.reset();
             return;
         }
 
@@ -298,7 +299,7 @@ void Text_renderer::print(
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_font) {
+    if (!config.enabled || !m_font) {
         return;
     }
 

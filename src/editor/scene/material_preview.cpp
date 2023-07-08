@@ -56,7 +56,7 @@ Material_preview::Material_preview(
     , m_context {editor_context}
     , m_pipeline_renderpass{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Opaque",
-        .shader_stages  = &programs.circular_brushed_metal,
+        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),

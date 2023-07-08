@@ -54,8 +54,7 @@ auto reverse(Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("reverse({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Reverse operation{source, result};
         }
     };

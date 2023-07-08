@@ -41,7 +41,7 @@ class Shader_stages_create_info
 public:
     // Adds #version, #extensions, #defines, fragment outputs, uniform blocks, samplers,
     // and source (possibly read from file).
-    [[nodiscard]] auto final_source           (const Shader_stage& shader) const -> std::string;
+    [[nodiscard]] auto final_source           (Instance& graphics_instance, const Shader_stage& shader) const -> std::string;
     [[nodiscard]] auto attributes_source      () const -> std::string;
     [[nodiscard]] auto fragment_outputs_source() const -> std::string;
     [[nodiscard]] auto struct_types_source    () const -> std::string;
@@ -50,7 +50,6 @@ public:
 
     void add_interface_block(gsl::not_null<const Shader_resource*> uniform_block);
 
-    Instance&                                        instance;
     std::string                                      name;
     std::vector<std::string>                         pragmas                  {};
     std::vector<std::pair<std::string, std::string>> defines                  {};
@@ -70,7 +69,14 @@ public:
 class Shader_stages_prototype final
 {
 public:
-    explicit Shader_stages_prototype(const Shader_stages_create_info& create_info);
+    Shader_stages_prototype(
+        Instance&                   graphics_instance,
+        Shader_stages_create_info&& create_info
+    );
+    Shader_stages_prototype(
+        Instance&                        graphics_instance,
+        const Shader_stages_create_info& create_info
+    );
     ~Shader_stages_prototype() noexcept = default;
     Shader_stages_prototype (const Shader_stages_prototype&) = delete;
     void operator=          (const Shader_stages_prototype&) = delete;
@@ -98,6 +104,7 @@ private:
     static constexpr int state_ready                      = 3;
     static constexpr int state_fail                       = 4;
 
+    Instance&                 m_graphics_instance;
     Shader_stages_create_info m_create_info;
     Gl_program                m_handle;
     std::vector<Gl_shader>    m_shaders;
@@ -110,7 +117,7 @@ class Shader_stages
 {
 public:
     explicit Shader_stages(Shader_stages_prototype&& prototype);
-    explicit Shader_stages(const std::string& non_functinal_name);
+    explicit Shader_stages(const std::string& non_functional_name);
 
     // Reloads program by consuming prototype
     void reload(Shader_stages_prototype&& prototype);
@@ -122,6 +129,27 @@ private:
     std::string            m_name;
     Gl_program             m_handle;
     std::vector<Gl_shader> m_attached_shaders;
+};
+
+class Reloadable_shader_stages
+{
+public:
+    Reloadable_shader_stages(
+        const std::string& non_functional_name
+    );
+    Reloadable_shader_stages(
+        Shader_stages_prototype&& prototype
+    );
+    Reloadable_shader_stages(
+        Instance&                        graphics_instance,
+        const Shader_stages_create_info& create_info
+    );
+
+    Shader_stages_create_info create_info;
+    Shader_stages             shader_stages;
+
+private:
+    [[nodiscard]] auto make_prototype(Instance& graphics_instance) -> Shader_stages_prototype;
 };
 
 class Shader_stages_hash

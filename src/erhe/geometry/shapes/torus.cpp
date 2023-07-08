@@ -285,8 +285,7 @@ auto make_torus(
 
     return Geometry{
         "torus",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             Torus_builder builder{geometry, major_radius, minor_radius, major_axis_steps, minor_axis_steps};
             builder.build();
         }

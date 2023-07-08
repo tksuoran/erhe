@@ -116,7 +116,6 @@ Line_renderer_pipeline::Line_renderer_pipeline(
         const std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
         const std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
         erhe::graphics::Shader_stages_create_info create_info{
-            .instance                  = graphics_instance,
             .name                      = "line",
             .defines                   = {
                 { "ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"},
@@ -133,7 +132,7 @@ Line_renderer_pipeline::Line_renderer_pipeline(
             }
         };
 
-        erhe::graphics::Shader_stages_prototype prototype(create_info);
+        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
         if (prototype.is_valid()) {
             shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
 

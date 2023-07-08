@@ -36,8 +36,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
     {
         ERHE_PROFILE_SCOPE("initial points");
 
-        source.for_each_point_const([&](auto& i)
-        {
+        source.for_each_point_const([&](auto& i) {
             const auto n = static_cast<float>(i.point.corner_count);
             if (i.point.corner_count >= 3) {
                 // n = 0   -> centroid points, safe to skip
@@ -62,16 +61,14 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
         ERHE_PROFILE_SCOPE("edge midpoints");
 
         reserve_edge_to_new_points();
-        source.for_each_edge_const([&](auto& i)
-        {
+        source.for_each_edge_const([&](auto& i) {
             const Point& src_point_a  = source.points[i.edge.a];
             const Point& src_point_b  = source.points[i.edge.b];
             const auto   new_point_id = find_or_make_point_from_edge(i.edge.a, i.edge.b);
             add_point_source(new_point_id, 1.0f, i.edge.a);
             add_point_source(new_point_id, 1.0f, i.edge.b);
 
-            i.edge.for_each_polygon_const(source, [&](auto& j)
-            {
+            i.edge.for_each_polygon_const(source, [&](auto& j) {
                 const auto weight = 1.0f / static_cast<float>(j.polygon.corner_count);
                 add_polygon_centroid(new_point_id, weight, j.polygon_id);
             });
@@ -94,8 +91,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
     {
         ERHE_PROFILE_SCOPE("face points");
 
-        source.for_each_polygon_const([&](auto& i)
-        {
+        source.for_each_polygon_const([&](auto& i) {
             const Polygon& src_polygon = source.polygons[i.polygon_id];
 
             make_new_point_from_polygon_centroid(i.polygon_id);
@@ -121,10 +117,8 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(
     {
         ERHE_PROFILE_SCOPE("subdivide");
 
-        source.for_each_polygon_const([&](auto& i)
-        {
-            i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j)
-            {
+        source.for_each_polygon_const([&](auto& i) {
+            i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
                 const Point_id   previous_edge_midpoint = get_edge_new_point(j.prev_corner.point_id, j.corner.point_id);
                 const Point_id   next_edge_midpoint     = get_edge_new_point(j.corner.point_id,      j.next_corner.point_id);
                 const Polygon_id new_polygon_id         = make_new_polygon_from_polygon(i.polygon_id);
@@ -145,8 +139,7 @@ auto catmull_clark_subdivision(Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("catmull_clark({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Catmull_clark_subdivision operation{source, result};
         }
     };

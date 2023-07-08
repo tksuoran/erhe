@@ -24,6 +24,11 @@ void Shader_monitor::begin()
     m_poll_filesystem_thread = std::thread(&Shader_monitor::poll_thread, this);
 }
 
+Shader_monitor::Shader_monitor(Instance& instance)
+    : m_graphics_instance{instance}
+{
+}
+
 Shader_monitor::~Shader_monitor() noexcept
 {
     log_shader_monitor->info("Shader_monitor shutting down");
@@ -43,21 +48,29 @@ void Shader_monitor::set_enabled(const bool enabled)
 }
 
 void Shader_monitor::add(
-    erhe::graphics::Shader_stages_create_info    create_info,
+    erhe::graphics::Shader_stages_create_info     create_info,
     gsl::not_null<erhe::graphics::Shader_stages*> shader_stages
 )
 {
     for (const auto& shader : create_info.shaders) {
-        if (shader.source.empty() && std::filesystem::exists(shader.path)) {
+        if (
+            shader.source.empty() &&
+            erhe::toolkit::check_is_existing_non_empty_regular_file("Shader_monitor::add", shader.path)
+        ) {
             add(shader.path, create_info, shader_stages);
         }
     }
 }
 
+void Shader_monitor::add(Reloadable_shader_stages& reloadable_shader_stages)
+{
+    add(reloadable_shader_stages.create_info, &reloadable_shader_stages.shader_stages);
+}
+
 void Shader_monitor::add(
-    const std::filesystem::path&                      path,
+    const std::filesystem::path&                     path,
     const erhe::graphics::Shader_stages_create_info& create_info,
-    gsl::not_null<erhe::graphics::Shader_stages*>     shader_stages
+    gsl::not_null<erhe::graphics::Shader_stages*>    shader_stages
 )
 {
     const std::lock_guard<std::mutex> lock{m_mutex};
@@ -70,11 +83,9 @@ void Shader_monitor::add(
 
     auto& f = m_files[path];
 
-    ERHE_VERIFY(std::filesystem::exists(path));
-
     f.path = path;
 
-    if (!std::filesystem::exists(f.path)) {
+    if (!erhe::toolkit::check_is_existing_non_empty_regular_file("Shader_monitor:add", f.path)) {
         f.path.clear();
     } else {
         f.last_time = std::filesystem::last_write_time(f.path);
@@ -97,10 +108,7 @@ void Shader_monitor::poll_thread()
                 // Watch out; filesystem can throw exception for some random reason,
                 // like file being externally modified at the same time.
                 try {
-                    const bool ok =
-                        std::filesystem::exists(f.path)    &&
-                        !std::filesystem::is_empty(f.path) &&
-                        std::filesystem::is_regular_file(f.path);
+                    const bool ok = erhe::toolkit::check_is_existing_non_empty_regular_file("Shader_monitor::poll_thread", f.path);
                     if (ok) {
                         const auto time = std::filesystem::last_write_time(f.path);
                         if (f.last_time != time) {
@@ -109,7 +117,7 @@ void Shader_monitor::poll_thread()
                         }
                     }
                 } catch (...) {
-                    log_shader_monitor->warn("Failed to poll file {}", f.path.generic_string());
+                    log_shader_monitor->warn("Failed to poll file {}", f.path.string());
                     // Never mind exceptions.
                 }
             }
@@ -129,12 +137,16 @@ void Shader_monitor::update_once_per_frame()
     for (auto* f : m_reload_list) {
         for (const auto& entry : f->reload_entries) {
             const auto& create_info = entry.create_info;
-            erhe::graphics::Shader_stages_prototype prototype{create_info};
+            erhe::graphics::Shader_stages_prototype prototype{m_graphics_instance, create_info};
             if (prototype.is_valid()) {
                 entry.shader_stages->reload(std::move(prototype));
             }
         }
-        f->last_time = std::filesystem::last_write_time(f->path);
+        std::error_code error_code;
+        const auto last_time = std::filesystem::last_write_time(f->path, error_code);
+        if (!error_code) {
+            f->last_time = last_time;
+        }
     }
     m_reload_list.clear();
 }

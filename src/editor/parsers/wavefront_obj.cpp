@@ -134,7 +134,7 @@ auto parse_obj_geometry(
     log_parsers->trace("path = {}", path.generic_string());
 
     std::vector<std::shared_ptr<erhe::geometry::Geometry>> result;
-    const auto opt_text = erhe::toolkit::read(path);
+    const auto opt_text = erhe::toolkit::read("parse_obj_geometry", path);
 
     // I dislike this big scope, I'd prefer just to
     // return {} but unfortunately having more than

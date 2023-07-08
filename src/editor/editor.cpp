@@ -372,9 +372,8 @@ public:
 
     auto on_idle() -> bool override
     {
-        // TODO Something nicer?
+        m_graphics_instance.shader_monitor.update_once_per_frame();
         m_mesh_memory.gl_buffer_transfer_queue.flush();
-
         m_time.update();
         m_editor_rendering.begin_frame();
         m_imgui_windows.imgui_windows();

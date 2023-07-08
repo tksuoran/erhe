@@ -18,8 +18,7 @@ Join::Join(Geometry& src, Geometry& destination)
     make_points_from_points();
     make_polygon_centroids();
 
-    source.for_each_edge_const([&](const auto& i)
-    {
+    source.for_each_edge_const([&](const auto& i) {
         if (i.edge.polygon_count != 2) {
             return;
         }
@@ -35,8 +34,7 @@ Join::Join(Geometry& src, Geometry& destination)
         bool l_forward {false}; // a, b
         bool l_backward{false}; // b, a
         std::stringstream l_ss;
-        polygon_l.for_each_corner_neighborhood_const(src, [&](auto& j)
-        {
+        polygon_l.for_each_corner_neighborhood_const(src, [&](auto& j) {
             l_ss << j.corner.point_id << " ";
             if (j.corner.point_id == point_id_a) {
                 if (j.prev_corner.point_id == point_id_b) {
@@ -56,8 +54,7 @@ Join::Join(Geometry& src, Geometry& destination)
         bool r_forward {false};
         bool r_backward{false};
         std::stringstream r_ss;
-        polygon_r.for_each_corner_neighborhood_const(src, [&](auto& j)
-        {
+        polygon_r.for_each_corner_neighborhood_const(src, [&](auto& j) {
             r_ss << j.corner.point_id << " ";
             if (j.corner.point_id == point_id_a) {
                 if (j.prev_corner.point_id == point_id_b) {
@@ -98,8 +95,7 @@ auto join(Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("join({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Join operation{source, result};
         }
     };

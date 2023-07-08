@@ -163,33 +163,38 @@ void Physics_tool::on_message(Editor_message& message)
 
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        set_hover_scene_view(message.scene_view);
+        //if (m_hover_scene_view != scene_view)
+        {
+            //Scene_view* old_scene_view = scene_view;
+            set_hover_scene_view(message.scene_view);
+            //Scene_view* new_scene_view = scene_view;
 
-        if (m_physics_world != nullptr) {
-            if (m_constraint_world_point_rigid_body) {
-                m_physics_world->remove_rigid_body(m_constraint_world_point_rigid_body.get());
-                m_constraint_world_point_rigid_body.reset();
+            if (m_physics_world != nullptr) {
+                if (m_constraint_world_point_rigid_body) {
+                    m_physics_world->remove_rigid_body(m_constraint_world_point_rigid_body.get());
+                    m_constraint_world_point_rigid_body.reset();
+                }
+                release_target();
+                m_physics_world = nullptr;
             }
-            release_target();
-            m_physics_world = nullptr;
-        }
 
-        Scene_view* scene_view = get_hover_scene_view();
-        if (scene_view != nullptr) {
-            auto scene_root = scene_view->get_scene_root();
-            if (scene_root) {
-                m_physics_world = &scene_root->physics_world();
-                m_constraint_world_point_rigid_body = erhe::physics::IRigid_body::create_rigid_body_shared(
-                    erhe::physics::IRigid_body_create_info{
-                        .world             = scene_root->physics_world(),
-                        .collision_shape   = erhe::physics::ICollision_shape::create_empty_shape_shared(),
-                        .mass              = 10.0f,
-                        .debug_label       = "Physics Tool",
-                        .enable_collisions = false
-                    },
-                    this
-                );
-                m_physics_world->add_rigid_body(m_constraint_world_point_rigid_body.get());
+            Scene_view* scene_view = get_hover_scene_view();
+            if (scene_view != nullptr) {
+                auto scene_root = scene_view->get_scene_root();
+                if (scene_root) {
+                    m_physics_world = &scene_root->physics_world();
+                    m_constraint_world_point_rigid_body = erhe::physics::IRigid_body::create_rigid_body_shared(
+                        erhe::physics::IRigid_body_create_info{
+                            .world             = scene_root->physics_world(),
+                            .collision_shape   = erhe::physics::ICollision_shape::create_empty_shape_shared(),
+                            .mass              = 10.0f,
+                            .debug_label       = "Physics Tool",
+                            .enable_collisions = false
+                        },
+                        this
+                    );
+                    m_physics_world->add_rigid_body(m_constraint_world_point_rigid_body.get());
+                }
             }
         }
     }

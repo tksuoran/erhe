@@ -292,7 +292,7 @@ auto Post_processing::make_program(
     erhe::graphics::Instance&    graphics_instance,
     const char*                  name,
     const std::filesystem::path& fs_path
-) -> erhe::graphics::Shader_stages
+) -> erhe::graphics::Shader_stages_create_info
 {
     const std::vector<std::pair<std::string, std::string>> bindess_defines{
         {"ERHE_BINDLESS_TEXTURE", "1"}
@@ -305,25 +305,20 @@ auto Post_processing::make_program(
     const std::vector<erhe::graphics::Shader_stage_extension> empty_extensions{};
     const bool bindless_textures = graphics_instance.info.use_bindless_texture;
 
-    return erhe::graphics::Shader_stages{
-        erhe::graphics::Shader_stages_prototype{
-            erhe::graphics::Shader_stages_create_info{
-                .instance              = graphics_instance,
-                .name                  = name,
-                .defines               = bindless_textures ? bindess_defines : empty_defines,
-                .extensions            = bindless_textures ? bindless_extensions : empty_extensions,
-                .interface_blocks      = { &m_parameter_block },
-                .fragment_outputs      = &m_fragment_outputs,
-                .default_uniform_block = bindless_textures ? nullptr : &m_default_uniform_block,
-                .shaders = {
-                    { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
-                    { gl::Shader_type::fragment_shader, m_shader_path / fs_path}
-                },
-                .build                 = true
-            }
-        }
-    };
-    //// graphics_instance.shader_monitor.add(x_create_info,       m_downsample_x_shader_stages.get());
+    return
+        erhe::graphics::Shader_stages_create_info{
+            .name                  = name,
+            .defines               = bindless_textures ? bindess_defines : empty_defines,
+            .extensions            = bindless_textures ? bindless_extensions : empty_extensions,
+            .interface_blocks      = { &m_parameter_block },
+            .fragment_outputs      = &m_fragment_outputs,
+            .default_uniform_block = bindless_textures ? nullptr : &m_default_uniform_block,
+            .shaders = {
+                { gl::Shader_type::vertex_shader,   m_shader_path / std::filesystem::path("post_processing.vert")},
+                { gl::Shader_type::fragment_shader, m_shader_path / fs_path}
+            },
+            .build                 = true
+        };
 }
 
 Post_processing::Post_processing(
@@ -375,14 +370,14 @@ Post_processing::Post_processing(
             )
     }
     , m_shader_path{std::filesystem::path("res") / std::filesystem::path("shaders")}
-    , m_downsample_x_shader_stages{make_program(graphics_instance, "downsample_x", std::filesystem::path("downsample_x.frag"))}
-    , m_downsample_y_shader_stages{make_program(graphics_instance, "downsample_y", std::filesystem::path("downsample_y.frag"))}
-    , m_compose_shader_stages     {make_program(graphics_instance, "compose",      std::filesystem::path("compose.frag"))}
+    , m_downsample_x_shader_stages{graphics_instance, make_program(graphics_instance, "downsample_x", std::filesystem::path("downsample_x.frag"))}
+    , m_downsample_y_shader_stages{graphics_instance, make_program(graphics_instance, "downsample_y", std::filesystem::path("downsample_y.frag"))}
+    , m_compose_shader_stages     {graphics_instance, make_program(graphics_instance, "compose",      std::filesystem::path("compose.frag"))}
 
     , m_downsample_x_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Post Procesisng Downsample X",
-            .shader_stages  = &m_downsample_x_shader_stages,
+            .shader_stages  = &m_downsample_x_shader_stages.shader_stages,
             .vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
@@ -393,7 +388,7 @@ Post_processing::Post_processing(
     , m_downsample_y_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Post Processing Downsample Y",
-            .shader_stages  = &m_downsample_y_shader_stages,
+            .shader_stages  = &m_downsample_y_shader_stages.shader_stages,
             .vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
@@ -404,7 +399,7 @@ Post_processing::Post_processing(
     , m_compose_pipeline{
         erhe::graphics::Pipeline_data{
             .name           = "Post Processing Compose",
-            .shader_stages  = &m_compose_shader_stages,
+            .shader_stages  = &m_compose_shader_stages.shader_stages,
             .vertex_input   = &m_empty_vertex_input,
             .input_assembly = erhe::graphics::Input_assembly_state::triangle_fan,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
@@ -413,7 +408,6 @@ Post_processing::Post_processing(
         }
     }
     , m_gpu_timer{"Post_processing"}
-
 {
     create_frame_resources();
 }

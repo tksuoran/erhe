@@ -28,8 +28,7 @@ void Geometry_operation::make_points_from_points()
     ERHE_PROFILE_FUNCTION();
 
     point_old_to_new.reserve(source.get_point_count());
-    source.for_each_point_const([&](auto& i)
-    {
+    source.for_each_point_const([&](auto& i) {
         make_new_point_from_point(i.point_id);
     });
 }
@@ -39,8 +38,7 @@ void Geometry_operation::make_polygon_centroids()
     ERHE_PROFILE_FUNCTION();
 
     old_polygon_centroid_to_new_points.reserve(source.get_polygon_count());
-    source.for_each_polygon_const([&](auto& i)
-    {
+    source.for_each_polygon_const([&](auto& i) {
         make_new_point_from_polygon_centroid(i.polygon_id);
     });
 }
@@ -95,10 +93,8 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
     const std::size_t split_count = relative_positions.size();
     reserve_edge_to_new_points();
 
-    source.for_each_polygon_const([&](auto& i)
-    {
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j)
-        {
+    source.for_each_polygon_const([&](auto& i) {
+        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
             const bool      in_order = j.corner.point_id < j.next_corner.point_id;
             const Point_id  point_a  = j.corner.point_id;
             const Point_id  point_b  = j.next_corner.point_id;
@@ -134,12 +130,9 @@ void Geometry_operation::make_edge_midpoints(const std::initializer_list<float> 
                 add_point_source       (new_point_id, weight_b, point_b); // TODO only add these once per edge?
                 add_point_corner_source(new_point_id, weight_a, corner_a);
                 add_point_corner_source(new_point_id, weight_b, corner_b);
-                if (in_order)
-                {
+                if (in_order) {
                     ++new_point_id;
-                }
-                else
-                {
+                } else {
                     --new_point_id;
                 }
             }
@@ -271,8 +264,7 @@ void Geometry_operation::add_polygon_centroid(
     //     new_point_id, weight, old_polygon_id
     // );
     // const erhe::log::Indenter scope_indent;
-    old_polygon.for_each_corner_const(source, [&](auto& i)
-    {
+    old_polygon.for_each_corner_const(source, [&](auto& i) {
         add_point_corner_source(new_point_id, polygon_weight, i.corner_id);
         add_point_source(new_point_id, polygon_weight, i.corner.point_id);
     });
@@ -290,8 +282,7 @@ void Geometry_operation::add_point_ring(
     // );
     // const erhe::log::Indenter scope_indent;
     const Point& old_point = source.points[old_point_id];
-    old_point.for_each_corner_const(source, [&](auto& i)
-    {
+    old_point.for_each_corner_const(source, [&](auto& i) {
         const Polygon_id ring_polygon_id     = i.corner.polygon_id;
         const Polygon&   ring_polygon        = source.polygons[ring_polygon_id];
         const Corner_id  next_ring_corner_id = ring_polygon.next_corner(source, i.corner_id);
@@ -388,8 +379,7 @@ void Geometry_operation::add_polygon_corners(
     // );
     // const erhe::log::Indenter scope_indent;
     const Polygon& old_polygon = source.polygons[old_polygon_id];
-    old_polygon.for_each_corner_const(source, [&](auto& i)
-    {
+    old_polygon.for_each_corner_const(source, [&](auto& i) {
         const Point_id  old_point_id  = i.corner.point_id;
         const Point_id  new_point_id  = point_old_to_new[old_point_id];
         const Corner_id new_corner_id = destination.make_polygon_corner(new_polygon_id, new_point_id);
@@ -513,8 +503,7 @@ void Geometry_operation::build_destination_edges_with_sourcing()
 
     destination.build_edges();
 
-    source.for_each_edge_const([&](auto& i)
-    {
+    source.for_each_edge_const([&](auto& i) {
         const Point_id new_a       = point_old_to_new[i.edge.a];
         const Point_id new_b       = point_old_to_new[i.edge.b];
         const Point_id new_a_      = std::min(new_a, new_b);

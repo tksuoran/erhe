@@ -464,11 +464,9 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
 
     point_normals->clear();
 
-    for_each_point([&](auto& i)
-    {
+    for_each_point([&](auto& i) {
         vec3 normal_sum{0.0f};
-        i.point.for_each_corner(*this, [&](auto& j)
-        {
+        i.point.for_each_corner(*this, [&](auto& j) {
             if (polygon_normals->has(j.corner.polygon_id)) {
                 normal_sum += polygon_normals->get(j.corner.polygon_id);
             }

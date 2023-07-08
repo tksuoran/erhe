@@ -53,16 +53,14 @@ Shadow_renderer::Shadow_renderer(
 )
     : m_graphics_instance{graphics_instance}
     , m_shader_stages{
-        program_interface.make_program(
-            program_interface.make_prototype(
-                graphics_instance,
-                "res/shaders",
-                erhe::graphics::Shader_stages_create_info{
-                    .instance       = graphics_instance,
-                    .name           = "depth",
-                    .dump_interface = false
-                }
-            )
+        program_interface.make_prototype(
+            graphics_instance,
+            "res/shaders",
+            erhe::graphics::Shader_stages_create_info{
+                .name           = "depth",
+                .dump_interface = false,
+                .build          = true
+            }
         )
     }
     , m_light_buffers        {graphics_instance, program_interface.light_interface}
@@ -138,7 +136,7 @@ auto Shadow_renderer::get_pipeline(
     lru_entry->serial = m_pipeline_cache_serial;
     lru_entry->pipeline.data = {
         .name           = "Shadow Renderer",
-        .shader_stages  = &m_shader_stages,
+        .shader_stages  = &m_shader_stages.shader_stages,
         .vertex_input   = vertex_input_state,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_none,

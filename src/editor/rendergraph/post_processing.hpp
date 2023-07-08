@@ -134,7 +134,7 @@ private:
         erhe::graphics::Instance&    graphics_instance,
         const char*                  name,
         const std::filesystem::path& fs_path
-    ) -> erhe::graphics::Shader_stages;
+    ) -> erhe::graphics::Shader_stages_create_info;
 
     void downsample(
         const erhe::graphics::Texture*  source_texture,
@@ -174,9 +174,9 @@ private:
     const erhe::graphics::Shader_resource*             m_downsample_source_texture_resource; // for non bindless textures
     const erhe::graphics::Shader_resource*             m_compose_source_textures_resource;   // for non bindless textures
     std::filesystem::path                              m_shader_path;
-    erhe::graphics::Shader_stages                      m_downsample_x_shader_stages;
-    erhe::graphics::Shader_stages                      m_downsample_y_shader_stages;
-    erhe::graphics::Shader_stages                      m_compose_shader_stages;
+    erhe::graphics::Reloadable_shader_stages           m_downsample_x_shader_stages;
+    erhe::graphics::Reloadable_shader_stages           m_downsample_y_shader_stages;
+    erhe::graphics::Reloadable_shader_stages           m_compose_shader_stages;
     erhe::graphics::Pipeline                           m_downsample_x_pipeline;
     erhe::graphics::Pipeline                           m_downsample_y_pipeline;
     erhe::graphics::Pipeline                           m_compose_pipeline;

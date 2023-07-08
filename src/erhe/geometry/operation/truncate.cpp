@@ -23,18 +23,15 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
 
     // New faces from old points, new face corner for each old point corner edge
     // 'midpoint' that is closest to the corner
-    source.for_each_point_const([&](auto& i)
-    {
+    source.for_each_point_const([&](auto& i) {
         const Polygon_id new_polygon_id = destination.make_polygon();
 
-        i.point.for_each_corner_const(source, [&](auto& j)
-        {
+        i.point.for_each_corner_const(source, [&](auto& j) {
             const Polygon&  src_polygon        = source.polygons[j.corner.polygon_id];
             const Corner_id src_next_corner_id = src_polygon.next_corner(source, j.corner_id);
             const Corner&   src_next_corner    = source.corners[src_next_corner_id];
             Point_id        edge_midpoint      = get_edge_new_point(j.corner.point_id, src_next_corner.point_id);
-            if (src_next_corner.point_id > j.corner.point_id)
-            {
+            if (src_next_corner.point_id > j.corner.point_id) {
                 edge_midpoint += 1;
             }
             make_new_corner_from_point(new_polygon_id, edge_midpoint);
@@ -42,11 +39,9 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
     });
 
     // New faces from old faces, new face corner for each old corner edge 'midpoint'
-    source.for_each_polygon([&](auto& i)
-    {
+    source.for_each_polygon([&](auto& i) {
         const Polygon_id new_polygon_id = destination.make_polygon();
-        i.polygon.for_each_corner_neighborhood(source, [&](auto& j)
-        {
+        i.polygon.for_each_corner_neighborhood(source, [&](auto& j) {
             const Point_id edge_midpoint = get_edge_new_point(j.corner.point_id, j.next_corner.point_id);
             const Point_id point_a       = edge_midpoint;
             const Point_id point_b       = edge_midpoint + 1;
@@ -67,8 +62,7 @@ auto truncate(Geometry& source) -> Geometry
 {
     return Geometry(
         fmt::format("truncate({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Truncate operation{source, result};
         }
     );

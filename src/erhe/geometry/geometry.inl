@@ -23,8 +23,7 @@ void Geometry::smooth_normalize(
 
     corner_attribute.clear();
     for_each_polygon_const(
-        [&](auto& i)
-        {
+        [&](auto& i) {
             if (max_smoothing_angle_radians == 0.0f) {
                 i.polygon.copy_to_corners(
                     i.polygon_id,
@@ -57,8 +56,7 @@ void Geometry::smooth_average(
     ERHE_PROFILE_FUNCTION();
 
     for_each_polygon(
-        [&](auto& i)
-        {
+        [&](auto& i) {
             i.polygon.smooth_average(
                 *this,
                 smoothed_corner_attribute,

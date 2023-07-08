@@ -26,16 +26,14 @@ Subdivide::Subdivide(Geometry& src, Geometry& destination)
     make_polygon_centroids();
     make_edge_midpoints();
 
-    source.for_each_polygon_const([&](auto& i)
-    {
+    source.for_each_polygon_const([&](auto& i) {
         //if (src_polygon.corner_count == 3)
         //{
         //    Polygon_id new_polygon_id = make_new_polygon_from_polygon(src_polygon_id);
         //    add_polygon_corners(new_polygon_id, src_polygon_id);
         //    continue;
         //}
-        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j)
-        {
+        i.polygon.for_each_corner_neighborhood_const(source, [&](auto& j) {
             const Point_id   a                      = j.prev_corner.point_id;
             const Point_id   b                      = j.corner     .point_id;
             const Point_id   c                      = j.next_corner.point_id;
@@ -72,8 +70,7 @@ auto subdivide(Geometry& source) -> Geometry
 {
     return Geometry{
         fmt::format("subdivide({})", source.name),
-        [&source](auto& result)
-        {
+        [&source](auto& result) {
             Subdivide operation{source, result};
         }
     };

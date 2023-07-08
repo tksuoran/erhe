@@ -268,7 +268,11 @@ void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
     m_body->SetMotionType(to_jolt(motion_mode));
 
     if (motion_mode == Motion_mode::e_dynamic) {
-        m_body_interface.ActivateBody(m_body->GetID());
+        // If body does not in world, this check will return false
+        if (m_body->IsInBroadPhase()) {
+            // This would asset if body was not in physics world
+            m_body_interface.ActivateBody(m_body->GetID());
+        }
     }
 }
 

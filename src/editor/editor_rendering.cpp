@@ -328,7 +328,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     : m_empty_vertex_input{}
     , polygon_fill_standard_opaque{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Opaque",
-        .shader_stages  = &programs.circular_brushed_metal,
+        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -337,7 +337,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}}
     , polygon_fill_standard_translucent{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Translucent",
-        .shader_stages  = &programs.circular_brushed_metal,
+        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_none,
@@ -348,7 +348,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         erhe::graphics::Pipeline{
             {
                 .name           = "Sky",
-                .shader_stages  = &programs.sky,
+                .shader_stages  = &programs.sky.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,
                 .input_assembly = Input_assembly_state::triangles,
                 .rasterization  = Rasterization_state::cull_mode_none,
@@ -366,7 +366,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }
     , edge_lines{erhe::graphics::Pipeline{{
         .name           = "Edge Lines",
-        .shader_stages  = &programs.wide_lines_draw_color,
+        .shader_stages  = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::lines,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -401,7 +401,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 
     , corner_points{erhe::graphics::Pipeline{{
         .name           = "Corner Points",
-        .shader_stages  = &programs.points,
+        .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::points,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -411,7 +411,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 
     , polygon_centroids{erhe::graphics::Pipeline{{
         .name           = "Polygon Centroids",
-        .shader_stages  = &programs.points,
+        .shader_stages  = &programs.points.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::points,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -421,7 +421,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 
     , line_hidden_blend{erhe::graphics::Pipeline{{
         .name                       = "Hidden lines with blending",
-        .shader_stages              = &programs.wide_lines_draw_color,
+        .shader_stages              = &programs.wide_lines_draw_color.shader_stages,
         .vertex_input               = &mesh_memory.vertex_input,
         .input_assembly             = Input_assembly_state::lines,
         .rasterization              = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -468,7 +468,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 
     , brush_back{erhe::graphics::Pipeline{{
         .name           = "Brush back faces",
-        .shader_stages  = &programs.brush,
+        .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_front_ccw(REVERSE_DEPTH),
@@ -478,7 +478,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 
     , brush_front{erhe::graphics::Pipeline{{
         .name           = "Brush front faces",
-        .shader_stages  = &programs.brush,
+        .shader_stages  = &programs.brush.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
@@ -488,7 +488,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
 
     , rendertarget_meshes{erhe::graphics::Pipeline{{
         .name           = "Rendertarget Meshes",
-        .shader_stages  = &programs.textured,
+        .shader_stages  = &programs.textured.shader_stages,
         .vertex_input   = &mesh_memory.vertex_input,
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_none,

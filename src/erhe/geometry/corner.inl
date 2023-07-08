@@ -99,8 +99,7 @@ void Corner::smooth_average(
 
     std::size_t participant_count{0};
     const Point& point = geometry.points[point_id];
-    point.for_each_corner_const([&](const auto& i)
-    {
+    point.for_each_corner_const([&](const auto& i) {
         if (!has_corner_normal || (corner_normals.get(i.corner_id) == corner_normal)) {
             if (old_corner_attribute.has(i.corner_id)) {
                 corner_value += old_corner_attribute.get(i.corner_id);

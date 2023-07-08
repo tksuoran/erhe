@@ -413,8 +413,7 @@ auto make_sphere(
 
     return Geometry{
         "sphere",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             Sphere_builder builder{
                 geometry,
                 static_cast<Sphere_builder::scalar>(radius),

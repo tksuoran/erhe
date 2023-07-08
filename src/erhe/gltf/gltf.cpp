@@ -635,23 +635,8 @@ private:
         const std::filesystem::path& path
     ) -> std::shared_ptr<erhe::graphics::Texture>
     {
-        std::error_code error_code{};
-        const bool exists = std::filesystem::exists(path, error_code);
-        if (error_code) {
-            log_gltf->error("std::filesystem::exists('{}') returned error code {}", path.string(), error_code.value());
-            return {};
-        }
-        if (!exists) {
-            log_gltf->error("image file '{}' not found", path.string());
-            return {};
-        }
-        const bool is_empty = std::filesystem::is_empty(path, error_code);
-        if (error_code) {
-            log_gltf->error("std::filesystem::is_empty('{}') returned error code {}", path.string(), error_code.value());
-            return {};
-        }
-        if (is_empty) {
-            log_gltf->error("image file '{}' is empty", path.string());
+        const bool file_is_ok = erhe::toolkit::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
+        if (!file_is_ok) {
             return {};
         }
 

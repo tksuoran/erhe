@@ -112,11 +112,12 @@ auto Shader_stages_create_info::interface_source() const -> std::string
 }
 
 auto Shader_stages_create_info::final_source(
+    Instance&           graphics_instance,
     const Shader_stage& shader
 ) const -> std::string
 {
     std::stringstream sb;
-    sb << "#version " << instance.info.glsl_version << " core\n\n";
+    sb << "#version " << graphics_instance.info.glsl_version << " core\n\n";
 
     if (!pragmas.empty()) {
         sb << "// Pragmas\n";
@@ -162,38 +163,11 @@ auto Shader_stages_create_info::final_source(
     if (!shader.source.empty()) {
         sb << shader.source;
     } else if (!shader.path.empty()) {
-        std::error_code error_code;
-        const bool exists = std::filesystem::exists(shader.path, error_code);
-        if (error_code) {
-            log_program->warn("Shader: std::filesystem::exists('{}') returned error code {}", shader.path.string(), error_code.value());
-        }
-        if (!exists) {
-            log_program->warn("Shader: Cannot load from non-existing file '{}'", shader.path.string());
-        }
-        const bool is_regular_file = std::filesystem::is_regular_file(shader.path, error_code);
-        if (error_code) {
-            log_program->warn("Shader: std::filesystem::is_regular_file('{}') returned error code {}", shader.path.string(), error_code.value());
-        }
-        if (!is_regular_file) {
-            log_program->warn("Shader: Source file '{}' is not regular file", shader.path.string());
-        }
-        const bool is_empty = std::filesystem::is_empty(shader.path, error_code);
-        if (error_code) {
-            log_program->warn("Shader: std::filesystem::is_empty('{}') returned error code {}", shader.path.string(), error_code.value());
-        }
-        if (is_empty) {
-            log_program->warn("Shader: Source file '{}' is empty", shader.path.string());
-        }
-
-        auto source = erhe::toolkit::read(shader.path);
-        if (source.has_value()) {
-            sb << "\n// Loaded from: ";
-            sb << shader.path;
-            sb << "\n\n";
-            sb << source.value();
-        } else {
-            sb << "\n// Source load failed";
-        }
+        auto source = erhe::toolkit::read("Shader_stages_create_info::final_source", shader.path);
+        sb << (source.has_value() ? "\n// Loaded from: " : "\n// Source load failed from: ");
+        sb << shader.path;
+        sb << "\n\n";
+        sb << source.value();
     }
 
     return sb.str(); // shaders.emplace_back(type, source, sb.str());

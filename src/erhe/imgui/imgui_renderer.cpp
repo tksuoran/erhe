@@ -453,8 +453,8 @@ Imgui_program_interface::Imgui_program_interface(
     , default_uniform_block{get_shader_default_uniform_block(graphics_instance, s_texture_unit_count)}
     , shader_stages{
         erhe::graphics::Shader_stages_prototype{
+            graphics_instance,
             erhe::graphics::Shader_stages_create_info{
-                .instance                  = graphics_instance,
                 .name                      = "ImGui Renderer",
                 .defines                   = get_shader_defines(graphics_instance),
                 .extensions                = get_shader_extensions(graphics_instance),

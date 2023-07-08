@@ -64,8 +64,7 @@ Property_map<Key_type, Value_type>::remap_keys(const std::vector<Key_type>& key_
 {
     const auto old_values  = values;
     const auto old_present = present;
-    for (Key_type new_key = 0, end = static_cast<Key_type>(key_new_to_old.size()); new_key < end; ++new_key)
-    {
+    for (Key_type new_key = 0, end = static_cast<Key_type>(key_new_to_old.size()); new_key < end; ++new_key) {
         Key_type old_key = key_new_to_old[new_key];
         values [new_key] = old_values[old_key];
         present[new_key] = old_present[old_key];

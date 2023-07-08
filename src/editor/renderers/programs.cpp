@@ -18,18 +18,17 @@
 namespace editor {
 
 Programs::Shader_stages_builder::Shader_stages_builder(
-    erhe::graphics::Shader_stages&              shader_stages,
-    erhe::graphics::Instance&                   graphics_instance,
-    erhe::scene_renderer::Program_interface&    program_interface,
-    std::filesystem::path                       shader_path,
-    erhe::graphics::Shader_stages_create_info&& create_info
+    erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages,
+    erhe::graphics::Instance&                 graphics_instance,
+    erhe::scene_renderer::Program_interface&  program_interface,
+    std::filesystem::path                     shader_path
 )
-    : shader_stages{shader_stages}
+    : reloadable_shader_stages{reloadable_shader_stages}
     , prototype{
         program_interface.make_prototype(
             graphics_instance,
             shader_path,
-            std::move(create_info)
+            reloadable_shader_stages.create_info
         )
     }
 {
@@ -127,44 +126,44 @@ Programs::Programs(
         &program_interface,
         &prototypes
     ](
-        erhe::graphics::Shader_stages&              shader_stages,
+        erhe::graphics::Reloadable_shader_stages&   reloadable_shader_stages,
         erhe::graphics::Shader_stages_create_info&& create_info
     )
     {
+        reloadable_shader_stages.create_info = std::move(create_info);
         prototypes.emplace_back(
-            shader_stages,
+            reloadable_shader_stages,
             graphics_instance,
             program_interface,
-            shader_path,
-            std::move(create_info)
+            shader_path
         );
     };
 
-    add_shader(standard                , CI{ .instance = graphics_instance, .name = "standard"                , .default_uniform_block = &default_uniform_block, .dump_interface = true } );
-    add_shader(anisotropic_slope       , CI{ .instance = graphics_instance, .name = "anisotropic_slope"       , .default_uniform_block = &default_uniform_block } );
-    add_shader(anisotropic_engine_ready, CI{ .instance = graphics_instance, .name = "anisotropic_engine_ready", .default_uniform_block = &default_uniform_block } );
-    add_shader(circular_brushed_metal  , CI{ .instance = graphics_instance, .name = "circular_brushed_metal"  , .default_uniform_block = &default_uniform_block } );
-    add_shader(brdf_slice              , CI{ .instance = graphics_instance, .name = "brdf_slice"              , .default_uniform_block = &default_uniform_block } );
-    add_shader(brush                   , CI{ .instance = graphics_instance, .name = "brush"                   , .default_uniform_block = &default_uniform_block } );
-    add_shader(textured                , CI{ .instance = graphics_instance, .name = "textured"                , .default_uniform_block = &default_uniform_block } );
-    add_shader(sky                     , CI{ .instance = graphics_instance, .name = "sky"                     , .default_uniform_block = &default_uniform_block } );
-    add_shader(wide_lines_draw_color   , CI{ .instance = graphics_instance, .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}});
-    add_shader(wide_lines_vertex_color , CI{ .instance = graphics_instance, .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}});
-    add_shader(points                  , CI{ .instance = graphics_instance, .name = "points" } );
-    add_shader(depth                   , CI{ .instance = graphics_instance, .name = "depth"  } );
-    add_shader(id                      , CI{ .instance = graphics_instance, .name = "id"     } );
-    add_shader(tool                    , CI{ .instance = graphics_instance, .name = "tool"   } );
-    add_shader(debug_depth             , CI{ .instance = graphics_instance, .name = "visualize_depth", .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_normal            , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_NORMAL",             "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_tangent           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_bitangent         , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_texcoord          , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_vertex_color_rgb  , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_vertex_color_alpha, CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_omega_o           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_O",            "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_omega_i           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_I",            "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_omega_g           , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = &default_uniform_block } );
-    add_shader(debug_misc              , CI{ .instance = graphics_instance, .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(standard                , CI{ .name = "standard"                , .default_uniform_block = &default_uniform_block, .dump_interface = true } );
+    add_shader(anisotropic_slope       , CI{ .name = "anisotropic_slope"       , .default_uniform_block = &default_uniform_block } );
+    add_shader(anisotropic_engine_ready, CI{ .name = "anisotropic_engine_ready", .default_uniform_block = &default_uniform_block } );
+    add_shader(circular_brushed_metal  , CI{ .name = "circular_brushed_metal"  , .default_uniform_block = &default_uniform_block } );
+    add_shader(brdf_slice              , CI{ .name = "brdf_slice"              , .default_uniform_block = &default_uniform_block } );
+    add_shader(brush                   , CI{ .name = "brush"                   , .default_uniform_block = &default_uniform_block } );
+    add_shader(textured                , CI{ .name = "textured"                , .default_uniform_block = &default_uniform_block } );
+    add_shader(sky                     , CI{ .name = "sky"                     , .default_uniform_block = &default_uniform_block } );
+    add_shader(wide_lines_draw_color   , CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_DRAW_COLOR",   "1"}}});
+    add_shader(wide_lines_vertex_color , CI{ .name = "wide_lines"              , .defines = { std::pair<std::string, std::string>{"ERHE_USE_VERTEX_COLOR", "1"}}});
+    add_shader(points                  , CI{ .name = "points" } );
+    add_shader(depth                   , CI{ .name = "depth"  } );
+    add_shader(id                      , CI{ .name = "id"     } );
+    add_shader(tool                    , CI{ .name = "tool"   } );
+    add_shader(debug_depth             , CI{ .name = "visualize_depth", .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_normal            , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_NORMAL",             "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_tangent           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_bitangent         , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_texcoord          , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vertex_color_rgb  , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_vertex_color_alpha, CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_omega_o           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_O",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_omega_i           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_I",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_omega_g           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_OMEGA_G",            "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_misc              , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_MISC",               "1"}}, .default_uniform_block = &default_uniform_block } );
 
     // Compile shaders
     {
@@ -188,7 +187,8 @@ Programs::Programs(
         ERHE_PROFILE_SCOPE("post link");
 
         for (auto& entry : prototypes) {
-            entry.shader_stages.reload(std::move(entry.prototype));
+            entry.reloadable_shader_stages.shader_stages.reload(std::move(entry.prototype));
+            graphics_instance.shader_monitor.add(entry.reloadable_shader_stages);
         }
     }
 }

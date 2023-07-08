@@ -27,8 +27,7 @@ auto Polygon::compute_normal(
     vec3 newell_normal{0.0f};
     for_each_corner_neighborhood_const(
         geometry,
-        [&newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i)
-        {
+        [&newell_normal, &point_locations](const Polygon_corner_neighborhood_context_const& i) {
             const Point_id a     = i.corner     .point_id;
             const Point_id b     = i.next_corner.point_id;
             const auto     pos_a = point_locations.get(a);
@@ -68,8 +67,7 @@ auto Polygon::compute_centroid(
 
     for_each_corner_const(
         geometry,
-        [&geometry, &centroid, &count, &point_locations](const Polygon_corner_context_const& i)
-        {
+        [&geometry, &centroid, &count, &point_locations](const Polygon_corner_context_const& i) {
             const Point_id point_id = geometry.corners[i.corner_id].point_id;
             const auto     pos0     = point_locations.get(point_id);
             centroid += pos0;

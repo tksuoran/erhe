@@ -44,8 +44,7 @@ auto make_box(
 
     return Geometry{
         "box",
-        [=](Geometry& geometry)
-        {
+        [=](Geometry& geometry) {
             Property_map<Corner_id, vec2>* corner_texcoords = geometry.corner_attributes().create<vec2>(c_corner_texcoords);
 
             geometry.make_point(-x, -y, -z); // 0    6------7
@@ -84,8 +83,7 @@ auto make_box(
 {
     return Geometry{
         "box",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             geometry.make_point(min_x, max_y, max_z, 0, 1); // 0
             geometry.make_point(max_x, max_y, max_z, 1, 1); // 1
             geometry.make_point(max_x, min_y, max_z, 1, 1); // 2
@@ -193,8 +191,7 @@ public:
             (z == -div.z) || (z == div.z);
 
         point_locations->put(point_id, vec3{x_p, y_p, z_p});
-        if (!is_discontinuity)
-        {
+        if (!is_discontinuity) {
             point_normals->put(point_id, n);
             point_texcoords->put(point_id, vec2{s, t});
 
@@ -388,8 +385,7 @@ auto make_box(
 
     return Geometry{
         "box",
-        [size, div, p](auto& geometry)
-        {
+        [size, div, p](auto& geometry) {
             Box_builder builder{geometry, size / 2.0f, div, p};
             builder.build();
         }

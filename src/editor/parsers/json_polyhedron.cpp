@@ -21,7 +21,7 @@ Json_library::Json_library(const std::filesystem::path& path)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto opt_text = erhe::toolkit::read(path);
+    const auto opt_text = erhe::toolkit::read("Json_library", path);
     if (!opt_text.has_value()) {
         return;
     }

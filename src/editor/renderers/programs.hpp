@@ -75,46 +75,45 @@ public:
     erhe::graphics::Sampler          linear_sampler;
     erhe::graphics::Sampler          linear_mipmap_linear_sampler;
 
-    erhe::graphics::Shader_stages    brdf_slice;
-    erhe::graphics::Shader_stages    brush;
-    erhe::graphics::Shader_stages    standard;
-    erhe::graphics::Shader_stages    anisotropic_slope;
-    erhe::graphics::Shader_stages    anisotropic_engine_ready;
-    erhe::graphics::Shader_stages    circular_brushed_metal;
-    erhe::graphics::Shader_stages    textured;
-    erhe::graphics::Shader_stages    sky;
-    erhe::graphics::Shader_stages    wide_lines_draw_color;
-    erhe::graphics::Shader_stages    wide_lines_vertex_color;
-    erhe::graphics::Shader_stages    points;
-    erhe::graphics::Shader_stages    depth;
-    erhe::graphics::Shader_stages    id;
-    erhe::graphics::Shader_stages    tool;
-    erhe::graphics::Shader_stages    debug_depth;
-    erhe::graphics::Shader_stages    debug_normal;
-    erhe::graphics::Shader_stages    debug_tangent;
-    erhe::graphics::Shader_stages    debug_bitangent;
-    erhe::graphics::Shader_stages    debug_texcoord;
-    erhe::graphics::Shader_stages    debug_vertex_color_rgb;
-    erhe::graphics::Shader_stages    debug_vertex_color_alpha;
-    erhe::graphics::Shader_stages    debug_omega_o;
-    erhe::graphics::Shader_stages    debug_omega_i;
-    erhe::graphics::Shader_stages    debug_omega_g;
-    erhe::graphics::Shader_stages    debug_misc;
+    erhe::graphics::Reloadable_shader_stages brdf_slice;
+    erhe::graphics::Reloadable_shader_stages brush;
+    erhe::graphics::Reloadable_shader_stages standard;
+    erhe::graphics::Reloadable_shader_stages anisotropic_slope;
+    erhe::graphics::Reloadable_shader_stages anisotropic_engine_ready;
+    erhe::graphics::Reloadable_shader_stages circular_brushed_metal;
+    erhe::graphics::Reloadable_shader_stages textured;
+    erhe::graphics::Reloadable_shader_stages sky;
+    erhe::graphics::Reloadable_shader_stages wide_lines_draw_color;
+    erhe::graphics::Reloadable_shader_stages wide_lines_vertex_color;
+    erhe::graphics::Reloadable_shader_stages points;
+    erhe::graphics::Reloadable_shader_stages depth;
+    erhe::graphics::Reloadable_shader_stages id;
+    erhe::graphics::Reloadable_shader_stages tool;
+    erhe::graphics::Reloadable_shader_stages debug_depth;
+    erhe::graphics::Reloadable_shader_stages debug_normal;
+    erhe::graphics::Reloadable_shader_stages debug_tangent;
+    erhe::graphics::Reloadable_shader_stages debug_bitangent;
+    erhe::graphics::Reloadable_shader_stages debug_texcoord;
+    erhe::graphics::Reloadable_shader_stages debug_vertex_color_rgb;
+    erhe::graphics::Reloadable_shader_stages debug_vertex_color_alpha;
+    erhe::graphics::Reloadable_shader_stages debug_omega_o;
+    erhe::graphics::Reloadable_shader_stages debug_omega_i;
+    erhe::graphics::Reloadable_shader_stages debug_omega_g;
+    erhe::graphics::Reloadable_shader_stages debug_misc;
 
     class Shader_stages_builder
     {
     public:
         Shader_stages_builder(
-            erhe::graphics::Shader_stages&              shader_stages,
-            erhe::graphics::Instance&                   graphics_instance,
-            erhe::scene_renderer::Program_interface&    program_interface,
-            std::filesystem::path                       shader_path,
-            erhe::graphics::Shader_stages_create_info&& create_info
+            erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages,
+            erhe::graphics::Instance&                 graphics_instance,
+            erhe::scene_renderer::Program_interface&  program_interface,
+            std::filesystem::path                     shader_path
         );
         Shader_stages_builder(Shader_stages_builder&& other);
 
-        erhe::graphics::Shader_stages&          shader_stages;
-        erhe::graphics::Shader_stages_prototype prototype;
+        erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages;
+        erhe::graphics::Shader_stages_prototype   prototype;
     };
 };
 

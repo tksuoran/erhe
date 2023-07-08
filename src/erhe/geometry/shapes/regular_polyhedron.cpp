@@ -12,8 +12,7 @@ auto make_cuboctahedron(const double r) -> Geometry
 
     return Geometry{
         "cuboctahedron",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             const double sq2 = std::sqrt(2.0);
 
             geometry.make_point( 0,      r,      0          );
@@ -58,8 +57,7 @@ auto make_dodecahedron(const double r) -> Geometry
 
     return Geometry{
         "dodecahedron",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             const double sq3 = std::sqrt(3.0);
             const double sq5 = std::sqrt(5.0);
             const double a   = 2.0 / (sq3 + sq3 * sq5);
@@ -113,8 +111,7 @@ auto make_icosahedron(const double r) -> Geometry
 
     return Geometry{
         "icosahedron",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             const double sq5 = std::sqrt(5.0);
             const double a0  = 2.0 / (1.0 + sq5);
             const double b   = std::sqrt((3.0 + sq5) / (1.0 + sq5));
@@ -168,8 +165,7 @@ auto make_octahedron(const double r) -> Geometry
 
     return Geometry{
         "octahedron",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             geometry.make_point( 0,  r,  0);
             geometry.make_point( 0, -r,  0);
             geometry.make_point(-r,  0,  0);
@@ -200,8 +196,7 @@ auto make_tetrahedron(double r) -> Geometry
 
     return Geometry{
         "tetrahedron",
-        [=](auto& geometry)
-        {
+        [=](auto& geometry) {
             const double sq2 = std::sqrt(2.0);
             const double sq3 = std::sqrt(3.0);
 
@@ -229,8 +224,7 @@ auto make_cube(const double r) -> Geometry
 
     return Geometry{
         "cube",
-        [=](Geometry& geometry)
-        {
+        [=](Geometry& geometry) {
             const double a =  0.5 * r;
             const double b = -0.5 * r;
             Property_map<Corner_id, glm::vec2>* corner_texcoords = geometry.corner_attributes().create<glm::vec2>(c_corner_texcoords);
