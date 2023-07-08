@@ -157,18 +157,18 @@ Text_renderer::Text_renderer(
         erhe::graphics::Vertex_attribute::color_ubyte4(),
         erhe::graphics::Vertex_attribute::texcoord0_float2()
     }
+    , m_index_buffer{
+        graphics_instance,
+        gl::Buffer_target::element_array_buffer,
+        index_stride * index_count,
+        gl::Buffer_storage_mask::map_write_bit
+    }
     , m_nearest_sampler{
         erhe::graphics::Sampler_create_info{
             .min_filter  = gl::Texture_min_filter::nearest,
             .mag_filter  = gl::Texture_mag_filter::nearest,
             .debug_label = "Text_renderer"
         }
-    }
-    , m_index_buffer{
-        graphics_instance,
-        gl::Buffer_target::element_array_buffer,
-        index_stride * index_count,
-        gl::Buffer_storage_mask::map_write_bit
     }
     , m_vertex_writer        {graphics_instance}
     , m_projection_writer    {graphics_instance}

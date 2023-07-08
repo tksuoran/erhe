@@ -86,8 +86,8 @@ Viewport_windows::Viewport_windows(
     Editor_context&           editor_context,
     Editor_message_bus&       editor_message_bus
 )
-    : m_open_new_viewport_window_command{commands, editor_context}
-    , m_context                         {editor_context}
+    : m_context                         {editor_context}
+    , m_open_new_viewport_window_command{commands, editor_context}
 {
     Command_host::set_description("Viewport_windows");
 

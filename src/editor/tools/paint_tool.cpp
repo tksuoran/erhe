@@ -122,8 +122,8 @@ Paint_tool::Paint_tool(
     Icon_set&                    icon_set,
     Tools&                       tools
 )
-    : Tool                          {editor_context}
-    , erhe::imgui::Imgui_window     {imgui_renderer, imgui_windows, "Paint Tool", "paint_tool"}
+    : erhe::imgui::Imgui_window     {imgui_renderer, imgui_windows, "Paint Tool", "paint_tool"}
+    , Tool                          {editor_context}
     , m_paint_vertex_command        {commands, editor_context}
     , m_drag_redirect_update_command{commands, m_paint_vertex_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}

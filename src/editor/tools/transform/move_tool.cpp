@@ -108,6 +108,7 @@ auto Move_tool::update(Scene_view* scene_view) -> bool
                 update(closest_point.value());
                 return true;
             }
+            return false;
         }
 
         default: {

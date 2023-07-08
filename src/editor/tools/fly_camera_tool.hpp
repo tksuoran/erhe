@@ -78,10 +78,10 @@ private:
 };
 
 class Fly_camera_tool
-    : public erhe::imgui::Imgui_window
-    , public Tool
-    , public Update_fixed_step
+    : public Update_fixed_step
     , public Update_once_per_frame
+    , public erhe::imgui::Imgui_window
+    , public Tool
 {
 public:
     class Config

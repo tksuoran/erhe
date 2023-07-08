@@ -165,14 +165,12 @@ Tile_renderer::Tile_renderer(
     : m_graphics_instance    {graphics_instance}
     , m_imgui_renderer       {imgui_renderer}
     , m_tiles                {tiles}
-
     , m_default_uniform_block{graphics_instance}
     , m_texture_sampler{
         graphics_instance.info.use_bindless_texture
             ? nullptr
             : m_default_uniform_block.add_sampler("s_texture", gl::Uniform_type::sampler_2d, 0)
     }
-
     , m_fragment_outputs{
         erhe::graphics::Fragment_output{
             .name     = "out_color",

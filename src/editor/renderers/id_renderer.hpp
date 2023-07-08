@@ -117,11 +117,16 @@ private:
     void create_id_frame_resources();
     void update_framebuffer       (const erhe::toolkit::Viewport viewport);
 
+    bool                                          m_enabled{true};
+    erhe::toolkit::Viewport                       m_viewport{0, 0, 0, 0, true};
+
+    // TODO Do not store these here?
     erhe::graphics::Instance&                     m_graphics_instance;
     Mesh_memory&                                  m_mesh_memory;
 
-    bool                                          m_enabled{true};
-    erhe::toolkit::Viewport                       m_viewport{0, 0, 0, 0, true};
+    erhe::scene_renderer::Camera_buffer           m_camera_buffers;
+    erhe::renderer::Draw_indirect_buffer          m_draw_indirect_buffers;
+    erhe::scene_renderer::Primitive_buffer        m_primitive_buffers;
 
     erhe::graphics::Pipeline                      m_pipeline;
     erhe::graphics::Pipeline                      m_selective_depth_clear_pipeline;
@@ -151,10 +156,6 @@ private:
     bool               m_use_scissor      {true};
     bool               m_use_renderbuffers{true};
     bool               m_use_textures     {false};
-
-    erhe::scene_renderer::Camera_buffer    m_camera_buffers;
-    erhe::renderer::Draw_indirect_buffer   m_draw_indirect_buffers;
-    erhe::scene_renderer::Primitive_buffer m_primitive_buffers;
 };
 
 }

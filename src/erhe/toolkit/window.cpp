@@ -1,5 +1,3 @@
-#pragma once
-
 #include "erhe/toolkit/window.hpp"
 
 #include <fmt/format.h>

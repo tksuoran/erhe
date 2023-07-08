@@ -121,8 +121,8 @@ Hotbar::Hotbar(
     Scene_builder&                  scene_builder,
     Tools&                          tools
 )
-    : Tool                       {editor_context}
-    , erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", "hotbar"}
+    : erhe::imgui::Imgui_window  {imgui_renderer, imgui_windows, "Hotbar", "hotbar"}
+    , Tool                       {editor_context}
     , m_toggle_visibility_command{commands, editor_context}
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     , m_trackpad_command         {commands, editor_context}

@@ -68,7 +68,7 @@ public:
         >&                                                                 mesh_spans;
         const std::vector<erhe::renderer::Pipeline_renderpass*>            passes;
         erhe::primitive::Primitive_mode                                    primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
-        Primitive_interface_settings                                       primitive_settings;
+        Primitive_interface_settings                                       primitive_settings{};
         const erhe::graphics::Texture*                                     shadow_texture{nullptr};
         const erhe::toolkit::Viewport&                                     viewport;
         const erhe::scene::Item_filter                                     filter{};

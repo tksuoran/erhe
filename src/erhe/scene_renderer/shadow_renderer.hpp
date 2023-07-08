@@ -67,8 +67,8 @@ public:
         gl::Draw_elements_type                                     index_type;
 
         const erhe::scene::Camera*                                 view_camera;
-        const erhe::toolkit::Viewport                                view_camera_viewport;
-        const erhe::toolkit::Viewport                                light_camera_viewport;
+        const erhe::toolkit::Viewport                              view_camera_viewport;
+        const erhe::toolkit::Viewport                              light_camera_viewport;
         std::shared_ptr<erhe::graphics::Texture>                   texture;
         const std::vector<
             std::unique_ptr<erhe::graphics::Framebuffer>
@@ -105,10 +105,10 @@ private:
     erhe::graphics::Reloadable_shader_stages m_shader_stages;
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Vertex_input_state       m_vertex_input;
-    erhe::graphics::Gpu_timer                m_gpu_timer;
-    Light_buffer                             m_light_buffers;
     erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffers;
+    Light_buffer                             m_light_buffers;
     Primitive_buffer                         m_primitive_buffers;
+    erhe::graphics::Gpu_timer                m_gpu_timer;
 };
 
 

@@ -43,8 +43,8 @@ Hover_tool::Hover_tool(
     Editor_message_bus&          editor_message_bus,
     Tools&                       tools
 )
-    : Tool                     {editor_context}
-    , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover"}
+    , Tool                     {editor_context}
 {
     set_flags      (Tool_flags::background | Tool_flags::toolbox);
     set_description("Hover Tool");

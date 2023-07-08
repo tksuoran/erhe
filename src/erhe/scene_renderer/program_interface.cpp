@@ -137,10 +137,10 @@ Program_interface::Program_interface(
         }
     }
     , camera_interface   {graphics_instance}
+    , joint_interface    {graphics_instance}
     , light_interface    {graphics_instance}
     , material_interface {graphics_instance}
     , primitive_interface{graphics_instance}
-    , joint_interface    {graphics_instance}
 {
 }
 
