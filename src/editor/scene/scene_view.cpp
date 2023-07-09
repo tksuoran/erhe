@@ -45,8 +45,9 @@ void Hover_entry::reset()
     return empty_string;
 }
 
-Scene_view::Scene_view(Editor_context& context)
-    : m_context{context}
+Scene_view::Scene_view(Editor_context& context, Viewport_config viewport_config)
+    : m_context        {context}
+    , m_viewport_config{viewport_config}
 {
 }
 
@@ -69,6 +70,11 @@ void Scene_view::set_hover(
             }
         );
     }
+}
+
+auto Scene_view::get_config() -> Viewport_config&
+{
+    return m_viewport_config;
 }
 
 auto Scene_view::get_light_projections() const -> const erhe::scene_renderer::Light_projections*

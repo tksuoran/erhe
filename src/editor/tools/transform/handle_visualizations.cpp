@@ -173,6 +173,7 @@ void Handle_visualizations::update_for_view(
 )
 {
     // TODO also consider fov
+    m_scene_view = scene_view;
     if (scene_view == nullptr) {
         return;
     }
@@ -473,8 +474,12 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (m_scene_view == nullptr) {
+        return;
+    }
+
     const auto&     settings = m_context.transform_tool->shared.settings;
-    const glm::mat4 scale    = erhe::toolkit::create_scale<float>(settings.gizmo_scale * m_view_distance / 100.0f);
+    const glm::mat4 scale    = erhe::toolkit::create_scale<float>(m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f);
     const glm::mat4 world_from_anchor = settings.local
         ? m_world_from_anchor.get_matrix()
         : erhe::toolkit::create_translation<float>(m_world_from_anchor.get_translation());

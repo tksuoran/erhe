@@ -16,6 +16,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
@@ -147,7 +148,6 @@ Transform_tool::Transform_tool(
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "transform_tool");
     auto& settings = shared.settings;
-    ini->get("scale",          settings.gizmo_scale);
     ini->get("show_translate", settings.show_translate);
     ini->get("show_rotate",    settings.show_rotate);
 
@@ -225,11 +225,7 @@ void Transform_tool::imgui()
     const bool   show_rotate    = settings.show_rotate;
     const bool   show_scale     = settings.show_scale;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x / 2, 0.0f};
-    const bool   multiselect    = shared.entries.size() > 1;
 
-    if (multiselect) {
-        ImGui::BeginDisabled();
-    }
     if (
         erhe::imgui::make_button(
             "Local",
@@ -248,9 +244,6 @@ void Transform_tool::imgui()
         )
     ) {
         settings.local = false;
-    }
-    if (multiselect) {
-        ImGui::EndDisabled();
     }
 
     //ImGui::SliderFloat("Scale", &settings.gizmo_scale, 1.0f, 10.0f);
@@ -371,26 +364,17 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
 
 void Transform_tool::adjust_translation(const vec3 translation)
 {
-    if (shared.settings.local) {
-        touch();
-        for (auto& entry : shared.entries) {
-            auto& node = entry.node;
-            if (!node) {
-                return;
-            }
-            node->set_world_from_node(
-                erhe::scene::translate(entry.world_from_node_before, translation)
-            );
+    touch();
+    for (auto& entry : shared.entries) {
+        auto& node = entry.node;
+        if (!node) {
+            return;
         }
-        shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
-    } else {
-        adjust(
-            glm::translate(
-                shared.world_from_anchor_initial_state.get_matrix(),
-                translation
-            )
+        node->set_world_from_node(
+            erhe::scene::translate(entry.world_from_node_before, translation)
         );
     }
+    shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
     update_transforms();
 }
 
@@ -699,8 +683,7 @@ void Transform_tool::tool_render(
         if (!node) {
             continue;
         }
-        if (shared.settings.cast_rays)
-        {
+        if (shared.settings.cast_rays) {
             render_rays(*node.get());
         }
     }

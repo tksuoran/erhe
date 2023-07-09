@@ -21,7 +21,8 @@ public:
 
     Rotate_tool(
         Editor_context& editor_context,
-        Icon_set&       icon_set
+        Icon_set&       icon_set,
+        Tools&          tools
     );
     ~Rotate_tool() noexcept override;
 

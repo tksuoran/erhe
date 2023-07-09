@@ -70,13 +70,15 @@ Light_buffer::Light_buffer(
     m_light_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_block.binding_point(),
-        m_light_interface.light_block.size_bytes()
+        // TODO
+        16 * m_light_interface.light_block.size_bytes()
     );
 
     m_control_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_control_block.binding_point(),
-        m_light_interface.light_control_block.size_bytes() * 40
+        // TODO
+        8 * m_light_interface.light_control_block.size_bytes() * 40
     );
 }
 

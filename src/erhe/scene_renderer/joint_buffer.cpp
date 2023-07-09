@@ -49,8 +49,8 @@ Joint_buffer::Joint_buffer(
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
         m_joint_interface.joint_block.binding_point(),
-        // TODO Separate update joint (and other) buffers outside composer renderpasses
-        8 * m_joint_interface.offsets.joint_struct + m_joint_interface.joint_struct.size_bytes() * m_joint_interface.max_joint_count
+        // TODO Separate update joint (and other) buffers outside composer renderpasses. Also consider multiple viewports
+        16 * m_joint_interface.offsets.joint_struct + m_joint_interface.joint_struct.size_bytes() * m_joint_interface.max_joint_count
     );
 }
 

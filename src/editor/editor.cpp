@@ -217,9 +217,9 @@ public:
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         , m_hand_tracker{m_editor_context, m_editor_rendering}
 #endif
-        , m_move_tool             {m_editor_context,    m_icon_set}
-        , m_rotate_tool           {m_editor_context,    m_icon_set}
-        , m_scale_tool            {m_editor_context,    m_icon_set}
+        , m_move_tool             {m_editor_context, m_icon_set, m_tools}
+        , m_rotate_tool           {m_editor_context, m_icon_set, m_tools}
+        , m_scale_tool            {m_editor_context, m_icon_set, m_tools}
         , m_transform_tool{
             m_commands,           m_imgui_renderer,  m_imgui_windows, m_editor_context,
             m_editor_message_bus, m_headset_view,    m_mesh_memory,   m_tools

@@ -71,7 +71,8 @@ Material_buffer::Material_buffer(
     Multi_buffer::allocate(
         gl::Buffer_target::shader_storage_buffer,
         m_material_interface.material_block.binding_point(),
-        m_material_interface.material_struct.size_bytes() * m_material_interface.max_material_count
+        // TODO
+        8 * m_material_interface.material_struct.size_bytes() * m_material_interface.max_material_count
     );
 }
 

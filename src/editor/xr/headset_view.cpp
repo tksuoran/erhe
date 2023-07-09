@@ -90,7 +90,7 @@ Headset_view::Headset_view(
     Mesh_memory&                           mesh_memory,
     Scene_builder&                         scene_builder
 )
-    : Scene_view{editor_context}
+    : Scene_view{editor_context, Viewport_config{}}
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
     ini->get("openxr",            config.openxr);

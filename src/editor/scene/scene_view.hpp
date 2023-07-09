@@ -2,6 +2,7 @@
 
 #include "editor_message.hpp"
 #include "renderers/programs.hpp"
+#include "renderers/viewport_config.hpp"
 #include "scene/node_raytrace_mask.hpp"
 
 #include "erhe/rendergraph/rendergraph_node.hpp"
@@ -99,7 +100,7 @@ public:
 class Scene_view
 {
 public:
-    explicit Scene_view(Editor_context& context);
+    Scene_view(Editor_context& context, Viewport_config viewport_config);
     virtual ~Scene_view() noexcept;
 
     // Virtual interface
@@ -127,6 +128,7 @@ public:
     void update_hover_with_raytrace();
     void update_grid_hover         ();
 
+    [[nodiscard]] auto get_config                               () -> Viewport_config&;
     [[nodiscard]] auto get_world_from_control                   () const -> std::optional<glm::mat4>;
     [[nodiscard]] auto get_control_from_world                   () const -> std::optional<glm::mat4>;
     [[nodiscard]] auto get_control_ray_origin_in_world          () const -> std::optional<glm::vec3>;
@@ -138,10 +140,10 @@ public:
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);
 
+    Editor_context&          m_context;
     std::optional<glm::mat4> m_world_from_control;
     std::optional<glm::mat4> m_control_from_world;
-
-    Editor_context& m_context;
+    Viewport_config          m_viewport_config;
 
 private:
     std::array<Hover_entry, Hover_entry::slot_count> m_hover_entries;
