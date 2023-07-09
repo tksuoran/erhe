@@ -25,7 +25,8 @@ using namespace glm;
 
 Rotate_tool::Rotate_tool(
     Editor_context& editor_context,
-    Icon_set&       icon_set
+    Icon_set&       icon_set,
+    Tools&          tools
 )
     : Subtool{editor_context}
 {
@@ -33,7 +34,7 @@ Rotate_tool::Rotate_tool(
     set_description  ("Rotate");
     set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
     set_icon         (icon_set.icons.rotate);
-    //g_tools->register_tool(this);
+    tools.register_tool(this);
 }
 
 Rotate_tool::~Rotate_tool() noexcept = default;
@@ -192,7 +193,7 @@ void Rotate_tool::render(const Render_context& context)
     const vec3  side2             = normalize(cross(n, side1));
     const vec3  position_in_world = p;//node.position_in_world();
     const float distance          = length(position_in_world - vec3{camera_node->position_in_world()});
-    const float scale             = shared.settings.gizmo_scale * distance / 100.0f;
+    const float scale             = context.scene_view.get_config().gizmo_scale * distance / 100.0f;
     const float r1                = scale * 6.0f;
 
     constexpr vec4 red   {1.0f, 0.0f, 0.0f, 1.0f};

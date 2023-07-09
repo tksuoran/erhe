@@ -18,6 +18,7 @@ public:
     Render_style_data render_style_not_selected;
     Render_style_data render_style_selected;
     glm::vec4         clear_color{0.0f, 0.0f, 0.0, 0.4f};
+    float             gizmo_scale{4.5f};
 
     class Debug_visualizations
     {

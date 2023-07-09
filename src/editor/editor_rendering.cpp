@@ -546,17 +546,27 @@ auto Editor_rendering::height() const -> int
 
 void Editor_rendering::imgui()
 {
-    int index = static_cast<int>(debug_joint_indices.x);
-    ImGui::SliderInt("Debug Joint Index", &index, 0, 200); // TODO correct range
-    debug_joint_indices.x = index;
+    const ImGuiTreeNodeFlags flags{
+        ImGuiTreeNodeFlags_Framed            |
+        ImGuiTreeNodeFlags_OpenOnArrow       |
+        ImGuiTreeNodeFlags_OpenOnDoubleClick |
+        ImGuiTreeNodeFlags_SpanFullWidth
+    };
 
-    for (
-        int joint_index = 0, end = static_cast<int>(debug_joint_colors.size());
-        joint_index < end;
-        ++joint_index
-    ) {
-        std::string label = fmt::format("Joint {}", joint_index);
-        ImGui::ColorEdit4(label.c_str(), &debug_joint_colors[joint_index].x, ImGuiColorEditFlags_Float);
+    if (ImGui::TreeNodeEx("Skin Debug", flags)) {
+        int index = static_cast<int>(debug_joint_indices.x);
+        ImGui::SliderInt("Debug Joint Index", &index, 0, 200); // TODO correct range
+        debug_joint_indices.x = index;
+
+        for (
+            int joint_index = 0, end = static_cast<int>(debug_joint_colors.size());
+            joint_index < end;
+            ++joint_index
+        ) {
+            std::string label = fmt::format("Joint {}", joint_index);
+            ImGui::ColorEdit4(label.c_str(), &debug_joint_colors[joint_index].x, ImGuiColorEditFlags_Float);
+        }
+        ImGui::TreePop();
     }
 }
 

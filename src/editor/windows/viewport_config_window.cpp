@@ -31,6 +31,7 @@ Viewport_config_window::Viewport_config_window(
     config.render_style_selected.edge_lines = false;
 
     auto ini = erhe::configuration::get_ini("erhe.ini", "viewport");
+    ini->get("gizmo_scale",               gizmo_scale);
     ini->get("polygon_fill",              polygon_fill);
     ini->get("edge_lines",                edge_lines);
     ini->get("edge_color",                edge_color);
@@ -60,6 +61,7 @@ Viewport_config_window::Viewport_config_window(
     config.render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
     //data.render_style_selected.edge_lines = false;
 
+    config.gizmo_scale               = gizmo_scale;
     config.selection_bounding_box    = selection_bounding_box;
     config.selection_bounding_sphere = selection_bounding_sphere;
     config.clear_color               = clear_color;
@@ -141,8 +143,6 @@ void Viewport_config_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    m_context.editor_rendering->imgui();
-
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -151,6 +151,7 @@ void Viewport_config_window::imgui()
     };
 
     if (edit_data != nullptr) {
+        ImGui::SliderFloat("Gizmo Scale", &edit_data->gizmo_scale, 1.0f, 8.0f, "%.2f");
         ImGui::ColorEdit4("Clear Color", &edit_data->clear_color.x, ImGuiColorEditFlags_Float);
 
         if (ImGui::TreeNodeEx("Default Style", flags)) {
@@ -174,26 +175,26 @@ void Viewport_config_window::imgui()
 
     ImGui::SliderFloat("LoD Bias", &rendertarget_mesh_lod_bias, -8.0f, 8.0f);
 
-    {
-        if (ImGui::TreeNodeEx("Hotbar", flags)) {
-            auto& hotbar = *m_context.hotbar;
-            auto& color_inactive = hotbar.get_color(0);
-            auto& color_hover    = hotbar.get_color(1);
-            auto& color_active   = hotbar.get_color(2);
-            ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
-            ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
-            ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
+    m_context.editor_rendering->imgui();
 
-            auto position = hotbar.get_position();
-            if (ImGui::DragFloat3("Position", &position.x, 0.1f)) {
-                hotbar.set_position(position);
-            }
-            ImGui::TreePop();
+    if (ImGui::TreeNodeEx("Hotbar", flags)) {
+        auto& hotbar = *m_context.hotbar;
+        auto& color_inactive = hotbar.get_color(0);
+        auto& color_hover    = hotbar.get_color(1);
+        auto& color_active   = hotbar.get_color(2);
+        ImGui::ColorEdit4("Inactive", &color_inactive.x, ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Hover",    &color_hover.x,    ImGuiColorEditFlags_Float);
+        ImGui::ColorEdit4("Active",   &color_active.x,   ImGuiColorEditFlags_Float);
 
-            bool locked = hotbar.get_locked();
-            if (ImGui::Checkbox("Locked", &locked)) {
-                hotbar.set_locked(locked);
-            }
+        auto position = hotbar.get_position();
+        if (ImGui::DragFloat3("Position", &position.x, 0.1f)) {
+            hotbar.set_position(position);
+        }
+        ImGui::TreePop();
+
+        bool locked = hotbar.get_locked();
+        if (ImGui::Checkbox("Locked", &locked)) {
+            hotbar.set_locked(locked);
         }
     }
 #endif

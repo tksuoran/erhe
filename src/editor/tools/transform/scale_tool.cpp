@@ -15,7 +15,8 @@ using namespace glm;
 
 Scale_tool::Scale_tool(
     Editor_context& editor_context,
-    Icon_set&       icon_set
+    Icon_set&       icon_set,
+    Tools&          tools
 )
     : Subtool{editor_context}
 {
@@ -23,6 +24,7 @@ Scale_tool::Scale_tool(
     set_description  ("Scale");
     set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
     set_icon         (icon_set.icons.scale);
+    tools.register_tool(this);
 }
 
 void Scale_tool::handle_priority_update(

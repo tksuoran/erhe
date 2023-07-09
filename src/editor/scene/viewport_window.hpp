@@ -1,6 +1,5 @@
 #pragma once
 
-#include "windows/viewport_config_window.hpp"
 #include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
 
@@ -113,7 +112,6 @@ public:
     void link_to                   (std::shared_ptr<Post_processing_node> node);
     void set_final_output          (std::shared_ptr<Rendergraph_node> node);
 
-    [[nodiscard]] auto get_config              () -> Viewport_config*;
     [[nodiscard]] auto ini_label               () const -> const char* { return m_ini_label; }
     [[nodiscard]] auto viewport_from_window    (const glm::vec2 position_in_window) const -> glm::vec2;
     [[nodiscard]] auto project_to_viewport     (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
@@ -134,8 +132,6 @@ private:
     void update_hover_with_id_render();
 
     static int s_serial;
-
-    Viewport_config                    m_viewport_config;
 
     // TODO Consider if this is the right place for ownership
     std::shared_ptr<erhe::rendergraph::Multisample_resolve_node> m_multisample_resolve_node;

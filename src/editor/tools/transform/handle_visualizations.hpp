@@ -103,7 +103,8 @@ private:
     ) -> std::shared_ptr<erhe::primitive::Material>;
 
     Editor_context& m_context;
-    float           m_scale {1.0f};
+    float           m_scale     {1.0f};
+    Scene_view*     m_scene_view{nullptr};
 
     std::map<erhe::scene::Mesh*, Handle>             m_handles;
     erhe::scene::Trs_transform                       m_world_from_anchor;

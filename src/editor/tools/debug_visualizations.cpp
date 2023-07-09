@@ -644,7 +644,7 @@ void Debug_visualizations::selection_visualization(
         return;
     }
 
-    const auto* viewport_config = context.viewport_window->get_config();
+    const auto& viewport_config = context.viewport_window->get_config();
 
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
@@ -680,8 +680,7 @@ void Debug_visualizations::selection_visualization(
                 const auto camera = as_camera(attachment);
                 if (
                     camera &&
-                    (viewport_config != nullptr) &&
-                    (viewport_config->debug_visualizations.camera == erhe::renderer::Visualization_mode::selected)
+                    (viewport_config.debug_visualizations.camera == erhe::renderer::Visualization_mode::selected)
                 ) {
                     camera_visualization(context, camera.get());
                 }

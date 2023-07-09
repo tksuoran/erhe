@@ -21,6 +21,7 @@
 #include "tools/tools.hpp"
 #include "windows/imgui_viewport_window.hpp"
 #include "windows/settings.hpp"
+#include "windows/viewport_config_window.hpp"
 
 #include "erhe/commands/commands.hpp"
 #include "erhe/configuration/configuration.hpp"
@@ -576,7 +577,7 @@ void Viewport_windows::viewport_toolbar(
     }
     if (button_pressed) {
         m_context.viewport_config_window->show();
-        m_context.viewport_config_window->edit_data = viewport_window.get_config();
+        m_context.viewport_config_window->edit_data = &viewport_window.get_config();
     }
     ImGui::PopID();
 }

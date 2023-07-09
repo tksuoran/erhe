@@ -13,7 +13,6 @@ public:
     bool  show_scale           {false};
     bool  hide_inactive        {true};
     bool  local                {false};
-    float gizmo_scale          {1.0f};
 
     bool  translate_snap_enable{false};
     float translate_snap       {0.1f};

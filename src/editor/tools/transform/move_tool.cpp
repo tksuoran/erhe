@@ -5,6 +5,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
@@ -25,7 +26,8 @@ using namespace glm;
 
 Move_tool::Move_tool(
     Editor_context& editor_context,
-    Icon_set&       icon_set
+    Icon_set&       icon_set,
+    Tools&          tools
 )
     : Subtool{editor_context}
 {
@@ -33,6 +35,7 @@ Move_tool::Move_tool(
     set_description  ("Move Tool");
     set_flags        (Tool_flags::toolbox | Tool_flags::allow_secondary);
     set_icon         (icon_set.icons.move);
+    tools.register_tool(this);
 }
 
 Move_tool::~Move_tool() noexcept = default;

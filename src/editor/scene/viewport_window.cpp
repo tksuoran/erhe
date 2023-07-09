@@ -19,6 +19,7 @@
 #include "tools/tools.hpp"
 #include "tools/transform/transform_tool.hpp"
 #include "windows/physics_window.hpp"
+#include "windows/viewport_config_window.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -77,9 +78,8 @@ Viewport_window::Viewport_window(
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera
 )
-    : Scene_view       {editor_context}
+    : Scene_view       {editor_context, viewport_config_window.config}
     , Rendergraph_node {rendergraph, name}
-    , m_viewport_config{viewport_config_window.config}
     , m_name           {name}
     , m_ini_label      {ini_label}
     , m_scene_root     {scene_root}
@@ -510,11 +510,6 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
     );
     Shadow_render_node* shadow_render_node = reinterpret_cast<Shadow_render_node*>(input_node);
     return shadow_render_node;
-}
-
-auto Viewport_window::get_config() -> Viewport_config*
-{
-    return &m_viewport_config;
 }
 
 auto Viewport_window::viewport_toolbar() -> bool

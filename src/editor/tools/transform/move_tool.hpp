@@ -21,7 +21,8 @@ public:
 
     Move_tool(
         Editor_context& editor_context,
-        Icon_set&       icon_set
+        Icon_set&       icon_set,
+        Tools&          tools
     );
     ~Move_tool() noexcept override;
 

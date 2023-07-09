@@ -19,6 +19,7 @@ class Viewport_config_window
     : public erhe::imgui::Imgui_window
 {
 public:
+    float     gizmo_scale              {3.0f};
     bool      polygon_fill             {true};
     bool      edge_lines               {false};
     bool      selection_polygon_fill   {true};

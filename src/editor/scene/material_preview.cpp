@@ -52,7 +52,7 @@ Material_preview::Material_preview(
     Programs&                       programs
 )
 #define REVERSE_DEPTH graphics_instance.configuration.reverse_depth
-    : Scene_view{editor_context}
+    : Scene_view{editor_context, Viewport_config{}}
     , m_context {editor_context}
     , m_pipeline_renderpass{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Opaque",
@@ -284,8 +284,6 @@ void Material_preview::render_preview(
     gl::clear_stencil(0);
     gl::clear_depth_f(*m_context.graphics_instance->depth_clear_value_pointer());
 
-    Viewport_config viewport_config;
-
     const auto& layers = m_scene_root->layers();
 
     m_light_projections = erhe::scene_renderer::Light_projections{
@@ -299,7 +297,7 @@ void Material_preview::render_preview(
     const Render_context context{
         .editor_context  = m_context,
         .scene_view      = *this,
-        .viewport_config = viewport_config,
+        .viewport_config = m_viewport_config,
         .camera          = *m_camera.get(),
         .viewport_window = nullptr,
         .viewport        = erhe::toolkit::Viewport{
