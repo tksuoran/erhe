@@ -1,23 +1,16 @@
 #include "windows/layers_window.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/graphics/texture.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
-
-#include <gsl/gsl>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

@@ -4,14 +4,12 @@
 
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/iworld.hpp"
-#include "erhe/physics/physics_log.hpp"
-#include "erhe/scene/mesh.hpp"
+#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 namespace editor
 {

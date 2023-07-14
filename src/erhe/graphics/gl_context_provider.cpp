@@ -1,9 +1,5 @@
-#include <fmt/core.h>
-#include <fmt/ostream.h>
-
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/toolkit/window.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"

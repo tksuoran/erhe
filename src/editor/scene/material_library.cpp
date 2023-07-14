@@ -3,7 +3,6 @@
 #include "erhe/toolkit/math_util.hpp"
 
 #include <fmt/format.h>
-#include <imgui/imgui.h>
 
 namespace editor
 {

@@ -1,7 +1,6 @@
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
 #include <fmt/format.h>
 #include <gsl/assert>
 

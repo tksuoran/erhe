@@ -1,10 +1,8 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "parsers/gltf.hpp"
-#include "editor_log.hpp"
 
 #include "scene/content_library.hpp"
-#include "scene/material_library.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
@@ -12,7 +10,6 @@
 #include "erhe/gltf/gltf.hpp"
 #include "erhe/gltf/image_transfer.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/animation.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"

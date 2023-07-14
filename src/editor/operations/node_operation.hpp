@@ -4,7 +4,12 @@
 
 #include "erhe/scene/node.hpp"
 
+#include <memory>
 #include <vector>
+
+namespace erhe::scene {
+    class Node;
+}
 
 namespace editor
 {

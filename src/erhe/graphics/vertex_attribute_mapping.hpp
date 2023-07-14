@@ -3,7 +3,6 @@
 #include "erhe/graphics/vertex_attribute.hpp"
 
 #include <string_view>
-#include <utility>
 
 namespace erhe::graphics
 {

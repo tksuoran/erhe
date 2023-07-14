@@ -2,7 +2,6 @@
 #include "erhe/commands/command.hpp"
 #include "erhe/commands/input_arguments.hpp"
 #include "erhe/commands/commands_log.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::commands {
 

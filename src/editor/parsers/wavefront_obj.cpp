@@ -6,11 +6,6 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <gsl/gsl>
-
-#include <algorithm>
-#include <cctype>
-#include <glm/glm.hpp>
 #include <limits>
 #include <string>
 

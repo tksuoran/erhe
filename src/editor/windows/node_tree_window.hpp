@@ -10,7 +10,6 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 
 namespace erhe::imgui {
     class Imgui_windows;

@@ -5,17 +5,11 @@
 #include "editor_message_bus.hpp"
 
 #include "erhe/configuration/configuration.hpp"
-#include "erhe/graphics/instance.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/graphics/instance.hpp"
 #include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/toolkit/verify.hpp"
 #include "mini/ini.h"
-
-#include <fmt/format.h>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

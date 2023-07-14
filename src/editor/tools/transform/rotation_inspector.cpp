@@ -1,35 +1,13 @@
 #include "tools/transform/rotation_inspector.hpp"
 
-#include "editor_log.hpp"
-#include "operations/compound_operation.hpp"
-#include "operations/insert_operation.hpp"
-#include "operations/node_operation.hpp"
-#include "operations/operation_stack.hpp"
-
-#include "renderers/render_context.hpp"
-#include "windows/operations.hpp"
-
 #include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/message_bus/message_bus.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe/scene/trs_transform.hpp"
 
-#include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/matrix_interpolation.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
-#   include <imgui_internal.h>
-#   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
-
-#include <cmath>
 
 namespace editor
 {

@@ -4,7 +4,6 @@
 
 #include <gsl/gsl>
 
-#include <memory>
 #include <vector>
 
 namespace erhe::graphics

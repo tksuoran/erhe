@@ -2,10 +2,10 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/geometry_log.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
 
 namespace erhe::geometry::operation
 {

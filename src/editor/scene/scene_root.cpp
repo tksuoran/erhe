@@ -1,18 +1,10 @@
 #include "scene/scene_root.hpp"
 
 #include "editor_log.hpp"
-#include "editor_message_bus.hpp"
 #include "rendertarget_mesh.hpp"
 
 #include "scene/content_library.hpp"
-#include "scene/debug_draw.hpp"
-#include "scene/node_physics.hpp"
-#include "scene/node_raytrace.hpp"
-#include "tools/selection_tool.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/framebuffer.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
@@ -22,11 +14,8 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/skin.hpp"
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#include <glm/gtx/color_space.hpp>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

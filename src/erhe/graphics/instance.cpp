@@ -9,8 +9,6 @@
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/state/depth_stencil_state.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/window.hpp"
 
 #if !defined(WIN32)
 #   include <csignal>

@@ -1,5 +1,4 @@
 #include "erhe/graphics/fragment_outputs.hpp"
-#include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"

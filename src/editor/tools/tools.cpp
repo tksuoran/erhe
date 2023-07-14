@@ -10,22 +10,13 @@
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
 #include "tools/tool.hpp"
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/controller_visualization.hpp"
-#   include "xr/headset_view.hpp"
-#   include "erhe/xr/headset.hpp"
-#endif
 
 #include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 
 namespace editor {

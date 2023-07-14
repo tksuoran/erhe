@@ -5,14 +5,9 @@
 #include "xr/controller_visualization.hpp"
 #include "xr/headset_view_resources.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/xr/headset.hpp"
-
-#include <array>
 
 namespace erhe::graphics {
     class Instance;

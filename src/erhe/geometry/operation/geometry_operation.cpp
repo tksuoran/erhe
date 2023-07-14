@@ -5,7 +5,6 @@
 #include "erhe/toolkit/verify.hpp"
 
 #include <gsl/assert>
-#include <set>
 
 namespace erhe::geometry::operation
 {

@@ -4,35 +4,19 @@
 
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
-#include "scene/content_library.hpp"
-#include "scene/material_library.hpp"
-#include "scene/material_preview.hpp"
-#include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
-#include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/window_imgui_viewport.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
 #include "erhe/rendergraph/texture_rendergraph_node.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/log/log_glm.hpp"
 #include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/scene/scene.hpp" // TODO move light layer to separate header
 #include "erhe/toolkit/profile.hpp"
 
 #include <imgui/imgui.h>
-
-#include <fmt/format.h>
 
 namespace editor
 {

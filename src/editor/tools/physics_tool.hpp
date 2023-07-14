@@ -4,12 +4,10 @@
 #include "scene/node_raytrace.hpp"
 
 #include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/physics/imotion_state.hpp"
 
 #include <glm/glm.hpp>
 
-#include <functional>
 #include <memory>
 
 namespace erhe::physics {

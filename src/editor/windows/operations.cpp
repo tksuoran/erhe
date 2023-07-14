@@ -1,24 +1,18 @@
 #include "windows/operations.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "scene/scene_builder.hpp"
-#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
-#include "tools/tool.hpp"
 
 #include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

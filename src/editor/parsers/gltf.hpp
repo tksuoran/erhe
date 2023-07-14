@@ -1,7 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <memory>
 
 namespace erhe::graphics {
     class Instance;

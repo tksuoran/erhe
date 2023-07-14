@@ -1,10 +1,13 @@
-#include "erhe/geometry/operation/truncate.hpp"
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/geometry/operation/geometry_operation.hpp"
+#include "erhe/geometry/operation/truncate.hpp"
+#include "erhe/geometry/types.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
+#include <fmt/core.h>
+#include <vector>
 
 namespace erhe::geometry::operation
 {
@@ -15,8 +18,8 @@ Truncate::Truncate(Geometry& source, Geometry& destination)
     ERHE_PROFILE_FUNCTION();
 
     // Trisect each old edge by generating two new points.
-    float t0 = 1.0f / 3.0f;
-    float t1 = 2.0f / 3.0f;
+    const float t0 = 1.0f / 3.0f;
+    const float t1 = 2.0f / 3.0f;
 
     make_polygon_centroids();
     make_edge_midpoints( {t0, t1} );

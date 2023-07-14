@@ -3,9 +3,10 @@
 #include "tools/tool.hpp"
 
 #include "erhe/imgui/imgui_window.hpp"
-#include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
+
+#include <vector>
 
 namespace erhe::imgui {
     class Imgui_windows;

@@ -1,19 +1,11 @@
 #include "tools/transform/subtool.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
-#include "scene/node_physics.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_view.hpp"
-#include "tools/tools.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
 #include "erhe/toolkit/verify.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 namespace editor
 {

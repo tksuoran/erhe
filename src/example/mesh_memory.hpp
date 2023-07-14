@@ -55,8 +55,8 @@ public:
     //erhe::graphics::Shader_resource       vertex_data_out;  // For SSBO write
 
 private:
-    [[nodiscard]] auto get_vertex_buffer_size() const -> int;
-    [[nodiscard]] auto get_index_buffer_size() const -> int;
+    [[nodiscard]] auto get_vertex_buffer_size() const -> std::size_t;
+    [[nodiscard]] auto get_index_buffer_size() const -> std::size_t;
 };
 
 } // namespace example

@@ -8,6 +8,7 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <sstream>
 

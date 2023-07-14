@@ -1,7 +1,6 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "scene/scene_view.hpp"
 
 #include "erhe/commands/command.hpp"
 #include "erhe/imgui/imgui_window.hpp"
@@ -11,7 +10,11 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
+namespace erhe::geometry {
+    class Geometry;
+}
 namespace erhe::imgui {
     class Imgui_windows;
 }

@@ -2,8 +2,6 @@
 
 #include "erhe/imgui/imgui_window.hpp"
 
-#include <memory>
-
 namespace erhe::imgui {
     class Imgui_windows;
 }

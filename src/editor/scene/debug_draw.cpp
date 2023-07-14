@@ -2,12 +2,9 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
-#include "scene/scene_root.hpp"
 
 #include "erhe/renderer/line_renderer.hpp"
 #include "erhe/renderer/text_renderer.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 

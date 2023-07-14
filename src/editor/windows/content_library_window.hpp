@@ -5,7 +5,6 @@
 #include "erhe/imgui/imgui_window.hpp"
 
 #include <memory>
-#include <thread>
 
 namespace erhe::imgui {
     class Imgui_windows;

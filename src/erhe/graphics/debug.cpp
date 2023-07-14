@@ -7,11 +7,6 @@
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 
-#include <gsl/gsl>
-
-#include <sstream>
-#include <thread>
-
 #if !defined(WIN32)
 #   include <signal.h>
 #endif

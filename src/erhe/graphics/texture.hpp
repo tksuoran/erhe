@@ -1,13 +1,10 @@
 #pragma once
 
-//#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/gl_objects.hpp"
 
 #include <gsl/span>
 
-#include <optional>
-#include <string_view>
-#include <vector>
+#include <string>
 
 namespace erhe::graphics
 {

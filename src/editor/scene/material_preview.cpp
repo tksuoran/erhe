@@ -1,23 +1,17 @@
 #include "scene/material_preview.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
+#include "renderers/renderpass.hpp"
 #include "renderers/viewport_config.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
-#include "tools/tools.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe/graphics/instance.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
-#include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -31,8 +25,6 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/format.h>
 

@@ -1,18 +1,13 @@
 #include "tools/grid.hpp"
 
 #include "editor_context.hpp"
-#include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
-#include "tools/tools.hpp"
 
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/renderer/line_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)

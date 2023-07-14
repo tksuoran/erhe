@@ -13,44 +13,31 @@
 #include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_windows.hpp"
-#include "tools/grid.hpp"
 #include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/transform/transform_tool.hpp"
-#include "windows/physics_window.hpp"
 #include "windows/viewport_config_window.hpp"
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_view.hpp"
-#endif
 
-#include "erhe/imgui/windows/log_window.hpp"
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_viewport.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
 #include "erhe/rendergraph/multisample_resolve.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/renderer/text_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
-#   include <imgui_internal.h>
 #endif
 
 namespace editor

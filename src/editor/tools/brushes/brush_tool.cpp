@@ -4,46 +4,27 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/render_context.hpp"
-#include "scene/collision_generator.hpp"
-#include "scene/material_library.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
 #include "tools/brushes/brush.hpp"
 #include "tools/grid.hpp"
-#include "tools/grid_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
-#include "windows/operations.hpp"
 
-#include "erhe/commands/input_arguments.hpp"
 #include "erhe/commands/command.hpp"
 #include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/text_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/operation/clone.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/primitive/enums.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/scene/scene_host.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -54,8 +35,6 @@
 #   include "erhe/xr/headset.hpp"
 #endif
 
-#include <glm/gtx/transform.hpp>
-
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
 #endif
@@ -63,7 +42,6 @@
 #include <glm/glm.hpp>
 
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <vector>
 

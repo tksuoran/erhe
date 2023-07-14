@@ -4,6 +4,8 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
+
+//#include <glm/gtx/color_space.hpp>
 #include "editor_message_bus.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
@@ -17,7 +19,6 @@
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 

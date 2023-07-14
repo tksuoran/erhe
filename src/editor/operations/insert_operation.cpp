@@ -2,14 +2,11 @@
 
 #include "editor_context.hpp"
 #include "operations/node_operation.hpp"
-#include "operations/operation_stack.hpp"
 
 #include "editor_log.hpp"
-#include "scene/node_physics.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/scene/scene.hpp"
-#include "erhe/scene/scene_host.hpp"
 
 #include <sstream>
 

@@ -2,8 +2,6 @@
 
 #include "erhe/imgui/imgui_viewport.hpp"
 
-#include <string_view>
-
 namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_window;

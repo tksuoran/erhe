@@ -4,12 +4,8 @@
 #include "renderers/programs.hpp"
 
 #include "erhe/configuration/configuration.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/graphics/texture.hpp"
 #include "erhe/scene/light.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>

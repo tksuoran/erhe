@@ -12,7 +12,6 @@
 #include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/renderer/line_renderer.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

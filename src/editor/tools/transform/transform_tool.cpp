@@ -1,13 +1,12 @@
 #include "tools/transform/transform_tool.hpp"
+#include "tools/transform/move_tool.hpp"
+#include "tools/transform/rotate_tool.hpp"
+#include "tools/transform/scale_tool.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
-#include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
 
@@ -17,40 +16,22 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/transform/handle_enums.hpp"
-#include "tools/transform/move_tool.hpp"
 #include "tools/transform/rotate_tool.hpp"
-#include "tools/transform/scale_tool.hpp"
-#include "windows/operations.hpp"
 
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/commands/commands.hpp"
-#include "erhe/commands/command_binding.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/text_renderer.hpp"
 #include "erhe/physics/irigid_body.hpp"
-#include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
-#include "erhe/scene/camera.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/message_bus/message_bus.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
-#include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/matrix_interpolation.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -60,8 +41,6 @@
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
-#   include <imgui_internal.h>
-#   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
 namespace editor

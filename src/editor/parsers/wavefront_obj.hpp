@@ -6,7 +6,6 @@ namespace erhe::geometry {
 
 #include <filesystem>
 #include <memory>
-#include <string>
 #include <vector>
 
 namespace editor {

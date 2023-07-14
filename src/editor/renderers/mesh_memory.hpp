@@ -1,15 +1,11 @@
 #pragma once
 
-#include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
+#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
-#include "erhe/primitive/enums.hpp"
-
-#include <memory>
 
 namespace erhe::graphics {
     class Buffer;
@@ -50,8 +46,8 @@ public:
     //erhe::graphics::Shader_resource       vertex_data_out;  // For SSBO write
 
 private:
-    [[nodiscard]] auto get_vertex_buffer_size() const -> int;
-    [[nodiscard]] auto get_index_buffer_size() const -> int;
+    [[nodiscard]] auto get_vertex_buffer_size() const -> std::size_t;
+    [[nodiscard]] auto get_index_buffer_size() const -> std::size_t;
 };
 
 } // namespace editor

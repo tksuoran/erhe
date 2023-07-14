@@ -9,20 +9,16 @@
 #include "windows/node_tree_window.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
-#include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/windows/log_window.hpp"
-#include "erhe/graphics/texture.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/light.hpp"
@@ -31,9 +27,6 @@
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
-
-#include <gsl/gsl>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

@@ -1,9 +1,7 @@
 #pragma once
 
 #include "renderable.hpp"
-#include "tools/tool.hpp"
 
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/xr/xr.hpp"
 
 #include <glm/glm.hpp>
@@ -21,6 +19,7 @@ namespace erhe::renderer {
 namespace editor
 {
 
+class Editor_context;
 class Editor_rendering;
 class Headset_view;
 

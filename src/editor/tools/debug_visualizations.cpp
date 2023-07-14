@@ -1,7 +1,6 @@
 #include "tools/debug_visualizations.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
@@ -9,20 +8,19 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/transform/transform_tool.hpp"
 
 #include "erhe/renderer/line_renderer.hpp"
 #include "erhe/renderer/text_renderer.hpp"
-#include "time.hpp"
 #include "erhe/imgui/imgui_window.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -30,7 +28,6 @@
 #include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

@@ -1,23 +1,16 @@
 #include "tools/material_paint_tool.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 
 #include "graphics/icon_set.hpp"
-#include "scene/material_library.hpp"
+#include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
-#include "windows/operations.hpp"
 
 #include "erhe/commands/commands.hpp"
-#include "erhe/commands/input_arguments.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"

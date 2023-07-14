@@ -1,14 +1,9 @@
 #include "parsers/json_polyhedron.hpp"
-#include "editor_log.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <glm/glm.hpp>
-#include <sstream>
 #include <string>
 
 namespace editor {

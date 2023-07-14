@@ -4,8 +4,6 @@
 
 #include <glm/glm.hpp>
 
-#include <string>
-#include <string_view>
 #include <optional>
 
 namespace editor

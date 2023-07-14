@@ -5,18 +5,14 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "rendertarget_mesh.hpp"
-#include "scene/viewport_window.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/hand_tracker.hpp"
 #   include "xr/headset_view.hpp"
 #   include "erhe/xr/headset.hpp"
 #   include "erhe/xr/xr_action.hpp"
 #endif
 
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/imgui/scoped_imgui_context.hpp"
 #include "erhe/graphics/framebuffer.hpp"

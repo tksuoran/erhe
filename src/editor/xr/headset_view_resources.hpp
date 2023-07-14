@@ -1,7 +1,5 @@
 #pragma once
 
-#include "erhe/rendergraph/rendergraph_node.hpp"
-
 #include <memory>
 
 namespace erhe::xr

@@ -2,8 +2,9 @@
 
 #include "erhe/scene/item.hpp"
 
+#include <cstdint>
 #include <memory>
-#include <string_view>
+#include <vector>
 
 namespace editor
 {

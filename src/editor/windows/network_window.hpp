@@ -5,8 +5,6 @@
 #include "erhe/net/client.hpp"
 #include "erhe/net/server.hpp"
 
-#include <memory>
-#include <mutex>
 #include <vector>
 
 namespace erhe::imgui {

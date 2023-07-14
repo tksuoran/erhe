@@ -8,7 +8,7 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/toolkit/viewport.hpp"
 
-#include <fmt/format.h>
+//#include <fmt/format.h>
 #include <glm/glm.hpp>
 
 #include <memory>

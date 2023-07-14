@@ -1,21 +1,20 @@
 #pragma once
 
-#include "editor_message.hpp"
-#include "operations/node_operation.hpp"
-#include "tools/transform/handle_enums.hpp"
-#include "tools/transform/handle_visualizations.hpp"
-#include "tools/selection_tool.hpp"
-#include "tools/tool.hpp"
-
-#include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/message_bus/message_bus.hpp"
-#include "erhe/physics/imotion_state.hpp"
-#include "erhe/primitive/primitive_geometry.hpp"
-#include "erhe/scene/node.hpp"
-
+//#include "editor_message.hpp"
+//#include "operations/node_operation.hpp"
+//#include "tools/transform/handle_enums.hpp"
+//#include "tools/transform/handle_visualizations.hpp"
+//#include "tools/selection_tool.hpp"
+//#include "tools/tool.hpp"
+//
+//#include "erhe/commands/command.hpp"
+//#include "erhe/imgui/imgui_window.hpp"
+//#include "erhe/message_bus/message_bus.hpp"
+//#include "erhe/physics/imotion_state.hpp"
+//#include "erhe/primitive/primitive_geometry.hpp"
+//#include "erhe/scene/node.hpp"
+//
 #include <glm/glm.hpp>
-#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 namespace erhe::imgui {

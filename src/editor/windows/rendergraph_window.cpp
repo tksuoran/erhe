@@ -6,8 +6,6 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
-#include "editor_scenes.hpp"
-#include "scene/scene_root.hpp"
 
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
@@ -17,14 +15,12 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/gl_helpers.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
 #endif
 
 #include <vector>
-#include <map>
 #include <string>
 #include <imgui.h>
 #include <imgui_internal.h>

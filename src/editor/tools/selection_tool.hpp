@@ -1,15 +1,11 @@
 #pragma once
 
-#include "editor_message.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe/commands/command.hpp"
 #include "erhe/imgui/imgui_window.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/node.hpp"
 
-#include <functional>
 #include <memory>
 #include <vector>
 

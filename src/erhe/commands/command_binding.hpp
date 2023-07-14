@@ -1,9 +1,5 @@
 #pragma once
 
-#include "erhe/commands/state.hpp"
-
-#include "erhe/toolkit/unique_id.hpp"
-
 namespace erhe::commands {
 
 class Command;

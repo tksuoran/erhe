@@ -1,5 +1,4 @@
 #include "operations/geometry_operations.hpp"
-#include "tools/selection_tool.hpp"
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/operation/ambo.hpp"

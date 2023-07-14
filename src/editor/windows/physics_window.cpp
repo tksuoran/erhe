@@ -1,31 +1,15 @@
 #include "windows/physics_window.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
-#include "editor_scenes.hpp"
-#include "renderers/mesh_memory.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/render_context.hpp"
-#include "scene/debug_draw.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
-#include "tools/selection_tool.hpp"
-#include "tools/tools.hpp"
 
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/iworld.hpp"
-#include "erhe/primitive/primitive.hpp"
-#include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
-
-#include <glm/ext/matrix_common.hpp>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

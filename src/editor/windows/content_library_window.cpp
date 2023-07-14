@@ -1,22 +1,17 @@
 #include "windows/content_library_window.hpp"
 
 #include "editor_scenes.hpp"
-#include "scene/material_library.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/brushes/brush.hpp"
 
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
-#   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
 namespace editor

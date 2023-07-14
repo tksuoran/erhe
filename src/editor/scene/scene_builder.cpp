@@ -1,54 +1,33 @@
 #include "scene/scene_builder.hpp"
 
-#include "editor_log.hpp"
+//#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
-#include "rendertarget_mesh.hpp"
-#include "rendertarget_imgui_viewport.hpp"
 #include "task_queue.hpp"
 
 #include "tools/brushes/brush.hpp"
-#include "tools/brushes/brush_tool.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/json_polyhedron.hpp"
 #include "parsers/wavefront_obj.hpp"
-#include "rendergraph/shadow_render_node.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/programs.hpp"
-#include "scene/debug_draw.hpp"
 #include "scene/material_library.hpp"
-#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
-#include "tools/fly_camera_tool.hpp"
-#include "tools/grid_tool.hpp"
-#include "windows/debug_view_window.hpp"
-#include "windows/imgui_viewport_window.hpp"
-#include "windows/physics_window.hpp"
 #include "windows/settings.hpp"
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_view.hpp"
-#endif
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/window_imgui_viewport.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/geometry/shapes/box.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/geometry/shapes/disc.hpp"
 #include "erhe/geometry/shapes/sphere.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/geometry/shapes/regular_polyhedron.hpp"
-#include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
@@ -68,7 +47,6 @@
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/gtx/quaternion.hpp>
-#include <glm/gtx/color_space.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 
 #define ERHE_ENABLE_SECOND_CAMERA 1

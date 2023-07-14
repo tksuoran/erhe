@@ -2,12 +2,10 @@
 
 #include "editor_context.hpp"
 #include "editor_rendering.hpp"
-#include "tools/tools.hpp"
 #include "xr/headset_view.hpp"
 
 #include "erhe/renderer/line_renderer.hpp"
 #include "renderers/render_context.hpp"
-#include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"

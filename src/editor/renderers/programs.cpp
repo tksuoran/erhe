@@ -1,19 +1,9 @@
 #include "renderers/programs.hpp"
-#include "renderers/mesh_memory.hpp"
 
-#include "editor_log.hpp"
-
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/gl/command_info.hpp"
 #include "erhe/graphics/shader_monitor.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/scene_renderer/camera_buffer.hpp"
-#include "erhe/scene_renderer/light_buffer.hpp"
-#include "erhe/scene_renderer/material_buffer.hpp"
-#include "erhe/scene_renderer/primitive_buffer.hpp"
 #include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 namespace editor {
 

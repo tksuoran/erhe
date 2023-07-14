@@ -6,13 +6,10 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/render_style.hpp"
-#include "renderers/viewport_config.hpp"
 #include "scene/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/graphics/debug.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/scene_renderer/forward_renderer.hpp"
 #include "erhe/toolkit/profile.hpp"
 

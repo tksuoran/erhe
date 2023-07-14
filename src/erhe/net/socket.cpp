@@ -312,7 +312,7 @@ auto Socket::send(const char* const data, const int length) -> bool
     }
 
     // Write header to send buffer
-    const Packet_header header{static_cast<size_t>(length)};
+    const Packet_header header{static_cast<uint32_t>(length)};
     const auto header_byte_write_count = m_send_buffer->write(reinterpret_cast<const uint8_t*>(&header), sizeof(Packet_header));
     ERHE_VERIFY(header_byte_write_count == sizeof(Packet_header));
 

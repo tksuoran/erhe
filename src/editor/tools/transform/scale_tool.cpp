@@ -3,7 +3,6 @@
 #include "editor_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
 #include "tools/tools.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"

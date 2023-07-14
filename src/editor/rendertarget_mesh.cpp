@@ -5,20 +5,10 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/render_context.hpp"
-#include "scene/content_library.hpp"
 #include "scene/node_raytrace.hpp"
-#include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
+#include "scene/scene_view.hpp"
 #include "windows/viewport_config_window.hpp"
 
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/hand_tracker.hpp"
-#   include "xr/headset_view.hpp"
-#endif
-
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/geometry/shapes/regular_polygon.hpp"
@@ -26,22 +16,11 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe/scene_renderer/forward_renderer.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/window.hpp"
-
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "erhe/xr/headset.hpp"
-#endif
-
-//#include <GLFW/glfw3.h> // TODO Fix dependency ?
 
 namespace editor
 {

@@ -3,10 +3,8 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "scene/content_library.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -19,12 +17,9 @@
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
-#include "windows/operations.hpp"
 
 #include "erhe/commands/commands.hpp"
 #include "erhe/configuration/configuration.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
@@ -32,11 +27,9 @@
 #include "erhe/geometry/shapes/disc.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
-#include "erhe/log/log_glm.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

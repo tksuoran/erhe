@@ -1,7 +1,6 @@
 #include "scene/scene_commands.hpp"
 
 #include "editor_context.hpp"
-#include "editor_scenes.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
@@ -17,7 +16,7 @@
 #include "erhe/commands/commands.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/scene/camera.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe/scene/light.hpp"
 
 namespace editor
 {

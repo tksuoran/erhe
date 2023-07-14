@@ -6,10 +6,6 @@
 
 #include "erhe/imgui/imgui_windows.hpp"
 
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
-#endif
-
 namespace editor
 {
 

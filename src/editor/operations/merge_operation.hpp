@@ -2,7 +2,6 @@
 
 #include "operations/ioperation.hpp"
 
-#include "erhe/physics/transform.hpp"
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"

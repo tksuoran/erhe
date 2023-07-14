@@ -3,22 +3,18 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
-#include "editor_scenes.hpp"
 #include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
-#include "windows/imgui_viewport_window.hpp"
 
 #include "erhe/commands/input_arguments.hpp"
 #include "erhe/commands/commands.hpp"
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/windows/log_window.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/window_event_handler.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)

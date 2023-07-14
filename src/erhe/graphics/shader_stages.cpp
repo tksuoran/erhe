@@ -4,7 +4,6 @@
 #include "erhe/gl/wrapper_functions.hpp"
 
 #include <fmt/format.h>
-#include <sstream>
 
 namespace erhe::graphics
 {

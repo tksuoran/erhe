@@ -5,9 +5,8 @@
 #include "renderers/mesh_memory.hpp"
 
 #include "scene/scene_root.hpp"
-#include "scene/viewport_window.hpp"
+#include "scene/scene_view.hpp"
 
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -15,7 +14,6 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/scene/light.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"

@@ -3,15 +3,11 @@
 #include "editor_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_view.hpp"
-#include "scene/viewport_window.hpp"
-#include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
 #include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

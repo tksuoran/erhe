@@ -1,29 +1,19 @@
 #pragma once
 
 #include "editor_message.hpp"
-#include "operations/node_operation.hpp"
-#include "tools/transform/move_tool.hpp"
-#include "tools/transform/rotate_tool.hpp"
-#include "tools/transform/scale_tool.hpp"
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/handle_visualizations.hpp"
 #include "tools/transform/rotation_inspector.hpp"
-#include "tools/selection_tool.hpp"
 #include "tools/tool.hpp"
 
 #include "erhe/commands/command.hpp"
 #include "erhe/imgui/imgui_window.hpp"
-#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/physics/imotion_state.hpp"
-#include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 #include <array>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -43,6 +33,7 @@ namespace editor
 {
 
 class Compound_operation;
+class Editor_message_bus;
 class Headset_view;
 class Node_physics;
 class Scene_root;

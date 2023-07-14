@@ -1,5 +1,4 @@
 #include "xr/headset_view_resources.hpp"
-#include "editor_rendering.hpp"
 #include "editor_log.hpp"
 #include "xr/headset_view.hpp"
 
@@ -7,8 +6,6 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/xr/headset.hpp"
 
 namespace editor
 {

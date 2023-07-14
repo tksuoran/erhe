@@ -3,17 +3,11 @@
 #include "tools/hover_tool.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
 #include "editor_message_bus.hpp"
-#include "editor_rendering.hpp"
 #include "renderers/render_context.hpp"
-#include "scene/material_library.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
 #include "tools/grid.hpp"
-#include "tools/grid_tool.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe/imgui/imgui_windows.hpp"
@@ -21,12 +15,8 @@
 #include "erhe/renderer/text_renderer.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/irigid_body.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #include <fmt/core.h>
 #include <fmt/format.h>

@@ -2,15 +2,12 @@
 
 #include "erhe/rendergraph/texture_rendergraph_node.hpp"
 #include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/imgui/windows/framebuffer_window.hpp"
 #include "erhe/imgui/imgui_window.hpp"
-#include "erhe/graphics/pipeline.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics/vertex_attribute_mappings.hpp"
+#include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/renderer/pipeline_renderpass.hpp"
 #include "erhe/toolkit/viewport.hpp"
 
-#include <memory>
+//#include <memory>
 
 namespace erhe::graphics {
     class Instance;

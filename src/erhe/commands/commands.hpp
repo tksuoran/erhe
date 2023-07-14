@@ -1,17 +1,14 @@
 #pragma once
 
-#include "erhe/commands/command_binding.hpp"
+#include "erhe/commands/state.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "erhe/commands/xr_boolean_binding.hpp"
 #endif
 
-#include "erhe/imgui/imgui_window.hpp"
 #include "erhe/toolkit/window_event_handler.hpp"
-#include "erhe/toolkit/unique_id.hpp"
 
 #include <glm/glm.hpp>
 
-#include <functional>
 #include <mutex>
 #include <optional>
 

@@ -4,8 +4,6 @@
 
 #include <gsl/span>
 
-#include <memory>
-
 namespace erhe::graphics {
     class Instance;
     class Scoped_gl_context;

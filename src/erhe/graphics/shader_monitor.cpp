@@ -4,7 +4,6 @@
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::graphics
 {

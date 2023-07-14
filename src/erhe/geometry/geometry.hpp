@@ -2,7 +2,6 @@
 
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/property_map_collection.hpp"
-#include "erhe/geometry/remapper.hpp"
 #include "erhe/geometry/types.hpp"
 
 #include <glm/glm.hpp>
@@ -10,7 +9,6 @@
 
 #include <functional>
 #include <optional>
-#include <set>
 #include <string_view>
 #include <vector>
 

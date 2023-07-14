@@ -1,10 +1,6 @@
 #include "time.hpp"
 
-#include "editor_context.hpp"
-#include "editor_log.hpp"
-
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 namespace editor {
 

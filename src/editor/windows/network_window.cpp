@@ -1,14 +1,12 @@
 #include "windows/network_window.hpp"
 
 #include "editor_context.hpp"
-#include "editor_settings.hpp"
 
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_window.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/net/client.hpp"
 #include "erhe/net/server.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>

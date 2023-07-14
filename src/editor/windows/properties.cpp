@@ -1,14 +1,9 @@
 #include "windows/properties.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
-#include "editor_scenes.hpp"
 #include "rendertarget_mesh.hpp"
-#include "operations/node_operation.hpp"
-#include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/frame_controller.hpp"
-#include "scene/material_library.hpp"
 #include "scene/material_preview.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -17,10 +12,8 @@
 
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/windows/log_window.hpp"
 
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/physics/iworld.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/material.hpp"
@@ -34,14 +27,8 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <glm/glm.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/euler_angles.hpp>
-#include <glm/gtc/constants.hpp>
-
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
-#   include <imgui_internal.h>
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 

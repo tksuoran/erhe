@@ -2,7 +2,6 @@
 
 #include "erhe/commands/state.hpp"
 
-#include <optional>
 #include <string>
 #include <string_view>
 

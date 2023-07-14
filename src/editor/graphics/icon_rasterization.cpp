@@ -1,14 +1,10 @@
 #include "graphics/icon_rasterization.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>

@@ -2,8 +2,6 @@
 
 #include "erhe/imgui/imgui_window.hpp"
 
-#include <glm/glm.hpp>
-
 #include <vector>
 
 namespace erhe::imgui {

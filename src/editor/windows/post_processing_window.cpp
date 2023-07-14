@@ -1,7 +1,6 @@
 #include "windows/post_processing_window.hpp"
 
 #include "editor_context.hpp"
-#include "tools/tools.hpp"
 
 #include "rendergraph/post_processing.hpp"
 #include "scene/viewport_window.hpp"
@@ -10,7 +9,6 @@
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

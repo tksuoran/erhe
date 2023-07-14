@@ -7,7 +7,7 @@ namespace editor {
 
 static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::map_write_bit};
 
-auto Mesh_memory::get_vertex_buffer_size() const -> int
+auto Mesh_memory::get_vertex_buffer_size() const -> std::size_t
 {
     int vertex_buffer_size{32}; // in megabytes
     auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");
@@ -15,7 +15,7 @@ auto Mesh_memory::get_vertex_buffer_size() const -> int
     return vertex_buffer_size * 1024 * 1024;
 }
 
-auto Mesh_memory::get_index_buffer_size() const -> int
+auto Mesh_memory::get_index_buffer_size() const -> std::size_t
 {
     int index_buffer_size{8}; // in megabytes
     auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");

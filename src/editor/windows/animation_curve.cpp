@@ -3,12 +3,9 @@
 #include "erhe/scene/animation.hpp"
 
 #include <fmt/format.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
+
 #include <imgui.h>
 #include <imgui_internal.h>
-
-#include <functional>
 
 namespace editor {
 

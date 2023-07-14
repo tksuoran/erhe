@@ -1,18 +1,15 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/geometry_log.hpp"
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
 
 #if defined(ERHE_USE_GEOMETRIC_TOOLS)
 #   include <Mathematics/PolyhedralMassProperties.h>
 #endif
 
 #include <cmath>
-#include <stdexcept>
 #include <sstream>
 
 namespace erhe::geometry

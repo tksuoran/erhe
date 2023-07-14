@@ -2,8 +2,6 @@
 #include "tools/tool.hpp"
 
 #include "editor_context.hpp"
-#include "editor_rendering.hpp"
-#include "editor_scenes.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -14,24 +12,18 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "tools/brushes/brush.hpp"
-#include "tools/brushes/brush_tool.hpp"
 #include "tools/brushes/create/create_preview_settings.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/imgui_window.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/shapes/box.hpp"
-#include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/geometry/shapes/sphere.hpp"
-#include "erhe/geometry/shapes/torus.hpp"
-#include "erhe/physics/icollision_shape.hpp"
+#include "erhe/scene/mesh.hpp"
+#include "erhe/scene/scene.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

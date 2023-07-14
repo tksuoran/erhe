@@ -1,7 +1,5 @@
 #pragma once
 
-#include "tools/tool.hpp"
-
 #include "erhe/imgui/imgui_window.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 
@@ -12,6 +10,7 @@ namespace erhe::imgui {
 namespace editor
 {
 
+class Editor_context;
 class Selection_tool;
 class Tools;
 class Viewport_windows;

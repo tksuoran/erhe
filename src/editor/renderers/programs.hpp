@@ -4,8 +4,6 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 
-#include <memory>
-
 namespace erhe::graphics {
     class Instance;
 }

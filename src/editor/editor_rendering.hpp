@@ -1,19 +1,12 @@
 #pragma once
 
-#include "graphics/icon_set.hpp"
 #include "renderers/composer.hpp"
-#include "renderers/id_renderer.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/renderpass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
-#include "rendergraph/post_processing.hpp"
 #include "erhe/commands/command.hpp"
-#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/renderer/text_renderer.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/scene_renderer/shadow_renderer.hpp"
 
 #include <glm/glm.hpp>

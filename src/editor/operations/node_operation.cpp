@@ -3,18 +3,12 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
-#include "operations/operation_stack.hpp"
-#include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/log/log_glm.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <fmt/format.h>
-
 #include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 #include <sstream>
 

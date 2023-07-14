@@ -3,11 +3,9 @@
 #include "tools/tool.hpp"
 
 #include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
-#include <functional>
 #include <memory>
 
 namespace erhe::imgui {
@@ -97,8 +95,6 @@ private:
     int m_active_command{c_command_paint};
 
     std::shared_ptr<erhe::primitive::Material> m_material;
-    //std::shared_ptr<erhe::scene::Mesh>         m_target_mesh;
-    //size_t                                     m_target_primitive{0};
 };
 
 } // namespace editor

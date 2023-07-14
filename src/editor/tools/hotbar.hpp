@@ -30,6 +30,7 @@ namespace erhe::scene {
 namespace editor
 {
 
+class Editor_context;
 class Editor_message_bus;
 class Hotbar;
 class Icon_set;

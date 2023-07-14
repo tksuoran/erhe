@@ -1,25 +1,19 @@
 #include "tools/brushes/create/create_cone.hpp"
 
-#include "tools/brushes/create/create.hpp"
 #include "tools/brushes/create/create_preview_settings.hpp"
 
 #include "renderers/render_context.hpp"
-#include "scene/scene_view.hpp"
 #include "tools/brushes/brush.hpp"
 
 #include "erhe/renderer/line_renderer.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/physics/icollision_shape.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
-#   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
-namespace editor                                                    
+namespace editor
 {
 
 void Create_cone::render_preview(

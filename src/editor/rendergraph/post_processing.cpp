@@ -4,24 +4,16 @@
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/shader_monitor.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
-#endif
 
 #include <algorithm>
 

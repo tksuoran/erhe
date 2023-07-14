@@ -1,14 +1,9 @@
 #pragma once
 
 #include "tools/tool.hpp"
-#include "scene/scene_view.hpp"
 
 #include "erhe/imgui/imgui_window.hpp"
 
-#include <glm/glm.hpp>
-
-#include <memory>
-#include <optional>
 
 namespace erhe::imgui {
     class Imgui_windows;

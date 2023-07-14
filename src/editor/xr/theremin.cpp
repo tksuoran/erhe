@@ -1,29 +1,15 @@
 #include "theremin.hpp"
 
 #include "editor_context.hpp"
-#include "editor_log.hpp"
-#include "editor_rendering.hpp"
-#include "renderers/mesh_memory.hpp"
-#include "scene/scene_root.hpp"
-#include "tools/grid_tool.hpp"
-#include "tools/tools.hpp"
 
 #include "graphics/gradients.hpp"
 #include "xr/hand_tracker.hpp"
 #include "xr/headset_view.hpp"
 
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/renderer/line_renderer.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
-#include <fmt/core.h>
-#include <fmt/format.h>
 #include <imgui.h>
-
-#include <string>
 
 namespace editor
 {

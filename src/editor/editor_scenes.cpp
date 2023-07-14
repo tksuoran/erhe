@@ -4,15 +4,10 @@
 #include "editor_settings.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/physics/iworld.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #include <imgui.h>
-#include <misc/cpp/imgui_stdlib.h>
 
 namespace editor
 {

@@ -1,6 +1,5 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/toolkit/verify.hpp"
 

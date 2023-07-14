@@ -7,9 +7,10 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/graphics_log.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/sampler.hpp"
 #include "erhe/toolkit/verify.hpp"
+
 #include <fmt/format.h>
+
 #include <algorithm>
 
 namespace erhe::graphics

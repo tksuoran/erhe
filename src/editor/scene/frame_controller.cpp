@@ -1,5 +1,4 @@
 #include "scene/frame_controller.hpp"
-#include "editor_log.hpp"
 
 #include "erhe/toolkit/simulation_variable.hpp"
 #include "erhe/scene/node.hpp"
@@ -8,7 +7,6 @@
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
 
 namespace editor
 {

@@ -10,7 +10,6 @@
 #include "erhe/commands/key_binding.hpp"
 #include "erhe/commands/mouse_button_binding.hpp"
 #include "erhe/commands/mouse_drag_binding.hpp"
-#include "erhe/commands/mouse_motion_binding.hpp"
 #include "erhe/commands/mouse_wheel_binding.hpp"
 #include "erhe/commands/update_binding.hpp"
 #include "erhe/toolkit/window_event_handler.hpp"

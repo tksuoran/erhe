@@ -15,22 +15,12 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/scene_renderer/program_interface.hpp"
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
-#include <algorithm>
 
 namespace editor
 {

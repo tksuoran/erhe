@@ -1,37 +1,13 @@
 #include "windows/imgui_viewport_window.hpp"
 
 #include "editor_log.hpp"
-#include "editor_rendering.hpp"
-#include "renderers/id_renderer.hpp"
-#include "renderers/programs.hpp"
-#include "renderers/render_context.hpp"
-#include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
-#include "tools/selection_tool.hpp"
-#include "tools/tools.hpp"
-#if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "xr/headset_view.hpp"
-#endif
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/commands/commands.hpp"
 #include "erhe/imgui/imgui_viewport.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/windows/log_window.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -42,23 +18,6 @@ namespace editor
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
-
-//Imgui_viewport_window::Imgui_viewport_window()
-//    : erhe::imgui::Imgui_window{
-//        "(default constructed Imgui_viewport_window)",
-//        "default_imgui_viewport"
-//    }
-//    , erhe::rendergraph::Texture_rendergraph_node{
-//        erhe::rendergraph::Texture_rendergraph_node_create_info{
-//            .name                 = std::string{"(default constructed Imgui_viewport_window)"},
-//            .input_key            = erhe::rendergraph::Rendergraph_node_key::viewport,
-//            .output_key           = erhe::rendergraph::Rendergraph_node_key::window,
-//            .color_format         = gl::Internal_format{0},
-//            .depth_stencil_format = gl::Internal_format{0}
-//        }
-//    }
-//{
-//}
 
 Imgui_viewport_window::Imgui_viewport_window(
     erhe::imgui::Imgui_renderer&            imgui_renderer,

@@ -1,10 +1,6 @@
 #include "rendergraph/basic_viewport_window.hpp"
 
 #include "scene/viewport_window.hpp"
-#include "scene/viewport_windows.hpp"
-
-#include "erhe/toolkit/window.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
 
 
 namespace editor

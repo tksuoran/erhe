@@ -1,10 +1,10 @@
 #include "erhe/geometry/operation/weld.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/geometry_log.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
 #include "erhe/geometry/operation/octree.hpp"
+#include "erhe/log/log_glm.hpp"
+#include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/norm.hpp>

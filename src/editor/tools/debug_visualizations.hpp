@@ -3,12 +3,9 @@
 #include "renderable.hpp"
 
 #include "erhe/imgui/imgui_window.hpp"
-#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
-#include <functional>
 #include <memory>
-#include <vector>
 
 namespace erhe::imgui {
     class Imgui_windows;

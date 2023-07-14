@@ -2,7 +2,6 @@
 
 #include "erhe/commands/commands.hpp"
 #include "erhe/commands/commands_log.hpp"
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/commands/command.hpp"
 #include "erhe/commands/input_arguments.hpp"
 #include "erhe/commands/key_binding.hpp"
@@ -17,12 +16,7 @@
 #   include "erhe/xr/xr_action.hpp"
 #endif
 #include "erhe/commands/update_binding.hpp"
-#include "erhe/toolkit/window.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-//#if defined(ERHE_GUI_LIBRARY_IMGUI)
-//#   include <imgui.h>
-//#endif
 
 namespace erhe::commands {
 

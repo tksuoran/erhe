@@ -10,7 +10,6 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/xr/headset.hpp"
 #include "erhe/xr/xr_action.hpp"
 
 namespace editor

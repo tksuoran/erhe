@@ -1,7 +1,5 @@
 #include "erhe/graphics/png_loader_mango_spng.hpp"
-#include "erhe/graphics/graphics_log.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/defer.hpp"
+#include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include "spng.h"
@@ -9,7 +7,6 @@
 #include <mango/mango.hpp>
 
 #include <filesystem>
-#include <fstream>
 
 namespace erhe::graphics
 {

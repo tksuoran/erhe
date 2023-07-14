@@ -3,7 +3,6 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "operations/merge_operation.hpp"
-#include "operations/operation_stack.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
@@ -14,7 +13,7 @@
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/defer.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <memory>
 #include <sstream>

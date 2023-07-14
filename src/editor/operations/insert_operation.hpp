@@ -2,8 +2,6 @@
 
 #include "operations/ioperation.hpp"
 
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/verify.hpp"
 
