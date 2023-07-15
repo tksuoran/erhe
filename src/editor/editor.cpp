@@ -17,6 +17,7 @@
 #include "renderers/programs.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_viewport.hpp"
+#include "scene/asset_browser.hpp"
 #include "scene/debug_draw.hpp"
 #include "scene/material_preview.hpp"
 #include "scene/scene_builder.hpp"
@@ -158,6 +159,7 @@ public:
 
         , m_imgui_windows         {m_imgui_renderer,    &m_context_window,   m_rendergraph}
         , m_editor_scenes         {m_editor_context,    m_time}
+        , m_asset_browser         {m_imgui_renderer,    m_imgui_windows, m_editor_context}
         , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_scenes}
         , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
@@ -423,6 +425,7 @@ public:
     erhe::imgui::Imgui_windows              m_imgui_windows;
     Editor_scenes                           m_editor_scenes;
 
+    Asset_browser                           m_asset_browser;
     Content_library_window                  m_content_library_window;
     Icon_set                                m_icon_set;
     Post_processing                         m_post_processing;

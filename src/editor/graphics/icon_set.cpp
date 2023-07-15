@@ -44,6 +44,8 @@ Icon_set::Icon_set(
     icons.camera            = load(icon_directory / "camera.svg");
     icons.directional_light = load(icon_directory / "directional_light.svg");
     icons.drag              = load(icon_directory / "drag.svg");
+    icons.file              = load(icon_directory / "file.svg");
+    icons.folder            = load(icon_directory / "filebrowser.svg");
     icons.grid              = load(icon_directory / "grid.svg");
     icons.hud               = load(icon_directory / "hud.svg");
     icons.material          = load(icon_directory / "material.svg");

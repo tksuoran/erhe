@@ -34,6 +34,8 @@ public:
     glm::vec2 camera           {};
     glm::vec2 directional_light{};
     glm::vec2 drag             {};
+    glm::vec2 file             {};
+    glm::vec2 folder           {};
     glm::vec2 grid             {};
     glm::vec2 hud              {};
     glm::vec2 material         {};
