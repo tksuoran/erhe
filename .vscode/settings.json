@@ -122,19 +122,5 @@
         "execution": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled",
-    "C_Cpp.dimInactiveRegions": false,
-    "workbench.colorCustomizations": {
-        "editorCursor.foreground":    "#ffaa00",
-        "editorCursor.background":    "#ff8800",
-        "editor.selectionBackground": "#0000cc",
-        "editor.selectionForeground": "#ffffff",
-        "activityBar.background":     "#132053",
-        "activityBar.foreground":     "#ffffff",
-        "activityBar.activeBorder":   "#4c9fdf",
-        "titleBar.activeBackground":  "#223344",
-        "titleBar.activeForeground":  "#FEFBF7",
-        "editor.background":          "#1a1f1f",
-        "menu.background":            "#333355",
-        "sideBar.background":         "#202038"
-    }
+    "C_Cpp.dimInactiveRegions": false
 }
