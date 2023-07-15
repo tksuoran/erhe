@@ -121,6 +121,10 @@
         "ranges": "cpp",
         "execution": "cpp"
     },
-    "C_Cpp.errorSquiggles": "Disabled",
-    "C_Cpp.dimInactiveRegions": false
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground":   "#402292",
+        "titleBar.activeForeground":   "#ffffff",
+        "titleBar.inactiveBackground": "#402292",
+        "titleBar.inativeForeground":  "#cccccc"
+    }
 }
