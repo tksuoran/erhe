@@ -9,7 +9,6 @@ namespace erhe::scene
 using glm::vec3;
 using glm::mat4;
 
-
 Trs_transform::Trs_transform(const Trs_transform& t) = default;
 
 auto Trs_transform::operator=(const Trs_transform& t) -> Trs_transform& = default;

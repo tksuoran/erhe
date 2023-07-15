@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/graphics/pipeline.hpp"
-#include "erhe/primitive/enums.hpp"
 
 #include <functional>
 

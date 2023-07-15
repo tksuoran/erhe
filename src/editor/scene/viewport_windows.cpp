@@ -8,9 +8,6 @@
 #include "editor_rendering.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
-//#include "renderers/id_renderer.hpp"
-//#include "renderers/programs.hpp"
-//#include "renderers/render_context.hpp"
 #include "rendergraph/basic_viewport_window.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -41,6 +38,7 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/window.hpp"
+#include "erhe/toolkit/xxhash.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

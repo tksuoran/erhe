@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
 #include <glm/glm.hpp>

@@ -1,16 +1,16 @@
 #pragma once
 
-#include <openxr/openxr_reflection.h>
+#include <openxr/openxr.h>
 
-#include "erhe/gl/gl.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/log/log.hpp"
+
+#include <spdlog/spdlog.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <cstdarg>
+#include <string>
 
 namespace erhe::xr {
 

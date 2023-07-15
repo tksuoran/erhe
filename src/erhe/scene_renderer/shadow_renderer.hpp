@@ -6,12 +6,9 @@
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/renderer/draw_indirect_buffer.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/toolkit/viewport.hpp"
 #include "erhe/scene_renderer/light_buffer.hpp"
 #include "erhe/scene_renderer/primitive_buffer.hpp"
-
-#include <gsl/gsl>
 
 #include <initializer_list>
 

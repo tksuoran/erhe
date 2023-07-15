@@ -1,6 +1,5 @@
 #pragma once
 
-//#include "tools/brushes/brush.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/toolkit/verify.hpp"

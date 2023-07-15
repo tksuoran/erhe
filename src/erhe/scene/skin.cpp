@@ -1,7 +1,6 @@
 #include "erhe/scene/skin.hpp"
 
 #include "erhe/scene/scene_host.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 
 namespace erhe::scene

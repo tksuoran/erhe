@@ -6,13 +6,7 @@
 #include "erhe/renderer/renderer_log.hpp"
 
 #include "erhe/gl/draw_indirect.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/projection.hpp"
-#include "erhe/scene/transform.hpp"
-#include "erhe/toolkit/viewport.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 

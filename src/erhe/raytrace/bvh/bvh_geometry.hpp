@@ -7,15 +7,12 @@
 #endif
 
 #include "erhe/raytrace/igeometry.hpp"
-#include "erhe/toolkit/math_util.hpp"
 
 #include <glm/glm.hpp>
 
 #include <bvh/v2/bvh.h>
-#include <bvh/v2/vec.h>
 #include <bvh/v2/tri.h>
 
-#include <optional>
 #include <string>
 #include <vector>
 

@@ -1,7 +1,6 @@
 #include "erhe/renderer/text_renderer.hpp"
 #include "erhe/renderer/renderer_log.hpp"
 #include "erhe/configuration/configuration.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/shader_monitor.hpp"
 
 #include "erhe/gl/enum_bit_mask_operators.hpp"
@@ -15,19 +14,11 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/ui/font.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
-#include <iomanip>
-#include <cstdarg>
 
 namespace erhe::renderer
 {

@@ -2,22 +2,15 @@
 
 #include "erhe/rendergraph/rendergraph.hpp"
 #include "erhe/rendergraph/rendergraph_log.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui/imgui.h>
-#endif
 
 #include <algorithm>
 

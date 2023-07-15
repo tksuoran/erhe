@@ -3,7 +3,7 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include <fmt/format.h>
+
 #include <sstream>
 
 namespace erhe::renderer

@@ -4,6 +4,7 @@
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
 #include "erhe/graphics/shader_resource.hpp"
+#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/buffer_sink.hpp"

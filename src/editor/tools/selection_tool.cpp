@@ -18,6 +18,7 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe/toolkit/xxhash.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

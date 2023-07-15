@@ -5,7 +5,6 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
-#include <vector>
 
 namespace erhe::graphics {
     class Framebuffer;

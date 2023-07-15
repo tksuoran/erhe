@@ -7,8 +7,6 @@
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <glm/gtx/matrix_decompose.hpp>
-
 #include <fmt/format.h>
 
 #include <sstream>

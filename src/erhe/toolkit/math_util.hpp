@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <optional>
-#include <tuple>
 #include <vector>
 
 namespace erhe::toolkit

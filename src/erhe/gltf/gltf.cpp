@@ -6,15 +6,11 @@
 
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/geometry/geometry.hpp"
-#include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/png_loader.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/material.hpp"
 
 #include "erhe/scene/animation.hpp"
@@ -23,11 +19,9 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/light.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/scene/skin.hpp"
 
 #include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 extern "C" {
@@ -35,16 +29,10 @@ extern "C" {
 }
 
 #include <glm/glm.hpp>
-#include <gsl/gsl>
 
 #include <algorithm>
-#include <cctype>
-#include <fstream>
 #include <limits>
-#include <map>
 #include <string>
-#include <unordered_set>
-
 #include <vector>
 
 namespace erhe::gltf {

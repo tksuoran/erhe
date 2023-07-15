@@ -1,7 +1,6 @@
 #include "erhe/graphics/state/rasterization_state.hpp"
 #include "erhe/gl/enum_base_zero_functions.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #define DISABLE_CACHE 1
 

@@ -2,8 +2,6 @@
 
 #include "erhe/xr/xr_action.hpp"
 
-//#include <openxr/openxr.h>
-
 #ifdef _WIN32
 #   include <unknwn.h>
 #   define XR_USE_PLATFORM_WIN32      1
@@ -13,16 +11,12 @@
 #   define XR_USE_PLATFORM_LINUX      1
 #endif
 
-//#define XR_USE_GRAPHICS_API_VULKAN 1
 #define XR_USE_GRAPHICS_API_OPENGL 1
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
 #include "etl/vector.h"
 
-#include <memory>
-#include <mutex>
-#include <optional>
 #include <string_view>
 #include <vector>
 

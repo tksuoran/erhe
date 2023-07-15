@@ -8,10 +8,8 @@
 
 #include "erhe/raytrace/bvh/bvh_geometry.hpp"
 #include "erhe/raytrace/bvh/bvh_instance.hpp"
-#include "erhe/raytrace/bvh/bvh_scene.hpp"
 #include "erhe/raytrace/bvh/glm_conversions.hpp"
 #include "erhe/raytrace/ibuffer.hpp"
-#include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 
@@ -24,13 +22,10 @@
 #include <bvh/v2/executor.h>
 #include <bvh/v2/node.h>
 #include <bvh/v2/ray.h>
-#include <bvh/v2/sphere.h>
 #include <bvh/v2/stack.h>
 #include <bvh/v2/thread_pool.h>
 
 #include <fstream>
-#include <iostream>
-#include <set>
 
 namespace erhe::raytrace
 {

@@ -5,11 +5,9 @@
 #include "erhe/graphics/shader_resource.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
-#include "erhe/scene/transform.hpp"
 #include "erhe/toolkit/viewport.hpp"
 
 #include <memory>
-#include <optional>
 
 namespace erhe::graphics
 {

@@ -23,6 +23,7 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/xxhash.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 namespace editor

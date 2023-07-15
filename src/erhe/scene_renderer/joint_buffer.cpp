@@ -3,11 +3,10 @@
 #include "erhe/scene_renderer/joint_buffer.hpp"
 
 #include "erhe/configuration/configuration.hpp"
-#include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/skin.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/scene_renderer/scene_renderer_log.hpp"
+#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 

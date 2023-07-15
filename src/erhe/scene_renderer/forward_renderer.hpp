@@ -1,12 +1,9 @@
 #pragma once
 
-#include "erhe/graphics/pipeline.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/renderer/draw_indirect_buffer.hpp"
 #include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/scene/node.hpp"
 #include "erhe/scene_renderer/camera_buffer.hpp"
 #include "erhe/scene_renderer/joint_buffer.hpp"
 #include "erhe/scene_renderer/light_buffer.hpp"
@@ -15,10 +12,7 @@
 
 #include <glm/glm.hpp>
 
-#include <functional>
-#include <initializer_list>
 #include <memory>
-#include <optional>
 #include <vector>
 
 namespace erhe::graphics

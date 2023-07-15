@@ -1,5 +1,4 @@
 #include "erhe/xr/headset.hpp"
-#include "erhe/toolkit/verify.hpp"
 #include "erhe/xr/xr_instance.hpp"
 #include "erhe/xr/xr_session.hpp"
 #include "erhe/toolkit/profile.hpp"

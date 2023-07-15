@@ -7,18 +7,10 @@
 #include "erhe/physics/imotion_state.hpp"
 #include "erhe/physics/physics_log.hpp"
 #include "erhe/physics/transform.hpp"
-#include "erhe/scene/node.hpp"
 
 #include <Jolt/Jolt.h>
-#include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Collision/Shape/ConvexShape.h>
-
-#include <fmt/format.h>
-
-#include <glm/glm.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
 
 namespace erhe::physics
 {

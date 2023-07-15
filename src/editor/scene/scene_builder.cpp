@@ -1,6 +1,5 @@
 #include "scene/scene_builder.hpp"
 
-//#include "editor_log.hpp"
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "task_queue.hpp"
@@ -45,6 +44,8 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
+
+#include <fmt/format.h>
 
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/rotate_vector.hpp>

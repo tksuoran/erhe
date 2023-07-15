@@ -5,9 +5,6 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 
-#include <glm/glm.hpp>
-
-#include <memory>
 
 namespace erhe::physics
 {

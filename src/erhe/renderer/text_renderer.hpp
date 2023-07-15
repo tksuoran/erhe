@@ -7,10 +7,6 @@
 #include "erhe/graphics/pipeline.hpp"
 #include "erhe/graphics/sampler.hpp"
 #include "erhe/graphics/shader_resource.hpp"
-#include "erhe/graphics/state/color_blend_state.hpp"
-#include "erhe/graphics/state/depth_stencil_state.hpp"
-#include "erhe/graphics/state/input_assembly_state.hpp"
-#include "erhe/graphics/state/rasterization_state.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
@@ -24,7 +20,6 @@
 #include <deque>
 #include <memory>
 #include <string_view>
-#include <vector>
 
 namespace erhe::graphics
 {

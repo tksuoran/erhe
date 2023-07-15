@@ -1,9 +1,7 @@
 #pragma once
 
 #include "erhe/graphics/shader_resource.hpp"
-#include "erhe/renderer/enums.hpp"
 #include "erhe/renderer/multi_buffer.hpp"
-#include "erhe/scene_renderer/primitive_buffer.hpp"
 
 #include <vector>
 

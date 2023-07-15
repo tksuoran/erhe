@@ -1,9 +1,6 @@
 #include "erhe/scene/mesh.hpp"
 
-#include "erhe/primitive/primitive_geometry.hpp"
-#include "erhe/geometry/geometry.hpp"
 #include "erhe/scene/scene_host.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 
 namespace erhe::scene

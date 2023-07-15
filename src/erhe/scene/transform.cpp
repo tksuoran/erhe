@@ -1,8 +1,5 @@
 #include "erhe/scene/transform.hpp"
-//#include "erhe/graphics/instance.hpp"
 #include "erhe/toolkit/math_util.hpp"
-
-#include <glm/gtx/matrix_decompose.hpp>
 
 namespace erhe::scene
 {

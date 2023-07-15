@@ -2,7 +2,6 @@
 
 #include "erhe/rendergraph/rendergraph_node.hpp"
 
-#include <memory>
 #include <string_view>
 
 namespace erhe::rendergraph {

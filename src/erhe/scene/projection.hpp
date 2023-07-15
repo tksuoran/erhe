@@ -5,8 +5,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
-#include <cstdint>
-
 
 namespace erhe::scene
 {

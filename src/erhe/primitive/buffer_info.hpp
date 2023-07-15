@@ -3,8 +3,6 @@
 #include "erhe/gl/wrapper_enums.hpp"
 #include "erhe/primitive/enums.hpp"
 
-#include <memory>
-
 namespace erhe::graphics
 {
     class Vertex_format;

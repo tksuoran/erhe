@@ -2,7 +2,6 @@
 
 #include "renderers/render_style.hpp"
 
-//#include "erhe/primitive/enums.hpp"
 #include "erhe/renderer/enums.hpp"
 
 #include <glm/glm.hpp>

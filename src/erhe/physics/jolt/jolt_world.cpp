@@ -1,17 +1,14 @@
 #include "erhe/physics/jolt/jolt_world.hpp"
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/jolt/jolt_constraint.hpp"
-#include "erhe/physics/jolt/jolt_debug_renderer.hpp"
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
 #include "erhe/physics/idebug_draw.hpp"
 #include "erhe/physics/physics_log.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/profile.hpp"
 
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
-#include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/Body.h>
 
 namespace erhe::physics

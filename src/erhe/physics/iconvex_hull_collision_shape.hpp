@@ -2,8 +2,6 @@
 
 #include <glm/glm.hpp>
 
-#include <memory>
-
 namespace erhe::physics
 {
 

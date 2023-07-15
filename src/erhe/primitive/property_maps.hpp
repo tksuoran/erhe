@@ -4,15 +4,12 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/geometry/property_map_collection.hpp"
-#include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <glm/glm.hpp>
 
 #include <cstddef>
-#include <memory>
 #include <string>
 
 namespace erhe::geometry

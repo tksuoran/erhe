@@ -5,8 +5,6 @@
 #include "erhe/scene/scene.hpp" // for Light_layer..
 #include "erhe/scene/transform.hpp"
 
-#include <gsl/gsl>
-
 #include <memory>
 #include <string>
 

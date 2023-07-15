@@ -7,17 +7,13 @@
 #include "erhe/raytrace/bvh/bvh_scene.hpp"
 #include "erhe/raytrace/bvh/bvh_geometry.hpp"
 #include "erhe/raytrace/bvh/bvh_instance.hpp"
-#include "erhe/raytrace/bvh/glm_conversions.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/toolkit/profile.hpp"
 
-#include <bvh/v2/default_builder.h>
-
 namespace erhe::raytrace
 {
-
 
 auto IScene::create(const std::string_view debug_label) -> IScene*
 {

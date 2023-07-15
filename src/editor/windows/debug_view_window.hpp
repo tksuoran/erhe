@@ -7,8 +7,6 @@
 #include "erhe/renderer/pipeline_renderpass.hpp"
 #include "erhe/toolkit/viewport.hpp"
 
-//#include <memory>
-
 namespace erhe::graphics {
     class Instance;
 }

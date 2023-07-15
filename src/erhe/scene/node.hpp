@@ -2,12 +2,8 @@
 
 #include "erhe/scene/item.hpp"
 #include "erhe/scene/trs_transform.hpp"
-#include "erhe/toolkit/unique_id.hpp"
-
-#include <glm/gtc/quaternion.hpp>
 
 #include <cstdint>
-#include <functional>
 #include <optional>
 #include <string>
 #include <vector>

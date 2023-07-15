@@ -2,7 +2,6 @@
 
 #include "erhe/rendergraph/resource_routing.hpp"
 #include "erhe/toolkit/viewport.hpp"
-#include "erhe/toolkit/xxhash.hpp"
 
 #include <glm/glm.hpp>
 

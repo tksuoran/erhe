@@ -1,5 +1,4 @@
 #include "erhe/physics/jolt/jolt_constraint.hpp"
-#include "erhe/physics/jolt/jolt_rigid_body.hpp"
 
 namespace erhe::physics
 {

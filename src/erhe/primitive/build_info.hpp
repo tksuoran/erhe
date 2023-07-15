@@ -1,7 +1,12 @@
 #pragma once
 
 #include "erhe/primitive/buffer_info.hpp"
-#include "erhe/primitive/format_info.hpp"
+
+#include <glm/glm.hpp>
+
+namespace erhe::graphics {
+    class Vertex_attribute_mappings;
+}
 
 namespace erhe::primitive
 {

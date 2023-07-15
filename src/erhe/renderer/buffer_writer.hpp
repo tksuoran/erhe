@@ -1,7 +1,5 @@
 #pragma once
 
-#include "erhe/gl/wrapper_enums.hpp"
-
 #include <gsl/span>
 
 #include <cstddef>

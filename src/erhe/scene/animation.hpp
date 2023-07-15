@@ -1,11 +1,9 @@
 #pragma once
 
 #include "erhe/scene/node.hpp"
-#include "erhe/scene/transform.hpp"
 
 #include <glm/glm.hpp>
 
-#include <array>
 #include <string>
 
 namespace erhe::scene

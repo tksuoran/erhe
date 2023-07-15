@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/log/log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>

@@ -1,8 +1,6 @@
 #pragma once
 
-#include "erhe/message_bus/message_bus.hpp"
 #include "erhe/scene/item.hpp"
-#include "erhe/scene/scene_message.hpp"
 #include "erhe/scene/scene_message_bus.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 

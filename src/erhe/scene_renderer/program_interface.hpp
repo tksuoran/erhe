@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/graphics/fragment_outputs.hpp"
-#include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/scene_renderer/camera_buffer.hpp"
@@ -9,8 +8,6 @@
 #include "erhe/scene_renderer/light_buffer.hpp"
 #include "erhe/scene_renderer/material_buffer.hpp"
 #include "erhe/scene_renderer/primitive_buffer.hpp"
-
-#include <memory>
 
 namespace erhe::graphics
 {

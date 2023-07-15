@@ -2,16 +2,11 @@
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
-#include "erhe/geometry/property_map_collection.hpp"
-#include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
 #include "erhe/primitive/buffer_writer.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/build_info.hpp"
 #include "erhe/primitive/index_range.hpp"
-#include "erhe/primitive/primitive_log.hpp"
-#include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/property_maps.hpp"
 #include "erhe/primitive/vertex_attribute_info.hpp"
@@ -19,8 +14,6 @@
 #include <glm/glm.hpp>
 
 #include <cstddef>
-#include <memory>
-#include <string>
 
 namespace erhe::graphics
 {

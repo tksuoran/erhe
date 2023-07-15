@@ -4,8 +4,6 @@
 
 #include <cstddef>
 #include <limits>
-#include <memory>
-#include <string>
 
 namespace erhe::graphics
 {

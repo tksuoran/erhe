@@ -4,12 +4,9 @@
 
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/light.hpp"
-#include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/scene_renderer/scene_renderer_log.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"

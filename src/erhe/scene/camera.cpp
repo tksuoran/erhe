@@ -1,12 +1,7 @@
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/scene/scene_host.hpp"
-#include "erhe/scene/scene_log.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#include <gsl/gsl>
 
 namespace erhe::scene
 {

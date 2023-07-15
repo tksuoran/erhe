@@ -3,10 +3,7 @@
 #include "types.hpp"
 
 #include <cstdint>
-//#include <string>
 #include "etl/string.h"
-
-//#include <gsl/assert>
 
 namespace hextiles
 {

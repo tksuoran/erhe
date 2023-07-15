@@ -1,11 +1,7 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 #include <glm/gtc/constants.hpp>
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/gtx/norm.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include "Geometry/Sphere.h"
@@ -13,8 +9,6 @@
 #include <glm/gtx/pca.hpp>
 
 #include <algorithm>
-#include <array>
-#include <stdexcept>
 
 namespace erhe::toolkit
 {

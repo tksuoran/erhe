@@ -3,7 +3,6 @@
 #include "erhe/renderer/buffer_writer.hpp"
 #include "erhe/graphics/buffer.hpp"
 
-#include <memory>
 #include <vector>
 
 namespace erhe::renderer

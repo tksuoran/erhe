@@ -10,24 +10,12 @@
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
 #include "erhe/gl/gl_helpers.hpp"
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
-#include <glm/gtc/type_precision.hpp>
-#include <gsl/span>
-
-#include <cassert>
-#include <map>
-#include <stdexcept>
 
 namespace erhe::primitive
 {

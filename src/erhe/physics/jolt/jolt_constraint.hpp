@@ -1,19 +1,12 @@
 #pragma once
 
 #include "erhe/physics/iconstraint.hpp"
-#include "erhe/log/log_glm.hpp"
 #include "erhe/physics/jolt/jolt_rigid_body.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
-#include "erhe/physics/physics_log.hpp"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Constraints/Constraint.h>
-#include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
-
-#include <glm/glm.hpp>
-
-#include <memory>
 
 namespace erhe::physics
 {

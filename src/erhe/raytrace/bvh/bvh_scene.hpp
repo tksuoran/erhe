@@ -9,7 +9,6 @@
 #include "erhe/raytrace/iscene.hpp"
 
 #include <bvh/v2/bvh.h>
-#include <bvh/v2/sphere.h>
 
 #include <string>
 #include <vector>

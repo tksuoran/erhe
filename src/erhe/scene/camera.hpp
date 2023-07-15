@@ -5,11 +5,8 @@
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
 
-#include <glm/glm.hpp>
-
-#include <array>
+#include <cstdint>
 #include <string>
-
 
 namespace erhe::scene
 {

@@ -3,7 +3,6 @@
 #include "erhe/rendergraph/rendergraph.hpp"
 #include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/rendergraph/rendergraph_log.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/toolkit/verify.hpp"
 

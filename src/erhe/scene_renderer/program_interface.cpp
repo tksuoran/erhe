@@ -1,20 +1,15 @@
 #include "erhe/scene_renderer/program_interface.hpp"
 
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/command_info.hpp"
 #include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/sampler.hpp"
-#include "erhe/graphics/shader_monitor.hpp"
-#include "erhe/graphics/vertex_format.hpp"
 #include "erhe/scene_renderer/scene_renderer_log.hpp"
 #include "erhe/toolkit/file.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/window.hpp"
 
 namespace erhe::graphics
 {
-class Vertex_attribute;
+    class Vertex_attribute;
 }
 
 namespace erhe::scene_renderer

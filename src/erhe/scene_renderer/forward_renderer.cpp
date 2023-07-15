@@ -1,31 +1,18 @@
 #include "erhe/scene_renderer/forward_renderer.hpp"
 
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/draw_indirect.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/debug.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/shader_resource.hpp"
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/primitive/primitive.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
-#include "erhe/scene/skin.hpp"
-#include "erhe/scene/scene.hpp"
 #include "erhe/scene_renderer/scene_renderer_log.hpp"
 #include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 #include <functional>
 

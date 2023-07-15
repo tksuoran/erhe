@@ -4,15 +4,9 @@
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene_host.hpp"
 #include "erhe/scene/scene_log.hpp"
-#include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/verify.hpp"
-
-#include <gsl/gsl>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 
 namespace erhe::scene
 {

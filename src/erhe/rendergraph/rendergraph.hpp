@@ -1,8 +1,5 @@
 #pragma once
 
-#include "erhe/rendergraph/resource_routing.hpp"
-
-#include <memory>
 #include <mutex>
 #include <vector>
 

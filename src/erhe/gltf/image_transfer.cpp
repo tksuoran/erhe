@@ -1,11 +1,9 @@
 #include "image_transfer.hpp"
 
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::gltf

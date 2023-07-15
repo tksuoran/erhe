@@ -2,7 +2,6 @@
 
 #include "erhe/physics/icollision_shape.hpp"
 #include "erhe/physics/jolt/glm_conversions.hpp"
-#include "erhe/physics/physics_log.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <Jolt/Jolt.h>
@@ -11,12 +10,8 @@
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
-#include <Jolt/Physics/Collision/Shape/TaperedCapsuleShape.h>
 
 #include <glm/glm.hpp>
-
-#include <memory>
-#include <optional>
 
 namespace erhe::physics
 {

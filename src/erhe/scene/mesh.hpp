@@ -5,8 +5,6 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
-#include <glm/glm.hpp>
-
 #include <vector>
 
 namespace erhe::geometry

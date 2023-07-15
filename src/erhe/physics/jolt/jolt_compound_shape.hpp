@@ -5,11 +5,6 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 
-#include <glm/glm.hpp>
-
-#include <memory>
-#include <vector>
-
 namespace erhe::physics
 {
 

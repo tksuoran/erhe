@@ -21,7 +21,6 @@
 #endif
 
 #include <fmt/format.h>
-//#include <gsl/gsl>
 
 namespace editor
 {

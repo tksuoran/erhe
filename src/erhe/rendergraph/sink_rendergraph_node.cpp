@@ -1,6 +1,4 @@
 #include "erhe/rendergraph/sink_rendergraph_node.hpp"
-#include "erhe/rendergraph/rendergraph_log.hpp"
-#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::rendergraph {
 

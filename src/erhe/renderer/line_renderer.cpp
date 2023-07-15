@@ -2,12 +2,10 @@
 
 #include "erhe/renderer/renderer_log.hpp"
 
-//#include "erhe/configuration/configuration.hpp"
 #include "erhe/gl/enum_bit_mask_operators.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/graphics/buffer.hpp"
 #include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
 #include "erhe/graphics/instance.hpp"
 #include "erhe/graphics/opengl_state_tracker.hpp"
 #include "erhe/graphics/shader_monitor.hpp"
@@ -15,21 +13,14 @@
 #include "erhe/graphics/shader_stages.hpp"
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/windows/log_window.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/toolkit/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/norm.hpp>
 
-#include <iomanip>
-#include <cstdarg>
 
 namespace erhe::renderer
 {

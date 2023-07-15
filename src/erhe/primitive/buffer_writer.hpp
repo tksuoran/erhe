@@ -4,7 +4,6 @@
 #include "erhe/primitive/vertex_attribute_info.hpp"
 
 #include <glm/glm.hpp>
-#include <gsl/pointers>
 #include <gsl/span>
 
 #include <vector>

@@ -2,10 +2,6 @@
 
 #include "erhe/primitive/buffer_range.hpp"
 
-#include <gsl/span>
-
-#include <memory>
-#include <mutex>
 #include <vector>
 
 namespace erhe::graphics

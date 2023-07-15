@@ -1,6 +1,5 @@
 #include "erhe/primitive/buffer_writer.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
-#include "erhe/primitive/primitive_log.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/geometry/geometry.hpp"

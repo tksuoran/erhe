@@ -3,9 +3,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include <memory>
-#include <stdexcept>
-
 namespace erhe::scene
 {
 

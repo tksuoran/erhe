@@ -3,10 +3,7 @@
 #include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 
-#include <fmt/format.h>
-
 #include <string>
-#include <deque>
 
 namespace erhe::graphics
 {

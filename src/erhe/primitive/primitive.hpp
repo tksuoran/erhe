@@ -1,6 +1,5 @@
 #pragma once
 
-#include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/enums.hpp"
 
