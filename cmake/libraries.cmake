@@ -153,10 +153,8 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     harfbuzz
-    #GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-    #GIT_TAG        main
-    GIT_REPOSITORY https://github.com/tksuoran/harfbuzz.git
-    GIT_TAG        origin/cmake-fix
+    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
+    GIT_TAG        main
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

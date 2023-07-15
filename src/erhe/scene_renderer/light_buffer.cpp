@@ -14,10 +14,19 @@
 namespace erhe::scene_renderer
 {
 
+[[nodiscard]] auto get_max_light_count() -> std::size_t
+{
+    int max_light_count{1};
+    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
+    ini->get("max_light_count", max_light_count);
+    return max_light_count;
+}
+
 Light_interface::Light_interface(
     erhe::graphics::Instance& graphics_instance
 )
-    : light_block{
+    : max_light_count{get_max_light_count()}
+    , light_block{
         graphics_instance,
         "light_block",
         1,
@@ -46,14 +55,12 @@ Light_interface::Light_interface(
             .direction_and_outer_spot_cos = light_struct.add_vec4("direction_and_outer_spot_cos")->offset_in_parent(),
             .radiance_and_range           = light_struct.add_vec4("radiance_and_range"          )->offset_in_parent(),
         },
+        .light_struct = light_block.add_struct("lights", &light_struct, max_light_count)->offset_in_parent()
     }
     , light_index_offset{
         light_control_block.add_uint("light_index")->offset_in_parent()
     }
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
-    ini->get("max_light_count", max_light_count);
-    offsets.light_struct = light_block.add_struct("lights", &light_struct, max_light_count)->offset_in_parent();
 }
 
 Light_buffer::Light_buffer(

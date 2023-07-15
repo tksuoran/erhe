@@ -1,5 +1,3 @@
-#pragma once
-
 #include "erhe/primitive/format_info.hpp"
 
 namespace erhe::primitive

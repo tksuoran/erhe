@@ -90,7 +90,7 @@ Viewport_window::Viewport_window(
     );
 }
 
-Viewport_window::~Viewport_window()
+Viewport_window::~Viewport_window() noexcept
 {
     m_context.viewport_windows->erase(this);
 }

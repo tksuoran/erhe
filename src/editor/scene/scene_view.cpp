@@ -51,7 +51,7 @@ Scene_view::Scene_view(Editor_context& context, Viewport_config viewport_config)
 {
 }
 
-Scene_view::~Scene_view() = default;
+Scene_view::~Scene_view() noexcept = default;
 
 void Scene_view::set_hover(
     const std::size_t  slot,

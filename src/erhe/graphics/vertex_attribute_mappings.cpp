@@ -22,8 +22,8 @@ Vertex_attribute_mappings::Vertex_attribute_mappings(
     erhe::graphics::Instance&                       instance,
     std::initializer_list<Vertex_attribute_mapping> mappings
 )
-    : m_instance{instance}
-    , mappings  {mappings}
+    : mappings  {mappings}
+    , m_instance{instance}
 {
 }
 

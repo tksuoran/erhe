@@ -3,6 +3,7 @@
 #include "erhe/primitive/buffer_range.hpp"
 
 #include <vector>
+#include <cstdint>
 
 namespace erhe::graphics
 {

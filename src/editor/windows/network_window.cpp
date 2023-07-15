@@ -20,8 +20,8 @@ Network_window::Network_window(
     Editor_context&              editor_context,
     Time&                        time
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network"}
-    , Update_time_base         {time}
+    : Update_time_base         {time}
+    , erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Network", "network"}
     , m_context                {editor_context}
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "network");

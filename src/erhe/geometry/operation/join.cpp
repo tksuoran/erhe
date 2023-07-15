@@ -7,6 +7,8 @@
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 
+#include <sstream>
+
 namespace erhe::geometry::operation
 {
 

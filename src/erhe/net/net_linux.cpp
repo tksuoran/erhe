@@ -292,6 +292,10 @@ auto get_socket_option(
 
 auto get_net_hints(const int flags, const int family, const int socktype, const int protocol) -> addrinfo
 {
+    static_cast<void>(flags);
+    static_cast<void>(family);
+    static_cast<void>(socktype);
+    static_cast<void>(protocol);
     return addrinfo{
         .ai_flags     = 0,
         .ai_family    = AF_INET,

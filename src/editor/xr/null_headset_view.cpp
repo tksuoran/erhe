@@ -13,7 +13,7 @@ Headset_view::Headset_view(
     Mesh_memory&                           ,
     Scene_builder&                         
 )
-    : Scene_view{editor_context}
+    : Scene_view{editor_context, Viewport_config{}}
 {
 }
 

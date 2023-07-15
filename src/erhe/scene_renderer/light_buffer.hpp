@@ -54,12 +54,12 @@ public:
         erhe::graphics::Instance& graphics_instance
     );
 
+    std::size_t                     max_light_count;
     erhe::graphics::Shader_resource light_block;
     erhe::graphics::Shader_resource light_control_block;
     erhe::graphics::Shader_resource light_struct;
     Light_block                     offsets;
     std::size_t                     light_index_offset;
-    std::size_t                     max_light_count;
 };
 
 // Selects camera for which the shadow frustums are fitted
@@ -70,8 +70,8 @@ public:
     Light_projections(
         const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
         const erhe::scene::Camera*                                  view_camera,
-        ////const erhe::toolkit::Viewport&                            view_camera_viewport,
-        const erhe::toolkit::Viewport&                                light_texture_viewport,
+        ////const erhe::toolkit::Viewport&                          view_camera_viewport,
+        const erhe::toolkit::Viewport&                              light_texture_viewport,
         const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
         uint64_t                                                    shadow_map_texture_handle
     );

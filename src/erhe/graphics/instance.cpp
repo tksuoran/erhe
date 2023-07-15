@@ -95,8 +95,8 @@ auto get_string(gl::String_name string_name) -> std::string
 
 Instance::Instance(erhe::toolkit::Context_window& context_window)
     : shader_monitor  {*this}
-    , m_context_window{context_window}
     , context_provider{*this, opengl_state_tracker}
+    , m_context_window{context_window}
 {
     std::vector<std::string> extensions;
     const auto gl_vendor      = (get_string)(gl::String_name::vendor);

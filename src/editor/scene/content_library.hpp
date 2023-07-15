@@ -6,6 +6,7 @@
 
 #include <imgui/imgui.h>
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <vector>

@@ -1097,6 +1097,9 @@ auto Shader_resource::add(const Vertex_attribute& attribute) -> Shader_resource*
             }
             break;
         }
+        default: {
+            ERHE_FATAL("Attribute type not supported");
+        }
     }
 
     return nullptr;

@@ -289,7 +289,8 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
                 Transform_entry{
                     .node                    = node,
                     .parent_from_node_before = node->parent_from_node_transform(),
-                    .world_from_node_before  = node->world_from_node_transform()
+                    .world_from_node_before  = node->world_from_node_transform(),
+                    .original_motion_mode    = {}
                 }
             );
         } else {

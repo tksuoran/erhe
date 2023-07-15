@@ -32,13 +32,14 @@ class Frame_controller
 public:
     Frame_controller();
 
-    // Implements Node_attachment
     [[nodiscard]] static auto static_type     () -> uint64_t;
     [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto get_type () const -> uint64_t override;
-    [[nodiscard]] auto type_name() const -> const char* override;
-    void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node);
-    void handle_node_transform_update() override;
+
+    // Implements Node_attachment
+    [[nodiscard]] auto get_type () const -> uint64_t                                            override;
+    [[nodiscard]] auto type_name() const -> const char*                                         override;
+    void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;
+    void handle_node_transform_update()                                                         override;
 
     // Public API
     void reset                  ();

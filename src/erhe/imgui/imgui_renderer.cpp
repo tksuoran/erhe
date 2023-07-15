@@ -444,12 +444,6 @@ Imgui_program_interface::Imgui_program_interface(
             }
         }
     }
-    , vertex_buffer        {graphics_instance, "ImGui Vertex Buffer"}
-    , index_buffer         {graphics_instance, "ImGui Index Buffer"}
-    , draw_parameter_buffer{graphics_instance, "ImGui Draw Parameter Buffer"}
-    , draw_indirect_buffer {graphics_instance, "ImGui Draw Indirect Buffer"}
-    , pipeline             {"ImGui Pipeline"}
-//    ERHE_VERIFY(prototype.is_valid());
     , default_uniform_block{get_shader_default_uniform_block(graphics_instance, s_texture_unit_count)}
     , shader_stages{
         erhe::graphics::Shader_stages_prototype{
@@ -473,6 +467,11 @@ Imgui_program_interface::Imgui_program_interface(
             }
         }
     }
+    , vertex_buffer        {graphics_instance, "ImGui Vertex Buffer"}
+    , index_buffer         {graphics_instance, "ImGui Index Buffer"}
+    , draw_parameter_buffer{graphics_instance, "ImGui Draw Parameter Buffer"}
+    , draw_indirect_buffer {graphics_instance, "ImGui Draw Indirect Buffer"}
+    , pipeline             {"ImGui Pipeline"}
 {
     vertex_buffer.allocate(gl::Buffer_target::array_buffer, s_max_vertex_count * vertex_format.stride());
     index_buffer.allocate(gl::Buffer_target::element_array_buffer, s_max_index_count * sizeof(uint16_t));

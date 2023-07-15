@@ -69,7 +69,7 @@ class Brush_data
 {
 public:
     Editor_context&                                  context;
-    std::string                                      name;
+    std::string                                      name                       {};
     erhe::primitive::Build_info                      build_info;
     erhe::primitive::Normal_style                    normal_style               {erhe::primitive::Normal_style::corner_normals};
     std::shared_ptr<erhe::geometry::Geometry>        geometry                   {};

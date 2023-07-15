@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <sstream>
 
 namespace erhe::geometry::operation
 {

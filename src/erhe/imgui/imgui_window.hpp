@@ -66,12 +66,12 @@ public:
 protected:
     Imgui_renderer&   m_imgui_renderer;
 
+    std::string       m_title;
     Imgui_viewport*   m_imgui_viewport{nullptr};
     bool              m_is_visible    {true};
     bool              m_is_hovered    {false};
     bool              m_show_in_menu  {true};
     const char*       m_ini_label     {nullptr};
-    std::string       m_title;
     float             m_min_size[2]{120.0f, 120.0f};
     float             m_max_size[2]{99999.0f, 99999.0f};
 };

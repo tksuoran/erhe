@@ -1291,7 +1291,7 @@ private:
         }
 
         template <typename T>
-        [[nodiscard]] void put_point_attribute(
+        void put_point_attribute(
             const cgltf_attribute*   attribute,
             erhe::geometry::Point_id point_id,
             T                        value[4]
@@ -1311,14 +1311,14 @@ private:
                     break;
                 }
                 default: {
-                    log_gltf->warn("Unsupported glTF attribute type {}", attribute->type);
+                    log_gltf->warn("Unsupported glTF attribute type {}", c_str(attribute->type));
                     break;
                 }
             }
         }
 
         template <typename T>
-        [[nodiscard]] void put_corner_attribute(
+        void put_corner_attribute(
             const cgltf_attribute*    attribute,
             erhe::geometry::Corner_id corner_id,
             T                         value[4]
@@ -1344,7 +1344,7 @@ private:
                     break;
                 }
                 default: {
-                    log_gltf->warn("Unsupported glTF attribute type {}", attribute->type);
+                    log_gltf->warn("Unsupported glTF attribute type {}", c_str(attribute->type));
                     break;
                 }
             }

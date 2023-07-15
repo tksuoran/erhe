@@ -37,7 +37,6 @@ namespace erhe::toolkit {
 namespace editor
 {
 
-//class Controller_visualization;
 class Editor_context;
 class Editor_message_bus;
 class Editor_rendering;

@@ -2,6 +2,7 @@
 
 #include "concurrentqueue.h"
 
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>

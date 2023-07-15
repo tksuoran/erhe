@@ -7,6 +7,7 @@
 #include <fmt/format.h>
 
 #include <cmath>
+#include <sstream>
 
 namespace erhe::geometry
 {

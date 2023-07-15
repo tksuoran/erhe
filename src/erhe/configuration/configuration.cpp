@@ -193,6 +193,7 @@ public:
         section = ini.get(section_name);
     }
     ~Ini_impl() noexcept override = default;
+    Ini_impl& operator=(const Ini_impl&) = default;
     void get(const char* key, std::size_t& destination) const override
     {
         ini_get(section, key, destination);
