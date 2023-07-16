@@ -133,10 +133,10 @@ private:
 class Reloadable_shader_stages
 {
 public:
-    Reloadable_shader_stages(
+    explicit Reloadable_shader_stages(
         const std::string& non_functional_name
     );
-    Reloadable_shader_stages(
+    explicit Reloadable_shader_stages(
         Shader_stages_prototype&& prototype
     );
     Reloadable_shader_stages(

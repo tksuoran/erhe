@@ -951,7 +951,7 @@ private:
     class Primitive_to_geometry
     {
     public:
-        Primitive_to_geometry(const cgltf_primitive* primitive)
+        explicit Primitive_to_geometry(const cgltf_primitive* primitive)
             : primitive{primitive}
             , geometry {std::make_shared<erhe::geometry::Geometry>()}
         {

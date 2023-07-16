@@ -12,8 +12,8 @@ public:
     Trs_transform         () = default;
     explicit Trs_transform(const glm::mat4 m);
     Trs_transform         (const glm::mat4 matrix, const glm::mat4 inverse_matrix);
-    Trs_transform         (const glm::vec3 translation);
-    Trs_transform         (const glm::quat rotation);
+    explicit Trs_transform(const glm::vec3 translation);
+    explicit Trs_transform(const glm::quat rotation);
     Trs_transform         (const glm::vec3 translation, glm::quat rotation);
     Trs_transform         (const glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
     Trs_transform         (const glm::vec3 translation, glm::quat rotation, glm::vec3 scale, glm::vec3 skew);
