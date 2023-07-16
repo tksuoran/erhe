@@ -7,6 +7,7 @@
 #include "erhe/graphics/gpu_timer.hpp"
 #include "erhe/renderer/draw_indirect_buffer.hpp"
 #include "erhe/toolkit/viewport.hpp"
+#include "erhe/scene_renderer/joint_buffer.hpp"
 #include "erhe/scene_renderer/light_buffer.hpp"
 #include "erhe/scene_renderer/primitive_buffer.hpp"
 
@@ -76,6 +77,7 @@ public:
             >
         >&                                                         mesh_spans;
         const gsl::span<const std::shared_ptr<erhe::scene::Light>> lights;
+        const gsl::span<const std::shared_ptr<erhe::scene::Skin>>& skins{};
         Light_projections&                                         light_projections;
     };
 
@@ -103,6 +105,7 @@ private:
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Vertex_input_state       m_vertex_input;
     erhe::renderer::Draw_indirect_buffer     m_draw_indirect_buffers;
+    Joint_buffer                             m_joint_buffers;
     Light_buffer                             m_light_buffers;
     Primitive_buffer                         m_primitive_buffers;
     erhe::graphics::Gpu_timer                m_gpu_timer;

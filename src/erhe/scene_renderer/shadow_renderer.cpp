@@ -57,6 +57,7 @@ Shadow_renderer::Shadow_renderer(
         }
     }
     , m_draw_indirect_buffers{graphics_instance}
+    , m_joint_buffers        {graphics_instance, program_interface.joint_interface}
     , m_light_buffers        {graphics_instance, program_interface.light_interface}
     , m_primitive_buffers    {graphics_instance, program_interface.primitive_interface}
     , m_gpu_timer            {"Shadow_renderer"}
@@ -140,6 +141,7 @@ void Shadow_renderer::next_frame()
         return;
     }
 
+    m_joint_buffers        .next_frame();
     m_light_buffers        .next_frame();
     m_draw_indirect_buffers.next_frame();
     m_primitive_buffers    .next_frame();
@@ -200,6 +202,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u
     };
+
+    const auto joint_range = m_joint_buffers.update(
+        glm::uvec4{0, 0, 0, 0},
+        {},
+        parameters.skins
+    );
+    m_joint_buffers.bind(joint_range);
 
     const auto light_range = m_light_buffers.update(
         lights,
