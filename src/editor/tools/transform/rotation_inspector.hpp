@@ -83,7 +83,11 @@ public:
     void update_axis_angle_from_quaternion             ();
     void update_matrix_and_quaternion_from_euler_angles();
 
-    void imgui(erhe::imgui::Value_edit_state& value_edit_state, glm::quat rotation);
+    void imgui(
+        erhe::imgui::Value_edit_state& value_edit_state,
+        glm::quat                      rotation,
+        bool                           matches_gizmo
+    );
 
     [[nodiscard]] auto get_matrix     () -> glm::mat4;
     [[nodiscard]] auto get_quaternion () -> glm::quat;
@@ -92,7 +96,7 @@ public:
     [[nodiscard]] auto get_angle      () const -> float;
 
 private:
-    [[nodiscard]] auto get_label_color    (std::size_t i, bool text) const -> uint32_t;
+    [[nodiscard]] auto get_label_color    (std::size_t i, bool text, bool matches_gizmo) const -> uint32_t;
     [[nodiscard]] auto get_euler_axis     (std::size_t i) const -> std::size_t;
     [[nodiscard]] auto gimbal_lock_warning() const -> bool;
 

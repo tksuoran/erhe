@@ -763,8 +763,15 @@ void Transform_tool::transform_properties()
     }
 
     Value_edit_state rotate_edit_state;
+    const auto first_parent = first_node->parent().lock();
+    const bool euler_matches_gizmo = !multiselect &&
+        (
+            !use_world_mode ||
+            !first_parent ||
+            first_parent == first_node->get_scene()->get_root_node()
+        );
     if (ImGui::TreeNodeEx("Rotation", ImGuiTreeNodeFlags_DefaultOpen)) {
-        m_rotation.imgui(rotate_edit_state, rotation);
+        m_rotation.imgui(rotate_edit_state, rotation, euler_matches_gizmo);
         ImGui::TreePop();
     }
     if (rotate_edit_state.value_changed) {

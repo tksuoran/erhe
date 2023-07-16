@@ -179,7 +179,8 @@ void Rotation_inspector::update_matrix_and_quaternion_from_euler_angles()
 
 void Rotation_inspector::imgui(
     erhe::imgui::Value_edit_state& value_edit_state,
-    const glm::quat                rotation
+    const glm::quat                rotation,
+    const bool                     matches_gizmo
 )
 {
     if (!m_active) {
@@ -229,8 +230,8 @@ void Rotation_inspector::imgui(
                     &m_quaternion.w,
                     -1.0f, // TODO
                      1.0f, // TODO
-                    get_label_color(3, true),
-                    get_label_color(3, false),
+                    get_label_color(3, true,  matches_gizmo),
+                    get_label_color(3, false, matches_gizmo),
                     "W",
                     "##R.qw"
                 )
@@ -240,8 +241,8 @@ void Rotation_inspector::imgui(
                     &m_quaternion.x,
                     -1.0f, // TODO
                      1.0f, // TODO
-                    get_label_color(0, true),
-                    get_label_color(0, false),
+                    get_label_color(0, true,  matches_gizmo),
+                    get_label_color(0, false, matches_gizmo),
                     "X",
                     "##R.qx"
                 )
@@ -251,8 +252,8 @@ void Rotation_inspector::imgui(
                     &m_quaternion.y,
                     -1.0f, // TODO
                      1.0f, // TODO
-                    get_label_color(1, true),
-                    get_label_color(1, false),
+                    get_label_color(1, true,  matches_gizmo),
+                    get_label_color(1, false, matches_gizmo),
                     "Y",
                     "##R.qy"
                 )
@@ -262,8 +263,8 @@ void Rotation_inspector::imgui(
                     &m_quaternion.z,
                     -1.0f, // TODO
                      1.0f, // TODO
-                    get_label_color(2, true),
-                    get_label_color(2, false),
+                    get_label_color(2, true,  matches_gizmo),
+                    get_label_color(2, false, matches_gizmo),
                     "Z",
                     "##R.qz"
                 )
@@ -289,8 +290,8 @@ void Rotation_inspector::imgui(
                     m_euler_angles[0],
                     10.0f * -glm::pi<float>(),
                     10.0f *  glm::pi<float>(),
-                    get_label_color(a, true),
-                    get_label_color(a, false),
+                    get_label_color(a, true,  matches_gizmo),
+                    get_label_color(a, false, matches_gizmo),
                     axis_labels[a],
                     "##R.0"
                 )
@@ -301,8 +302,8 @@ void Rotation_inspector::imgui(
                     m_euler_angles[1],
                     10.0f * -glm::half_pi<float>(),
                     10.0f *  glm::half_pi<float>(),
-                    get_label_color(b, true),
-                    get_label_color(b, false),
+                    get_label_color(b, true,  matches_gizmo),
+                    get_label_color(b, false, matches_gizmo),
                     axis_labels[b],
                     "##R.1"
                 )
@@ -314,8 +315,8 @@ void Rotation_inspector::imgui(
                     m_euler_angles[2],
                     10.0f * -glm::pi<float>(),
                     10.0f *  glm::pi<float>(),
-                    get_label_color(c, true),
-                    get_label_color(c, false),
+                    get_label_color(c, true,  matches_gizmo),
+                    get_label_color(c, false, matches_gizmo),
                     axis_labels[c],
                     "##R.2"
                 )
@@ -334,8 +335,8 @@ void Rotation_inspector::imgui(
                     m_angle,
                     10.0f * -glm::pi<float>(),
                     10.0f *  glm::pi<float>(),
-                    get_label_color(3, true),
-                    get_label_color(3, false),
+                    get_label_color(3, true,  false),
+                    get_label_color(3, false, false),
                     "a",
                     "##R.aa"
                 )
@@ -346,8 +347,8 @@ void Rotation_inspector::imgui(
                     &m_axis.x,
                     -1.0f, // TODO
                      1.0f, // TODO
-                    get_label_color(0, true),
-                    get_label_color(0, false),
+                    get_label_color(0, true,  false),
+                    get_label_color(0, false, false),
                     "X",
                     "##R.ax"
                 )
@@ -357,8 +358,8 @@ void Rotation_inspector::imgui(
                     &m_axis.y,
                     -1.0f, // TODO
                      1.0f, // TODO
-                    get_label_color(1, true),
-                    get_label_color(1, false),
+                    get_label_color(1, true,  false),
+                    get_label_color(1, false, false),
                     "Y",
                     "##R.ay"
                 )
@@ -368,8 +369,8 @@ void Rotation_inspector::imgui(
                     &m_axis.z,
                     -1.0f, // TODO
                      1.0f, // TODO
-                    get_label_color(2, true),
-                    get_label_color(2, false),
+                    get_label_color(2, true,  false),
+                    get_label_color(2, false, false),
                     "Z",
                     "##R.sz"
                 )
@@ -412,8 +413,15 @@ auto Rotation_inspector::get_euler_axis(const std::size_t i) const -> std::size_
     }
 }
 
-auto Rotation_inspector::get_label_color(const std::size_t i, const bool text) const -> uint32_t
+auto Rotation_inspector::get_label_color(
+    const std::size_t i,
+    const bool        text,
+    const bool        matches_gizmo
+) const -> uint32_t
 {
+    if (!matches_gizmo) {
+        return text ? 0xffccccccu : 0xff222222u;
+    }
     switch (i) {
         case 0:  return text ? 0xff8888ffu : 0xff222266u; // X
         case 1:  return text ? 0xff88ff88u : 0xff226622u; // Y
