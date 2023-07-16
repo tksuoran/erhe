@@ -125,7 +125,8 @@ void Asset_browser::imgui(Asset_node& node)
             m_context.icon_set->get_small_rasterization().icon(icons.file, file_color);
         }
         ImGui::SameLine();
-        ImGui::TextUnformatted(node.path.filename().string().c_str());
+        bool selected = m_popup_node == &node;
+        ImGui::Selectable(node.path.filename().string().c_str(), selected);
         if (is_gltf) {
             ImGuiID popup_id = ImGui::GetID("asset_browser_node_popup");
             if (
