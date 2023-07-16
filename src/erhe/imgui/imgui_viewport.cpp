@@ -144,7 +144,6 @@ Imgui_viewport::Imgui_viewport(
     ImFontAtlas*                    font_atlas
 )
     : Rendergraph_node{rendergraph, fmt::format("Viewport {}", name)}
-    , m_name          {name}
     , m_imgui_ini_path{imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
     , m_imgui_windows {imgui_windows}
 {

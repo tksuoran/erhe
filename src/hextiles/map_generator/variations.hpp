@@ -27,8 +27,8 @@ public:
     ) const -> Terrain_variation;
     void assign                  (std::vector<Terrain_variation>&& terrains);
 
-    float                          m_min_value;
-    float                          m_max_value;
+    float                          m_min_value{0.0f};
+    float                          m_max_value{0.0f};
     std::vector<float>             m_values;
     std::vector<Terrain_variation> m_terrains;
 };

@@ -27,7 +27,7 @@ public:
     int    stack_end;
  
     std::map<std::pair<int, int>, Point_id> points;
-    Point_id center_point_id;
+    Point_id                                center_point_id{0};
 
     Property_map<Point_id  , vec3>* point_locations  {nullptr};
     Property_map<Point_id  , vec3>* point_normals    {nullptr};
@@ -37,7 +37,7 @@ public:
     Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
     Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
 
-    auto get_point(int slice, int stack) -> Point_id
+    auto get_point(const int slice, const int stack) -> Point_id
     {
         return points[std::make_pair(slice, stack)];
     }

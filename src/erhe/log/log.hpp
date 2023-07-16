@@ -32,7 +32,7 @@ public:
         std::string               timestamp;
         std::string               message;
         unsigned int              repeat_count{0};
-        spdlog::level::level_enum level;
+        spdlog::level::level_enum level       {2/*spdlog::level::level_enum::SPDLOG_LEVEL_INFO*/};
     };
 
     store_log_sink();

@@ -485,7 +485,7 @@ private:
         auto erhe_animation = std::make_shared<erhe::scene::Animation>(animation_name);
         m_context.animations.push_back(erhe_animation);
         erhe_animation->samplers.resize(animation->samplers_count);
-        for (cgltf_size sampler_index = 0; animation_index < animation->samplers_count; ++sampler_index) {
+        for (cgltf_size sampler_index = 0; sampler_index < animation->samplers_count; ++sampler_index) {
             cgltf_animation_sampler& sampler = animation->samplers[sampler_index];
             auto& erhe_sampler = erhe_animation->samplers[sampler_index];
             if (sampler.input == nullptr) {

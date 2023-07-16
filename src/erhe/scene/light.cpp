@@ -16,9 +16,7 @@ Light::Light(const std::string_view name)
 {
 }
 
-Light::~Light() noexcept
-{
-}
+Light::~Light() noexcept = default;
 
 auto Light::static_type() -> uint64_t
 {

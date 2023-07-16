@@ -86,8 +86,8 @@ auto Polygon::compute_edge_midpoint(
 ) const -> glm::vec3
 {
     if (corner_count >= 2) {
-        const auto      polygon_corner_id_a = first_polygon_corner_id + (corner_offset     % corner_count);
-        const auto      polygon_corner_id_b = first_polygon_corner_id + (corner_offset + 1 % corner_count);
+        const auto      polygon_corner_id_a = first_polygon_corner_id + (corner_offset       % corner_count);
+        const auto      polygon_corner_id_b = first_polygon_corner_id + ((corner_offset + 1) % corner_count);
         const Corner_id corner0_id          = geometry.polygon_corners[polygon_corner_id_a];
         const Corner_id corner1_id          = geometry.polygon_corners[polygon_corner_id_b];
         const Corner&   corner0             = geometry.corners[corner0_id];

@@ -89,7 +89,7 @@ private:
 
     XrHandEXT                                                          m_hand;
     std::array<erhe::xr::Hand_tracking_joint, XR_HAND_JOINT_COUNT_EXT> m_joints;
-    bool                                                               m_is_active;
+    bool                                                               m_is_active{false};
     std::array<ImVec4, Finger_name::count>                             m_color;
 };
 

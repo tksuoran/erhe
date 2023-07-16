@@ -65,14 +65,14 @@ constexpr terrain_t Terrain_bridges[] = {
 
 struct Terrain_group
 {
-    bool      enabled    {true};
-    int       shape_group{0};
-    terrain_t base_terrain_type;
-    terrain_t link_first[3];
-    terrain_t link_last [3];
-    int       link_group[3];
-    int       promoted;
-    int       demoted;
+    bool      enabled          {true};
+    int       shape_group      {0};
+    terrain_t base_terrain_type{0};
+    terrain_t link_first       [3];
+    terrain_t link_last        [3];
+    int       link_group       [3];
+    int       promoted         {0};
+    int       demoted          {0};
 };
 
 struct Terrain_replacement_rule

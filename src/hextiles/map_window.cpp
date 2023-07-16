@@ -158,11 +158,8 @@ Map_window::Map_window(
     Tile_renderer&                 tile_renderer
 )
     : Framebuffer_window    {graphics_instance, imgui_renderer, imgui_windows, "Map", "map"}
-    , m_graphics_instance   {graphics_instance}
-    , m_imgui_renderer      {imgui_renderer}
     , m_text_renderer       {text_renderer}
     , m_tile_renderer       {tile_renderer}
-
     , m_free_zoom_command   {commands, *this}
     , m_mouse_scroll_command{commands, *this}
     , m_scroll_left_command {commands, *this, -4.0f,  0.0f }

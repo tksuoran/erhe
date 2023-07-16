@@ -39,9 +39,9 @@ Menu_window::Menu_window(
     , m_tile_renderer  {tile_renderer}
     , m_map_window     {map_window}
     , m_game           {commands, imgui_renderer, imgui_windows, m_map_window, *this, m_tile_renderer, m_tiles}
+    , m_map_editor     {commands, imgui_renderer, imgui_windows, m_map_window, *this, m_tile_renderer, m_tiles}
     , m_new_game_window{imgui_renderer, imgui_windows, m_game, m_map_editor, m_map_window, *this, m_tile_renderer, m_tiles}
     , m_type_editor    {imgui_renderer, imgui_windows, *this, m_tile_renderer, m_tiles}
-    , m_map_editor     {commands, imgui_renderer, imgui_windows, m_map_window, *this, m_tile_renderer, m_tiles}
 
 {
     show();

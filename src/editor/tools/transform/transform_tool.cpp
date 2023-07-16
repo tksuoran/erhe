@@ -200,9 +200,6 @@ void Transform_tool::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     auto& settings = shared.settings;
-    const bool   show_translate = settings.show_translate;
-    const bool   show_rotate    = settings.show_rotate;
-    const bool   show_scale     = settings.show_scale;
     const ImVec2 button_size{ImGui::GetContentRegionAvail().x / 2, 0.0f};
 
     if (
@@ -227,18 +224,21 @@ void Transform_tool::imgui()
 
     //ImGui::SliderFloat("Scale", &settings.gizmo_scale, 1.0f, 10.0f);
 
+    //const bool show_translate = settings.show_translate;
+    //const bool show_rotate    = settings.show_rotate;
+    //const bool show_scale     = settings.show_scale;
     //ImGui::Checkbox("Translate Tool", &settings.show_translate);
     //ImGui::Checkbox("Rotate Tool",    &settings.show_rotate);
     //ImGui::Checkbox("Scale Tool",     &settings.show_scale);
     //ImGui::Checkbox("Hide Inactive",  &settings.hide_inactive);
 
-    if (
-        (show_translate != settings.show_translate) ||
-        (show_rotate    != settings.show_rotate   ) ||
-        (show_scale     != settings.show_scale    )
-    ) {
-        shared.visualization->update_visibility();
-    }
+    // if (
+    //     (show_translate != settings.show_translate) ||
+    //     (show_rotate    != settings.show_rotate   ) ||
+    //     (show_scale     != settings.show_scale    )
+    // ) {
+    //     shared.visualization->update_visibility();
+    // }
 
     transform_properties();
 

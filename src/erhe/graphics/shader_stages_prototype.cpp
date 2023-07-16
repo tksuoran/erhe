@@ -375,7 +375,6 @@ template <typename T>
         m_state = state_fail;
         return gl_shader;
     }
-    ERHE_VERIFY(source.length() > 0);
     const char* const c_source = source.c_str();
     std::array<const char* , 1> sources{ c_source };
 

@@ -10,9 +10,9 @@ namespace erhe::graphics
 class Fragment_output
 {
 public:
-    std::string                     name;
-    gl::Fragment_shader_output_type type{gl::Fragment_shader_output_type::float_vec4};
-    unsigned int                    location;
+    std::string                     name    {};
+    gl::Fragment_shader_output_type type    {gl::Fragment_shader_output_type::float_vec4};
+    unsigned int                    location{0};
 };
 
 } // namespace erhe::graphics

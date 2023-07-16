@@ -71,11 +71,11 @@ auto write_file(
         return false;
     }
     const size_t res = std::fwrite(buffer, 1, length, file);
+    std::fclose(file);
     if (res != length) {
         log_file->error("Failed to write '{}'", path);
         return false;
     }
-    std::fclose(file);
     return true;
 }
 
@@ -95,11 +95,11 @@ auto write_file(
         return false;
     }
     const size_t res = std::fwrite(text.data(), 1, text.size(), file);
+    std::fclose(file);
     if (res != text.size()) {
         log_file->error("Failed to write '{}'", path);
         return false;
     }
-    std::fclose(file);
     return true;
 }
 

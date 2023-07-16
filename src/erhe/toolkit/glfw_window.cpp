@@ -639,11 +639,9 @@ void Context_window::set_cursor(const Mouse_cursor cursor)
     if (!m_is_mouse_captured) {
         glfwSetInputMode(
             window, GLFW_CURSOR,
-            m_is_mouse_captured
-                ? GLFW_CURSOR_DISABLED
-                : (m_current_mouse_cursor != Mouse_cursor_None)
-                    ? GLFW_CURSOR_NORMAL
-                    : GLFW_CURSOR_HIDDEN
+            (m_current_mouse_cursor != Mouse_cursor_None)
+                ? GLFW_CURSOR_NORMAL
+                : GLFW_CURSOR_HIDDEN
         );
     }
 

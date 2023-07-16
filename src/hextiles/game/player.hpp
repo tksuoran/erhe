@@ -21,7 +21,7 @@ public:
     //void unit_imgui();
     //void imgui     ();
 
-    int                               id;
+    int                               id{0};
     Map                               map;
     etl::string<max_name_length>      name;
     etl::vector<Unit, max_city_count> cities;

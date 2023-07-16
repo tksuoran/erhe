@@ -69,7 +69,6 @@ void Node_physics::handle_node_scene_host_update(
 
     if (old_scene_host != nullptr) {
         Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
-        ERHE_VERIFY(old_scene_root != nullptr);
         auto& physics_world = old_scene_root->physics_world();
         physics_world.remove_rigid_body(rigid_body());
         m_physics_world = nullptr;
@@ -77,7 +76,6 @@ void Node_physics::handle_node_scene_host_update(
     if (new_scene_host != nullptr) {
         log_physics->trace("attaching {} to physics world", m_rigid_body->get_debug_label());
         Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
-        ERHE_VERIFY(new_scene_root != nullptr);
         auto& physics_world = new_scene_root->physics_world();
         physics_world.add_rigid_body(rigid_body());
         m_physics_world = &physics_world;

@@ -122,6 +122,7 @@ auto Brush::is_shown_in_ui() const -> bool
 void Brush::late_initialize()
 {
     const auto geometry = get_geometry();
+    ERHE_VERIFY(geometry);
     if (!gl_primitive_geometry) {
         ERHE_PROFILE_SCOPE("gl primitive");
 
@@ -446,13 +447,11 @@ auto Brush::make_instance(
         node->attach(node_physics);
     }
 
-    if (scaled.rt_primitive) {
-        auto node_raytrace = std::make_shared<Node_raytrace>( // TODO use content library?
-            scaled.geometry,
-            scaled.rt_primitive
-        );
-        node->attach(node_raytrace);
-    }
+    auto node_raytrace = std::make_shared<Node_raytrace>( // TODO use content library?
+        scaled.geometry,
+        scaled.rt_primitive
+    );
+    node->attach(node_raytrace);
 
     return node;
 }

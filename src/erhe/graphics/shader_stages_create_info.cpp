@@ -166,7 +166,9 @@ auto Shader_stages_create_info::final_source(
         sb << (source.has_value() ? "\n// Loaded from: " : "\n// Source load failed from: ");
         sb << shader.path;
         sb << "\n\n";
-        sb << source.value();
+        if (source.has_value()) {
+            sb << source.value();
+        }
     }
 
     return sb.str(); // shaders.emplace_back(type, source, sb.str());

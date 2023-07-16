@@ -159,7 +159,6 @@ public:
 protected:
     void flush_queud_events();
 
-    std::string              m_name;
     std::string              m_imgui_ini_path;
     bool                     m_show_menu       {false};
     double                   m_time            {0.0};

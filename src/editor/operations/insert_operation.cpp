@@ -42,7 +42,6 @@ Node_insert_remove_operation::Node_insert_remove_operation(
     }
 
     if (parameters.mode == Mode::remove) {
-        m_node         = parameters.node;
         m_after_parent = std::shared_ptr<erhe::scene::Node>{};
 
         const auto& children = parameters.node->children();

@@ -46,15 +46,15 @@ Mesh_memory::Mesh_memory(
         get_index_buffer_size(),
         storage_mask
     }
-    , buffer_info{
-        .index_type    = gl::Draw_elements_type::unsigned_int,
-        .vertex_format = vertex_format,
-        .buffer_sink   = gl_buffer_sink
-    }
     , gl_buffer_sink{
         gl_buffer_transfer_queue,
         gl_vertex_buffer,
         gl_index_buffer
+    }
+    , buffer_info{
+        .index_type    = gl::Draw_elements_type::unsigned_int,
+        .vertex_format = vertex_format,
+        .buffer_sink   = gl_buffer_sink
     }
     , vertex_input{
         erhe::graphics::Vertex_input_state_data::make(

@@ -79,8 +79,6 @@ private:
     void make_preview_scene(Mesh_memory& mesh_memory);
     //// void generate_torus_geometry();
 
-    Editor_context& m_context;
-
     int                                           m_width{0};
     int                                           m_height{0};
     gl::Internal_format                           m_color_format;

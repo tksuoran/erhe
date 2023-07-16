@@ -49,7 +49,6 @@ public:
 protected:
     erhe::graphics::Instance&                    m_graphics_instance;
     std::string                                  m_debug_label;
-    bool                                         m_is_hovered         {false};
     erhe::toolkit::Viewport                      m_viewport           {0, 0, 0, 0, true};
     float                                        m_content_rect_x     {0.0f};
     float                                        m_content_rect_y     {0.0f};

@@ -398,7 +398,7 @@ auto Game::get_unit_tile(
 ) -> unit_tile_t
 {
     uint32_t    occupied_player_mask     {0u};
-    uint32_t    occupied_battle_type_mask{0u};
+    //uint32_t    occupied_battle_type_mask{0u};
     unit_tile_t first_found_unit_tile    {0u};
     size_t      found_unit_count         {0u};
     std::array<int, Battle_type::bit_count> battle_type_player_id;
@@ -414,8 +414,8 @@ auto Game::get_unit_tile(
             if (unit.location != position) {
                 continue;
             }
-            const Unit_type& unit_type = m_tiles.get_unit_type(unit.type);
-            occupied_battle_type_mask |= (1u << unit_type.battle_type);
+            //const Unit_type& unit_type = m_tiles.get_unit_type(unit.type);
+            //occupied_battle_type_mask |= (1u << unit_type.battle_type);
             // Single city found
             return m_tile_renderer.get_single_unit_tile(player_index, unit.type);
         }
@@ -428,13 +428,13 @@ auto Game::get_unit_tile(
                 continue;
             }
             const Unit_type& unit_type = m_tiles.get_unit_type(unit.type);
-            occupied_battle_type_mask |= (1u << unit_type.battle_type);
+            //occupied_battle_type_mask |= (1u << unit_type.battle_type);
             occupied_player_mask      |= (1u << player_index);
 
             //Expects(
             //    (battle_type_player_id[unit_type.battle_type] == 0) ||
             //    (battle_type_player_id[unit_type.battle_type] == player_id)
-            //);
+            //);                        //
             battle_type_player_id[unit_type.battle_type] = player_id;
             if (found_unit_count == 0) {
                 first_found_unit_tile = m_tile_renderer.get_single_unit_tile(player_index, unit.type);

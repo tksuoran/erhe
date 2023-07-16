@@ -40,6 +40,7 @@ private:
         {
             key = other.key;
             value = std::move(other.value);
+            return *this;
         }
 
         std::string key;

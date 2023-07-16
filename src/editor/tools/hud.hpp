@@ -149,7 +149,6 @@ private:
     int   m_width_items   {10};
     int   m_height_items  {10};
     bool  m_enabled       {true};
-    bool  m_is_visible    {false};
     bool  m_locked_to_head{false};
 
     std::optional<glm::mat4> m_node_from_control;

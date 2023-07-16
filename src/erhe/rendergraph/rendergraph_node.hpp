@@ -25,18 +25,18 @@ class Rendergraph_producer_connector
 {
 public:
     Resource_routing               resource_routing{Resource_routing::None};
-    std::string                    label;
-    int                            key;
-    std::vector<Rendergraph_node*> consumer_nodes;
+    std::string                    label           {};
+    int                            key             {0};
+    std::vector<Rendergraph_node*> consumer_nodes  {};
 };
 
 class Rendergraph_consumer_connector
 {
 public:
     Resource_routing               resource_routing{Resource_routing::None};
-    std::string                    label;
-    int                            key;
-    std::vector<Rendergraph_node*> producer_nodes{};
+    std::string                    label           {};
+    int                            key             {0};
+    std::vector<Rendergraph_node*> producer_nodes  {};
 };
 
 constexpr int rendergraph_max_depth = 10;

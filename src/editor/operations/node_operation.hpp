@@ -100,13 +100,13 @@ public:
     void undo   (Editor_context& context) override;
 
 private:
-    std::shared_ptr<erhe::scene::Node> m_child_node;
-    std::shared_ptr<erhe::scene::Node> m_parent_before;
-    std::size_t                        m_parent_before_index;
-    std::shared_ptr<erhe::scene::Node> m_parent_after;
-    std::size_t                        m_parent_after_index;
-    std::shared_ptr<erhe::scene::Node> m_place_before_node;
-    std::shared_ptr<erhe::scene::Node> m_place_after_node;
+    std::shared_ptr<erhe::scene::Node> m_child_node         {};
+    std::shared_ptr<erhe::scene::Node> m_parent_before      {};
+    std::size_t                        m_parent_before_index{0};
+    std::shared_ptr<erhe::scene::Node> m_parent_after       {};
+    std::size_t                        m_parent_after_index {0};
+    std::shared_ptr<erhe::scene::Node> m_place_before_node  {};
+    std::shared_ptr<erhe::scene::Node> m_place_after_node   {};
 };
 
 class Node_reposition_in_parent_operation
@@ -127,9 +127,9 @@ public:
 
 private:
     std::shared_ptr<erhe::scene::Node> m_child_node;
-    std::size_t                        m_before_index;
-    std::shared_ptr<erhe::scene::Node> m_place_before_node;
-    std::shared_ptr<erhe::scene::Node> m_place_after_node;
+    std::size_t                        m_before_index     {0};
+    std::shared_ptr<erhe::scene::Node> m_place_before_node{};
+    std::shared_ptr<erhe::scene::Node> m_place_after_node {};
 };
 
 }

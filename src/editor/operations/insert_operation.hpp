@@ -57,12 +57,12 @@ public:
 
 private:
     Mode                                                m_mode;
-    std::shared_ptr<erhe::scene::Node>                  m_node;
-    std::shared_ptr<erhe::scene::Node>                  m_before_parent;
-    std::shared_ptr<erhe::scene::Node>                  m_after_parent;
+    std::shared_ptr<erhe::scene::Node>                  m_node         {};
+    std::shared_ptr<erhe::scene::Node>                  m_before_parent{};
+    std::shared_ptr<erhe::scene::Node>                  m_after_parent {};
     std::vector<std::shared_ptr<Node_attach_operation>> m_parent_changes;
 
-    erhe::scene::Scene_host*                            m_scene_host;
+    erhe::scene::Scene_host*                            m_scene_host{nullptr};
     std::vector<std::shared_ptr<erhe::scene::Item>>     m_selection_before;
     std::vector<std::shared_ptr<erhe::scene::Item>>     m_selection_after;
 };

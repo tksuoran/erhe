@@ -45,7 +45,7 @@ public:
         [[nodiscard]] auto operator==(const Data_type& other) const -> bool;
         [[nodiscard]] auto operator!=(const Data_type& other) const -> bool;
 
-        gl::Vertex_attrib_type type;
+        gl::Vertex_attrib_type type      {gl::Vertex_attrib_type::float_};
         bool                   normalized{false};
         std::size_t            dimension {0};
     };
@@ -56,11 +56,11 @@ public:
     [[nodiscard]] auto operator==(const Vertex_attribute& other) const -> bool;
     [[nodiscard]] auto operator!=(const Vertex_attribute& other) const -> bool;
 
-    Usage              usage;
-    gl::Attribute_type shader_type;
-    Data_type          data_type;
-    std::size_t        offset {0};
-    unsigned int       divisor{0};
+    Usage              usage      {};
+    gl::Attribute_type shader_type{gl::Attribute_type::float_};
+    Data_type          data_type  {};
+    std::size_t        offset     {0};
+    unsigned int       divisor    {0};
 
     [[nodiscard]] static auto position_float2() -> erhe::graphics::Vertex_attribute
     {

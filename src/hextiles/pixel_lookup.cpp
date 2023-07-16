@@ -4,6 +4,8 @@
 #include "hextiles_log.hpp"
 #include "tiles.hpp"
 
+#include "erhe/toolkit/verify.hpp"
+
 #include <bitset>
 #include <limits>
 #include <map>
@@ -21,7 +23,7 @@ auto get_mask_bits() -> tile_mask_t
 
     tile_mask_t res;
     const std::byte* const mask_pixels = mask.data.data();
-    if (mask_pixels == nullptr) {
+    if (mask.data.empty()) {
 #if defined(ERHE_PNG_LIBRARY_NONE)
         log_pixel_lookup->error("Unable to load image due to ERHE_PNG_LIBRARY_NONE build configuration. Exiting program.");
 #elif !defined(ERHE_PNG_LIBRARY_MANGO)
@@ -30,6 +32,9 @@ auto get_mask_bits() -> tile_mask_t
         log_pixel_lookup->error("Unable to load image, check program working directory. Exiting program.");
 #endif
         std::abort();
+    }
+    if (mask.data.size() != Tile_shape::full_width * Tile_shape::height * 4) {
+        ERHE_FATAL("mask.png size mismatch");
     }
     for (size_t y = 0; y < Tile_shape::height; ++y) {
         for (size_t x = 0; x < Tile_shape::full_width; ++x) {

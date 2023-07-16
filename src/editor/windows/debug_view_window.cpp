@@ -385,20 +385,14 @@ void Debug_view_window::imgui()
     }
 
     auto* producer_node = input->producer_nodes.front();
-    if (!producer_node) {
+    if (producer_node == nullptr) {
         log_render->error("Debug_view_window input producer is expired or not set.");
+        return;
     }
-    if (producer_node) { // TODO
-        producer_node->set_enabled(true);
-    }
+    producer_node->set_enabled(true);
 
     // TODO add safety?
     auto* input_texture_node = reinterpret_cast<Depth_to_color_rendergraph_node*>(producer_node);
-    if (input_texture_node == nullptr) {
-        log_render->error("Debug_view_window has no input render graph node");
-        return;
-    }
-
     auto* shadow_render_node = reinterpret_cast<Shadow_render_node*>(
         producer_node->get_consumer_input_node(
             erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
@@ -478,8 +472,7 @@ void Debug_view_window::imgui()
 
     if (
         (texture_width  > 0) &&
-        (texture_height > 0) &&
-        (area_size      > 0)
+        (texture_height > 0)
     ) {
         auto cursor_position = ImGui::GetCursorPos();
         cursor_position.x += (available_size.x - image_size) / 2.0f;

@@ -362,7 +362,6 @@ void rgb_to_hsv(const float r, const float g, const float b, float& h, float& s,
 {
     h = 0;
     s = 1.0f;
-    v = 1.0f;
 
     float max;
     float min;

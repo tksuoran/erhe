@@ -53,10 +53,10 @@ private:
     Tiles&      m_tiles;
 
     Fbm_noise   m_noise;
-    Variations  m_elevation_generator;
-    Variations  m_temperature_generator;
-    Variations  m_humidity_generator;
-    Variations  m_variation_generator;
+    Variations  m_elevation_generator  {};
+    Variations  m_temperature_generator{};
+    Variations  m_humidity_generator   {};
+    Variations  m_variation_generator  {};
 
     etl::vector<Biome, max_biome_count> m_biomes;
 };

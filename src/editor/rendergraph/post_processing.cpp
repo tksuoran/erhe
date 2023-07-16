@@ -696,16 +696,13 @@ void Post_processing::compose(Post_processing_node& node)
                 m_linear_sampler
             );
 
-            const uint32_t texture_handle[2] =
-            {
+            const uint32_t texture_handle[2] = {
                 static_cast<uint32_t>((handle & 0xffffffffu)),
                 static_cast<uint32_t>(handle >> 32u)
             };
             const gsl::span<const uint32_t> texture_handle_cpu_data{&texture_handle[0], 2};
 
-            if (graphics_instance.info.use_bindless_texture) {
-                gl::make_texture_handle_non_resident_arb(handle);
-            }
+            gl::make_texture_handle_non_resident_arb(handle);
         }
     }
 }

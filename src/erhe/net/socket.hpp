@@ -64,11 +64,11 @@ private:
     void on_state_changed     (State old_state, State new_state);
     auto receive_packet_length() -> uint32_t;
 
-    SOCKET                       m_socket   {INVALID_SOCKET};
-    sockaddr_in                  m_address_in;
-    addrinfo*                    m_addr_info{nullptr};
+    SOCKET                       m_socket    {INVALID_SOCKET};
+    sockaddr_in                  m_address_in{};
+    addrinfo*                    m_addr_info {nullptr};
     std::string                  m_address;
-    State                        m_state    {State::CLOSED};
+    State                        m_state     {State::CLOSED};
     std::unique_ptr<Ring_buffer> m_send_buffer;
     std::unique_ptr<Ring_buffer> m_receive_buffer;
     Receive_handler              m_receive_handler;

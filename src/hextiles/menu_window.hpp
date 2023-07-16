@@ -61,9 +61,9 @@ private:
     Tile_renderer&                       m_tile_renderer;
     Map_window&                          m_map_window;
     Game                                 m_game;
+    Map_editor                           m_map_editor;
     New_game_window                      m_new_game_window;
     Type_editor                          m_type_editor;
-    Map_editor                           m_map_editor;
 };
 
 } // namespace hextiles

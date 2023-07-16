@@ -10,11 +10,11 @@ namespace erhe::graphics
 class Vertex_attribute_mapping
 {
 public:
-    std::size_t                  layout_location;
-    gl::Attribute_type           shader_type;
-    std::string_view             name;
-    Vertex_attribute::Usage      src_usage;
-    Vertex_attribute::Usage_type dst_usage_type{Vertex_attribute::Usage_type::automatic};
+    std::size_t                  layout_location{0};
+    gl::Attribute_type           shader_type    {gl::Attribute_type::float_};
+    std::string_view             name           {};
+    Vertex_attribute::Usage      src_usage      {};
+    Vertex_attribute::Usage_type dst_usage_type {Vertex_attribute::Usage_type::automatic};
 
     [[nodiscard]] static auto a_position_float_vec2() -> Vertex_attribute_mapping
     {

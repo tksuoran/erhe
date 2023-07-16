@@ -171,8 +171,6 @@ private:
     auto normalize(Pixel_coordinate pixel_coordinate) const -> Pixel_coordinate;
 
     // Commands
-    erhe::graphics::Instance&      m_graphics_instance;
-    erhe::imgui::Imgui_renderer&   m_imgui_renderer;
     erhe::renderer::Text_renderer& m_text_renderer;
     Tile_renderer&                 m_tile_renderer;
 

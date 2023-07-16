@@ -26,9 +26,9 @@ public:
         erhe::renderer::Visualization_mode camera{erhe::renderer::Visualization_mode::selected};
     };
 
-    Debug_visualizations debug_visualizations;
-    bool                 selection_bounding_box;
-    bool                 selection_bounding_sphere;
+    Debug_visualizations debug_visualizations     {};
+    bool                 selection_bounding_box   {false};
+    bool                 selection_bounding_sphere{false};
 };
 
 

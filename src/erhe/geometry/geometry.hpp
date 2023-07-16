@@ -81,10 +81,10 @@ public:
     {
     public:
         Geometry&       geometry;
-        Point_corner_id point_corner_id;
-        Corner_id       corner_id;
+        Point_corner_id point_corner_id{0};
+        Corner_id       corner_id      {0};
         Corner&         corner;
-        bool            break_{false};
+        bool            break_         {false};
 
         void break_iteration()
         {
@@ -101,10 +101,10 @@ public:
     {
     public:
         const Geometry& geometry;
-        Point_corner_id point_corner_id;
-        Corner_id       corner_id;
+        Point_corner_id point_corner_id{0};
+        Corner_id       corner_id      {0};
         const Corner&   corner;
-        bool            break_{false};
+        bool            break_         {false};
 
         void break_iteration()
         {
@@ -121,12 +121,12 @@ public:
     {
     public:
         Geometry&       geometry;
-        Point_corner_id prev_point_corner_id;
-        Point_corner_id point_corner_id;
-        Point_corner_id next_point_corner_id;
-        Corner_id       prev_corner_id;
-        Corner_id       corner_id;
-        Corner_id       next_corner_id;
+        Point_corner_id prev_point_corner_id{0};
+        Point_corner_id point_corner_id     {0};
+        Point_corner_id next_point_corner_id{0};
+        Corner_id       prev_corner_id      {0};
+        Corner_id       corner_id           {0};
+        Corner_id       next_corner_id      {0};
         Corner&         prev_corner;
         Corner&         corner;
         Corner&         next_corner;
@@ -142,12 +142,12 @@ public:
     {
     public:
         const Geometry& geometry;
-        Point_corner_id prev_point_corner_id;
-        Point_corner_id point_corner_id;
-        Point_corner_id next_point_corner_id;
-        Corner_id       prev_corner_id;
-        Corner_id       corner_id;
-        Corner_id       next_corner_id;
+        Point_corner_id prev_point_corner_id{0};
+        Point_corner_id point_corner_id     {0};
+        Point_corner_id next_point_corner_id{0};
+        Corner_id       prev_corner_id      {0};
+        Corner_id       corner_id           {0};
+        Corner_id       next_corner_id      {0};
         const Corner&   prev_corner;
         const Corner&   corner;
         const Corner&   next_corner;
@@ -271,10 +271,10 @@ public:
     {
     public:
         Geometry&         geometry;
-        Polygon_corner_id polygon_corner_id;
-        Corner_id         corner_id;
+        Polygon_corner_id polygon_corner_id{0};
+        Corner_id         corner_id        {0};
         Corner&           corner;
-        bool              break_{false};
+        bool              break_           {false};
 
         void break_iteration()
         {
@@ -311,12 +311,12 @@ public:
     {
     public:
         Geometry&         geometry;
-        Polygon_corner_id prev_polygon_corner_id;
-        Polygon_corner_id polygon_corner_id;
-        Polygon_corner_id next_polygon_corner_id;
-        Corner_id         prev_corner_id;
-        Corner_id         corner_id;
-        Corner_id         next_corner_id;
+        Polygon_corner_id prev_polygon_corner_id{0};
+        Polygon_corner_id polygon_corner_id     {0};
+        Polygon_corner_id next_polygon_corner_id{0};
+        Corner_id         prev_corner_id        {0};
+        Corner_id         corner_id             {0};
+        Corner_id         next_corner_id        {0};
         Corner&           prev_corner;
         Corner&           corner;
         Corner&           next_corner;
@@ -716,9 +716,9 @@ public:
     class Corner_context
     {
     public:
-        Corner_id corner_id;
+        Corner_id corner_id{0};
         Corner&   corner;
-        bool      break_{false};
+        bool      break_   {false};
 
         void break_iteration()
         {
@@ -729,9 +729,9 @@ public:
     class Corner_context_const
     {
     public:
-        Corner_id     corner_id;
+        Corner_id     corner_id{0};
         const Corner& corner;
-        bool          break_{false};
+        bool          break_   {false};
 
         void break_iteration()
         {
@@ -742,9 +742,9 @@ public:
     class Point_context
     {
     public:
-        Point_id point_id;
+        Point_id point_id{0};
         Point&   point;
-        bool     break_{false};
+        bool     break_  {false};
 
         void break_iteration()
         {
@@ -755,9 +755,9 @@ public:
     class Point_context_const
     {
     public:
-        Point_id     point_id;
+        Point_id     point_id{0};
         const Point& point;
-        bool         break_{false};
+        bool         break_  {false};
 
         void break_iteration()
         {
@@ -768,9 +768,9 @@ public:
     class Polygon_context
     {
     public:
-        Polygon_id polygon_id;
+        Polygon_id polygon_id{0};
         Polygon&   polygon;
-        bool       break_{false};
+        bool       break_    {false};
 
         void break_iteration()
         {
@@ -781,9 +781,9 @@ public:
     class Polygon_context_const
     {
     public:
-        Polygon_id     polygon_id;
+        Polygon_id     polygon_id{0};
         const Polygon& polygon;
-        bool           break_{false};
+        bool           break_    {false};
 
         void break_iteration()
         {
@@ -794,7 +794,7 @@ public:
     class Edge_context
     {
     public:
-        Edge_id edge_id;
+        Edge_id edge_id{0};
         Edge&   edge;
         bool    break_{false};
 
@@ -807,9 +807,9 @@ public:
     class Edge_context_const
     {
     public:
-        Edge_id     edge_id;
+        Edge_id     edge_id{0};
         const Edge& edge;
-        bool        break_{false};
+        bool        break_ {false};
 
         void break_iteration()
         {

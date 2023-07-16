@@ -227,7 +227,7 @@ void Hotbar::init_hotbar(
     // Also registers rendertarget node
     imgui_windows.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
 
-    this->set_viewport(m_rendertarget_imgui_viewport.get());
+    this->Hotbar::set_viewport(m_rendertarget_imgui_viewport.get());
 }
 
 void Hotbar::init_radial_menu(

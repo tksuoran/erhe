@@ -124,7 +124,6 @@ Jolt_rigid_body::Jolt_rigid_body(
     creation_settings.mMassPropertiesOverride  = m_mass_properties;
     creation_settings.mLinearDamping           = create_info.linear_damping;
     creation_settings.mAngularDamping          = create_info.angular_damping;
-    creation_settings.mLinearDamping           = 0.001f;
 
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
     creation_settings.mUserData = static_cast<JPH::uint64>(reinterpret_cast<uintptr_t>(this));

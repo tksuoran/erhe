@@ -69,7 +69,6 @@ public:
 
 private:
     std::weak_ptr<Viewport_window> m_viewport_window;
-    bool                           m_is_hovered     {false};
     erhe::toolkit::Viewport        m_viewport;
 };
 

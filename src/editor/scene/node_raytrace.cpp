@@ -209,7 +209,6 @@ void Node_raytrace::handle_node_scene_host_update(
     if (old_scene_host != nullptr) {
         log_raytrace->trace("detaching {} from raytrace world", m_instance->debug_label());
         Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
-        ERHE_VERIFY(old_scene_root != nullptr);
         auto& raytrace_scene = old_scene_root->raytrace_scene();
         raytrace_scene.detach(raytrace_instance());
     }
@@ -217,7 +216,6 @@ void Node_raytrace::handle_node_scene_host_update(
         log_raytrace->trace("attaching {} to raytrace world", m_instance->debug_label());
         ERHE_VERIFY(m_node);
         Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
-        ERHE_VERIFY(new_scene_root != nullptr);
         auto& raytrace_scene = new_scene_root->raytrace_scene();
         raytrace_scene.attach(raytrace_instance());
         uint32_t mask = 0;

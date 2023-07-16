@@ -164,7 +164,10 @@ Property_map<Key_type, Value_type>::interpolate(
     ERHE_PROFILE_FUNCTION();
 
     auto* destination = dynamic_cast<Property_map<Key_type, Value_type>*>(destination_base);
-    ERHE_VERIFY(destination != nullptr);
+    if (destination == nullptr) {
+        //log_interpolate->error("destination is nullptr");
+        return;
+    }
 
     if (m_descriptor.interpolation_mode == Interpolation_mode::none) {
         SPDLOG_LOGGER_TRACE(log_interpolate, "\tinterpolation mode none, skipping this map");
@@ -274,7 +277,10 @@ Property_map<Key_type, Value_type>::import_from(
     ERHE_PROFILE_FUNCTION();
 
     const auto* const source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
-    ERHE_VERIFY(source != nullptr);
+    if (source == nullptr) {
+        //log_attribute_maps->error("source is nullptr");
+        return;
+    }
 
     ERHE_VERIFY(values.size() == present.size());
     ERHE_VERIFY(source->values.size() == source->present.size());
@@ -362,7 +368,10 @@ Property_map<Key_type, Value_type>::import_from(
     ERHE_PROFILE_FUNCTION();
 
     auto* source = dynamic_cast<Property_map<Key_type, Value_type>*>(source_base);
-    ERHE_VERIFY(source != nullptr);
+    if (source == nullptr) {
+        //log_attribute_maps->error("source is nullptr");
+        return;
+    }
 
     ERHE_VERIFY(values.size() == present.size());
     ERHE_VERIFY(source->values.size() == source->present.size());

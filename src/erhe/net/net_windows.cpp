@@ -220,11 +220,11 @@ auto set_socket_option(
             break;
         }
         case Socket_option::ReceiveTimeout: {
-            result = setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, optval, optlen);
+            result = setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, optval, optlen);
             break;
         }
         case Socket_option::SendTimeout: {
-            result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, optval, optlen);
+            result = setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, optval, optlen);
             break;
         }
         case Socket_option::NoDelay: {

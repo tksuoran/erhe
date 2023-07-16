@@ -256,7 +256,7 @@ to renderable vertex and index buffers.
 
 `erhe::scene` namespace provides classes for basic 3D scene graph.
 
-Warning: `erhe::physics` is in early, experimental stages.
+Warning: `erhe::scene` is in early, experimental stages.
 
 ## erhe::toolkit namespace
 
@@ -274,16 +274,6 @@ Both will need more work.
 
 Warning: `erhe::physics` is in early, experimental stages.
 
-## erhe::application namespace
+## SAST Tools
 
-`erhe::application` contains code that can be shared with multiple applications. Features
-contained in this library may eventually end up elsewhere.
-
-Some features:
-
--  Commands that can be bound to input events (key, mouse events)
--  OpenGL context provided for multi-threaded loading of OpenGL resources
--  ImGui window wrapper/abstraction, including custom ImGui backend / renderer using erhe
--  Shader hot-reloading support `Shader_monitor`
-
-Warning: `erhe::application` is in early, experimental stages.
+[PVS-Studio](https://pvs-studio.com/en/pvs-studio/?utm_source=website&utm_medium=github&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code.

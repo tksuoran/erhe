@@ -646,10 +646,12 @@ auto Shader_resource::type_string() const -> std::string
 
         case Type::sampler: {
             ERHE_FATAL("Samplers are only allowed in default uniform block");
+            break;
         }
 
         default: {
             ERHE_FATAL("Bad Shader_resource::Type");
+            break;
         }
     }
 }
