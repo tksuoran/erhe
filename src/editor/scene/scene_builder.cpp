@@ -312,8 +312,13 @@ void Scene_builder::setup_cameras(
 
     //// TODO Read these from ini
     const bool enable_post_processing = true;
-    const bool window_show             = true;
-    const bool window_viewport         = true;
+    const bool window_viewport        = true;
+    bool       window_show            = true;
+    {
+        auto ini = erhe::configuration::get_ini("erhe.ini", "window");
+        ini->get("show", window_show);
+    }
+
     if (!window_show) {
         return;
     }
@@ -352,11 +357,6 @@ void Scene_builder::setup_cameras(
         );
     }
 }
-
-//auto Scene_builder::build_info() -> erhe::primitive::Build_info&
-//{
-//    return g_mesh_memory->build_info;
-//};
 
 auto Scene_builder::make_brush(
     Brush_data&& brush_create_info,

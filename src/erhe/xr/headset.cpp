@@ -1,4 +1,5 @@
 #include "erhe/xr/headset.hpp"
+#include "erhe/xr/xr_log.hpp"
 #include "erhe/xr/xr_instance.hpp"
 #include "erhe/xr/xr_session.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -12,6 +13,7 @@ Headset::Headset(
 {
     m_xr_instance = std::make_unique<Xr_instance>(configuration);
     if (!m_xr_instance->is_available()) {
+        log_xr->info("OpenXR instance is not available");
         m_xr_instance.reset();
         return;
     }

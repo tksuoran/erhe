@@ -191,7 +191,7 @@ Hud::Hud(
         editor_context,
         m_rendertarget_mesh.get(),
         "Hud Viewport",
-        false
+        true
     );
 
     m_rendertarget_imgui_viewport->set_menu_visible(true);

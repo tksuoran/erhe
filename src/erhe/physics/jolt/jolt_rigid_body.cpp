@@ -128,6 +128,10 @@ Jolt_rigid_body::Jolt_rigid_body(
     static_assert(sizeof(uintptr_t) <= sizeof(JPH::uint64));
     creation_settings.mUserData = static_cast<JPH::uint64>(reinterpret_cast<uintptr_t>(this));
     m_body = m_body_interface.CreateBody(creation_settings);
+    if (m_body == nullptr) {
+        log_physics->warn("CreateBody() returned nullptr");
+        m_debug_label = fmt::format("{} (CreateBody() returned nullptr)", create_info.debug_label);
+    }
 
     m_debug_label = fmt::format("{} ({})", create_info.debug_label, m_body->GetID().GetIndex());
 }

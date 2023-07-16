@@ -399,6 +399,9 @@ public:
         return true;
     }
 
+    bool m_close_requested{false};
+    bool m_openxr         {false};
+
     // No constructors
     Editor_settings                m_editor_settings;
     erhe::commands::Commands       m_commands;
@@ -482,9 +485,6 @@ public:
     Paint_tool                              m_paint_tool;
     Physics_tool                            m_physics_tool;
     Selection_tool                          m_selection_tool;
-
-    bool m_close_requested{false};
-    bool m_openxr         {false};
 };
 
 void run_editor()
@@ -511,11 +511,25 @@ void run_editor()
 #endif
     editor::initialize_logging();
 
+    bool openxr{false};
     bool enable_renderdoc_capture_support{false};
-    auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
-    ini->get("capture_support", enable_renderdoc_capture_support);
+    {
+        auto ini = erhe::configuration::get_ini("erhe.ini", "renderdoc");
+        ini->get("capture_support", enable_renderdoc_capture_support);
+    }
+    {
+        auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
+        ini->get("openxr", openxr);
+    }
     if (enable_renderdoc_capture_support) {
-        erhe::toolkit::initialize_frame_capture();
+        if (!openxr) {
+            erhe::toolkit::initialize_frame_capture();
+        } else {
+            log_startup->warn(
+                "Renderdoc capture cannot be used together with OpenXR. "
+                "Keeping OpenXR enabled and disabling renderdoc capture."
+            );
+        }
     }
 
     Editor editor{};

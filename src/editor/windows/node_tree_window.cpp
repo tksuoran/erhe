@@ -816,6 +816,7 @@ auto Node_tree_window::item_icon_and_text(
         flags
     );
 
+#if 0
     std::stringstream ss;
     if (ImGui::IsItemClicked()) ss << "clicked ";
     if (ImGui::IsItemToggledOpen()) ss << "toggled_open ";
@@ -832,6 +833,7 @@ auto Node_tree_window::item_icon_and_text(
     {
         log_node_properties->info("{} {}", item->get_label(), message);
     }
+#endif
 
     const bool is_item_toggled_open = ImGui::IsItemToggledOpen();
     if (is_item_toggled_open) {

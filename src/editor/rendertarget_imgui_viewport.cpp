@@ -215,13 +215,34 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
 
             ImGuiIO& io = m_imgui_context->IO;
             auto* trigger_click = headset->get_actions_right().trigger_click;
-            auto* a_click = headset->get_actions_right().a_click;
+            auto* a_click       = headset->get_actions_right().a_click;
             if ((trigger_click != nullptr) && (trigger_click->state.changedSinceLastSync == XR_TRUE)) {
-                io.AddMouseButtonEvent(0, trigger_click->state.currentState == XR_TRUE);
+                io.AddMouseButtonEvent(ImGuiMouseButton_Left, trigger_click->state.currentState == XR_TRUE);
             }
             if ((a_click != nullptr) && (a_click->state.changedSinceLastSync == XR_TRUE)) {
-                io.AddMouseButtonEvent(0, a_click->state.currentState == XR_TRUE);
+                io.AddMouseButtonEvent(ImGuiMouseButton_Left, a_click->state.currentState == XR_TRUE);
             }
+            auto* menu_click = headset->get_actions_left().menu_click;
+            if ((menu_click != nullptr) && (menu_click->state.changedSinceLastSync == XR_TRUE)) {
+                io.AddMouseButtonEvent(ImGuiMouseButton_Right, menu_click->state.currentState == XR_TRUE);
+            }
+
+            // The thumbrest is not present for the second edition of the Oculus Touch (Rift S and Quest)
+            auto* r_thumbrest_touch = headset->get_actions_right().thumbrest_touch;
+            if ((r_thumbrest_touch != nullptr) && (r_thumbrest_touch->state.changedSinceLastSync == XR_TRUE)) {
+                io.AddMouseButtonEvent(ImGuiMouseButton_Right, a_click->state.currentState == XR_TRUE);
+            }
+
+            // This also does not seem to work with Rift S
+            auto* r_thumbstick_touch = headset->get_actions_right().thumbstick_touch;
+            if ((r_thumbstick_touch != nullptr) && (r_thumbstick_touch->state.changedSinceLastSync == XR_TRUE)) {
+                io.AddMouseButtonEvent(ImGuiMouseButton_Right, a_click->state.currentState == XR_TRUE);
+            }
+
+            //auto* system_click  = headset->get_actions_right().system_click;
+            //if ((system_click != nullptr) && (system_click->state.changedSinceLastSync == XR_TRUE)) {
+            //    io.AddMouseButtonEvent(ImGuiMouseButton_Right, a_click->state.currentState == XR_TRUE);
+            //}
         }
     }
 #endif
