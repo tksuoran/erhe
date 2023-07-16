@@ -73,7 +73,7 @@ void Rotation_inspector::set_axis_angle(
     update_euler_angles_from_matrix();
 }
 
-auto Rotation_inspector::is_proper(Euler_angle_order euler_angle_order) -> bool
+auto Rotation_inspector::is_proper(const Euler_angle_order euler_angle_order) -> bool
 {
     switch (euler_angle_order) {
         case Euler_angle_order::e_xyx: return true;
@@ -92,7 +92,7 @@ auto Rotation_inspector::is_proper(Euler_angle_order euler_angle_order) -> bool
     }
 }
 
-auto Rotation_inspector::is_tait_bryan(Euler_angle_order euler_angle_order) -> bool
+auto Rotation_inspector::is_tait_bryan(const Euler_angle_order euler_angle_order) -> bool
 {
     switch (euler_angle_order) {
         case Euler_angle_order::e_xyx: return !true;
@@ -182,8 +182,7 @@ void Rotation_inspector::imgui(
     const glm::quat                rotation
 )
 {
-    if (!m_active)
-    {
+    if (!m_active) {
         set_quaternion(rotation);
     }
     // ImGui::TextUnformatted(m_active ? "Active" : "Not active");
@@ -206,8 +205,7 @@ void Rotation_inspector::imgui(
     }
 
     switch (m_representation) {
-        case Representation::e_matrix:
-        {
+        case Representation::e_matrix: {
             const glm::vec3 col0 = m_matrix[0];
             const glm::vec3 col1 = m_matrix[1];
             const glm::vec3 col2 = m_matrix[2];
@@ -225,8 +223,7 @@ void Rotation_inspector::imgui(
             break;
         }
 
-        case Representation::e_quaternion:
-        {
+        case Representation::e_quaternion: {
             value_edit_state.combine(
                 erhe::imgui::make_scalar_button(
                     &m_quaternion.w,
@@ -279,8 +276,7 @@ void Rotation_inspector::imgui(
             break;
         }
 
-        case Representation::e_euler_angles:
-        {
+        case Representation::e_euler_angles: {
             const auto   a             = get_euler_axis(0);
             const auto   b             = get_euler_axis(1);
             const auto   c             = get_euler_axis(2);
@@ -332,8 +328,7 @@ void Rotation_inspector::imgui(
             break;
         }
 
-        case Representation::e_axis_angle:
-        {
+        case Representation::e_axis_angle: {
             value_edit_state.combine(
                 erhe::imgui::make_angle_button(
                     m_angle,
@@ -400,7 +395,7 @@ auto Rotation_inspector::get_quaternion() -> quat
     return glm::normalize(m_quaternion);
 }
 
-auto Rotation_inspector::get_euler_value(std::size_t i) const -> float
+auto Rotation_inspector::get_euler_value(const std::size_t i) const -> float
 {
     return m_euler_angles[i];
 }
@@ -417,7 +412,7 @@ auto Rotation_inspector::get_euler_axis(const std::size_t i) const -> std::size_
     }
 }
 
-auto Rotation_inspector::get_label_color(std::size_t i, const bool text) const -> uint32_t
+auto Rotation_inspector::get_label_color(const std::size_t i, const bool text) const -> uint32_t
 {
     switch (i) {
         case 0:  return text ? 0xff8888ffu : 0xff222266u; // X
@@ -428,5 +423,4 @@ auto Rotation_inspector::get_label_color(std::size_t i, const bool text) const -
     }
 }
 
-
-}
+} // namespace editor

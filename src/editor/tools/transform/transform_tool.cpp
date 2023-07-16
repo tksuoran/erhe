@@ -740,8 +740,13 @@ void Transform_tool::transform_properties()
             ? shared.world_from_anchor
             : shared.entries.front().node->parent_from_node_transform();
 
+    Trs_transform& rotation_transform =
+        (use_world_mode || multiselect)
+            ? shared.world_from_anchor
+            : shared.entries.front().node->parent_from_node_transform();
+
     vec3 scale       = transform.get_scale      ();
-    quat rotation    = transform.get_rotation   ();
+    quat rotation    = rotation_transform.get_rotation();
     vec3 translation = transform.get_translation();
     vec3 skew        = transform.get_skew       ();
 
@@ -763,9 +768,32 @@ void Transform_tool::transform_properties()
         ImGui::TreePop();
     }
     if (rotate_edit_state.value_changed) {
-        Trs_transform n = shared.world_from_anchor_initial_state;
-        n.set_rotation(m_rotation.get_quaternion());
-        adjust(n.get_matrix());
+        if (use_world_mode || multiselect) {
+            touch();
+            for (auto& entry : shared.entries) {
+                auto& node = entry.node;
+                if (!node) {
+                    return;
+                }
+                Trs_transform world_from_node = entry.world_from_node_before;
+                world_from_node.set_rotation(m_rotation.get_quaternion());
+                node->set_world_from_node(world_from_node);
+            }
+            shared.world_from_anchor.set_rotation(m_rotation.get_quaternion());
+        } else {
+            touch();
+            for (auto& entry : shared.entries) {
+                auto& node = entry.node;
+                if (!node) {
+                    return;
+                }
+                Trs_transform parent_from_node = entry.parent_from_node_before;
+                parent_from_node.set_rotation(m_rotation.get_quaternion());
+                node->set_parent_from_node(parent_from_node);
+                shared.world_from_anchor.set(node->world_from_node());
+            }
+        }
+        update_transforms();
     }
 
     Value_edit_state scale_edit_state;
