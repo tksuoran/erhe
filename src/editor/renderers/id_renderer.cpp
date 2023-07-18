@@ -286,7 +286,7 @@ void Id_renderer::render(
         gl::multi_draw_elements_indirect(
             m_pipeline.data.input_assembly.primitive_topology,
             m_mesh_memory.buffer_info.index_type,
-            reinterpret_cast<const void *>(draw_indirect_buffer_range.range.first_byte_offset),
+            reinterpret_cast<const void*>(draw_indirect_buffer_range.range.first_byte_offset),
             static_cast<GLsizei>(draw_indirect_buffer_range.draw_indirect_count),
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
         );

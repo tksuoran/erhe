@@ -42,7 +42,6 @@ using uvec4 = glm::uvec4;
 using mat4 = glm::mat4;
 
 
-
 Build_context_root::Build_context_root(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
@@ -129,16 +128,16 @@ void Build_context_root::get_vertex_attributes()
 {
     ERHE_PROFILE_FUNCTION();
 
-    //const Attribute_types& attribute_types = build_info.primitive_types
-    attributes.position      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::position,  0);
-    attributes.normal        = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    0); // content normals
-    //attributes.normal_flat   = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    1); // flat normals
-    //attributes.normal_smooth = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    2); // smooth normals
-    attributes.tangent       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tangent,   0);
-    attributes.bitangent     = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::bitangent, 0);
-    attributes.color         = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::color,     0);
-    attributes.texcoord      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tex_coord, 0);
-    attributes.id_vec3       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::id,        0);
+    attributes.position      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::position,      0);
+    attributes.normal        = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,        0); // content normals
+    attributes.normal_smooth = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,        1); // smooth normals
+    //attributes.normal_flat   = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::normal,    2); // flat normals
+    attributes.tangent       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tangent,       0);
+    attributes.bitangent     = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::bitangent,     0);
+    attributes.color         = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::color,         0);
+    attributes.aniso_control = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::aniso_control, 0);
+    attributes.texcoord      = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::tex_coord,     0);
+    attributes.id_vec3       = Vertex_attribute_info(vertex_format, Vertex_attribute::Usage_type::id,            0);
     //// TODO
     //// if (erhe::graphics::g_instance->info.use_integer_polygon_ids)
     //// {
@@ -273,7 +272,6 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
         c_str(m_normal_style),
         m_geometry.name
     );
-    //const erhe::log::Indenter indenter;
 
     Build_context build_context{
         m_geometry,
@@ -283,7 +281,6 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
     };
 
     const Primitive_types& primitive_types = m_build_info.primitive_types;
-
     if (primitive_types.fill_triangles) {
         build_context.build_polygon_fill();
     }
@@ -370,7 +367,7 @@ void Build_context::build_vertex_normal()
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!root.attributes.normal.is_valid()) {
+    if (!root.attributes.normal.is_valid() && !root.attributes.normal_smooth.is_valid()) {
         return;
     }
 
@@ -431,19 +428,23 @@ void Build_context::build_vertex_normal()
     //     SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} flat polygon normal {}", point_id, corner_id, polygon_normal);
     // }
     // 
-    // if (features.normal_smooth && root.attributes.normal_smooth.is_valid()) {
-    //     vec3 smooth_point_normal{0.0f, 1.0f, 0.0f};
-    // 
-    //     if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id)) {
-    //         smooth_point_normal = property_maps.point_normals_smooth->get(point_id);
-    //         SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} smooth point normal {}", point_id, corner_id, smooth_point_normal);
-    //     } else {
-    //         SPDLOG_LOGGER_WARN(log_primitive_builder, "point {} corner {} smooth unit y normal", point_id, corner_id);
-    //         used_fallback_smooth_normal = true;
-    //     }
-    // 
-    //     vertex_writer.write(root.attributes.normal_smooth, smooth_point_normal);
-    // }
+    if (root.attributes.normal_smooth.is_valid()) {
+        vec3 smooth_point_normal{0.0f, 1.0f, 0.0f};
+    
+        if ((property_maps.point_normals_smooth != nullptr) && property_maps.point_normals_smooth->has(point_id)) {
+            smooth_point_normal = property_maps.point_normals_smooth->get(point_id);
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} smooth point normal {}", point_id, corner_id, smooth_point_normal);
+        } else {
+            // Smooth normals are currently used only for wide line depth bias.
+            // If edge lines are not used, do not generate warning about missing smooth normals.
+            if (root.build_info.primitive_types.edge_lines) {
+                SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} smooth unit y normal", point_id, corner_id);
+                used_fallback_smooth_normal = true;
+            }
+        }
+    
+        vertex_writer.write(root.attributes.normal_smooth, smooth_point_normal);
+    }
 }
 
 void Build_context::build_vertex_tangent()
@@ -659,6 +660,52 @@ void Build_context::build_vertex_color(const uint32_t /*polygon_corner_count*/)
     vertex_writer.write(root.attributes.color, color);
 }
 
+void Build_context::build_vertex_aniso_control()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!root.attributes.aniso_control.is_valid()) {
+        return;
+    }
+
+    // X is used to modulate anisotropy level:
+    //   0.0 -- Anisotropic
+    //   1.0 -- Isotropic when approaching texcoord (0, 0)
+    // Y is used for tangent space selection/control:
+    //   0.0 -- Use geometry T and B (from vertex attribute
+    //   1.0 -- Use T and B derived from texcoord
+    vec2 value{1.0f, 1.0f};
+    bool found{false};
+    if (property_maps.corner_aniso_control != nullptr) {
+        found = property_maps.corner_aniso_control->maybe_get(corner_id, value);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found) {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} corner aniso control {}", point_id, corner_id, value);
+        }
+#endif
+    }
+    if (!found && (property_maps.point_aniso_control != nullptr)) {
+        found = property_maps.point_aniso_control->maybe_get(point_id, value);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found) {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point aniso control {}", point_id, corner_id, value);
+        }
+#endif
+    }
+    if (!found && (property_maps.polygon_aniso_control != nullptr)) {
+        found = property_maps.polygon_aniso_control->maybe_get(polygon_id, value);
+#if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
+        if (found) {
+            SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} polygon {} polygon aniso control {}", point_id, corner_id, polygon_id, value);
+        }
+#else
+        static_cast<void>(found);
+#endif
+    }
+
+    vertex_writer.write(root.attributes.aniso_control, value);
+}
+
 void Build_context::build_centroid_position()
 {
     if (!root.build_info.primitive_types.centroid_points || !root.attributes.position.is_valid()) {
@@ -759,13 +806,14 @@ void Build_context::build_polygon_fill()
 
             root.primitive_geometry->corner_to_vertex_id[corner_id] = vertex_index;
 
-            build_polygon_id      ();
-            build_vertex_position ();
-            build_vertex_normal   ();
-            build_vertex_tangent  ();
-            build_vertex_bitangent();
-            build_vertex_texcoord ();
-            build_vertex_color    (polygon.corner_count);
+            build_polygon_id          ();
+            build_vertex_position     ();
+            build_vertex_normal       ();
+            build_vertex_tangent      ();
+            build_vertex_bitangent    ();
+            build_vertex_texcoord     ();
+            build_vertex_color        (polygon.corner_count);
+            build_vertex_aniso_control();
             build_vertex_joint_indices();
             build_vertex_joint_weights();
 

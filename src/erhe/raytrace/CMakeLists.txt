@@ -76,12 +76,8 @@ target_link_libraries(${_target}
         erhe::scene
 )
 
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
-    target_link_libraries(${_target} PRIVATE TracyClient)
-endif ()
-
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
-    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+if (DEFINED ERHE_PROFILE_TARGET)
+    target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
 endif ()
 
 erhe_target_settings(${_target})

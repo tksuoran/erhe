@@ -33,10 +33,11 @@ public:
     Vertex_attribute_info position     ;
     Vertex_attribute_info normal       ;
     //Vertex_attribute_info normal_flat  ;
-    //Vertex_attribute_info normal_smooth;
+    Vertex_attribute_info normal_smooth; // Editor wireframe bias requires smooth normal
     Vertex_attribute_info tangent      ;
     Vertex_attribute_info bitangent    ;
     Vertex_attribute_info color        ;
+    Vertex_attribute_info aniso_control;
     Vertex_attribute_info texcoord     ;
     Vertex_attribute_info id_vec3      ;
     //// TODO Vertex_attribute_info attribute_id_uint;
@@ -104,6 +105,7 @@ private:
     void build_vertex_bitangent    ();
     void build_vertex_texcoord     ();
     void build_vertex_color        (const uint32_t polygon_corner_count);
+    void build_vertex_aniso_control();
     void build_vertex_joint_indices();
     void build_vertex_joint_weights();
 

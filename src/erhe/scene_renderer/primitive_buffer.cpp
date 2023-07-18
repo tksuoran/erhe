@@ -27,7 +27,7 @@ Primitive_interface::Primitive_interface(
         .material_index           = primitive_struct.add_uint ("material_index"          )->offset_in_parent(),
         .size                     = primitive_struct.add_float("size"                    )->offset_in_parent(),
         .skinning_factor          = primitive_struct.add_float("skinning_factor"         )->offset_in_parent(),
-        .extra3                   = primitive_struct.add_uint ("extra3"                  )->offset_in_parent()
+        .base_joint_index         = primitive_struct.add_uint ("base_joint_index"        )->offset_in_parent()
     }
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
@@ -157,12 +157,13 @@ auto Primitive_buffer::update(
                 m_id_offset += add;
             }
 
-            const glm::vec4 wireframe_color = mesh->get_wireframe_color();
-            const glm::vec3 id_offset_vec3  = erhe::toolkit::vec3_from_uint(m_id_offset);
-            const glm::vec4 id_offset_vec4  = glm::vec4{id_offset_vec3, 0.0f};
-            const uint32_t  material_index  = (primitive.material != nullptr) ? primitive.material->material_buffer_index : 0u;
-            const float     skinning_factor = get_skin(node) ? 1.0f : 0.0f;
-            const uint32_t  extra3          = 0;
+            const glm::vec4 wireframe_color  = mesh->get_wireframe_color();
+            const glm::vec3 id_offset_vec3   = erhe::toolkit::vec3_from_uint(m_id_offset);
+            const glm::vec4 id_offset_vec4   = glm::vec4{id_offset_vec3, 0.0f};
+            const uint32_t  material_index   = (primitive.material != nullptr) ? primitive.material->material_buffer_index : 0u;
+            const auto      skin             = mesh_data.skin;
+            const float     skinning_factor  = skin ? 1.0f : 0.0f;
+            const uint32_t  base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0;
 
             using erhe::graphics::as_span;
             const auto color_span =
@@ -183,7 +184,7 @@ auto Primitive_buffer::update(
                 write(primitive_gpu_data, m_writer.write_offset + offsets.material_index,           as_span(material_index          ));
                 write(primitive_gpu_data, m_writer.write_offset + offsets.size,                     size_span                        );
                 write(primitive_gpu_data, m_writer.write_offset + offsets.skinning_factor,          as_span(skinning_factor         ));
-                write(primitive_gpu_data, m_writer.write_offset + offsets.extra3,                   as_span(extra3                  ));
+                write(primitive_gpu_data, m_writer.write_offset + offsets.base_joint_index,         as_span(base_joint_index        ));
 
             }
             m_writer.write_offset += entry_size;

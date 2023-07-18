@@ -1,11 +1,22 @@
 in vec2      v_texcoord;
 in vec4      v_position;
 in vec4      v_color;
+in vec2      v_aniso_control;
 in mat3      v_TBN;
 in flat uint v_material_index;
 in float     v_tangent_scale;
 in float     v_line_width;
 in vec4      v_bone_color;
+
+vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
+{
+#if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_texture = sampler2D(texture_handle);
+    return texture(s_texture, v_texcoord);
+#else
+    return texture(s_texture[texture_handle.x], v_texcoord);
+#endif
+}
 
 float srgb_to_linear(float x)
 {
@@ -52,6 +63,8 @@ void main()
     vec3  L              = normalize(point_to_light);
 
     Material material = material.materials[v_material_index];
+    uvec2 base_color_texture         = material.base_color_texture;
+    uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
 
     vec2  T_circular                    = normalize(v_texcoord);
     float circular_anisotropy_magnitude = pow(length(v_texcoord) * 8.0, 0.25);
@@ -61,15 +74,14 @@ void main()
     // Vertex color green channel is used for tangent space selection/control:
     //   0.0 -- Use geometry T and B (from vertex attribute
     //   1.0 -- Use T and B derived from texcoord
-    float tangent_space_control = v_color.g;
     float anisotropy_strength = mix(
         1.0,
         min(1.0, circular_anisotropy_magnitude),
-        tangent_space_control
-    ) * v_color.r;
+        v_aniso_control.y
+    ) * v_aniso_control.x;
     // Mix tangent space geometric .. texcoord generated
-    vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, tangent_space_control);
-    vec3  B                   = mix(B0, T_circular.y * T0 - T_circular.x * B0, tangent_space_control);
+    vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y);
+    vec3  B                   = mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y);
     float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
     // Mix roughness based on anisotropy_strength
     float roughness_x         = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);
@@ -124,11 +136,20 @@ void main()
 #if defined(ERHE_DEBUG_TEXCOORD)
     out_color.rgb = srgb_to_linear(vec3(v_texcoord, 0.0));
 #endif
+#if defined(ERHE_DEBUG_BASE_COLOR_TEXTURE)
+    out_color.rgb = srgb_to_linear(sample_texture(base_color_texture, v_texcoord).rgb);
+#endif
 #if defined(ERHE_DEBUG_VERTEX_COLOR_RGB)
     out_color.rgb = srgb_to_linear(v_color.rgb);
 #endif
 #if defined(ERHE_DEBUG_VERTEX_COLOR_ALPHA)
     out_color.rgb = srgb_to_linear(vec3(v_color.a));
+#endif
+#if defined(ERHE_DEBUG_ANISO_STRENGTH)
+    out_color.rgb = srgb_to_linear(vec3(v_aniso_control.x));
+#endif
+#if defined(ERHE_DEBUG_ANISO_TEXCOORD)
+    out_color.rgb = srgb_to_linear(vec3(v_aniso_control.y));
 #endif
 #if defined(ERHE_DEBUG_MISC)
     // Show Draw ID

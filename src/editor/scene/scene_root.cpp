@@ -4,9 +4,13 @@
 #include "rendertarget_mesh.hpp"
 
 #include "scene/content_library.hpp"
+#include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 
 #include "erhe/primitive/material.hpp"
 #include "erhe/physics/iworld.hpp"
+#include "erhe/physics/irigid_body.hpp"
+#include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
@@ -216,6 +220,139 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
     }
 }
 
+void Scene_root::register_node_physics(Node_physics* node_physics)
+{
+#ifndef NDEBUG
+    const auto i = std::find(m_node_physics.begin(), m_node_physics.end(), node_physics);
+    if (i != m_node_physics.end()) {
+        auto* node = node_physics->get_node();
+        log_physics->error("Node_physics for '{}' already in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+    } else
+#endif
+    {
+        m_node_physics.push_back(node_physics);
+        m_node_physics_sorted = false;
+    }
+
+    if (m_physics_world) {
+        node_physics->set_physics_world(m_physics_world.get());
+        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body != nullptr) {
+            m_physics_world->add_rigid_body(node_physics->get_rigid_body());
+        }
+    }
+}
+
+void Scene_root::unregister_node_physics(Node_physics* node_physics)
+{
+    const auto i = std::remove(
+        m_node_physics.begin(),
+        m_node_physics.end(),
+        node_physics
+    );
+    if (i == m_node_physics.end()) {
+        auto* node = node_physics->get_node();
+        log_physics->error("Node_physics for '{}' not in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+    } else {
+        m_node_physics.erase(i, m_node_physics.end());
+        m_node_physics_sorted = false;
+    }
+
+    if (m_physics_world) {
+        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body != nullptr) {
+            m_physics_world->remove_rigid_body(node_physics->get_rigid_body());
+        }
+        node_physics->set_physics_world(nullptr);
+    }
+}
+
+void Scene_root::update_physics_simulation_fixed_step(const double dt)
+{
+    if (m_physics_world) {
+        m_physics_world->update_fixed_step(dt);
+    }
+}
+
+void Scene_root::update_physics_simulation_once_per_frame()
+{
+    // Sort nodes, so that parent transforms are updated before child nodes
+    if (!m_node_physics_sorted) {
+        std::sort(
+            m_node_physics.begin(),
+            m_node_physics.end(),
+            [](Node_physics* lhs, Node_physics* rhs) -> bool {
+                erhe::scene::Node* lhs_node = lhs->get_node();
+                erhe::scene::Node* rhs_node = rhs->get_node();
+                if ((lhs_node == nullptr) || (rhs_node == nullptr)) {
+                    return true;
+                }
+                return lhs_node->get_depth() < rhs_node->get_depth();
+            }
+        );
+    }
+
+    for (Node_physics* node_physics : m_node_physics) {
+        auto* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body) {
+            if (rigid_body->is_active()) {
+                const glm::mat4 transform = rigid_body->get_world_transform();
+                node_physics->set_world_from_node(transform);
+            } else {
+                log_physics_frame->trace("{} is sleeping", rigid_body->get_debug_label());
+            }
+        }
+    }
+}
+
+//
+void Scene_root::register_node_raytrace(Node_raytrace* node_raytrace)
+{
+#ifndef NDEBUG
+    const auto i = std::find(m_node_raytraces.begin(), m_node_raytraces.end(), node_raytrace);
+    if (i != m_node_raytraces.end()) {
+        auto* node = node_raytrace->get_node();
+        log_raytrace->error("Node_raytrace for '{}' already in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+    } else
+#endif
+    {
+        m_node_raytraces.push_back(node_raytrace);
+    }
+
+    if (m_raytrace_scene) {
+        erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
+        m_raytrace_scene->attach(rt_instance);
+        uint32_t mask = 0;
+        for (const auto& node_attachment : node_raytrace->get_node()->get_attachments()) {
+            mask = mask | raytrace_node_mask(*node_attachment.get());
+        }
+        rt_instance->set_mask(mask);
+        log_raytrace->trace("RT {} attached, mask = {}", node_raytrace->get_label(), mask);
+    }
+}
+
+void Scene_root::unregister_node_raytrace(Node_raytrace* node_raytrace)
+{
+    const auto i = std::remove(
+        m_node_raytraces.begin(),
+        m_node_raytraces.end(),
+        node_raytrace
+    );
+    if (i == m_node_raytraces.end()) {
+        auto* node = node_raytrace->get_node();
+        log_raytrace->error("Node_raytrace for '{}' not in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+    } else {
+        m_node_raytraces.erase(i, m_node_raytraces.end());
+    }
+
+    if (m_raytrace_scene) {
+        erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
+        m_raytrace_scene->detach(rt_instance);
+        log_raytrace->trace("RT {} detached", node_raytrace->get_label());
+    }
+}
+
+//
 
 [[nodiscard]] auto Scene_root::get_shared_scene() -> std::shared_ptr<erhe::scene::Scene>
 {
@@ -232,13 +369,13 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
     return m_layers;
 }
 
-auto Scene_root::physics_world() -> erhe::physics::IWorld&
+auto Scene_root::get_physics_world() -> erhe::physics::IWorld&
 {
     ERHE_VERIFY(m_physics_world);
     return *m_physics_world.get();
 }
 
-auto Scene_root::raytrace_scene() -> erhe::raytrace::IScene&
+auto Scene_root::get_raytrace_scene() -> erhe::raytrace::IScene&
 {
     ERHE_VERIFY(m_raytrace_scene);
     return *m_raytrace_scene.get();

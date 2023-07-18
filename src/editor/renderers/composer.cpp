@@ -10,24 +10,24 @@ Composer::Composer(const std::string_view name)
 {
 }
 
-[[nodiscard]] auto Composer::static_type() -> uint64_t
+[[nodiscard]] auto Composer::get_static_type() -> uint64_t
 {
     return erhe::scene::Item_type::composer;
 }
 
-[[nodiscard]] auto Composer::static_type_name() -> const char*
+[[nodiscard]] auto Composer::get_static_type_name() -> const char*
 {
     return "composer";
 }
 
 [[nodiscard]] auto Composer::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-[[nodiscard]] auto Composer::type_name() const -> const char*
+[[nodiscard]] auto Composer::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
 void Composer::render(const Render_context& context) const

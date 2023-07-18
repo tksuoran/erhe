@@ -10,7 +10,7 @@ namespace erhe::physics {
     class IWorld;
 }
 namespace erhe::scene {
-    class Scene_host;
+    class Item_host;
 }
 
 namespace editor
@@ -27,15 +27,15 @@ public:
     ~Node_physics() noexcept override;
 
     // Implements Item
-    [[nodiscard]] static auto static_type     () -> uint64_t;
-    [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto get_type () const -> uint64_t override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
     // Implements Node_attachment
-    void handle_node_scene_host_update(
-        erhe::scene::Scene_host* old_scene_host,
-        erhe::scene::Scene_host* new_scene_host
+    void handle_item_host_update(
+        erhe::scene::Item_host* old_item_host,
+        erhe::scene::Item_host* new_item_host
     ) override;
     void handle_node_transform_update() override;
 
@@ -47,13 +47,16 @@ public:
     void set_motion_mode         (const erhe::physics::Motion_mode motion_mode         ) override;
 
     // Public API
-    [[nodiscard]] auto rigid_body         ()       ->       erhe::physics::IRigid_body*;
-    [[nodiscard]] auto rigid_body         () const -> const erhe::physics::IRigid_body*;
+    [[nodiscard]] auto get_rigid_body     ()       ->       erhe::physics::IRigid_body*;
+    [[nodiscard]] auto get_rigid_body     () const -> const erhe::physics::IRigid_body*;
     [[nodiscard]] auto get_world_from_node() const -> erhe::physics::Transform;
 
     void set_world_from_node    (const glm::mat4& world_from_node);
     void set_world_from_node    (const erhe::physics::Transform world_from_node);
     void set_rigidbody_from_node(const erhe::physics::Transform rigidbody_from_node);
+
+    void set_physics_world(erhe::physics::IWorld* value);
+    [[nodiscard]] auto get_physics_world() const -> erhe::physics::IWorld*;
 
 private:
     erhe::physics::IWorld*                           m_physics_world      {nullptr};

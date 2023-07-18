@@ -1,4 +1,6 @@
 #include "icon_set.hpp"
+
+#include "editor_context.hpp"
 #include "editor_log.hpp"
 
 #include "renderers/programs.hpp"
@@ -6,6 +8,7 @@
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>
@@ -38,6 +41,7 @@ Icon_set::Icon_set(
 
     const auto icon_directory = std::filesystem::path("res") / "icons";
 
+    icons.anim              = load(icon_directory / "anim.svg");
     icons.bone              = load(icon_directory / "bone_data.svg");
     icons.brush_big         = load(icon_directory / "brush_big.svg");
     icons.brush_small       = load(icon_directory / "brush_small.svg");
@@ -73,11 +77,52 @@ Icon_set::Icon_set(
     icons.space_mouse_lmb   = load(icon_directory / "space_mouse_lmb.svg");
     icons.space_mouse_rmb   = load(icon_directory / "space_mouse_rmb.svg");
     icons.spot_light        = load(icon_directory / "spot_light.svg");
+    icons.texture           = load(icon_directory / "texture.svg");
     icons.three_dots        = load(icon_directory / "three_dots.svg");
     icons.vive              = load(icon_directory / "vive.svg");
     icons.vive_menu         = load(icon_directory / "vive_menu.svg");
     icons.vive_trackpad     = load(icon_directory / "vive_trackpad.svg");
     icons.vive_trigger      = load(icon_directory / "vive_trigger.svg");
+
+    type_icons.resize(erhe::scene::Item_type::count);
+    type_icons[erhe::scene::Item_type::index_scene         ] = { .icon = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 1.0f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_content_folder] = { .icon = icons.folder,      .color = glm::vec4{0.7f, 0.7f, 0.7f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_brush         ] = { .icon = icons.brush_small, .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_material      ] = { .icon = icons.material,    .color = glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_node          ] = { .icon = icons.node,        .color = glm::vec4{0.2f, 0.2f, 1.0f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_mesh          ] = { .icon = icons.mesh,        .color = glm::vec4{0.4f, 1.0f, 0.3f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_skin          ] = { .icon = icons.skin,        .color = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_bone          ] = { .icon = icons.bone,        .color = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_animation     ] = { .icon = icons.anim,        .color = glm::vec4{1.0f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_camera        ] = { .icon = icons.camera,      .color = glm::vec4{0.4f, 0.0f, 1.0f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_light         ] = { .icon = icons.point_light, .color = glm::vec4{1.0f, 0.8f, 0.5f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_physics       ] = { .icon = icons.physics,     .color = glm::vec4{0.2f, 0.5f, 1.0f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_raytrace      ] = { .icon = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_grid          ] = { .icon = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
+    type_icons[erhe::scene::Item_type::index_texture       ] = { .icon = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
+}
+
+void Icon_set::add_icons(
+    const uint64_t item_type,
+    const float    scale
+)
+{
+    using namespace erhe::toolkit;
+    using Item_flags = erhe::scene::Item_flags;
+
+    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
+        const uint64_t bit_mask = (uint64_t{1} << bit_position);
+        if (erhe::toolkit::test_all_rhs_bits_set(item_type, bit_mask)) {
+            const auto& icon_opt = type_icons.at(bit_position);
+            if (icon_opt.has_value()) {
+                const auto& icon = icon_opt.value();
+                const auto& icon_rasterization = scale < 1.5f
+                    ? get_small_rasterization()
+                    : get_large_rasterization();
+                icon_rasterization.icon(icon.icon, icon.color);
+            }
+        }
+    }
 }
 
 auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2

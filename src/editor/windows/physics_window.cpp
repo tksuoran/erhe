@@ -1,6 +1,7 @@
 #include "windows/physics_window.hpp"
 
 #include "editor_context.hpp"
+#include "editor_settings.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
@@ -26,28 +27,13 @@ Physics_window::Physics_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Physics", "physics"}
     , m_context                {editor_context}
 {
-    auto ini = erhe::configuration::get_ini("erhe.ini", "physics");
-    ini->get("static_enable",  config.static_enable);
-    ini->get("dynamic_enable", config.dynamic_enable);
-
     m_min_size[0] = 120.0f;
     m_min_size[1] = 120.0f;
 }
 
 void Physics_window::viewport_toolbar(bool& hovered)
 {
-    const auto viewport_window = m_context.viewport_windows->last_window();
-    if (!viewport_window) {
-        return;
-    }
-
-    const auto scene_root = viewport_window->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
-    auto& physics_world   = scene_root->physics_world();
-    bool  physics_enabled = physics_world.is_physics_updates_enabled();
+    bool physics_enabled = m_context.editor_settings->physics_dynamic_enable;
 
     ImGui::SameLine();
     const bool pressed = erhe::imgui::make_button(
@@ -65,12 +51,8 @@ void Physics_window::viewport_toolbar(bool& hovered)
         );
     };
 
-    if (pressed) {
-        if (physics_enabled) {
-            physics_world.disable_physics_updates();
-        } else {
-            physics_world.enable_physics_updates();
-        }
+    if (pressed && m_context.editor_settings->physics_static_enable) {
+        m_context.editor_settings->physics_dynamic_enable = !m_context.editor_settings->physics_dynamic_enable;
     }
 }
 
@@ -79,26 +61,14 @@ void Physics_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
-    const auto viewport_window = m_context.viewport_windows->last_window();
-    if (!viewport_window) {
-        return;
+    if (!m_context.editor_settings->physics_static_enable) {
+        ImGui::BeginDisabled();
     }
-
-    const auto scene_root = viewport_window->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
-    auto&      physics_world           = scene_root->physics_world();
-    const bool physics_enabled         = physics_world.is_physics_updates_enabled();
-    bool       updated_physics_enabled = physics_enabled;
-    ImGui::Text("Scene: %s", scene_root->get_name().c_str());
-    ImGui::Checkbox("Physics enabled", &updated_physics_enabled);
-    if (updated_physics_enabled != physics_enabled) {
-        if (updated_physics_enabled) {
-            physics_world.enable_physics_updates();
-        } else {
-            physics_world.disable_physics_updates();
+    ImGui::Checkbox("Physics enabled", &m_context.editor_settings->physics_dynamic_enable);
+    if (!m_context.editor_settings->physics_static_enable) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("erhe.ini has [physics] static_enable = false");
         }
     }
 
@@ -128,6 +98,17 @@ void Physics_window::imgui()
     ////     }
     //// }
 
+    const auto viewport_window = m_context.viewport_windows->last_window();
+    if (!viewport_window) {
+        return;
+    }
+
+    const auto scene_root = viewport_window->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+
+    auto& physics_world = scene_root->get_physics_world();
     const auto gravity = physics_world.get_gravity();
     {
         float floats[3] = { gravity.x, gravity.y, gravity.z };

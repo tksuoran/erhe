@@ -106,7 +106,7 @@ private:
     Instance&                 m_graphics_instance;
     Shader_stages_create_info m_create_info;
     Gl_program                m_handle;
-    std::vector<Gl_shader>    m_shaders;
+    std::vector<Gl_shader>    m_prelink_shaders;
     int                       m_state{state_init};
     Shader_resource           m_default_uniform_block;
     std::map<std::string, Shader_resource, std::less<>> m_resources;
@@ -119,14 +119,17 @@ public:
     explicit Shader_stages(const std::string& non_functional_name);
 
     // Reloads program by consuming prototype
-    void reload(Shader_stages_prototype&& prototype);
+    void reload    (Shader_stages_prototype&& prototype);
+    void invalidate();
 
-    [[nodiscard]] auto name()    const -> const std::string&;
-    [[nodiscard]] auto gl_name() const -> unsigned int;
+    [[nodiscard]] auto name    () const -> const std::string&;
+    [[nodiscard]] auto gl_name () const -> unsigned int;
+    [[nodiscard]] auto is_valid() const -> bool;
 
 private:
     std::string            m_name;
     Gl_program             m_handle;
+    bool                   m_is_valid{false};
     std::vector<Gl_shader> m_attached_shaders;
 };
 

@@ -43,4 +43,31 @@ auto timestamp() -> std::string
     );
 }
 
+auto timestamp_short() -> std::string
+{
+    struct timespec ts{};
+#if defined(_MSC_VER)
+    timespec_get(&ts, TIME_UTC);
+#else
+    // Works at least with MinGW gcc bundled with CLion
+    clock_gettime(CLOCK_REALTIME, &ts);
+#endif
+
+    struct tm time;
+#if defined (_WIN32) // _MSC_VER
+    localtime_s(&time, &ts.tv_sec);
+#else
+    localtime_r(&ts.tv_sec, &time);
+#endif
+
+    // Write time
+    return fmt::format(
+        "{:02}:{:02}:{:02}.{:03d} ",
+        time.tm_hour,
+        time.tm_min,
+        time.tm_sec,
+        ts.tv_nsec / 1000000
+    );
+}
+
 } // namespace erhe::toolkit

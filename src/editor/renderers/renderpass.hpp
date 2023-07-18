@@ -33,10 +33,10 @@ public:
     void render(const Render_context& context) const;
 
     // Implements Item
-    [[nodiscard]] static auto static_type     () -> uint64_t;
-    [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto get_type () const -> uint64_t override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
     std::vector<erhe::scene::Layer_id>                mesh_layers;
     std::vector<erhe::renderer::Pipeline_renderpass*> passes;

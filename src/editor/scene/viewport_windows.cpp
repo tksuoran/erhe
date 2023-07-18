@@ -196,9 +196,9 @@ auto Viewport_windows::create_viewport_window(
     }
 
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> previous_node;
-    log_startup->info("Viewport_windows::create_viewport_window(): msaa_sample_count = {}", msaa_sample_count);
+    log_post_processing->trace("Viewport_windows::create_viewport_window(): msaa_sample_count = {}", msaa_sample_count);
     if (msaa_sample_count > 1) {
-        log_startup->info("Adding Multisample_resolve_node to rendergraph");
+        log_post_processing->trace("Adding Multisample_resolve_node to rendergraph");
         auto multisample_resolve_node = std::make_shared<erhe::rendergraph::Multisample_resolve_node>(
             rendergraph,
             fmt::format("MSAA for {}", name),
@@ -214,13 +214,13 @@ auto Viewport_windows::create_viewport_window(
         );
         previous_node = multisample_resolve_node;
     } else {
-        log_startup->info("Multisample is disabled (not added to rendergraph)");
+        log_post_processing->trace("Multisample is disabled (not added to rendergraph)");
         previous_node = new_viewport_window;
     }
 
     std::shared_ptr<erhe::rendergraph::Rendergraph_node> viewport_producer;
     if (enable_post_processing) {
-        log_startup->info("Adding post processing node to rendergraph");
+        log_post_processing->trace("Adding post processing node to rendergraph");
         auto post_processing_node = std::make_shared<Post_processing_node>(
             rendergraph,
             m_context,
@@ -234,7 +234,7 @@ auto Viewport_windows::create_viewport_window(
         );
         new_viewport_window->set_final_output(post_processing_node);
     } else {
-        log_startup->info("Post processing is disabled (not added to rendergraph)");
+        log_post_processing->trace("Post processing is disabled (not added to rendergraph)");
         new_viewport_window->set_final_output(previous_node);
     }
     return new_viewport_window;

@@ -55,18 +55,18 @@ Program_interface::Program_interface(
                 }
             },
             erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 2,
+                .layout_location = 3,
                 .shader_type     = gl::Attribute_type::float_vec3,
-                .name            = "a_normal_flat",
+                .name            = "a_normal_smooth",
                 .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::normal,
                     .index = 1
                 }
             },
             erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 3,
+                .layout_location = 2,
                 .shader_type     = gl::Attribute_type::float_vec3,
-                .name            = "a_normal_smooth",
+                .name            = "a_normal_flat",
                 .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::normal,
                     .index = 2
@@ -99,13 +99,21 @@ Program_interface::Program_interface(
             erhe::graphics::Vertex_attribute_mapping{
                 .layout_location = 7,
                 .shader_type     = gl::Attribute_type::float_vec2,
+                .name            = "a_aniso_control",
+                .src_usage       = {
+                    .type  = Vertex_attribute::Usage_type::aniso_control,
+                }
+            },
+            erhe::graphics::Vertex_attribute_mapping{
+                .layout_location = 8,
+                .shader_type     = gl::Attribute_type::float_vec2,
                 .name            = "a_texcoord",
                 .src_usage       = {
                     .type  = Vertex_attribute::Usage_type::tex_coord,
                 }
             },
             erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 8,
+                .layout_location = 9,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_id",
                 .src_usage       = {
@@ -113,7 +121,7 @@ Program_interface::Program_interface(
                 }
             },
             erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 9,
+                .layout_location = 10,
                 .shader_type     = gl::Attribute_type::unsigned_int_vec4,
                 .name            = "a_joints",
                 .src_usage       =
@@ -122,7 +130,7 @@ Program_interface::Program_interface(
                 }
             },
             erhe::graphics::Vertex_attribute_mapping{
-                .layout_location = 10,
+                .layout_location = 11,
                 .shader_type     = gl::Attribute_type::float_vec4,
                 .name            = "a_weights",
                 .src_usage       = {

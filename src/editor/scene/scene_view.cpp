@@ -256,8 +256,8 @@ void Scene_view::update_hover_with_raytrace()
         return;
     }
 
-    auto& scene = scene_root->raytrace_scene();
-    scene.commit();
+    auto& rt_scene = scene_root->get_raytrace_scene();
+    rt_scene.commit();
 
     ERHE_PROFILE_SCOPE("raytrace inner");
 
@@ -284,16 +284,16 @@ void Scene_view::update_hover_with_raytrace()
         erhe::raytrace::Hit hit;
         if (slot == Hover_entry::tool_slot) {
             if (tool_scene_root != nullptr) {
-                tool_scene_root->raytrace_scene().intersect(ray, hit);
+                tool_scene_root->get_raytrace_scene().intersect(ray, hit);
             }
         } else {
-            scene.intersect(ray, hit);
+            rt_scene.intersect(ray, hit);
         }
         entry.valid = (hit.instance != nullptr);
         if (entry.valid) {
             void* user_data     = hit.instance->get_user_data();
             entry.uv            = hit.uv;
-            entry.raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+            entry.raytrace_node = static_cast<Node_raytrace*>(user_data);
             entry.position      = ray.origin + ray.t_far * ray.direction;
             entry.local_index   = std::numeric_limits<std::size_t>::max();
 

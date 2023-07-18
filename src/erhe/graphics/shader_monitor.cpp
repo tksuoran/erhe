@@ -139,6 +139,10 @@ void Shader_monitor::update_once_per_frame()
             erhe::graphics::Shader_stages_prototype prototype{m_graphics_instance, create_info};
             if (prototype.is_valid()) {
                 entry.shader_stages->reload(std::move(prototype));
+                log_shader_monitor->info("Shader reload OK {}", entry.create_info.shaders.front().path.string());
+            } else {
+                entry.shader_stages->invalidate();
+                log_shader_monitor->warn("Shader reload FAIL {}", entry.create_info.shaders.front().path.string());
             }
         }
         std::error_code error_code;

@@ -53,8 +53,8 @@ target_link_libraries(
     mINI
 )
 
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
-    target_link_libraries(${_target} PRIVATE TracyClient)
+if (DEFINED ERHE_PROFILE_TARGET)
+    target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
 endif ()
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")

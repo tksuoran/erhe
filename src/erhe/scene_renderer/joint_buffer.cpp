@@ -27,8 +27,12 @@ Joint_interface::Joint_interface(
     auto ini = erhe::configuration::get_ini("erhe.ini", "renderer");
     ini->get("max_joint_count", max_joint_count);
 
-    offsets.debug_joint_indices = joint_block.add_uvec4("debug_joint_indices")->offset_in_parent();
-    offsets.debug_joint_colors  = joint_block.add_vec4 ("debug_joint_colors", max_joint_count)->offset_in_parent();
+    offsets.debug_joint_indices     = joint_block.add_uvec4("debug_joint_indices")->offset_in_parent();
+    offsets.debug_joint_color_count = joint_block.add_uint ("debug_joint_color_count")->offset_in_parent(),
+    offsets.extra1                  = joint_block.add_uint ("extra1")->offset_in_parent(),
+    offsets.extra2                  = joint_block.add_uint ("extra2")->offset_in_parent(),
+    offsets.extra3                  = joint_block.add_uint ("extra3")->offset_in_parent(),
+    offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors", max_joint_count)->offset_in_parent();
     offsets.joint = {
         .world_from_bind          = joint_struct.add_mat4("world_from_bind"         )->offset_in_parent(),
         .world_from_bind_cofactor = joint_struct.add_mat4("world_from_bind_cofactor")->offset_in_parent()
@@ -87,7 +91,16 @@ auto Joint_buffer::update(
     using erhe::graphics::as_span;
     using erhe::graphics::write;
 
-    write(primitive_gpu_data, m_writer.write_offset + offsets.debug_joint_indices, as_span(debug_joint_indices));
+    const uint32_t debug_joint_color_count = static_cast<uint32_t>(debug_joint_colors.size());
+    const uint32_t extra1 = 0;
+    const uint32_t extra2 = 0;
+    const uint32_t extra3 = 0;
+
+    write(primitive_gpu_data, m_writer.write_offset + offsets.debug_joint_indices,     as_span(debug_joint_indices    ));
+    write(primitive_gpu_data, m_writer.write_offset + offsets.debug_joint_color_count, as_span(debug_joint_color_count));
+    write(primitive_gpu_data, m_writer.write_offset + offsets.extra1,                  as_span(extra1));
+    write(primitive_gpu_data, m_writer.write_offset + offsets.extra2,                  as_span(extra2));
+    write(primitive_gpu_data, m_writer.write_offset + offsets.extra3,                  as_span(extra3));
 
     if (!debug_joint_colors.empty()) {
         uint32_t color_index = 0;

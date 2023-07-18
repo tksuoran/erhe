@@ -273,6 +273,11 @@ void Commands::command_inactivated(Command* const command)
     }
 }
 
+auto Commands::has_active_mouse() const -> bool
+{
+    return m_active_mouse_command != nullptr;
+}
+
 auto Commands::on_key(
     const erhe::toolkit::Keycode code,
     const uint32_t               modifier_mask,
@@ -326,7 +331,7 @@ auto Commands::on_idle() -> bool
             }
 
             if (binding->get_type() == Command_binding::Type::Mouse_drag) {
-                auto*      drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
+                auto*      drag_binding = static_cast<Mouse_drag_binding*>(binding.get());
                 Command*   command      = binding->get_command();
                 const auto state        = command->get_command_state();
                 if ((state == State::Ready) || (state == State::Active)) {
@@ -373,21 +378,21 @@ void Commands::sort_mouse_bindings()
             const auto lhs_priority = get_command_priority(lhs_command);
             const auto rhs_priority = get_command_priority(rhs_command);
             const bool is_higher = lhs_priority > rhs_priority;
-            log_input->trace(
-                "lhs = {} {}, rhs = {} {}, is_higher = {}",
-                lhs_command->get_name(), lhs_priority,
-                rhs_command->get_name(), rhs_priority,
-                is_higher
-            );
+            // log_input->trace(
+            //     "lhs = {} {}, rhs = {} {}, is_higher = {}",
+            //     lhs_command->get_name(), lhs_priority,
+            //     rhs_command->get_name(), rhs_priority,
+            //     is_higher
+            // );
             return is_higher;
         }
     );
-    log_input->trace("Mouse bindings after sort:");
-    for (const auto& binding : m_mouse_bindings) {
-        auto* const command = binding->get_command();
-        const auto priority = get_command_priority(command);
-        log_input->trace("{} {}", priority, command->get_name());
-    }
+    // log_input->trace("Mouse bindings after sort:");
+    // for (const auto& binding : m_mouse_bindings) {
+    //     auto* const command = binding->get_command();
+    //     const auto priority = get_command_priority(command);
+    //     log_input->trace("{} {}", priority, command->get_name());
+    // }
 }
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -528,9 +533,13 @@ auto Commands::on_mouse_button(
             continue;
         }
 
-        if (binding->on_button(input)) {
-            log_input->trace("Mouse button {} {} consumed by {}", button_name, pressed, command->get_name());
+        const bool consumed = binding->on_button(input);
+        if (binding->get_command()->get_command_state() == State::Active) {
             update_active_mouse_command(command);
+        }
+
+        if (consumed) {
+            log_input->trace("Mouse button {} {} consumed by {}", button_name, pressed, command->get_name());
             return true;
         } else {
             log_input->trace("Mouse button {} {} not consumed by {}", button_name, pressed, command->get_name());
@@ -540,10 +549,7 @@ auto Commands::on_mouse_button(
     return false;
 }
 
-auto Commands::on_mouse_wheel(
-    const float x,
-    const float y
-) -> bool
+auto Commands::on_mouse_wheel(const float x, const float y) -> bool
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
@@ -563,6 +569,7 @@ auto Commands::on_mouse_wheel(
 
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
+
         if (binding->on_wheel(input)) { // does not set active mouse command - each wheel event is one shot
             return true;
         }
@@ -570,10 +577,7 @@ auto Commands::on_mouse_wheel(
     return false;
 }
 
-auto Commands::on_mouse_move(
-    const float x,
-    const float y
-) -> bool
+auto Commands::on_mouse_move(const float x, const float y) -> bool
 {
     std::lock_guard<std::mutex> lock{m_command_mutex};
 
@@ -595,9 +599,12 @@ auto Commands::on_mouse_move(
 
         auto* const command = binding->get_command();
         ERHE_VERIFY(command != nullptr);
-        if (binding->on_motion(input)) {
+        // Mouse motion bindings never return "consumed".
+        binding->on_motion(input);
+
+        // However, the commands may transition to "active" state
+        if (binding->get_command()->get_command_state() == State::Active) {
             update_active_mouse_command(command);
-            return true;
         }
     }
     return false;

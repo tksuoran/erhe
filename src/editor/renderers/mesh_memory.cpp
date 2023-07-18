@@ -10,7 +10,7 @@ static constexpr gl::Buffer_storage_mask storage_mask{gl::Buffer_storage_mask::m
 auto Mesh_memory::get_vertex_buffer_size() const -> std::size_t
 {
     int vertex_buffer_size{32}; // in megabytes
-    auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");
+    const auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");
     ini->get("vertex_buffer_size", vertex_buffer_size);
     return vertex_buffer_size * 1024 * 1024;
 }
@@ -18,8 +18,8 @@ auto Mesh_memory::get_vertex_buffer_size() const -> std::size_t
 auto Mesh_memory::get_index_buffer_size() const -> std::size_t
 {
     int index_buffer_size{8}; // in megabytes
-    auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");
-    ini->get("index_buffer_size",  index_buffer_size);
+    const auto ini = erhe::configuration::get_ini("erhe.ini", "mesh_memory");
+    ini->get("index_buffer_size", index_buffer_size);
     return index_buffer_size * 1024 * 1024;
 }
 
@@ -30,11 +30,12 @@ Mesh_memory::Mesh_memory(
     : graphics_instance{graphics_instance}
     , vertex_format{
         erhe::graphics::Vertex_attribute::position_float3(),
-        erhe::graphics::Vertex_attribute::normal_float3(),
-        erhe::graphics::Vertex_attribute::tangent_float3(),
-        erhe::graphics::Vertex_attribute::bitangent_float3(),
+        erhe::graphics::Vertex_attribute::normal0_float3(),
+        erhe::graphics::Vertex_attribute::normal1_float3(), // editor wireframe bias requires smooth normal attribute
+        erhe::graphics::Vertex_attribute::tangent_float4(),
         erhe::graphics::Vertex_attribute::texcoord0_float2(),
-        erhe::graphics::Vertex_attribute::color_float4(),
+        erhe::graphics::Vertex_attribute::color_ubyte4(),
+        erhe::graphics::Vertex_attribute::aniso_control_ubyte2(),
         erhe::graphics::Vertex_attribute::joint_indices0_ubyte4(),
         erhe::graphics::Vertex_attribute::joint_weights0_float4()
     }

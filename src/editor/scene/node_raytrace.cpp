@@ -177,52 +177,42 @@ Node_raytrace::~Node_raytrace() noexcept
     // TODO
 }
 
-auto Node_raytrace::static_type() -> uint64_t
+auto Node_raytrace::get_static_type() -> uint64_t
 {
     return
         erhe::scene::Item_type::node_attachment |
         erhe::scene::Item_type::raytrace;
 }
 
-auto Node_raytrace::static_type_name() -> const char*
+auto Node_raytrace::get_static_type_name() -> const char*
 {
     return "Node_raytrace";
 }
 
 auto Node_raytrace::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Node_raytrace::type_name() const -> const char*
+auto Node_raytrace::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
-void Node_raytrace::handle_node_scene_host_update(
-    erhe::scene::Scene_host* old_scene_host,
-    erhe::scene::Scene_host* new_scene_host
+void Node_raytrace::handle_item_host_update(
+    erhe::scene::Item_host* const old_item_host,
+    erhe::scene::Item_host* const new_item_host
 )
 {
-    ERHE_VERIFY(old_scene_host != new_scene_host);
+    ERHE_VERIFY(old_item_host != new_item_host);
 
-    if (old_scene_host != nullptr) {
-        log_raytrace->trace("detaching {} from raytrace world", m_instance->debug_label());
-        Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
-        auto& raytrace_scene = old_scene_root->raytrace_scene();
-        raytrace_scene.detach(raytrace_instance());
+    if (old_item_host != nullptr) {
+        Scene_root* old_scene_root = static_cast<Scene_root*>(old_item_host);
+        old_scene_root->unregister_node_raytrace(this);
     }
-    if (new_scene_host != nullptr) {
-        log_raytrace->trace("attaching {} to raytrace world", m_instance->debug_label());
-        ERHE_VERIFY(m_node);
-        Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
-        auto& raytrace_scene = new_scene_root->raytrace_scene();
-        raytrace_scene.attach(raytrace_instance());
-        uint32_t mask = 0;
-        for (const auto& node_attachment : m_node->attachments()) {
-            mask = mask | raytrace_node_mask(*node_attachment.get());
-        }
-        m_instance->set_mask(mask);
+    if (new_item_host != nullptr) {
+        Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
+        new_scene_root->register_node_raytrace(this);
     }
 }
 
@@ -381,7 +371,7 @@ auto as_raytrace(
 
 auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
 {
-    for (const auto& attachment : node->attachments()) {
+    for (const auto& attachment : node->get_attachments()) {
         auto node_raytrace = as_raytrace(attachment);
         if (node_raytrace) {
             return node_raytrace;
@@ -398,7 +388,7 @@ void draw_ray_hit(
 )
 {
     void* user_data     = hit.instance->get_user_data();
-    auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+    auto* raytrace_node = static_cast<Node_raytrace*>(user_data);
     if (raytrace_node == nullptr) {
         return;
     }
@@ -472,7 +462,7 @@ void draw_ray_hit(
         return false;
     }
     void* user_data     = hit.instance->get_user_data();
-    auto* raytrace_node = reinterpret_cast<Node_raytrace*>(user_data);
+    auto* raytrace_node = static_cast<Node_raytrace*>(user_data);
     if (raytrace_node == nullptr) {
         return false;
     }

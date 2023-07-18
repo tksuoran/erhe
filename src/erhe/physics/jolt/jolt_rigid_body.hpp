@@ -40,7 +40,9 @@ public:
     auto get_mass                    () const -> float                             override;
     auto get_motion_mode             () const -> Motion_mode                       override;
     auto get_restitution             () const -> float                             override;
-    auto get_world_transform         () const -> Transform                         override;
+    auto get_world_transform         () const -> glm::mat4                         override;
+    auto is_active                   () const -> bool                              override;
+    auto get_allow_sleeping          () const -> bool                              override;
 
     void begin_move                  ()                                             override; // Disables deactivation
     void end_move                    ()                                             override; // Sets active, clears disable deactivation
@@ -55,6 +57,7 @@ public:
     void set_motion_mode             (Motion_mode motion_mode)                      override;
     void set_restitution             (float restitution)                            override;
     void set_world_transform         (const Transform& transform)                   override;
+    void set_allow_sleeping          (bool value)                                   override;
 
     // Public API
     auto get_jolt_body      () const -> JPH::Body*;

@@ -46,7 +46,7 @@ void Mesh_operation::execute(Editor_context&)
     for (const auto& entry : m_entries) {
         const auto* node = entry.mesh->get_node();
         ERHE_VERIFY(node != nullptr);
-        auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
+        auto* scene_root = static_cast<Scene_root*>(node->node_data.host);
         ERHE_VERIFY(scene_root);
         const auto& scene = scene_root->scene();
         scene.sanity_check();
@@ -62,7 +62,7 @@ void Mesh_operation::undo(Editor_context&)
     for (const auto& entry : m_entries) {
         const auto* mesh_node = entry.mesh->get_node();
         ERHE_VERIFY(mesh_node != nullptr);
-        auto* scene_root = reinterpret_cast<Scene_root*>(mesh_node->node_data.host);
+        auto* scene_root = static_cast<Scene_root*>(mesh_node->node_data.host);
         ERHE_VERIFY(scene_root);
         const auto& scene = scene_root->scene();
         scene.sanity_check();
@@ -82,17 +82,37 @@ void Mesh_operation::make_entries(
     if (selected_items.empty()) {
         return;
     }
-    const auto first_node = selection.get_first_selected_node();
-    if (!first_node) {
+
+    const auto first_mesh = selection.get<erhe::scene::Mesh>();
+    const auto first_node = selection.get<erhe::scene::Node>();
+    if (!first_mesh && !first_node) {
         return;
     }
-    auto* scene_root = reinterpret_cast<Scene_root*>(first_node->node_data.host);
-    ERHE_VERIFY(scene_root);
+
+    auto* const first_node_raw = first_node ? first_node.get() : first_mesh->get_node();
+    if (first_node_raw == nullptr) {
+        // TODO Can this limitation be lifted?
+        log_operations->error("First selected mesh does not have scene, cannot perform geometry operation");
+        return;
+    }
+
+    auto* scene_root = static_cast<Scene_root*>(first_node_raw->node_data.host);
+    if (scene_root == nullptr) {
+        log_operations->error("First selected mesh does node not have item (scene) host");
+        return;
+    }
+
     const auto& scene = scene_root->scene();
     scene.sanity_check();
 
     for (auto& item : selected_items) {
-        const auto& mesh = as_mesh(item);
+        auto mesh = as_mesh(item);
+        if (!mesh) {
+            const auto node = as_node(item);
+            if (node){
+                mesh = get_mesh(node.get());
+            }
+        }
         if (!mesh) {
             continue;
         }

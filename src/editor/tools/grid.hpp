@@ -41,8 +41,8 @@ public:
     ~Grid() noexcept override;
 
     // Implements Node_attachment
-    [[nodiscard]] auto get_type () const -> uint64_t    override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] auto get_type     () const -> uint64_t    override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
     // Public API
     [[nodiscard]] auto get_name           () const -> const std::string&;

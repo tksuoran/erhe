@@ -102,7 +102,7 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node()
         return;
     }
 
-    Shadow_render_node* shadow_render_node = reinterpret_cast<Shadow_render_node*>(input_node);
+    Shadow_render_node* shadow_render_node = static_cast<Shadow_render_node*>(input_node);
     const auto& shadow_texture = shadow_render_node->get_texture();
     if (!shadow_texture) {
         SPDLOG_LOGGER_TRACE(
@@ -392,8 +392,8 @@ void Debug_view_window::imgui()
     producer_node->set_enabled(true);
 
     // TODO add safety?
-    auto* input_texture_node = reinterpret_cast<Depth_to_color_rendergraph_node*>(producer_node);
-    auto* shadow_render_node = reinterpret_cast<Shadow_render_node*>(
+    auto* input_texture_node = static_cast<Depth_to_color_rendergraph_node*>(producer_node);
+    auto* shadow_render_node = static_cast<Shadow_render_node*>(
         producer_node->get_consumer_input_node(
             erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
             erhe::rendergraph::Rendergraph_node_key::shadow_maps

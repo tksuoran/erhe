@@ -21,6 +21,7 @@ extern std::shared_ptr<spdlog::logger> log_node_properties;
 extern std::shared_ptr<spdlog::logger> log_operations;
 extern std::shared_ptr<spdlog::logger> log_parsers;
 extern std::shared_ptr<spdlog::logger> log_physics;
+extern std::shared_ptr<spdlog::logger> log_physics_frame;
 extern std::shared_ptr<spdlog::logger> log_pointer;
 extern std::shared_ptr<spdlog::logger> log_post_processing;
 extern std::shared_ptr<spdlog::logger> log_programs;
@@ -38,6 +39,7 @@ extern std::shared_ptr<spdlog::logger> log_hud;
 extern std::shared_ptr<spdlog::logger> log_controller_ray;
 extern std::shared_ptr<spdlog::logger> log_frame;
 extern std::shared_ptr<spdlog::logger> log_tree;
+extern std::shared_ptr<spdlog::logger> log_tree_frame;
 
 void initialize_logging();
 

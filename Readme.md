@@ -99,20 +99,20 @@ For IDE:
 There are several configuration options that can be set when configuring
 erhe with CMake:
 
-| Option                          | Description                | Recognized values         |
-| :---                            | :---                       | :---                      |
-| ERHE_AUDIO_LIBRARY              | Audio library              | miniaudio, none           |
-| ERHE_FONT_RASTERIZATION_LIBRARY | Font rasterization library | freetype, none            |
-| ERHE_GLTF_LIBRARY               | GLTF library               | cgltf, none               |
-| ERHE_GUI_LIBRARY                | GUI library                | imgui, none               |
-| ERHE_PHYSICS_LIBRARY            | Physics library            | bullet, jolt, none        |
-| ERHE_PNG_LIBRARY                | PNG loading library        | mango, none               |
-| ERHE_PROFILE_LIBRARY            | Profile library            | superluminal, tracy, none |
-| ERHE_RAYTRACE_LIBRARY           | Raytrace library           | embree, bvh, none         |
-| ERHE_SVG_LIBRARY                | SVG loading library        | lunasvg, none             |
-| ERHE_TEXT_LAYOUT_LIBRARY        | Text layout library        | harfbuzz, freetype, none  |
-| ERHE_WINDOW_LIBRARY             | Window library             | glfw, none                |
-| ERHE_XR_LIBRARY                 | XR library                 | OpenXR, none              |
+| Option                          | Description                | Recognized values               |
+| :---                            | :---                       | :---                            |
+| ERHE_AUDIO_LIBRARY              | Audio library              | miniaudio, none                 |
+| ERHE_FONT_RASTERIZATION_LIBRARY | Font rasterization library | freetype, none                  |
+| ERHE_GLTF_LIBRARY               | GLTF library               | cgltf, none                     |
+| ERHE_GUI_LIBRARY                | GUI library                | imgui, none                     |
+| ERHE_PHYSICS_LIBRARY            | Physics library            | bullet, jolt, none              |
+| ERHE_PNG_LIBRARY                | PNG loading library        | mango, none                     |
+| ERHE_PROFILE_LIBRARY            | Profile library            | nvtx, superluminal, tracy, none |
+| ERHE_RAYTRACE_LIBRARY           | Raytrace library           | embree, bvh, none               |
+| ERHE_SVG_LIBRARY                | SVG loading library        | lunasvg, none                   |
+| ERHE_TEXT_LAYOUT_LIBRARY        | Text layout library        | harfbuzz, freetype, none        |
+| ERHE_WINDOW_LIBRARY             | Window library             | glfw, none                      |
+| ERHE_XR_LIBRARY                 | XR library                 | OpenXR, none                    |
 
 Main purposes of these configuration options are
 

@@ -31,7 +31,7 @@ Grid::~Grid() noexcept = default;
         erhe::scene::Item_type::grid;
 }
 
-[[nodiscard]] auto Grid::type_name() const -> const char*
+[[nodiscard]] auto Grid::get_type_name() const -> const char*
 {
     return "Grid";
 }
@@ -226,7 +226,7 @@ void Grid::imgui(Editor_context& context)
                 }
             }
         }
-        const auto& host_node = context.selection->get_first_selected_node();
+        const auto& host_node = context.selection->get<erhe::scene::Node>();
         if (host_node) {
             const std::string label = fmt::format("Attach to {}", host_node->get_name());
             if (ImGui::Button(label.c_str())) {

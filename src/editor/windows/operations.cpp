@@ -31,12 +31,21 @@ Operations::Operations(
 {
 }
 
+// Special rule to count meshes as selected even when the node that
+// contains the mesh is seletected and mesh itself is not selected.
 auto Operations::count_selected_meshes() const -> size_t
 {
     const auto& selection = m_context.selection->get_selection();
     std::size_t count = 0;
-    for (const auto& node : selection) {
-        if (is_mesh(node)) {
+    for (const auto& item : selection) {
+        auto node = as_node(item);
+        if (node) {
+            for (const auto& attachment : node->get_attachments()) {
+                if (is_mesh(attachment)) {
+                    ++count;
+                }
+            }
+        } else if (is_mesh(item)) {
             ++count;
         }
     }
@@ -50,6 +59,8 @@ void Operations::imgui()
     ERHE_PROFILE_FUNCTION();
 
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
+    auto& selection       = *m_context.selection;
+    auto& operation_stack = *m_context.operation_stack;
 
     //// for (unsigned int i = 0; i < static_cast<unsigned int>(m_active_tools.size()); ++i) {
     ////     auto* tool = m_active_tools.at(i);
@@ -79,31 +90,34 @@ void Operations::imgui()
         };
     };
 
-    const auto undo_mode = m_context.operation_stack->can_undo()
+    const auto undo_mode = operation_stack.can_undo()
         ? erhe::imgui::Item_mode::normal
         : erhe::imgui::Item_mode::disabled;
     if (erhe::imgui::make_button("Undo", undo_mode, button_size)) {
-        m_context.operation_stack->undo();
+        operation_stack.undo();
     }
 
-    const auto redo_mode = m_context.operation_stack->can_redo()
+    const auto redo_mode = operation_stack.can_redo()
         ? erhe::imgui::Item_mode::normal
         : erhe::imgui::Item_mode::disabled;
     if (erhe::imgui::make_button("Redo", redo_mode, button_size)) {
-        m_context.operation_stack->redo();
+        operation_stack.redo();
     }
 
     const auto selected_mesh_count = count_selected_meshes();
-
-    const auto multi_select_mode = (selected_mesh_count >= 2)
+    const auto selected_node_count = selection.count<erhe::scene::Node>();
+    const auto multi_select_meshes = (selected_mesh_count >= 2)
         ? erhe::imgui::Item_mode::normal
         : erhe::imgui::Item_mode::disabled;
-    if (erhe::imgui::make_button("Attach", multi_select_mode, button_size)) {
-        const auto& node0 = as_node(m_context.selection->get_selection().at(0));
-        const auto& node1 = as_node(m_context.selection->get_selection().at(1));
+    const auto multi_select_nodes  = (selected_node_count >= 2)
+        ? erhe::imgui::Item_mode::normal
+        : erhe::imgui::Item_mode::disabled;
+    if (erhe::imgui::make_button("Attach", multi_select_nodes, button_size)) {
+        const auto& node0 = selection.get<erhe::scene::Node>(0);
+        const auto& node1 = selection.get<erhe::scene::Node>(1);
         if (node0 && node1) {
-            m_context.operation_stack->push(
-                std::make_shared<Node_attach_operation>(
+            operation_stack.push(
+                std::make_shared<Item_parent_change_operation>(
                     node1,
                     node0,
                     std::shared_ptr<erhe::scene::Node>{},
@@ -118,10 +132,10 @@ void Operations::imgui()
         : erhe::imgui::Item_mode::disabled;
 
     if (make_button("Unparent", has_selection_mode, button_size)) {
-        const auto& node0 = as_node(m_context.selection->get_selection().at(0));
+        const auto& node0 = selection.get<erhe::scene::Node>();
         if (node0) {
             m_context.operation_stack->push(
-                std::make_shared<Node_attach_operation>(
+                std::make_shared<Item_parent_change_operation>(
                     std::shared_ptr<erhe::scene::Node>{},
                     node0,
                     std::shared_ptr<erhe::scene::Node>{},
@@ -131,7 +145,7 @@ void Operations::imgui()
         }
     }
 
-    if (make_button("Merge", multi_select_mode, button_size)) {
+    if (make_button("Merge", multi_select_meshes, button_size)) {
         m_context.operation_stack->push(
             std::make_shared<Merge_operation>(
                 Merge_operation::Parameters{

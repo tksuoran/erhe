@@ -212,7 +212,7 @@ void Jolt_rigid_body::begin_move()
         return;
     }
     SPDLOG_LOGGER_TRACE(log_physics, "{} begin move", m_debug_label);
-    m_body->SetAllowSleeping(false);
+    set_allow_sleeping(false);
     m_body_interface.ActivateBody(m_body->GetID());
 }
 
@@ -223,7 +223,7 @@ void Jolt_rigid_body::end_move()
         return;
     }
     SPDLOG_LOGGER_TRACE(log_physics, "{} end move", m_debug_label);
-    m_body->SetAllowSleeping(true);
+    set_allow_sleeping(true);
     log_physics->trace("End velocity = {}", get_linear_velocity());
     //m_body_interface.ActivateBody(m_body->GetID());
 }
@@ -320,23 +320,17 @@ void Jolt_rigid_body::move_world_transform(const Transform& transform, const flo
     );
 }
 
-auto Jolt_rigid_body::get_world_transform() const -> Transform
+auto Jolt_rigid_body::get_world_transform() const -> glm::mat4
 {
     if (m_body == nullptr) {
-        return erhe::physics::Transform{};
+        return glm::mat4{1.0f};
     }
 
-    JPH::Quat basis;
-    JPH::Vec3 origin;
-    m_body_interface.GetPositionAndRotation(
-        m_body->GetID(),
-        origin,
-        basis
-    );
-    return erhe::physics::Transform{
-        glm::mat3{from_jolt(basis)},
-        from_jolt(origin)
-    };
+    // TODO Figure out difference of m_body->GetWorldTransform()
+    //      vs m_body_interface.GetPositionAndRotation()
+    const JPH::Mat44 jolt_transform = m_body->GetWorldTransform();
+    const glm::mat4  transform      = from_jolt(jolt_transform);
+    return transform;
 }
 
 void Jolt_rigid_body::set_world_transform(const Transform& transform)
@@ -508,6 +502,10 @@ void Jolt_rigid_body::set_mass_properties(
 
     SPDLOG_LOGGER_TRACE(log_physics, "{} set mass = {}", m_debug_label, mass);
 
+    if (m_body->IsStatic()) {
+        return;
+    }
+
     auto* motion_properties = m_body->GetMotionProperties();
     if (motion_properties == nullptr) {
         return;
@@ -518,6 +516,31 @@ void Jolt_rigid_body::set_mass_properties(
 auto Jolt_rigid_body::get_debug_label() const -> const char*
 {
     return m_debug_label.c_str();
+}
+
+auto Jolt_rigid_body::is_active() const -> bool
+{
+    if (m_body == nullptr) {
+        return false;
+    }
+
+    // TODO Check if this would be needed or useful.
+    // if (m_motion_mode != Motion_mode::e_dynamic) {
+    //     return false;
+    // }
+
+    return m_body->IsActive();
+}
+
+auto Jolt_rigid_body::get_allow_sleeping() const -> bool
+{
+    return m_body->GetAllowSleeping();
+}
+
+void Jolt_rigid_body::set_allow_sleeping(const bool value)
+{
+    log_physics->trace("{} set_allow_sleeping = {}", m_debug_label, value);
+    m_body->SetAllowSleeping(value);
 }
 
 auto Jolt_rigid_body::get_jolt_body() const -> JPH::Body*

@@ -463,6 +463,8 @@ void Hand_tracker::set_color(
 
 void Hand_tracker::render(const Render_context&)
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (!m_show_hands) {
         return;
     }

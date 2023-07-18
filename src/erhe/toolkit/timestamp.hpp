@@ -5,6 +5,7 @@
 namespace erhe::toolkit
 {
 
-auto timestamp() -> std::string;
+auto timestamp      () -> std::string;
+auto timestamp_short() -> std::string;
 
 }

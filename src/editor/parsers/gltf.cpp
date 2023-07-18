@@ -15,6 +15,8 @@
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
 
+#include <fmt/format.h>
+
 #include <unordered_map>
 #include <unordered_set>
 
@@ -28,7 +30,7 @@ void color_graph(
     const std::unordered_set<int>&               available_colors
 ) {
     std::unordered_set<int> colors_for_node = available_colors;
-    auto parent = node->parent().lock();
+    auto parent = node->get_parent_node();
     if (parent) {
         auto i = node_colors.find(parent.get());
         if (i != node_colors.end()) {
@@ -36,8 +38,12 @@ void color_graph(
             colors_for_node.erase(parent_color);
         }
     }
-    for (const auto& child : node->children()) {
-        auto i = node_colors.find(child.get());
+    for (const auto& child : node->get_children()) {
+        auto child_node = as_node(child);
+        if (!child_node) {
+            continue;
+        }
+        auto i = node_colors.find(child_node.get());
         if (i != node_colors.end()) {
             int child_color = i->second;
             colors_for_node.erase(child_color);
@@ -47,21 +53,31 @@ void color_graph(
     int node_color = *colors_for_node.begin();
     node_colors.emplace(node, node_color);
 
-    for (auto& child : node->children()) {
-        color_graph(child.get(), node_colors, available_colors);
+    for (auto& child : node->get_children()) {
+        auto child_node = as_node(child);
+        if (!child_node) {
+            continue;
+        }
+        color_graph(child_node.get(), node_colors, available_colors);
     }
 }
 
 }
 
-void parse_gltf(
+void import_gltf(
     erhe::graphics::Instance&    graphics_instance,
     erhe::primitive::Build_info  build_info,
     Scene_root&                  scene_root,
     const std::filesystem::path& path
 )
 {
-    const auto root_node = scene_root.get_hosted_scene()->get_root_node();
+    const auto scene_root_node = scene_root.get_hosted_scene()->get_root_node();
+
+    // TODO Make importing an operation
+    auto root_node = std::make_shared<erhe::scene::Node>(path.filename().string());
+    root_node->enable_flag_bits(erhe::scene::Item_flags::content | erhe::scene::Item_flags::show_in_ui);
+    root_node->set_parent(scene_root_node);
+
     const erhe::scene::Layer_id content_layer_id = scene_root.layers().content()->id;
     erhe::gltf::Image_transfer image_transfer{graphics_instance};
     erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(
@@ -96,7 +112,7 @@ void parse_gltf(
     }
 
     for (const auto& image : gltf_data.images) {
-        scene_root.content_library()->texture.add(image);
+        scene_root.content_library()->textures.add(image);
     }
 
     for (const auto& material : gltf_data.materials) {
@@ -151,7 +167,7 @@ void parse_gltf(
             }
         }
 
-        if (node->parent().lock() == root_node) {
+        if (node->get_parent_node() == root_node) {
             color_graph(node.get(), node_colors, available_colors);
         }
     }
@@ -167,6 +183,24 @@ void parse_gltf(
         scene_root.content_library()->animations.add(animation);
         //animation->apply(0.0f);
     }
+}
+
+auto scan_gltf(const std::filesystem::path& path) -> std::vector<std::string>
+{
+    std::vector<std::string> out;
+    erhe::gltf::Gltf_scan scan = erhe::gltf::scan_gltf(path);
+
+    if (!scan.scenes    .empty()) out.push_back(fmt::format("{} scenes",     scan.scenes    .size()));
+    if (!scan.meshes    .empty()) out.push_back(fmt::format("{} meshes",     scan.meshes    .size()));
+    if (!scan.animations.empty()) out.push_back(fmt::format("{} animations", scan.animations.size()));
+    if (!scan.skins     .empty()) out.push_back(fmt::format("{} skins",      scan.skins     .size()));
+    if (!scan.materials .empty()) out.push_back(fmt::format("{} materials",  scan.materials .size()));
+    if (!scan.nodes     .empty()) out.push_back(fmt::format("{} nodes",      scan.nodes     .size()));
+    if (!scan.cameras   .empty()) out.push_back(fmt::format("{} cameras",    scan.cameras   .size()));
+    if (!scan.lights    .empty()) out.push_back(fmt::format("{} lights",     scan.lights    .size()));
+    if (!scan.images    .empty()) out.push_back(fmt::format("{} images",     scan.images    .size()));
+    if (!scan.samplers  .empty()) out.push_back(fmt::format("{} samplers",   scan.samplers  .size()));
+    return out;
 }
 
 } // namespace editor

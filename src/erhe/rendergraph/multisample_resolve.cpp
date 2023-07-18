@@ -95,6 +95,8 @@ void Multisample_resolve_node::reconfigure(const int sample_count)
 
 void Multisample_resolve_node::execute_rendergraph_node()
 {
+    ERHE_PROFILE_FUNCTION();
+
     using erhe::graphics::Framebuffer;
     using erhe::graphics::Texture;
 

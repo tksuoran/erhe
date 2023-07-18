@@ -33,21 +33,6 @@ Null_world::~Null_world() noexcept
 {
 }
 
-void Null_world::enable_physics_updates()
-{
-    m_physics_enabled = true;
-}
-
-void Null_world::disable_physics_updates()
-{
-    m_physics_enabled = false;
-}
-
-auto Null_world::is_physics_updates_enabled() const -> bool
-{
-    return m_physics_enabled;
-}
-
 void Null_world::update_fixed_step(const double dt)
 {
     static_cast<void>(dt);

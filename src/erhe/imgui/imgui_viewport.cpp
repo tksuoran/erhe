@@ -147,7 +147,6 @@ Imgui_viewport::Imgui_viewport(
     , m_imgui_ini_path{imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
     , m_imgui_windows {imgui_windows}
 {
-    log_imgui->info("creating imgui viewport {}", name);
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext(font_atlas);
 
@@ -173,7 +172,6 @@ Imgui_viewport::~Imgui_viewport()
 {
     m_imgui_windows.unregister_imgui_viewport(this);
 
-    log_imgui->info("destroying imgui viewport {}", m_name);
     ImGui::DestroyContext(m_imgui_context);
     m_imgui_context = nullptr;
 }

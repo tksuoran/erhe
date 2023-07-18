@@ -2,6 +2,8 @@
 
 #include "erhe/imgui/imgui_window.hpp"
 
+#include <glm/glm.hpp>
+
 #include <filesystem>
 #include <vector>
 
@@ -18,11 +20,19 @@ class Asset_node
 {
 public:
     Asset_node();
-    Asset_node(const std::filesystem::path& path, std::size_t depth);
+    Asset_node(Editor_context& context, const std::filesystem::path& path, std::size_t depth);
 
-    std::filesystem::path   path;
-    std::vector<Asset_node> children;
-    std::size_t             depth;
+    bool                     is_directory{false};
+    bool                     is_gltf     {false};
+    bool                     is_scanned  {false};
+    glm::vec2                icon        {0.0f, 0.0f};
+    glm::vec4                icon_color  {1.0f, 1.0f, 1.0f, 1.0f};
+    std::string              label;
+    std::vector<std::string> contents;
+    std::filesystem::path    path;
+    std::vector<Asset_node>  children;
+    std::size_t              depth;
+    static int s_counter;
 };
 
 class Asset_browser

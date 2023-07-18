@@ -20,6 +20,7 @@
 
 #include "erhe/commands/commands.hpp"
 #include "erhe/configuration/configuration.hpp"
+#include "erhe/graphics/texture.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
@@ -122,6 +123,9 @@ Hotbar::Hotbar(
     , m_trackpad_click_command   {commands, m_trackpad_command}
 #endif
 {
+    static_cast<void>(icon_set);
+    static_cast<void>(rendergraph);
+    static_cast<void>(graphics_instance);
     auto ini = erhe::configuration::get_ini("erhe.ini", "hotbar");
     ini->get("enabled",    m_enabled);
     ini->get("show",       m_show);
@@ -166,38 +170,40 @@ Hotbar::Hotbar(
         init_radial_menu(mesh_memory, scene_root);
     } else {
         this->Imgui_window::m_show_in_menu = false;
-        init_hotbar(graphics_instance, imgui_renderer, imgui_windows, rendergraph, editor_context, icon_set, mesh_memory, scene_root);
+        //init_hotbar(graphics_instance, imgui_renderer, imgui_windows, rendergraph, editor_context, icon_set, mesh_memory, scene_root);
     }
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
             on_message(message);
+
         }
     );
 }
 
-void Hotbar::init_hotbar(
-    erhe::graphics::Instance&       graphics_instance,
-    erhe::imgui::Imgui_renderer&    imgui_renderer,
-    erhe::imgui::Imgui_windows&     imgui_windows,
-    erhe::rendergraph::Rendergraph& rendergraph,
-    Editor_context&                 editor_context,
-    Icon_set&                       icon_set,
-    Mesh_memory&                    mesh_memory,
-    Scene_root&                     scene_root
-)
+void Hotbar::init_hotbar()
 {
-    const auto& icon_rasterization = icon_set.get_hotbar_rasterization();
+    const auto& icon_rasterization = m_context.icon_set->get_hotbar_rasterization();
     const int   icon_size          = icon_rasterization.get_size();
+    const auto& tools = m_context.tools->get_tools();
+    if (tools.empty()) {
+        return;
+    }
+    int width = icon_size * static_cast<int>(tools.size());
+
+    m_rendertarget_mesh.reset();
+    m_rendertarget_node.reset();
+    m_rendertarget_imgui_viewport.reset();
 
     m_rendertarget_mesh = std::make_shared<Rendertarget_mesh>(
-        graphics_instance,
-        mesh_memory,
-        icon_size * 8,
+        *m_context.graphics_instance,
+        *m_context.mesh_memory,
+        width,
         icon_size,
         4000.0f
     );
-    m_rendertarget_mesh->mesh_data.layer_id = scene_root.layers().rendertarget()->id;
+    const auto scene_root = m_context.scene_builder->get_scene_root();
+    m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
 
     m_rendertarget_mesh->enable_flag_bits(
         erhe::scene::Item_flags::visible     |
@@ -205,10 +211,10 @@ void Hotbar::init_hotbar(
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
-        imgui_renderer,
-        imgui_windows,
-        rendergraph,
-        editor_context,
+        *m_context.imgui_renderer,
+        *m_context.imgui_windows,
+        *m_context.rendergraph,
+        m_context,
         m_rendertarget_mesh.get(),
         "Hotbar Viewport",
         false
@@ -223,9 +229,6 @@ void Hotbar::init_hotbar(
     }
 
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
-
-    // Also registers rendertarget node
-    imgui_windows.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
 
     this->Hotbar::set_viewport(m_rendertarget_imgui_viewport.get());
 }
@@ -311,6 +314,7 @@ void Hotbar::get_all_tools()
 {
     m_slot_first = 0;
     m_slot_last  = 0;
+    m_slots.clear();
     const auto& tools = m_context.tools->get_tools();
     for (Tool* tool : tools) {
         const auto opt_icon = tool->get_icon();
@@ -322,6 +326,7 @@ void Hotbar::get_all_tools()
             m_slots.push_back(tool);
         }
     }
+    init_hotbar();
 }
 
 void Hotbar::on_message(Editor_message& message)
@@ -438,7 +443,7 @@ void Hotbar::update_node_transform()
 
     if (m_radial_menu_node) {
         if (root_node) {
-            m_radial_menu_node->set_parent         (root_node);
+            m_radial_menu_node->set_parent(root_node);
         }
         m_radial_menu_node->set_world_from_node(world_from_node);
     }
@@ -619,27 +624,12 @@ void Hotbar::set_visibility(const bool value)
     if (m_rendertarget_mesh) {
         m_rendertarget_imgui_viewport->set_enabled(value);
         m_rendertarget_mesh->set_visible(value);
-        log_hud->info("horizontal menu visibility set to {}", value);
+        log_hud->trace("horizontal menu visibility set to {}", value);
     }
 
     if (m_radial_menu_background_mesh) {
         m_radial_menu_background_mesh->set_visible(value);
-        log_hud->info("radial menu visibility set to {}", value);
-    }
-
-    const Scene_view* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr) {
-        return;
-    }
-    auto scene_root = scene_view->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-    auto* scene = scene_root->get_hosted_scene();
-    const auto root_node = scene->get_root_node();
-    if (root_node) {
-        log_hud->info("root node trace:");
-        root_node->trace();
+        log_hud->trace("radial menu visibility set to {}", value);
     }
 }
 

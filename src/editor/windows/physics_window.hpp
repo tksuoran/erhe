@@ -19,14 +19,6 @@ class Physics_window
     : public erhe::imgui::Imgui_window
 {
 public:
-    class Config
-    {
-    public:
-        bool static_enable {false};
-        bool dynamic_enable{false};
-    };
-    Config config;
-
     Physics_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,

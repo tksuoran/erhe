@@ -79,11 +79,10 @@ Shader_stages::Shader_stages(const std::string& failed_name)
 Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
 {
     Expects(prototype.m_handle.gl_name() != 0);
-    Expects(!prototype.m_shaders.empty());
 
-    m_name             = prototype.name();
-    m_handle           = std::move(prototype.m_handle);
-    m_attached_shaders = std::move(prototype.m_shaders);
+    m_name     = prototype.name();
+    m_handle   = std::move(prototype.m_handle);
+    m_is_valid = true;
 
     std::string label = fmt::format(
         "(P:{}) {}{}",
@@ -99,18 +98,28 @@ Shader_stages::Shader_stages(Shader_stages_prototype&& prototype)
     );
 }
 
+auto Shader_stages::is_valid() const -> bool
+{
+    return m_is_valid;
+}
+
+void Shader_stages::invalidate()
+{
+    m_is_valid = false;
+}
+
 void Shader_stages::reload(Shader_stages_prototype&& prototype)
 {
     if (
-        !prototype.is_valid()               ||
-        (prototype.m_handle.gl_name() == 0) ||
-        prototype.m_shaders.empty()
+        !prototype.is_valid() ||
+        (prototype.m_handle.gl_name() == 0)
     ) {
+        invalidate();
         return;
     }
 
-    m_handle           = std::move(prototype.m_handle);
-    m_attached_shaders = std::move(prototype.m_shaders);
+    m_handle   = std::move(prototype.m_handle);
+    m_is_valid = true;
 
     std::string label = fmt::format("(P:{}) {}", gl_name(), m_name);
     gl::object_label(

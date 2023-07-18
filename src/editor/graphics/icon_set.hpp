@@ -28,6 +28,7 @@ class Icons;
 class Icons
 {
 public:
+    glm::vec2 anim             {};
     glm::vec2 bone             {};
     glm::vec2 brush_small      {}; // for vertex paint
     glm::vec2 brush_big        {}; // for brush tool
@@ -63,12 +64,15 @@ public:
     glm::vec2 space_mouse_lmb  {};
     glm::vec2 space_mouse_rmb  {};
     glm::vec2 spot_light       {};
+    glm::vec2 texture          {};
     glm::vec2 three_dots       {};
     glm::vec2 vive             {};
     glm::vec2 vive_menu        {};
     glm::vec2 vive_trackpad    {};
     glm::vec2 vive_trigger     {};
 };
+
+class Editor_context;
 
 class Icon_set
 {
@@ -96,6 +100,8 @@ public:
     [[nodiscard]] auto get_large_rasterization () const -> const Icon_rasterization&;
     [[nodiscard]] auto get_hotbar_rasterization() const -> const Icon_rasterization&;
 
+    void add_icons(uint64_t item_type, float scale);
+
     Config config;
 
 private:
@@ -108,7 +114,15 @@ private:
     Icon_rasterization m_hotbar;
 
 public:
-    Icons icons;
+    Icons                                 icons;
+
+    class Type_icon
+    {
+    public:
+        glm::vec2 icon;
+        glm::vec4 color;
+    };
+    std::vector<std::optional<Type_icon>> type_icons;
 };
 
 }

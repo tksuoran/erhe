@@ -40,51 +40,65 @@ Node_physics::~Node_physics() noexcept
     set_node(nullptr);
 }
 
-auto Node_physics::static_type() -> uint64_t
+auto Node_physics::get_static_type() -> uint64_t
 {
     return erhe::scene::Item_type::node_attachment | erhe::scene::Item_type::physics;
 }
 
-auto Node_physics::static_type_name() -> const char*
+auto Node_physics::get_static_type_name() -> const char*
 {
     return "Node_physics";
 }
 
 auto Node_physics::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Node_physics::type_name() const -> const char*
+auto Node_physics::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
-void Node_physics::handle_node_scene_host_update(
-    erhe::scene::Scene_host* old_scene_host,
-    erhe::scene::Scene_host* new_scene_host
+void Node_physics::set_physics_world(erhe::physics::IWorld* value)
+{
+    if (value != nullptr) {
+        ERHE_VERIFY(m_physics_world == nullptr);
+    }
+    m_physics_world = value;
+}
+
+auto Node_physics::get_physics_world() const -> erhe::physics::IWorld*
+{
+    return m_physics_world;
+}
+
+void Node_physics::handle_item_host_update(
+    erhe::scene::Item_host* const old_item_host,
+    erhe::scene::Item_host* const new_item_host
 )
 {
-    ERHE_VERIFY(old_scene_host != new_scene_host);
+    ERHE_VERIFY(old_item_host != new_item_host);
 
-    if (old_scene_host != nullptr) {
-        Scene_root* old_scene_root = reinterpret_cast<Scene_root*>(old_scene_host);
-        auto& physics_world = old_scene_root->physics_world();
-        physics_world.remove_rigid_body(rigid_body());
-        m_physics_world = nullptr;
+    if (old_item_host != nullptr) {
+        Scene_root* old_scene_root = static_cast<Scene_root*>(old_item_host);
+        old_scene_root->unregister_node_physics(this);
     }
-    if (new_scene_host != nullptr) {
+    if (new_item_host != nullptr) {
         log_physics->trace("attaching {} to physics world", m_rigid_body->get_debug_label());
-        Scene_root* new_scene_root = reinterpret_cast<Scene_root*>(new_scene_host);
-        auto& physics_world = new_scene_root->physics_world();
-        physics_world.add_rigid_body(rigid_body());
-        m_physics_world = &physics_world;
+        Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
+        new_scene_root->register_node_physics(this);
     }
 }
 
 // This is called from scene graph (Node) when mode is moved
 void Node_physics::handle_node_transform_update()
 {
+    // This can happen if node has been detached from scene
+    if (m_physics_world == nullptr) {
+        log_physics_frame->warn("Node_physics '{}' is not in physics world", m_rigid_body->get_debug_label());
+        return;
+    }
     // TODO ERHE_VERIFY(m_node != nullptr);
 
     if (m_transform_change_from_physics) {
@@ -103,8 +117,8 @@ void Node_physics::handle_node_transform_update()
 
     const erhe::physics::Transform world_from_node = get_world_from_node();
 
-    log_physics->trace(
-        "on_node_transform_changed {} pos = {}",
+    log_physics_frame->trace(
+        "handle_node_transform_update {} pos = {}",
         m_rigid_body->get_debug_label(),
         world_from_node.origin
     );
@@ -194,23 +208,24 @@ void Node_physics::set_world_from_node(
 
     // TODO Take center of mass into account
 
+    log_physics_frame->trace("physics transform update for {}, depth = {}", m_node->get_name(), m_node->get_depth());
+
+    m_transform_change_from_physics = true;
+
     const glm::vec3 world_position = glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
     if (world_position.y < -100.0f) {
         const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
         m_rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{world_from_node}, respawn_location});
         m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
         m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+        const glm::mat4 matrix = erhe::toolkit::create_translation<float>(respawn_location);
+        get_node()->set_world_from_node(matrix);
+    } else {
+        get_node()->set_world_from_node(world_from_node);
     }
-
-    m_transform_change_from_physics = true;
-
-    const glm::mat4& matrix{world_from_node};
-    // TODO don't unparent, call set_world_from_node() instead?
-    get_node()->set_parent(get_node()->get_scene()->get_root_node());
-    get_node()->set_parent_from_node(matrix);
-
     m_transform_change_from_physics = false;
 }
+
 void Node_physics::set_world_from_node(
     const erhe::physics::Transform world_from_node
 )
@@ -241,21 +256,22 @@ void Node_physics::set_world_from_node(
         world_from_node.origin.z,
         1.0f
     };
-    // TODO don't unparent, call set_world_from_node() instead?
-    get_node()->set_parent(get_node()->get_scene()->get_root_node());
-    get_node()->set_parent_from_node(matrix);
+
+    log_physics_frame->trace("physics transform update for {}, depth = {}", m_node->get_name(), m_node->get_depth());
+
+    get_node()->set_world_from_node(matrix);
 
     m_transform_change_from_physics = false;
 }
 
-auto Node_physics::rigid_body() -> IRigid_body*
+auto Node_physics::get_rigid_body() -> IRigid_body*
 {
-    return m_rigid_body.get();
+    return (m_physics_world != nullptr) ? m_rigid_body.get() : nullptr;
 }
 
-auto Node_physics::rigid_body() const -> const IRigid_body*
+auto Node_physics::get_rigid_body() const -> const IRigid_body*
 {
-    return m_rigid_body.get();
+    return (m_physics_world != nullptr) ? m_rigid_body.get() : nullptr;
 }
 
 auto is_physics(const erhe::scene::Item* const scene_item) -> bool
@@ -315,7 +331,7 @@ auto get_node_physics(
     const erhe::scene::Node* node
 ) -> std::shared_ptr<Node_physics>
 {
-    for (const auto& attachment : node->attachments()) {
+    for (const auto& attachment : node->get_attachments()) {
         auto node_physics = as_physics(attachment);
         if (node_physics) {
             return node_physics;

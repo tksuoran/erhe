@@ -32,7 +32,7 @@ Image_transfer::Slot::Slot(erhe::graphics::Instance& graphics_instance)
 {
     Expects(m_pbo.gl_name() != 0);
 
-    m_capacity = 8 * 1024 * 1024;
+    m_capacity = 64 * 1024 * 1024;
     m_storage_mask = gl::Buffer_storage_mask::map_write_bit;
     m_access_mask = 
         gl::Map_buffer_access_mask::map_invalidate_buffer_bit |
@@ -68,7 +68,7 @@ void Image_transfer::Slot::map()
     ERHE_VERIFY(map_pointer != nullptr);
 
     m_span = gsl::span(
-        reinterpret_cast<std::byte*>(map_pointer),
+        static_cast<std::byte*>(map_pointer),
         m_capacity
     );
 }

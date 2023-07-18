@@ -103,6 +103,12 @@ auto Imgui_window::title() const -> const std::string_view
     return (m_imgui_viewport != nullptr) ? m_imgui_viewport->get_scale_value() : 0.0f;
 }
 
+void Imgui_window::set_min_size(const float min_width, const float min_height)
+{
+    m_min_size[0] = min_width;
+    m_min_size[1] = min_height;
+}
+
 auto Imgui_window::begin() -> bool
 {
     on_begin();

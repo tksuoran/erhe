@@ -165,29 +165,9 @@ Bullet_world::~Bullet_world() noexcept
 {
 }
 
-void Bullet_world::enable_physics_updates()
-{
-    m_physics_enabled = true;
-}
-
-void Bullet_world::disable_physics_updates()
-{
-    m_physics_enabled = false;
-}
-
-auto Bullet_world::is_physics_updates_enabled() const -> bool
-{
-    return m_physics_enabled;
-}
-
 void Bullet_world::update_fixed_step(const double dt)
 {
     ERHE_PROFILE_FUNCTION
-
-    if (!m_physics_enabled)
-    {
-        return;
-    }
 
     const auto timeStep = static_cast<btScalar>(dt);
     const int maxSubSteps{1};
@@ -242,12 +222,9 @@ auto Bullet_world::get_gravity() const -> glm::vec3
 void Bullet_world::set_debug_drawer(IDebug_draw* debug_draw)
 {
     m_debug_draw_adapter.set_debug_draw(debug_draw);
-    if (debug_draw != nullptr)
-    {
+    if (debug_draw != nullptr) {
         m_bullet_dynamics_world.setDebugDrawer(&m_debug_draw_adapter);
-    }
-    else
-    {
+    } else {
         m_bullet_dynamics_world.setDebugDrawer(nullptr);
     }
 }

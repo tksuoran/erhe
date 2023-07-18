@@ -1,8 +1,8 @@
-in vec2  v_start;
-in vec2  v_line;
-in vec4  v_color;
-in float v_l2;
-in float v_line_width;
+in layout(location = 0) vec2  v_start;
+in layout(location = 1) vec2  v_line;
+in layout(location = 2) vec4  v_color;
+in layout(location = 3) float v_l2;
+in layout(location = 4) float v_line_width;
 
 void main(void)
 {

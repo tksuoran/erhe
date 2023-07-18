@@ -27,15 +27,15 @@ public:
 
     std::vector<Point_id> points;
 
-    Property_map<Point_id  , vec3>* point_locations  {nullptr};
-    Property_map<Point_id  , vec3>* point_normals    {nullptr};
-    Property_map<Point_id  , vec4>* point_tangents   {nullptr};
-    Property_map<Point_id  , vec4>* point_bitangents {nullptr};
-    Property_map<Point_id  , vec2>* point_texcoords  {nullptr};
-    Property_map<Corner_id , vec2>* corner_texcoords {nullptr};
-    Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
-    Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
-    Property_map<Polygon_id, vec4>* polygon_colors   {nullptr};
+    Property_map<Point_id  , vec3>* point_locations      {nullptr};
+    Property_map<Point_id  , vec3>* point_normals        {nullptr};
+    Property_map<Point_id  , vec4>* point_tangents       {nullptr};
+    Property_map<Point_id  , vec4>* point_bitangents     {nullptr};
+    Property_map<Point_id  , vec2>* point_texcoords      {nullptr};
+    Property_map<Corner_id , vec2>* corner_texcoords     {nullptr};
+    Property_map<Polygon_id, vec3>* polygon_centroids    {nullptr};
+    Property_map<Polygon_id, vec3>* polygon_normals      {nullptr};
+    Property_map<Polygon_id, vec2>* polygon_aniso_control{nullptr};
 
     class Point_data
     {
@@ -97,9 +97,9 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        const Point_id   point_id = geometry.make_point();
-        const Point_data data     = make_point_data(rel_major, rel_minor);
-        const bool is_uv_discontinuity = (rel_major == 1.0) || (rel_minor == 1.0);
+        const Point_id   point_id            = geometry.make_point();
+        const Point_data data                = make_point_data(rel_major, rel_minor);
+        const bool       is_uv_discontinuity = (rel_major == 1.0) || (rel_minor == 1.0);
 
         point_locations ->put(point_id, data.position);
         point_normals   ->put(point_id, data.normal);
@@ -202,24 +202,24 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        point_locations   = geometry.point_attributes()  .create<vec3>(c_point_locations  );
-        point_normals     = geometry.point_attributes()  .create<vec3>(c_point_normals    );
-        point_tangents    = geometry.point_attributes()  .create<vec4>(c_point_tangents   );
-        point_bitangents  = geometry.point_attributes()  .create<vec4>(c_point_bitangents );
-        point_texcoords   = geometry.point_attributes()  .create<vec2>(c_point_texcoords  );
-        corner_texcoords  = geometry.corner_attributes() .create<vec2>(c_corner_texcoords );
-        polygon_centroids = geometry.polygon_attributes().create<vec3>(c_polygon_centroids);
-        polygon_normals   = geometry.polygon_attributes().create<vec3>(c_polygon_normals  );
-        polygon_colors    = geometry.polygon_attributes().create<vec4>(c_polygon_colors   );
+        point_locations       = geometry.point_attributes()  .create<vec3>(c_point_locations      );
+        point_normals         = geometry.point_attributes()  .create<vec3>(c_point_normals        );
+        point_tangents        = geometry.point_attributes()  .create<vec4>(c_point_tangents       );
+        point_bitangents      = geometry.point_attributes()  .create<vec4>(c_point_bitangents     );
+        point_texcoords       = geometry.point_attributes()  .create<vec2>(c_point_texcoords      );
+        corner_texcoords      = geometry.corner_attributes() .create<vec2>(c_corner_texcoords     );
+        polygon_centroids     = geometry.polygon_attributes().create<vec3>(c_polygon_centroids    );
+        polygon_normals       = geometry.polygon_attributes().create<vec3>(c_polygon_normals      );
+        polygon_aniso_control = geometry.polygon_attributes().create<vec2>(c_polygon_aniso_control);
     }
 
     void build()
     {
         ERHE_PROFILE_FUNCTION();
 
-        // red channel   = anisotropy strength
-        // green channel = apply texture coordinate to anisotropy
-        const glm::vec4 anisotropic_no_texcoord{1.0f, 0.0f, 0.0f, 0.0f}; // Used on lateral surface
+        // X = anisotropy strength
+        // Y = apply texture coordinate to anisotropy
+        const glm::vec2 anisotropic_no_texcoord{1.0f, 0.0f}; // all of torus
 
         for (int major = 0; major < major_axis_steps; ++major) {
             const auto rel_major = static_cast<double>(major) / static_cast<double>(major_axis_steps);
@@ -257,9 +257,9 @@ public:
                         point_locations->get(get_point_id(major,     minor + 1)) +
                         point_locations->get(get_point_id(major + 1, minor + 1))
                     );
-                polygon_centroids->put(polygon_id, flat_centroid_location);
-                polygon_normals  ->put(polygon_id, centroid_data.normal);
-                polygon_colors   ->put(polygon_id, anisotropic_no_texcoord);
+                polygon_centroids    ->put(polygon_id, flat_centroid_location);
+                polygon_normals      ->put(polygon_id, centroid_data.normal);
+                polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
             }
         }
 

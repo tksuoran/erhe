@@ -15,38 +15,38 @@ Camera::~Camera() noexcept
 {
 }
 
-auto Camera::static_type() -> uint64_t
+auto Camera::get_static_type() -> uint64_t
 {
     return Item_type::node_attachment | Item_type::camera;
 }
 
-auto Camera::static_type_name() -> const char*
+auto Camera::get_static_type_name() -> const char*
 {
     return "Camera";
 }
 
 auto Camera::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Camera::type_name() const -> const char*
+auto Camera::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
-void Camera::handle_node_scene_host_update(
-    Scene_host* old_scene_host,
-    Scene_host* new_scene_host
+void Camera::handle_item_host_update(
+    Item_host* const old_item_host,
+    Item_host* const new_item_host
 )
 {
-    if (old_scene_host) {
-        old_scene_host->unregister_camera(
+    if (old_item_host) {
+        old_item_host->unregister_camera(
             std::static_pointer_cast<Camera>(shared_from_this())
         );
     }
-    if (new_scene_host) {
-        new_scene_host->register_camera(
+    if (new_item_host) {
+        new_item_host->register_camera(
             std::static_pointer_cast<Camera>(shared_from_this())
         );
     }
@@ -119,7 +119,7 @@ auto as_camera(Item* const item) -> Camera*
     if (!test_all_rhs_bits_set(item->get_type(), Item_type::camera)) {
         return nullptr;
     }
-    return static_cast<Camera*>(item);
+    return reinterpret_cast<Camera*>(item);
 }
 
 auto as_camera(const std::shared_ptr<Item>& item) -> std::shared_ptr<Camera>
@@ -138,7 +138,7 @@ auto get_camera(const erhe::scene::Node* const node) -> std::shared_ptr<Camera>
     if (node == nullptr) {
         return {};
     }
-    for (const auto& attachment : node->attachments()) {
+    for (const auto& attachment : node->get_attachments()) {
         auto camera = as_camera(attachment);
         if (camera) {
             return camera;

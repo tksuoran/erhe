@@ -21,7 +21,7 @@ Sampler::Sampler(const Sampler_create_info& create_info)
     Expects(m_handle.gl_name() != 0);
     apply();
     set_debug_label(create_info.debug_label);
-    log_texture->info("Created sampler '{}'", debug_label());
+    log_texture->trace("Created sampler '{}'", debug_label());
 }
 
 void Sampler::set_debug_label(const std::string& value)

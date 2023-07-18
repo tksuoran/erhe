@@ -417,15 +417,15 @@ void Brush_tool::do_insert_operation()
     std::shared_ptr<erhe::scene::Node> parent = (hover_node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(hover_node->shared_from_this())
         : scene_root->get_hosted_scene()->get_root_node();
-    const auto& first_selected_node = m_context.selection->get_first_selected_node();
+    const auto& first_selected_node = m_context.selection->get<erhe::scene::Node>();
     if (first_selected_node) {
         parent = first_selected_node;
     }
 
-    auto op = std::make_shared<Node_insert_remove_operation>(
-        Node_insert_remove_operation::Parameters{
+    auto op = std::make_shared<Item_insert_remove_operation>(
+        Item_insert_remove_operation::Parameters{
             .context = m_context,
-            .node    = instance_node,
+            .item    = instance_node,
             .parent  = parent,
             .mode    = Scene_item_operation::Mode::insert
         }

@@ -462,6 +462,11 @@ auto Texture::is_sparse() const -> bool
     return m_is_sparse;
 }
 
+auto Texture::is_shown_in_ui() const -> bool
+{
+    return true;
+}
+
 //// auto Texture::get_sparse_tile_size() const -> Tile_size
 //// {
 ////     if (!m_is_sparse) {
@@ -538,7 +543,7 @@ void Texture::upload(
     const auto row_stride = width * get_upload_pixel_byte_count(internal_format);
     const auto byte_count = row_stride * height;
     Expects(data.size_bytes() >= byte_count);
-    const auto* data_pointer = reinterpret_cast<const void*>(data.data());
+    const auto* data_pointer = static_cast<const void*>(data.data());
 
     switch (storage_dimensions(m_target)) {
         case 1: {

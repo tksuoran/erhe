@@ -492,8 +492,7 @@ auto main(int argc, char** argv) -> int
                 &terminal,
                 &server_window
 #endif
-            ](const uint8_t* data, const std::size_t length)
-            {
+            ](const uint8_t* data, const std::size_t length) {
                 if ((data == nullptr) || (length == 0)) {
                     return;
                 }

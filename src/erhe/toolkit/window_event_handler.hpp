@@ -166,6 +166,9 @@ public:
 
     void set_priority(int priority) { m_priority = priority; }
     [[nodiscard]] auto get_priority() const -> int { return m_priority; }
+    [[nodiscard]] virtual auto get_name        () const -> const char* = 0;
+
+    [[nodiscard]] virtual auto has_active_mouse() const -> bool { return false; }
 
     virtual auto on_idle() -> bool { return false; }
 
@@ -238,6 +241,9 @@ class Root_window_event_handler
     : public Window_event_handler
 {
 public:
+    // Implements Window_event_handler
+    [[nodiscard]] auto get_name() const -> const char* override { return "Root_window_event_handler"; }
+
     explicit Root_window_event_handler(Context_window* window);
 
     void attach(Window_event_handler* handler, int priority);
@@ -257,12 +263,15 @@ public:
 
 private:
     void sort_handlers();
+    void set_active_mouse_handler(Window_event_handler* handler);
 
     Context_window*                    m_window{nullptr};
     int                                m_width {0};
     int                                m_height{0};
     std::mutex                         m_mutex;
     std::vector<Window_event_handler*> m_handlers;
+    Window_event_handler*              m_active_mouse_handler{nullptr};
 };
 
 } // namespace erhe::toolkit
+

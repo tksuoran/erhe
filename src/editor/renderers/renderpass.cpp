@@ -21,24 +21,24 @@ Renderpass::Renderpass(const std::string_view name)
 {
 }
 
-[[nodiscard]] auto Renderpass::static_type() -> uint64_t
+[[nodiscard]] auto Renderpass::get_static_type() -> uint64_t
 {
     return erhe::scene::Item_type::renderpass;
 }
 
-[[nodiscard]] auto Renderpass::static_type_name() -> const char*
+[[nodiscard]] auto Renderpass::get_static_type_name() -> const char*
 {
     return "renderpass";
 }
 
 [[nodiscard]] auto Renderpass::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-[[nodiscard]] auto Renderpass::type_name() const -> const char*
+[[nodiscard]] auto Renderpass::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
 void Renderpass::render(const Render_context& context) const
@@ -100,7 +100,8 @@ void Renderpass::render(const Render_context& context) const
                     : erhe::scene_renderer::Primitive_interface_settings{},
                 .shadow_texture         = nullptr,
                 .viewport               = context.viewport,
-                .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr
+                .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
+                .error_shader_stages    = &context.editor_context.programs->error.shader_stages
             },
             nullptr
         );
@@ -147,6 +148,7 @@ void Renderpass::render(const Render_context& context) const
                 .viewport               = context.viewport,
                 .filter                 = this->filter,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
+                .error_shader_stages    = &context.editor_context.programs->error.shader_stages,
                 .debug_joint_indices    = context.editor_context.editor_rendering->debug_joint_indices,
                 .debug_joint_colors     = context.editor_context.editor_rendering->debug_joint_colors
             }

@@ -39,7 +39,7 @@ public:
     );
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto type_name() const -> std::string_view override { return "Shadow_render_node"; }
+    [[nodiscard]] auto get_type_name() const -> std::string_view override { return "Shadow_render_node"; }
     void execute_rendergraph_node() override;
 
     [[nodiscard]] auto get_producer_output_texture(

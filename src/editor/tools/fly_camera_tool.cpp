@@ -15,6 +15,7 @@
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/window_event_handler.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
@@ -105,7 +106,6 @@ auto Fly_camera_turn_command::try_call_with_input(
         return false;
     }
 
-    log_fly_camera->trace("Fly camera applying turn");
     m_context.fly_camera_tool->turn_relative(-value.x, -value.y);
     return true;
 }
@@ -301,7 +301,7 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera)
     // might not be valid due to transform hierarchy.
 
     if (camera != nullptr) {
-        auto* scene_root = reinterpret_cast<Scene_root*>(camera->get_node()->node_data.host);
+        auto* scene_root = static_cast<Scene_root*>(camera->get_node()->node_data.host);
         if (scene_root != nullptr) {
             scene_root->scene().update_node_transforms();
         } else {
@@ -454,39 +454,46 @@ auto simple_degrees(const float radians_value) -> float
 
 void Fly_camera_tool::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};
 
     float speed = m_camera_controller->translate_z.max_delta();
 
-    auto* camera = get_camera();
-    auto* hover_scene_view = Tool::get_hover_scene_view();
-    if (hover_scene_view == nullptr) {
-        return;
-    }
-
-    const auto& scene_root = hover_scene_view->get_scene_root();
-    if (!scene_root) {
-        return;
-    }
-
-    if (
-        scene_root->camera_combo("Camera", camera) &&
-        !m_use_viewport_camera
-    ) {
-        set_camera(camera);
-    }
     ImGui::Checkbox   ("Use Viewport Camera", &m_use_viewport_camera);
     ImGui::SliderFloat("Sensitivity", &m_sensitivity, 0.2f,   2.0f);
     ImGui::SliderFloat("Speed",       &speed,         0.001f, 0.1f); //, "%.3f", logarithmic);
 
-    // \xc2\xb0 is degree symbol UTF-8 encoded
-    ImGui::Text("Heading = %.2f\xc2\xb0", simple_degrees(m_camera_controller->get_heading()));
-    ImGui::Text("Elevation = %.2f\xc2\xb0", simple_degrees(m_camera_controller->get_elevation()));
-
     m_camera_controller->translate_x.set_max_delta(speed);
     m_camera_controller->translate_y.set_max_delta(speed);
     m_camera_controller->translate_z.set_max_delta(speed);
+
+    // TODO Figure out if this can be re-enabled.
+    //      This is currently disabled, because fly camera detaches from
+    //      the scene as soon as mouse leaves the viewport, for example
+    //      when user moves mouse to *this* ImGui window.
+    //
+    // auto* camera = get_camera();
+    // auto* hover_scene_view = Tool::get_last_hover_scene_view();
+    // if (hover_scene_view == nullptr) {
+    //     return;
+    // }
+    // 
+    // const auto& scene_root = hover_scene_view->get_scene_root();
+    // if (!scene_root) {
+    //     return;
+    // }
+    // if (
+    //     scene_root->camera_combo("Camera", camera) &&
+    //     !m_use_viewport_camera
+    // ) {
+    //     set_camera(camera);
+    // }
+
+    // \xc2\xb0 is degree symbol UTF-8 encoded
+    ImGui::Text("Heading = %.2f\xc2\xb0", simple_degrees(m_camera_controller->get_heading()));
+    ImGui::Text("Elevation = %.2f\xc2\xb0", simple_degrees(m_camera_controller->get_elevation()));
 #endif
 }
 

@@ -98,7 +98,7 @@ public:
     auto get_closest_point_on_plane(const glm::vec3 N , const glm::vec3 P ) -> std::optional<glm::vec3> override;
 
     // Implements Rendergraph_node
-    auto type_name() const -> std::string_view override { return "Viewport_window"; }
+    auto get_type_name           () const -> std::string_view override { return "Viewport_window"; }
     void execute_rendergraph_node() override;
 
     // Public API

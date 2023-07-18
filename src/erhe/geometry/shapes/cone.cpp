@@ -57,19 +57,19 @@ public:
     Point_id top_point_id   {0};
     Point_id bottom_point_id{0};
 
-    Property_map<Point_id  , vec3>* point_locations  {nullptr};
-    Property_map<Point_id  , vec3>* point_normals    {nullptr};
-    Property_map<Point_id  , vec4>* point_tangents   {nullptr};
-    Property_map<Point_id  , vec4>* point_bitangents {nullptr};
-    Property_map<Point_id  , vec2>* point_texcoords  {nullptr};
-    Property_map<Corner_id , vec3>* corner_normals   {nullptr};
-    Property_map<Corner_id , vec4>* corner_tangents  {nullptr};
-    Property_map<Corner_id , vec4>* corner_bitangents{nullptr};
-    Property_map<Corner_id , vec2>* corner_texcoords {nullptr};
-    Property_map<Corner_id , vec4>* corner_colors    {nullptr};
-    Property_map<Polygon_id, vec3>* polygon_centroids{nullptr};
-    Property_map<Polygon_id, vec3>* polygon_normals  {nullptr};
-    Property_map<Polygon_id, vec4>* polygon_colors   {nullptr};
+    Property_map<Point_id  , vec3>* point_locations      {nullptr};
+    Property_map<Point_id  , vec3>* point_normals        {nullptr};
+    Property_map<Point_id  , vec4>* point_tangents       {nullptr};
+    Property_map<Point_id  , vec4>* point_bitangents     {nullptr};
+    Property_map<Point_id  , vec2>* point_texcoords      {nullptr};
+    Property_map<Corner_id , vec3>* corner_normals       {nullptr};
+    Property_map<Corner_id , vec4>* corner_tangents      {nullptr};
+    Property_map<Corner_id , vec4>* corner_bitangents    {nullptr};
+    Property_map<Corner_id , vec2>* corner_texcoords     {nullptr};
+    Property_map<Corner_id , vec2>* corner_aniso_control {nullptr};
+    Property_map<Polygon_id, vec3>* polygon_centroids    {nullptr};
+    Property_map<Polygon_id, vec3>* polygon_normals      {nullptr};
+    Property_map<Polygon_id, vec2>* polygon_aniso_control{nullptr};
 
     auto get_point(const int slice, const int stack) -> Point_id
     {
@@ -352,30 +352,30 @@ public:
 
         ERHE_VERIFY(slice_count != 0);
         ERHE_VERIFY(stack_count != 0);
-        point_locations   = geometry.point_attributes  ().create<vec3>(c_point_locations  );
-        point_normals     = geometry.point_attributes  ().create<vec3>(c_point_normals    );
-        point_tangents    = geometry.point_attributes  ().create<vec4>(c_point_tangents   );
-        point_bitangents  = geometry.point_attributes  ().create<vec4>(c_point_bitangents );
-        point_texcoords   = geometry.point_attributes  ().create<vec2>(c_point_texcoords  );
-        corner_normals    = geometry.corner_attributes ().create<vec3>(c_corner_normals   );
-        corner_tangents   = geometry.corner_attributes ().create<vec4>(c_corner_tangents  );
-        corner_bitangents = geometry.corner_attributes ().create<vec4>(c_corner_bitangents);
-        corner_texcoords  = geometry.corner_attributes ().create<vec2>(c_corner_texcoords );
-        corner_colors     = geometry.corner_attributes ().create<vec4>(c_corner_colors    );
-        polygon_centroids = geometry.polygon_attributes().create<vec3>(c_polygon_centroids);
-        polygon_normals   = geometry.polygon_attributes().create<vec3>(c_polygon_normals  );
-        polygon_colors    = geometry.polygon_attributes().create<vec4>(c_polygon_colors   );
+        point_locations       = geometry.point_attributes  ().create<vec3>(c_point_locations      );
+        point_normals         = geometry.point_attributes  ().create<vec3>(c_point_normals        );
+        point_tangents        = geometry.point_attributes  ().create<vec4>(c_point_tangents       );
+        point_bitangents      = geometry.point_attributes  ().create<vec4>(c_point_bitangents     );
+        point_texcoords       = geometry.point_attributes  ().create<vec2>(c_point_texcoords      );
+        corner_normals        = geometry.corner_attributes ().create<vec3>(c_corner_normals       );
+        corner_tangents       = geometry.corner_attributes ().create<vec4>(c_corner_tangents      );
+        corner_bitangents     = geometry.corner_attributes ().create<vec4>(c_corner_bitangents    );
+        corner_texcoords      = geometry.corner_attributes ().create<vec2>(c_corner_texcoords     );
+        corner_aniso_control  = geometry.corner_attributes ().create<vec2>(c_corner_aniso_control );
+        polygon_centroids     = geometry.polygon_attributes().create<vec3>(c_polygon_centroids    );
+        polygon_normals       = geometry.polygon_attributes().create<vec3>(c_polygon_normals      );
+        polygon_aniso_control = geometry.polygon_attributes().create<vec2>(c_polygon_aniso_control);
     }
 
     void build()
     {
         ERHE_PROFILE_FUNCTION();
 
-        // red channel   = anisotropy strength
-        // green channel = apply texture coordinate to anisotropy
-        const glm::vec4 non_anisotropic          {0.0f, 0.0f, 0.0f, 0.0f}; // Used on tips
-        const glm::vec4 anisotropic_no_texcoord  {1.0f, 0.0f, 0.0f, 0.0f}; // Used on lateral surface
-        const glm::vec4 anisotropic_with_texcoord{1.0f, 1.0f, 0.0f, 0.0f}; // Used on bottom / top ends
+        // X = anisotropy strength
+        // Y = apply texture coordinate to anisotropy
+        const glm::vec2 non_anisotropic          {0.0f, 0.0f}; // Used on tips
+        const glm::vec2 anisotropic_no_texcoord  {1.0f, 0.0f}; // Used on lateral surface
+        const glm::vec2 anisotropic_with_texcoord{1.0f, 1.0f}; // Used on bottom / top ends
 
         // Points
         SPDLOG_LOGGER_TRACE(log_cone, "Points:");
@@ -416,11 +416,11 @@ public:
                 const auto p0 = get_point(slice,     stack);
                 const auto p1 = get_point(slice + 1, stack);
 
-                corner_normals   ->put(tip_corner_id, average_data.normal);
-                corner_tangents  ->put(tip_corner_id, average_data.tangent);
-                corner_bitangents->put(tip_corner_id, average_data.bitangent);
-                corner_texcoords ->put(tip_corner_id, average_data.texcoord);
-                corner_colors    ->put(tip_corner_id, non_anisotropic);
+                corner_normals      ->put(tip_corner_id, average_data.normal);
+                corner_tangents     ->put(tip_corner_id, average_data.tangent);
+                corner_bitangents   ->put(tip_corner_id, average_data.bitangent);
+                corner_texcoords    ->put(tip_corner_id, average_data.texcoord);
+                corner_aniso_control->put(tip_corner_id, non_anisotropic);
 
                 const Point_data centroid_data = make_point_data(rel_slice_centroid, rel_stack_centroid);
                 const auto flat_centroid_location = (1.0f / 3.0f) *
@@ -429,18 +429,18 @@ public:
                         point_locations->get(p1) +
                         glm::vec3{min_x, 0.0, 0.0}
                     );
-                polygon_centroids->put(polygon_id, flat_centroid_location);
-                polygon_normals  ->put(polygon_id, centroid_data.normal);
-                polygon_colors   ->put(polygon_id, anisotropic_no_texcoord);
+                polygon_centroids    ->put(polygon_id, flat_centroid_location);
+                polygon_normals      ->put(polygon_id, centroid_data.normal);
+                polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
             }
         } else {
             if (use_bottom) {
                 SPDLOG_LOGGER_TRACE(log_cone, "Bottom - flat polygon");
                 const Polygon_id polygon_id = geometry.make_polygon();
 
-                polygon_centroids->put(polygon_id, vec3{static_cast<float>(min_x), 0.0f, 0.0f});
-                polygon_normals  ->put(polygon_id, vec3{-1.0f, 0.0f, 0.0f});
-                polygon_colors   ->put(polygon_id, anisotropic_with_texcoord);
+                polygon_centroids    ->put(polygon_id, vec3{static_cast<float>(min_x), 0.0f, 0.0f});
+                polygon_normals      ->put(polygon_id, vec3{-1.0f, 0.0f, 0.0f});
+                polygon_aniso_control->put(polygon_id, anisotropic_with_texcoord);
 
                 for (int slice = 0; slice < slice_count; ++slice) {
                     make_corner(polygon_id, slice, 0, true);
@@ -488,9 +488,9 @@ public:
                         point_locations->get(get_point_id(slice,     stack + 1)) +
                         point_locations->get(get_point_id(slice + 1, stack + 1))
                     );
-                polygon_centroids->put(polygon_id, flat_centroid_location);
-                polygon_normals  ->put(polygon_id, centroid_data.normal);
-                polygon_colors   ->put(polygon_id, anisotropic_no_texcoord);
+                polygon_centroids    ->put(polygon_id, flat_centroid_location);
+                polygon_normals      ->put(polygon_id, centroid_data.normal);
+                polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
             }
         }
 
@@ -512,16 +512,16 @@ public:
                 const Corner_id tip_corner_id = make_corner(polygon_id, slice, stack_top);
 
                 SPDLOG_LOGGER_TRACE(log_cone, "polygon {} tip tangent {}", polygon_id, average_data.tangent);
-                corner_normals   ->put(tip_corner_id, average_data.normal);
-                corner_tangents  ->put(tip_corner_id, average_data.tangent);
-                corner_bitangents->put(tip_corner_id, average_data.bitangent);
-                corner_texcoords ->put(tip_corner_id, average_data.texcoord);
-                corner_colors    ->put(tip_corner_id, non_anisotropic);
+                corner_normals      ->put(tip_corner_id, average_data.normal);
+                corner_tangents     ->put(tip_corner_id, average_data.tangent);
+                corner_bitangents   ->put(tip_corner_id, average_data.bitangent);
+                corner_texcoords    ->put(tip_corner_id, average_data.texcoord);
+                corner_aniso_control->put(tip_corner_id, non_anisotropic);
 
                 const Point_data centroid_data = make_point_data(rel_slice_centroid, rel_stack_centroid);
 
-                const auto p0 = get_point(slice,     stack);
-                const auto p1 = get_point(slice + 1, stack);
+                const auto p0           = get_point(slice,     stack);
+                const auto p1           = get_point(slice + 1, stack);
                 const vec3 position_p0  = point_locations->get(p0);
                 const vec3 position_p1  = point_locations->get(p1);
                 const vec3 position_tip = glm::vec3{max_x, 0.0, 0.0};
@@ -542,18 +542,18 @@ public:
                     polygon_id
                 );
 
-                polygon_centroids->put(polygon_id, flat_centroid_location);
-                polygon_normals  ->put(polygon_id, centroid_data.normal);
-                polygon_colors   ->put(polygon_id, anisotropic_no_texcoord);
+                polygon_centroids    ->put(polygon_id, flat_centroid_location);
+                polygon_normals      ->put(polygon_id, centroid_data.normal);
+                polygon_aniso_control->put(polygon_id, anisotropic_no_texcoord);
             }
         } else {
             if (use_top) {
                 SPDLOG_LOGGER_TRACE(log_cone, "Top - flat polygon");
                 const Polygon_id polygon_id = geometry.make_polygon();
 
-                polygon_centroids->put(polygon_id, vec3{static_cast<float>(max_x), 0.0f, 0.0f});
-                polygon_normals  ->put(polygon_id, vec3{1.0f, 0.0f, 0.0f});
-                polygon_colors   ->put(polygon_id, anisotropic_with_texcoord);
+                polygon_centroids    ->put(polygon_id, vec3{static_cast<float>(max_x), 0.0f, 0.0f});
+                polygon_normals      ->put(polygon_id, vec3{1.0f, 0.0f, 0.0f});
+                polygon_aniso_control->put(polygon_id, anisotropic_with_texcoord);
 
                 for (int slice = 0; slice < slice_count; ++slice) {
                     const int reverse_slice = slice_count - 1 - slice;

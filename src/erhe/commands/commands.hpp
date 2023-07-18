@@ -42,6 +42,9 @@ class Commands
     : public erhe::toolkit::Window_event_handler
 {
 public:
+    // Implements Window_event_handler
+    [[nodiscard]] auto get_name() const -> const char* override { return "Commands"; }
+
     Commands();
     ~Commands() noexcept override;
 
@@ -119,11 +122,12 @@ public:
     [[nodiscard]] auto last_mouse_position_delta() const -> glm::vec2;
 
     // Implements erhe::toolkit::Window_event_handler
-    auto on_key         (erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed) -> bool override;
-    auto on_mouse_move  (float x, float y)                                                  -> bool override;
-    auto on_mouse_button(erhe::toolkit::Mouse_button button, bool pressed)                  -> bool override;
-    auto on_mouse_wheel (float x, float y)                                                  -> bool override;
-    auto on_idle        ()                                                                  -> bool override;
+    auto has_active_mouse() const                                                            -> bool override;
+    auto on_key          (erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed) -> bool override;
+    auto on_mouse_move   (float x, float y)                                                  -> bool override;
+    auto on_mouse_button (erhe::toolkit::Mouse_button button, bool pressed)                  -> bool override;
+    auto on_mouse_wheel  (float x, float y)                                                  -> bool override;
+    auto on_idle         ()                                                                  -> bool override;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void on_xr_action   (erhe::xr::Xr_action_boolean&  xr_action);

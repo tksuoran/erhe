@@ -229,25 +229,28 @@ auto make_cube(const double r) -> Geometry
             const double b = -0.5 * r;
             Property_map<Corner_id, glm::vec2>* corner_texcoords = geometry.corner_attributes().create<glm::vec2>(c_corner_texcoords);
 
-            geometry.make_point(b, b, b); // 0    6------7
+            geometry.make_point(b, b, b); // 0    2------4
             geometry.make_point(a, b, b); // 1   /|     /|
-            geometry.make_point(b, a, b); // 2  2-+----4 |
+            geometry.make_point(b, a, b); // 2  6-+----7 |
             geometry.make_point(b, b, a); // 3  | |    | |
             geometry.make_point(a, a, b); // 4  | |    | |
-            geometry.make_point(a, b, a); // 5  | 3----+-5
+            geometry.make_point(a, b, a); // 5  | 0----|-1
             geometry.make_point(b, a, a); // 6  |/     |/
-            geometry.make_point(a, a, a); // 7  0------1
+            geometry.make_point(a, a, a); // 7  3------5
 
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 4, 7, 5, 1); // x+
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 6, 7, 4, 2); // y+
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 7, 6, 3, 5); // z+
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 6, 2, 0, 3); // x-
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 0, 1, 5, 3); // y-
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 2, 4, 1, 0); // z-
+            geometry.make_polygon({1, 4, 7, 5}); // x+
+            geometry.make_polygon({2, 6, 7, 4}); // y+
+            geometry.make_polygon({3, 5, 7, 6}); // z+
+            geometry.make_polygon({0, 3, 6, 2}); // x-
+            geometry.make_polygon({0, 1, 5, 3}); // y-
+            geometry.make_polygon({0, 2, 4, 1}); // z-
 
             geometry.make_point_corners();
             geometry.build_edges();
+            geometry.compute_polygon_corner_texcoords(corner_texcoords);
             //geometry.generate_polygon_texture_coordinates(true);
+            geometry.compute_polygon_normals();
+            geometry.compute_polygon_centroids();
             geometry.compute_tangents(true, true, false, false, true, true);
         }
     };

@@ -56,7 +56,7 @@ public:
     );
     virtual ~Rendergraph_node() noexcept;
 
-    [[nodiscard]] virtual auto type_name() const -> std::string_view { return "Rendergraph_node"; }
+    [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Rendergraph_node"; }
     [[nodiscard]] auto get_name   () const -> const std::string&;
     [[nodiscard]] auto get_inputs () const -> const std::vector<Rendergraph_consumer_connector>&;
     [[nodiscard]] auto get_inputs ()       ->       std::vector<Rendergraph_consumer_connector>&;

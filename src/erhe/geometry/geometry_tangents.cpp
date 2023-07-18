@@ -57,7 +57,7 @@ auto Geometry::compute_tangents(
         return true;
     }
 
-    log_tangent_gen->info("{} for {}", __func__, name);
+    log_tangent_gen->trace("{} for {}", __func__, name);
 
     if (!compute_polygon_normals()) {
         return false;
@@ -356,7 +356,7 @@ auto Geometry::compute_tangents(
     SMikkTSpaceInterface mikktspace{
         .m_getNumFaces = [](const SMikkTSpaceContext* pContext)
         {
-            const auto* context   = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            const auto* context   = static_cast<Geometry_context*>(pContext->m_pUserData);
             const int   num_faces = context->triangle_count;
             return num_faces;
         },
@@ -374,7 +374,7 @@ auto Geometry::compute_tangents(
             int32_t                   iVert
         )
         {
-            const auto* context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            const auto* context    = static_cast<Geometry_context*>(pContext->m_pUserData);
             vec3        g_location = context->get_position(iFace, iVert);
             fvPosOut[0] = g_location[0];
             fvPosOut[1] = g_location[1];
@@ -388,7 +388,7 @@ auto Geometry::compute_tangents(
             int32_t                   iVert
         )
         {
-            const auto* context  = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            const auto* context  = static_cast<Geometry_context*>(pContext->m_pUserData);
             vec3        g_normal = context->get_normal(iFace, iVert);
             fvNormOut[0] = g_normal[0];
             fvNormOut[1] = g_normal[1];
@@ -402,7 +402,7 @@ auto Geometry::compute_tangents(
             int32_t                   iVert
         )
         {
-            auto* context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            auto* context    = static_cast<Geometry_context*>(pContext->m_pUserData);
             vec2  g_texcoord = context->get_texcoord(iFace, iVert);
             fvTexcOut[0] = g_texcoord[0];
             fvTexcOut[1] = g_texcoord[1];
@@ -424,7 +424,7 @@ auto Geometry::compute_tangents(
             static_cast<void>(fMagS);
             static_cast<void>(fMagT);
             static_cast<void>(bIsOrientationPreserving);
-            auto*       context    = reinterpret_cast<Geometry_context*>(pContext->m_pUserData);
+            auto*          context = static_cast<Geometry_context*>(pContext->m_pUserData);
 
             const Polygon& polygon = context->get_polygon(iFace);
             if ((polygon.corner_count > 3) && (iVert == 0)) {

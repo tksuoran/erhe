@@ -28,6 +28,7 @@
 #include "erhe/scene/skin.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -91,7 +92,7 @@ auto Debug_visualizations::get_selected_camera(
             if (node->get_scene() != scene) {
                 continue;
             }
-            for (const auto& attachment : node->attachments()) {
+            for (const auto& attachment : node->get_attachments()) {
                 const auto camera = as_camera(attachment);
                 if (camera) {
                     return camera;
@@ -202,18 +203,12 @@ void Debug_visualizations::mesh_selection_visualization(
 
 void Debug_visualizations::skin_visualization(
     const Render_context& render_context,
-    erhe::scene::Skin*    skin
+    erhe::scene::Skin&    skin
 )
 {
-    if (skin == nullptr) {
-        return;
-    }
-    auto& line_renderer = *m_context.line_renderer_set->visible.at(2).get();
+    ERHE_PROFILE_FUNCTION();
 
-    const auto* node = skin->get_node();
-    if (node == nullptr) {
-        return;
-    }
+    auto& line_renderer = *m_context.line_renderer_set->visible.at(2).get();
 
     const auto* camera_node = render_context.get_camera_node();
     if (camera_node == nullptr) {
@@ -235,8 +230,8 @@ void Debug_visualizations::skin_visualization(
     //constexpr vec4 cyan { 0.0f, 1.0f, 1.0f, 1.0f};
     line_renderer.set_thickness(2.0f);
 
-    for (std::size_t i = 0, end_i = skin->skin_data.joints.size(); i < end_i; ++i) {
-        const auto& joint = skin->skin_data.joints[i];
+    for (std::size_t i = 0, end_i = skin.skin_data.joints.size(); i < end_i; ++i) {
+        const auto& joint = skin.skin_data.joints[i];
         if (!joint) {
             continue;
         }
@@ -248,12 +243,12 @@ void Debug_visualizations::skin_visualization(
 
         // Search for child to connect bone tip:
         bool child_found = false;
-        for (std::size_t j = 0, end_j = skin->skin_data.joints.size(); j < end_j; ++j) {
+        for (std::size_t j = 0, end_j = skin.skin_data.joints.size(); j < end_j; ++j) {
             if (j == i) {
                 continue;
             }
-            const auto& other_joint = skin->skin_data.joints[j];
-            if (other_joint->parent().lock() == joint) {
+            const auto& other_joint = skin.skin_data.joints[j];
+            if (other_joint->get_parent_node() == joint) {
                 b = other_joint->position_in_world();
                 child_found = true;
                 break;
@@ -261,7 +256,7 @@ void Debug_visualizations::skin_visualization(
         }
         if (!child_found) {
             // No child, try to guess bone tip compared to parent (if it has parent):
-            const auto& parent = joint->parent().lock();
+            const auto& parent = joint->get_parent_node();
             if (parent) {
                 const vec3 parent_position = parent->position_in_world();
                 const float distance = glm::distance(parent_position, a);
@@ -306,6 +301,8 @@ void Debug_visualizations::light_visualization(
     const erhe::scene::Light*            light
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     using namespace erhe::toolkit;
     if (!test_all_rhs_bits_set(light->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations)) {
         return;
@@ -597,6 +594,8 @@ void Debug_visualizations::camera_visualization(
     const erhe::scene::Camera*  camera
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (camera == &render_context.camera) {
         return;
     }
@@ -636,6 +635,8 @@ void Debug_visualizations::selection_visualization(
     const Render_context& context
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     const auto* scene = context.get_scene();
     if (scene == nullptr) {
         return;
@@ -664,7 +665,7 @@ void Debug_visualizations::selection_visualization(
                 line_renderer.add_lines( m, green, {{ O, axis_y }} );
                 line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
             }
-            for (const auto& attachment : node->attachments()) {
+            for (const auto& attachment : node->get_attachments()) {
                 const auto mesh = as_mesh(attachment);
                 if (mesh) {
                     mesh_selection_visualization(context, mesh.get());
@@ -770,6 +771,8 @@ void Debug_visualizations::physics_nodes_visualization(
     const std::shared_ptr<Scene_root>& scene_root
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
     for (const auto& mesh : scene_root->layers().content()->meshes) {
@@ -780,20 +783,13 @@ void Debug_visualizations::physics_nodes_visualization(
 
         const auto& node_physics = get_node_physics(node);
         if (node_physics) {
-            const erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+            const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
             if (rigid_body != nullptr) {
-                const erhe::physics::Transform transform = rigid_body->get_world_transform();
+                const glm::mat4 m = rigid_body->get_world_transform();
                 {
                     const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
                     const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
                     const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
-                    glm::mat4 m{transform.basis};
-                    m[3] = glm::vec4{
-                        transform.origin.x,
-                        transform.origin.y,
-                        transform.origin.z,
-                        1.0f
-                    };
                     line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
                     line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
                     line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
@@ -801,13 +797,6 @@ void Debug_visualizations::physics_nodes_visualization(
                 {
                     const glm::vec4 cyan{0.0f, 1.0f, 1.0f, 1.0f};
                     const glm::vec3 velocity = rigid_body->get_linear_velocity();
-                    glm::mat4 m{1.0f};
-                    m[3] = glm::vec4{
-                        transform.origin.x,
-                        transform.origin.y,
-                        transform.origin.z,
-                        1.0f
-                    };
                     line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
                 }
             }
@@ -819,6 +808,8 @@ void Debug_visualizations::raytrace_nodes_visualization(
     const std::shared_ptr<Scene_root>& scene_root
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
     const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
@@ -847,6 +838,8 @@ void Debug_visualizations::mesh_labels(
     erhe::scene::Mesh*    mesh
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
     if (mesh == nullptr) {
@@ -1060,6 +1053,8 @@ void Debug_visualizations::render(
     const Render_context& context
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (
         m_tool_hide &&
         m_context.transform_tool->is_transform_tool_active()
@@ -1104,8 +1099,16 @@ void Debug_visualizations::render(
     }
 
     if (m_skins) {
-        for (const auto& skin : scene_root->scene().get_skins()) {
-            skin_visualization(context, skin.get());
+        // Skins can be shared by multiple meshes.
+        // Visualize each skin only once.
+        std::set<erhe::scene::Skin*> skins;
+        for (const auto& mesh : scene_root->layers().content()->meshes) {
+            if (mesh->mesh_data.skin) {
+                skins.insert(mesh->mesh_data.skin.get());
+            }
+        }
+        for (auto* skin : skins) {
+            skin_visualization(context, *skin);
         }
     }
 
@@ -1120,6 +1123,8 @@ void Debug_visualizations::render(
 
 void Debug_visualizations::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     //// for (const auto& line : m_lines)
     //// {

@@ -141,6 +141,8 @@ void Window_imgui_viewport::end_imgui_frame()
 
 void Window_imgui_viewport::execute_rendergraph_node()
 {
+    ERHE_PROFILE_FUNCTION();
+
     Scoped_imgui_context imgui_context{*this};
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);

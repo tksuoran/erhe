@@ -81,18 +81,20 @@ public:
     explicit Animation(const std::string_view name);
     ~Animation() noexcept override;
 
-    [[nodiscard]] static auto static_type     () -> uint64_t;
-    [[nodiscard]] static auto static_type_name() -> const char*;
-
     // Implements Item
-    [[nodiscard]] auto get_type () const -> uint64_t override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
+    // Public API
     [[nodiscard]] auto evaluate(float time_current, std::size_t channel_index, std::size_t component) -> float;
     void apply(float time_current);
 
     std::vector<Animation_sampler> samplers;
     std::vector<Animation_channel> channels;
 };
+
+auto as_animation(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Animation>;
 
 } // namespace erhe::scene

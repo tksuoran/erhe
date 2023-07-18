@@ -29,6 +29,9 @@ class Imgui_windows
     : public erhe::toolkit::Window_event_handler
 {
 public:
+    // Implements Window_event_handler
+    [[nodiscard]] auto get_name() const -> const char* override { return "Imgui_windows"; }
+
     Imgui_windows(
         Imgui_renderer&                 imgui_renderer,
         erhe::toolkit::Context_window*  context_window,

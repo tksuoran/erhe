@@ -38,7 +38,7 @@ namespace editor
 
 using Light_type = erhe::scene::Light_type;
 
-Node_tree_window::Node_tree_window(
+Item_tree_window::Item_tree_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     Editor_context&              context
@@ -54,32 +54,32 @@ Node_tree_window::Node_tree_window(
 {
 }
 
-void Node_tree_window::clear_selection()
+void Item_tree_window::clear_selection()
 {
-    SPDLOG_LOGGER_TRACE(log_node_properties, "clear_selection()");
+    SPDLOG_LOGGER_TRACE(log_tree, "clear_selection()");
 
     m_context.selection->clear_selection();
 }
 
-void Node_tree_window::recursive_add_to_selection(
-    const std::shared_ptr<erhe::scene::Node>& node
+void Item_tree_window::recursive_add_to_selection(
+    const std::shared_ptr<erhe::scene::Item>& item
 )
 {
-    m_context.selection->add_to_selection(node);
-    for (const auto& child_node : node->children()) {
-        recursive_add_to_selection(child_node);
+    m_context.selection->add_to_selection(item);
+    for (const auto& child : item->get_children()) {
+        recursive_add_to_selection(child);
     }
 }
 
-void Node_tree_window::select_all()
+void Item_tree_window::select_all()
 {
-    SPDLOG_LOGGER_TRACE(log_node_properties, "select_all()");
+    SPDLOG_LOGGER_TRACE(log_tree, "select_all()");
 
     m_context.selection->clear_selection();
     const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         const auto& scene = scene_root->scene();
-        for (const auto& node : scene.get_root_node()->children()) {
+        for (const auto& node : scene.get_root_node()->get_children()) {
             recursive_add_to_selection(node);
         }
     }
@@ -98,7 +98,7 @@ template <typename T, typename U>
     ) != items.end();
 }
 
-auto Node_tree_window::get_item_by_id(
+auto Item_tree_window::get_item_by_id(
     const erhe::toolkit::Unique_id<erhe::scene::Item>::id_type id
 ) const -> std::shared_ptr<erhe::scene::Item>
 {
@@ -110,13 +110,13 @@ auto Node_tree_window::get_item_by_id(
     return i->second;
 }
 
-void Node_tree_window::move_selection(
-    const std::shared_ptr<erhe::scene::Node>&                  target_node,
-    const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id,
-    const Placement                                            placement
+void Item_tree_window::move_selection(
+    const std::shared_ptr<erhe::scene::Item>& target_node,
+    const std::size_t                         payload_id,
+    const Placement                           placement
 )
 {
-    log_node_properties->trace(
+    log_tree->trace(
         "move_selection(anchor = {}, {})",
         target_node ? target_node->get_name() : "(empty)",
         (placement == Placement::Before_anchor)
@@ -128,7 +128,7 @@ void Node_tree_window::move_selection(
     const auto& selection = m_context.selection->get_selection();
     const auto& drag_item = get_item_by_id(payload_id);
 
-    std::shared_ptr<erhe::scene::Node> anchor = target_node;
+    std::shared_ptr<erhe::scene::Item> anchor = target_node;
     if (is_in(drag_item, selection)) {
         // Dragging node which is part of the selection.
         // In this case we apply reposition to whole selection.
@@ -165,16 +165,16 @@ void Node_tree_window::move_selection(
 namespace {
 
 [[nodiscard]] auto get_ancestor_in(
-    const std::shared_ptr<erhe::scene::Node>&              node,
+    const std::shared_ptr<erhe::scene::Item>&              item,
     const std::vector<std::shared_ptr<erhe::scene::Item>>& selection
-) -> std::shared_ptr<erhe::scene::Node>
+) -> std::shared_ptr<erhe::scene::Item>
 {
-    const auto& node_parent = node->parent().lock();
-    if (node_parent) {
-        if (is_in(node_parent, selection)) {
-            return node_parent;
+    const auto& item_parent = item->get_parent().lock();
+    if (item_parent) {
+        if (is_in(item_parent, selection)) {
+            return item_parent;
         }
-        return get_ancestor_in(node_parent, selection);
+        return get_ancestor_in(item_parent, selection);
     } else {
         return {};
     }
@@ -182,42 +182,42 @@ namespace {
 
 } // anonymous namespace
 
-void Node_tree_window::reposition(
+void Item_tree_window::reposition(
     Compound_operation::Parameters&           compound_parameters,
-    const std::shared_ptr<erhe::scene::Node>& anchor_node,
-    const std::shared_ptr<erhe::scene::Node>& node,
+    const std::shared_ptr<erhe::scene::Item>& anchor,
+    const std::shared_ptr<erhe::scene::Item>& item,
     const Placement                           placement,
     const Selection_usage                     selection_usage
 )
 {
     SPDLOG_LOGGER_TRACE(
-        log_node_properties,
+        log_tree,
         "reposition(anchor_node = {}, node = {}, placement = {})",
-        anchor_node ? anchor_node->get_name() : "(empty)",
-        node ? node->get_name() : "(empty)",
+        anchor ? anchor->get_name() : "(empty)",
+        item ? item->get_name() : "(empty)",
         (placement == Placement::Before_anchor)
             ? "Before_anchor"
             : "After_anchor"
     );
 
-    if (!node) {
-        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty node");
+    if (!item) {
+        SPDLOG_LOGGER_WARN(log_tree, "Bad empty item");
         return;
     }
 
-    if (!anchor_node) {
-        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty anchor node");
+    if (!anchor) {
+        SPDLOG_LOGGER_WARN(log_tree, "Bad empty anchor");
         return;
     }
 
     // Nodes cannot be attached to themselves
-    if (node == anchor_node) {
+    if (item == anchor) {
         return;
     }
 
     // Ancestors cannot be attached to descendants
-    if (anchor_node->is_ancestor(node.get())) {
-        SPDLOG_LOGGER_WARN(log_node_properties, "Ancestors cannot be attached to descendants");
+    if (anchor->is_ancestor(item.get())) {
+        SPDLOG_LOGGER_WARN(log_tree, "Ancestors cannot be moved as child of descendant");
         return;
     }
 
@@ -225,108 +225,108 @@ void Node_tree_window::reposition(
         const auto& selection = m_context.selection->get_selection();
 
         // Ignore nodes if their ancestors is in selection
-        const auto ancestor_in_selection = get_ancestor_in(node, selection);
+        const auto ancestor_in_selection = get_ancestor_in(item, selection);
         if (ancestor_in_selection) {
             SPDLOG_LOGGER_TRACE(
-                log_node_properties,
+                log_tree,
                 "Ignoring node {} because ancestor {} is in selection",
-                node->get_name(),
+                item->get_name(),
                 ancestor_in_selection->get_name()
             );
             return;
         }
     }
 
-    if (anchor_node->parent().lock() != node->parent().lock()) {
+    if (anchor->get_parent().lock() != item->get_parent().lock()) {
         compound_parameters.operations.push_back(
-            std::make_shared<Node_attach_operation>(
-                anchor_node->parent().lock(),
-                node,
-                (placement == Placement::Before_anchor) ? anchor_node : std::shared_ptr<erhe::scene::Node>{},
-                (placement == Placement::After_anchor ) ? anchor_node : std::shared_ptr<erhe::scene::Node>{}
+            std::make_shared<Item_parent_change_operation>(
+                anchor->get_parent().lock(),
+                item,
+                (placement == Placement::Before_anchor) ? anchor : std::shared_ptr<erhe::scene::Node>{},
+                (placement == Placement::After_anchor ) ? anchor : std::shared_ptr<erhe::scene::Node>{}
             )
         );
         return;
     }
 
     compound_parameters.operations.push_back(
-        std::make_shared<Node_reposition_in_parent_operation>(
-            node,
-            (placement == Placement::Before_anchor) ? anchor_node : std::shared_ptr<erhe::scene::Node>{},
-            (placement == Placement::After_anchor ) ? anchor_node : std::shared_ptr<erhe::scene::Node>{}
+        std::make_shared<Item_reposition_in_parent_operation>(
+            item,
+            (placement == Placement::Before_anchor) ? anchor : std::shared_ptr<erhe::scene::Node>{},
+            (placement == Placement::After_anchor ) ? anchor : std::shared_ptr<erhe::scene::Node>{}
         )
     );
 }
 
-void Node_tree_window::try_add_to_attach(
+void Item_tree_window::try_add_to_attach(
     Compound_operation::Parameters&           compound_parameters,
-    const std::shared_ptr<erhe::scene::Node>& target_node,
-    const std::shared_ptr<erhe::scene::Node>& node,
+    const std::shared_ptr<erhe::scene::Item>& target,
+    const std::shared_ptr<erhe::scene::Item>& item,
     const Selection_usage                     selection_usage
 )
 {
     SPDLOG_LOGGER_TRACE(
-        log_node_properties,
-        "try_add_to_attach(target_node = {}, node = {})",
-        target_node ? target_node->get_name() : "(empty)",
-        node        ? node->get_name()        : "(empty)"
+        log_tree,
+        "try_add_to_attach(target = {}, item = {})",
+        target ? target->get_name() : "(empty)",
+        item   ? item->get_name()   : "(empty)"
     );
 
-    if (!node) {
-        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty node");
+    if (!item) {
+        SPDLOG_LOGGER_WARN(log_tree, "Bad empty item");
         return;
     }
 
-    if (!target_node) {
-        SPDLOG_LOGGER_WARN(log_node_properties, "Bad empty target node");
+    if (!target) {
+        SPDLOG_LOGGER_WARN(log_tree, "Bad empty target");
         return;
     }
 
     // Nodes cannot be attached to themselves
-    if (node == target_node) {
-        SPDLOG_LOGGER_WARN(log_node_properties, "Nodes cannot be attached to themselves");
+    if (item == target) {
+        SPDLOG_LOGGER_WARN(log_tree, "Nodes cannot be moved as child of themselves");
         return;
     }
 
     // Ancestors cannot be attached to descendants
-    if (target_node->is_ancestor(node.get())) {
-        SPDLOG_LOGGER_WARN(log_node_properties, "Ancestors cannot be attached to descendants");
+    if (target->is_ancestor(item.get())) {
+        SPDLOG_LOGGER_WARN(log_tree, "Ancestors cannot be moved to child of descendant");
         return;
     }
 
     if (selection_usage == Selection_usage::Selection_used) {
         const auto& selection = m_context.selection->get_selection();
 
-        // Ignore nodes if their ancestors is in selection
-        const auto ancestor_in_selection = get_ancestor_in(node, selection);
+        // Ignore item if their ancestors is in selection
+        const auto ancestor_in_selection = get_ancestor_in(item, selection);
         if (ancestor_in_selection) {
             SPDLOG_LOGGER_TRACE(
-                log_node_properties,
-                "Ignoring node {} because ancestor {} is in selection",
-                node->get_name(),
-                ancestor_in_selection->get_name()
+                log_tree,
+                "Ignoring item '{}' because ancestor '{}' is in selection",
+                item->describe(),
+                ancestor_in_selection->describe()
             );
             return;
         }
     }
 
     compound_parameters.operations.push_back(
-        std::make_shared<Node_attach_operation>(
-            target_node,
-            node,
-            std::shared_ptr<erhe::scene::Node>{},
-            std::shared_ptr<erhe::scene::Node>{}
+        std::make_shared<Item_parent_change_operation>(
+            target,
+            item,
+            std::shared_ptr<erhe::scene::Item>{},
+            std::shared_ptr<erhe::scene::Item>{}
         )
     );
 }
 
-void Node_tree_window::attach_selection_to(
-    const std::shared_ptr<erhe::scene::Node>&                  target_node,
-    const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
+void Item_tree_window::attach_selection_to(
+    const std::shared_ptr<erhe::scene::Item>& target,
+    const std::size_t                         payload_id
 )
 {
     SPDLOG_LOGGER_TRACE(
-        log_node_properties,
+        log_tree,
         "attach_selection_to()"
     );
 
@@ -341,16 +341,10 @@ void Node_tree_window::attach_selection_to(
 
     if (is_in(drag_item, selection)) {
         for (const auto& item : selection) {
-            const auto& node = as_node(item);
-            if (node) {
-                try_add_to_attach(compound_parameters, target_node, node, Selection_usage::Selection_used);
-            }
+            try_add_to_attach(compound_parameters, target, item, Selection_usage::Selection_used);
         }
     } else if (compound_parameters.operations.empty()) {
-        const auto& drag_node = as_node(drag_item);
-        if (drag_node) {
-            try_add_to_attach(compound_parameters, target_node, drag_node, Selection_usage::Selection_ignored);
-        }
+        try_add_to_attach(compound_parameters, target, drag_item, Selection_usage::Selection_ignored);
     }
 
     if (!compound_parameters.operations.empty()) {
@@ -359,16 +353,18 @@ void Node_tree_window::attach_selection_to(
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-void Node_tree_window::drag_and_drop_source(
+void Item_tree_window::drag_and_drop_source(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     ERHE_PROFILE_FUNCTION();
 
+    log_tree_frame->trace("DnD source: '{}'", item->describe());
+
     const auto id = item->get_id();
     m_tree_items.emplace(id, item);
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-        ImGui::SetDragDropPayload(item->type_name(), &id, sizeof(id));
+        ImGui::SetDragDropPayload(item->get_type_name(), &id, sizeof(id));
 
         const auto& selection = m_context.selection->get_selection();
         if (is_in(item, selection)) {
@@ -429,13 +425,14 @@ void drag_and_drop_gradient_preview(
 
 }
 
-auto Node_tree_window::drag_and_drop_target(
+auto Item_tree_window::drag_and_drop_target(
     const std::shared_ptr<erhe::scene::Item>& item
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
     if (!item) {
+        log_tree_frame->trace("DnD item is empty");
         return false;
     }
 
@@ -450,9 +447,9 @@ auto Node_tree_window::drag_and_drop_target(
     const float x1       = rect_max.x;
 
     const auto        id                = item->get_id();
-    const std::string label_move_before = fmt::format("node dnd move before {}: {} {}", id, item->type_name(), item->get_name());
-    const std::string label_attach_to   = fmt::format("node dnd attach to {}: {} {}",   id, item->type_name(), item->get_name());
-    const std::string label_move_after  = fmt::format("node dnd move after {}: {} {}",  id, item->type_name(), item->get_name());
+    const std::string label_move_before = fmt::format("node dnd move before {}: {} {}", id, item->get_type_name(), item->get_name());
+    const std::string label_attach_to   = fmt::format("node dnd attach to {}: {} {}",   id, item->get_type_name(), item->get_name());
+    const std::string label_move_after  = fmt::format("node dnd move after {}: {} {}",  id, item->get_type_name(), item->get_name());
     const ImGuiID     imgui_id_before   = ImGui::GetID(label_move_before.c_str());
     const ImGuiID     imgui_id_attach   = ImGui::GetID(label_attach_to.c_str());
     const ImGuiID     imgui_id_after    = ImGui::GetID(label_move_after.c_str());
@@ -460,14 +457,18 @@ auto Node_tree_window::drag_and_drop_target(
     // Move selection before drop target
     const auto& node = as_node(item);
     if (node) {
+        log_tree_frame->trace("Dnd item is Node: {}", node->describe());
         const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
         if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_before)) {
             const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
             drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
             if (payload != nullptr) {
+                log_tree_frame->trace("Dnd payload is Node (top rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
                 const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
                 move_selection(node, payload_id, Placement::Before_anchor);
+            } else {
+                log_tree_frame->trace("Dnd payload is not Node (top rect)");
             }
             ImGui::EndDragDropTarget();
             return true;
@@ -479,9 +480,12 @@ auto Node_tree_window::drag_and_drop_target(
             const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
             drag_and_drop_rectangle_preview(middle_rect);
             if (payload != nullptr) {
+                log_tree_frame->trace("Dnd payload is Node (middle rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
                 const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
                 attach_selection_to(node, payload_id);
+            } else {
+                log_tree_frame->trace("Dnd payload is not Node (middle rect)");
             }
             ImGui::EndDragDropTarget();
             return true;
@@ -493,18 +497,23 @@ auto Node_tree_window::drag_and_drop_target(
             const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
             drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
             if (payload != nullptr) {
+                log_tree_frame->trace("Dnd payload is Node (bottom rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
                 const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
                 move_selection(node, payload_id, Placement::After_anchor);
+            } else {
+                log_tree_frame->trace("Dnd payload is not Node (bottom rect)");
             }
             ImGui::EndDragDropTarget();
             return true;
         }
+    } else {
+        log_tree_frame->trace("Dnd item is not Node: {}", item->describe());
     }
     return false;
 }
 
-void Node_tree_window::set_item_selection_terminator(
+void Item_tree_window::set_item_selection_terminator(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
@@ -512,31 +521,19 @@ void Node_tree_window::set_item_selection_terminator(
     range_selection.set_terminator(item);
 }
 
-void Node_tree_window::set_item_selection(
+void Item_tree_window::set_item_selection(
     const std::shared_ptr<erhe::scene::Item>& item,
     const bool                                selected
 )
 {
-    const auto& node = as_node(item);
-
     if (selected) {
         m_context.selection->add_to_selection(item);
-        if (node && !m_context.editor_settings->node_tree_expand_attachments) {
-            for (const auto& node_attachment : node->attachments()) {
-                m_context.selection->add_to_selection(node_attachment);
-            }
-        }
     } else {
         m_context.selection->remove_from_selection(item);
-        if (node && !m_context.editor_settings->node_tree_expand_attachments) {
-            for (const auto& node_attachment : node->attachments()) {
-                m_context.selection->remove_from_selection(node_attachment);
-            }
-        }
     }
 }
 
-void Node_tree_window::item_update_selection(
+void Item_tree_window::item_update_selection(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
@@ -563,9 +560,9 @@ void Node_tree_window::item_update_selection(
             }
         } else if (shift_down) {
             SPDLOG_LOGGER_TRACE(
-                log_node_properties,
+                log_tree,
                 "click with shift down on {} {} - range select",
-                item->type_name(),
+                item->get_type_name(),
                 item->get_name()
             );
             set_item_selection_terminator(item);
@@ -574,9 +571,9 @@ void Node_tree_window::item_update_selection(
             range_selection.reset();
             m_context.selection->clear_selection();
             SPDLOG_LOGGER_TRACE(
-                log_node_properties,
+                log_tree,
                 "mouse button release without modifier keys on {} {} - {} selecting it",
-                item->type_name(),
+                item->get_type_name(),
                 item->get_name(),
                 was_selected ? "de" : ""
             );
@@ -591,9 +588,9 @@ void Node_tree_window::item_update_selection(
         if (item != m_last_focus_item.lock()) {
             if (shift_down) {
                 SPDLOG_LOGGER_TRACE(
-                    log_node_properties,
+                    log_tree,
                     "key with shift down on {} {} - range select",
-                    item->type_name(),
+                    item->get_type_name(),
                     item->get_name()
                 );
                 set_item_selection_terminator(item);
@@ -601,7 +598,7 @@ void Node_tree_window::item_update_selection(
             // else
             // {
             //     SPDLOG_LOGGER_TRACE(
-            //         log_node_properties,
+            //         log_tree,
             //         "key without modifier key on node {} - clearing range select and select",
             //         node->get_name()
             //     );
@@ -617,7 +614,7 @@ void Node_tree_window::item_update_selection(
         const bool a_pressed = ImGui::IsKeyPressed(ImGuiKey_A);
         if (a_pressed) {
             SPDLOG_LOGGER_TRACE(
-                log_node_properties,
+                log_tree,
                 "ctrl a pressed - select all"
             );
             select_all();
@@ -625,12 +622,12 @@ void Node_tree_window::item_update_selection(
     }
 }
 
-void Node_tree_window::item_popup_menu(
+void Item_tree_window::item_popup_menu(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     const auto& node       = as_node(item);
-    Scene_root* scene_root = reinterpret_cast<Scene_root*>(item->get_item_host());
+    Scene_root* scene_root = static_cast<Scene_root*>(item->get_item_host());
     if (!node || (scene_root == nullptr))
     {
         return;
@@ -660,7 +657,7 @@ void Node_tree_window::item_popup_menu(
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings
     );
     if (begin_popup_context_item) {
-        auto parent_node = node->parent().lock();
+        auto parent_node = node->get_parent_node();
 
         bool close{false};
         if (ImGui::BeginMenu("Create")) {
@@ -711,7 +708,7 @@ void Node_tree_window::item_popup_menu(
     ImGui::PopStyleVar(1);
 }
 
-void Node_tree_window::item_icon(
+void Item_tree_window::item_icon(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
@@ -770,7 +767,7 @@ void Node_tree_window::item_icon(
     }
 }
 
-auto Node_tree_window::item_icon_and_text(
+auto Item_tree_window::item_icon_and_text(
     const std::shared_ptr<erhe::scene::Item>& item,
     const bool                                update
 ) -> Tree_node_state
@@ -781,7 +778,7 @@ auto Node_tree_window::item_icon_and_text(
 
     const auto& node = as_node(item);
     if (!m_context.editor_settings->node_tree_expand_attachments && node) {
-        for (const auto& node_attachment : node->attachments()) {
+        for (const auto& node_attachment : node->get_attachments()) {
             item_icon(node_attachment);
         }
     }
@@ -789,10 +786,10 @@ auto Node_tree_window::item_icon_and_text(
     const auto& scene = as_scene(item);
 
     bool is_leaf = true;
-    if (node && (node->child_count(m_filter) > 0)) {
+    if (node && (node->get_child_count(m_filter) > 0)) {
         is_leaf = false;
     }
-    if (scene && scene->get_root_node()->child_count(m_filter) > 0) {
+    if (scene && scene->get_root_node()->get_child_count(m_filter) > 0) {
         is_leaf = false;
     }
 
@@ -831,7 +828,7 @@ auto Node_tree_window::item_icon_and_text(
     const std::string message = ss.str();
     if (!message.empty())
     {
-        log_node_properties->info("{} {}", item->get_label(), message);
+        log_tree->info("{} {}", item->get_label(), message);
     }
 #endif
 
@@ -844,7 +841,7 @@ auto Node_tree_window::item_icon_and_text(
 
         if (update) {
             ERHE_PROFILE_SCOPE("update");
-            const bool consumed_by_drag_and_drop = drag_and_drop_target(item);
+            const bool consumed_by_drag_and_drop = ImGui::IsDragDropActive() && drag_and_drop_target(item);
             if (!consumed_by_drag_and_drop) {
                 item_update_selection(item);
             }
@@ -858,21 +855,18 @@ auto Node_tree_window::item_icon_and_text(
     };
 }
 
-void Node_tree_window::imgui_item_node(
+void Item_tree_window::imgui_item_node(
     const std::shared_ptr<erhe::scene::Item>& item
 )
 {
     ERHE_PROFILE_FUNCTION();
 
     if (!m_filter(item->get_flag_bits())) {
-        //// log_node_properties->info("filtered {}", item->describe());
+        //// log_tree->info("filtered {}", item->describe());
         return;
     }
 
-    m_context.selection->range_selection().entry(
-        item,
-        m_context.editor_settings->node_tree_expand_attachments
-    );
+    m_context.selection->range_selection().entry(item);
 
     const auto tree_node_state = item_icon_and_text(item, true);
     if (tree_node_state.is_open) {
@@ -882,12 +876,12 @@ void Node_tree_window::imgui_item_node(
                 if (m_context.editor_settings->node_tree_expand_attachments) {
                     const float attachment_indent = 15.0f; // TODO
                     ImGui::Indent(attachment_indent);
-                    for (const auto& node_attachment : node->attachments()) {
+                    for (const auto& node_attachment : node->get_attachments()) {
                         imgui_item_node(node_attachment);
                     }
                     ImGui::Unindent(attachment_indent);
                 }
-                for (const auto& child_node : node->children()) {
+                for (const auto& child_node : node->get_children()) {
                     imgui_item_node(child_node);
                 }
             }
@@ -895,7 +889,7 @@ void Node_tree_window::imgui_item_node(
         {
             const auto& scene = as_scene(item);
             if (scene) {
-                for (const auto& node : scene->get_root_node()->children()) {
+                for (const auto& node : scene->get_root_node()->get_children()) {
                     imgui_item_node(node);
                 }
             }
@@ -907,7 +901,7 @@ void Node_tree_window::imgui_item_node(
 }
 #endif
 
-void Node_tree_window::on_begin()
+void Item_tree_window::on_begin()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,      ImVec2{0.0f, 0.0f});
@@ -915,14 +909,14 @@ void Node_tree_window::on_begin()
 #endif
 }
 
-void Node_tree_window::on_end()
+void Item_tree_window::on_end()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ImGui::PopStyleVar(2);
 #endif
 }
 
-void Node_tree_window::imgui()
+void Item_tree_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
@@ -954,8 +948,7 @@ void Node_tree_window::imgui()
 
     // TODO Handle cross scene drags and drops
 #if 1 //// TODO
-    if (ImGui::Button("Create Scene"))
-    {
+    if (ImGui::Button("Create Scene")) {
         auto content_library = std::make_shared<Content_library>();
         content_library->materials.make("Default");
         auto scene_root = std::make_shared<Scene_root>(
@@ -1014,9 +1007,7 @@ void Node_tree_window::imgui()
         m_operation.reset();
     }
 
-    m_context.selection->range_selection().end(
-        m_context.editor_settings->node_tree_expand_attachments
-    );
+    m_context.selection->range_selection().end();
 
     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
         m_toggled_open = false;

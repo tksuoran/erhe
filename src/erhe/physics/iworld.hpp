@@ -22,10 +22,7 @@ public:
     [[nodiscard]] static auto create_shared() -> std::shared_ptr<IWorld>;
     [[nodiscard]] static auto create_unique() -> std::unique_ptr<IWorld>;
 
-    [[nodiscard]] virtual auto is_physics_updates_enabled() const -> bool      = 0;
-    [[nodiscard]] virtual auto get_gravity               () const -> glm::vec3 = 0;
-    virtual void enable_physics_updates ()                         = 0;
-    virtual void disable_physics_updates()                         = 0;
+    [[nodiscard]] virtual auto get_gravity() const -> glm::vec3 = 0;
     virtual void update_fixed_step      (double dt)                = 0;
     virtual void add_rigid_body         (IRigid_body* rigid_body)  = 0;
     virtual void remove_rigid_body      (IRigid_body* rigid_body)  = 0;

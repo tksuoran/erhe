@@ -22,7 +22,7 @@ public:
         const std::string_view name
     );
 
-    [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
+    [[nodiscard]] auto get_type_name() const -> std::string_view override { return c_type_name; }
     void execute_rendergraph_node() override;
 
     auto outputs_allowed() const -> bool override;

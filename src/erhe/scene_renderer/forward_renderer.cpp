@@ -163,12 +163,20 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     for (auto& pass : passes) {
         const auto& pipeline = pass->pipeline;
-        const bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
+        bool use_override_shader_stages = (parameters.override_shader_stages != nullptr);
         if (
             (pipeline.data.shader_stages == nullptr) &&
             !use_override_shader_stages
         ) {
             continue;
+        }
+
+        auto* used_shader_stages = use_override_shader_stages
+            ? parameters.override_shader_stages
+            : pipeline.data.shader_stages;
+        if (!used_shader_stages->is_valid()) {
+            use_override_shader_stages = true;
+            used_shader_stages = parameters.error_shader_stages;
         }
 
         if (pass->begin) {
@@ -179,7 +187,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         erhe::graphics::Scoped_debug_group pass_scope{pass->pipeline.data.name};
 
         if (use_override_shader_stages) {
-            m_graphics_instance.opengl_state_tracker.shader_stages.execute(parameters.override_shader_stages);
+            m_graphics_instance.opengl_state_tracker.shader_stages.execute(used_shader_stages);
         }
         m_graphics_instance.opengl_state_tracker.execute(pipeline, use_override_shader_stages);
 

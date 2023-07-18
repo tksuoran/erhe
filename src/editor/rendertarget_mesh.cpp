@@ -37,11 +37,10 @@ Rendertarget_mesh::Rendertarget_mesh(
 {
     enable_flag_bits(erhe::scene::Item_flags::rendertarget | erhe::scene::Item_flags::translucent);
 
-    init_rendertarget(graphics_instance, width, height);
-    add_primitive(mesh_memory);
+    resize_rendertarget(graphics_instance, mesh_memory, width, height);
 }
 
-auto Rendertarget_mesh::static_type() -> uint64_t
+auto Rendertarget_mesh::get_static_type() -> uint64_t
 {
     return
         erhe::scene::Item_type::node_attachment |
@@ -49,27 +48,32 @@ auto Rendertarget_mesh::static_type() -> uint64_t
         erhe::scene::Item_type::rendertarget;
 }
 
-auto Rendertarget_mesh::static_type_name() -> const char*
+auto Rendertarget_mesh::get_static_type_name() -> const char*
 {
     return "Rendertarget_mesh";
 }
 
 auto Rendertarget_mesh::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Rendertarget_mesh::type_name() const -> const char*
+auto Rendertarget_mesh::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
-void Rendertarget_mesh::init_rendertarget(
+void Rendertarget_mesh::resize_rendertarget(
     erhe::graphics::Instance& graphics_instance,
+    Mesh_memory&              mesh_memory,
     const int                 width,
     const int                 height
 )
 {
+    if (m_texture && m_texture->width() == width && m_texture->height() == height) {
+        return;
+    }
+
     using Texture     = erhe::graphics::Texture;
     using Framebuffer = erhe::graphics::Framebuffer;
 
@@ -111,10 +115,7 @@ void Rendertarget_mesh::init_rendertarget(
     create_info.attach(gl::Framebuffer_attachment::color_attachment0, m_texture.get());
     m_framebuffer = std::make_shared<Framebuffer>(create_info);
     m_framebuffer->set_debug_label("Rendertarget Node");
-}
 
-void Rendertarget_mesh::add_primitive(Mesh_memory& mesh_memory)
-{
     m_material = std::make_shared<erhe::primitive::Material>(
         "Rendertarget Node",
         glm::vec4{0.1f, 0.1f, 0.2f, 1.0f}
@@ -304,7 +305,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
 }
 
 [[nodiscard]] auto Rendertarget_mesh::world_to_window(
-    glm::vec3 position_in_world
+    const glm::vec3 position_in_world
 ) const -> std::optional<glm::vec2>
 {
     auto const* node = get_node();
@@ -346,7 +347,7 @@ void Rendertarget_mesh::bind()
     gl::viewport        (0, 0, m_texture->width(), m_texture->height());
 }
 
-void Rendertarget_mesh::clear(glm::vec4 clear_color)
+void Rendertarget_mesh::clear(const glm::vec4 clear_color)
 {
     //m_pipeline_state_tracker->shader_stages.reset();
     //m_pipeline_state_tracker->color_blend.execute(
@@ -439,7 +440,7 @@ auto get_rendertarget(
     const erhe::scene::Node* const node
 ) -> std::shared_ptr<Rendertarget_mesh>
 {
-    for (const auto& attachment : node->attachments()) {
+    for (const auto& attachment : node->get_attachments()) {
         auto rendertarget = as_rendertarget(attachment);
         if (rendertarget) {
             return rendertarget;

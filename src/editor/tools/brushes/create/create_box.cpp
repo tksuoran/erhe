@@ -8,6 +8,7 @@
 #include "erhe/renderer/line_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/box.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -36,6 +37,8 @@ void Create_box::render_preview(
 
 void Create_box::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
     ImGui::Text("Box Parameters");
 
     ImGui::SliderFloat3("Size",  &m_size.x, 0.0f, 10.0f);

@@ -47,27 +47,28 @@ auto make_box(
         [=](Geometry& geometry) {
             Property_map<Corner_id, vec2>* corner_texcoords = geometry.corner_attributes().create<vec2>(c_corner_texcoords);
 
-            geometry.make_point(-x, -y, -z); // 0    6------7
+            geometry.make_point(-x, -y, -z); // 0    2------4
             geometry.make_point( x, -y, -z); // 1   /|     /|
-            geometry.make_point(-x,  y, -z); // 2  2------4 |
+            geometry.make_point(-x,  y, -z); // 2  6-+----7 |
             geometry.make_point(-x, -y,  z); // 3  | |    | |
             geometry.make_point( x,  y, -z); // 4  | |    | |
-            geometry.make_point( x, -y,  z); // 5  | 3----|-5
+            geometry.make_point( x, -y,  z); // 5  | 0----|-1
             geometry.make_point(-x,  y,  z); // 6  |/     |/
-            geometry.make_point( x,  y,  z); // 7  0------1
+            geometry.make_point( x,  y,  z); // 7  3------5
 
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 4, 7, 5, 1); // x+
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 6, 7, 4, 2); // y+
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 7, 6, 3, 5); // z+
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 6, 2, 0, 3); // x-
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 0, 1, 5, 3); // y-
-            geometry.make_quad_with_corner_texcoords(corner_texcoords, 2, 4, 1, 0); // z-
+            geometry.make_polygon({1, 4, 7, 5}); // x+
+            geometry.make_polygon({2, 6, 7, 4}); // y+
+            geometry.make_polygon({3, 5, 7, 6}); // z+
+            geometry.make_polygon({0, 3, 6, 2}); // x-
+            geometry.make_polygon({0, 1, 5, 3}); // y-
+            geometry.make_polygon({0, 2, 4, 1}); // z-
 
             geometry.make_point_corners();
             geometry.build_edges();
+            geometry.compute_polygon_corner_texcoords(corner_texcoords);
             geometry.compute_polygon_normals();
             geometry.compute_polygon_centroids();
-            geometry.compute_tangents();
+            geometry.compute_tangents(true, true, false, false, true, true);
         }
     };
 }
@@ -84,27 +85,30 @@ auto make_box(
     return Geometry{
         "box",
         [=](auto& geometry) {
-            geometry.make_point(min_x, max_y, max_z, 0, 1); // 0
-            geometry.make_point(max_x, max_y, max_z, 1, 1); // 1
-            geometry.make_point(max_x, min_y, max_z, 1, 1); // 2
-            geometry.make_point(min_x, min_y, max_z, 0, 1); // 3
-            geometry.make_point(min_x, max_y, min_z, 0, 0); // 4
-            geometry.make_point(max_x, max_y, min_z, 1, 0); // 5
-            geometry.make_point(max_x, min_y, min_z, 1, 0); // 6
-            geometry.make_point(min_x, min_y, min_z, 0, 0); // 7
+            Property_map<Corner_id, vec2>* corner_texcoords = geometry.corner_attributes().create<vec2>(c_corner_texcoords);
 
-            geometry.make_polygon_reverse( {0, 1, 2, 3} );
-            geometry.make_polygon_reverse( {0, 3, 7, 4} );
-            geometry.make_polygon_reverse( {0, 4, 5, 1} ); // top
-            geometry.make_polygon_reverse( {5, 4, 7, 6} );
-            geometry.make_polygon_reverse( {2, 1, 5, 6} );
-            geometry.make_polygon_reverse( {7, 3, 2, 6} ); // bottom
+            geometry.make_point(min_x, min_y, min_z); // 0    2------4
+            geometry.make_point(max_x, min_y, min_z); // 1   /|     /|
+            geometry.make_point(min_x, max_y, min_z); // 2  6-+----7 |
+            geometry.make_point(min_x, min_y, max_z); // 3  | |    | |
+            geometry.make_point(max_x, max_y, min_z); // 4  | |    | |
+            geometry.make_point(max_x, min_y, max_z); // 5  | 0----|-1
+            geometry.make_point(min_x, max_y, max_z); // 6  |/     |/
+            geometry.make_point(max_x, max_y, max_z); // 7  3------5
+
+            geometry.make_polygon({1, 4, 7, 5}); // x+
+            geometry.make_polygon({2, 6, 7, 4}); // y+
+            geometry.make_polygon({3, 5, 7, 6}); // z+
+            geometry.make_polygon({0, 3, 6, 2}); // x-
+            geometry.make_polygon({0, 1, 5, 3}); // y-
+            geometry.make_polygon({0, 2, 4, 1}); // z-
 
             geometry.make_point_corners();
             geometry.build_edges();
+            geometry.compute_polygon_corner_texcoords(corner_texcoords);
             geometry.compute_polygon_normals();
             geometry.compute_polygon_centroids();
-            geometry.compute_tangents();
+            geometry.compute_tangents(true, true, false, false, true, true);
         }
     };
 }

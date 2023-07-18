@@ -4,6 +4,7 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_settings.hpp"
 #include "renderers/render_context.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/node_physics.hpp"
@@ -171,10 +172,10 @@ void Physics_tool::on_message(Editor_message& message)
             if (scene_view != nullptr) {
                 auto scene_root = scene_view->get_scene_root();
                 if (scene_root) {
-                    m_physics_world = &scene_root->physics_world();
+                    m_physics_world = &scene_root->get_physics_world();
                     m_constraint_world_point_rigid_body = erhe::physics::IRigid_body::create_rigid_body_shared(
                         erhe::physics::IRigid_body_create_info{
-                            .world             = scene_root->physics_world(),
+                            .world             = *m_physics_world,
                             .collision_shape   = erhe::physics::ICollision_shape::create_empty_shape_shared(),
                             .mass              = 10.0f,
                             .debug_label       = "Physics Tool",
@@ -198,7 +199,7 @@ void Physics_tool::on_message(Editor_message& message)
 [[nodiscard]] auto Physics_tool::get_raytrace_scene() const -> erhe::raytrace::IScene*
 {
     Scene_root* scene_root = get_scene_root();
-    return (scene_root != nullptr) ? &scene_root->raytrace_scene() : nullptr;
+    return (scene_root != nullptr) ? &scene_root->get_raytrace_scene() : nullptr;
 }
 
 [[nodiscard]] auto Physics_tool::get_mode() const -> Physics_tool_mode
@@ -291,7 +292,7 @@ auto Physics_tool::acquire_target() -> bool
         return false;
     }
 
-    erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
+    erhe::physics::IRigid_body* rigid_body = m_target_node_physics->get_rigid_body();
     if (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static) {
         log_physics->warn("Cant target: Static mesh");
         return false;
@@ -332,7 +333,7 @@ auto Physics_tool::acquire_target() -> bool
     move_drag_point_instant(m_target_position_end);
 
     const erhe::physics::Point_to_point_constraint_settings constraint_settings{
-        .rigid_body_a = m_target_node_physics->rigid_body(),
+        .rigid_body_a = m_target_node_physics->get_rigid_body(),
         .rigid_body_b = m_constraint_world_point_rigid_body.get(),
         .pivot_in_a   = m_target_position_in_mesh,
         .pivot_in_b   = glm::vec3{0.0f, 0.0f, 0.0f},
@@ -340,7 +341,7 @@ auto Physics_tool::acquire_target() -> bool
         .damping      = m_damping
     };
 
-    m_target_node_physics->rigid_body()->begin_move();
+    m_target_node_physics->get_rigid_body()->begin_move();
 
     m_target_constraint = erhe::physics::IConstraint::create_point_to_point_constraint_unique(
         constraint_settings
@@ -384,7 +385,7 @@ void Physics_tool::release_target()
     }
 
     if (m_target_node_physics) {
-        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
+        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->get_rigid_body();
         //rigid_body->set_damping(
         //    m_original_linear_damping,
         //    m_original_angular_damping
@@ -450,7 +451,7 @@ auto Physics_tool::on_drag() -> bool
     if (m_physics_world == nullptr) {
         return false;
     }
-    if (!m_physics_world->is_physics_updates_enabled()) {
+    if (!m_context.editor_settings->physics_dynamic_enable) {
         return false;
     }
 
@@ -498,7 +499,7 @@ auto Physics_tool::on_drag() -> bool
 
     if (m_target_node_physics) {
         // TODO investigate jolt damping
-        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->rigid_body();
+        erhe::physics::IRigid_body* rigid_body = m_target_node_physics->get_rigid_body();
         glm::vec3 angular_velocity = rigid_body->get_angular_velocity();
         glm::vec3 linear_velocity  = rigid_body->get_linear_velocity();
 
@@ -582,19 +583,12 @@ void Physics_tool::tool_render(const Render_context&)
     //}
 
     if (m_show_drag_body) {
-        const erhe::physics::Transform transform = m_constraint_world_point_rigid_body->get_world_transform();
+        const glm::mat4 m = m_constraint_world_point_rigid_body->get_world_transform();
         {
             const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
             const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
             const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
             constexpr glm::vec3 O{ 0.0f };
-            glm::mat4 m{transform.basis};
-            m[3] = glm::vec4{
-                transform.origin.x,
-                transform.origin.y,
-                transform.origin.z,
-                1.0f
-            };
             line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
             line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
             line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
@@ -651,11 +645,11 @@ void Physics_tool::tool_properties()
     ImGui::Text("Distance: %f",    m_target_distance);
     ImGui::Text("Target Size: %f", m_target_mesh_size);
     if (m_target_constraint) {
+        std::stringstream ss;
         std::string object_position = fmt::format("{}", m_target_position_in_mesh);
         std::string world_position  = fmt::format("{}", m_target_position_end);
-        const erhe::physics::Transform transform = m_constraint_world_point_rigid_body->get_world_transform();
-        std::stringstream ss;
-        ss << fmt::format("{}", transform.origin);
+        const glm::mat4 transform = m_constraint_world_point_rigid_body->get_world_transform();
+        ss << fmt::format("{}", glm::vec3{transform * glm::vec4{0.0, 0.0, 0.0, 1.0}});
         ImGui::Text("Drag point body pos: %s", ss.str().c_str());
         ImGui::Text("Object: %s", object_position.c_str());
         ImGui::Text("World: %s",  world_position.c_str());

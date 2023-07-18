@@ -30,7 +30,7 @@ Mesh_memory::Mesh_memory(
     : graphics_instance{graphics_instance}
     , vertex_format{
         erhe::graphics::Vertex_attribute::position_float3 (),
-        erhe::graphics::Vertex_attribute::normal_float3   (),
+        erhe::graphics::Vertex_attribute::normal0_float3  (),
         erhe::graphics::Vertex_attribute::texcoord0_float2(),
         erhe::graphics::Vertex_attribute::color_ubyte4    ()
     }

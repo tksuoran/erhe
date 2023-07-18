@@ -49,7 +49,7 @@ public:
     ~Texture_rendergraph_node() noexcept override; 
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
+    [[nodiscard]] auto get_type_name() const -> std::string_view override { return c_type_name; }
 
     // TODO Think if we want to provide here both consumer input and producer output
     [[nodiscard]] auto get_consumer_input_texture(

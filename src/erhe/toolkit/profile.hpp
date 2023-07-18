@@ -46,6 +46,26 @@
 #   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id)
 #   define ERHE_PROFILE_GPU_CONTEXT
 #   define ERHE_PROFILE_FRAME_END
+#elif defined(ERHE_PROFILE_LIBRARY_NVTX)
+#   define ERHE_CONCAT(x,y) ERHE_CONCAT_INDIRECT(x,y)
+#   define ERHE_CONCAT_INDIRECT(x,y) x##y
+#   define NVTX3_V1_FUNCTION_RANGE_IN(D)                                             \
+        static ::nvtx3::v1::registered_string_in<D> const nvtx3_func_name__{__FUNCTION__}; \
+        static ::nvtx3::v1::event_attributes const nvtx3_func_attr__{nvtx3_func_name__};   \
+        ::nvtx3::v1::scoped_range_in<D> const nvtx3_range__{nvtx3_func_attr__};
+
+#   include <nvtx3/nvtx3.hpp>
+//#   define ERHE_PROFILE_FUNCTION() NVTX3_V1_FUNC_RANGE()
+#   define ERHE_PROFILE_FUNCTION() NVTX3_V1_FUNCTION_RANGE_IN(::nvtx3::v1::domain::global)
+#   define ERHE_PROFILE_SCOPE(name) nvtx3::scoped_range_in<nvtx3::domain::global> ERHE_CONCAT(__erhe_source_location,__LINE__){name}
+#   define ERHE_PROFILE_COLOR(erhe_profile_id, erhe_profile_color) static_cast<void>(erhe_profile_id);
+#   define ERHE_PROFILE_DATA(erhe_profile_id, erhe_profile_data, erhe_profile_data_length) static_cast<void>(erhe_profile_id);
+#   define ERHE_PROFILE_MESSAGE(erhe_profile_message, erhe_profile_message_length) static_cast<void>(erhe_profile_message);
+#   define ERHE_PROFILE_MESSAGE_LITERAL(erhe_profile_message) nvtx3::mark(erhe_profile_message)
+#   define ERHE_PROFILE_GPU_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);
+#   define ERHE_PROFILE_GPU_CONTEXT
+#   define ERHE_PROFILE_FRAME_END
+
 #else
 #   define ERHE_PROFILE_FUNCTION();
 #   define ERHE_PROFILE_SCOPE(erhe_profile_id) static_cast<void>(erhe_profile_id);

@@ -43,16 +43,10 @@ class Jolt_collision_filter
     , public JPH::ObjectLayerPairFilter
 {
     // Implements JPH::ObjectVsBroadPhaseLayerFilter
-	auto ShouldCollide(
-        JPH::ObjectLayer     inLayer1,
-        JPH::BroadPhaseLayer inLayer2
-    ) const -> bool override;
+    auto ShouldCollide(JPH::ObjectLayer inLayer1, JPH::BroadPhaseLayer inLayer2) const -> bool override;
 
     // Implements JPH::ObjectLayerPairFilter
-    auto ShouldCollide(
-        JPH::ObjectLayer inLayer1,
-        JPH::ObjectLayer inLayer2
-    ) const -> bool override;
+    auto ShouldCollide(JPH::ObjectLayer inLayer1, JPH::ObjectLayer inLayer2) const -> bool override;
 };
 
 class Jolt_world
@@ -65,19 +59,16 @@ public:
     virtual ~Jolt_world() noexcept override;
 
     // Implements IWorld
-    [[nodiscard]] auto is_physics_updates_enabled() const -> bool      override;
-    [[nodiscard]] auto get_gravity               () const -> glm::vec3 override;
-    void enable_physics_updates ()                         override;
-    void disable_physics_updates()                         override;
-    void update_fixed_step      (double dt)                override;
-    void set_gravity            (const glm::vec3& gravity) override;
-    void add_rigid_body         (IRigid_body* rigid_body)  override;
-    void remove_rigid_body      (IRigid_body* rigid_body)  override;
-    void add_constraint         (IConstraint* constraint)  override;
-    void remove_constraint      (IConstraint* constraint)  override;
-    void set_debug_drawer       (IDebug_draw* debug_draw)  override;
-    void debug_draw             ()                         override;
-    void sanity_check           ()                         override;
+    [[nodiscard]] auto get_gravity() const -> glm::vec3 override;
+    void update_fixed_step (double dt)                override;
+    void set_gravity       (const glm::vec3& gravity) override;
+    void add_rigid_body    (IRigid_body* rigid_body)  override;
+    void remove_rigid_body (IRigid_body* rigid_body)  override;
+    void add_constraint    (IConstraint* constraint)  override;
+    void remove_constraint (IConstraint* constraint)  override;
+    void set_debug_drawer  (IDebug_draw* debug_draw)  override;
+    void debug_draw        ()                         override;
+    void sanity_check      ()                         override;
 
     // Implements BodyActivationListener
     void OnBodyActivated  (const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
@@ -104,14 +95,12 @@ private:
     };
     Initialize_first m_initialize_first;
 
-    bool                                           m_physics_enabled{false};
-    glm::vec3                                      m_gravity        {0.0f};
-
     static constexpr unsigned int cMaxBodies             = 1024 * 32;
     static constexpr unsigned int cNumBodyMutexes        = 0;
     static constexpr unsigned int cMaxBodyPairs          = 1024 * 8;
     static constexpr unsigned int cMaxContactConstraints = 1024;
 
+    glm::vec3                                      m_gravity        {0.0f};
     const Jolt_collision_filter                    m_collision_filter;
 
     JPH::TempAllocatorImpl                         m_temp_allocator;

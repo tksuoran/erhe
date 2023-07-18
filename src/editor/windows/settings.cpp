@@ -122,7 +122,7 @@ void Settings_window::use_settings(
     const Settings&                        settings
 )
 {
-    log_startup->info("Sending graphics_settings editor message using settings {}", settings.name);
+    log_startup->trace("Sending graphics_settings editor message using settings {}", settings.name);
     m_used_settings = settings.name;
 
     auto& shadow_config = shadow_renderer.config;

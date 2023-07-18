@@ -69,6 +69,7 @@ class Brush_data
 {
 public:
     Editor_context&                                  context;
+    Editor_settings&                                 editor_settings;
     std::string                                      name                       {};
     erhe::primitive::Build_info                      build_info;
     erhe::primitive::Normal_style                    normal_style               {erhe::primitive::Normal_style::corner_normals};
@@ -117,7 +118,7 @@ public:
     void operator=(Brush&&)      = delete;
 
     // Public API
-    [[nodiscard]] static auto static_type_name() -> const char*;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
     [[nodiscard]] auto is_shown_in_ui() const -> bool;
     [[nodiscard]] auto get_name      () const -> const std::string&;
     [[nodiscard]] auto get_label     () const -> const std::string&;

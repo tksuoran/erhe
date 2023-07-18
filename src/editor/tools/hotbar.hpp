@@ -112,21 +112,12 @@ public:
     void set_locked       (bool value);
 
 private:
-    void on_message           (Editor_message& message);
-    void update_node_transform();
-    void tool_button          (uint32_t id, Tool* tool);
-    void handle_slot_update   ();
+    void on_message            (Editor_message& message);
+    void update_node_transform ();
+    void tool_button           (uint32_t id, Tool* tool);
+    void handle_slot_update    ();
 
-    void init_hotbar(
-        erhe::graphics::Instance&       graphics_instance,
-        erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
-        erhe::rendergraph::Rendergraph& rendergraph,
-        Editor_context&                 editor_context,
-        Icon_set&                       icon_set,
-        Mesh_memory&                    mesh_memory,
-        Scene_root&                     scene_root
-    );
+    void init_hotbar();
     void init_radial_menu(
         Mesh_memory& mesh_memory,
         Scene_root&  scene_root

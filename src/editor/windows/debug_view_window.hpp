@@ -66,7 +66,7 @@ public:
     explicit Debug_view_node(erhe::rendergraph::Rendergraph& rendergraph);
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto type_name() const -> std::string_view override { return "Debug_view_node"; }
+    [[nodiscard]] auto get_type_name() const -> std::string_view override { return "Debug_view_node"; }
     void execute_rendergraph_node() override;
 
     [[nodiscard]] auto get_consumer_input_viewport(

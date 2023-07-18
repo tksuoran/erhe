@@ -24,7 +24,7 @@ public:
     std::size_t material_index;             // uint  1 * 4 bytes
     std::size_t size;                       // float 1 * 4 bytes - point size / line width
     std::size_t skinning_factor;            // float 1 * 4 bytes
-    std::size_t extra3;                     // uint  1 * 4 bytes
+    std::size_t base_joint_index;           // uint  1 * 4 bytes
 };
 
 class Primitive_interface

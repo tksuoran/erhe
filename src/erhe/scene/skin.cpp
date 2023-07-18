@@ -12,7 +12,7 @@ Skin::Skin()
 }
 
 Skin::Skin(const std::string_view name)
-    : Node_attachment{name}
+    : Item{name}
 {
 }
 
@@ -20,41 +20,24 @@ Skin::~Skin() noexcept
 {
 }
 
-auto Skin::static_type() -> uint64_t
+auto Skin::get_static_type() -> uint64_t
 {
     return Item_type::node_attachment | Item_type::skin;
 }
 
-auto Skin::static_type_name() -> const char*
+auto Skin::get_static_type_name() -> const char*
 {
     return "Skin";
 }
 
 auto Skin::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Skin::type_name() const -> const char*
+auto Skin::get_type_name() const -> const char*
 {
-    return static_type_name();
-}
-
-void Skin::handle_node_scene_host_update(
-    Scene_host* old_scene_host,
-    Scene_host* new_scene_host
-)
-{
-    if (old_scene_host) {
-        old_scene_host->unregister_skin(
-            std::static_pointer_cast<Skin>(shared_from_this())
-        );
-    }
-    if (new_scene_host) {
-        new_scene_host->register_skin(
-            std::static_pointer_cast<Skin>(shared_from_this())
-        );
-    }
+    return get_static_type_name();
 }
 
 auto operator<(const Skin& lhs, const Skin& rhs) -> bool
@@ -97,20 +80,6 @@ auto as_skin(const std::shared_ptr<Item>& item) -> std::shared_ptr<Skin>
         return {};
     }
     return std::static_pointer_cast<Skin>(item);
-}
-
-auto get_skin(const erhe::scene::Node* const node) -> std::shared_ptr<Skin>
-{
-    if (node == nullptr) {
-        return {};
-    }
-    for (const auto& attachment : node->attachments()) {
-        auto skin = as_skin(attachment);
-        if (skin) {
-            return skin;
-        }
-    }
-    return {};
 }
 
 //

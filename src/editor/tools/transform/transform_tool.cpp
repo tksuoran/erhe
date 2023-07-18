@@ -6,6 +6,7 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_settings.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -321,14 +322,22 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
     for (auto& entry : shared.entries) {
         const auto& node = entry.node;
         if (!node) {
-            return;
+            continue;
         }
+        const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+            node->get_flag_bits(),
+            erhe::scene::Item_flags::lock_viewport_transform
+        );
+        if (node_lock_viewport_transform) {
+            continue;
+        }
+
         const mat4 world_from_node           = entry.world_from_node_before.get_matrix();
         const mat4 anchor_from_world         = shared.world_from_anchor_initial_state.get_inverse_matrix();
         const mat4 previous_anchor_from_node = anchor_from_world         * world_from_node;
         const mat4 updated_world_from_node   = updated_world_from_anchor * previous_anchor_from_node;
 
-        const auto& parent = node->parent().lock();
+        const auto& parent = node->get_parent_node();
         const mat4 parent_from_world = [&]() -> mat4 {
             if (parent) {
                 return parent->node_from_world() * updated_world_from_node;
@@ -348,8 +357,16 @@ void Transform_tool::adjust_translation(const vec3 translation)
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
         if (!node) {
-            return;
+            continue;
         }
+        const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+            node->get_flag_bits(),
+            erhe::scene::Item_flags::lock_viewport_transform
+        );
+        if (node_lock_viewport_transform) {
+            continue;
+        }
+
         node->set_world_from_node(
             erhe::scene::translate(entry.world_from_node_before, translation)
         );
@@ -368,8 +385,16 @@ void Transform_tool::adjust_rotation(
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
             if (!node) {
-                return;
+                continue;
             }
+            const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+                node->get_flag_bits(),
+                erhe::scene::Item_flags::lock_viewport_transform
+            );
+            if (node_lock_viewport_transform) {
+                continue;
+            }
+
             node->set_world_from_node(
                 erhe::scene::rotate(entry.world_from_node_before, rotation)
             );
@@ -395,8 +420,16 @@ void Transform_tool::adjust_scale(
         for (auto& entry : shared.entries) {
             auto& node = entry.node;
             if (!node) {
-                return;
+                continue;
             }
+            const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+                node->get_flag_bits(),
+                erhe::scene::Item_flags::lock_viewport_transform
+            );
+            if (node_lock_viewport_transform) {
+                continue;
+            }
+
             node->set_world_from_node(
                 erhe::scene::scale(entry.world_from_node_before, scale)
             );
@@ -536,6 +569,10 @@ void Transform_tool::end_drag()
 
 void Transform_tool::acquire_node_physics()
 {
+    if (!m_context.editor_settings->physics_dynamic_enable) {
+        return;
+    }
+
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
         if (!node) {
@@ -543,7 +580,7 @@ void Transform_tool::acquire_node_physics()
         }
         const auto node_physics = get_node_physics(node.get());
         auto* const rigid_body = node_physics
-            ? node_physics->rigid_body()
+            ? node_physics->get_rigid_body()
             : nullptr;
 
         if (rigid_body == nullptr) {
@@ -559,23 +596,32 @@ void Transform_tool::acquire_node_physics()
 
 void Transform_tool::release_node_physics()
 {
+    if (!m_context.editor_settings->physics_dynamic_enable) {
+        return;
+    }
+
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
         if (!node) {
             continue;
         }
         const auto node_physics = get_node_physics(node.get());
-        if (node_physics && node_physics->rigid_body()) {
-            auto* const rigid_body = node_physics->rigid_body();
-            if (entry.original_motion_mode.has_value()) {
-                log_trs_tool->trace("S restoring old physics node");
-                rigid_body->set_motion_mode(entry.original_motion_mode.value());
+
+        // TODO Make it so that release will be called when node physics is removed by any means
+        //      This would require Transform_tool to listen to node attachment or something.
+        if (node_physics) {
+            auto* const rigid_body = node_physics->get_rigid_body();
+            if (node_physics && (rigid_body != nullptr)) {
+                if (entry.original_motion_mode.has_value()) {
+                    log_trs_tool->trace("S restoring old physics node");
+                    rigid_body->set_motion_mode(entry.original_motion_mode.value());
+                }
+                rigid_body->set_linear_velocity (vec3{0.0f, 0.0f, 0.0f});
+                rigid_body->set_angular_velocity(vec3{0.0f, 0.0f, 0.0f});
+                rigid_body->end_move            ();
+                node_physics->handle_node_transform_update();
+                entry.original_motion_mode.reset();
             }
-            rigid_body->set_linear_velocity (vec3{0.0f, 0.0f, 0.0f});
-            rigid_body->set_angular_velocity(vec3{0.0f, 0.0f, 0.0f});
-            rigid_body->end_move            ();
-            node_physics->handle_node_transform_update();
-            entry.original_motion_mode.reset();
         }
     }
     shared.touched = false;
@@ -608,7 +654,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
     if (!mesh) {
         return;
     }
-    auto* scene_root = reinterpret_cast<Scene_root*>(node.node_data.host);
+    auto* scene_root = static_cast<Scene_root*>(node.node_data.host);
     if (scene_root == nullptr) {
         return;
     }
@@ -622,7 +668,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
 
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
-    auto& raytrace_scene = scene_root->raytrace_scene();
+    auto& raytrace_scene = scene_root->get_raytrace_scene();
 
     for (auto& d : directions) {
         erhe::raytrace::Ray ray{
@@ -763,7 +809,7 @@ void Transform_tool::transform_properties()
     }
 
     Value_edit_state rotate_edit_state;
-    const auto first_parent = first_node->parent().lock();
+    const auto first_parent = first_node->get_parent_node();
     const bool euler_matches_gizmo = !multiselect &&
         (
             !use_world_mode ||

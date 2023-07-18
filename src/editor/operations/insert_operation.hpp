@@ -8,7 +8,7 @@
 namespace editor
 {
 
-class Node_attach_operation;
+class Item_parent_change_operation;
 class Selection;
 
 class Scene_item_operation
@@ -35,7 +35,7 @@ public:
     }
 };
 
-class Node_insert_remove_operation
+class Item_insert_remove_operation
     : public Scene_item_operation
 {
 public:
@@ -43,12 +43,12 @@ public:
     {
     public:
         Editor_context&                    context;
-        std::shared_ptr<erhe::scene::Node> node;
-        std::shared_ptr<erhe::scene::Node> parent;
+        std::shared_ptr<erhe::scene::Item> item;
+        std::shared_ptr<erhe::scene::Item> parent;
         Mode                               mode;
     };
 
-    explicit Node_insert_remove_operation(const Parameters& parameters);
+    explicit Item_insert_remove_operation(const Parameters& parameters);
 
     // Implements IOperation
     [[nodiscard]] auto describe() const -> std::string override;
@@ -56,15 +56,15 @@ public:
     void undo   (Editor_context& context) override;
 
 private:
-    Mode                                                m_mode;
-    std::shared_ptr<erhe::scene::Node>                  m_node         {};
-    std::shared_ptr<erhe::scene::Node>                  m_before_parent{};
-    std::shared_ptr<erhe::scene::Node>                  m_after_parent {};
-    std::vector<std::shared_ptr<Node_attach_operation>> m_parent_changes;
+    Mode                                                       m_mode;
+    std::shared_ptr<erhe::scene::Item>                         m_item         {};
+    std::shared_ptr<erhe::scene::Item>                         m_before_parent{};
+    std::shared_ptr<erhe::scene::Item>                         m_after_parent {};
+    std::vector<std::shared_ptr<Item_parent_change_operation>> m_parent_changes;
 
-    erhe::scene::Scene_host*                            m_scene_host{nullptr};
-    std::vector<std::shared_ptr<erhe::scene::Item>>     m_selection_before;
-    std::vector<std::shared_ptr<erhe::scene::Item>>     m_selection_after;
+    erhe::scene::Item_host*                         m_scene_host{nullptr};
+    std::vector<std::shared_ptr<erhe::scene::Item>> m_selection_before;
+    std::vector<std::shared_ptr<erhe::scene::Item>> m_selection_after;
 };
 
 }

@@ -5,6 +5,7 @@
 #include "erhe/commands/command.hpp"
 #include "erhe/imgui/imgui_window.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 
 #include <memory>
 #include <vector>
@@ -48,11 +49,11 @@ private:
     Editor_context& m_context;
 };
 
-class Selection_select_command
+class Viewport_select_command
     : public erhe::commands::Command
 {
 public:
-    Selection_select_command(
+    Viewport_select_command(
         erhe::commands::Commands& commands,
         Editor_context&           context
     );
@@ -63,11 +64,11 @@ private:
     Editor_context& m_context;
 };
 
-class Selection_select_toggle_command
+class Viewport_select_toggle_command
     : public erhe::commands::Command
 {
 public:
-    Selection_select_toggle_command(
+    Viewport_select_toggle_command(
         erhe::commands::Commands& commands,
         Editor_context&           context
     );
@@ -84,9 +85,9 @@ public:
     explicit Range_selection(Selection& selection);
 
     void set_terminator(const std::shared_ptr<erhe::scene::Item>& item);
-    void entry         (const std::shared_ptr<erhe::scene::Item>& item, bool attachments_expanded);
+    void entry         (const std::shared_ptr<erhe::scene::Item>& item);
     void begin         ();
-    void end           (bool attachments_expanded);
+    void end           ();
     void reset         ();
 
 private:
@@ -139,15 +140,19 @@ public:
     );
 #endif
 
-    // Implements Imgui_window
-    //void imgui() override;
-
     // Public API
-    [[nodiscard]] auto get_selection           () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
-    [[nodiscard]] auto is_in_selection         (const std::shared_ptr<erhe::scene::Item>& item) const -> bool;
-    [[nodiscard]] auto range_selection         () -> Range_selection&;
-    [[nodiscard]] auto get_first_selected_node () -> std::shared_ptr<erhe::scene::Node>;
-    [[nodiscard]] auto get_first_selected_scene() -> std::shared_ptr<erhe::scene::Scene>;
+    [[nodiscard]] auto get_selection     () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
+    [[nodiscard]] auto is_in_selection   (const std::shared_ptr<erhe::scene::Item>& item) const -> bool;
+    [[nodiscard]] auto range_selection   () -> Range_selection&;
+
+    template <typename T>
+    [[nodiscard]] auto get(std::size_t index = 0) -> std::shared_ptr<T>;
+
+    template <typename T>
+    [[nodiscard]] auto count() -> std::size_t;
+
+    [[nodiscard]] auto get(erhe::scene::Item_filter filter, std::size_t index = 0) -> std::shared_ptr<erhe::scene::Item>;
+
     void set_selection                   (const std::vector<std::shared_ptr<erhe::scene::Item>>& selection);
     auto add_to_selection                (const std::shared_ptr<erhe::scene::Item>& item) -> bool;
     auto clear_selection                 () -> bool;
@@ -156,9 +161,9 @@ public:
     void sanity_check                    ();
 
     // Commands
-    auto on_select_try_ready() -> bool;
-    auto on_select          () -> bool;
-    auto on_select_toggle   () -> bool;
+    auto on_viewport_select_try_ready() -> bool;
+    auto on_viewport_select          () -> bool;
+    auto on_viewport_select_toggle   () -> bool;
 
     auto delete_selection() -> bool;
 
@@ -170,11 +175,11 @@ private:
         bool                                      clear_others
     );
 
-    Editor_context&     m_context;
+    Editor_context&                m_context;
 
-    Selection_select_command        m_select_command;
-    Selection_select_toggle_command m_select_toggle_command;
-    Selection_delete_command        m_delete_command;
+    Viewport_select_command        m_viewport_select_command;
+    Viewport_select_toggle_command m_viewport_select_toggle_command;
+    Selection_delete_command       m_delete_command;
 
     Scene_view*                                     m_hover_scene_view{nullptr};
     std::vector<std::shared_ptr<erhe::scene::Item>> m_selection;
@@ -183,5 +188,41 @@ private:
     bool                                            m_hover_content{false};
     bool                                            m_hover_tool   {false};
 };
+
+template <typename T>
+auto Selection::get(const std::size_t index) -> std::shared_ptr<T>
+{
+    std::size_t i = 0;
+    for (const auto& item : m_selection) {
+        if (!item) {
+            continue;
+        }
+        if (!erhe::toolkit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+            continue;
+        }
+        if (i == index) {
+            return std::static_pointer_cast<T>(item);
+        } else {
+            ++i;
+        }
+    }
+    return {};
+}
+
+template <typename T>
+auto Selection::count() -> std::size_t
+{
+    std::size_t i = 0;
+    for (const auto& item : m_selection) {
+        if (!item) {
+            continue;
+        }
+        if (!erhe::toolkit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+            continue;
+        }
+        ++i;
+    }
+    return i;
+}
 
 } // namespace editor

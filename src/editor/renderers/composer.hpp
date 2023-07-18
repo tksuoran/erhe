@@ -19,10 +19,10 @@ public:
     explicit Composer(const std::string_view name);
 
     // Implements Item
-    [[nodiscard]] static auto static_type     () -> uint64_t;
-    [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto get_type () const -> uint64_t override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
     void render(const Render_context& context) const;
 

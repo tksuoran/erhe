@@ -95,12 +95,18 @@
 #include "erhe/toolkit/window_event_handler.hpp"
 #include "erhe/ui/ui_log.hpp"
 
+#if defined(ERHE_PROFILE_LIBRARY_NVTX)
+#   include <nvtx3/nvToolsExt.h>
+#endif
+
 namespace editor {
 
 class Editor
     : public erhe::toolkit::Window_event_handler
 {
 public:
+    // Implements Window_event_handler
+    [[nodiscard]] auto get_name() const -> const char* override { return "Editor"; }
 
     [[nodiscard]] auto create_window() -> erhe::toolkit::Context_window
     {
@@ -159,8 +165,8 @@ public:
 
         , m_imgui_windows         {m_imgui_renderer,    &m_context_window,   m_rendergraph}
         , m_editor_scenes         {m_editor_context,    m_time}
-        , m_asset_browser         {m_imgui_renderer,    m_imgui_windows, m_editor_context}
-        , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_scenes}
+        , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
+        , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_context, m_editor_scenes}
         , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
@@ -200,6 +206,7 @@ public:
             m_editor_context,
             m_editor_rendering,
             m_editor_scenes,
+            m_editor_settings,
             m_mesh_memory,
             m_settings_window,
             m_tools,
@@ -269,6 +276,13 @@ public:
 
         fill_editor_context();
 
+        auto ini = erhe::configuration::get_ini("erhe.ini", "physics");
+        ini->get("static_enable",  m_editor_settings.physics_static_enable);
+        ini->get("dynamic_enable", m_editor_settings.physics_dynamic_enable);
+        if (!m_editor_settings.physics_static_enable) {
+            m_editor_settings.physics_dynamic_enable = false;
+        }
+
         m_hotbar.get_all_tools();
 
         gl::clip_control(gl::Clip_control_origin::lower_left, gl::Clip_control_depth::zero_to_one);
@@ -277,8 +291,7 @@ public:
         auto& root_event_handler = m_context_window.get_root_window_event_handler();
         root_event_handler.attach(this, 3);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-        if (m_headset_view.config.openxr)
-        {
+        if (m_headset_view.config.openxr) {
             // TODO Create windows directly to correct viewport?
             // Move all imgui windows that have window viewport to hud viewport
             const auto viewport        = m_hud.get_rendertarget_imgui_viewport();
@@ -298,14 +311,6 @@ public:
             root_event_handler.attach(&m_input_state, 4);
             root_event_handler.attach(&m_imgui_windows, 2);
             root_event_handler.attach(&m_commands, 1);
-        }
-
-        if (
-            m_editor_settings.physics_static_enable &&
-            m_editor_settings.physics_dynamic_enable
-        ) {
-            const auto& test_scene_root = m_scene_builder.get_scene_root();
-            test_scene_root->physics_world().enable_physics_updates();
         }
 
         m_tools.set_priority_tool(&m_physics_tool);
@@ -443,7 +448,7 @@ public:
     Commands_window                         m_commands_window;
     Layers_window                           m_layers_window;
     Network_window                          m_network_window;
-    Node_tree_window                        m_node_tree_window;
+    Item_tree_window                        m_node_tree_window;
     Operations                              m_operations;
     Physics_window                          m_physics_window;
     Post_processing_window                  m_post_processing_window;
@@ -489,6 +494,9 @@ public:
 
 void run_editor()
 {
+#if defined(ERHE_PROFILE_LIBRARY_NVTX)
+    nvtxInitialize(nullptr);
+#endif
     erhe::log::initialize_log_sinks();
     gl::initialize_logging();
     erhe::commands::initialize_logging();

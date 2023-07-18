@@ -531,6 +531,8 @@ auto Editor_rendering::height() const -> int
 
 void Editor_rendering::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
     const ImGuiTreeNodeFlags flags{
         ImGuiTreeNodeFlags_Framed            |
         ImGuiTreeNodeFlags_OpenOnArrow       |
@@ -663,6 +665,8 @@ void Editor_rendering::render_viewport_main(
 
 void Editor_rendering::render_viewport_renderables(const Render_context& context)
 {
+    ERHE_PROFILE_FUNCTION();
+
     for (auto* renderable : m_renderables) {
         renderable->render(context);
     }

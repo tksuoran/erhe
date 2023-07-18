@@ -18,7 +18,7 @@ namespace erhe::primitive {
     class Material;
 }
 namespace erhe::scene {
-    class Scene_host;
+    class Item_host;
 }
 
 namespace editor
@@ -49,10 +49,10 @@ public:
     );
 
     // Implements Item
-    [[nodiscard]] static auto static_type     () -> uint64_t;
-    [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto get_type () const -> uint64_t    override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t    override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
     // Public API
     [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
@@ -74,9 +74,15 @@ public:
     void clear         (glm::vec4 clear_color);
     void render_done   (Editor_context& context); // generates mipmaps, updates lod bias
 
+    void resize_rendertarget(
+        erhe::graphics::Instance& graphics_instance,
+        Mesh_memory&              mesh_memory,
+        int                       width,
+        int                       height
+    );
+
 private:
-    void init_rendertarget(erhe::graphics::Instance& graphics_instance, int width, int height);
-    void add_primitive    (Mesh_memory& mesh_memory);
+    void make_primitive(Mesh_memory& mesh_memory);
 
     float                                        m_pixels_per_meter{0.0f};
     float                                        m_local_width     {0.0f};

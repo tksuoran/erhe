@@ -1,80 +1,25 @@
 in vec2      v_texcoord;
 in vec4      v_position;
 in vec4      v_color;
+in vec2      v_aniso_control;
 in mat3      v_TBN;
 in flat uint v_material_index;
 
+vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
+{
+    if ((texture_handle.x == 0) && (texture_handle.y == 0)) {
+        return vec4(1.0, 1.0, 1.0, 1.0);
+    }
+#if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_texture = sampler2D(texture_handle);
+    return texture(s_texture, v_texcoord);
+#else
+    return texture(s_texture[texture_handle.x], v_texcoord);
+#endif
+}
+
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
-
-// https://www.shadertoy.com/view/NtlyWX
-
-float cos_theta  (vec3 w) {return w.z; }
-float cos_2_theta(vec3 w) {return w.z * w.z; }
-float sin_2_theta(vec3 w) {return max(0.0, 1.0 - cos_2_theta(w)); }
-float sin_theta  (vec3 w) {return sqrt(sin_2_theta(w)); }
-float tan_theta  (vec3 w) {return sin_theta(w) / cos_theta(w); }
-float cos_phi    (vec3 w) {return (sin_theta(w) == 0.0) ? 1.0 : clamp(w.x / sin_theta(w), -1.0, 1.0); }
-float sin_phi    (vec3 w) {return (sin_theta(w) == 0.0) ? 0.0 : clamp(w.y / sin_theta(w), -1.0, 1.0); }
-float cos_2_phi  (vec3 w) {return cos_phi(w) * cos_phi(w); }
-float sin_2_phi  (vec3 w) {return sin_phi(w) * sin_phi(w); }
-
-float p22_ggx_isotropic(float x, float y, float alpha)
-{
-    float x_sqr     = x * x;
-    float y_sqr     = y * y;
-    float alpha_sqr = alpha * alpha;
-    float denom     = 1.0 + (x_sqr / alpha_sqr) + (y_sqr / alpha_sqr);
-    return 1.0 / ((m_pi * alpha_sqr) * (denom * denom));
-}
-
-float p22_ggx_anisotropic(float x, float y, float alpha_x, float alpha_y)
-{
-    float x_sqr       = x * x;
-    float y_sqr       = y * y;
-    float alpha_x_sqr = alpha_x * alpha_x;
-    float alpha_y_sqr = alpha_y * alpha_y;
-    float denom       = 1.0 + (x_sqr / alpha_x_sqr) + (y_sqr / alpha_y_sqr);
-    float denom_sqr   = denom * denom;
-    return 1.0 / ((m_pi * alpha_x * alpha_y) * denom_sqr);
-}
-
-float slope_ndf_ggx_isotropic(vec3 omega_h, float alpha)
-{
-    float slope_x     = -(omega_h.x / omega_h.z);
-    float slope_y     = -(omega_h.y / omega_h.z);
-    float cos_theta   = cos_theta(omega_h);
-    float cos_2_theta = cos_theta * cos_theta;
-    float cos_4_theta = cos_2_theta * cos_2_theta;
-    float ggx_p22     = p22_ggx_isotropic(slope_x, slope_y, alpha);
-    return ggx_p22 / cos_4_theta;
-}
-
-float slope_ndf_ggx_anisotropic(vec3 omega_h, float alpha_x, float alpha_y)
-{
-    float slope_x     = -(omega_h.x / omega_h.z);
-    float slope_y     = -(omega_h.y / omega_h.z);
-    float cos_theta   = cos_theta(omega_h);
-    float cos_2_theta = cos_theta * cos_theta;
-    float cos_4_theta = cos_2_theta * cos_2_theta;
-    float ggx_p22     = p22_ggx_anisotropic(slope_x, slope_y, alpha_x, alpha_y);
-    return ggx_p22 / cos_4_theta;
-}
-
-float lambda_ggx_isotropic(vec3 omega, float alpha)
-{
-    float a = 1.0 / (alpha * tan_theta(omega));
-    return 0.5 * (-1.0 + sqrt(1.0 + 1.0 / (a * a)));
-}
-
-float lambda_ggx_anisotropic(vec3 omega, float alpha_x, float alpha_y)
-{
-    float cos_phi = cos_phi(omega);
-    float sin_phi = sin_phi(omega);
-    float alpha_o = sqrt(cos_phi * cos_phi * alpha_x * alpha_x + sin_phi * sin_phi * alpha_y * alpha_y);
-    float a       = 1.0 / (alpha_o * tan_theta(omega));
-    return 0.5 * (-1.0 + sqrt(1.0 + 1.0 / (a * a)));
-}
 
 float ggx_isotropic_ndf(float N_dot_H, float alpha)
 {
@@ -135,49 +80,6 @@ vec3 fresnel_schlick(float cos_theta, vec3 f0)
 float clamped_dot(vec3 x, vec3 y)
 {
     return clamp(dot(x, y), 0.001, 1.0);
-}
-
-vec3 slope_brdf(
-    vec3  base_color,
-    float roughness_x,
-    float roughness_y,
-    float metalness,
-    mat3  TBN_t,
-    vec3  L,
-    vec3  V,
-    vec3  T,
-    vec3  B,
-    vec3  N
-)
-{
-    float alpha_x   = roughness_x * roughness_x;
-    float alpha_y   = roughness_y * roughness_y;
-    vec3  wo        = normalize(TBN_t * V);
-    vec3  wg        = normalize(TBN_t * N); // ( should be (0,0,1)^T )
-    vec3  wi        = normalize(TBN_t * L);
-    vec3  wh        = normalize(wo + wi);
-    float wi_dot_wh = clamp(dot(wi, wh), 0.0, 1.0);
-    float wg_dot_wi = clamp(cos_theta(wi), 0.0, 1.0);
-    float lambda_wo = lambda_ggx_anisotropic(wo, alpha_x, alpha_y);
-    float lambda_wi = lambda_ggx_anisotropic(wi, alpha_x, alpha_y);
-    float D         = slope_ndf_ggx_anisotropic(wh, alpha_x, alpha_y);
-    float G         = 1.0 / (1.0 + lambda_wo + lambda_wi);
-
-    float specular_brdf = max(
-        wg_dot_wi * (D * G) / (4.0 * cos_theta(wi) * cos_theta(wo)),
-        0.0
-    );
-
-    vec3  H                 = normalize(L + V);
-    float N_dot_L           = clamped_dot(N, L);
-    float V_dot_H           = clamped_dot(V, H);
-    vec3  diffuse_brdf      = N_dot_L * base_color * m_i_pi;
-    float fresnel           = pow(1.0 - abs(V_dot_H), 5.0);
-    vec3  conductor_fresnel = specular_brdf * (base_color + (1.0 - base_color) * fresnel);
-    float f0                = 0.04;
-    float fr                = f0 + (1.0 - f0) * fresnel;
-    vec3  fresnel_mix       = mix(diffuse_brdf, vec3(specular_brdf), fr);
-    return mix(fresnel_mix, conductor_fresnel, metalness);
 }
 
 vec3 brdf(
@@ -316,25 +218,27 @@ void main()
     float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];
+    uvec2 base_color_texture         = material.base_color_texture;
+    uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
+    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
 
     // Generating circular anisotropy direction from texcoord
     vec2  T_circular                    = normalize(v_texcoord);
     float circular_anisotropy_magnitude = pow(length(v_texcoord) * 8.0, 0.25);
-    // Vertex red channel is used to modulate anisotropy level:
+    // X is used to modulate anisotropy level:
     //   0.0 -- Anisotropic
     //   1.0 -- Isotropic when approaching texcoord (0, 0)
-    // Vertex color green channel is used for tangent space selection/control:
+    // Y is used for tangent space selection/control:
     //   0.0 -- Use geometry T and B (from vertex attribute
     //   1.0 -- Use T and B derived from texcoord
-    float tangent_space_control = v_color.g;
     float anisotropy_strength = mix(
         1.0,
         min(1.0, circular_anisotropy_magnitude),
-        tangent_space_control
-    ) * v_color.r;
+        v_aniso_control.y
+    ) * v_aniso_control.x;
     // Mix tangent space geometric .. texcoord generated
-    vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, tangent_space_control);
-    vec3  B                   = mix(B0, T_circular.y * T0 - T_circular.x * B0, tangent_space_control);
+    vec3  T                   = mix(T0, T_circular.x * T0 + T_circular.y * B0, v_aniso_control.y);
+    vec3  B                   = mix(B0, T_circular.y * T0 - T_circular.x * B0, v_aniso_control.y);
     float isotropic_roughness = 0.5 * material.roughness.x + 0.5 * material.roughness.y;
     // Mix roughness based on anisotropy_strength
     float roughness_x         = mix(isotropic_roughness, material.roughness.x, anisotropy_strength);
@@ -342,10 +246,12 @@ void main()
 
     uint directional_light_count  = light_block.directional_light_count;
     uint spot_light_count         = light_block.spot_light_count;
+    uint point_light_count        = light_block.point_light_count;
     uint directional_light_offset = 0;
     uint spot_light_offset        = directional_light_count;
+    uint point_light_offset       = spot_light_offset + spot_light_count;
     vec3 color = vec3(0);
-    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * material.base_color.rgb;
+    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
     color += material.emissive.rgb;
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;
@@ -357,7 +263,7 @@ void main()
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
             color += intensity * brdf(
-                material.base_color.rgb,
+                base_color,
                 roughness_x,
                 roughness_y,
                 material.metallic,
@@ -383,7 +289,32 @@ void main()
             float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
             color += intensity * brdf(
-                material.base_color.rgb,
+                base_color,
+                roughness_x,
+                roughness_y,
+                material.metallic,
+                material.reflectance,
+                L,
+                V,
+                T,
+                B,
+                N
+            );
+        }
+    }
+
+    for (uint i = 0; i < point_light_count; ++i) {
+        uint  light_index    = point_light_offset + i;
+        Light light          = light_block.lights[light_index];
+        vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
+        vec3  L              = normalize(point_to_light);
+        float N_dot_L        = clamped_dot(N, L);
+        if (N_dot_L > 0.0 || N_dot_V > 0.0) {
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
+            vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
+            color += intensity * brdf(
+                base_color,
                 roughness_x,
                 roughness_y,
                 material.metallic,

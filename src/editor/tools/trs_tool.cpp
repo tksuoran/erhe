@@ -269,7 +269,7 @@ void Trs_tool::begin_move()
     m_touched = true;
     const auto node_physics = get_target_node_physics();
     auto* const rigid_body = node_physics
-        ? node_physics->rigid_body()
+        ? node_physics->get_rigid_body()
         : nullptr;
 
     if (rigid_body == nullptr)
@@ -287,15 +287,12 @@ void Trs_tool::begin_move()
 
 void Trs_tool::end_move()
 {
-    const auto node_physics = get_target_node_physics();
-    if (
-        node_physics &&
-        node_physics->rigid_body()
-    )
+    const auto  node_physics = get_target_node_physics();
+    auto* const rigid_body   = node_physics->get_rigid_body();
+    if (node_physics && (rigid_body != nullptr))
     {
         ERHE_VERIFY(m_original_motion_mode.has_value());
         log_trs_tool->trace("S restoring old physics node");
-        auto* const rigid_body = node_physics->rigid_body();
         rigid_body->set_motion_mode     (m_original_motion_mode.value());
         rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
         rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
@@ -1136,7 +1133,7 @@ void Trs_tool::tool_render(
             const auto* node = mesh->get_node();
             if (node != nullptr)
             {
-                auto* scene_root = reinterpret_cast<Scene_root*>(node->node_data.host);
+                auto* scene_root = static_cast<Scene_root*>(node->node_data.host);
                 if (scene_root != nullptr)
                     {
                         glm::vec3 directions[] = {
@@ -1355,7 +1352,7 @@ void Trs_tool::update_transforms()
     {
         return;
     }
-    auto* scene_root = reinterpret_cast<Scene_root*>(target_node->node_data.host);
+    auto* scene_root = static_cast<Scene_root*>(target_node->node_data.host);
     if (scene_root == nullptr)
     {
         log_trs_tool->error("Node '{}' has no scene root", target_node->get_name());

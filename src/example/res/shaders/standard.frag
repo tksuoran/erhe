@@ -5,9 +5,6 @@ in mat3      v_TBN;
 in flat uint v_material_index;
 in float     v_tangent_scale;
 
-in flat uvec2 v_base_color_texture;
-in flat uvec2 v_metallic_roughness_texture;
-
 const float m_pi   = 3.1415926535897932384626434;
 const float m_i_pi = 0.3183098861837906715377675;
 
@@ -183,18 +180,18 @@ void main()
 
     Material material = material.materials[v_material_index];
 
-    uint directional_light_count  = light_block.directional_light_count;
-    uint spot_light_count         = light_block.spot_light_count;
-    uint point_light_count        = light_block.point_light_count;
-    uint directional_light_offset = 0;
-    uint spot_light_offset        = directional_light_count;
-    uint point_light_offset       = spot_light_offset + spot_light_count;
-
-    vec3 base_color = material.base_color.rgb * sample_texture(v_base_color_texture, v_texcoord).rgb;
+    uvec2 base_color_texture         = material.base_color_texture;
+    uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
+    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
+    uint  directional_light_count    = light_block.directional_light_count;
+    uint  spot_light_count           = light_block.spot_light_count;
+    uint  point_light_count          = light_block.point_light_count;
+    uint  directional_light_offset   = 0;
+    uint  spot_light_offset          = directional_light_count;
+    uint  point_light_offset         = spot_light_offset + spot_light_count;
 
     vec3 color = vec3(0);
-    color += //(0.5 + 0.5 * N.y) * 
-             light_block.ambient_light.rgb * base_color;
+    color += light_block.ambient_light.rgb * base_color;
     color += material.emissive.rgb;
 
     for (uint i = 0; i < directional_light_count; ++i) {
@@ -239,7 +236,6 @@ void main()
     }
 
     for (uint i = 0; i < point_light_count; ++i) {
-        //color = vec3(0.0, 1.0, 0.0);
         uint  light_index    = point_light_offset + i;
         Light light          = light_block.lights[light_index];
         vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
@@ -261,16 +257,6 @@ void main()
     }
 
     float exposure = camera.cameras[0].exposure;
-    out_color.rgb = color * exposure; // * material.opacity;
-    //out_color.rgb = srgb_to_linear(color);
-
-//#if 0
-//    out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
-//#endif
-
-    //out_color.rgb = color * exposure;
-    //out_color.rgb = sample_texture(v_base_color_texture, v_texcoord).rgb;
-    //out_color.rg = v_texcoord.rg;
-    //out_color.rgb = material.base_color.rgb * ;
-    out_color.a = 1.0; //material.opacity;
+    out_color.rgb = color * exposure * material.opacity;
+    out_color.a = material.opacity;
 }

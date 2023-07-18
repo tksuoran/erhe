@@ -39,6 +39,8 @@ class Example
     : public erhe::toolkit::Window_event_handler
 {
 public:
+    virtual auto get_name() const -> const char* { return "Example"; }
+
     Example(
         erhe::toolkit::Context_window&          window,
         erhe::scene::Scene&                     scene,
@@ -396,7 +398,7 @@ void run_example()
         .vertex_format     = mesh_memory.vertex_format,
         .scene             = scene,
         .image_transfer    = image_transfer,
-        .path              = "res/models/Box.gltf"
+        .path              = "res/models/BoxTextured.gltf"
     };
     parse_gltf(parse_context);
     mesh_memory.gl_buffer_transfer_queue.flush();

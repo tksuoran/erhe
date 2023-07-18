@@ -21,7 +21,11 @@ public:
 class Joint_block
 {
 public:
-    std::size_t  debug_joint_indices;
+    std::size_t  debug_joint_indices;     // uvec4
+    std::size_t  debug_joint_color_count; // uint
+    std::size_t  extra1;                  // uint
+    std::size_t  extra2;                  // uint
+    std::size_t  extra3;                  // uint
     std::size_t  debug_joint_colors;
     Joint_struct joint;
     std::size_t  joint_struct;
@@ -37,7 +41,7 @@ public:
     erhe::graphics::Shader_resource joint_block;
     erhe::graphics::Shader_resource joint_struct;
     Joint_block                     offsets;
-    std::size_t                     max_joint_count{200};
+    std::size_t                     max_joint_count{1000};
 };
 
 class Joint_buffer

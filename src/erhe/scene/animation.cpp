@@ -1,5 +1,6 @@
 #include "erhe/scene/animation.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::scene
@@ -302,24 +303,24 @@ Animation::Animation(const std::string_view name)
 
 Animation::~Animation() noexcept = default;
 
-auto Animation::static_type() -> uint64_t
+auto Animation::get_static_type() -> uint64_t
 {
     return Item_type::animation;
 }
 
-auto Animation::static_type_name() -> const char*
+auto Animation::get_static_type_name() -> const char*
 {
     return "Animation";
 }
 
 auto Animation::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Animation::type_name() const -> const char*
+auto Animation::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
 auto Animation::evaluate(
@@ -342,5 +343,16 @@ void Animation::apply(float time_current)
     }
 }
 
+auto as_animation(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Animation>
+{
+    if (!scene_item) {
+        return {};
+    }
+    using namespace erhe::toolkit;
+    if (!test_all_rhs_bits_set(scene_item->get_type(), Item_type::physics)) {
+        return {};
+    }
+    return std::static_pointer_cast<Animation>(scene_item);
+}
 
 } // namespace erhe::scene

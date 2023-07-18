@@ -47,6 +47,21 @@ public:
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
 };
 
+class Gltf_scan
+{
+public:
+    std::vector<std::string> animations;
+    std::vector<std::string> cameras;
+    std::vector<std::string> lights;
+    std::vector<std::string> meshes;
+    std::vector<std::string> skins;
+    std::vector<std::string> nodes;
+    std::vector<std::string> materials;
+    std::vector<std::string> images;
+    std::vector<std::string> samplers;
+    std::vector<std::string> scenes;
+};
+
 [[nodiscard]] auto parse_gltf(
     erhe::graphics::Instance&                 graphics_instance,
     Image_transfer&                           image_transfer,
@@ -54,5 +69,7 @@ public:
     erhe::scene::Layer_id                     mesh_layer_id,
     std::filesystem::path                     path
 ) -> Gltf_data;
+
+[[nodiscard]] auto scan_gltf(std::filesystem::path path) -> Gltf_scan;
 
 }

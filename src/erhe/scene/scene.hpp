@@ -70,7 +70,7 @@ public:
     Layer_id                            id;
 };
 
-class Scene_host;
+class Item_host;
 
 class Scene
     : public Item
@@ -79,14 +79,16 @@ public:
     Scene(
         erhe::scene::Scene_message_bus& scene_message_bus,
         const std::string_view          name,
-        Scene_host*                     host = nullptr
+        Item_host*                      host = nullptr
     );
 
     ~Scene();
 
     // Implements Item
-    [[nodiscard]] auto get_type () const -> uint64_t override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
     // Public API
     void sanity_check          () const;
@@ -127,7 +129,7 @@ public:
 
 private:
     Scene_message_bus&                        m_message_bus;
-    Scene_host*                               m_host       {nullptr};
+    Item_host*                                m_host       {nullptr};
     std::shared_ptr<erhe::scene::Node>        m_root_node;
     std::vector<std::shared_ptr<Node>>        m_flat_node_vector;
     std::vector<std::shared_ptr<Mesh_layer>>  m_mesh_layers;

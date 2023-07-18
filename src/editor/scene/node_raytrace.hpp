@@ -58,13 +58,13 @@ public:
     ~Node_raytrace() noexcept override;
 
     // Implements Node_attachment
-    [[nodiscard]] static auto static_type     () -> uint64_t;
-    [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto get_type () const -> uint64_t    override;
-    [[nodiscard]] auto type_name() const -> const char* override;
-    void handle_node_scene_host_update(
-        erhe::scene::Scene_host* old_scene_host,
-        erhe::scene::Scene_host* new_scene_host
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t    override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
+    void handle_item_host_update(
+        erhe::scene::Item_host* old_item_host,
+        erhe::scene::Item_host* new_item_host
     ) override;
     void handle_node_transform_update() override;
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;

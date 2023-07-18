@@ -268,7 +268,7 @@ auto Scene::get_light_layers() const -> const std::vector<std::shared_ptr<Light_
 void Scene::sanity_check() const
 {
 #if !defined(NDEBUG)
-    m_root_node->sanity_check();
+    m_root_node->node_sanity_check();
 #endif
 }
 
@@ -295,6 +295,9 @@ void Scene::update_node_transforms()
     }
 
     for (auto& node : m_flat_node_vector) {
+        if (node->is_no_transform_update()) {
+            continue;
+        }
         node->update_transform(0);
     }
 }
@@ -302,17 +305,18 @@ void Scene::update_node_transforms()
 Scene::Scene(
     Scene_message_bus&     message_bus,
     const std::string_view name,
-    Scene_host* const      host
+    Item_host* const       host
 )
     : Item         {name}
     , m_message_bus{message_bus}
     , m_host       {host}
     , m_root_node  {std::make_shared<erhe::scene::Node>("root")}
 {
-    enable_flag_bits(Item_flags::content);
+    enable_flag_bits(Item_flags::content | Item_flags::no_transform_update);
     // The implicit root node has a valid (identity) transform
     m_root_node->node_data.host = host;
-    m_root_node->node_data.transforms.update_serial = 1;
+    m_root_node->node_data.transforms.parent_from_node_serial = 1;
+    m_root_node->node_data.transforms.world_from_node_serial  = 1;
 }
 
 Scene::~Scene()
@@ -329,14 +333,24 @@ Scene::~Scene()
     m_root_node.reset();
 }
 
-auto Scene::get_type() const -> uint64_t
+auto Scene::get_static_type() -> uint64_t
 {
     return Item_type::scene;
 }
 
-auto Scene::type_name() const -> const char*
+auto Scene::get_static_type_name() -> const char*
 {
-    return "Scene";
+    return Item_type::c_bit_labels[Item_type::index_scene];
+}
+
+auto Scene::get_type() const -> uint64_t
+{
+    return get_static_type();
+}
+
+auto Scene::get_type_name() const -> const char*
+{
+    return get_static_type_name();
 }
 
 void Scene::add_mesh_layer(const std::shared_ptr<Mesh_layer>& mesh_layer)
@@ -358,7 +372,7 @@ void Scene::register_node(
 #ifndef NDEBUG
     const auto i = std::find(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);
     if (i != m_flat_node_vector.end()) {
-        log->error("{} {} already in scene nodes", node->type_name(), node->get_name());
+        log->error("{} {} already in scene nodes", node->get_type_name(), node->get_name());
     } else
 #endif
     {
@@ -368,7 +382,7 @@ void Scene::register_node(
         m_nodes_sorted = false;
     }
 
-    ERHE_VERIFY(!node->parent().expired());
+    ERHE_VERIFY(!node->get_parent().expired());
 
     if ((node->get_flag_bits() & Item_flags::no_message) == 0) {
         m_message_bus.send_message(
@@ -389,7 +403,7 @@ void Scene::unregister_node(
         "unregister {} depth {} child count = {}",
         node->get_name(),
         node->get_depth(),
-        node->node_data.children.size()
+        node->get_child_count()
     );
 
     const auto i = std::remove(m_flat_node_vector.begin(), m_flat_node_vector.end(), node);

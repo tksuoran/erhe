@@ -275,7 +275,7 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
     if (!m_instance.info.use_persistent_buffers) {
         Expects(m_map.empty());
         //// ERHE_VERIFY(m_capacity_byte_count == m_cpu_copy.size());
-        //auto* const map_pointer = reinterpret_cast<std::byte*>(m_cpu_copy.data());
+        //auto* const map_pointer = static_cast<std::byte*>(m_cpu_copy.data());
         //m_map = gsl::span<std::byte>(map_pointer, m_capacity_byte_count);
         if (byte_count == 0) {
             byte_count = m_capacity_byte_count - byte_offset;
@@ -288,7 +288,7 @@ auto Buffer::begin_write(const std::size_t byte_offset, std::size_t byte_count) 
             //gl::Map_buffer_access_mask::map_invalidate_range_bit |
             gl::Map_buffer_access_mask::map_write_bit;
 
-        auto* const map_pointer = reinterpret_cast<std::byte*>(
+        auto* const map_pointer = static_cast<std::byte*>(
             gl::map_named_buffer_range(
                 gl_name(),
                 byte_offset,
@@ -350,7 +350,7 @@ auto Buffer::map_all_bytes(
     m_map_byte_offset = 0;
     m_map_buffer_access_mask = access_mask;
 
-    auto* const map_pointer = reinterpret_cast<std::byte*>(
+    auto* const map_pointer = static_cast<std::byte*>(
         gl::map_named_buffer_range(
             gl_name(),
             m_map_byte_offset,
@@ -399,7 +399,7 @@ auto Buffer::map_bytes(
     m_map_byte_offset = static_cast<GLsizeiptr>(byte_offset);
     m_map_buffer_access_mask = access_mask;
 
-    auto* const map_pointer = reinterpret_cast<std::byte*>(
+    auto* const map_pointer = static_cast<std::byte*>(
         gl::map_named_buffer_range(
             gl_name(),
             m_map_byte_offset,
@@ -538,7 +538,7 @@ void Buffer::dump() const noexcept
     uint32_t* data {nullptr};
     bool      unmap{false};
     if (mapped == GL_FALSE) {
-        data = reinterpret_cast<uint32_t*>(
+        data = static_cast<uint32_t*>(
             gl::map_named_buffer_range(
                 gl_name(),
                 0,

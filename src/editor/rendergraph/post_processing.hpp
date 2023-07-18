@@ -68,7 +68,7 @@ public:
     );
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto type_name() const -> std::string_view override { return "Post_processing_node"; }
+    [[nodiscard]] auto get_type_name() const -> std::string_view override { return "Post_processing_node"; }
     void execute_rendergraph_node() override;
 
     // Overridden to provide texture from the first downsample node

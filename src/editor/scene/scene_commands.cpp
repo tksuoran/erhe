@@ -91,14 +91,14 @@ auto Scene_commands::get_scene_root(
 ) const -> Scene_root*
 {
     if (parent != nullptr) {
-        return reinterpret_cast<Scene_root*>(parent->get_item_host());
+        return static_cast<Scene_root*>(parent->get_item_host());
     }
 
-    const auto  first_selected_node  = m_context.selection->get_first_selected_node();
-    const auto  first_selected_scene = m_context.selection->get_first_selected_scene();
+    const auto  first_selected_node  = m_context.selection->get<erhe::scene::Node>();
+    const auto  first_selected_scene = m_context.selection->get<erhe::scene::Scene>();
     const auto& viewport_window      = m_context.viewport_windows->last_window();
 
-    erhe::scene::Scene_host* scene_host = first_selected_node
+    erhe::scene::Item_host* scene_host = first_selected_node
         ? first_selected_node->get_item_host()
         : first_selected_scene
             ? first_selected_scene->get_root_node()->get_item_host()
@@ -109,7 +109,7 @@ auto Scene_commands::get_scene_root(
         return nullptr;
     }
 
-    Scene_root* scene_root = reinterpret_cast<Scene_root*>(scene_host);
+    Scene_root* scene_root = static_cast<Scene_root*>(scene_host);
     return scene_root;
 }
 
@@ -122,18 +122,18 @@ auto Scene_commands::create_new_camera(
         return {};
     }
 
-    auto new_node = std::make_shared<erhe::scene::Node>("new camera node");
+    auto new_node   = std::make_shared<erhe::scene::Node>("new camera node");
     auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
-    new_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     new_camera->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->push(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{
                 .operations = {
-                    std::make_shared<Node_insert_remove_operation>(
-                        Node_insert_remove_operation::Parameters{
+                    std::make_shared<Item_insert_remove_operation>(
+                        Item_insert_remove_operation::Parameters{
                             .context = m_context,
-                            .node    = new_node,
+                            .item    = new_node,
                             .parent  = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                                 : scene_root->get_hosted_scene()->get_root_node(),
@@ -161,10 +161,10 @@ auto Scene_commands::create_new_empty_node(
     auto new_empty_node = std::make_shared<erhe::scene::Node>("new empty node");
     new_empty_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->push(
-        std::make_shared<Node_insert_remove_operation>(
-            Node_insert_remove_operation::Parameters{
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .node    = new_empty_node,
+                .item    = new_empty_node,
                 .parent  = (parent != nullptr)
                     ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                     : scene_root->get_hosted_scene()->get_root_node(),
@@ -185,19 +185,19 @@ auto Scene_commands::create_new_light(
         return {};
     }
 
-    auto new_node = std::make_shared<erhe::scene::Node>("new light node");
+    auto new_node  = std::make_shared<erhe::scene::Node>("new light node");
     auto new_light = std::make_shared<erhe::scene::Light>("new light");
-    new_node->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
+    new_node ->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
     new_light->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
     new_light->layer_id = scene_root->layers().light()->id;
     m_context.operation_stack->push(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{
                 .operations = {
-                    std::make_shared<Node_insert_remove_operation>(
-                        Node_insert_remove_operation::Parameters{
+                    std::make_shared<Item_insert_remove_operation>(
+                        Item_insert_remove_operation::Parameters{
                             .context = m_context,
-                            .node    = new_node,
+                            .item    = new_node,
                             .parent  = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                                 : scene_root->get_hosted_scene()->get_root_node(),
@@ -276,10 +276,10 @@ auto Scene_commands::create_new_rendertarget(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{
                 .operations = {
-                    std::make_shared<Node_insert_remove_operation>(
-                        Node_insert_remove_operation::Parameters{
+                    std::make_shared<Item_insert_remove_operation>(
+                        Item_insert_remove_operation::Parameters{
                             .context = m_context,
-                            .node    = new_node,
+                            .item    = new_node,
                             .parent  = (parent != nullptr)
                                 ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
                                 : scene_root->get_hosted_scene()->get_root_node(),

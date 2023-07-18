@@ -66,7 +66,7 @@ private:
     );
     void skin_visualization(
         const Render_context& render_context,
-        erhe::scene::Skin*    skin
+        erhe::scene::Skin&    skin
     );
 
     void light_visualization(

@@ -13,14 +13,14 @@ layout(line_strip, max_vertices = 10) out;
 layout(triangle_strip, max_vertices = 6) out;
 #endif
 
-in vec4  vs_color[];
-in float vs_line_width[];
+in layout(location = 0) vec4  vs_color[];
+in layout(location = 1) float vs_line_width[];
 
-out vec2  v_start;
-out vec2  v_line;
-out vec4  v_color;
-out float v_l2;
-out float v_line_width;
+out layout(location = 0) vec2  v_start;
+out layout(location = 1) vec2  v_line;
+out layout(location = 2) vec4  v_color;
+out layout(location = 3) float v_l2;
+out layout(location = 4) float v_line_width;
 
 void main(void)
 {

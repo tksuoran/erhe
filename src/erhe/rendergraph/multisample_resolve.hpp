@@ -37,7 +37,7 @@ public:
     void reconfigure(int sample_count);
 
     // Implements Rendergraph_node
-    [[nodiscard]] auto type_name() const -> std::string_view override { return c_type_name; }
+    [[nodiscard]] auto get_type_name() const -> std::string_view override { return c_type_name; }
     [[nodiscard]] auto get_consumer_input_texture(
         Resource_routing resource_routing,
         int              key,

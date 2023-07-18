@@ -16,6 +16,7 @@ namespace editor {
 enum class Shader_stages_variant : int
 {
     standard,
+    error,
     anisotropic_slope,
     anisotropic_engine_ready,
     circular_brushed_metal,
@@ -24,8 +25,11 @@ enum class Shader_stages_variant : int
     debug_tangent,
     debug_bitangent,
     debug_texcoord,
+    debug_base_color_texture,
     debug_vertex_color_rgb,
     debug_vertex_color_alpha,
+    debug_aniso_strength,
+    debug_aniso_texcoord,
     debug_vdotn,
     debug_ldotn,
     debug_hdotv,
@@ -40,6 +44,7 @@ enum class Shader_stages_variant : int
 static constexpr const char* c_shader_stages_variant_strings[] =
 {
     "Standard",
+    "Error",
     "Anisotropic Slope",
     "Anisotropic Engine-Ready",
     "Circular Brushed Metal",
@@ -48,8 +53,11 @@ static constexpr const char* c_shader_stages_variant_strings[] =
     "Debug Tangent",
     "Debug Bitangent",
     "Debug TexCoord",
+    "Debug Base Color Texture",
     "Debug Vertex Color RGB",
     "Debug Vertex Color Alpha",
+    "Debug Aniso Strength",
+    "Debug Aniso TexCoord",
     "Debug V.N",
     "Debug L.N",
     "Debug H.V",
@@ -83,6 +91,7 @@ public:
     erhe::graphics::Sampler          linear_sampler;
     erhe::graphics::Sampler          linear_mipmap_linear_sampler;
 
+    erhe::graphics::Reloadable_shader_stages error;
     erhe::graphics::Reloadable_shader_stages brdf_slice;
     erhe::graphics::Reloadable_shader_stages brush;
     erhe::graphics::Reloadable_shader_stages standard;
@@ -102,8 +111,11 @@ public:
     erhe::graphics::Reloadable_shader_stages debug_tangent;
     erhe::graphics::Reloadable_shader_stages debug_bitangent;
     erhe::graphics::Reloadable_shader_stages debug_texcoord;
+    erhe::graphics::Reloadable_shader_stages debug_base_color_texture;
     erhe::graphics::Reloadable_shader_stages debug_vertex_color_rgb;
     erhe::graphics::Reloadable_shader_stages debug_vertex_color_alpha;
+    erhe::graphics::Reloadable_shader_stages debug_aniso_strength;
+    erhe::graphics::Reloadable_shader_stages debug_aniso_texcoord;
     erhe::graphics::Reloadable_shader_stages debug_vdotn;
     erhe::graphics::Reloadable_shader_stages debug_ldotn;
     erhe::graphics::Reloadable_shader_stages debug_hdotv;

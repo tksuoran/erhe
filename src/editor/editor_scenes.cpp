@@ -30,7 +30,7 @@ void Editor_scenes::register_scene_root(
     m_scene_roots.push_back(scene_root);
 }
 
-void Editor_scenes::update_physics_simulation(const Time_context& time_context)
+void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& time_context)
 {
     if (
         !m_context.editor_settings->physics_static_enable ||
@@ -40,7 +40,21 @@ void Editor_scenes::update_physics_simulation(const Time_context& time_context)
     }
 
     for (const auto& scene_root : m_scene_roots) {
-        scene_root->physics_world().update_fixed_step(time_context.dt);
+        scene_root->update_physics_simulation_fixed_step(time_context.dt);
+    }
+}
+
+void Editor_scenes::update_physics_simulation_once_per_frame()
+{
+    if (
+        !m_context.editor_settings->physics_static_enable ||
+        !m_context.editor_settings->physics_dynamic_enable
+    ) {
+        return;
+    }
+
+    for (const auto& scene_root : m_scene_roots) {
+        scene_root->update_physics_simulation_once_per_frame();
     }
 }
 
@@ -53,11 +67,12 @@ void Editor_scenes::update_node_transforms()
 
 void Editor_scenes::update_fixed_step(const Time_context& time_context)
 {
-    update_physics_simulation(time_context);
+    update_physics_simulation_fixed_step(time_context);
 }
 
 void Editor_scenes::update_once_per_frame(const Time_context&)
 {
+    update_physics_simulation_once_per_frame();
     update_node_transforms();
 }
 

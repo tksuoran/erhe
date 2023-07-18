@@ -24,6 +24,7 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/scene.hpp"
+#include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -72,15 +73,15 @@ void Create::brush_create_button(const char* label, Create_shape* create_shape)
 
 auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 {
-    const auto selected_node   = m_context.selection->get_first_selected_node();
-    const auto selected_scene  = m_context.selection->get_first_selected_scene();
+    const auto selected_node   = m_context.selection->get<erhe::scene::Node>();
+    const auto selected_scene  = m_context.selection->get<erhe::scene::Scene>();
     const auto viewport_window = m_context.viewport_windows->last_window();
 
     Scene_view* scene_view = get_hover_scene_view();
-    erhe::scene::Scene_host* scene_host = selected_node
-        ? reinterpret_cast<Scene_root*>(selected_node->get_item_host())
+    erhe::scene::Item_host* scene_host = selected_node
+        ? static_cast<Scene_root*>(selected_node->get_item_host())
         : selected_scene
-            ? reinterpret_cast<Scene_root*>(selected_scene->get_root_node()->get_item_host())
+            ? static_cast<Scene_root*>(selected_scene->get_root_node()->get_item_host())
             : viewport_window
                 ? viewport_window->get_scene_root().get()
                 : (scene_view != nullptr)
@@ -89,7 +90,7 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
     if (scene_host == nullptr) {
         return {};
     }
-    auto* scene_root = reinterpret_cast<Scene_root*>(scene_host);
+    auto* scene_root = static_cast<Scene_root*>(scene_host);
 
     const auto parent = selected_node
         ? selected_node
@@ -100,13 +101,15 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 
 void Create::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto parent = find_parent();
     if (!parent) {
         return;
     }
 
-    Scene_root* scene_root = reinterpret_cast<Scene_root*>(parent->get_item_host());
+    Scene_root* scene_root = static_cast<Scene_root*>(parent->get_item_host());
     auto content_library = scene_root->content_library();
 
     const glm::mat4 world_from_node = parent->world_from_node();
@@ -147,14 +150,15 @@ void Create::imgui()
         const bool create_brush    = ImGui::Button("Create Brush", button_size);
         if (create_instance || create_brush) {
             Brush_data brush_create_info{
-                .context      = m_context,
-                .name         = m_brush_name,
-                .build_info   = erhe::primitive::Build_info{
+                .context         = m_context,
+                .editor_settings = *m_context.editor_settings,
+                .name            = m_brush_name,
+                .build_info      = erhe::primitive::Build_info{
                     .primitive_types = { .fill_triangles = true, .edge_lines = true, .corner_points = true, .centroid_points = true },
                     .buffer_info     = m_context.mesh_memory->buffer_info
                 },
-                .normal_style = m_normal_style,
-                .density      = m_density,
+                .normal_style    = m_normal_style,
+                .density         = m_density,
             };
 
             m_brush = m_create_shape->create(brush_create_info);
@@ -183,10 +187,10 @@ void Create::imgui()
                 };
                 const auto instance_node = m_brush->make_instance(brush_instance_create_info);
 
-                auto op = std::make_shared<Node_insert_remove_operation>(
-                    Node_insert_remove_operation::Parameters{
+                auto op = std::make_shared<Item_insert_remove_operation>(
+                    Item_insert_remove_operation::Parameters{
                         .context = m_context,
-                        .node    = instance_node,
+                        .item    = instance_node,
                         .parent  = parent,
                         .mode    = Scene_item_operation::Mode::insert
                     }
@@ -233,15 +237,16 @@ void Create::imgui()
                 ImGui::Text("Selected Primitive: %s", source_geometry->name.c_str());
                 if (ImGui::Button("Selected Mesh to Brush")) {
                     Brush_data brush_create_info{
-                        .context      = m_context,
-                        .name         = m_brush_name,
-                        .build_info   = erhe::primitive::Build_info{
+                        .context         = m_context,
+                        .editor_settings = *m_context.editor_settings,
+                        .name            = m_brush_name,
+                        .build_info      = erhe::primitive::Build_info{
                             .primitive_types = { .fill_triangles = true, .edge_lines = true, .corner_points = true, .centroid_points = true },
                             .buffer_info     = m_context.mesh_memory->buffer_info
                         },
-                        .normal_style = m_normal_style,
-                        .geometry     = source_geometry,
-                        .density      = m_density
+                        .normal_style    = m_normal_style,
+                        .geometry        = source_geometry,
+                        .density         = m_density
                     };
                     //// source_geometry->build_edges();
                     //// source_geometry->compute_polygon_normals();
@@ -259,12 +264,14 @@ void Create::imgui()
 
 void Create::tool_render(const Render_context& context)
 {
+    ERHE_PROFILE_FUNCTION();
+
     const auto parent = find_parent();
     if (!parent) {
         return;
     }
 
-    Scene_root* scene_root = reinterpret_cast<Scene_root*>(parent->get_item_host());
+    Scene_root* scene_root = static_cast<Scene_root*>(parent->get_item_host());
     if (context.get_scene() != scene_root->get_hosted_scene()) {
         return;
     }

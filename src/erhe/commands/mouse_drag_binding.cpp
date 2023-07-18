@@ -38,10 +38,6 @@ auto Mouse_drag_binding::on_button(
 
     if (!command->is_accepted()) {
         ERHE_VERIFY(command->get_command_state() == State::Inactive);
-        log_input_event_filtered->trace(
-            "{} not active so button event ignored",
-            command->get_name()
-        );
         return false;
     }
 

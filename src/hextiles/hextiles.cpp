@@ -41,6 +41,8 @@ class Hextiles
     : public erhe::toolkit::Window_event_handler
 {
 public:
+    virtual auto get_name() const -> const char* { return "Hextiles"; }
+
     Hextiles()
         : m_context_window{
             erhe::toolkit::Window_configuration{

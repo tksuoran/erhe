@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe/toolkit/profile.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
@@ -984,6 +986,8 @@ static inline auto convert_float4_to_uint32(const glm::vec3& in) -> uint32_t
 
 static inline auto compute_cofactor(glm::mat4 const& m) -> glm::mat4
 {
+    ERHE_PROFILE_FUNCTION();
+
     using namespace glm;
 
     float coef_00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];

@@ -1103,7 +1103,7 @@ void Imgui_renderer::render_draw_data()
         gl::multi_draw_elements_indirect(
             pipeline.data.input_assembly.primitive_topology,
             gl::Draw_elements_type::unsigned_short,
-            reinterpret_cast<const void *>(draw_indirect_writer.range.first_byte_offset),
+            reinterpret_cast<const void*>(draw_indirect_writer.range.first_byte_offset),
             static_cast<GLsizei>(draw_indirect_count),
             static_cast<GLsizei>(sizeof(gl::Draw_elements_indirect_command))
         );

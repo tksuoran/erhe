@@ -89,19 +89,36 @@ inline void write_low(
     const glm::vec2               value
 )
 {
-    if (type == gl::Vertex_attrib_type::float_) {
-        auto* const ptr = reinterpret_cast<float*>(destination.data());
-        ptr[0] = value.x;
-        ptr[1] = value.y;
-    } else if (type == gl::Vertex_attrib_type::half_float) {
-        // TODO(tksuoran@gmail.com): Would this be safe even if we are not aligned?
-        // uint* ptr = reinterpret_cast<uint*>(data_ptr);
-        // *ptr = glm::packHalf2x16(value);
-        auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
-        ptr[0] = glm::packHalf1x16(value.x);
-        ptr[1] = glm::packHalf1x16(value.y);
-    } else {
-        ERHE_FATAL("unsupported attribute type");
+    switch (type) {
+        case gl::Vertex_attrib_type::float_: {
+            auto* const ptr = reinterpret_cast<float*>(destination.data());
+            ptr[0] = value.x;
+            ptr[1] = value.y;
+            break;
+        }
+        case gl::Vertex_attrib_type::half_float: {
+            // TODO(tksuoran@gmail.com): Would this be safe even if we are not aligned?
+            // uint* ptr = reinterpret_cast<uint*>(data_ptr);
+            // *ptr = glm::packHalf2x16(value);
+            auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
+            ptr[0] = glm::packHalf1x16(value.x);
+            ptr[1] = glm::packHalf1x16(value.y);
+            break;
+        }
+        case gl::Vertex_attrib_type::unsigned_byte: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
+            float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
+            Expects(scaled_x <= 0xffU);
+            Expects(scaled_y <= 0xffU);
+            ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
+            ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
+            break;
+        }
+        default: {
+            ERHE_FATAL("unsupported attribute type");
+            break;
+        }
     }
 }
 
@@ -111,18 +128,38 @@ inline void write_low(
     const glm::vec3               value
 )
 {
-    if (type == gl::Vertex_attrib_type::float_) {
-        auto* const ptr = reinterpret_cast<float*>(destination.data());
-        ptr[0] = value.x;
-        ptr[1] = value.y;
-        ptr[2] = value.z;
-    } else if (type == gl::Vertex_attrib_type::half_float) {
-        auto* const ptr = reinterpret_cast<glm::uint16 *>(destination.data());
-        ptr[0] = glm::packHalf1x16(value.x);
-        ptr[1] = glm::packHalf1x16(value.y);
-        ptr[2] = glm::packHalf1x16(value.z);
-    } else {
-        ERHE_FATAL("unsupported attribute type");
+    switch (type) {
+        case gl::Vertex_attrib_type::float_: {
+            auto* const ptr = reinterpret_cast<float*>(destination.data());
+            ptr[0] = value.x;
+            ptr[1] = value.y;
+            ptr[2] = value.z;
+            break;
+        }
+        case gl::Vertex_attrib_type::half_float: {
+            auto* const ptr = reinterpret_cast<glm::uint16 *>(destination.data());
+            ptr[0] = glm::packHalf1x16(value.x);
+            ptr[1] = glm::packHalf1x16(value.y);
+            ptr[2] = glm::packHalf1x16(value.z);
+            break;
+        }
+        case gl::Vertex_attrib_type::unsigned_byte: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
+            float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
+            float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
+            Expects(scaled_x <= 0xffU);
+            Expects(scaled_y <= 0xffU);
+            Expects(scaled_z <= 0xffU);
+            ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
+            ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
+            ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
+            break;
+        }
+        default: {
+            ERHE_FATAL("unsupported attribute type");
+            break;
+        }
     }
 }
 
@@ -132,21 +169,44 @@ inline void write_low(
     const glm::vec4               value
 )
 {
-    if (type == gl::Vertex_attrib_type::float_) {
-        auto* const ptr = reinterpret_cast<float*>(destination.data());
-        ptr[0] = value.x;
-        ptr[1] = value.y;
-        ptr[2] = value.z;
-        ptr[3] = value.w;
-    } else if (type == gl::Vertex_attrib_type::half_float) {
-        auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
-        // TODO(tksuoran@gmail.com): glm::packHalf4x16() - but what if we are not aligned?
-        ptr[0] = glm::packHalf1x16(value.x);
-        ptr[1] = glm::packHalf1x16(value.y);
-        ptr[2] = glm::packHalf1x16(value.z);
-        ptr[3] = glm::packHalf1x16(value.w);
-    } else {
-        ERHE_FATAL("unsupported attribute type");
+    switch (type) {
+        case gl::Vertex_attrib_type::float_: {
+            auto* const ptr = reinterpret_cast<float*>(destination.data());
+            ptr[0] = value.x;
+            ptr[1] = value.y;
+            ptr[2] = value.z;
+            ptr[3] = value.w;
+            break;
+        }
+        case gl::Vertex_attrib_type::half_float: { 
+            auto* const ptr = reinterpret_cast<glm::uint16*>(destination.data());
+            // TODO(tksuoran@gmail.com): glm::packHalf4x16() - but what if we are not aligned?
+            ptr[0] = glm::packHalf1x16(value.x);
+            ptr[1] = glm::packHalf1x16(value.y);
+            ptr[2] = glm::packHalf1x16(value.z);
+            ptr[3] = glm::packHalf1x16(value.w);
+            break;
+        }
+        case gl::Vertex_attrib_type::unsigned_byte: {
+            auto* const ptr = reinterpret_cast<uint8_t*>(destination.data());
+            float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
+            float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
+            float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
+            float scaled_w = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
+            Expects(scaled_x <= 0xffU);
+            Expects(scaled_y <= 0xffU);
+            Expects(scaled_z <= 0xffU);
+            Expects(scaled_w <= 0xffU);
+            ptr[0] = static_cast<uint8_t>(scaled_x) & 0xffU;
+            ptr[1] = static_cast<uint8_t>(scaled_y) & 0xffU;
+            ptr[2] = static_cast<uint8_t>(scaled_z) & 0xffU;
+            ptr[3] = static_cast<uint8_t>(scaled_w) & 0xffU;
+            break;
+        }
+        default: {
+            ERHE_FATAL("unsupported attribute type");
+            break;
+        }
     }
 }
 

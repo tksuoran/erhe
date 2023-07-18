@@ -220,6 +220,15 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+    nvtx
+    GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
+    GIT_TAG        release-v3
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+)
+
+
+FetchContent_Declare(
     OpenXR-SDK
     GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK.git
     GIT_TAG        origin/main

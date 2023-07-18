@@ -17,6 +17,7 @@
 #include "erhe/imgui/scoped_imgui_context.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <GLFW/glfw3.h> // TODO Fix dependency ?
@@ -284,6 +285,8 @@ void Rendertarget_imgui_viewport::set_clear_color(const glm::vec4& value)
 
 void Rendertarget_imgui_viewport::execute_rendergraph_node()
 {
+    ERHE_PROFILE_FUNCTION();
+
     SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_viewport::execute_rendergraph_node()");
 
     if (!m_enabled) {

@@ -21,6 +21,7 @@ std::shared_ptr<spdlog::logger> log_node_properties;
 std::shared_ptr<spdlog::logger> log_operations;
 std::shared_ptr<spdlog::logger> log_parsers;
 std::shared_ptr<spdlog::logger> log_physics;
+std::shared_ptr<spdlog::logger> log_physics_frame;
 std::shared_ptr<spdlog::logger> log_pointer;
 std::shared_ptr<spdlog::logger> log_post_processing;
 std::shared_ptr<spdlog::logger> log_programs;
@@ -35,11 +36,12 @@ std::shared_ptr<spdlog::logger> log_tools;
 std::shared_ptr<spdlog::logger> log_trs_tool;
 std::shared_ptr<spdlog::logger> log_xr;
 std::shared_ptr<spdlog::logger> log_tree;
+std::shared_ptr<spdlog::logger> log_tree_frame;
 
 void initialize_logging()
 {
-    log_asset_browser              = erhe::log::make_logger("editor::asset_browser"             , spdlog::level::trace);
-    log_startup                    = erhe::log::make_logger("editor::startup"                   , spdlog::level::trace);
+    log_asset_browser              = erhe::log::make_logger("editor::asset_browser"             , spdlog::level::info);
+    log_startup                    = erhe::log::make_logger("editor::startup"                   , spdlog::level::info);
     log_brush                      = erhe::log::make_logger("editor::brush"                     , spdlog::level::info);
     log_controller_ray             = erhe::log::make_logger("editor::controller_ray"            , spdlog::level::info, false);
     log_debug_visualization        = erhe::log::make_logger("editor::debug_visualization"       , spdlog::level::info, false);
@@ -56,10 +58,11 @@ void initialize_logging()
     log_operations                 = erhe::log::make_logger("editor::operations"                , spdlog::level::info);
     log_parsers                    = erhe::log::make_logger("editor::parsers"                   , spdlog::level::info);
     log_physics                    = erhe::log::make_logger("editor::physics"                   , spdlog::level::info);
+    log_physics_frame              = erhe::log::make_logger("editor::physics_frame"             , spdlog::level::info, false);
     log_pointer                    = erhe::log::make_logger("editor::pointer"                   , spdlog::level::info);
     log_post_processing            = erhe::log::make_logger("editor::post_processing"           , spdlog::level::info, false);
     log_programs                   = erhe::log::make_logger("editor::programs"                  , spdlog::level::info);
-    log_raytrace                   = erhe::log::make_logger("editor::raytrace"                  , spdlog::level::warn);
+    log_raytrace                   = erhe::log::make_logger("editor::raytrace"                  , spdlog::level::trace);
     log_render                     = erhe::log::make_logger("editor::render"                    , spdlog::level::info, false);
     log_rendertarget_imgui_windows = erhe::log::make_logger("editor::rendertarget_imgui_windows", spdlog::level::info, false);
     log_scene                      = erhe::log::make_logger("editor::scene"                     , spdlog::level::info);
@@ -70,6 +73,7 @@ void initialize_logging()
     log_trs_tool                   = erhe::log::make_logger("editor::transform_tool"            , spdlog::level::info);
     log_xr                         = erhe::log::make_logger("editor::xr"                        , spdlog::level::info);
     log_tree                       = erhe::log::make_logger("editor::tree"                      , spdlog::level::info);
+    log_tree_frame                 = erhe::log::make_logger("editor::tree_frame"                , spdlog::level::info, false);
 }
 
 }

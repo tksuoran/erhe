@@ -64,6 +64,8 @@ erhe_target_sources_grouped(
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
 
+    scene/asset_browser.cpp
+    scene/asset_browser.hpp
     scene/content_library.cpp
     scene/content_library.hpp
     scene/debug_draw.cpp
@@ -244,6 +246,8 @@ erhe_target_sources_grouped(
     res/shaders/circular_brushed_metal.frag
     res/shaders/depth.vert
     res/shaders/depth.frag
+    res/shaders/error.vert
+    res/shaders/error.frag
     res/shaders/compose.frag
     res/shaders/downsample_x.frag
     res/shaders/downsample_y.frag
@@ -353,12 +357,8 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
 
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
-    target_link_libraries(${_target} PRIVATE TracyClient)
-endif ()
-
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
-    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
+if (DEFINED ERHE_PROFILE_TARGET)
+    target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
 endif ()
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")

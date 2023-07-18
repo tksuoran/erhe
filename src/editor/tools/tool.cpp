@@ -11,16 +11,11 @@ Tool::Tool(Editor_context& editor_context)
 {
 }
 
-Tool::~Tool() noexcept
-{
-    m_hover_scene_view = nullptr;
-}
-
 void Tool::on_message(Editor_message& message)
 {
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        m_hover_scene_view = message.scene_view;
+        set_hover_scene_view(message.scene_view);
     }
 }
 
@@ -42,11 +37,19 @@ auto Tool::get_priority_boost() const -> int
 void Tool::set_hover_scene_view(Scene_view* scene_view)
 {
     m_hover_scene_view = scene_view;
+    if (scene_view != nullptr) {
+        m_last_hover_scene_view = scene_view;
+    }
 }
 
 auto Tool::get_hover_scene_view() const -> Scene_view*
 {
     return m_hover_scene_view;
+}
+
+auto Tool::get_last_hover_scene_view() const -> Scene_view*
+{
+    return m_last_hover_scene_view;
 }
 
 auto Tool::get_flags() const -> uint64_t
@@ -61,7 +64,7 @@ auto Tool::get_icon() const -> std::optional<glm::vec2>
 
 void Tool::set_priority_boost(const int priority_boost)
 {
-    log_tools->info("{} priority_boost set to {}", get_description(), priority_boost);
+    log_tools->trace("{} priority_boost set to {}", get_description(), priority_boost);
 
     const int old_priority = get_priority();
     m_priority_boost = priority_boost;

@@ -38,6 +38,7 @@ public:
     [[nodiscard]] auto title          () const -> const std::string_view;
     [[nodiscard]] auto get_scale_value() const -> float;
     [[nodiscard]] auto show_in_menu   () const -> bool;
+    void set_min_size     (float min_width, float min_height);
     auto begin            () -> bool;
     void end              ();
     void set_visibility   (bool visible);
@@ -72,7 +73,7 @@ protected:
     bool              m_is_hovered    {false};
     bool              m_show_in_menu  {true};
     const char*       m_ini_label     {nullptr};
-    float             m_min_size[2]{120.0f, 120.0f};
+    float             m_min_size[2]{200.0f, 400.0f};
     float             m_max_size[2]{99999.0f, 99999.0f};
 };
 

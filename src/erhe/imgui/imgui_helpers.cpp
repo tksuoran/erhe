@@ -47,17 +47,25 @@ void end_button_style(const Item_mode mode)
     }
 }
 
-bool make_button(
+auto make_button(
     const char*     label,
     const Item_mode mode,
-    const ImVec2    size,
-    const bool      small
-)
+    const ImVec2    size
+) -> bool
 {
     begin_button_style(mode);
-    const bool pressed = small
-        ? ImGui::SmallButton(label)
-        : ImGui::Button(label, size) && (mode != Item_mode::disabled);
+    const bool pressed = ImGui::Button(label, size) && (mode != Item_mode::disabled);
+    end_button_style(mode);
+    return pressed;
+}
+
+auto make_small_button(
+    const char*     label,
+    const Item_mode mode
+) -> bool
+{
+    begin_button_style(mode);
+    const bool pressed = ImGui::SmallButton(label) && (mode != Item_mode::disabled);
     end_button_style(mode);
     return pressed;
 }

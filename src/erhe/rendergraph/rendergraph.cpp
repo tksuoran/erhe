@@ -4,6 +4,7 @@
 #include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/rendergraph/rendergraph_log.hpp"
 #include "erhe/graphics/debug.hpp"
+#include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::rendergraph {
@@ -129,6 +130,8 @@ void Rendergraph::sort()
 
 void Rendergraph::execute()
 {
+    ERHE_PROFILE_FUNCTION();
+
     std::lock_guard<std::mutex> lock{m_mutex};
 
     SPDLOG_LOGGER_TRACE(log_frame, "Execute render graph with {} nodes:", m_nodes.size());
@@ -169,7 +172,7 @@ void Rendergraph::register_node(Rendergraph_node* node)
     float y = 0.0f;
     node->set_position(glm::vec2{x, y});
 
-    log_tail->info("Registered Rendergraph_node {}", node->get_name());
+    log_tail->trace("Registered Rendergraph_node {}", node->get_name());
 }
 
 void Rendergraph::unregister_node(Rendergraph_node* node)
@@ -209,7 +212,7 @@ void Rendergraph::unregister_node(Rendergraph_node* node)
 
     m_nodes.erase(i);
 
-    log_tail->info("Unregistered Rendergraph_node {}", node->get_name());
+    log_tail->trace("Unregistered Rendergraph_node {}", node->get_name());
 }
 
 [[nodiscard]] auto Rendergraph::get_graphics_instance() -> erhe::graphics::Instance&

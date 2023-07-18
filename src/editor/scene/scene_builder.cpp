@@ -119,6 +119,7 @@ Scene_builder::Scene_builder(
     Editor_context&                        editor_context,
     Editor_rendering&                      editor_rendering,
     Editor_scenes&                         editor_scenes,
+    Editor_settings&                       editor_settings,
     Mesh_memory&                           mesh_memory,
     Settings_window&                       settings_window,
     Tools&                                 tools,
@@ -149,7 +150,7 @@ Scene_builder::Scene_builder(
         viewport_windows
     );
     setup_lights   ();
-    make_brushes   (graphics_instance, mesh_memory);
+    make_brushes   (graphics_instance, editor_settings, mesh_memory);
     make_mesh_nodes();
     add_room       ();
 
@@ -374,6 +375,7 @@ auto Scene_builder::make_brush(
 }
 
 auto Scene_builder::make_brush(
+    Editor_settings&           editor_settings,
     Mesh_memory&               mesh_memory,
     erhe::geometry::Geometry&& geometry,
     const bool                 instantiate_to_scene
@@ -381,11 +383,12 @@ auto Scene_builder::make_brush(
 {
     return make_brush(
         Brush_data{
-            .context      = m_context,
-            .build_info   = build_info(mesh_memory),
-            .normal_style = Normal_style::polygon_normals,
-            .geometry     = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
-            .density      = config.mass_scale,
+            .context         = m_context,
+            .editor_settings = editor_settings,
+            .build_info      = build_info(mesh_memory),
+            .normal_style    = Normal_style::polygon_normals,
+            .geometry        = std::make_shared<erhe::geometry::Geometry>(std::move(geometry)),
+            .density         = config.mass_scale,
         },
         instantiate_to_scene
     );
@@ -405,6 +408,7 @@ auto Scene_builder::build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Bui
 }
 
 auto Scene_builder::make_brush(
+    Editor_settings&                                 editor_settings,
     Mesh_memory&                                     mesh_memory,
     const std::shared_ptr<erhe::geometry::Geometry>& geometry,
     const bool                                       instantiate_to_scene
@@ -412,11 +416,12 @@ auto Scene_builder::make_brush(
 {
     return make_brush(
         Brush_data{
-            .context      = m_context,
-            .build_info   = build_info(mesh_memory),
-            .normal_style = Normal_style::polygon_normals,
-            .geometry     = geometry,
-            .density      = config.mass_scale,
+            .context         = m_context,
+            .editor_settings = editor_settings,
+            .build_info      = build_info(mesh_memory),
+            .normal_style    = Normal_style::polygon_normals,
+            .geometry        = geometry,
+            .density         = config.mass_scale,
         },
         instantiate_to_scene
     );
@@ -424,6 +429,7 @@ auto Scene_builder::make_brush(
 
 void Scene_builder::make_brushes(
     erhe::graphics::Instance& graphics_instance, 
+    Editor_settings&          editor_settings,
     Mesh_memory&              mesh_memory
 )
 {
@@ -452,7 +458,7 @@ void Scene_builder::make_brushes(
         m_collision_shapes.push_back(floor_box_shape);
 
         execution_queue->enqueue(
-            [this, &floor_box_shape, &mesh_memory]() {
+            [this, &floor_box_shape, &editor_settings, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Floor brush");
 
                 auto floor_geometry = std::make_shared<erhe::geometry::Geometry>(
@@ -464,6 +470,7 @@ void Scene_builder::make_brushes(
                 m_floor_brush = std::make_unique<Brush>(
                     Brush_data{
                         .context         = m_context,
+                        .editor_settings = editor_settings,
                         .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::polygon_normals,
                         .geometry        = floor_geometry,
@@ -485,28 +492,12 @@ void Scene_builder::make_brushes(
             {
                 ERHE_PROFILE_SCOPE("parse gltf files");
 
-                //const Brush_create_context context{build_info_set(), Normal_style::polygon_normals};
-                //constexpr bool instantiate = true;
-
-                const char* files_names[] = {
-                    "res/models/SM_Deccer_Cubes.gltf"
-                    //"res/models/MetalRoughSpheresNoTextures.gltf"
-                    //"res/models/SimpleSkin.gltf"
-                    //"res/models/AnimatedTriangle.gltf"
-                    //"res/models/BoxAnimated.gltf"
-                    //"res/models/RiggedFigure.gltf"
-                    //"res/models/Box.gltf"
-                    //"res/models/test.gltf"
-                    //"res/models/Suzanne.gltf"
-                };
-                for (auto* path : files_names) {
-                    parse_gltf(
-                        graphics_instance,
-                        build_info(mesh_memory),
-                        *m_scene_root.get(),
-                        path
-                    );
-                }
+                import_gltf(
+                    graphics_instance,
+                    build_info(mesh_memory),
+                    *m_scene_root.get(),
+                    "res/assets/sample_models/SimpleSkin.gltf"
+                );
             }
         //);
 #endif
@@ -514,7 +505,7 @@ void Scene_builder::make_brushes(
 
     if (config.obj_files) {
         execution_queue->enqueue(
-            [this, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("parse .obj files");
 
                 constexpr bool instantiate = true;
@@ -539,11 +530,12 @@ void Scene_builder::make_brushes(
                         geometry->flip_reversed_polygons();
                         make_brush(
                             Brush_data {
-                                .context      = m_context,
-                                .build_info   = build_info(mesh_memory),
-                                .normal_style = Normal_style::polygon_normals,
-                                .geometry     = geometry,
-                                .density      = config.mass_scale
+                                .context         = m_context,
+                                .editor_settings = editor_settings,
+                                .build_info      = build_info(mesh_memory),
+                                .normal_style    = Normal_style::polygon_normals,
+                                .geometry        = geometry,
+                                .density         = config.mass_scale
                             },
                             instantiate
                         );
@@ -555,20 +547,21 @@ void Scene_builder::make_brushes(
 
     if (config.platonic_solids) {
         execution_queue->enqueue(
-            [this, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Platonic solids");
 
                 constexpr bool instantiate = global_instantiate;
                 const auto scale = config.object_scale;
 
-                make_brush(mesh_memory, make_dodecahedron (scale), instantiate);
-                make_brush(mesh_memory, make_icosahedron  (scale), instantiate);
-                make_brush(mesh_memory, make_octahedron   (scale), instantiate);
-                make_brush(mesh_memory, make_tetrahedron  (scale), instantiate);
-                make_brush(mesh_memory, make_cuboctahedron(scale), instantiate);
+                make_brush(editor_settings, mesh_memory, make_dodecahedron (scale), instantiate);
+                make_brush(editor_settings, mesh_memory, make_icosahedron  (scale), instantiate);
+                make_brush(editor_settings, mesh_memory, make_octahedron   (scale), instantiate);
+                make_brush(editor_settings, mesh_memory, make_tetrahedron  (scale), instantiate);
+                make_brush(editor_settings, mesh_memory, make_cuboctahedron(scale), instantiate);
                 make_brush(
                     Brush_data{
                         .context         = m_context,
+                        .editor_settings = editor_settings,
                         .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::polygon_normals,
                         .geometry        = std::make_shared<erhe::geometry::Geometry>(make_cube(scale)),
@@ -585,13 +578,14 @@ void Scene_builder::make_brushes(
 
     if (config.sphere) {
         execution_queue->enqueue(
-            [this, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Sphere");
                 constexpr bool instantiate = global_instantiate;
 
                 make_brush(
                     Brush_data{
                         .context         = m_context,
+                        .editor_settings = editor_settings,
                         .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::corner_normals,
                         .geometry        = std::make_shared<erhe::geometry::Geometry>(
@@ -614,7 +608,7 @@ void Scene_builder::make_brushes(
 
     if (config.torus) {
         execution_queue->enqueue(
-            [this, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Torus");
 
                 constexpr bool instantiate = global_instantiate;
@@ -682,6 +676,7 @@ void Scene_builder::make_brushes(
                 make_brush(
                     Brush_data{
                         .context                     = m_context,
+                        .editor_settings             = editor_settings,
                         .build_info                  = build_info(mesh_memory),
                         .normal_style                = Normal_style::corner_normals,
                         .geometry                    = torus_geometry,
@@ -698,7 +693,7 @@ void Scene_builder::make_brushes(
 
     if (config.cylinder) {
         execution_queue->enqueue(
-            [this, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Cylinder");
 
                 constexpr bool instantiate = global_instantiate;
@@ -717,6 +712,7 @@ void Scene_builder::make_brushes(
                 make_brush(
                     Brush_data{
                         .context         = m_context,
+                        .editor_settings = editor_settings,
                         .build_info      = build_info(mesh_memory),
                         .normal_style    = Normal_style::corner_normals,
                         .geometry        = std::make_shared<erhe::geometry::Geometry>(
@@ -736,7 +732,7 @@ void Scene_builder::make_brushes(
 
     if (config.cone) {
         execution_queue->enqueue(
-            [this, &mesh_memory]() {
+            [this, &editor_settings, &mesh_memory]() {
                 ERHE_PROFILE_SCOPE("Cone");
 
                 constexpr bool instantiate = global_instantiate;
@@ -752,13 +748,14 @@ void Scene_builder::make_brushes(
 
                 make_brush(
                     Brush_data{
-                        .context      = m_context,
-                        .build_info   = build_info(mesh_memory),
-                        .normal_style = Normal_style::corner_normals,
-                        .geometry     = std::make_shared<erhe::geometry::Geometry>(
+                        .context         = m_context,
+                        .editor_settings = editor_settings,
+                        .build_info      = build_info(mesh_memory),
+                        .normal_style    = Normal_style::corner_normals,
+                        .geometry        = std::make_shared<erhe::geometry::Geometry>(
                             std::move(cone_geometry)
                         ),
-                        .density      = config.mass_scale
+                        .density         = config.mass_scale
                         // Sadly, Jolt does not have cone shape
                         //erhe::physics::ICollision_shape::create_cone_shape_shared(
                         //    erhe::physics::Axis::Y,
@@ -843,7 +840,7 @@ void Scene_builder::make_brushes(
         library = Json_library("res/polyhedra/johnson.json");
         for (const auto& key_name : library.names) {
             execution_queue->enqueue(
-                [this, &mesh_memory, &library, &key_name]() {
+                [this, &editor_settings, &mesh_memory, &library, &key_name]() {
                     auto geometry = library.make_geometry(key_name);
                     if (geometry.get_polygon_count() == 0) {
                         return;
@@ -857,6 +854,7 @@ void Scene_builder::make_brushes(
                     make_brush(
                         Brush_data{
                             .context            = m_context,
+                            .editor_settings    = editor_settings,
                             .name               = shared_geometry->name,
                             .build_info         = build_info(mesh_memory),
                             .normal_style       = Normal_style::polygon_normals,
@@ -899,8 +897,8 @@ void Scene_builder::add_room()
 
     // Notably shadow cast is not enabled for floor
     Instance_create_info floor_brush_instance_create_info{
-        .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui,
-        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui,
+        .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform,
+        .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform,
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
         .material        = floor_material,

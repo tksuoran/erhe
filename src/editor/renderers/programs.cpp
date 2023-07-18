@@ -75,6 +75,7 @@ Programs::Programs(
             .debug_label = "Programs linear mipmap"
         }
     }
+    , error                   {"error-not_loaded"}
     , brdf_slice              {"brdf_slice-not_loaded"}
     , brush                   {"brush-not_loaded"}
     , standard                {"standard-not_loaded"}
@@ -94,8 +95,11 @@ Programs::Programs(
     , debug_tangent           {"debug_tangent-not_loaded"}
     , debug_bitangent         {"debug_bitangent-not_loaded"}
     , debug_texcoord          {"debug_texcoord-not_loaded"}
+    , debug_base_color_texture{"debug_base_color_texture-not_loaded"}
     , debug_vertex_color_rgb  {"debug_vertex_color_rgb-not_loaded"}
     , debug_vertex_color_alpha{"debug_vertex_color_alpha-not_loaded"}
+    , debug_aniso_strength    {"debug_aniso_strength-not_loaded"}
+    , debug_aniso_texcoord    {"debug_aniso_texcoord-not_loaded"}
     , debug_vdotn             {"debug_v_dot_n-not_loaded"}
     , debug_ldotn             {"debug_v_dot_n-not_loaded"}
     , debug_hdotv             {"debug_h_dot_v-not_loaded"}
@@ -121,8 +125,7 @@ Programs::Programs(
     ](
         erhe::graphics::Reloadable_shader_stages&   reloadable_shader_stages,
         erhe::graphics::Shader_stages_create_info&& create_info
-    )
-    {
+    ) {
         reloadable_shader_stages.create_info = std::move(create_info);
         prototypes.emplace_back(
             reloadable_shader_stages,
@@ -132,7 +135,8 @@ Programs::Programs(
         );
     };
 
-    add_shader(standard                , CI{ .name = "standard"                , .default_uniform_block = &default_uniform_block, .dump_interface = true } );
+    add_shader(error                   , CI{ .name = "error"                   , .default_uniform_block = &default_uniform_block, .dump_interface = true } );
+    add_shader(standard                , CI{ .name = "standard"                , .default_uniform_block = &default_uniform_block } );
     add_shader(anisotropic_slope       , CI{ .name = "anisotropic_slope"       , .default_uniform_block = &default_uniform_block } );
     add_shader(anisotropic_engine_ready, CI{ .name = "anisotropic_engine_ready", .default_uniform_block = &default_uniform_block } );
     add_shader(circular_brushed_metal  , CI{ .name = "circular_brushed_metal"  , .default_uniform_block = &default_uniform_block } );
@@ -151,8 +155,11 @@ Programs::Programs(
     add_shader(debug_tangent           , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TANGENT",            "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_bitangent         , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_BITANGENT",          "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_texcoord          , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_TEXCOORD",           "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_base_color_texture, CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_BASE_COLOR_TEXTURE", "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vertex_color_rgb  , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_RGB",   "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vertex_color_alpha, CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VERTEX_COLOR_ALPHA", "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_aniso_strength    , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_ANISO_STRENGTH",     "1"}}, .default_uniform_block = &default_uniform_block } );
+    add_shader(debug_aniso_texcoord    , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_ANISO_TEXCOORD",     "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_vdotn             , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_VDOTN",              "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_ldotn             , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_LDOTN",              "1"}}, .default_uniform_block = &default_uniform_block } );
     add_shader(debug_hdotv             , CI{ .name = "standard_debug", .defines = { std::pair<std::string, std::string>{"ERHE_DEBUG_HDOTV",              "1"}}, .default_uniform_block = &default_uniform_block } );

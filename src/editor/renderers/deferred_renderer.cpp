@@ -364,7 +364,7 @@ void Deferred_renderer::geometry_pass(
         Index_range                   index_range   = geometry_mesh->fill_indices();
         GLsizei                       count         = static_cast<GLsizei>(index_range.index_count);
         gl::draw_elements_type::value index_type    = gl::draw_elements_type::unsigned_int;
-        GLvoid *                      index_pointer = reinterpret_cast<GLvoid *>((index_range.first_index + mesh->first_index()) * mesh->index_buffer()->stride());
+        GLvoid *                      index_pointer = static_cast<GLvoid*>((index_range.first_index + mesh->first_index()) * mesh->index_buffer()->stride());
         GLint                         base_vertex   = configuration::can_use.draw_elements_base_vertex
             ? static_cast<GLint>(mesh->first_vertex())
             : 0;
@@ -481,7 +481,7 @@ void Deferred_renderer::light_pass(const Light_collection &lights, const Camera 
         const Index_range             &index_range   = geometry_mesh->fill_indices();
         GLsizei                       count         = static_cast<GLsizei>(index_range.index_count);
         gl::draw_elements_type::value index_type    = gl::draw_elements_type::unsigned_int;
-        GLvoid *                      index_pointer = reinterpret_cast<GLvoid *>((index_range.first_index + mesh->first_index()) * mesh->index_buffer()->stride());
+        GLvoid *                      index_pointer = static_cast<GLvoid*>((index_range.first_index + mesh->first_index()) * mesh->index_buffer()->stride());
         GLint                         base_vertex   = configuration::can_use.draw_elements_base_vertex
             ? static_cast<GLint>(mesh->first_vertex())
             : 0;

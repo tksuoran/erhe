@@ -127,7 +127,7 @@ void Commands_window::imgui()
                     break;
                 }
                 case Command_binding::Type::Mouse_button: {
-                    const auto click_binding = reinterpret_cast<erhe::commands::Mouse_button_binding*>(binding.get());
+                    const auto click_binding = static_cast<erhe::commands::Mouse_button_binding*>(binding.get());
                     ImGui::Text(
                         "%d/%d %s %s <- %s %d",
                         binding->get_command()->get_priority(),
@@ -140,7 +140,7 @@ void Commands_window::imgui()
                     break;
                 }
                 case Command_binding::Type::Mouse_drag: {
-                    const auto drag_binding = reinterpret_cast<Mouse_drag_binding*>(binding.get());
+                    const auto drag_binding = static_cast<Mouse_drag_binding*>(binding.get());
                     ImGui::Text(
                         "%d %s <- %s %d",
                         binding->get_command()->get_priority(),

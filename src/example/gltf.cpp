@@ -755,10 +755,10 @@ private:
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
         erhe::graphics::Sampler_create_info create_info;
-        create_info.min_filter     = static_cast<gl::Texture_min_filter>(sampler->min_filter);
-        create_info.mag_filter     = static_cast<gl::Texture_mag_filter>(sampler->mag_filter);
-        create_info.wrap_mode[0]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_s);
-        create_info.wrap_mode[1]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_t);
+        create_info.min_filter     = (sampler->min_filter != 0) ? static_cast<gl::Texture_min_filter>(sampler->min_filter) : gl::Texture_min_filter::nearest;
+        create_info.mag_filter     = (sampler->mag_filter != 0) ? static_cast<gl::Texture_mag_filter>(sampler->mag_filter) : gl::Texture_mag_filter::nearest;
+        create_info.wrap_mode[0]   = (sampler->wrap_s != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_s) : gl::Texture_wrap_mode::repeat;
+        create_info.wrap_mode[1]   = (sampler->wrap_t != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_t) : gl::Texture_wrap_mode::repeat;
         create_info.max_anisotropy = m_context.graphics_instance.limits.max_texture_max_anisotropy;
         create_info.debug_label    = sampler_name;
 
@@ -783,18 +783,26 @@ private:
         if (material->has_pbr_metallic_roughness) {
             const cgltf_pbr_metallic_roughness& pbr_metallic_roughness = material->pbr_metallic_roughness;
             if (pbr_metallic_roughness.base_color_texture.texture != nullptr) {
-                const cgltf_texture* texture       = pbr_metallic_roughness.base_color_texture.texture;
-                const cgltf_size     image_index   = texture->image   - m_data->images;
-                const cgltf_size     sampler_index = texture->sampler - m_data->samplers;
-                new_material->base_color_texture = m_images  [image_index];
-                new_material->base_color_sampler = m_samplers[sampler_index];
+                const cgltf_texture* texture = pbr_metallic_roughness.base_color_texture.texture;
+                if (texture->image != nullptr) {
+                    const cgltf_size image_index = texture->image - m_data->images;
+                    new_material->base_color_texture = m_images[image_index];
+                }
+                if (texture->sampler != nullptr) {
+                    const cgltf_size sampler_index = texture->sampler - m_data->samplers;
+                    new_material->base_color_sampler = m_samplers[sampler_index];
+                }
             }
             if (pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
-                const cgltf_texture* texture       = pbr_metallic_roughness.metallic_roughness_texture.texture;
-                const cgltf_size     image_index   = texture->image   - m_data->images;
-                const cgltf_size     sampler_index = texture->sampler - m_data->samplers;
-                new_material->metallic_roughness_texture = m_images  [image_index];
-                new_material->metallic_roughness_sampler = m_samplers[sampler_index];
+                const cgltf_texture* texture = pbr_metallic_roughness.metallic_roughness_texture.texture;
+                if (texture->image != nullptr) {
+                    const cgltf_size image_index = texture->image - m_data->images;
+                    new_material->metallic_roughness_texture = m_images[image_index];
+                }
+                if (texture->sampler != nullptr) {
+                    const cgltf_size sampler_index = texture->sampler - m_data->samplers;
+                    new_material->metallic_roughness_sampler = m_samplers[sampler_index];
+                }
             }
             new_material->base_color = glm::vec4{
                 pbr_metallic_roughness.base_color_factor[0],
@@ -1240,12 +1248,11 @@ private:
 
         if (node->mesh != nullptr) {
             const cgltf_size mesh_index = node->mesh - m_data->meshes;
+            if (node->skin != nullptr) {
+                const cgltf_size skin_index = node->skin - m_data->skins;
+                m_meshes[mesh_index]->mesh_data.skin = m_skins[skin_index];
+            }
             erhe_node->attach(m_meshes[mesh_index]);
-        }
-
-        if (node->skin != nullptr) {
-            const cgltf_size skin_index = node->skin - m_data->skins;
-            erhe_node->attach(m_skins[skin_index]);
         }
     }
 

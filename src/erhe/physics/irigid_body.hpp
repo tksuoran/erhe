@@ -64,7 +64,9 @@ public:
     [[nodiscard]] virtual auto get_mass                    () const -> float                             = 0;
     [[nodiscard]] virtual auto get_motion_mode             () const -> Motion_mode                       = 0;
     [[nodiscard]] virtual auto get_restitution             () const -> float                             = 0;
-    [[nodiscard]] virtual auto get_world_transform         () const -> Transform                         = 0;
+    [[nodiscard]] virtual auto get_world_transform         () const -> glm::mat4                         = 0;
+    [[nodiscard]] virtual auto is_active                   () const -> bool                              = 0;
+    [[nodiscard]] virtual auto get_allow_sleeping          () const -> bool                              = 0;
     virtual void begin_move                  ()                                             = 0;
     virtual void end_move                    ()                                             = 0;
     virtual void move_world_transform        (const Transform& transform, float delta_time) = 0;
@@ -78,6 +80,7 @@ public:
     virtual void set_motion_mode             (Motion_mode motion_mode)                      = 0;
     virtual void set_restitution             (float restitution)                            = 0;
     virtual void set_world_transform         (const Transform& transform)                   = 0;
+    virtual void set_allow_sleeping          (bool value)                                   = 0;
 };
 
 } // namespace erhe::physics

@@ -292,6 +292,8 @@ void Tools::render_viewport_tools(
     const Render_context& context
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     for (const auto& tool : m_background_tools) {
         tool->tool_render(context);
     }
@@ -307,17 +309,17 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 
     if (m_priority_tool != nullptr) {
-        log_tools->info("de-prioritizing tool {}", m_priority_tool->get_description());
+        log_tools->trace("de-prioritizing tool {}", m_priority_tool->get_description());
         m_priority_tool->set_priority_boost(0);
     }
 
     m_priority_tool = priority_tool;
 
     if (m_priority_tool != nullptr) {
-        log_tools->info("prioritizing tool {}", m_priority_tool->get_description());
+        log_tools->trace("prioritizing tool {}", m_priority_tool->get_description());
         m_priority_tool->set_priority_boost(100);
     } else {
-        log_tools->info("active tool reset");
+        log_tools->trace("active tool reset");
     }
 
     {
@@ -325,7 +327,7 @@ void Tools::set_priority_tool(Tool* priority_tool)
         const bool allow_secondary =
             (m_priority_tool != nullptr) &&
             test_all_rhs_bits_set(m_priority_tool->get_flags(), Tool_flags::allow_secondary);
-        log_tools->info("Update tools: allow_secondary = {}", allow_secondary);
+        log_tools->trace("Update tools: allow_secondary = {}", allow_secondary);
         for (auto* tool : m_tools) {
             const auto flags = tool->get_flags();
             if (test_all_rhs_bits_set(flags, Tool_flags::toolbox)) {
@@ -333,7 +335,7 @@ void Tools::set_priority_tool(Tool* priority_tool)
                 const bool is_secondary     = test_all_rhs_bits_set(flags, Tool_flags::secondary);
                 const bool enable           = is_priority_tool || (allow_secondary && is_secondary);
                 tool->set_enabled(enable);
-                log_tools->info(
+                log_tools->trace(
                     "{} {}{}{}", tool->get_description(),
                     is_priority_tool ? "priority " : "",
                     is_secondary     ? "secondary " : "",

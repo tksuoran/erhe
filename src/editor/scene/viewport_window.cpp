@@ -10,6 +10,7 @@
 #include "renderers/id_renderer.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/render_context.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_windows.hpp"
@@ -21,6 +22,7 @@
 
 #include "erhe/imgui/imgui_helpers.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
+#include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/rendergraph/multisample_resolve.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -99,6 +101,7 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
 {
     auto& programs = *m_context.programs;
     switch (m_shader_stages_variant) {
+        case Shader_stages_variant::error:                    return &programs.error.shader_stages;
         case Shader_stages_variant::standard:                 return &programs.standard.shader_stages;
         case Shader_stages_variant::anisotropic_slope:        return &programs.anisotropic_slope.shader_stages;
         case Shader_stages_variant::anisotropic_engine_ready: return &programs.anisotropic_engine_ready.shader_stages;
@@ -108,8 +111,11 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
         case Shader_stages_variant::debug_tangent:            return &programs.debug_tangent.shader_stages;
         case Shader_stages_variant::debug_bitangent:          return &programs.debug_bitangent.shader_stages;
         case Shader_stages_variant::debug_texcoord:           return &programs.debug_texcoord.shader_stages;
+        case Shader_stages_variant::debug_base_color_texture: return &programs.debug_base_color_texture.shader_stages;
         case Shader_stages_variant::debug_vertex_color_rgb:   return &programs.debug_vertex_color_rgb.shader_stages;
         case Shader_stages_variant::debug_vertex_color_alpha: return &programs.debug_vertex_color_alpha.shader_stages;
+        case Shader_stages_variant::debug_aniso_strength:     return &programs.debug_aniso_strength.shader_stages;
+        case Shader_stages_variant::debug_aniso_texcoord:     return &programs.debug_aniso_texcoord.shader_stages;
         case Shader_stages_variant::debug_vdotn:              return &programs.debug_vdotn.shader_stages;
         case Shader_stages_variant::debug_ldotn:              return &programs.debug_ldotn.shader_stages;
         case Shader_stages_variant::debug_hdotv:              return &programs.debug_hdotv.shader_stages;
@@ -119,7 +125,7 @@ auto Viewport_window::get_override_shader_stages() const -> erhe::graphics::Shad
         case Shader_stages_variant::debug_omega_i:            return &programs.debug_omega_i.shader_stages;
         case Shader_stages_variant::debug_omega_g:            return &programs.debug_omega_g.shader_stages;
         case Shader_stages_variant::debug_misc:               return &programs.debug_misc.shader_stages;
-        default:                                              return &programs.standard.shader_stages;
+        default:                                              return &programs.error.shader_stages;
     }
 }
 
@@ -495,7 +501,7 @@ auto Viewport_window::get_shadow_render_node() const -> Shadow_render_node*
         erhe::rendergraph::Resource_routing::Resource_provided_by_producer,
         erhe::rendergraph::Rendergraph_node_key::shadow_maps
     );
-    Shadow_render_node* shadow_render_node = reinterpret_cast<Shadow_render_node*>(input_node);
+    Shadow_render_node* shadow_render_node = static_cast<Shadow_render_node*>(input_node);
     return shadow_render_node;
 }
 

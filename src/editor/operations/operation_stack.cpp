@@ -148,6 +148,8 @@ void Operation_stack::imgui(
 
 void Operation_stack::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     imgui("Executed", m_executed);
     imgui("Undone", m_undone);

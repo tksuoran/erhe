@@ -73,7 +73,7 @@ public:
     void imgui() override;
 
 private:
-    [[nodiscard]]auto count_selected_meshes() const -> size_t;
+    [[nodiscard]] auto count_selected_meshes() const -> size_t;
 
     Editor_context& m_context;
 };

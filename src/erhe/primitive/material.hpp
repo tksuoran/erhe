@@ -32,8 +32,8 @@ public:
     ~Material() noexcept;
 
     // Interface similar to erhe::scene::Scene_item
-    [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto type_name     () const -> const char*;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type_name () const -> const char*;
     [[nodiscard]] auto get_name      () const -> const std::string&;
                   void set_name      (const std::string_view name);
     [[nodiscard]] auto get_label     () const -> const std::string&;

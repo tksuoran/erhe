@@ -29,12 +29,12 @@ Material::Material(
 {
 }
 
-auto Material::static_type_name() -> const char*
+auto Material::get_static_type_name() -> const char*
 {
     return "Material";
 }
 
-auto Material::type_name() const -> const char*
+auto Material::get_type_name() const -> const char*
 {
     return "Material";
 }

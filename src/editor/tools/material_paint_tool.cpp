@@ -250,7 +250,7 @@ void Material_paint_tool::tool_properties()
         set_active_command(command);
     }
 
-    material_library.combo("Material", m_material, false);
+    material_library.combo(m_context, "Material", m_material, false);
 #endif
 }
 

@@ -1,4 +1,5 @@
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/skin.hpp"
 
 #include "erhe/scene/scene_host.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
@@ -29,40 +30,46 @@ Mesh::~Mesh() noexcept
 {
 }
 
-auto Mesh::static_type() -> uint64_t
+auto Mesh::get_static_type() -> uint64_t
 {
     return Item_type::node_attachment | Item_type::mesh;
 }
 
-auto Mesh::static_type_name() -> const char*
+auto Mesh::get_static_type_name() -> const char*
 {
     return "Mesh";
 }
 
 auto Mesh::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Mesh::type_name() const -> const char*
+auto Mesh::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
-void Mesh::handle_node_scene_host_update(
-    Scene_host* old_scene_host,
-    Scene_host* new_scene_host
+void Mesh::handle_item_host_update(
+    Item_host* const old_item_host,
+    Item_host* const new_item_host
 )
 {
-    if (old_scene_host) {
-        old_scene_host->unregister_mesh(
+    if (old_item_host) {
+        old_item_host->unregister_mesh(
             std::static_pointer_cast<Mesh>(shared_from_this())
         );
+        if (mesh_data.skin) {
+            old_item_host->unregister_skin(mesh_data.skin);
+        }
     }
-    if (new_scene_host) {
-        new_scene_host->register_mesh(
+    if (new_item_host) {
+        new_item_host->register_mesh(
             std::static_pointer_cast<Mesh>(shared_from_this())
         );
+        if (mesh_data.skin) {
+            new_item_host->register_skin(mesh_data.skin);
+        }
     }
 }
 
@@ -94,7 +101,7 @@ auto as_mesh(Item* const item) -> Mesh*
     if (!test_all_rhs_bits_set(item->get_type(), Item_type::mesh)) {
         return nullptr;
     }
-    return static_cast<Mesh*>(item);
+    return reinterpret_cast<Mesh*>(item);
 }
 
 auto as_mesh(const std::shared_ptr<Item>& item) -> std::shared_ptr<Mesh>
@@ -113,7 +120,7 @@ auto get_mesh(const erhe::scene::Node* const node) -> std::shared_ptr<Mesh>
     if (node == nullptr) {
         return {};
     }
-    for (const auto& attachment : node->attachments()) {
+    for (const auto& attachment : node->get_attachments()) {
         auto mesh = as_mesh(attachment);
         if (mesh) {
             return mesh;

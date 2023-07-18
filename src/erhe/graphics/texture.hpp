@@ -99,6 +99,8 @@ public:
     [[nodiscard]] auto is_sparse           () const -> bool;
     //// [[nodiscard]] auto get_sparse_tile_size() const -> Tile_size;
 
+    [[nodiscard]] auto is_shown_in_ui() const -> bool;
+
 private:
     Gl_texture          m_handle;
     std::string         m_debug_label;

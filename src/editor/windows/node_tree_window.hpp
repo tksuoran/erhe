@@ -50,11 +50,11 @@ public:
     bool need_tree_pop{false};
 };
 
-class Node_tree_window
+class Item_tree_window
     : public erhe::imgui::Imgui_window
 {
 public:
-    Node_tree_window(
+    Item_tree_window(
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         Editor_context&              context
@@ -69,17 +69,17 @@ private:
     void set_item_selection_terminator(const std::shared_ptr<erhe::scene::Item>& item);
     void set_item_selection           (const std::shared_ptr<erhe::scene::Item>& item, bool selected);
     void clear_selection              ();
-    void recursive_add_to_selection   (const std::shared_ptr<erhe::scene::Node>& node);
+    void recursive_add_to_selection   (const std::shared_ptr<erhe::scene::Item>& node);
     void select_all                   ();
 
     void move_selection(
-        const std::shared_ptr<erhe::scene::Node>&            target_node,
-        erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id,
-        Placement                                            placement
+        const std::shared_ptr<erhe::scene::Item>& target,
+        std::size_t                               payload_id,
+        Placement                                 placement
     );
     void attach_selection_to(
-        const std::shared_ptr<erhe::scene::Node>&            target_node,
-        erhe::toolkit::Unique_id<erhe::scene::Node>::id_type payload_id
+        const std::shared_ptr<erhe::scene::Item>& target_node,
+        std::size_t                               payload_id
     );
 
     void item_popup_menu      (const std::shared_ptr<erhe::scene::Item>& item);
@@ -89,20 +89,20 @@ private:
     void imgui_item_node      (const std::shared_ptr<erhe::scene::Item>& item);
 
     auto get_item_by_id(
-        const erhe::toolkit::Unique_id<erhe::scene::Item>::id_type id
+        std::size_t id
     ) const -> std::shared_ptr<erhe::scene::Item>;
 
     void try_add_to_attach(
         Compound_operation::Parameters&           compound_parameters,
-        const std::shared_ptr<erhe::scene::Node>& target_node,
-        const std::shared_ptr<erhe::scene::Node>& node,
+        const std::shared_ptr<erhe::scene::Item>& target_node,
+        const std::shared_ptr<erhe::scene::Item>& node,
         Selection_usage                           selection_usage
     );
 
     void reposition(
         Compound_operation::Parameters&           compound_parameters,
-        const std::shared_ptr<erhe::scene::Node>& anchor_node,
-        const std::shared_ptr<erhe::scene::Node>& child_node,
+        const std::shared_ptr<erhe::scene::Item>& anchor_node,
+        const std::shared_ptr<erhe::scene::Item>& child_node,
         Placement                                 placement,
         Selection_usage                           selection_usage
     );

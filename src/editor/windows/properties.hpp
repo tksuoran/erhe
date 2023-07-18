@@ -11,6 +11,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 namespace erhe::scene {
+    class Animation;
     class Camera;
     class Light;
     class Mesh;
@@ -42,6 +43,7 @@ public:
     void on_end  () override;
 
 private:
+    void animation_properties   (erhe::scene::Animation& animation) const;
     void camera_properties      (erhe::scene::Camera& camera) const;
     void light_properties       (erhe::scene::Light& light) const;
     void mesh_properties        (erhe::scene::Mesh& mesh) const;

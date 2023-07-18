@@ -328,7 +328,7 @@ class Gltf_parser
 public:
     const cgltf_size null_index{std::numeric_limits<cgltf_size>::max()};
 
-    explicit Gltf_parser(
+    Gltf_parser(
         Gltf_data&                                gltf_data,
         erhe::graphics::Instance&                 graphics_instance,
         Image_transfer&                           image_transfer,
@@ -502,6 +502,8 @@ private:
         );
 
         auto erhe_animation = std::make_shared<erhe::scene::Animation>(animation_name);
+        erhe_animation->set_source_path(m_path);
+        erhe_animation->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
         m_data_out.animations.push_back(erhe_animation);
         erhe_animation->samplers.resize(animation->samplers_count);
         for (cgltf_size sampler_index = 0; sampler_index < animation->samplers_count; ++sampler_index) {
@@ -666,6 +668,7 @@ private:
         }
 
         auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+        // TODO texture->set_source_path(m_path);
         texture->set_debug_label(path.string());
 
         gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
@@ -731,6 +734,7 @@ private:
         }
 
         auto texture = std::make_shared<erhe::graphics::Texture>(texture_create_info);
+        // TODO texture->set_source_path(m_path);
         texture->set_debug_label(name);
 
         gl::flush_mapped_named_buffer_range(slot.gl_name(), 0, span.size_bytes());
@@ -774,14 +778,15 @@ private:
         log_gltf->trace("Sampler: sampler index = {}, name = {}", sampler_index, sampler_name);
 
         erhe::graphics::Sampler_create_info create_info;
-        create_info.min_filter     = static_cast<gl::Texture_min_filter>(sampler->min_filter);
-        create_info.mag_filter     = static_cast<gl::Texture_mag_filter>(sampler->mag_filter);
-        create_info.wrap_mode[0]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_s);
-        create_info.wrap_mode[1]   = static_cast<gl::Texture_wrap_mode> (sampler->wrap_t);
+        create_info.min_filter     = (sampler->min_filter != 0) ? static_cast<gl::Texture_min_filter>(sampler->min_filter) : gl::Texture_min_filter::nearest;
+        create_info.mag_filter     = (sampler->mag_filter != 0) ? static_cast<gl::Texture_mag_filter>(sampler->mag_filter) : gl::Texture_mag_filter::nearest;
+        create_info.wrap_mode[0]   = (sampler->wrap_s != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_s) : gl::Texture_wrap_mode::repeat;
+        create_info.wrap_mode[1]   = (sampler->wrap_t != 0) ? static_cast<gl::Texture_wrap_mode>(sampler->wrap_t) : gl::Texture_wrap_mode::repeat;
         create_info.max_anisotropy = m_graphics_instance.limits.max_texture_max_anisotropy;
         create_info.debug_label    = sampler_name;
 
         auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(create_info);
+        // TODO erhe_sampler->set_source_path(m_path);
         erhe_sampler->set_debug_label(sampler_name);
         m_data_out.samplers[sampler_index] = erhe_sampler;
         m_data_out.samplers.push_back(erhe_sampler);
@@ -797,22 +802,31 @@ private:
         );
 
         auto new_material = std::make_shared<erhe::primitive::Material>(material_name);
+        // TODO new_material->set_source_path(m_path);
         m_data_out.materials[material_index] = new_material;
         if (material->has_pbr_metallic_roughness) {
             const cgltf_pbr_metallic_roughness& pbr_metallic_roughness = material->pbr_metallic_roughness;
             if (pbr_metallic_roughness.base_color_texture.texture != nullptr) {
-                const cgltf_texture* texture       = pbr_metallic_roughness.base_color_texture.texture;
-                const cgltf_size     image_index   = texture->image   - m_data->images;
-                const cgltf_size     sampler_index = texture->sampler - m_data->samplers;
-                new_material->base_color_texture = m_data_out.images  [image_index];
-                new_material->base_color_sampler = m_data_out.samplers[sampler_index];
+                const cgltf_texture* texture = pbr_metallic_roughness.base_color_texture.texture;
+                if (texture->image != nullptr) {
+                    const cgltf_size image_index = texture->image - m_data->images;
+                    new_material->base_color_texture = m_data_out.images[image_index];
+                }
+                if (texture->sampler != nullptr) {
+                    const cgltf_size sampler_index = texture->sampler - m_data->samplers;
+                    new_material->base_color_sampler = m_data_out.samplers[sampler_index];
+                }
             }
             if (pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr) {
-                const cgltf_texture* texture       = pbr_metallic_roughness.metallic_roughness_texture.texture;
-                const cgltf_size     image_index   = texture->image   - m_data->images;
-                const cgltf_size     sampler_index = texture->sampler - m_data->samplers;
-                new_material->metallic_roughness_texture = m_data_out.images  [image_index];
-                new_material->metallic_roughness_sampler = m_data_out.samplers[sampler_index];
+                const cgltf_texture* texture = pbr_metallic_roughness.metallic_roughness_texture.texture;
+                if (texture->image != nullptr) {
+                    const cgltf_size image_index = texture->image - m_data->images;
+                    new_material->metallic_roughness_texture = m_data_out.images  [image_index];
+                }
+                if (texture->sampler != nullptr) {
+                    const cgltf_size sampler_index = texture->sampler - m_data->samplers;
+                    new_material->metallic_roughness_sampler = m_data_out.samplers[sampler_index];
+                }
             }
             new_material->base_color = glm::vec4{
                 pbr_metallic_roughness.base_color_factor[0],
@@ -868,15 +882,27 @@ private:
         const std::shared_ptr<erhe::scene::Node>& erhe_node
     )
     {
-        cgltf_float m[16];
-        cgltf_node_transform_local(node, &m[0]);
-        const glm::mat4 matrix{
-            m[ 0], m[ 1], m[ 2], m[ 3],
-            m[ 4], m[ 5], m[ 6], m[ 7],
-            m[ 8], m[ 9], m[10], m[11],
-            m[12], m[13], m[14], m[15]
-        };
-        erhe_node->set_parent_from_node(matrix);
+        if (node->has_matrix) {
+            const auto& m = node->matrix;
+            const glm::mat4 matrix{
+                m[ 0], m[ 1], m[ 2], m[ 3],
+                m[ 4], m[ 5], m[ 6], m[ 7],
+                m[ 8], m[ 9], m[10], m[11],
+                m[12], m[13], m[14], m[15]
+            };
+            erhe_node->set_parent_from_node(matrix);
+        } else {
+            const auto& t = node->translation;
+            const auto& r = node->rotation;
+            const auto& s = node->scale;
+            erhe_node->node_data.transforms.parent_from_node.set_trs(
+                glm::vec3{t[0], t[1], t[2]},
+                glm::quat{r[3], r[0], r[1], r[2]},
+                glm::vec3{s[0], s[1], s[2]}
+            );
+            erhe_node->update_world_from_node();
+            erhe_node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
+        }
     }
     void parse_camera(const cgltf_size camera_index)
     {
@@ -885,6 +911,7 @@ private:
         log_gltf->trace("Camera: camera index = {}, name = {}", camera_index, camera_name);
 
         auto erhe_camera = std::make_shared<erhe::scene::Camera>(camera_name);
+        erhe_camera->set_source_path(m_path);
         m_data_out.cameras[camera_index] = erhe_camera;
         erhe_camera->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
         auto* projection = erhe_camera->projection();
@@ -932,6 +959,7 @@ private:
         log_gltf->trace("Light: camera index = {}, name = {}", light_index, light_name);
 
         auto erhe_light = std::make_shared<erhe::scene::Light>(light_name);
+        erhe_light->set_source_path(m_path);
         m_data_out.lights[light_index] = erhe_light;
         erhe_light->color = glm::vec3{
             light->color[0],
@@ -1449,6 +1477,7 @@ private:
         log_gltf->info("Skin: skin index = {}, name = {}", skin_index, skin_name);
 
         auto erhe_skin = std::make_shared<erhe::scene::Skin>(skin_name);
+        erhe_skin->set_source_path(m_path);
         m_data_out.skins[skin_index] = erhe_skin;
         erhe_skin->enable_flag_bits(
             Item_flags::content    |
@@ -1463,6 +1492,8 @@ private:
                 auto& erhe_joint_node = m_data_out.nodes.at(joint_node_index);
                 ERHE_VERIFY(erhe_joint_node);
                 erhe_skin->skin_data.joints[i] = erhe_joint_node;
+            } else {
+                log_gltf->warn("Skin {} joint {} node missing", skin_index, i);
             }
             if (skin->inverse_bind_matrices != nullptr) {
                 cgltf_float m[16];
@@ -1475,6 +1506,7 @@ private:
                 };
                 erhe_skin->skin_data.inverse_bind_matrices[i] = matrix;
             } else {
+                log_gltf->warn("Skin {} joint {} inverse bind matrix missing", skin_index, i);
                 erhe_skin->skin_data.inverse_bind_matrices[i] = glm::mat4{1.0f};
             }
         }
@@ -1492,6 +1524,7 @@ private:
         log_gltf->trace("Mesh: mesh index = {}, name = {}", mesh_index, mesh_name);
 
         auto erhe_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
+        erhe_mesh->set_source_path(m_path);
         erhe_mesh->mesh_data.layer_id = m_mesh_layer_id;
         m_data_out.meshes[mesh_index] = erhe_mesh;
         erhe_mesh->enable_flag_bits(
@@ -1515,6 +1548,7 @@ private:
         const std::string node_name = safe_resource_name(node->name, "node", node_index);
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node_name);
         auto erhe_node = std::make_shared<erhe::scene::Node>(node_name);
+        erhe_node->set_source_path(m_path);
         erhe_node->enable_flag_bits(
             Item_flags::content |
             Item_flags::visible |
@@ -1551,12 +1585,12 @@ private:
 
         if (node->mesh != nullptr) {
             const cgltf_size mesh_index = node->mesh - m_data->meshes;
-            erhe_node->attach(m_data_out.meshes[mesh_index]);
-        }
-
-        if (node->skin != nullptr) {
-            const cgltf_size skin_index = node->skin - m_data->skins;
-            erhe_node->attach(m_data_out.skins[skin_index]);
+            const auto erhe_mesh = m_data_out.meshes[mesh_index];
+            if (node->skin != nullptr) {
+                const cgltf_size skin_index = node->skin - m_data->skins;
+                erhe_mesh->mesh_data.skin = m_data_out.skins[skin_index];
+            }
+            erhe_node->attach(erhe_mesh);
         }
     }
 
@@ -1569,7 +1603,7 @@ private:
     cgltf_data*                        m_data{nullptr};
 };
 
-[[nodiscard]] auto parse_gltf(
+auto parse_gltf(
     erhe::graphics::Instance&                 graphics_instance,
     Image_transfer&                           image_transfer,
     const std::shared_ptr<erhe::scene::Node>& root_node,
@@ -1580,6 +1614,93 @@ private:
     Gltf_data result;
     Gltf_parser parser{result, graphics_instance, image_transfer, root_node, mesh_layer_id, path};
     parser.parse_and_build();
+    return result;
+}
+
+auto scan_gltf(std::filesystem::path path) -> Gltf_scan
+{
+    const cgltf_options parse_options{
+        .type             = cgltf_file_type_invalid, // auto
+        .json_token_count = 0, // 0 == auto
+        .memory = {
+            .alloc_func   = nullptr,
+            .free_func    = nullptr,
+            .user_data    = nullptr
+        },
+        .file = {
+            .read         = nullptr,
+            .release      = nullptr,
+            .user_data    = nullptr
+        }
+    };
+
+    cgltf_data* data{nullptr};
+    const cgltf_result parse_result = cgltf_parse_file(
+        &parse_options,
+        path.string().c_str(),
+        &data
+    );
+
+    if (parse_result != cgltf_result::cgltf_result_success) {
+        log_gltf->error("glTF parse error: {}", c_str(parse_result));
+        return {};
+    }
+    if (data == nullptr) {
+        log_gltf->error("No data loaded to parse glTF");
+        return {};
+    }
+
+    Gltf_scan result;
+    result.images.resize(data->images_count);
+    for (cgltf_size i = 0; i < data->images_count; ++i) {
+        result.images[i] = safe_resource_name(data->images[i].name, "image", i);
+    }
+
+    result.samplers.resize(data->samplers_count);
+    for (cgltf_size i = 0; i < data->samplers_count; ++i) {
+        result.samplers[i] = safe_resource_name(data->samplers[i].name, "sampler", i);
+    }
+
+    result.materials.resize(data->materials_count);
+    for (cgltf_size i = 0; i < data->materials_count; ++i) {
+        result.materials[i] = safe_resource_name(data->materials[i].name, "material", i);
+    }
+
+    result.cameras.resize(data->cameras_count);
+    for (cgltf_size i = 0; i < data->cameras_count; ++i) {
+        result.cameras[i] = safe_resource_name(data->cameras[i].name, "camera", i);
+    }
+
+    result.lights.resize(data->lights_count);
+    for (cgltf_size i = 0; i < data->lights_count; ++i) {
+        result.lights[i] = safe_resource_name(data->lights[i].name, "light", i);
+    }
+
+    result.meshes.resize(data->meshes_count);
+    for (cgltf_size i = 0; i < data->meshes_count; ++i) {
+        result.meshes[i] = safe_resource_name(data->meshes[i].name, "mesh", i);
+    }
+
+    result.nodes.resize(data->nodes_count);
+    for (cgltf_size i = 0; i < data->nodes_count; ++i) {
+        result.nodes[i] = safe_resource_name(data->nodes[i].name, "node", i);
+    }
+
+    result.skins.resize(data->skins_count);
+    for (cgltf_size i = 0; i < data->skins_count; ++i) {
+        result.skins[i] = safe_resource_name(data->skins[i].name, "skin", i);
+    }
+
+    result.animations.resize(data->animations_count);
+    for (cgltf_size i = 0; i < data->animations_count; ++i) {
+        result.animations[i] = safe_resource_name(data->animations[i].name, "animation", i);
+    }
+
+    result.scenes.resize(data->scenes_count);
+    for (cgltf_size i = 0; i < data->scenes_count; ++i) {
+        result.scenes[i] = safe_resource_name(data->scenes[i].name, "scene", i);
+    }
+
     return result;
 }
 

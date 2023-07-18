@@ -1,5 +1,6 @@
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/geometry_log.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/toolkit/verify.hpp"
 #include "erhe/toolkit/profile.hpp"
 
@@ -169,7 +170,7 @@ auto Geometry::compute_polygon_normals() -> bool
         return true;
     }
 
-    log_geometry->info("{} for {}", __func__, name);
+    log_geometry->trace("{} for {}", __func__, name);
 
     auto*       const polygon_normals = polygon_attributes().find_or_create<vec3>(c_polygon_normals);
     const auto* const point_locations = point_attributes()  .find          <vec3>(c_point_locations);
@@ -213,7 +214,7 @@ auto Geometry::compute_polygon_centroids() -> bool
         return true;
     }
 
-    log_geometry->info("{} for {}", __func__, name);
+    log_geometry->trace("{} for {}", __func__, name);
 
     auto*       const polygon_centroids = polygon_attributes().find_or_create<vec3>(c_polygon_centroids);
     const auto* const point_locations   = point_attributes()  .find          <vec3>(c_point_locations);
@@ -255,7 +256,7 @@ void Geometry::build_edges(bool is_manifold)
     edges.clear();
     m_next_edge_id = 0;
 
-    log_build_edges->info("{} build_edges() : {} polygons", name, m_next_polygon_id);
+    log_build_edges->trace("{} build_edges() : {} polygons", name, m_next_polygon_id);
 
     //const erhe::log::Indenter scope_indent;
     std::size_t polygon_index{0};
@@ -411,6 +412,30 @@ void Geometry::debug_trace() const
         });
         log_geometry->info("{}", ss.str());
     });
+
+    auto* point_locations = point_attributes().find<vec3>(c_point_locations);
+    if (point_locations != nullptr) {
+        for_each_point_const([&](auto& i) {
+            glm::vec3 p;
+            if (point_locations->maybe_get(i.point_id, p)) {
+                log_geometry->info("point {:2} = {}", i.point_id, p);
+            } else {
+                log_geometry->info("point {:2} = not set", i.point_id);
+            }
+        });
+    }
+
+    auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
+    if (polygon_normals != nullptr) {
+        for_each_polygon_const([&](auto& i) {
+            glm::vec3 n;
+            if (polygon_normals->maybe_get(i.polygon_id, n)) {
+                log_geometry->info("polygon {:2} = {}", i.polygon_id, n);
+            } else {
+                log_geometry->info("polygon {:2} = not set", i.polygon_id);
+            }
+        });
+    }
 }
 
 auto Geometry::compute_point_normal(const Point_id point_id) -> vec3
@@ -447,7 +472,7 @@ auto Geometry::compute_point_normals(const Property_map_descriptor& descriptor) 
         return true;
     }
 
-    log_geometry->info("{} for {}", __func__, name);
+    log_geometry->trace("{} for {}", __func__, name);
 
     auto* const point_normals   = point_attributes().find_or_create<vec3>(descriptor);
     const auto* polygon_normals = polygon_attributes().find<vec3>(c_polygon_normals);
@@ -543,7 +568,7 @@ void Geometry::generate_texture_coordinates_spherical()
 {
     ERHE_PROFILE_FUNCTION();
 
-    log_geometry->info("{} for {}", __func__, name);
+    log_geometry->trace("{} for {}", __func__, name);
 
     compute_polygon_normals();
     compute_point_normals(c_point_normals);
@@ -613,7 +638,7 @@ auto Geometry::generate_polygon_texture_coordinates(const bool overwrite_existin
         return true;
     }
 
-    log_geometry->info("{} for {}", __func__, name);
+    log_geometry->trace("{} for {}", __func__, name);
 
     compute_polygon_normals();
     compute_polygon_centroids();

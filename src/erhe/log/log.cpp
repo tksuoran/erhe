@@ -43,12 +43,17 @@ store_log_sink::store_log_sink()
 {
 }
 
-auto store_log_sink::get_log() const -> const std::deque<Entry>&
+auto store_log_sink::get_serial() const -> uint64_t
+{
+    return m_serial;
+}
+
+auto store_log_sink::get_log() -> std::deque<Entry>&
 {
     return m_entries;
 }
 
-void store_log_sink::trim(size_t trim_size)
+void store_log_sink::trim(const std::size_t trim_size)
 {
     if (m_entries.size() > trim_size) {
         const auto trim_count = m_entries.size() - trim_size;
@@ -60,25 +65,15 @@ void store_log_sink::trim(size_t trim_size)
     }
 }
 
-void store_log_sink::set_paused(bool paused)
-{
-    m_is_paused = paused;
-}
-
-auto store_log_sink::is_paused() const -> bool
-{
-    return m_is_paused;
-}
-
 void store_log_sink::sink_it_(const spdlog::details::log_msg& msg)
 {
-    if (m_is_paused) {
-        return;
-    }
+    ++m_serial;
     m_entries.push_back(
         Entry{
-            .timestamp    = erhe::toolkit::timestamp(),
+            .serial       = m_serial,
+            .timestamp    = erhe::toolkit::timestamp_short(),
             .message      = std::string{msg.payload.begin(), msg.payload.end()},
+            .logger       = std::string{msg.logger_name.begin(), msg.logger_name.end()},
             .repeat_count = 0,
             .level        = msg.level,
         }

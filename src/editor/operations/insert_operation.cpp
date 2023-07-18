@@ -13,27 +13,25 @@
 namespace editor
 {
 
-auto Node_insert_remove_operation::describe() const -> std::string
+auto Item_insert_remove_operation::describe() const -> std::string
 {
-    ERHE_VERIFY(m_node);
+    ERHE_VERIFY(m_item);
     std::stringstream ss;
     switch (m_mode) {
         //using enum Mode;
-        case Mode::insert: ss << "Node_insert "; break;
-        case Mode::remove: ss << "Node_remove "; break;
+        case Mode::insert: ss << "Item_insert "; break;
+        case Mode::remove: ss << "Item_remove "; break;
         default: break;
     }
-    ss << m_node->get_name() << " ";
+    ss << m_item->get_name() << " ";
     return ss.str();
 }
 
-Node_insert_remove_operation::Node_insert_remove_operation(
-    const Parameters& parameters
-)
+Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& parameters)
     : m_mode{parameters.mode}
 {
     auto& selection = *parameters.context.selection;
-    m_node             = parameters.node,
+    m_item             = parameters.item,
     m_selection_before = selection.get_selection();
 
     if (parameters.mode == Mode::insert) {
@@ -44,48 +42,39 @@ Node_insert_remove_operation::Node_insert_remove_operation(
     if (parameters.mode == Mode::remove) {
         m_after_parent = std::shared_ptr<erhe::scene::Node>{};
 
-        const auto& children = parameters.node->children();
-        const auto parent = parameters.node->parent().lock();
+        const auto& children = parameters.item->get_children();
+        const auto parent = parameters.item->get_parent().lock();
         for (const auto& child : children) {
             m_parent_changes.push_back(
-                std::make_shared<Node_attach_operation>(
+                std::make_shared<Item_parent_change_operation>(
                     parent,
                     child,
-                    std::shared_ptr<erhe::scene::Node>{},
-                    std::shared_ptr<erhe::scene::Node>{}
+                    std::shared_ptr<erhe::scene::Item>{},
+                    std::shared_ptr<erhe::scene::Item>{}
                 )
             );
         }
 
-        log_tools->info("selection size = {}", m_selection_after.size());
+        log_operations->trace("selection size = {}", m_selection_after.size());
     }
 }
 
-void Node_insert_remove_operation::execute(
-    Editor_context& context
-)
+void Item_insert_remove_operation::execute(Editor_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
 
-    {
-        erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr) {
-            scene->sanity_check();
-        }
-    }
-
     if (m_mode == Mode::remove) {
-        m_before_parent = m_node->parent().lock();
-        const auto& children = m_node->children();
+        m_before_parent = m_item->get_parent().lock();
+        const auto& children = m_item->get_children();
         m_parent_changes.clear();
         for (const auto& child : children) {
-            log_tools->info("  child -> parent {}", child->get_name(), m_before_parent->get_name());
+            log_operations->trace("  child -> parent {}", child->get_name(), m_before_parent->get_name());
             m_parent_changes.push_back(
-                std::make_shared<Node_attach_operation>(
+                std::make_shared<Item_parent_change_operation>(
                     m_before_parent,
                     child,
-                    std::shared_ptr<erhe::scene::Node>{},
-                    std::shared_ptr<erhe::scene::Node>{}
+                    std::shared_ptr<erhe::scene::Item>{},
+                    std::shared_ptr<erhe::scene::Item>{}
                 )
             );
         }
@@ -95,43 +84,19 @@ void Node_insert_remove_operation::execute(
         child_parent_change->execute(context);
     }
 
-    m_node->set_parent(m_after_parent);
-
-    {
-        erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr) {
-            scene->sanity_check();
-        }
-    }
+    m_item->set_parent(m_after_parent);
 
     context.selection->set_selection(m_selection_after);
 }
 
-void Node_insert_remove_operation::undo(
-    Editor_context& context
-)
+void Item_insert_remove_operation::undo(Editor_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
 
-    {
-        erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr) {
-            scene->sanity_check();
-        }
+    if (m_mode == Mode::remove) {
+        m_after_parent = m_item->get_parent().lock();
     }
-
-    if (m_mode == Mode::remove)
-    {
-        m_after_parent = m_node->parent().lock();
-    }
-    m_node->set_parent(m_before_parent);
-
-    {
-        erhe::scene::Scene* const scene = m_node->get_scene();
-        if (scene != nullptr) {
-            scene->sanity_check();
-        }
-    }
+    m_item->set_parent(m_before_parent);
 
     for (
         auto i = rbegin(m_parent_changes),

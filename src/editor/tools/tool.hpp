@@ -31,7 +31,6 @@ class Tool
 {
 public:
     explicit Tool(Editor_context& editor_context);
-    ~Tool() noexcept override;
 
     // Implements Command_host
     [[nodiscard]] auto get_priority() const -> int override;
@@ -45,11 +44,12 @@ public:
         static_cast<void>(new_priority);
     }
 
-    [[nodiscard]] auto get_base_priority   () const -> int;
-    [[nodiscard]] auto get_priority_boost  () const -> int;
-    [[nodiscard]] auto get_hover_scene_view() const -> Scene_view*;
-    [[nodiscard]] auto get_flags           () const -> uint64_t;
-    [[nodiscard]] auto get_icon            () const -> std::optional<glm::vec2>;
+    [[nodiscard]] auto get_base_priority        () const -> int;
+    [[nodiscard]] auto get_priority_boost       () const -> int;
+    [[nodiscard]] auto get_hover_scene_view     () const -> Scene_view*;
+    [[nodiscard]] auto get_last_hover_scene_view() const -> Scene_view*;
+    [[nodiscard]] auto get_flags                () const -> uint64_t;
+    [[nodiscard]] auto get_icon                 () const -> std::optional<glm::vec2>;
     void set_priority_boost(int priority_boost);
 
 protected:
@@ -66,7 +66,8 @@ private:
     int                      m_priority_boost    {0};
     uint64_t                 m_flags             {0};
     std::optional<glm::vec2> m_icon;
-    Scene_view*              m_hover_scene_view{nullptr};
+    Scene_view*              m_hover_scene_view     {nullptr};
+    Scene_view*              m_last_hover_scene_view{nullptr};
 };
 
 } // namespace editor

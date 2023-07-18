@@ -209,30 +209,8 @@ Jolt_world::Jolt_world()
 
 Jolt_world::~Jolt_world() noexcept = default;
 
-void Jolt_world::enable_physics_updates()
-{
-    m_physics_enabled = true;
-    log_physics->trace("physics updates enabled");
-}
-
-void Jolt_world::disable_physics_updates()
-{
-    m_physics_enabled = false;
-    log_physics->trace("physics updates disabled");
-}
-
-auto Jolt_world::is_physics_updates_enabled() const -> bool
-{
-    return m_physics_enabled;
-}
-
 void Jolt_world::update_fixed_step(const double dt)
 {
-    if (!m_physics_enabled) {
-        //log_physics_frame.info("Physics is disabled\n");
-        return;
-    }
-
     // If you take larger steps than 1 / 60th of a second you need to do
     // multiple collision steps in order to keep the simulation stable.
     // Do 1 collision step per 1 / 60th of a second (round up).
@@ -253,10 +231,6 @@ void Jolt_world::update_fixed_step(const double dt)
         &m_temp_allocator,
         &m_job_system
     );
-
-    for (auto* rigid_body : m_rigid_bodies) {
-        rigid_body->update_motion_state();
-    }
 
     //const auto num_active_bodies = m_physics_system.GetNumActiveBodies();
     //const auto num_bodies        = m_physics_system.GetNumBodies();

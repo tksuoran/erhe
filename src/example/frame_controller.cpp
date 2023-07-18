@@ -94,24 +94,24 @@ auto Frame_controller::get_heading() const -> float
     return m_heading;
 }
 
-auto Frame_controller::static_type() -> uint64_t
+auto Frame_controller::get_static_type() -> uint64_t
 {
     return erhe::scene::Item_type::node_attachment | erhe::scene::Item_type::frame_controller;
 }
 
-auto Frame_controller::static_type_name() -> const char*
+auto Frame_controller::get_static_type_name() -> const char*
 {
     return "Frame_controller";
 }
 
 auto Frame_controller::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Frame_controller::type_name() const -> const char*
+auto Frame_controller::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
 void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
@@ -316,7 +316,7 @@ auto get_frame_controller(
     const erhe::scene::Node* node
 ) -> std::shared_ptr<Frame_controller>
 {
-    for (const auto& attachment : node->attachments()) {
+    for (const auto& attachment : node->get_attachments()) {
         auto frame_controller = as_frame_controller(attachment);
         if (frame_controller) {
             return frame_controller;

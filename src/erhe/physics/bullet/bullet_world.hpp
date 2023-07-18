@@ -56,10 +56,7 @@ public:
     auto operator=(Bullet_world&&) -> Bullet_world&      = delete;
 
     // Implements IWorld
-    [[nodiscard]] auto is_physics_updates_enabled() const -> bool      override;
-    [[nodiscard]] auto get_gravity               () const -> glm::vec3 override;
-    void enable_physics_updates ()                        override;
-    void disable_physics_updates()                        override;
+    [[nodiscard]] auto get_gravity() const -> glm::vec3 override;
     void update_fixed_step      (const double dt)         override;
     void set_gravity            (const glm::vec3 gravity) override;
     void add_rigid_body         (IRigid_body* rigid_body) override;
@@ -70,7 +67,6 @@ public:
     void debug_draw             ()                        override;
 
 private:
-    bool                                m_physics_enabled{false};
     Debug_draw_adapter                  m_debug_draw_adapter;
     btDefaultCollisionConfiguration     m_bullet_collision_configuration;
     btCollisionDispatcher               m_bullet_collision_dispatcher;

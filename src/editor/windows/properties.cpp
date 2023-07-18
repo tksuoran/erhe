@@ -1,6 +1,7 @@
 #include "windows/properties.hpp"
 
 #include "editor_context.hpp"
+#include "editor_message_bus.hpp"
 #include "rendertarget_mesh.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/frame_controller.hpp"
@@ -8,6 +9,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
+#include "windows/animation_curve.hpp"
 #include "windows/content_library_window.hpp"
 
 #include "erhe/imgui/imgui_windows.hpp"
@@ -17,6 +19,7 @@
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_geometry.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/scene/animation.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -50,6 +53,56 @@ Properties::Properties(
 }
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
+void Properties::animation_properties(erhe::scene::Animation& animation) const
+{
+    ImGui::Text("Samplers: %d", static_cast<int>(animation.samplers.size()));
+    ImGui::Text("Channels: %d", static_cast<int>(animation.channels.size()));
+    //ImGui::BulletText("Samplers");
+    //{
+    //    for (auto& sampler : animation.samplers) {
+    //        std::string text = fmt::format("Sampler {}", erhe::scene::c_str(sampler.interpolation_mode));
+    //        ImGui::BulletText("%s", text.c_str());
+    //    }
+    //}
+    //
+    //ImGui::BulletText("Channels");
+    //ImGui::Indent(10.0f);
+    //{
+    //    for (auto& channel : animation->channels) {
+    //        std::string text = fmt::format(
+    //            "{} {}",
+    //            //channel.target->get_name(),
+    //            channel.target->describe(),
+    //            erhe::scene::c_str(channel.path)
+    //        );
+    //        ImGui::BulletText("%s", text.c_str());
+    //    }
+    //}
+    //ImGui::Unindent(10.0f);
+
+    animation_curve(animation);
+
+    static float time       = 0.0f;
+    static float start_time = 0.0f;
+    static float end_time   = 5.0f;
+
+    const bool time_changed = ImGui::SliderFloat("Time##animation-time", &time, start_time, end_time);
+
+    if (!time_changed) {
+        return;
+    }
+
+    animation.apply(time);
+    m_context.editor_message_bus->send_message(
+        Editor_message{
+            .update_flags = Message_flag_bit::c_flag_bit_animation_update
+        }
+    );
+
+    // TODO assert all animation channels targets point to same scene?
+    animation.channels.front().target->get_scene()->update_node_transforms();
+}
+
 void Properties::camera_properties(erhe::scene::Camera& camera) const
 {
     ERHE_PROFILE_FUNCTION();
@@ -201,7 +254,7 @@ void Properties::light_properties(erhe::scene::Light& light) const
 
     const auto* node = light.get_node();
     if (node != nullptr) {
-        auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
+        auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
         if (scene_root != nullptr) {
             const auto& layers = scene_root->layers();
             ImGui::ColorEdit3(
@@ -217,14 +270,9 @@ void Properties::skin_properties(erhe::scene::Skin& skin) const
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto& skin_data  = skin.skin_data;
-    const auto* node = skin.get_node();
-    auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
-    if (scene_root == nullptr) {
-        ImGui::Text("Skin host not set");
-        return;
-    }
-    if (!ImGui::TreeNodeEx("Skin", ImGuiTreeNodeFlags_DefaultOpen)) {
+    auto& skin_data = skin.skin_data;
+    ImGui::Text("Joint Count : %d", static_cast<int>(skin_data.joints.size()));
+    if (!ImGui::TreeNodeEx("Skin")) {
         return;
     }
     for (auto& joint : skin_data.joints) {
@@ -237,7 +285,7 @@ void Properties::skin_properties(erhe::scene::Skin& skin) const
     ImGui::TreePop();
 }
 
-auto layer_name(erhe::scene::Layer_id layer_id) -> const char*
+auto layer_name(const erhe::scene::Layer_id layer_id) -> const char*
 {
     switch (layer_id) {
         case Mesh_layer_id::brush       : return "brush";
@@ -258,7 +306,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
     auto& mesh_data  = mesh.mesh_data;
     const auto* node = mesh.get_node();
-    auto* scene_root = reinterpret_cast<Scene_root*>(node->get_item_host());
+    auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
     if (scene_root == nullptr) {
         ImGui::Text("Mesh host not set");
         return;
@@ -266,27 +314,29 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
     auto& material_library = scene_root->content_library()->materials;
     ImGui::Text("Layer ID: %u %s", static_cast<unsigned int>(mesh_data.layer_id), layer_name(mesh_data.layer_id));
 
+    if (mesh_data.skin) {
+        skin_properties(*mesh_data.skin.get());
+    }
+
     int primitive_index = 0;
     for (auto& primitive : mesh_data.primitives) {
         const auto& geometry = primitive.source_geometry;
 
         ++primitive_index;
+        ImGui::PushID(primitive_index);
         const std::string label = geometry
             ? fmt::format("Primitive: {}", geometry->name)
             : fmt::format("Primitive: {}", primitive_index);
 
         if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Indent(indent);
-            material_library.combo("Material", primitive.material, false);
+            material_library.combo(m_context, "Material", primitive.material, false);
             if (primitive.material) {
                 ImGui::Text("Material Buffer Index: %u", primitive.material->material_buffer_index);
             } else {
                 ImGui::Text("Null material");
             }
-            if (
-                geometry &&
-                ImGui::TreeNodeEx("Statistics")
-            ) {
+            if (geometry && ImGui::TreeNodeEx("Statistics")) {
                 ImGui::Indent(indent);
                 int point_count   = geometry->get_point_count();
                 int polygon_count = geometry->get_polygon_count();
@@ -311,6 +361,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
             ImGui::Unindent(indent);
             ImGui::TreePop();
         }
+        ImGui::PopID();
     }
 }
 
@@ -348,12 +399,23 @@ namespace {
 
 void Properties::node_physics_properties(Node_physics& node_physics) const
 {
-    erhe::physics::IRigid_body* rigid_body = node_physics.rigid_body();
+    erhe::physics::IRigid_body* rigid_body = node_physics.get_rigid_body();
     if (rigid_body == nullptr) {
         return;
     }
 
-    ImGui::Text("Rigid Body: %s", rigid_body->get_debug_label());
+    ImGui::Text("Rigid Body: %s",     rigid_body->get_debug_label());
+    ImGui::Text("Is Active: %s",      rigid_body->is_active         () ? "Yes" : "No");
+
+    bool allow_sleeping = rigid_body->get_allow_sleeping();
+    ImGui::Text("Allow Sleeping: %s", allow_sleeping ? "Yes" : "No");
+    if (allow_sleeping && ImGui::Button("Disallow Sleeping")) {
+        rigid_body->set_allow_sleeping(false);
+    }
+    if (!allow_sleeping && ImGui::Button("Allow Sleeping")) {
+        rigid_body->set_allow_sleeping(true);
+    }
+
     float           mass    = rigid_body->get_mass();
     const glm::mat4 inertia = rigid_body->get_local_inertia();
     if (ImGui::SliderFloat("Mass", &mass, 0.0f, 1000.0f)) {
@@ -452,14 +514,13 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
     const auto camera       = as_camera      (item);
     const auto light        = as_light       (item);
     const auto mesh         = as_mesh        (item);
-    const auto skin         = as_skin        (item);
     const auto rendertarget = as_rendertarget(item);
 
     const bool default_open = !node_physics;
 
     if (
         !ImGui::TreeNodeEx(
-            item->type_name(),
+            item->get_type_name(),
             ImGuiTreeNodeFlags_Framed |
             (default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0)
         )
@@ -512,10 +573,6 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
         mesh_properties(*mesh);
     }
 
-    if (skin) {
-        skin_properties(*skin);
-    }
-
     if (rendertarget) {
         rendertarget_properties(*rendertarget);
     }
@@ -564,6 +621,25 @@ void Properties::imgui()
     for (const auto& item : selection) {
         ERHE_VERIFY(item);
         item_properties(item);
+
+        const auto node = as_node(item);
+        if (!node) {
+            continue;
+        }
+
+        for (auto& attachment : node->get_attachments()) {
+            item_properties(attachment);
+        }
+    }
+
+    const auto selected_animation = m_context.content_library_window->selected_animation();
+    if (selected_animation) {
+        animation_properties(*selected_animation.get());
+    }
+
+    const auto selected_skin = m_context.content_library_window->selected_skin();
+    if (selected_skin) {
+        skin_properties(*selected_skin.get());
     }
 
     material_properties();

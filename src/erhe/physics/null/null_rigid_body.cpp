@@ -83,7 +83,7 @@ auto Null_rigid_body::get_restitution() const -> float
     return m_restitution;
 }
 
-auto Null_rigid_body::get_world_transform() const -> Transform
+auto Null_rigid_body::get_world_transform() const -> glm::mat4
 {
     return m_transform;
 }

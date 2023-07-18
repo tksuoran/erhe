@@ -4,6 +4,19 @@ in vec4      v_color;
 in mat3      v_TBN;
 in flat uint v_material_index;
 
+vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
+{
+    if ((texture_handle.x == 0) && (texture_handle.y == 0)) {
+        return vec4(1.0, 1.0, 1.0, 1.0);
+    }
+#if defined(ERHE_BINDLESS_TEXTURE)
+    sampler2D s_texture = sampler2D(texture_handle);
+    return texture(s_texture, v_texcoord);
+#else
+    return texture(s_texture[texture_handle.x], v_texcoord);
+#endif
+}
+
 float sample_light_visibility(
     vec4  position,
     uint  light_index,
@@ -236,10 +249,6 @@ vec3 slope_brdf(
     vec3  diffuse_factor      = vec3(1.0) - F;
 
     return wg_dot_wi * (diffuse_factor * diffuse_lambert + specular_microfacet);
-    //return wg_dot_wi * vec3(1.0);
-    //return wg_dot_wi * (specular_microfacet);
-    //return vec3(metallic);
-    //return 0.5 * vec3(wo) + vec3(0.5);
 }
 
 void main()
@@ -259,12 +268,17 @@ void main()
     float N_dot_V = clamped_dot(N, V);
 
     Material material = material.materials[v_material_index];
-    uint directional_light_count  = light_block.directional_light_count;
-    uint spot_light_count         = light_block.spot_light_count;
-    uint directional_light_offset = 0;
-    uint spot_light_offset        = directional_light_count;
+    uvec2 base_color_texture         = material.base_color_texture;
+    uvec2 metallic_roughness_texture = material.metallic_roughness_texture;
+    vec3  base_color                 = v_color.rgb * material.base_color.rgb * sample_texture(base_color_texture, v_texcoord).rgb;
+    uint  directional_light_count    = light_block.directional_light_count;
+    uint  spot_light_count           = light_block.spot_light_count;
+    uint  point_light_count          = light_block.point_light_count;
+    uint  directional_light_offset   = 0;
+    uint  spot_light_offset          = directional_light_count;
+    uint  point_light_offset         = spot_light_offset + spot_light_count;
     vec3 color = vec3(0);
-    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * material.base_color.rgb;
+    color += (0.5 + 0.5 * N.y) * light_block.ambient_light.rgb * base_color;
     color += material.emissive.rgb;
     for (uint i = 0; i < directional_light_count; ++i) {
         uint  light_index    = directional_light_offset + i;
@@ -275,7 +289,7 @@ void main()
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             vec3 intensity = light.radiance_and_range.rgb * sample_light_visibility(v_position, light_index, N_dot_L);
             color += intensity * slope_brdf(
-                material.base_color.rgb,
+                base_color,
                 material.roughness.x,
                 material.roughness.y,
                 material.metallic,
@@ -299,10 +313,36 @@ void main()
         if (N_dot_L > 0.0 || N_dot_V > 0.0) {
             float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
             float spot_attenuation  = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w);
-            float light_visibility  = sample_light_visibility(v_position, light_index, N_dot_L);
+            float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
             vec3  intensity         = range_attenuation * spot_attenuation * light.radiance_and_range.rgb * light_visibility;
             color += intensity * slope_brdf(
-                material.base_color.rgb,
+                base_color,
+                material.roughness.x,
+                material.roughness.y,
+                material.metallic,
+                material.reflectance,
+                TBN_t,
+                L,
+                V,
+                T,
+                B,
+                N
+            );
+        }
+    }
+
+    for (uint i = 0; i < point_light_count; ++i) {
+        uint  light_index    = point_light_offset + i;
+        Light light          = light_block.lights[light_index];
+        vec3  point_to_light = light.position_and_inner_spot_cos.xyz - v_position.xyz;
+        vec3  L              = normalize(point_to_light);
+        float N_dot_L        = clamped_dot(N, L);
+        if (N_dot_L > 0.0 || N_dot_V > 0.0) {
+            float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light));
+            float light_visibility  = 1.0; // TODO sample_light_visibility(v_position, light_index, N_dot_L);
+            vec3  intensity         = range_attenuation * light.radiance_and_range.rgb * light_visibility;
+            color += intensity * slope_brdf(
+                base_color,
                 material.roughness.x,
                 material.roughness.y,
                 material.metallic,

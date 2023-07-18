@@ -42,6 +42,7 @@ class Debug_view_window;
 class Editor_context;
 class Editor_rendering;
 class Editor_scenes;
+class Editor_settings;
 class Fly_camera_tool;
 class Mesh_memory;
 class Post_processing;
@@ -95,6 +96,7 @@ public:
         Editor_context&                        editor_context,
         Editor_rendering&                      editor_rendering,
         Editor_scenes&                         editor_scenes,
+        Editor_settings&                       editor_settings,
         Mesh_memory&                           mesh_memory,
         Settings_window&                       settings_window,
         Tools&                                 tools,
@@ -141,12 +143,14 @@ private:
     ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
+        Editor_settings&           editor_settings,
         Mesh_memory&               mesh_memory,
         erhe::geometry::Geometry&& geometry,
         const bool                 instantiate_to_scene
     ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
+        Editor_settings&                                 editor_settings,
         Mesh_memory&                                     mesh_memory,
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,
         const bool                                       instantiate_to_scene
@@ -168,7 +172,11 @@ private:
     );
     void animate_lights     (const double time_d);
     void add_room           ();
-    void make_brushes       (erhe::graphics::Instance& graphics_instance, Mesh_memory& mesh_memory);
+    void make_brushes       (
+        erhe::graphics::Instance& graphics_instance,
+        Editor_settings&          editor_settings,
+        Mesh_memory&              mesh_memory
+    );
     void make_mesh_nodes    ();
     void make_cube_benchmark(Mesh_memory& mesh_memory);
     void setup_lights       ();

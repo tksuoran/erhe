@@ -454,7 +454,7 @@ void Shader_stages_prototype::compile_shaders()
 {
     ERHE_VERIFY(m_state == state_init);
     for (const auto& shader : m_create_info.shaders) {
-        m_shaders.emplace_back(compile(shader));
+        m_prelink_shaders.emplace_back(compile(shader));
         if (m_state == state_fail) {
             break;
         }
@@ -478,16 +478,17 @@ auto Shader_stages_prototype::link_program() -> bool
     ERHE_VERIFY(m_state == state_shader_compilation_started);
 
     const auto gl_name = m_handle.gl_name();
-    ERHE_VERIFY(m_shaders.size() == m_create_info.shaders.size());
-    for (std::size_t i = 0, end = m_shaders.size(); i < end; ++i) {
-        if (!post_compile(m_create_info.shaders[i], m_shaders[i])) {
+    ERHE_VERIFY(m_prelink_shaders.size() == m_create_info.shaders.size());
+    for (std::size_t i = 0, end = m_prelink_shaders.size(); i < end; ++i) {
+        if (!post_compile(m_create_info.shaders[i], m_prelink_shaders[i])) {
             m_state = state_fail;
             return false;
         }
-        gl::attach_shader(gl_name, m_shaders[i].gl_name());
+        gl::attach_shader(gl_name, m_prelink_shaders[i].gl_name());
     }
 
     gl::link_program(gl_name);
+    m_prelink_shaders.clear();
     m_state = state_program_link_started;
     return true;
 }

@@ -60,6 +60,8 @@ Headset_view_node::Headset_view_node(
 
 void Headset_view_node::execute_rendergraph_node()
 {
+    ERHE_PROFILE_FUNCTION();
+
     m_headset_view.render_headset();
 }
 

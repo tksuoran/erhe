@@ -274,10 +274,39 @@ auto Root_window_event_handler::on_char(const unsigned int codepoint) -> bool
     return false;
 }
 
+void Root_window_event_handler::set_active_mouse_handler(Window_event_handler* handler)
+{
+    if (m_active_mouse_handler == handler) {
+        return;
+    }
+    log_window_event->trace(
+        "active mouse event handler set to '{}'",
+        (handler != nullptr) ? handler->get_name() : ""
+    );
+
+    m_active_mouse_handler = handler;
+}
+
 auto Root_window_event_handler::on_mouse_move(const float x, const float y) -> bool
 {
+    if (m_active_mouse_handler != nullptr) {
+        if (m_active_mouse_handler->has_active_mouse()) {
+            if (m_active_mouse_handler->on_mouse_move(x, y)) {
+                return true;
+            }
+        } else {
+            set_active_mouse_handler(nullptr);
+        }
+    }
+
     for (auto* handler : m_handlers) {
-        if (handler->on_mouse_move(x, y)) {
+        const bool consumed = handler->on_mouse_move(x, y);
+        if (m_active_mouse_handler == nullptr) {
+            if (handler->has_active_mouse()) {
+                set_active_mouse_handler(handler);
+            }
+        }
+        if (consumed) {
             return true;
         }
     }
@@ -289,8 +318,25 @@ auto Root_window_event_handler::on_mouse_button(
     const bool         pressed
 ) -> bool
 {
+    if (m_active_mouse_handler != nullptr) {
+        if (m_active_mouse_handler->has_active_mouse()) {
+            const bool handled = m_active_mouse_handler->on_mouse_button(button, pressed);
+            if (handled) {
+                return true;
+            }
+        } else {
+            set_active_mouse_handler(nullptr);
+        }
+    }
+
     for (auto* handler : m_handlers) {
-        if (handler->on_mouse_button(button, pressed)) {
+        const bool consumed = handler->on_mouse_button(button, pressed);
+        if (m_active_mouse_handler == nullptr) {
+            if (handler->has_active_mouse()) {
+                set_active_mouse_handler(handler);
+            }
+        }
+        if (consumed) {
             return true;
         }
     }
@@ -302,8 +348,24 @@ auto Root_window_event_handler::on_mouse_wheel(
     const float y
 ) -> bool
 {
+    if (m_active_mouse_handler != nullptr) {
+        if (m_active_mouse_handler->has_active_mouse()) {
+            if (m_active_mouse_handler->on_mouse_wheel(x, y)) {
+                return true;
+            }
+        } else {
+            set_active_mouse_handler(nullptr);
+        }
+    }
+
     for (auto* handler : m_handlers) {
-        if (handler->on_mouse_wheel(x, y)) {
+        const bool consumed = handler->on_mouse_wheel(x, y);
+        if (m_active_mouse_handler == nullptr) {
+            if (handler->has_active_mouse()) {
+                set_active_mouse_handler(handler);
+            }
+        }
+        if (consumed) {
             return true;
         }
     }

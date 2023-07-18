@@ -50,20 +50,12 @@ target_link_libraries(${_target}
         erhe::raytrace
 )
 
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
-    target_link_libraries(${_target} PRIVATE TracyClient)
+if (DEFINED ERHE_PROFILE_TARGET)
+    target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
 endif ()
 
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
-    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
-endif ()
-
-if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "embree")
-    target_link_libraries(${_target} PUBLIC embree)
-endif ()
-
-if (${ERHE_RAYTRACE_LIBRARY} STREQUAL "bvh")
-    target_link_libraries(${_target} PUBLIC bvh)
+if (DEFINED ERHE_RAYTRACE_TARGET)
+    target_link_libraries(${_target} PUBLIC ${ERHE_RAYTRACE_TARGET})
 endif ()
 
 erhe_target_settings(${_target})

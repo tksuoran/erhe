@@ -139,6 +139,10 @@ void Hover_tool::tool_render(
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (get_hover_scene_view() == nullptr) {
+        return;
+    }
+
     const auto& entry = context.scene_view.get_nearest_hover(
         Hover_entry::content_bit | Hover_entry::grid_bit
     );
@@ -233,7 +237,7 @@ void Hover_tool::tool_render(
         const auto* node = entry.mesh->get_node();
         auto node_physics = get_node_physics(node);
         if (node_physics) {
-            erhe::physics::IRigid_body* rigid_body = node_physics->rigid_body();
+            erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
             if (rigid_body) {
                 const glm::vec3 local_position = node->transform_point_from_world_to_local(entry.position.value());
                 const std::string text_line_3 = fmt::format(

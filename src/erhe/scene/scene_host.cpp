@@ -3,7 +3,7 @@
 namespace erhe::scene
 {
 
-Scene_host::~Scene_host() noexcept = default;
+Item_host::~Item_host() noexcept = default;
 
 } // namespace erhe::scene
 

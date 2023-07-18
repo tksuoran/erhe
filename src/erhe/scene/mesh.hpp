@@ -7,8 +7,7 @@
 
 #include <vector>
 
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
 
@@ -17,11 +16,14 @@ namespace erhe::scene
 
 using Layer_id = uint64_t;
 
+class Skin;
+
 class Mesh_data
 {
 public:
     Layer_id                                layer_id{0xff};
     std::vector<erhe::primitive::Primitive> primitives;
+    std::shared_ptr<Skin>                   skin;
     float                                   point_size{3.0f};
     float                                   line_width{1.0f};
 };
@@ -36,13 +38,13 @@ public:
     ~Mesh        () noexcept override;
 
     // Implements Node_attachment
-    void handle_node_scene_host_update(Scene_host* old_scene_host, Scene_host* new_scene_host) override;
+    void handle_item_host_update(Item_host* old_item_host, Item_host* new_item_host) override;
 
     // Implements Item
-    [[nodiscard]] static auto static_type     () -> uint64_t;
-    [[nodiscard]] static auto static_type_name() -> const char*;
-    [[nodiscard]] auto get_type () const -> uint64_t override;
-    [[nodiscard]] auto type_name() const -> const char* override;
+    [[nodiscard]] static auto get_static_type     () -> uint64_t;
+    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    [[nodiscard]] auto get_type     () const -> uint64_t override;
+    [[nodiscard]] auto get_type_name() const -> const char* override;
 
     Mesh_data mesh_data;
 

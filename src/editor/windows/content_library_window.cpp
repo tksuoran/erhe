@@ -1,5 +1,6 @@
 #include "windows/content_library_window.hpp"
 
+#include "editor_context.hpp"
 #include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/brushes/brush.hpp"
@@ -17,15 +18,15 @@
 namespace editor
 {
 
-Content_library_window* g_content_library_window{nullptr};
-
 Content_library_window::Content_library_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              editor_context,
     Editor_scenes&               editor_scenes
+
 )
-    : Imgui_window   {imgui_renderer, imgui_windows, "Content Library", "content_library"}
-    , m_editor_scenes{editor_scenes}
+    : Imgui_window{imgui_renderer, imgui_windows, "Content Library", "content_library"}
+    , m_context   {editor_context}
 {
     const auto& scene_roots = editor_scenes.get_scene_roots();
     for (const auto& scene_root : scene_roots) {
@@ -47,6 +48,11 @@ Content_library_window::Content_library_window(
     }
 }
 
+auto Content_library_window::selected_animation() const -> std::shared_ptr<erhe::scene::Animation>
+{
+    return m_animations.get_selected_entry();
+}
+
 auto Content_library_window::selected_brush() const -> std::shared_ptr<Brush>
 {
     return m_brushes.get_selected_entry();
@@ -57,8 +63,15 @@ auto Content_library_window::selected_material() const -> std::shared_ptr<erhe::
     return m_materials.get_selected_entry();
 }
 
+auto Content_library_window::selected_skin() const -> std::shared_ptr<erhe::scene::Skin>
+{
+    return m_skins.get_selected_entry();
+}
+
 void Content_library_window::imgui()
 {
+    ERHE_PROFILE_FUNCTION();
+
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     const auto button_size = ImVec2{ImGui::GetContentRegionAvail().x, 0.0f};
 
@@ -69,9 +82,7 @@ void Content_library_window::imgui()
         ImGuiTreeNodeFlags_SpanFullWidth
     };
 
-    ERHE_PROFILE_FUNCTION();
-
-    const auto& scene_roots = m_editor_scenes.get_scene_roots();
+    const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
         const auto& content_library = scene_root->content_library();
         if (!content_library) {
@@ -82,11 +93,14 @@ void Content_library_window::imgui()
         }
 
         if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags)) {
-            m_brushes  .imgui(content_library->brushes);
-            m_cameras  .imgui(content_library->cameras);
-            m_lights   .imgui(content_library->lights);
-            m_meshes   .imgui(content_library->meshes);
-            m_materials.imgui(content_library->materials);
+            m_animations.imgui(m_context, content_library->animations);
+            m_brushes   .imgui(m_context, content_library->brushes);
+            m_cameras   .imgui(m_context, content_library->cameras);
+            m_lights    .imgui(m_context, content_library->lights);
+            m_materials .imgui(m_context, content_library->materials);
+            m_meshes    .imgui(m_context, content_library->meshes);
+            m_skins     .imgui(m_context, content_library->skins);
+            //m_textures  .imgui(content_library->textures);
             ImGui::TreePop();
         }
     }

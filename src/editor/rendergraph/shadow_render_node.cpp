@@ -55,7 +55,7 @@ void Shadow_render_node::reconfigure(
     const int                 light_count
 )
 {
-    log_render->info("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
+    log_render->trace("Reconfigure shadow resolution = {}, light count = {}", resolution, light_count);
 
     const bool reverse_depth = graphics_instance.configuration.reverse_depth;
     {
@@ -110,6 +110,8 @@ void Shadow_render_node::reconfigure(
 
 void Shadow_render_node::execute_rendergraph_node()
 {
+    ERHE_PROFILE_FUNCTION();
+
     // Render shadow maps
     const auto& scene_root = m_scene_view.get_scene_root();
     const auto& camera     = m_scene_view.get_camera();

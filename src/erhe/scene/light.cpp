@@ -18,38 +18,38 @@ Light::Light(const std::string_view name)
 
 Light::~Light() noexcept = default;
 
-auto Light::static_type() -> uint64_t
+auto Light::get_static_type() -> uint64_t
 {
     return Item_type::node_attachment | Item_type::light;
 }
 
-auto Light::static_type_name() -> const char*
+auto Light::get_static_type_name() -> const char*
 {
     return "Light";
 }
 
 auto Light::get_type() const -> uint64_t
 {
-    return static_type();
+    return get_static_type();
 }
 
-auto Light::type_name() const -> const char*
+auto Light::get_type_name() const -> const char*
 {
-    return static_type_name();
+    return get_static_type_name();
 }
 
-void Light::handle_node_scene_host_update(
-    Scene_host* old_scene_host,
-    Scene_host* new_scene_host
+void Light::handle_item_host_update(
+    Item_host* const old_item_host,
+    Item_host* const new_item_host
 )
 {
-    if (old_scene_host) {
-        old_scene_host->unregister_light(
+    if (old_item_host) {
+        old_item_host->unregister_light(
             std::static_pointer_cast<Light>(shared_from_this())
         );
     }
-    if (new_scene_host) {
-        new_scene_host->register_light(
+    if (new_item_host) {
+        new_item_host->register_light(
             std::static_pointer_cast<Light>(shared_from_this())
         );
     }
@@ -436,7 +436,7 @@ auto as_light(Item* const item) -> Light*
     if (!test_all_rhs_bits_set(item->get_type(), Item_type::light)) {
         return nullptr;
     }
-    return static_cast<Light*>(item);
+    return reinterpret_cast<Light*>(item);
 }
 
 auto as_light(const std::shared_ptr<Item>& item) -> std::shared_ptr<Light>
@@ -452,7 +452,7 @@ auto as_light(const std::shared_ptr<Item>& item) -> std::shared_ptr<Light>
 
 auto get_light(const erhe::scene::Node* const node) -> std::shared_ptr<Light>
 {
-    for (const auto& attachment : node->attachments()) {
+    for (const auto& attachment : node->get_attachments()) {
         auto light = as_light(attachment);
         if (light) {
             return light;

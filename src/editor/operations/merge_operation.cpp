@@ -2,6 +2,7 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
+#include "editor_settings.hpp"
 #include "operations/merge_operation.hpp"
 #include "tools/selection_tool.hpp"
 #include "scene/node_physics.hpp"
@@ -56,18 +57,18 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     bool        first_mesh                = true;
     mat4        reference_node_from_world = mat4{1};
     auto        normal_style              = Normal_style::none;
-    //erhe::primitive::Build_info build_
 
     m_selection_before = m_parameters.context.selection->get_selection();
 
     for (const auto& item : m_selection_before) {
-        const auto& mesh = as_mesh(item);
-        if (!mesh) {
+        auto shared_node = as_node(item);
+        if (!shared_node) {
             continue;
         }
+        auto* node = shared_node.get();
 
-        auto* node = mesh->get_node();
-        if (node == nullptr) {
+        const auto& mesh = get_mesh(node);
+        if (!mesh) {
             continue;
         }
 
@@ -79,7 +80,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         Entry source_entry{
             .mesh          = mesh,
             .node          = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this()),
-            .before_parent = node->parent().lock(),
+            .before_parent = node->get_parent_node(),
             .node_physics  = node_physics,
             .node_raytrace = node_raytrace
         };
@@ -87,7 +88,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         ERHE_VERIFY(source_entry.before_parent);
 
         if (first_mesh) {
-            scene_root                = reinterpret_cast<Scene_root*>(node->node_data.host);
+            scene_root                = static_cast<Scene_root*>(node->node_data.host);
             reference_node_from_world = node->node_from_world();
             transform                 = mat4{1};
             first_mesh                = false;
@@ -98,7 +99,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         if (node_physics) {
-            auto* rigid_body = node_physics->rigid_body();
+            auto* rigid_body = node_physics->get_rigid_body();
             if (rigid_body != nullptr) {
                 auto collision_shape = rigid_body->get_collision_shape();
 
@@ -138,15 +139,18 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         const auto& combined_collision_shape = erhe::physics::ICollision_shape::create_compound_shape_shared(
             compound_shape_create_info
         );
-        auto& physics_world = scene_root->physics_world();
 
-        const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-            .world           = physics_world,
-            .collision_shape = combined_collision_shape,
-            .debug_label     = "merged" // TODO
-        };
+        if (parameters.context.editor_settings->physics_static_enable) {
+            auto& physics_world = scene_root->get_physics_world();
 
-        m_combined.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+            const erhe::physics::IRigid_body_create_info rigid_body_create_info{
+                .world           = physics_world,
+                .collision_shape = combined_collision_shape,
+                .debug_label     = "merged" // TODO
+            };
+
+            m_combined.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+        }
     }
 
     std::shared_ptr<erhe::geometry::Geometry> welded_geometry = std::make_shared<erhe::geometry::Geometry>(
@@ -181,7 +185,7 @@ void Merge_operation::execute(Editor_context& context)
         return;
     }
 
-    auto* const scene_root = reinterpret_cast<Scene_root*>(m_sources.front().node->node_data.host);
+    auto* const scene_root = static_cast<Scene_root*>(m_sources.front().node->node_data.host);
     if (scene_root == nullptr) {
         return;
     }
@@ -246,7 +250,7 @@ void Merge_operation::undo(Editor_context& context)
         return;
     }
 
-    auto* const scene_root = reinterpret_cast<Scene_root*>(m_sources.front().node->node_data.host);
+    auto* const scene_root = static_cast<Scene_root*>(m_sources.front().node->node_data.host);
     if (scene_root == nullptr) {
         return;
     }
