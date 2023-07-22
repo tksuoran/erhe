@@ -127,7 +127,7 @@ void Node_raytrace::initialize()
         triangle_size,
         triangle_count
     );
-    SPDLOG_LOGGER_INFO(log_raytrace, "{}:", m_source_geometry->name);
+    SPDLOG_LOGGER_TRACE(log_raytrace, "{}:", m_source_geometry->name);
 
     {
         ERHE_PROFILE_SCOPE("geometry commit");

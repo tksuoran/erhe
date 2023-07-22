@@ -62,7 +62,7 @@ void initialize_logging()
     log_pointer                    = erhe::log::make_logger("editor::pointer"                   , spdlog::level::info);
     log_post_processing            = erhe::log::make_logger("editor::post_processing"           , spdlog::level::info, false);
     log_programs                   = erhe::log::make_logger("editor::programs"                  , spdlog::level::info);
-    log_raytrace                   = erhe::log::make_logger("editor::raytrace"                  , spdlog::level::trace);
+    log_raytrace                   = erhe::log::make_logger("editor::raytrace"                  , spdlog::level::info);
     log_render                     = erhe::log::make_logger("editor::render"                    , spdlog::level::info, false);
     log_rendertarget_imgui_windows = erhe::log::make_logger("editor::rendertarget_imgui_windows", spdlog::level::info, false);
     log_scene                      = erhe::log::make_logger("editor::scene"                     , spdlog::level::info);
