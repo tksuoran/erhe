@@ -243,7 +243,7 @@ Tools::Tools(
     // TODO Maybe this is not needed/useful?
     editor_scenes.register_scene_root(m_scene_root);
 
-    m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
+    m_scene_root->get_scene().disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
     for (const auto& tool : m_tools) {
         const auto priority = tool->get_priority();

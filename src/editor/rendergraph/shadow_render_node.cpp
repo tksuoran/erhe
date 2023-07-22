@@ -142,7 +142,7 @@ void Shadow_render_node::execute_rendergraph_node()
             .framebuffers          = m_framebuffers,
             .mesh_spans            = { layers.content()->meshes },
             .lights                = layers.light()->lights,
-            .skins                 = scene_root->scene().get_skins(),
+            .skins                 = scene_root->get_scene().get_skins(),
             .light_projections     = m_light_projections
         }
     );

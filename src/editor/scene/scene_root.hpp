@@ -127,22 +127,21 @@ public:
     void register_light         (const std::shared_ptr<erhe::scene::Light>&  light);
     void unregister_light       (const std::shared_ptr<erhe::scene::Light>&  light);
 
-    void register_node_physics  (Node_physics* node_physics);
-    void unregister_node_physics(Node_physics* node_physics);
+    void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
+    void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
 
-    void register_node_raytrace  (Node_raytrace* node_raytrace);
-    void unregister_node_raytrace(Node_raytrace* node_raytrace);
+    void register_node_raytrace  (const std::shared_ptr<Node_raytrace>& node_raytrace);
+    void unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace);
 
     void update_physics_simulation_fixed_step    (double dt);
     void update_physics_simulation_once_per_frame();
 
-    [[nodiscard]] auto get_shared_scene  () -> std::shared_ptr<erhe::scene::Scene>;
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
     [[nodiscard]] auto get_physics_world () -> erhe::physics::IWorld&;
     [[nodiscard]] auto get_raytrace_scene() -> erhe::raytrace::IScene&;
-    [[nodiscard]] auto scene             () -> erhe::scene::Scene&;
-    [[nodiscard]] auto scene             () const -> const erhe::scene::Scene&;
+    [[nodiscard]] auto get_scene         () -> erhe::scene::Scene&;
+    [[nodiscard]] auto get_scene         () const -> const erhe::scene::Scene&;
     [[nodiscard]] auto get_name          () const -> const std::string&;
 
     auto camera_combo(
@@ -172,21 +171,25 @@ public:
     void sanity_check();
 
 private:
+    // Live longest
     mutable std::mutex                              m_mutex;
     std::mutex                                      m_rendertarget_meshes_mutex;
+
+    // Must live longer than m_scene for example
+    bool                                            m_node_physics_sorted{false};
+    std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
+    std::vector<std::shared_ptr<Node_raytrace>>     m_node_raytraces;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
+
+    std::shared_ptr<Content_library>                m_content_library;
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
-    std::shared_ptr<erhe::scene::Camera>            m_camera;
-    std::shared_ptr<Content_library>                m_content_library;
-    std::shared_ptr<Frame_controller>               m_camera_controls;
-    std::shared_ptr<erhe::scene::Scene>             m_scene;
+
+    std::unique_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;
 
-    bool                                            m_node_physics_sorted{false};
-    std::vector<Node_physics*>                      m_node_physics;
-    std::vector<Node_raytrace*>                     m_node_raytraces;
-
+    std::shared_ptr<erhe::scene::Camera>            m_camera;
+    std::shared_ptr<Frame_controller>               m_camera_controls;
 };
 
 } // namespace editor

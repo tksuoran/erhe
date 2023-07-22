@@ -172,7 +172,7 @@ Hud::Hud(
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
-    m_rendertarget_node->set_parent(scene_root->scene().get_root_node());
+    m_rendertarget_node->set_parent(scene_root->get_scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
     m_rendertarget_node->enable_flag_bits(
         erhe::scene::Item_flags::rendertarget |

@@ -1093,7 +1093,7 @@ void Debug_visualizations::render(
 
     //if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
     if (m_cameras) {
-        for (const auto& camera : scene_root->scene().get_cameras()) {
+        for (const auto& camera : scene_root->get_scene().get_cameras()) {
             camera_visualization(context, camera.get());
         }
     }

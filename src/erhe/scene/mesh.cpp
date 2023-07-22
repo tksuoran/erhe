@@ -55,18 +55,16 @@ void Mesh::handle_item_host_update(
     Item_host* const new_item_host
 )
 {
+    const auto shared_this = std::static_pointer_cast<Mesh>(shared_from_this()); // keep alive
+
     if (old_item_host) {
-        old_item_host->unregister_mesh(
-            std::static_pointer_cast<Mesh>(shared_from_this())
-        );
+        old_item_host->unregister_mesh(shared_this);
         if (mesh_data.skin) {
             old_item_host->unregister_skin(mesh_data.skin);
         }
     }
     if (new_item_host) {
-        new_item_host->register_mesh(
-            std::static_pointer_cast<Mesh>(shared_from_this())
-        );
+        new_item_host->register_mesh(shared_this);
         if (mesh_data.skin) {
             new_item_host->register_skin(mesh_data.skin);
         }

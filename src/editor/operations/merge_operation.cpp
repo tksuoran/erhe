@@ -189,7 +189,7 @@ void Merge_operation::execute(Editor_context& context)
     if (scene_root == nullptr) {
         return;
     }
-    auto& scene = scene_root->scene();
+    auto& scene = scene_root->get_scene();
 
     scene.sanity_check();
 
@@ -255,7 +255,7 @@ void Merge_operation::undo(Editor_context& context)
         return;
     }
 
-    auto& scene = scene_root->scene();
+    auto& scene = scene_root->get_scene();
     scene.sanity_check();
 
     bool first_entry = true;

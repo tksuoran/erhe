@@ -48,7 +48,7 @@ void Mesh_operation::execute(Editor_context&)
         ERHE_VERIFY(node != nullptr);
         auto* scene_root = static_cast<Scene_root*>(node->node_data.host);
         ERHE_VERIFY(scene_root);
-        const auto& scene = scene_root->scene();
+        const auto& scene = scene_root->get_scene();
         scene.sanity_check();
         entry.mesh->mesh_data = entry.after;
         scene.sanity_check();
@@ -64,7 +64,7 @@ void Mesh_operation::undo(Editor_context&)
         ERHE_VERIFY(mesh_node != nullptr);
         auto* scene_root = static_cast<Scene_root*>(mesh_node->node_data.host);
         ERHE_VERIFY(scene_root);
-        const auto& scene = scene_root->scene();
+        const auto& scene = scene_root->get_scene();
         scene.sanity_check();
         entry.mesh->mesh_data = entry.before;
         scene.sanity_check();
@@ -102,7 +102,7 @@ void Mesh_operation::make_entries(
         return;
     }
 
-    const auto& scene = scene_root->scene();
+    const auto& scene = scene_root->get_scene();
     scene.sanity_check();
 
     for (auto& item : selected_items) {

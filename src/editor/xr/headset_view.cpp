@@ -386,7 +386,7 @@ void Headset_view::setup_root_camera()
         glm::vec3{0.0f, 1.0f, 0.0f}  // up
     );
 
-    m_root_node = m_scene_root->scene().get_root_node();
+    m_root_node = m_scene_root->get_scene().get_root_node();
     auto root_camera_node = std::make_shared<erhe::scene::Node>(
         "Headset Root Camera Node"
     );

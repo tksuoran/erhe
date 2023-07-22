@@ -43,15 +43,13 @@ void Light::handle_item_host_update(
     Item_host* const new_item_host
 )
 {
+    const auto shared_this = std::static_pointer_cast<Light>(shared_from_this()); // keep alive
+
     if (old_item_host) {
-        old_item_host->unregister_light(
-            std::static_pointer_cast<Light>(shared_from_this())
-        );
+        old_item_host->unregister_light(shared_this);
     }
     if (new_item_host) {
-        new_item_host->register_light(
-            std::static_pointer_cast<Light>(shared_from_this())
-        );
+        new_item_host->register_light(shared_this);
     }
 }
 

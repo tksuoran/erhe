@@ -205,14 +205,23 @@ void Node_raytrace::handle_item_host_update(
 )
 {
     ERHE_VERIFY(old_item_host != new_item_host);
+    Scene_root* old_scene_root = static_cast<Scene_root*>(old_item_host);
+    Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
+    log_raytrace->trace(
+        "RT {} node {} old host = {} new host = {}",
+        get_label(), get_node()->get_name(),
+        (old_scene_root != nullptr) ? old_scene_root->get_name().c_str() : "",
+        (new_scene_root != nullptr) ? new_scene_root->get_name().c_str() : ""
+    );
+
+    // NOTE: This also keeps this alive if old host has the only shared_ptr to it
+    const auto shared_this = std::static_pointer_cast<Node_raytrace>(shared_from_this());
 
     if (old_item_host != nullptr) {
-        Scene_root* old_scene_root = static_cast<Scene_root*>(old_item_host);
-        old_scene_root->unregister_node_raytrace(this);
+        old_scene_root->unregister_node_raytrace(shared_this);
     }
     if (new_item_host != nullptr) {
-        Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
-        new_scene_root->register_node_raytrace(this);
+        new_scene_root->register_node_raytrace(shared_this);
     }
 }
 

@@ -80,14 +80,17 @@ void Node_physics::handle_item_host_update(
 {
     ERHE_VERIFY(old_item_host != new_item_host);
 
+    // NOTE: This also keeps this alive is old host is only shared_ptr to it
+    const auto shared_this = std::static_pointer_cast<Node_physics>(shared_from_this());
+
     if (old_item_host != nullptr) {
         Scene_root* old_scene_root = static_cast<Scene_root*>(old_item_host);
-        old_scene_root->unregister_node_physics(this);
+        old_scene_root->unregister_node_physics(shared_this);
     }
     if (new_item_host != nullptr) {
         log_physics->trace("attaching {} to physics world", m_rigid_body->get_debug_label());
         Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
-        new_scene_root->register_node_physics(this);
+        new_scene_root->register_node_physics(shared_this);
     }
 }
 

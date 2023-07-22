@@ -350,8 +350,8 @@ auto Viewport_windows::open_new_viewport_window(
             }
         }
         // Case for when no camera found in selection
-        if (!scene_root->scene().get_cameras().empty()) {
-            const auto& camera = scene_root->scene().get_cameras().front();
+        if (!scene_root->get_scene().get_cameras().empty()) {
+            const auto& camera = scene_root->get_scene().get_cameras().front();
             return create_viewport_window(
                 *m_context.graphics_instance,
                 *m_context.rendergraph,

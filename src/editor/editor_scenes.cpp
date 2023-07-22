@@ -61,7 +61,7 @@ void Editor_scenes::update_physics_simulation_once_per_frame()
 void Editor_scenes::update_node_transforms()
 {
     for (const auto& scene_root : m_scene_roots) {
-        scene_root->scene().update_node_transforms();
+        scene_root->get_scene().update_node_transforms();
     }
 }
 

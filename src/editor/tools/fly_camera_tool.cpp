@@ -303,7 +303,7 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera)
     if (camera != nullptr) {
         auto* scene_root = static_cast<Scene_root*>(camera->get_node()->node_data.host);
         if (scene_root != nullptr) {
-            scene_root->scene().update_node_transforms();
+            scene_root->get_scene().update_node_transforms();
         } else {
             log_fly_camera->warn("camera node does not have scene root");
         }

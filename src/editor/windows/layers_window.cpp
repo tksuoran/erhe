@@ -56,7 +56,7 @@ void Layers_window::imgui()
     std::shared_ptr<erhe::scene::Item> item_clicked;
     for (const auto& scene_root : scene_roots) {
         if (ImGui::TreeNodeEx(scene_root->get_name().c_str(), parent_flags)) {
-            const auto& scene       = scene_root->scene();
+            const auto& scene       = scene_root->get_scene();
             const auto& mesh_layers = scene.get_mesh_layers();
             for (const auto& layer : mesh_layers) {
                 if (ImGui::TreeNodeEx(layer->get_name().c_str(), parent_flags)) {

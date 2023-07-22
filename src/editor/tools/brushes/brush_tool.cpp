@@ -486,7 +486,7 @@ void Brush_tool::add_brush_mesh()
     m_brush_mesh->mesh_data.layer_id = scene_root->layers().brush()->id;
 
     m_brush_node->attach(m_brush_mesh);
-    m_brush_node->set_parent(scene_root->scene().get_root_node());
+    m_brush_node->set_parent(scene_root->get_scene().get_root_node());
 
     update_mesh_node_transform();
 }

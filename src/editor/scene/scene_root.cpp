@@ -98,7 +98,7 @@ Scene_root::Scene_root(
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_scene = std::make_shared<Scene>(scene_message_bus, name, this);
+    m_scene = std::make_unique<Scene>(scene_message_bus, name, this);
     m_layers.add_layers_to_scene(*m_scene.get());
 
     // Layer configuration
@@ -220,8 +220,12 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
     }
 }
 
-void Scene_root::register_node_physics(Node_physics* node_physics)
+void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node_physics)
 {
+    if (!m_physics_world) {
+        return;
+    }
+
 #ifndef NDEBUG
     const auto i = std::find(m_node_physics.begin(), m_node_physics.end(), node_physics);
     if (i != m_node_physics.end()) {
@@ -234,17 +238,19 @@ void Scene_root::register_node_physics(Node_physics* node_physics)
         m_node_physics_sorted = false;
     }
 
-    if (m_physics_world) {
-        node_physics->set_physics_world(m_physics_world.get());
-        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-        if (rigid_body != nullptr) {
-            m_physics_world->add_rigid_body(node_physics->get_rigid_body());
-        }
+    node_physics->set_physics_world(m_physics_world.get());
+    erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+    if (rigid_body != nullptr) {
+        m_physics_world->add_rigid_body(node_physics->get_rigid_body());
     }
 }
 
-void Scene_root::unregister_node_physics(Node_physics* node_physics)
+void Scene_root::unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics)
 {
+    if (!m_physics_world) {
+        return;
+    }
+
     const auto i = std::remove(
         m_node_physics.begin(),
         m_node_physics.end(),
@@ -258,13 +264,11 @@ void Scene_root::unregister_node_physics(Node_physics* node_physics)
         m_node_physics_sorted = false;
     }
 
-    if (m_physics_world) {
-        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-        if (rigid_body != nullptr) {
-            m_physics_world->remove_rigid_body(node_physics->get_rigid_body());
-        }
-        node_physics->set_physics_world(nullptr);
+    erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+    if (rigid_body != nullptr) {
+        m_physics_world->remove_rigid_body(node_physics->get_rigid_body());
     }
+    node_physics->set_physics_world(nullptr);
 }
 
 void Scene_root::update_physics_simulation_fixed_step(const double dt)
@@ -276,12 +280,16 @@ void Scene_root::update_physics_simulation_fixed_step(const double dt)
 
 void Scene_root::update_physics_simulation_once_per_frame()
 {
+    if (!m_physics_world) {
+        return;
+    }
+
     // Sort nodes, so that parent transforms are updated before child nodes
     if (!m_node_physics_sorted) {
         std::sort(
             m_node_physics.begin(),
             m_node_physics.end(),
-            [](Node_physics* lhs, Node_physics* rhs) -> bool {
+            [](const auto& lhs, const auto& rhs) -> bool {
                 erhe::scene::Node* lhs_node = lhs->get_node();
                 erhe::scene::Node* rhs_node = rhs->get_node();
                 if ((lhs_node == nullptr) || (rhs_node == nullptr)) {
@@ -292,7 +300,7 @@ void Scene_root::update_physics_simulation_once_per_frame()
         );
     }
 
-    for (Node_physics* node_physics : m_node_physics) {
+    for (const auto& node_physics : m_node_physics) {
         auto* rigid_body = node_physics->get_rigid_body();
         if (rigid_body) {
             if (rigid_body->is_active()) {
@@ -306,33 +314,41 @@ void Scene_root::update_physics_simulation_once_per_frame()
 }
 
 //
-void Scene_root::register_node_raytrace(Node_raytrace* node_raytrace)
+void Scene_root::register_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace)
 {
+    log_raytrace->trace("RT add {} node {} to {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
+    if (!m_raytrace_scene) {
+        return;
+    }
+
 #ifndef NDEBUG
     const auto i = std::find(m_node_raytraces.begin(), m_node_raytraces.end(), node_raytrace);
     if (i != m_node_raytraces.end()) {
         auto* node = node_raytrace->get_node();
-        log_raytrace->error("Node_raytrace for '{}' already in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+        log_raytrace->error("Node_raytrace for '{}' already in {}", (node != nullptr) ? node->get_name().c_str() : "", m_scene->get_name());
     } else
 #endif
     {
         m_node_raytraces.push_back(node_raytrace);
     }
 
-    if (m_raytrace_scene) {
-        erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
-        m_raytrace_scene->attach(rt_instance);
-        uint32_t mask = 0;
-        for (const auto& node_attachment : node_raytrace->get_node()->get_attachments()) {
-            mask = mask | raytrace_node_mask(*node_attachment.get());
-        }
-        rt_instance->set_mask(mask);
-        log_raytrace->trace("RT {} attached, mask = {}", node_raytrace->get_label(), mask);
+    erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
+    m_raytrace_scene->attach(rt_instance);
+    uint32_t mask = 0;
+    for (const auto& node_attachment : node_raytrace->get_node()->get_attachments()) {
+        mask = mask | raytrace_node_mask(*node_attachment.get());
     }
+    rt_instance->set_mask(mask);
+    log_raytrace->trace("RT {} node {} attached to {}, mask = {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name(), mask);
 }
 
-void Scene_root::unregister_node_raytrace(Node_raytrace* node_raytrace)
+void Scene_root::unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace)
 {
+    log_raytrace->trace("RT remove {} node {} from {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
+    if (!m_raytrace_scene) {
+        return;
+    }
+
     const auto i = std::remove(
         m_node_raytraces.begin(),
         m_node_raytraces.end(),
@@ -340,24 +356,21 @@ void Scene_root::unregister_node_raytrace(Node_raytrace* node_raytrace)
     );
     if (i == m_node_raytraces.end()) {
         auto* node = node_raytrace->get_node();
-        log_raytrace->error("Node_raytrace for '{}' not in Scene_root", (node != nullptr) ? node->get_name().c_str() : "");
+        log_raytrace->error("Node_raytrace for '{}' not in {}", (node != nullptr) ? node->get_name().c_str() : "", m_scene->get_name());
+        for (const auto& entry : m_node_raytraces) {
+            Scene_root* root = static_cast<Scene_root*>(entry->get_item_host());
+            log_raytrace->info("  - {} {} {}" , entry->get_label(), entry->get_node()->get_name(), root->get_hosted_scene()->get_name());
+        }
     } else {
         m_node_raytraces.erase(i, m_node_raytraces.end());
     }
 
-    if (m_raytrace_scene) {
-        erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
-        m_raytrace_scene->detach(rt_instance);
-        log_raytrace->trace("RT {} detached", node_raytrace->get_label());
-    }
+    erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
+    m_raytrace_scene->detach(rt_instance);
+    log_raytrace->trace("RT {} node {} detached from {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
 }
 
 //
-
-[[nodiscard]] auto Scene_root::get_shared_scene() -> std::shared_ptr<erhe::scene::Scene>
-{
-    return m_scene;
-}
 
 [[nodiscard]] auto Scene_root::layers() -> Scene_layers&
 {
@@ -381,13 +394,13 @@ auto Scene_root::get_raytrace_scene() -> erhe::raytrace::IScene&
     return *m_raytrace_scene.get();
 }
 
-auto Scene_root::scene() -> erhe::scene::Scene&
+auto Scene_root::get_scene() -> erhe::scene::Scene&
 {
     ERHE_VERIFY(m_scene);
     return *m_scene.get();
 }
 
-auto Scene_root::scene() const -> const erhe::scene::Scene&
+auto Scene_root::get_scene() const -> const erhe::scene::Scene&
 {
     ERHE_VERIFY(m_scene);
     return *m_scene.get();
@@ -414,7 +427,7 @@ auto Scene_root::camera_combo(
         names.push_back("(none)");
         cameras.push_back(nullptr);
     }
-    const auto& scene_cameras = scene().get_cameras();
+    const auto& scene_cameras = get_scene().get_cameras();
     for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera.get());
@@ -453,7 +466,7 @@ auto Scene_root::camera_combo(
         names.push_back("(none)");
         cameras.push_back(nullptr);
     }
-    const auto& scene_cameras = scene().get_cameras();
+    const auto& scene_cameras = get_scene().get_cameras();
     for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);
@@ -492,7 +505,7 @@ auto Scene_root::camera_combo(
         names.push_back("(none)");
         cameras.push_back({});
     }
-    const auto& scene_cameras = scene().get_cameras();
+    const auto& scene_cameras = get_scene().get_cameras();
     for (const auto& camera : scene_cameras) {
         names.push_back(camera->get_name().c_str());
         cameras.push_back(camera);

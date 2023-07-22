@@ -66,7 +66,7 @@ Material_preview::Material_preview(
         "Material preview scene"
     );
 
-    m_scene_root->get_shared_scene()->disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
+    m_scene_root->get_scene().disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
 
     make_preview_scene(mesh_memory);
     make_rendertarget(graphics_instance);

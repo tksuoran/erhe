@@ -242,7 +242,7 @@ auto Scene_commands::create_new_rendertarget(
     new_node->set_parent_from_node(
         erhe::toolkit::mat4_rotate_xz_180
     );
-    new_node->set_parent(scene_root->scene().get_root_node());
+    new_node->set_parent(scene_root->get_scene().get_root_node());
     new_node->attach(new_mesh);
     new_node->enable_flag_bits(
         erhe::scene::Item_flags::rendertarget |

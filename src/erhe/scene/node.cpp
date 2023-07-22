@@ -109,10 +109,7 @@ void Node_attachment::set_node(
         auto weak_this = weak_from_this();
         ERHE_VERIFY(!weak_this.expired());
         auto shared_this = std::static_pointer_cast<Node_attachment>(weak_this.lock());
-        node->handle_add_attachment(
-            shared_this,
-            position
-        );
+        node->handle_add_attachment(shared_this, position);
 
         handle_node_update(old_node, node);
         if (new_host != old_host) {
@@ -373,19 +370,13 @@ void Node::handle_scene_host_update(
         attachment->handle_item_host_update(old_item_host, new_item_host);
     }
 
-    auto shared_this = shared_from_this(); // Keep alive guarantee
+    const auto shared_this = std::static_pointer_cast<Node>(shared_from_this()); // Keep alive guarantee
 
     if (old_item_host != nullptr) {
-        old_item_host->unregister_node(
-            std::static_pointer_cast<Node>(
-                shared_this
-            )
-        );
+        old_item_host->unregister_node(shared_this);
     }
     if (new_item_host != nullptr) {
-        new_item_host->register_node(
-            std::static_pointer_cast<Node>(shared_from_this())
-        );
+        new_item_host->register_node(shared_this);
     }
 
     for (const auto& child : item_data.children) {

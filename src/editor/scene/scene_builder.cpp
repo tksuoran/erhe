@@ -172,7 +172,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
         );
         rendertarget_mesh_1->mesh_data.layer_id = Mesh_layer_id::rendertarget;
         rendertarget_node_1->attach(rendertarget_mesh_1);
-        rendertarget_node_1->set_parent(test_scene_root->scene().get_root_node());
+        rendertarget_node_1->set_parent(test_scene_root->get_scene().get_root_node());
 
         rendertarget_node_1->set_world_from_node(
             erhe::toolkit::create_look_at(
@@ -226,7 +226,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
             2000.0f
         );
         rendertarget_node_2->attach(rendertarget_mesh_2);
-        rendertarget_node_2->set_parent(test_scene_root->scene().get_root_node());
+        rendertarget_node_2->set_parent(test_scene_root->get_scene().get_root_node());
 
         rendertarget_node_2->set_world_from_node(
             erhe::toolkit::create_look_at(
@@ -268,7 +268,7 @@ auto Scene_builder::make_camera(
     camera->projection()->z_far           = 80.0f;
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     node->attach(camera);
-    node->set_parent(m_scene_root->scene().get_root_node());
+    node->set_parent(m_scene_root->get_scene().get_root_node());
 
     const mat4 m = erhe::toolkit::create_look_at(
         position, // eye
@@ -823,7 +823,7 @@ void Scene_builder::make_brushes(
             auto node = std::make_shared<erhe::scene::Node>(name);
             node->attach              (mesh);
             node->set_parent_from_node(transform);
-            node->set_parent          (m_scene_root->scene().get_root_node());
+            node->set_parent          (m_scene_root->get_scene().get_root_node());
         };
 
         using namespace erhe::toolkit;
@@ -909,14 +909,14 @@ void Scene_builder::add_room()
         floor_brush_instance_create_info
     );
 
-    floor_instance_node->set_parent(m_scene_root->scene().get_root_node());
+    floor_instance_node->set_parent(m_scene_root->get_scene().get_root_node());
 }
 
 void Scene_builder::make_mesh_nodes()
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_scene_root->scene().sanity_check();
+    m_scene_root->get_scene().sanity_check();
 
     class Pack_entry
     {
@@ -1058,9 +1058,9 @@ void Scene_builder::make_mesh_nodes()
                 .scale           = 1.0f
             };
             auto instance_node = brush->make_instance(brush_instance_create_info);
-            instance_node->set_parent(m_scene_root->scene().get_root_node());
+            instance_node->set_parent(m_scene_root->get_scene().get_root_node());
 
-            m_scene_root->scene().sanity_check();
+            m_scene_root->get_scene().sanity_check();
         }
     }
 }
@@ -1069,7 +1069,7 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_scene_root->scene().sanity_check();
+    m_scene_root->get_scene().sanity_check();
 
     auto& material_library = m_scene_root->content_library()->materials;
     auto  material         = material_library.make("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
@@ -1098,12 +1098,12 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
                 mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
                 node->attach(mesh);
                 node->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
-                node->set_parent(m_scene_root->scene().get_root_node());
+                node->set_parent(m_scene_root->get_scene().get_root_node());
             }
         }
     }
 
-    m_scene_root->scene().sanity_check();
+    m_scene_root->get_scene().sanity_check();
 }
 
 auto Scene_builder::make_directional_light(
@@ -1122,7 +1122,7 @@ auto Scene_builder::make_directional_light(
     light->layer_id  = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     node->attach          (light);
-    node->set_parent      (m_scene_root->scene().get_root_node());
+    node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::toolkit::create_look_at(
@@ -1155,7 +1155,7 @@ auto Scene_builder::make_spot_light(
     light->layer_id         = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     node->attach          (light);
-    node->set_parent      (m_scene_root->scene().get_root_node());
+    node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
     const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});

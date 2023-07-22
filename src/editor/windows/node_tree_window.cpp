@@ -78,7 +78,7 @@ void Item_tree_window::select_all()
     m_context.selection->clear_selection();
     const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
-        const auto& scene = scene_root->scene();
+        const auto& scene = scene_root->get_scene();
         for (const auto& node : scene.get_root_node()->get_children()) {
             recursive_add_to_selection(node);
         }
@@ -870,28 +870,18 @@ void Item_tree_window::imgui_item_node(
 
     const auto tree_node_state = item_icon_and_text(item, true);
     if (tree_node_state.is_open) {
-        {
-            const auto& node = as_node(item);
-            if (node) {
-                if (m_context.editor_settings->node_tree_expand_attachments) {
-                    const float attachment_indent = 15.0f; // TODO
-                    ImGui::Indent(attachment_indent);
-                    for (const auto& node_attachment : node->get_attachments()) {
-                        imgui_item_node(node_attachment);
-                    }
-                    ImGui::Unindent(attachment_indent);
+        const auto& node = as_node(item);
+        if (node) {
+            if (m_context.editor_settings->node_tree_expand_attachments) {
+                const float attachment_indent = 15.0f; // TODO
+                ImGui::Indent(attachment_indent);
+                for (const auto& node_attachment : node->get_attachments()) {
+                    imgui_item_node(node_attachment);
                 }
-                for (const auto& child_node : node->get_children()) {
-                    imgui_item_node(child_node);
-                }
+                ImGui::Unindent(attachment_indent);
             }
-        }
-        {
-            const auto& scene = as_scene(item);
-            if (scene) {
-                for (const auto& node : scene->get_root_node()->get_children()) {
-                    imgui_item_node(node);
-                }
+            for (const auto& child_node : node->get_children()) {
+                imgui_item_node(child_node);
             }
         }
         if (tree_node_state.need_tree_pop) {
@@ -993,8 +983,10 @@ void Item_tree_window::imgui()
 #endif
     const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
     for (const auto& scene_root : scene_roots) {
-        const auto& scene = scene_root->get_shared_scene();
-        imgui_item_node(scene);
+        const auto& scene = scene_root->get_scene();
+        for (const auto& node : scene.get_root_node()->get_children()) {
+            imgui_item_node(node);
+        }
     }
 
     for (const auto& fun : m_operations) {
