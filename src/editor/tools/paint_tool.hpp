@@ -42,15 +42,13 @@ private:
     Editor_context& m_context;
 };
 
-enum class Paint_mode
-{
+enum class Paint_mode {
     Point = 0,
     Corner,
     Polygon
 };
 
-static constexpr const char* c_paint_mode_strings[] =
-{
+static constexpr const char* c_paint_mode_strings[] = {
     "Point",
     "Corner",
     "Polygon"
@@ -92,16 +90,16 @@ public:
 
 private:
     void paint_corner(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh,
-        const erhe::geometry::Geometry&           geometry,
-        erhe::geometry::Corner_id                 corner_id,
-        const glm::vec4                           color
+        const erhe::scene::Mesh&        mesh,
+        const erhe::geometry::Geometry& geometry,
+        erhe::geometry::Corner_id       corner_id,
+        const glm::vec4                 color
     );
     void paint_vertex(
-        const std::shared_ptr<erhe::scene::Mesh>& mesh,
-        const erhe::geometry::Geometry&           geometry,
-        uint32_t                                  vertex_id,
-        const glm::vec4                           color
+        const erhe::scene::Mesh&        mesh,
+        const erhe::geometry::Geometry& geometry,
+        uint32_t                        vertex_id,
+        const glm::vec4                 color
     );
 
     Paint_vertex_command                m_paint_vertex_command;

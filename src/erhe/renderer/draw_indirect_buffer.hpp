@@ -3,10 +3,12 @@
 #include "erhe/renderer/multi_buffer.hpp"
 #include "erhe/primitive/enums.hpp"
 
-namespace erhe::scene
-{
-    class Mesh;
+namespace erhe {
     class Item_filter;
+}
+
+namespace erhe::scene {
+    class Mesh;
 }
 
 namespace erhe::renderer
@@ -31,7 +33,7 @@ public:
     auto update(
         const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
         erhe::primitive::Primitive_mode                            primitive_mode,
-        const erhe::scene::Item_filter&                            filter
+        const erhe::Item_filter&                            filter
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();

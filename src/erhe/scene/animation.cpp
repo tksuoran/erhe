@@ -1,4 +1,5 @@
 #include "erhe/scene/animation.hpp"
+
 #include "erhe/scene/node.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -297,7 +298,7 @@ void Animation_sampler::apply(
 //
 
 Animation::Animation(const std::string_view name)
-    : Item{name}
+    : Item{name, erhe::toolkit::Unique_id<Animation>{}.get_id()}
 {
 }
 
@@ -308,19 +309,14 @@ auto Animation::get_static_type() -> uint64_t
     return Item_type::animation;
 }
 
-auto Animation::get_static_type_name() -> const char*
-{
-    return "Animation";
-}
-
 auto Animation::get_type() const -> uint64_t
 {
     return get_static_type();
 }
 
-auto Animation::get_type_name() const -> const char*
+auto Animation::get_type_name() const -> std::string_view
 {
-    return get_static_type_name();
+    return static_type_name;
 }
 
 auto Animation::evaluate(

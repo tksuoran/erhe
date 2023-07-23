@@ -12,9 +12,10 @@ Imgui_window::Imgui_window(
     Imgui_renderer&        imgui_renderer,
     Imgui_windows&         imgui_windows,
     const std::string_view title,
-    const char*            ini_label
+    const std::string_view ini_label
 )
     : m_imgui_renderer{imgui_renderer}
+    , m_imgui_windows {imgui_windows}
     , m_title         {title}
     , m_ini_label     {ini_label}
 {
@@ -23,7 +24,7 @@ Imgui_window::Imgui_window(
 
 Imgui_window::~Imgui_window() noexcept
 {
-    // TODO: unregister_imgui_window
+    m_imgui_windows.unregister_imgui_window(this);
 }
 
 void Imgui_window::image(
@@ -88,12 +89,12 @@ auto Imgui_window::is_hovered() const -> bool
     return m_is_hovered;
 }
 
-auto Imgui_window::ini_label() const -> const char*
+auto Imgui_window::get_ini_label() const -> const std::string&
 {
     return m_ini_label;
 }
 
-auto Imgui_window::title() const -> const std::string_view
+auto Imgui_window::get_title() const -> const std::string&
 {
     return m_title;
 }

@@ -6,6 +6,7 @@
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/node.hpp"
 
 namespace editor
 {

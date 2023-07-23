@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/toolkit/unique_id.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <glm/glm.hpp>
 
@@ -9,11 +10,9 @@
 #include <memory>
 #include <string>
 
-namespace erhe::scene
+namespace erhe
 {
 
-class Node;
-class Scene;
 class Item_host;
 
 class Item_flags
@@ -30,17 +29,18 @@ public:
     static constexpr uint64_t lock_viewport_selection   = (1u <<  7);
     static constexpr uint64_t lock_viewport_transform   = (1u <<  8);
     static constexpr uint64_t visible                   = (1u <<  9);
-    static constexpr uint64_t opaque                    = (1u << 10);
-    static constexpr uint64_t translucent               = (1u << 11);
-    static constexpr uint64_t render_wireframe          = (1u << 12); // TODO
-    static constexpr uint64_t render_bounding_volume    = (1u << 13); // TODO
-    static constexpr uint64_t content                   = (1u << 14);
-    static constexpr uint64_t id                        = (1u << 15);
-    static constexpr uint64_t tool                      = (1u << 16);
-    static constexpr uint64_t brush                     = (1u << 17);
-    static constexpr uint64_t controller                = (1u << 18);
-    static constexpr uint64_t rendertarget              = (1u << 19);
-    static constexpr uint64_t count                     = 20;
+    static constexpr uint64_t invisible_parent          = (1u << 10);
+    static constexpr uint64_t opaque                    = (1u << 11);
+    static constexpr uint64_t translucent               = (1u << 12);
+    static constexpr uint64_t render_wireframe          = (1u << 13); // TODO
+    static constexpr uint64_t render_bounding_volume    = (1u << 14); // TODO
+    static constexpr uint64_t content                   = (1u << 15);
+    static constexpr uint64_t id                        = (1u << 16);
+    static constexpr uint64_t tool                      = (1u << 17);
+    static constexpr uint64_t brush                     = (1u << 18);
+    static constexpr uint64_t controller                = (1u << 19);
+    static constexpr uint64_t rendertarget              = (1u << 20);
+    static constexpr uint64_t count                     = 21;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -54,6 +54,7 @@ public:
         "Lock Selection",
         "Lock Transform",
         "Visible",
+        "Invisible Parent",
         "Opaque",
         "Translucent",
         "Render Wireframe",
@@ -96,6 +97,11 @@ public:
     static constexpr uint64_t index_scene             = 22;
     static constexpr uint64_t index_skin              = 23;
     static constexpr uint64_t index_texture           = 24;
+    static constexpr uint64_t index_asset_folder      = 25;
+    static constexpr uint64_t index_asset_file_gltf   = 26;
+    static constexpr uint64_t index_asset_file_png    = 27;
+    static constexpr uint64_t index_asset_file_other  = 28;
+    static constexpr uint64_t count                   = 29;
 
     static constexpr uint64_t none              =  0u;
     static constexpr uint64_t animation         = (1u << index_animation        );
@@ -122,11 +128,13 @@ public:
     static constexpr uint64_t scene             = (1u << index_scene            );
     static constexpr uint64_t skin              = (1u << index_skin             );
     static constexpr uint64_t texture           = (1u << index_texture          );
-    static constexpr uint64_t count             = 25;
+    static constexpr uint64_t asset_folder      = (1u << index_asset_folder     );
+    static constexpr uint64_t asset_file_gltf   = (1u << index_asset_file_gltf  );
+    static constexpr uint64_t asset_file_png    = (1u << index_asset_file_png   );
+    static constexpr uint64_t asset_file_other  = (1u << index_asset_file_other );
 
     // NOTE: The names here must match the C++ class names
-    static constexpr const char* c_bit_labels[] =
-    {
+    static constexpr const char* c_bit_labels[] = {
         "none",
         "Animation",
         "Animation_channel",
@@ -152,10 +160,12 @@ public:
         "Rendertarget",
         "Scene",
         "Skin",
-        "Texture"
+        "Texture",
+        "Asset Folder",
+        "Asset File Folder",
+        "Asset File glTF",
+        "Asset File Other"
     };
-
-    [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
 };
 
 class Item_filter
@@ -171,95 +181,81 @@ public:
     uint64_t require_at_least_one_bit_clear{0};
 };
 
-class Item;
-
-class Item_data
-{
-public:
-    uint64_t                           flag_bits      {Item_flags::none};
-    glm::vec4                          wireframe_color{0.6f, 0.7f, 0.8f, 0.7f};
-    std::string                        name;
-    std::string                        label;
-    std::filesystem::path              source_path;
-
-    std::weak_ptr<Item>                parent{};
-    std::vector<std::shared_ptr<Item>> children;
-    std::size_t                        depth{0};
-
-    static constexpr unsigned int bit_children {1u << 0};
-    static constexpr unsigned int bit_depth    {1u << 1};
-    static constexpr unsigned int bit_flag_bits{1u << 2};
-    static constexpr unsigned int bit_host     {1u << 3};
-    static constexpr unsigned int bit_label    {1u << 4};
-    static constexpr unsigned int bit_name     {1u << 5};
-    static constexpr unsigned int bit_parent   {1u << 6};
-
-    //// static auto diff_mask(const Item_data& lhs, const Item_data& rhs) -> unsigned int;
-};
-
 class Item
     : public std::enable_shared_from_this<Item>
 {
 public:
-    Item();
-    explicit Item(const std::string_view name);
-    virtual ~Item() noexcept;
+    Item() = default;
+    explicit Item(std::size_t id) : m_id{id} {}
+    Item(const std::string_view name, std::size_t id) : m_id{id} { set_name(name); }
+    virtual ~Item() noexcept = default;
 
-    [[nodiscard]] virtual auto get_item_host       () const -> Item_host*;
-    [[nodiscard]] virtual auto get_type            () const -> uint64_t;
-    [[nodiscard]] virtual auto get_type_name       () const -> const char*;
-    [[nodiscard]] virtual auto get_parent          () const -> std::weak_ptr<Item>;
-    [[nodiscard]] virtual auto get_depth           () const -> size_t;
-    [[nodiscard]] virtual auto get_children        () const -> const std::vector<std::shared_ptr<Item>>&;
-    [[nodiscard]] virtual auto get_mutable_children() -> std::vector<std::shared_ptr<Item>>&;
-    [[nodiscard]] virtual auto get_root            () -> std::weak_ptr<Item>;
-    [[nodiscard]] virtual auto get_child_count     () const -> std::size_t;
-    [[nodiscard]] virtual auto get_child_count     (const Item_filter& filter) const -> std::size_t;
-    [[nodiscard]] virtual auto get_index_in_parent () const -> std::size_t;
-    [[nodiscard]] virtual auto get_index_of_child  (const Item* child) const -> std::optional<std::size_t>;
-    [[nodiscard]] virtual auto is_ancestor         (const Item* ancestor_candidate) const -> bool;
+    [[nodiscard]] virtual auto get_type     () const -> uint64_t { return 0; }
+    [[nodiscard]] virtual auto get_type_name() const -> std::string_view { return "Item"; }
+    [[nodiscard]] virtual auto get_item_host() const -> Item_host* { return nullptr; }
+    virtual void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) {
+        static_cast<void>(old_flag_bits);
+        static_cast<void>(new_flag_bits);
+    }
 
-    virtual void set_parent             (const std::shared_ptr<Item>& parent, std::size_t position = 0);
-    virtual void set_visible            (bool value);
-    virtual void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits );
-    virtual void handle_add_child       (const std::shared_ptr<Item>& child_node, std::size_t position = 0);
-    virtual void handle_remove_child    (Item* child_node);
-    virtual void handle_parent_update   (Item* old_parent, Item* new_parent);
-
-    [[nodiscard]] auto get_name                    () const -> const std::string&;
-    [[nodiscard]] auto get_label                   () const -> const std::string&;
     [[nodiscard]] auto get_flag_bits               () const -> uint64_t;
-    [[nodiscard]] auto get_id                      () const -> erhe::toolkit::Unique_id<Item>::id_type;
     [[nodiscard]] auto is_no_transform_update      () const -> bool;
     [[nodiscard]] auto is_transform_world_normative() const -> bool;
     [[nodiscard]] auto is_selected                 () const -> bool;
     [[nodiscard]] auto is_visible                  () const -> bool;
     [[nodiscard]] auto is_shown_in_ui              () const -> bool;
     [[nodiscard]] auto is_hidden                   () const -> bool;
-    [[nodiscard]] auto describe                    () const -> std::string;
     [[nodiscard]] auto get_wireframe_color         () const -> glm::vec4;
     [[nodiscard]] auto get_source_path             () const -> const std::filesystem::path&;
+    [[nodiscard]] auto get_name                    () const -> const std::string&;
+    [[nodiscard]] auto get_label                   () const -> const std::string&;
+    [[nodiscard]] auto get_id                      () const -> std::size_t;
+    [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
 
-    void remove                ();
-    void recursive_remove      ();
-    void set_parent            (Item* parent, std::size_t position = 0);
-    void set_depth_recursive   (std::size_t depth);
-    void sanity_check_root_path(const Item* node) const;
-    void set_name              (const std::string_view name);
-    void set_flag_bits         (uint64_t mask, bool value);
-    void enable_flag_bits      (uint64_t mask);
-    void disable_flag_bits     (uint64_t mask);
-    void set_selected          (bool value);
-    void show                  ();
-    void hide                  ();
-    void set_wireframe_color   (const glm::vec4& color);
-    void set_source_path       (const std::filesystem::path& path);
-    void trace                 ();
-    void item_sanity_check     () const;
+    void set_flag_bits    (uint64_t mask, bool value);
+    void enable_flag_bits (uint64_t mask);
+    void disable_flag_bits(uint64_t mask);
+
+    void set_name           (const std::string_view name);
+    void set_selected       (bool value);
+    void set_visible        (bool value);
+    void show               ();
+    void hide               ();
+    void set_wireframe_color(const glm::vec4& color);
+    void set_source_path    (const std::filesystem::path& path);
 
 protected:
-    erhe::toolkit::Unique_id<Item> m_id;
-    Item_data                      item_data;
+    uint64_t              m_flag_bits      {Item_flags::none};
+    glm::vec4             m_wireframe_color{0.6f, 0.7f, 0.8f, 0.7f};
+    std::string           m_name           {};
+    std::string           m_label          {};
+    std::filesystem::path m_source_path    {};
+    std::size_t           m_id             {0};
 };
 
-} // namespace erhe::scene
+template <typename T>
+auto is(const erhe::Item* const base) -> bool
+{
+    auto ptr = dynamic_cast<const T*>(base);
+    return ptr != nullptr;
+}
+
+template <typename T>
+auto is(const std::shared_ptr<erhe::Item>& base) -> bool
+{
+    return static_cast<bool>(std::dynamic_pointer_cast<T>(base));
+}
+
+template <typename T>
+auto as(erhe::Item* const base) -> T*
+{
+    return dynamic_cast<T*>(base);
+}
+
+template <typename T>
+auto as(const std::shared_ptr<erhe::Item>& base) -> std::shared_ptr<T>
+{
+    return std::dynamic_pointer_cast<T>(base);
+}
+
+} // namespace erhe

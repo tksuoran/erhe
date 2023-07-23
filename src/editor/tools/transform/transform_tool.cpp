@@ -274,7 +274,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     }
     std::size_t i = 0;
     for (const auto& item : selection) {
-        std::shared_ptr<erhe::scene::Node> node = as_node(item);
+        std::shared_ptr<erhe::scene::Node> node = as<erhe::scene::Node>(item);
         if (!node) {
             continue;
         }
@@ -326,7 +326,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
         }
         const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
             node->get_flag_bits(),
-            erhe::scene::Item_flags::lock_viewport_transform
+            erhe::Item_flags::lock_viewport_transform
         );
         if (node_lock_viewport_transform) {
             continue;
@@ -361,7 +361,7 @@ void Transform_tool::adjust_translation(const vec3 translation)
         }
         const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
             node->get_flag_bits(),
-            erhe::scene::Item_flags::lock_viewport_transform
+            erhe::Item_flags::lock_viewport_transform
         );
         if (node_lock_viewport_transform) {
             continue;
@@ -389,7 +389,7 @@ void Transform_tool::adjust_rotation(
             }
             const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
                 node->get_flag_bits(),
-                erhe::scene::Item_flags::lock_viewport_transform
+                erhe::Item_flags::lock_viewport_transform
             );
             if (node_lock_viewport_transform) {
                 continue;
@@ -424,7 +424,7 @@ void Transform_tool::adjust_scale(
             }
             const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
                 node->get_flag_bits(),
-                erhe::scene::Item_flags::lock_viewport_transform
+                erhe::Item_flags::lock_viewport_transform
             );
             if (node_lock_viewport_transform) {
                 continue;
@@ -456,7 +456,9 @@ void Transform_tool::update_hover()
 {
     auto* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
-        m_hover_handle = Handle::e_handle_none;
+        if (m_hover_handle != Handle::e_handle_none) {
+            m_hover_handle = Handle::e_handle_none;
+        }
         return;
     }
 
@@ -468,11 +470,11 @@ void Transform_tool::update_hover()
         return;
     }
 
-    const auto new_handle = get_handle(tool.mesh.get());
+    const auto new_handle = get_handle(tool.mesh);
     if (m_hover_handle == new_handle) {
         return;
     }
-    m_hover_handle = get_handle(tool.mesh.get());
+    m_hover_handle = new_handle;
 
     m_hover_tool = [&]() -> Subtool* {
         switch (get_handle_tool(m_hover_handle)) {
@@ -609,20 +611,22 @@ void Transform_tool::release_node_physics()
 
         // TODO Make it so that release will be called when node physics is removed by any means
         //      This would require Transform_tool to listen to node attachment or something.
-        if (node_physics) {
-            auto* const rigid_body = node_physics->get_rigid_body();
-            if (node_physics && (rigid_body != nullptr)) {
-                if (entry.original_motion_mode.has_value()) {
-                    log_trs_tool->trace("S restoring old physics node");
-                    rigid_body->set_motion_mode(entry.original_motion_mode.value());
-                }
-                rigid_body->set_linear_velocity (vec3{0.0f, 0.0f, 0.0f});
-                rigid_body->set_angular_velocity(vec3{0.0f, 0.0f, 0.0f});
-                rigid_body->end_move            ();
-                node_physics->handle_node_transform_update();
-                entry.original_motion_mode.reset();
-            }
+        if (!node_physics) {
+            continue;
         }
+        auto* const rigid_body = node_physics->get_rigid_body();
+        if (rigid_body == nullptr) {
+            continue;
+        }
+        if (entry.original_motion_mode.has_value()) {
+            log_trs_tool->trace("S restoring old physics node");
+            rigid_body->set_motion_mode(entry.original_motion_mode.value());
+        }
+        rigid_body->set_linear_velocity (vec3{0.0f, 0.0f, 0.0f});
+        rigid_body->set_angular_velocity(vec3{0.0f, 0.0f, 0.0f});
+        rigid_body->end_move            ();
+        node_physics->handle_node_transform_update();
+        entry.original_motion_mode.reset();
     }
     shared.touched = false;
     log_trs_tool->trace("TRS end_move");
@@ -763,7 +767,7 @@ void Transform_tool::record_transform_operation()
         );
         compompound_parameters.operations.push_back(node_operation);
     }
-    m_context.operation_stack->push(
+    m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             std::move(compompound_parameters)
         )

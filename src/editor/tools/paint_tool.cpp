@@ -87,14 +87,17 @@ auto Paint_vertex_command::try_call() -> bool
 namespace {
 
 auto vertex_id_from_corner_id(
-    const std::shared_ptr<erhe::scene::Mesh>& mesh,
-    const erhe::geometry::Geometry&           geometry,
-    const erhe::geometry::Corner_id           corner_id
+    const erhe::scene::Mesh&        mesh,
+    const erhe::geometry::Geometry& geometry,
+    const erhe::geometry::Corner_id corner_id
 ) -> std::optional<uint32_t>
 {
-    for (const auto& primitive : mesh->mesh_data.primitives) {
-        if (primitive.source_geometry.get() == &geometry) {
-            return primitive.gl_primitive_geometry.corner_to_vertex_id.at(corner_id);
+    for (const auto& primitive : mesh.mesh_data.primitives) {
+        const auto& geometry_primitive = primitive.geometry_primitive;
+        if (geometry_primitive) {
+            if (geometry_primitive->source_geometry.get() == &geometry) {
+                return geometry_primitive->gl_geometry_mesh.corner_to_vertex_id.at(corner_id);
+            }
         }
     }
     return std::nullopt;
@@ -232,10 +235,10 @@ auto Paint_tool::try_ready() -> bool
 }
 
 void Paint_tool::paint_corner(
-    const std::shared_ptr<erhe::scene::Mesh>& mesh,
-    const erhe::geometry::Geometry&           geometry,
-    erhe::geometry::Corner_id                 corner_id,
-    const glm::vec4                           color
+    const erhe::scene::Mesh&        mesh,
+    const erhe::geometry::Geometry& geometry,
+    erhe::geometry::Corner_id       corner_id,
+    const glm::vec4                 color
 )
 {
     const auto vertex_id_opt = vertex_id_from_corner_id(mesh, geometry, corner_id);
@@ -246,10 +249,10 @@ void Paint_tool::paint_corner(
 }
 
 void Paint_tool::paint_vertex(
-    const std::shared_ptr<erhe::scene::Mesh>& mesh,
-    const erhe::geometry::Geometry&           geometry,
-    const uint32_t                            vertex_id,
-    const glm::vec4                           color
+    const erhe::scene::Mesh&        mesh,
+    const erhe::geometry::Geometry& geometry,
+    const uint32_t                  vertex_id,
+    const glm::vec4                 color
 )
 {
     auto& mesh_memory = *m_context.mesh_memory;
@@ -267,9 +270,13 @@ void Paint_tool::paint_vertex(
 
     ERHE_VERIFY(attribute.get()->data_type.type == gl::Vertex_attrib_type::float_);
 
-    for (const auto& primitive : mesh->mesh_data.primitives) {
-        if (primitive.source_geometry.get() == &geometry) {
-            const std::size_t range_byte_offset = primitive.gl_primitive_geometry.vertex_buffer_range.byte_offset;
+    for (const auto& primitive : mesh.mesh_data.primitives) {
+        const auto& geometry_primitive = primitive.geometry_primitive;
+        if (!geometry_primitive) {
+            continue;
+        }
+        if (geometry_primitive->source_geometry.get() == &geometry) {
+            const std::size_t range_byte_offset = geometry_primitive->gl_geometry_mesh.vertex_buffer_range.byte_offset;
             mesh_memory.gl_buffer_transfer_queue.enqueue(
                 mesh_memory.gl_vertex_buffer,
                 range_byte_offset + vertex_offset,
@@ -292,24 +299,26 @@ void Paint_tool::paint()
 
     const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
     if (
-        !content.valid ||
-        !content.mesh ||
-        (content.geometry == nullptr) ||
-        !content.position.has_value()
+        !content.valid                ||
+        !content.position.has_value() ||
+        !content.geometry
     ) {
         return;
     }
 
-    auto* const point_locations = content.geometry->point_attributes().find<glm::vec3>(
+    ERHE_VERIFY(content.mesh != nullptr);
+    ERHE_VERIFY(content.primitive_index != std::numeric_limits<std::size_t>::max());
+
+    erhe::geometry::Geometry& geometry = *content.geometry.get();
+    auto* const point_locations = geometry.point_attributes().find<glm::vec3>(
         erhe::geometry::c_point_locations
     );
     if (point_locations == nullptr) {
         return;
     }
 
-    const erhe::geometry::Polygon_id polygon_id = static_cast<erhe::geometry::Polygon_id>(content.local_index);
-    const erhe::geometry::Polygon&   polygon    = content.geometry->polygons.at(polygon_id);
-
+    const erhe::geometry::Polygon_id polygon_id = static_cast<erhe::geometry::Polygon_id>(content.polygon_id);
+    const erhe::geometry::Polygon&   polygon    = geometry.polygons.at(polygon_id);
     if (polygon.corner_count == 0) {
         return;
     }
@@ -327,9 +336,8 @@ void Paint_tool::paint()
     erhe::geometry::Point_id  nearest_point_id     = 0;
     erhe::geometry::Corner_id nearest_corner_id    = 0;
     polygon.for_each_corner_const(
-        *content.geometry,
-        [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i)
-        {
+        geometry,
+        [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
             const erhe::geometry::Point_id point_id = i.corner.point_id;
             const glm::vec3 p = point_locations->get(point_id);
             const float d2 = glm::distance2(hover_position_in_mesh, p);
@@ -346,24 +354,26 @@ void Paint_tool::paint()
 
     switch (m_paint_mode) {
         case Paint_mode::Corner: {
-            paint_corner(content.mesh, *content.geometry, nearest_corner_id, m_color);
+            paint_corner(*content.mesh, geometry, nearest_corner_id, m_color);
             break;
         }
         case Paint_mode::Point: {
-            const erhe::geometry::Corner& corner = content.geometry->corners.at(nearest_corner_id);
-            const erhe::geometry::Point&  point  = content.geometry->points.at(corner.point_id);
+            const erhe::geometry::Corner& corner = geometry.corners.at(nearest_corner_id);
+            const erhe::geometry::Point&  point  = geometry.points.at(corner.point_id);
             //const uint32_t vertex_id = content.p
-            point.for_each_corner_const(*content.geometry, [&](const auto& i){
-                paint_corner(content.mesh, *content.geometry, i.corner_id, m_color);
-            });
+            point.for_each_corner_const(
+                geometry,
+                [&](const auto& i) {
+                    paint_corner(*content.mesh, geometry, i.corner_id, m_color);
+                }
+            );
             break;
         }
         case Paint_mode::Polygon: {
             polygon.for_each_corner_const(
-                *content.geometry,
-                [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i)
-                {
-                    paint_corner(content.mesh, *content.geometry, i.corner_id, m_color);
+                geometry,
+                [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
+                    paint_corner(*content.mesh, geometry, i.corner_id, m_color);
                 }
             );
             break;
@@ -404,13 +414,27 @@ void Paint_tool::imgui()
     }
     if (ImGui::Button("Color Selection") && !m_ngon_colors.empty()) {
         const auto& selection = m_context.selection->get_selection();
-        for (const auto& node : selection) {
-            const auto& mesh = as_mesh(node);
+        for (const auto& item : selection) {
+            auto* node = as<erhe::scene::Node>(item).get();
+            auto mesh = as<erhe::scene::Mesh>(item);
             if (!mesh) {
-                continue;
+                if (node) {
+                    mesh = erhe::scene::get_mesh(node);
+                }
+                if (!mesh) {
+                    continue;
+                }
             }
             for (const auto& primitive : mesh->mesh_data.primitives) {
-                primitive.source_geometry->for_each_polygon_const(
+                const auto& geometry_primitive = primitive.geometry_primitive;
+                if (!geometry_primitive) {
+                    continue;
+                }
+                const auto& geometry = geometry_primitive->source_geometry;
+                if (!geometry) {
+                    continue;
+                }
+                geometry->for_each_polygon_const(
                     [&](const auto& i) {
                         const std::size_t color_index = std::min(
                             static_cast<std::size_t>(i.polygon.corner_count),
@@ -419,10 +443,9 @@ void Paint_tool::imgui()
 
                         const glm::vec4 color = m_ngon_colors.at(color_index);
                         i.polygon.for_each_corner_const(
-                            *primitive.source_geometry.get(),
-                            [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i)
-                            {
-                                paint_corner(mesh, *primitive.source_geometry, i.corner_id, color);
+                            *geometry.get(),
+                            [&](const erhe::geometry::Polygon::Polygon_corner_context_const& i) {
+                                paint_corner(*mesh, *geometry.get(), i.corner_id, color);
                             }
                         );
                     }

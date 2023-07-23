@@ -24,7 +24,7 @@ public:
     void disable      ()                          override;
     void set_transform(const glm::mat4 transform) override;
     void set_scene    (IScene* scene)             override;
-    void set_mask     (const uint32_t mask)       override;
+    void set_mask     (uint32_t mask)             override;
     void set_user_data(void* ptr)                 override;
     [[nodiscard]] auto get_transform() const -> glm::mat4        override;
     [[nodiscard]] auto get_scene    () const -> IScene*          override;
@@ -34,7 +34,7 @@ public:
     [[nodiscard]] auto debug_label  () const -> std::string_view override;
 
     // Bvh_instance public API
-    void intersect(Ray& ray, Hit& hit);
+    auto intersect(Ray& ray, Hit& hit) -> bool;
 
 private:
     glm::mat4   m_transform{1.0f};

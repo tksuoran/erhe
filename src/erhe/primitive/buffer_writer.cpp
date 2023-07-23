@@ -1,7 +1,7 @@
 #include "erhe/primitive/buffer_writer.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/primitive/geometry_mesh.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -268,8 +268,8 @@ Vertex_buffer_writer::Vertex_buffer_writer(
     : build_context{build_context}
     , buffer_sink  {buffer_sink}
 {
-    Expects(build_context.root.primitive_geometry != nullptr);
-    const auto& vertex_buffer_range = build_context.root.primitive_geometry->vertex_buffer_range;
+    Expects(build_context.root.geometry_mesh != nullptr);
+    const auto& vertex_buffer_range = build_context.root.geometry_mesh->vertex_buffer_range;
     vertex_data.resize(vertex_buffer_range.count * vertex_buffer_range.element_size);
     vertex_data_span = gsl::make_span(vertex_data);
 }
@@ -281,7 +281,7 @@ Vertex_buffer_writer::~Vertex_buffer_writer() noexcept
 
 auto Vertex_buffer_writer::start_offset() -> std::size_t
 {
-    return build_context.root.primitive_geometry->vertex_buffer_range.byte_offset;
+    return build_context.root.geometry_mesh->vertex_buffer_range.byte_offset;
 }
 
 Index_buffer_writer::Index_buffer_writer(
@@ -291,11 +291,11 @@ Index_buffer_writer::Index_buffer_writer(
     : build_context  {build_context}
     , buffer_sink    {buffer_sink}
     , index_type     {build_context.root.build_info.buffer_info.index_type}
-    , index_type_size{build_context.root.primitive_geometry->index_buffer_range.element_size}
+    , index_type_size{build_context.root.geometry_mesh->index_buffer_range.element_size}
 {
-    Expects(build_context.root.primitive_geometry != nullptr);
-    const auto& primitive_geometry = *build_context.root.primitive_geometry;
-    const auto& index_buffer_range = primitive_geometry.index_buffer_range;
+    Expects(build_context.root.geometry_mesh != nullptr);
+    const auto& geometry_mesh = *build_context.root.geometry_mesh;
+    const auto& index_buffer_range = geometry_mesh.index_buffer_range;
     const auto& mesh_info          = build_context.root.mesh_info;
     index_data.resize(index_buffer_range.count * index_type_size);
     index_data_span = gsl::make_span(index_data);
@@ -304,25 +304,25 @@ Index_buffer_writer::Index_buffer_writer(
 
     if (primitive_types.corner_points) {
         corner_point_index_data_span = index_data_span.subspan(
-            primitive_geometry.corner_point_indices.first_index * index_type_size,
+            geometry_mesh.corner_point_indices.first_index * index_type_size,
             mesh_info.index_count_corner_points * index_type_size
         );
     }
     if (primitive_types.fill_triangles) {
         triangle_fill_index_data_span = index_data_span.subspan(
-            primitive_geometry.triangle_fill_indices.first_index * index_type_size,
+            geometry_mesh.triangle_fill_indices.first_index * index_type_size,
             mesh_info.index_count_fill_triangles * index_type_size
         );
     }
     if (primitive_types.edge_lines) {
         edge_line_index_data_span = index_data_span.subspan(
-            primitive_geometry.edge_line_indices.first_index * index_type_size,
+            geometry_mesh.edge_line_indices.first_index * index_type_size,
             mesh_info.index_count_edge_lines * index_type_size
         );
     }
     if (primitive_types.centroid_points) {
         polygon_centroid_index_data_span = index_data_span.subspan(
-            primitive_geometry.polygon_centroid_indices.first_index * index_type_size,
+            geometry_mesh.polygon_centroid_indices.first_index * index_type_size,
             mesh_info.polygon_count * index_type_size
         );
     }
@@ -335,7 +335,7 @@ Index_buffer_writer::~Index_buffer_writer() noexcept
 
 auto Index_buffer_writer::start_offset() -> std::size_t
 {
-    return build_context.root.primitive_geometry->index_buffer_range.byte_offset;
+    return build_context.root.geometry_mesh->index_buffer_range.byte_offset;
 }
 
 void Vertex_buffer_writer::write(

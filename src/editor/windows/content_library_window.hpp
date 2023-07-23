@@ -55,7 +55,7 @@ private:
                 ImGuiTreeNodeFlags_SpanFullWidth
             };
 
-            if (!ImGui::TreeNodeEx(library.get_type_name(), parent_flags)) {
+            if (!ImGui::TreeNodeEx(library.get_type_name().data(), parent_flags)) {
                 return;
             }
 

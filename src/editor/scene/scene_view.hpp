@@ -27,6 +27,9 @@ namespace erhe::geometry {
 namespace erhe::graphics {
     class Texture;
 }
+namespace erhe::primitive {
+    class Geometry_primitive;
+}
 namespace erhe::scene {
     class Camera;
     class Mesh;
@@ -43,6 +46,7 @@ class Editor_message;
 class Editor_message_bus;
 class Grid;
 class Node_raytrace;
+class Raytrace_primitive;
 class Scene_root;
 class Shadow_render_node;
 class Viewport_window;
@@ -83,18 +87,18 @@ public:
 
     void reset();
 
-    std::size_t                               slot         {slot_count};
-    uint32_t                                  mask         {0};
-    bool                                      valid        {false};
-    const Node_raytrace*                      raytrace_node{nullptr};
-    std::shared_ptr<erhe::scene::Mesh>        mesh         {};
-    const Grid*                               grid         {nullptr};
-    std::shared_ptr<erhe::geometry::Geometry> geometry     {};
-    std::optional<glm::vec3>                  position     {};
-    std::optional<glm::vec3>                  normal       {};
-    std::optional<glm::vec2>                  uv           {};
-    std::size_t                               primitive    {std::numeric_limits<std::size_t>::max()};
-    std::size_t                               local_index  {std::numeric_limits<std::size_t>::max()};
+    std::size_t                               slot           {slot_count};
+    uint32_t                                  mask           {0};
+    bool                                      valid          {false};
+    erhe::scene::Mesh*                        mesh           {nullptr};
+    const Grid*                               grid           {nullptr};
+    std::size_t                               primitive_index{std::numeric_limits<std::size_t>::max()};
+    std::shared_ptr<erhe::geometry::Geometry> geometry;
+    std::optional<glm::vec3>                  position       {};
+    std::optional<glm::vec3>                  normal         {};
+    std::optional<glm::vec2>                  uv             {};
+    std::size_t                               triangle_id    {std::numeric_limits<std::size_t>::max()};
+    std::size_t                               polygon_id     {std::numeric_limits<std::size_t>::max()};
 };
 
 class Scene_view

@@ -36,7 +36,7 @@
 #include "windows/debug_view_window.hpp"
 #include "windows/layers_window.hpp"
 #include "windows/network_window.hpp"
-#include "windows/node_tree_window.hpp"
+#include "windows/item_tree_window.hpp"
 #include "windows/operations.hpp"
 #include "windows/physics_window.hpp"
 #include "windows/post_processing_window.hpp"
@@ -73,6 +73,7 @@
 #   include "erhe/imgui/windows/performance_window.hpp"
 #   include "erhe/imgui/windows/pipelines.hpp"
 #endif
+#include "erhe/item/item_log.hpp"
 #include "erhe/log/log.hpp"
 #include "erhe/net/net_log.hpp"
 #include "erhe/physics/physics_log.hpp"
@@ -180,7 +181,6 @@ public:
         , m_commands_window       {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_layers_window         {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_network_window        {m_imgui_renderer, m_imgui_windows, m_editor_context, m_time}
-        , m_node_tree_window      {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_operations            {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_physics_window        {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_post_processing_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
@@ -193,8 +193,8 @@ public:
         , m_pipelines             {m_imgui_renderer, m_imgui_windows}
 
         , m_tools{
-            m_graphics_instance, m_scene_message_bus, m_editor_context, m_editor_rendering,
-            m_editor_scenes,     m_mesh_memory,       m_programs
+            m_graphics_instance, m_scene_message_bus, m_editor_context,
+            m_editor_rendering,  m_mesh_memory,       m_programs
         }
         , m_scene_builder{
             m_graphics_instance,
@@ -389,6 +389,7 @@ public:
         m_imgui_renderer.next_frame();
         m_editor_rendering.end_frame();
         m_commands.on_idle();
+        m_operation_stack.update();
         if (!m_openxr) {
             m_context_window.swap_buffers();
         }
@@ -448,7 +449,6 @@ public:
     Commands_window                         m_commands_window;
     Layers_window                           m_layers_window;
     Network_window                          m_network_window;
-    Item_tree_window                        m_node_tree_window;
     Operations                              m_operations;
     Physics_window                          m_physics_window;
     Post_processing_window                  m_post_processing_window;
@@ -504,6 +504,7 @@ void run_editor()
     erhe::geometry::initialize_logging();
     erhe::graphics::initialize_logging();
     erhe::imgui::initialize_logging();
+    erhe::item::initialize_logging();
     erhe::net::initialize_logging();
     erhe::physics::initialize_logging();
     erhe::primitive::initialize_logging();

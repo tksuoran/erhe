@@ -1,11 +1,14 @@
 #include "scene/scene_root.hpp"
 
 #include "editor_log.hpp"
+#include "editor_scenes.hpp"
+#include "editor_settings.hpp"
 #include "rendertarget_mesh.hpp"
 
 #include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace.hpp"
+#include "windows/item_tree_window.hpp"
 
 #include "erhe/primitive/material.hpp"
 #include "erhe/physics/iworld.hpp"
@@ -39,13 +42,13 @@ using erhe::primitive::Material;
 
 Scene_layers::Scene_layers()
 {
-    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::scene::Item_flags::brush,        Mesh_layer_id::brush);
-    m_content      = std::make_shared<Mesh_layer>("content",      erhe::scene::Item_flags::content,      Mesh_layer_id::content);
-    m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::scene::Item_flags::controller,   Mesh_layer_id::controller);
-    m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::scene::Item_flags::rendertarget, Mesh_layer_id::rendertarget);
-    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::scene::Item_flags::tool,         Mesh_layer_id::tool);
+    m_brush        = std::make_shared<Mesh_layer>("brush",        erhe::Item_flags::brush,        Mesh_layer_id::brush);
+    m_content      = std::make_shared<Mesh_layer>("content",      erhe::Item_flags::content,      Mesh_layer_id::content);
+    m_controller   = std::make_shared<Mesh_layer>("controller",   erhe::Item_flags::controller,   Mesh_layer_id::controller);
+    m_rendertarget = std::make_shared<Mesh_layer>("rendertarget", erhe::Item_flags::rendertarget, Mesh_layer_id::rendertarget);
+    m_tool         = std::make_shared<Mesh_layer>("tool",         erhe::Item_flags::tool,         Mesh_layer_id::tool);
 
-    m_light = std::make_shared<Light_layer>("lights", 0);
+    m_light        = std::make_shared<Light_layer>("lights", 0);
 }
 
 void Scene_layers::add_layers_to_scene(erhe::scene::Scene& scene)
@@ -91,6 +94,7 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 
 Scene_root::Scene_root(
     erhe::scene::Scene_message_bus&         scene_message_bus,
+    Editor_scenes*                          editor_scenes,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name
 )
@@ -99,6 +103,7 @@ Scene_root::Scene_root(
     ERHE_PROFILE_FUNCTION();
 
     m_scene = std::make_unique<Scene>(scene_message_bus, name, this);
+    //m_scene->enable_flag_bits(erhe::Item_flags::invisible_parent);
     m_layers.add_layers_to_scene(*m_scene.get());
 
     // Layer configuration
@@ -106,9 +111,98 @@ Scene_root::Scene_root(
     using std::make_unique;
     using erhe::scene::Node;
 
-    m_scene->enable_flag_bits(erhe::scene::Item_flags::show_in_ui);
+    //m_scene->enable_flag_bits(erhe::Item_flags::show_in_ui);
+    m_scene->get_root_node()->enable_flag_bits(erhe::Item_flags::invisible_parent);
     m_physics_world  = erhe::physics::IWorld::create_unique();
-    m_raytrace_scene = erhe::raytrace::IScene::create_unique("root");
+
+    m_raytrace_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
+
+    if (editor_scenes != nullptr) {
+        register_to_editor_scenes(*editor_scenes);
+    }
+}
+
+Scene_root::~Scene_root() noexcept
+{
+    if (m_is_registered) { // && (m_editor_scenes != nullptr)) {
+        unregister_from_editor_scenes(*m_editor_scenes);
+    }
+}
+
+void sanitize(std::string& s)
+{
+    s.erase(
+        std::remove_if(
+            s.begin(), s.end(), [](const char c) {
+                return '\n' == c || '\r' == c || '\0' == c || '\x1A' == c;
+            }
+        ),
+        s.end()
+    );
+    std::replace_if(s.begin(), s.end(), [](const char c){ return !std::isalnum(c); }, '_');
+}
+
+auto Scene_root::make_browser_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Editor_context&              context,
+    Editor_settings&             editor_settings
+) -> std::shared_ptr<Item_tree_window>
+{
+    std::string ini_label = m_scene->get_name();
+    sanitize(ini_label);
+    m_node_tree_window = std::make_shared<Item_tree_window>(
+        imgui_renderer,
+        imgui_windows,
+        context,
+        m_scene->get_name(),
+        fmt::format("scene_node_tree_{}", ini_label),
+        m_scene->get_root_node()
+    );
+    m_node_tree_window->set_item_filter(
+        editor_settings.node_tree_show_all
+            ? erhe::Item_filter{
+                .require_all_bits_set           = 0,
+                .require_at_least_one_bit_set   = 0,
+                .require_all_bits_clear         = 0,//erhe::Item_flags::tool | erhe::Item_flags::brush,
+                .require_at_least_one_bit_clear = 0
+            }
+            : erhe::Item_filter{
+                .require_all_bits_set           = erhe::Item_flags::show_in_ui,
+                .require_at_least_one_bit_set   = 0,
+                .require_all_bits_clear         = 0, //erhe::Item_flags::tool | erhe::Item_flags::brush,
+                .require_at_least_one_bit_clear = 0
+            }
+    );
+    m_node_tree_window->set_item_callback(
+        [this](const std::shared_ptr<erhe::Item>& item) {
+            return ImGui::IsDragDropActive() && m_node_tree_window->drag_and_drop_target(item);
+        }
+    );
+    return m_node_tree_window;
+}
+
+void Scene_root::remove_browser_window()
+{
+    m_node_tree_window.reset();
+}
+
+void Scene_root::register_to_editor_scenes(Editor_scenes& editor_scenes)
+{
+    ERHE_VERIFY(m_is_registered == false);
+    ERHE_VERIFY(m_editor_scenes == nullptr);
+    m_editor_scenes = &editor_scenes;
+    editor_scenes.register_scene_root(this);
+    m_is_registered = true;
+}
+
+void Scene_root::unregister_from_editor_scenes(Editor_scenes& editor_scenes)
+{
+    ERHE_VERIFY(m_is_registered == true);
+    ERHE_VERIFY(m_editor_scenes == &editor_scenes);
+    m_editor_scenes = nullptr;
+    editor_scenes.unregister_scene_root(this);
+    m_is_registered = false;
 }
 
 [[nodiscard]] auto Scene_root::get_host_name() const -> const char*
@@ -152,13 +246,26 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
 
+    // Automatically add Node_raytrace to every mesh added to Scene_root
+    auto* node = mesh->get_node();
+    ERHE_VERIFY(node != nullptr);
+    std::shared_ptr<Node_raytrace> node_raytrace = get_node_raytrace(node);
+    if (!node_raytrace) {
+        node_raytrace = std::make_shared<Node_raytrace>(mesh);
+        node->attach(node_raytrace);
+    }
+
     if (m_scene) {
         m_scene->register_mesh(mesh);
     }
 
+    if (mesh->mesh_data.skin) {
+        register_skin(mesh->mesh_data.skin);
+    }
+
     if (is_rendertarget(mesh)) {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
-        m_rendertarget_meshes.push_back(as_rendertarget(mesh));
+        m_rendertarget_meshes.push_back(as<Rendertarget_mesh>(mesh));
     }
 
     // Make sure materials are in the material library
@@ -175,7 +282,7 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     if (is_rendertarget(mesh)) {
         const std::lock_guard<std::mutex> lock{m_rendertarget_meshes_mutex};
-        const auto rendertarget = as_rendertarget(mesh);
+        const auto rendertarget = as<Rendertarget_mesh>(mesh);
         const auto i = std::remove(m_rendertarget_meshes.begin(), m_rendertarget_meshes.end(), rendertarget);
         if (i == m_rendertarget_meshes.end()) {
             log_scene->error("rendertarget mesh {} not in scene root", rendertarget->get_name());
@@ -183,6 +290,11 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
             m_rendertarget_meshes.erase(i, m_rendertarget_meshes.end());
         }
     }
+
+    if (mesh->mesh_data.skin) {
+        unregister_skin(mesh->mesh_data.skin);
+    }
+
     if (m_scene) {
         m_scene->unregister_mesh(mesh);
     }
@@ -313,7 +425,6 @@ void Scene_root::update_physics_simulation_once_per_frame()
     }
 }
 
-//
 void Scene_root::register_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace)
 {
     log_raytrace->trace("RT add {} node {} to {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
@@ -332,13 +443,13 @@ void Scene_root::register_node_raytrace(const std::shared_ptr<Node_raytrace>& no
         m_node_raytraces.push_back(node_raytrace);
     }
 
-    erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
-    m_raytrace_scene->attach(rt_instance);
+    node_raytrace->attach_to_scene(m_raytrace_scene.get());
+
     uint32_t mask = 0;
     for (const auto& node_attachment : node_raytrace->get_node()->get_attachments()) {
         mask = mask | raytrace_node_mask(*node_attachment.get());
     }
-    rt_instance->set_mask(mask);
+    node_raytrace->set_mask(mask);
     log_raytrace->trace("RT {} node {} attached to {}, mask = {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name(), mask);
 }
 
@@ -365,12 +476,11 @@ void Scene_root::unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& 
         m_node_raytraces.erase(i, m_node_raytraces.end());
     }
 
-    erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
-    m_raytrace_scene->detach(rt_instance);
+    //erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
+    //m_raytrace_scene->detach(rt_instance);
+    node_raytrace->detach_from_scene(m_raytrace_scene.get());
     log_raytrace->trace("RT {} node {} detached from {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
 }
-
-//
 
 [[nodiscard]] auto Scene_root::layers() -> Scene_layers&
 {

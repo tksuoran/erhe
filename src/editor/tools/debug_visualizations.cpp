@@ -19,7 +19,7 @@
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/log/log_glm.hpp"
-#include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/primitive/geometry_mesh.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/light.hpp"
@@ -86,14 +86,14 @@ auto Debug_visualizations::get_selected_camera(
     const auto* scene     = render_context.get_scene();
     const auto& selection = m_context.selection->get_selection();
 
-    for (const auto& scene_item : selection) {
-        const auto& node = as_node(scene_item);
+    for (const auto& item : selection) {
+        const auto& node = as<erhe::scene::Node>(item);
         if (node) {
             if (node->get_scene() != scene) {
                 continue;
             }
             for (const auto& attachment : node->get_attachments()) {
-                const auto camera = as_camera(attachment);
+                const auto camera = as<erhe::scene::Camera>(attachment);
                 if (camera) {
                     return camera;
                 }
@@ -134,21 +134,21 @@ void Debug_visualizations::mesh_selection_visualization(
         : Trs_transform{};
 
     for (const auto& primitive : mesh->mesh_data.primitives) {
-        if (!primitive.source_geometry) {
+        if (!primitive.geometry_primitive) {
             continue;
         }
-        const auto& primitive_geometry = primitive.gl_primitive_geometry;
+        const auto& geometry_mesh = primitive.geometry_primitive->gl_geometry_mesh;
 
-        const float box_volume    = primitive_geometry.bounding_box.volume();
-        const float sphere_volume = primitive_geometry.bounding_sphere.volume();
+        const float box_volume    = geometry_mesh.bounding_box.volume();
+        const float sphere_volume = geometry_mesh.bounding_sphere.volume();
         //const bool  smallest_visualization = !m_viewport_config->selection_bounding_box && !m_viewport_config->selection_bounding_sphere;
         const bool  box_smaller   = box_volume < sphere_volume;
 
         if (box_smaller) {
             m_selection_bounding_volume.add_box(
                 node->world_from_node(),
-                primitive_geometry.bounding_box.min,
-                primitive_geometry.bounding_box.max
+                geometry_mesh.bounding_box.min,
+                geometry_mesh.bounding_box.max
             );
         }
         if (
@@ -162,15 +162,15 @@ void Debug_visualizations::mesh_selection_visualization(
             line_renderer.add_cube(
                 node->world_from_node(),
                 m_selection_major_color,
-                primitive_geometry.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
-                primitive_geometry.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
+                geometry_mesh.bounding_box.min - glm::vec3{m_gap, m_gap, m_gap},
+                geometry_mesh.bounding_box.max + glm::vec3{m_gap, m_gap, m_gap}
             );
         }
         if (!box_smaller) {
             m_selection_bounding_volume.add_sphere(
                 node->world_from_node(),
-                primitive_geometry.bounding_sphere.center,
-                primitive_geometry.bounding_sphere.radius
+                geometry_mesh.bounding_sphere.center,
+                geometry_mesh.bounding_sphere.radius
             );
         }
         if (
@@ -187,8 +187,8 @@ void Debug_visualizations::mesh_selection_visualization(
                     m_selection_minor_color,
                     m_selection_major_width,
                     m_selection_minor_width,
-                    primitive_geometry.bounding_sphere.center,
-                    primitive_geometry.bounding_sphere.radius + m_gap,
+                    geometry_mesh.bounding_sphere.center,
+                    geometry_mesh.bounding_sphere.radius + m_gap,
                     &camera_world_from_node_transform,
                     m_sphere_step_count
                 );
@@ -304,7 +304,7 @@ void Debug_visualizations::light_visualization(
     ERHE_PROFILE_FUNCTION();
 
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(light->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations)) {
+    if (!test_all_rhs_bits_set(light->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
         return;
     }
 
@@ -601,7 +601,7 @@ void Debug_visualizations::camera_visualization(
     }
 
     using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(camera->get_flag_bits(), erhe::scene::Item_flags::show_debug_visualizations)) {
+    if (!test_all_rhs_bits_set(camera->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
         return;
     }
 
@@ -649,8 +649,8 @@ void Debug_visualizations::selection_visualization(
     const auto& selection = m_context.selection->get_selection();
 
     m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
-    for (const auto& scene_item : selection) {
-        const auto& node = as_node(scene_item);
+    for (const auto& item : selection) {
+        const auto& node = as<erhe::scene::Node>(item);
         if (node) {
             if (node->get_scene() != scene) {
                 continue;
@@ -666,7 +666,7 @@ void Debug_visualizations::selection_visualization(
                 line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
             }
             for (const auto& attachment : node->get_attachments()) {
-                const auto mesh = as_mesh(attachment);
+                const auto mesh = as<erhe::scene::Mesh>(attachment);
                 if (mesh) {
                     mesh_selection_visualization(context, mesh.get());
                 }
@@ -675,7 +675,7 @@ void Debug_visualizations::selection_visualization(
                 //    skin_visualization(context, skin.get());
                 //}
 
-                const auto camera = as_camera(attachment);
+                const auto camera = as<erhe::scene::Camera>(attachment);
                 if (
                     camera &&
                     (viewport_config.debug_visualizations.camera == erhe::renderer::Visualization_mode::selected)
@@ -808,29 +808,33 @@ void Debug_visualizations::raytrace_nodes_visualization(
     const std::shared_ptr<Scene_root>& scene_root
 )
 {
-    ERHE_PROFILE_FUNCTION();
+    static_cast<void>(scene_root);
 
-    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+    //// ERHE_PROFILE_FUNCTION();
+    //// 
+    //// auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+    //// 
+    //// const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+    //// const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+    //// const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+    //// 
+    //// for (const auto& mesh : scene_root->layers().content()->meshes) {
+    ////     const auto* node = mesh->get_node();
+    ////     if (node == nullptr) {
+    ////         continue;
+    ////     }
 
-    const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
-    const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
-    const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-
-    for (const auto& mesh : scene_root->layers().content()->meshes) {
-        const auto* node = mesh->get_node();
-        if (node == nullptr) {
-            continue;
-        }
-
-        const auto& node_raytrace = get_raytrace(node);
-        if (node_raytrace) {
-            const erhe::raytrace::IInstance* instance = node_raytrace->raytrace_instance();
-            const auto m = instance->get_transform();
-            line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-            line_renderer.add_lines( m, green, {{ O, axis_y }} );
-            line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
-        }
-    }
+        //// TODO RAYTRACE
+        ////
+        //// const auto& node_raytrace = get_node_raytrace(node);
+        //// if (node_raytrace) {
+        ////     const erhe::raytrace::IInstance* instance = node_raytrace->raytrace_instance();
+        ////     const auto m = instance->get_transform();
+        ////     line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+        ////     line_renderer.add_lines( m, green, {{ O, axis_y }} );
+        ////     line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+        //// }
+    //// }
 }
 
 void Debug_visualizations::mesh_labels(
@@ -855,7 +859,11 @@ void Debug_visualizations::mesh_labels(
 
     const glm::mat4 world_from_node = node->world_from_node();
     for (auto& primitive : mesh->mesh_data.primitives) {
-        const auto& geometry = primitive.source_geometry;
+        const auto& geometry_primitive = primitive.geometry_primitive;
+        if (!geometry_primitive) {
+            continue;
+        }
+        const auto& geometry = geometry_primitive->source_geometry;
         if (!geometry) {
             continue;
         }
@@ -1065,8 +1073,8 @@ void Debug_visualizations::render(
     std::shared_ptr<erhe::scene::Camera> selected_camera;
     const auto& selection = m_context.selection->get_selection();
     for (const auto& node : selection) {
-        if (is_camera(node)) {
-            selected_camera = as_camera(node);
+        if (erhe::scene::is_camera(node)) {
+            selected_camera = as<erhe::scene::Camera>(node);
         }
     }
 

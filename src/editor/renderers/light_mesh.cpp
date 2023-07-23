@@ -8,8 +8,9 @@
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/scene/node.hpp"
+#include "erhe/scene_renderer/program_interface.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
 #include <glm/glm.hpp>
@@ -143,7 +144,7 @@ auto Light_mesh::point_in_light(
 
 auto Light_mesh::get_light_mesh(
     const erhe::scene::Light& light
-) -> erhe::primitive::Primitive_geometry*
+) -> erhe::primitive::Geometry_mesh*
 {
     switch (light.type) {
         //using enum erhe::scene::Light_type;

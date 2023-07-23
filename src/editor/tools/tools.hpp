@@ -71,7 +71,6 @@ public:
         erhe::scene::Scene_message_bus& scene_message_bus,
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
-        Editor_scenes&                  editor_scenes,
         Mesh_memory&                    mesh_memory,
         Programs&                       programs
     );

@@ -31,12 +31,16 @@ namespace erhe::graphics {
     class Buffer_transfer_queue;
     class Vertex_format;
 }
+namespace erhe::imgui {
+    class Imgui_renderer;
+    class Imgui_windows;
+}
 namespace erhe::physics {
     class IWorld;
 }
 namespace erhe::primitive {
     class Material;
-    class Primitive_geometry;
+    class Geometry_mesh;
     class Primitive;
 }
 namespace erhe::raytrace {
@@ -59,7 +63,11 @@ namespace editor
 {
 
 class Content_library;
+class Editor_context;
 class Editor_message_bus;
+class Editor_scenes;
+class Editor_settings;
+class Item_tree_window;
 class Node_physics;
 class Node_raytrace;
 class Raytrace_primitive;
@@ -104,18 +112,33 @@ private:
 };
 
 class Scene_root
-    : public erhe::scene::Item_host
+    : public std::enable_shared_from_this<Scene_root>
+    , public erhe::scene::Scene_host
 {
 public:
     Scene_root(
         erhe::scene::Scene_message_bus&         scene_message_bus,
+        Editor_scenes*                          editor_scenes,
         const std::shared_ptr<Content_library>& content_library,
         const std::string_view                  name
     );
+    ~Scene_root() noexcept override;
 
-    // Implements Item_host
-    [[nodiscard]] auto get_host_name   () const -> const char*   override;
-    [[nodiscard]] auto get_hosted_scene() -> erhe::scene::Scene* override;
+    // Implements erhe::Item_host
+    [[nodiscard]] auto get_host_name() const -> const char* override;
+
+    // Public API
+    auto make_browser_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Editor_context&              context,
+        Editor_settings&             editor_settings
+    ) -> std::shared_ptr<Item_tree_window>;
+    void remove_browser_window();
+
+    void register_to_editor_scenes    (Editor_scenes& editor_scenes);
+    void unregister_from_editor_scenes(Editor_scenes& editor_scenes);
+
     void register_node          (const std::shared_ptr<erhe::scene::Node>&   node);
     void unregister_node        (const std::shared_ptr<erhe::scene::Node>&   node);
     void register_camera        (const std::shared_ptr<erhe::scene::Camera>& camera);
@@ -136,6 +159,7 @@ public:
     void update_physics_simulation_fixed_step    (double dt);
     void update_physics_simulation_once_per_frame();
 
+    [[nodiscard]] auto get_hosted_scene  () -> erhe::scene::Scene*;
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
     [[nodiscard]] auto get_physics_world () -> erhe::physics::IWorld&;
@@ -175,13 +199,16 @@ private:
     mutable std::mutex                              m_mutex;
     std::mutex                                      m_rendertarget_meshes_mutex;
 
+    Editor_scenes*                                  m_editor_scenes{nullptr};
+    std::shared_ptr<Content_library>                m_content_library;
+    bool                                            m_is_registered{false};
+
     // Must live longer than m_scene for example
     bool                                            m_node_physics_sorted{false};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
     std::vector<std::shared_ptr<Node_raytrace>>     m_node_raytraces;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 
-    std::shared_ptr<Content_library>                m_content_library;
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
 
@@ -190,6 +217,8 @@ private:
 
     std::shared_ptr<erhe::scene::Camera>            m_camera;
     std::shared_ptr<Frame_controller>               m_camera_controls;
+
+    std::shared_ptr<Item_tree_window>               m_node_tree_window;
 };
 
 } // namespace editor

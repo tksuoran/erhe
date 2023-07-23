@@ -2,6 +2,7 @@
 
 #include "editor_context.hpp"
 #include "editor_message_bus.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
@@ -165,24 +166,23 @@ Hud::Hud(
     auto scene_root = scene_builder.get_scene_root();
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     m_rendertarget_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::rendertarget |
-        erhe::scene::Item_flags::visible      |
-        erhe::scene::Item_flags::translucent  |
-        erhe::scene::Item_flags::show_in_ui
+        erhe::Item_flags::rendertarget |
+        erhe::Item_flags::visible      |
+        erhe::Item_flags::translucent  |
+        erhe::Item_flags::show_in_ui
     );
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hud RT node");
     m_rendertarget_node->set_parent(scene_root->get_scene().get_root_node());
     m_rendertarget_node->attach(m_rendertarget_mesh);
     m_rendertarget_node->enable_flag_bits(
-        erhe::scene::Item_flags::rendertarget |
-        erhe::scene::Item_flags::visible      |
-        erhe::scene::Item_flags::show_in_ui
+        erhe::Item_flags::rendertarget |
+        erhe::Item_flags::visible      |
+        erhe::Item_flags::show_in_ui
     );
-    auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
-    if (node_raytrace) {
-        m_rendertarget_node->attach(node_raytrace);
-    }
+
+    m_node_raytrace = std::make_shared<Node_raytrace>(m_rendertarget_mesh);
+    m_rendertarget_node->attach(m_node_raytrace);
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         imgui_renderer,
@@ -284,7 +284,7 @@ auto Hud::try_begin_drag() -> bool
     if (node == nullptr) {
         return false;
     }
-    m_drag_node = as_node(node->shared_from_this());
+    m_drag_node = as<erhe::scene::Node>(node->shared_from_this());
     auto drag_node = m_drag_node.lock();
     if (!drag_node) {
         return false;

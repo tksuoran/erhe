@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe/scene/camera.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe/scene/node_attachment.hpp"
 #include "erhe/scene/scene.hpp" // for Light_layer..
 #include "erhe/scene/transform.hpp"
 
@@ -11,8 +11,7 @@
 namespace erhe::scene
 {
 
-enum class Light_type : unsigned int
-{
+enum class Light_type : unsigned int {
     directional = 0,
     point,
     spot
@@ -21,7 +20,7 @@ enum class Light_type : unsigned int
 class Light_projection_parameters
 {
 public:
-    const Camera*                view_camera{nullptr};
+    const Camera*               view_camera{nullptr};
     erhe::toolkit::Viewport     shadow_map_viewport{};
     ////erhe::toolkit::Viewport view_camera_viewport;
 };
@@ -45,8 +44,7 @@ class Light
 public:
     using Type = Light_type;
 
-    static constexpr const char* c_type_strings[] =
-    {
+    static constexpr const char* c_type_strings[] = {
         "Directional",
         "Point",
         "Spot"
@@ -55,14 +53,14 @@ public:
     explicit Light(const std::string_view name);
     ~Light() noexcept override;
 
-    // Implements Node_attachment
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    void handle_item_host_update(Item_host* old_item_host, Item_host* new_item_host) override;
-
     // Implements Item
-    [[nodiscard]] auto get_type     () const -> uint64_t override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
+    static constexpr std::string_view static_type_name{"Light"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+
+    // Implements Node_attachment
+    void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // Public API
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
@@ -110,8 +108,6 @@ private:
 
 [[nodiscard]] auto is_light(const Item* scene_item) -> bool;
 [[nodiscard]] auto is_light(const std::shared_ptr<Item>& scene_item) -> bool;
-[[nodiscard]] auto as_light(Item* scene_item) -> Light*;
-[[nodiscard]] auto as_light(const std::shared_ptr<Item>& scene_item) -> std::shared_ptr<Light>;
 
 auto get_light(const erhe::scene::Node* node) -> std::shared_ptr<Light>;
 

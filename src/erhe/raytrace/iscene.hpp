@@ -21,7 +21,7 @@ public:
     virtual void detach   (IGeometry* geometry) = 0;
     virtual void detach   (IInstance* instance) = 0;
     virtual void commit   () = 0;
-    virtual void intersect(Ray& ray, Hit& hit) = 0;
+    virtual auto intersect(Ray& ray, Hit& hit) -> bool = 0;
     [[nodiscard]] virtual auto debug_label() const -> std::string_view = 0;
 
     [[nodiscard]] static auto create       (const std::string_view debug_label) -> IScene*;

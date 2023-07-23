@@ -5,11 +5,12 @@
 
 #include <vector>
 
-namespace erhe::scene
-{
+namespace erhe {
+    class Item_filter;
+}
+namespace erhe::scene {
     class Mesh;
     class Mesh_layer;
-    class Item_filter;
 }
 
 namespace erhe::scene_renderer
@@ -40,15 +41,13 @@ public:
     std::size_t                     max_primitive_count;
 };
 
-enum class Primitive_color_source : unsigned int
-{
+enum class Primitive_color_source : unsigned int {
     id_offset = 0,
     mesh_wireframe_color,
     constant_color,
 };
 
-static constexpr std::array<std::string_view, 3> c_primitive_color_source_strings =
-{
+static constexpr std::array<std::string_view, 3> c_primitive_color_source_strings = {
     "ID Offset",
     "Mesh Wireframe color",
     "Constant Color"
@@ -56,8 +55,7 @@ static constexpr std::array<std::string_view, 3> c_primitive_color_source_string
 
 static constexpr std::array<const char*, 3> c_primitive_color_source_strings_data{
     std::apply(
-        [](auto&&... s)
-        {
+        [](auto&&... s) {
             return std::array{s.data()...};
         },
         c_primitive_color_source_strings
@@ -112,7 +110,7 @@ public:
 
     auto update(
         const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-        const erhe::scene::Item_filter&                            filter,
+        const erhe::Item_filter&                                   filter,
         const Primitive_interface_settings&                        settings,
         bool                                                       use_id_ranges = false
     ) -> erhe::renderer::Buffer_range;
@@ -120,10 +118,10 @@ public:
     class Id_range
     {
     public:
-        uint32_t                           offset         {0};
-        uint32_t                           length         {0};
-        std::shared_ptr<erhe::scene::Mesh> mesh           {};
-        std::size_t                        primitive_index{0};
+        uint32_t           offset         {0};
+        uint32_t           length         {0};
+        erhe::scene::Mesh* mesh           {nullptr};
+        std::size_t        primitive_index{0};
     };
 
     void reset_id_ranges();

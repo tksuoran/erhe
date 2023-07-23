@@ -250,12 +250,14 @@ void Log_window::imgui()
         )
     ) {
         auto& frame_entries = frame->get_log();
+        ImGui::PushFont(m_imgui_renderer.mono_font());
         for (const auto& entry : frame_entries) {
             ImGui::SetNextItemWidth(100.0f);
             ImGui::TextUnformatted (entry.timestamp.c_str());
             ImGui::SameLine        ();
             ImGui::TextUnformatted (entry.message.c_str());
         }
+        ImGui::PopFont();
         ImGui::TreePop();
     }
     frame->trim(0);

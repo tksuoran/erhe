@@ -84,18 +84,18 @@ class Range_selection
 public:
     explicit Range_selection(Selection& selection);
 
-    void set_terminator(const std::shared_ptr<erhe::scene::Item>& item);
-    void entry         (const std::shared_ptr<erhe::scene::Item>& item);
+    void set_terminator(const std::shared_ptr<erhe::Item>& item);
+    void entry         (const std::shared_ptr<erhe::Item>& item);
     void begin         ();
     void end           ();
     void reset         ();
 
 private:
-    Selection&                                      m_selection;
-    std::shared_ptr<erhe::scene::Item>              m_primary_terminator;
-    std::shared_ptr<erhe::scene::Item>              m_secondary_terminator;
-    bool                                            m_edited{false};
-    std::vector<std::shared_ptr<erhe::scene::Item>> m_entries;
+    Selection&                               m_selection;
+    std::shared_ptr<erhe::Item>              m_primary_terminator;
+    std::shared_ptr<erhe::Item>              m_secondary_terminator;
+    bool                                     m_edited{false};
+    std::vector<std::shared_ptr<erhe::Item>> m_entries;
 };
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -141,8 +141,8 @@ public:
 #endif
 
     // Public API
-    [[nodiscard]] auto get_selection     () const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&;
-    [[nodiscard]] auto is_in_selection   (const std::shared_ptr<erhe::scene::Item>& item) const -> bool;
+    [[nodiscard]] auto get_selection     () const -> const std::vector<std::shared_ptr<erhe::Item>>&;
+    [[nodiscard]] auto is_in_selection   (const std::shared_ptr<erhe::Item>& item) const -> bool;
     [[nodiscard]] auto range_selection   () -> Range_selection&;
 
     template <typename T>
@@ -151,13 +151,13 @@ public:
     template <typename T>
     [[nodiscard]] auto count() -> std::size_t;
 
-    [[nodiscard]] auto get(erhe::scene::Item_filter filter, std::size_t index = 0) -> std::shared_ptr<erhe::scene::Item>;
+    [[nodiscard]] auto get(erhe::Item_filter filter, std::size_t index = 0) -> std::shared_ptr<erhe::Item>;
 
-    void set_selection                   (const std::vector<std::shared_ptr<erhe::scene::Item>>& selection);
-    auto add_to_selection                (const std::shared_ptr<erhe::scene::Item>& item) -> bool;
+    void set_selection                   (const std::vector<std::shared_ptr<erhe::Item>>& selection);
+    auto add_to_selection                (const std::shared_ptr<erhe::Item>& item) -> bool;
     auto clear_selection                 () -> bool;
-    auto remove_from_selection           (const std::shared_ptr<erhe::scene::Item>& item) -> bool;
-    void update_selection_from_scene_item(const std::shared_ptr<erhe::scene::Item>& item, const bool added);
+    auto remove_from_selection           (const std::shared_ptr<erhe::Item>& item) -> bool;
+    void update_selection_from_scene_item(const std::shared_ptr<erhe::Item>& item, const bool added);
     void sanity_check                    ();
 
     // Commands
@@ -181,12 +181,12 @@ private:
     Viewport_select_toggle_command m_viewport_select_toggle_command;
     Selection_delete_command       m_delete_command;
 
-    Scene_view*                                     m_hover_scene_view{nullptr};
-    std::vector<std::shared_ptr<erhe::scene::Item>> m_selection;
-    Range_selection                                 m_range_selection;
-    std::shared_ptr<erhe::scene::Mesh>              m_hover_mesh;
-    bool                                            m_hover_content{false};
-    bool                                            m_hover_tool   {false};
+    Scene_view*                              m_hover_scene_view{nullptr};
+    std::vector<std::shared_ptr<erhe::Item>> m_selection;
+    Range_selection                          m_range_selection;
+    erhe::scene::Mesh*                       m_hover_mesh   {nullptr};
+    bool                                     m_hover_content{false};
+    bool                                     m_hover_tool   {false};
 };
 
 template <typename T>

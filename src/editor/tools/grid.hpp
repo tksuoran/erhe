@@ -2,7 +2,7 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/scene/node.hpp"
+#include "erhe/scene/node_attachment.hpp"
 
 #include <glm/glm.hpp>
 
@@ -16,16 +16,14 @@ namespace editor
 class Selection_tool;
 
 // TODO Negative half planes
-enum class Grid_plane_type : unsigned int
-{
+enum class Grid_plane_type : unsigned int {
     XZ = 0,
     XY,
     YZ,
     Node
 };
 
-static constexpr const char* grid_plane_type_strings[] =
-{
+static constexpr const char* grid_plane_type_strings[] = {
     "XZ-Plane Y+",
     "XY-Plane Z+",
     "YZ-Plane X+",
@@ -38,11 +36,12 @@ class Grid
     : public erhe::scene::Node_attachment
 {
 public:
-    ~Grid() noexcept override;
+    Grid();
 
     // Implements Node_attachment
-    [[nodiscard]] auto get_type     () const -> uint64_t    override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
+    static constexpr std::string_view static_type_name{"Grid"};
+    [[nodiscard]] auto get_type     () const -> uint64_t         override;
+    [[nodiscard]] auto get_type_name() const -> std::string_view override;
 
     // Public API
     [[nodiscard]] auto get_name           () const -> const std::string&;

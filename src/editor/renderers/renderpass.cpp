@@ -17,18 +17,13 @@ namespace editor
 {
 
 Renderpass::Renderpass(const std::string_view name)
-    : erhe::scene::Item{name}
+    : erhe::Item{name, erhe::toolkit::Unique_id<Renderpass>{}.get_id()}
 {
 }
 
 [[nodiscard]] auto Renderpass::get_static_type() -> uint64_t
 {
-    return erhe::scene::Item_type::renderpass;
-}
-
-[[nodiscard]] auto Renderpass::get_static_type_name() -> const char*
-{
-    return "renderpass";
+    return erhe::Item_type::renderpass;
 }
 
 [[nodiscard]] auto Renderpass::get_type() const -> uint64_t
@@ -36,9 +31,9 @@ Renderpass::Renderpass(const std::string_view name)
     return get_static_type();
 }
 
-[[nodiscard]] auto Renderpass::get_type_name() const -> const char*
+[[nodiscard]] auto Renderpass::get_type_name() const -> std::string_view
 {
-    return get_static_type_name();
+    return static_type_name;
 }
 
 void Renderpass::render(const Render_context& context) const

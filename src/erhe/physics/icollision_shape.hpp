@@ -10,8 +10,7 @@
 namespace erhe::physics
 {
 
-enum class Axis : int
-{
+enum class Axis : int {
     X,
     Y,
     Z

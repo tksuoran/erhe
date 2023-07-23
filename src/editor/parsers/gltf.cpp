@@ -39,7 +39,7 @@ void color_graph(
         }
     }
     for (const auto& child : node->get_children()) {
-        auto child_node = as_node(child);
+        auto child_node = as<erhe::scene::Node>(child);
         if (!child_node) {
             continue;
         }
@@ -54,7 +54,7 @@ void color_graph(
     node_colors.emplace(node, node_color);
 
     for (auto& child : node->get_children()) {
-        auto child_node = as_node(child);
+        auto child_node = as<erhe::scene::Node>(child);
         if (!child_node) {
             continue;
         }
@@ -71,11 +71,15 @@ void import_gltf(
     const std::filesystem::path& path
 )
 {
-    const auto scene_root_node = scene_root.get_hosted_scene()->get_root_node();
+    erhe::scene::Scene* scene = scene_root.get_hosted_scene();
+    auto& layers              = scene_root.layers();
+    layers.light()->ambient_light = glm::vec4{0.17f, 0.17f, 0.17f, 0.0f};
+
+    const auto scene_root_node = scene->get_root_node();
 
     // TODO Make importing an operation
     auto root_node = std::make_shared<erhe::scene::Node>(path.filename().string());
-    root_node->enable_flag_bits(erhe::scene::Item_flags::content | erhe::scene::Item_flags::show_in_ui);
+    root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     root_node->set_parent(scene_root_node);
 
     const erhe::scene::Layer_id content_layer_id = scene_root.layers().content()->id;
@@ -88,39 +92,22 @@ void import_gltf(
         path
     );
 
-    // m_default_material = std::make_shared<erhe::primitive::Material>(
-    //     "Default",
-    //     glm::vec3{0.500f, 0.500f, 0.500f},
-    //     glm::vec2{1.0f, 1.0f},
-    //     0.0f
-    // );
-    class Geometry_primitive
-    {
-    public:
-        erhe::primitive::Primitive_geometry gl_primitive_geometry;
-        std::shared_ptr<Raytrace_primitive> raytrace_primitive;
-    };
-
-    std::unordered_map<erhe::geometry::Geometry*, Geometry_primitive> geometry_primitives;
-
-    // Create primitive data for each geometry
-    for (const auto& geometry : gltf_data.geometries) {
-        geometry_primitives[geometry.get()] = Geometry_primitive{
-            .gl_primitive_geometry = erhe::primitive::make_primitive(*geometry.get(), build_info),
-            .raytrace_primitive    = std::make_shared<Raytrace_primitive>(geometry)
-        };
+    for (const auto& geometry_primitive : gltf_data.geometry_primitives) {
+        geometry_primitive->build_from_geometry(build_info, erhe::primitive::Normal_style::corner_normals);
     }
 
+    std::shared_ptr<Content_library> content_library = scene_root.content_library();
+
     for (const auto& image : gltf_data.images) {
-        scene_root.content_library()->textures.add(image);
+        content_library->textures.add(image);
     }
 
     for (const auto& material : gltf_data.materials) {
-        scene_root.content_library()->materials.add(material);
+        content_library->materials.add(material);
     }
 
     for (const auto& skin : gltf_data.skins) {
-        scene_root.content_library()->skins.add(skin);
+        content_library->skins.add(skin);
     }
 
     // Assign node colors
@@ -137,40 +124,73 @@ void import_gltf(
 
     std::unordered_map<erhe::scene::Node*, int> node_colors;
 
+    bool add_default_camera = true;
+    bool add_default_light = true;
     for (const auto& node : gltf_data.nodes) {
         // Apply primitive data, attach node raytrace
         auto camera = erhe::scene::get_camera(node.get());
         if (camera) {
-            scene_root.content_library()->cameras.add(camera);
+            content_library->cameras.add(camera);
+            add_default_camera = false;
         }
 
         auto light = erhe::scene::get_light(node.get());
         if (light) {
-            scene_root.content_library()->lights.add(light);
+            content_library->lights.add(light);
+            add_default_light = false;
         }
 
         auto mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
-            scene_root.content_library()->meshes.add(mesh);
-            for (auto& primitive : mesh->mesh_data.primitives) {
-                if (!primitive.source_geometry) {
-                    continue;
-                }
-                Geometry_primitive& geometry_primitive = geometry_primitives[primitive.source_geometry.get()];
-                primitive.gl_primitive_geometry = geometry_primitive.gl_primitive_geometry;
-                primitive.rt_primitive_geometry = geometry_primitive.raytrace_primitive->primitive_geometry;
-                auto node_raytrace = std::make_shared<Node_raytrace>( // TODO use content library?
-                    primitive.source_geometry,
-                    geometry_primitive.raytrace_primitive
-                );
-                node->attach(node_raytrace);
-            }
+            content_library->meshes.add(mesh);
         }
 
         if (node->get_parent_node() == root_node) {
             color_graph(node.get(), node_colors, available_colors);
         }
     }
+
+    if (add_default_camera) {
+        auto node   = std::make_shared<erhe::scene::Node>("Default Camera Node");
+        auto camera = content_library->cameras.make("Default Camera");
+        camera->projection()->fov_y           = glm::radians(35.0f);
+        camera->projection()->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+        camera->projection()->z_near          = 0.03f;
+        camera->projection()->z_far           = 80.0f;
+        camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        node->attach(camera);
+        node->set_parent(scene_root_node);
+
+        const glm::mat4 m = erhe::toolkit::create_look_at(
+            glm::vec3{0.0f, 1.80f, -8.0f}, // eye
+            glm::vec3{0.0f, 1.80f,  0.0f}, // center
+            glm::vec3{0.0f, 1.00f,  0.0f}  // up
+        );
+        node->set_parent_from_node(m);
+        node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    }
+
+    if (add_default_light) {
+        auto node  = std::make_shared<erhe::scene::Node>("Default Light Node");
+        auto light = content_library->lights.make("Default Light");
+        light->type      = erhe::scene::Light::Type::directional;
+        light->color     = glm::vec3{1.0f, 1.0f, 1.0};
+        light->intensity = 1.0f;
+        light->range     = 0.0f;
+        light->layer_id  = scene_root.layers().light()->id;
+        light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        node->attach          (light);
+        node->set_parent      (scene_root_node);
+        node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+
+        const glm::mat4 m = erhe::toolkit::create_look_at(
+            glm::vec3{0.0f, 8.0f, 0.0f}, // eye
+            glm::vec3{0.0f, 0.0f, 0.0f}, // center
+            glm::vec3{1.0f, 0.0f, 0.0f}  // up
+        );
+        node->set_parent_from_node(m);
+    }
+
     for (const auto& node : gltf_data.nodes) {
         auto i = node_colors.find(node.get());
         if (i != node_colors.end()) {

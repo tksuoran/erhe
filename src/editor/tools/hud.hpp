@@ -29,6 +29,7 @@ class Editor_message_bus;
 class Headset_view;
 class Icon_set;
 class Mesh_memory;
+class Node_raytrace;
 class Rendertarget_imgui_viewport;
 class Rendertarget_mesh;
 class Scene_builder;
@@ -140,6 +141,7 @@ private:
     std::weak_ptr<erhe::scene::Node>             m_drag_node;
 
     std::shared_ptr<erhe::scene::Node>           m_rendertarget_node;
+    std::shared_ptr<Node_raytrace>               m_node_raytrace;
     std::shared_ptr<Rendertarget_mesh>           m_rendertarget_mesh;
     std::shared_ptr<Rendertarget_imgui_viewport> m_rendertarget_imgui_viewport;
     glm::mat4                                    m_world_from_camera{1.0f};

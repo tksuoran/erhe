@@ -21,7 +21,7 @@
 namespace editor
 {
 
-using erhe::scene::Item_flags;
+using erhe::Item_flags;
 
 #pragma region Command
 
@@ -98,18 +98,17 @@ auto Scene_commands::get_scene_root(
     const auto  first_selected_scene = m_context.selection->get<erhe::scene::Scene>();
     const auto& viewport_window      = m_context.viewport_windows->last_window();
 
-    erhe::scene::Item_host* scene_host = first_selected_node
+    erhe::Item_host* item_host = first_selected_node
         ? first_selected_node->get_item_host()
         : first_selected_scene
             ? first_selected_scene->get_root_node()->get_item_host()
             : viewport_window
                 ? viewport_window->get_scene_root().get()
                 : nullptr;
-    if (scene_host == nullptr) {
+    if (item_host == nullptr) {
         return nullptr;
     }
-
-    Scene_root* scene_root = static_cast<Scene_root*>(scene_host);
+    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
     return scene_root;
 }
 
@@ -125,8 +124,8 @@ auto Scene_commands::create_new_camera(
     auto new_node   = std::make_shared<erhe::scene::Node>("new camera node");
     auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
     new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    new_camera->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
-    m_context.operation_stack->push(
+    new_camera->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
+    m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{
                 .operations = {
@@ -160,7 +159,7 @@ auto Scene_commands::create_new_empty_node(
 
     auto new_empty_node = std::make_shared<erhe::scene::Node>("new empty node");
     new_empty_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    m_context.operation_stack->push(
+    m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
@@ -187,10 +186,10 @@ auto Scene_commands::create_new_light(
 
     auto new_node  = std::make_shared<erhe::scene::Node>("new light node");
     auto new_light = std::make_shared<erhe::scene::Light>("new light");
-    new_node ->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
-    new_light->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
+    new_node ->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
+    new_light->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
     new_light->layer_id = scene_root->layers().light()->id;
-    m_context.operation_stack->push(
+    m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{
                 .operations = {
@@ -232,10 +231,10 @@ auto Scene_commands::create_new_rendertarget(
     );
     new_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
     new_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::rendertarget |
-        erhe::scene::Item_flags::visible      |
-        erhe::scene::Item_flags::translucent  |
-        erhe::scene::Item_flags::show_in_ui
+        erhe::Item_flags::rendertarget |
+        erhe::Item_flags::visible      |
+        erhe::Item_flags::translucent  |
+        erhe::Item_flags::show_in_ui
     );
 
     new_node = std::make_shared<erhe::scene::Node>("Hud RT node");
@@ -245,14 +244,12 @@ auto Scene_commands::create_new_rendertarget(
     new_node->set_parent(scene_root->get_scene().get_root_node());
     new_node->attach(new_mesh);
     new_node->enable_flag_bits(
-        erhe::scene::Item_flags::rendertarget |
-        erhe::scene::Item_flags::visible      |
-        erhe::scene::Item_flags::show_in_ui
+        erhe::Item_flags::rendertarget |
+        erhe::Item_flags::visible      |
+        erhe::Item_flags::show_in_ui
     );
-    auto node_raytrace = new_mesh->get_node_raytrace();
-    if (node_raytrace) {
-        new_node->attach(node_raytrace);
-    }
+    auto node_raytrace = std::make_shared<Node_raytrace>(new_mesh);
+    new_node->attach(node_raytrace);
 
     auto rendertarget_imgui_viewport = std::make_shared<Rendertarget_imgui_viewport>(
         *m_context.imgui_renderer,
@@ -272,7 +269,7 @@ auto Scene_commands::create_new_rendertarget(
     );
 
     new_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
-    m_context.operation_stack->push(
+    m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
             Compound_operation::Parameters{
                 .operations = {

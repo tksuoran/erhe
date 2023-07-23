@@ -35,8 +35,7 @@ class Vertex_attribute;
 class Shader_resource final
 {
 public:
-    enum class Type : unsigned int
-    {
+    enum class Type : unsigned int {
         basic                 = 0, // non sampler basic types
         sampler               = 1,
         struct_type           = 2, // not really a resource, just type declaration
@@ -52,8 +51,7 @@ public:
     static auto is_block           (const Type type) -> bool;
     static auto uses_binding_points(const Type type) -> bool;
 
-    enum class Precision : unsigned int
-    {
+    enum class Precision : unsigned int {
         lowp    = 0,
         mediump = 1,
         highp   = 2,

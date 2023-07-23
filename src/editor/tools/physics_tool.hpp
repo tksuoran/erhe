@@ -33,8 +33,7 @@ class Node_physics;
 class Physics_tool;
 class Scene_root;
 
-enum class Physics_tool_mode : int
-{
+enum class Physics_tool_mode : int {
     Drag = 0,
     Push = 1,
     Pull = 2
@@ -103,7 +102,7 @@ private:
     void move_drag_point_kinematic(glm::vec3 position);
 
     [[nodiscard]] auto get_scene_root    () const -> Scene_root*;
-    [[nodiscard]] auto get_raytrace_scene() const -> erhe::raytrace::IScene*;
+    //// TODO RAYTRACE [[nodiscard]] auto get_raytrace_scene() const -> erhe::raytrace::IScene*;
 
     // Commands
     Physics_tool_drag_command                 m_drag_command;

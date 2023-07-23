@@ -11,8 +11,7 @@ namespace erhe::graphics
 class Vertex_attribute
 {
 public:
-    enum class Usage_type : unsigned int
-    {
+    enum class Usage_type : unsigned int {
         none          =  0,
         automatic     = (1 <<  0u),
         position      = (1 <<  1u),

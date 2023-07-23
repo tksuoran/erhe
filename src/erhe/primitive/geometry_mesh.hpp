@@ -7,27 +7,20 @@
 
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Buffer;
 }
-
-namespace erhe::raytrace
-{
+namespace erhe::raytrace {
     class Buffer;
 }
-
-namespace erhe::geometry
-{
+namespace erhe::geometry {
     class Geometry;
 }
 
 namespace erhe::primitive
 {
 
-class Index_range;
-
-class Primitive_geometry
+class Geometry_mesh
 {
 public:
     [[nodiscard]] auto base_vertex() const -> uint32_t;
@@ -45,7 +38,7 @@ public:
     Buffer_range vertex_buffer_range     {};
     Buffer_range index_buffer_range      {};
 
-    // TODO These make Primitive_geometry expensive to copy
+    // TODO These make Geometry_mesh expensive to copy
     std::vector<uint32_t> primitive_id_to_polygon_id;
     std::vector<uint32_t> corner_to_vertex_id;
 };

@@ -23,8 +23,7 @@ using erhe::geometry::c_corner_texcoords;
 // http://www.martinreddy.net/gfx/3d/OBJ.spec
 // https://www.marxentlabs.com/obj-files/
 
-enum class Command : unsigned int
-{
+enum class Command : unsigned int {
     Unknown = 0,
     //Basis_matrix,
     //Bevel_interpolation,

@@ -20,8 +20,7 @@ namespace mango {
 namespace erhe::graphics
 {
 
-enum class Image_format : int
-{
+enum class Image_format : int {
     srgb8 = 0,
     srgb8_alpha8,
 };

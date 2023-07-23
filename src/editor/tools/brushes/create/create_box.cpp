@@ -5,9 +5,10 @@
 #include "scene/scene_view.hpp"
 #include "tools/brushes/brush.hpp"
 
-#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/box.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)

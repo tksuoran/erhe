@@ -297,7 +297,11 @@ void Bvh_geometry::set_user_data(void* ptr)
     m_user_data = ptr;
 }
 
-auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool
+auto Bvh_geometry::intersect_instance(
+    Ray&          ray,
+    Hit&          hit,
+    Bvh_instance* instance
+) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -349,12 +353,12 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
         const auto triangle_index = should_permute ? prim_id : m_bvh.prim_ids[prim_id];
         const auto& triangle = m_precomputed_triangles.at(triangle_index);
 
-        ray.t_far        = bvh_ray.tmax;
-        hit.primitive_id = static_cast<unsigned int>(triangle_index);
-        hit.uv           = glm::vec2{u, v};
-        hit.normal       = glm::vec3{transform * glm::vec4{from_bvh(triangle.n), 0.0f}};
-        hit.instance     = instance;
-        hit.geometry     = this;
+        ray.t_far       = bvh_ray.tmax;
+        hit.triangle_id = static_cast<unsigned int>(triangle_index);
+        hit.uv          = glm::vec2{u, v};
+        hit.normal      = glm::vec3{transform * glm::vec4{from_bvh(triangle.n), 0.0f}};
+        hit.instance    = instance;
+        hit.geometry    = this;
         return true;
     }
     return false;

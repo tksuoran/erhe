@@ -32,7 +32,7 @@ Joint_interface::Joint_interface(
     offsets.extra1                  = joint_block.add_uint ("extra1")->offset_in_parent(),
     offsets.extra2                  = joint_block.add_uint ("extra2")->offset_in_parent(),
     offsets.extra3                  = joint_block.add_uint ("extra3")->offset_in_parent(),
-    offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors", max_joint_count)->offset_in_parent();
+    offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors", 32)->offset_in_parent();
     offsets.joint = {
         .world_from_bind          = joint_struct.add_mat4("world_from_bind"         )->offset_in_parent(),
         .world_from_bind_cofactor = joint_struct.add_mat4("world_from_bind_cofactor")->offset_in_parent()
@@ -53,7 +53,7 @@ Joint_buffer::Joint_buffer(
         gl::Buffer_target::shader_storage_buffer,
         m_joint_interface.joint_block.binding_point(),
         // TODO Separate update joint (and other) buffers outside composer renderpasses. Also consider multiple viewports
-        16 * m_joint_interface.offsets.joint_struct + m_joint_interface.joint_struct.size_bytes() * m_joint_interface.max_joint_count
+        m_joint_interface.offsets.joint_struct + m_joint_interface.joint_struct.size_bytes() * m_joint_interface.max_joint_count
     );
 }
 
@@ -104,7 +104,12 @@ auto Joint_buffer::update(
 
     if (!debug_joint_colors.empty()) {
         uint32_t color_index = 0;
-        for (auto& color : debug_joint_colors) {
+        for (
+            std::size_t i = 0, end = std::min(debug_joint_colors.size(), std::size_t{32});
+            i < end;
+            ++i
+        ) {
+            auto& color = debug_joint_colors[i];
             write(
                 primitive_gpu_data,
                 m_writer.write_offset + offsets.debug_joint_colors + (color_index * 4 * sizeof(float)),

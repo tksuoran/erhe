@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe/primitive/primitive_geometry.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe/primitive/geometry_mesh.hpp"
+#include "erhe/scene/node_attachment.hpp"
 #include "scene/node_raytrace_mask.hpp"
 
 #include <functional>
@@ -10,12 +10,14 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::raytrace {
-    class IBuffer;
     class IGeometry;
     class IInstance;
     class IScene;
     class Hit;
     class Ray;
+}
+namespace erhe::primitive {
+    class Primitive;
 }
 namespace erhe::renderer {
     class Line_renderer;
@@ -27,74 +29,68 @@ namespace erhe::scene {
 namespace editor
 {
 
-[[nodiscard]] auto raytrace_node_mask(
-    erhe::scene::Item& scene_item
-) -> uint32_t;
+[[nodiscard]] auto raytrace_node_mask(erhe::Item& scene_item) -> uint32_t;
+
 
 class Raytrace_primitive
 {
 public:
-    explicit Raytrace_primitive(
-        const std::shared_ptr<erhe::geometry::Geometry>& geometry
+    Raytrace_primitive(
+        erhe::scene::Mesh*         mesh,
+        std::size_t                primitive_index,
+        erhe::raytrace::IGeometry* rt_geometry
     );
 
-    std::shared_ptr<erhe::raytrace::IBuffer>  vertex_buffer;
-    std::shared_ptr<erhe::raytrace::IBuffer>  index_buffer;
-    erhe::primitive::Primitive_geometry       primitive_geometry;
+    erhe::scene::Mesh*                         mesh           {nullptr};
+    std::size_t                                primitive_index{0};
+    std::unique_ptr<erhe::raytrace::IInstance> rt_instance;
+    std::unique_ptr<erhe::raytrace::IScene>    rt_scene;
 };
 
 class Node_raytrace
     : public erhe::scene::Node_attachment
 {
 public:
-    explicit Node_raytrace(
-        const std::shared_ptr<erhe::geometry::Geometry>& source_geometry
-    );
+    explicit Node_raytrace(const std::shared_ptr<erhe::scene::Mesh>& mesh);
+
     Node_raytrace(
-        const std::shared_ptr<erhe::geometry::Geometry>& source_geometry,
-        const std::shared_ptr<Raytrace_primitive>&       primitive
+        const std::shared_ptr<erhe::scene::Mesh>&      mesh,
+        const std::vector<erhe::primitive::Primitive>& primitives
     );
 
     ~Node_raytrace() noexcept override;
 
-    // Implements Node_attachment
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    [[nodiscard]] auto get_type     () const -> uint64_t    override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
-    void handle_item_host_update(
-        erhe::scene::Item_host* old_item_host,
-        erhe::scene::Item_host* new_item_host
-    ) override;
+    // Implements Item
+    static constexpr std::string_view static_type_name{"Node_raytrace"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    [[nodiscard]] auto get_type     () const -> uint64_t                                         override;
+    [[nodiscard]] auto get_type_name() const -> std::string_view                                 override;
+    void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
+    void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits)                 override;
+
+    // Implements node attachment
     void handle_node_transform_update() override;
-    void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
     // Public API
-    [[nodiscard]] auto source_geometry   () const -> std::shared_ptr<erhe::geometry::Geometry>;
-    [[nodiscard]] auto raytrace_primitive()       -> Raytrace_primitive*;
-    [[nodiscard]] auto raytrace_primitive() const -> const Raytrace_primitive*;
-    [[nodiscard]] auto raytrace_geometry ()       ->       erhe::raytrace::IGeometry*;
-    [[nodiscard]] auto raytrace_geometry () const -> const erhe::raytrace::IGeometry*;
-    [[nodiscard]] auto raytrace_instance ()       ->       erhe::raytrace::IInstance*;
-    [[nodiscard]] auto raytrace_instance () const -> const erhe::raytrace::IInstance*;
-    [[nodiscard]] auto get_hit_normal    (const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>;
+    void set_mask         (uint32_t rt_mask);
+    void attach_to_scene  (erhe::raytrace::IScene* rt_scene);
+    void detach_from_scene(erhe::raytrace::IScene* rt_scene);
+    void properties_imgui ();
 
 private:
-    void initialize();
+    void initialize(
+        const std::shared_ptr<erhe::scene::Mesh>&      mesh,
+        const std::vector<erhe::primitive::Primitive>& primitives
+    );
 
-    std::shared_ptr<Raytrace_primitive>        m_primitive;
-    std::shared_ptr<erhe::geometry::Geometry>  m_source_geometry;
-    std::unique_ptr<erhe::raytrace::IGeometry> m_geometry;
-    std::unique_ptr<erhe::raytrace::IScene>    m_scene;
-    std::unique_ptr<erhe::raytrace::IInstance> m_instance;
+    erhe::raytrace::IScene*         m_rt_scene{nullptr};
+    std::vector<Raytrace_primitive> m_rt_primitives;
 };
 
-auto is_raytrace(const erhe::scene::Item* scene_item) -> bool;
-auto is_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
-auto as_raytrace(erhe::scene::Item* scene_item) -> Node_raytrace*;
-auto as_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Node_raytrace>;
+auto is_raytrace(const erhe::Item* scene_item) -> bool;
+auto is_raytrace(const std::shared_ptr<erhe::Item>& scene_item) -> bool;
 
-auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>;
+auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>;
 
 class Ray_hit_style
 {
@@ -106,6 +102,10 @@ public:
     float     hit_thickness{2.0f};
     float     hit_size     {0.5f};
 };
+
+[[nodiscard]] auto get_hit_node(const erhe::raytrace::Hit& hit) -> erhe::scene::Node*;
+
+[[nodiscard]] auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>;
 
 void draw_ray_hit(
     erhe::renderer::Line_renderer& line_renderer,

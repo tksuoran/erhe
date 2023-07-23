@@ -79,12 +79,24 @@ Operation_stack::Operation_stack(
     m_redo_command.set_host(this);
 }
 
-void Operation_stack::push(
+void Operation_stack::queue(
     const std::shared_ptr<IOperation>& operation
 )
 {
-    operation->execute(m_context);
-    m_executed.push_back(operation);
+    m_queued.push_back(operation);
+}
+
+void Operation_stack::update()
+{
+    if (m_queued.empty()) {
+        return;
+    }
+
+    for (const auto& operation : m_queued) {
+        operation->execute(m_context);
+        m_executed.push_back(operation);
+    }
+    m_queued.clear();
     m_undone.clear();
 }
 

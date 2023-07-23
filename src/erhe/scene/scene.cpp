@@ -3,6 +3,7 @@
 #include "erhe/scene/light.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/scene_host.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/scene/scene_message_bus.hpp"
 #include "erhe/scene/skin.hpp"
@@ -15,6 +16,11 @@
 namespace erhe::scene
 {
 
+auto Scene::get_static_type()       -> uint64_t         { return erhe::Item_type::scene; }
+auto Scene::get_type       () const -> uint64_t         { return get_static_type(); }
+auto Scene::get_type_name  () const -> std::string_view { return static_type_name; }
+
+#pragma region Layers
 Mesh_layer::Mesh_layer(
     const std::string_view name,
     const uint64_t         flags,
@@ -136,17 +142,7 @@ void Light_layer::remove(
     }
 }
 
-//auto Scene::get_node_by_id(
-//    const erhe::toolkit::Unique_id<Node>::id_type id
-//) const -> std::shared_ptr<Node>
-//{
-//    for (const auto& node : flat_node_vector) {
-//        if (node->get_id() == id) {
-//            return node;
-//        }
-//    }
-//    return {};
-//}
+#pragma endregion Layers
 
 auto Scene::get_camera_by_id(
     const erhe::toolkit::Unique_id<Node>::id_type id
@@ -305,14 +301,14 @@ void Scene::update_node_transforms()
 Scene::Scene(
     Scene_message_bus&     message_bus,
     const std::string_view name,
-    Item_host* const       host
+    Scene_host* const      host
 )
-    : Item         {name}
+    : Item         {name, erhe::toolkit::Unique_id<Scene>{}.get_id()}
     , m_message_bus{message_bus}
     , m_host       {host}
-    , m_root_node  {std::make_shared<erhe::scene::Node>("root")}
+    , m_root_node  {std::make_shared<Node>("root")}
 {
-    enable_flag_bits(Item_flags::content | Item_flags::no_transform_update);
+    enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::no_transform_update);
     // The implicit root node has a valid (identity) transform
     m_root_node->node_data.host = host;
     m_root_node->node_data.transforms.parent_from_node_serial = 1;
@@ -333,24 +329,9 @@ Scene::~Scene()
     m_root_node.reset();
 }
 
-auto Scene::get_static_type() -> uint64_t
+auto Scene::get_item_host() const -> erhe::Item_host*
 {
-    return Item_type::scene;
-}
-
-auto Scene::get_static_type_name() -> const char*
-{
-    return Item_type::c_bit_labels[Item_type::index_scene];
-}
-
-auto Scene::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Scene::get_type_name() const -> const char*
-{
-    return get_static_type_name();
+    return m_host;
 }
 
 void Scene::add_mesh_layer(const std::shared_ptr<Mesh_layer>& mesh_layer)
@@ -384,7 +365,7 @@ void Scene::register_node(
 
     ERHE_VERIFY(!node->get_parent().expired());
 
-    if ((node->get_flag_bits() & Item_flags::no_message) == 0) {
+    if ((node->get_flag_bits() & erhe::Item_flags::no_message) == 0) {
         m_message_bus.send_message(
             Scene_message{
                 .event_type = Scene_event_type::node_added_to_scene,
@@ -416,7 +397,7 @@ void Scene::unregister_node(
 
     sanity_check();
 
-    if ((node->get_flag_bits() & Item_flags::no_message) == 0) {
+    if ((node->get_flag_bits() & erhe::Item_flags::no_message) == 0) {
         m_message_bus.send_message(
             Scene_message{
                 .event_type = Scene_event_type::node_removed_from_scene,
@@ -517,43 +498,6 @@ void Scene::unregister_light(const std::shared_ptr<Light>& light)
     } else {
         log->error("light {} layer not found", light->get_name());
     }
-}
-
-using namespace erhe::toolkit;
-
-auto is_scene(const Item* const item) -> bool
-{
-    if (item == nullptr) {
-        return false;
-    }
-    return test_all_rhs_bits_set(item->get_type(), Item_type::scene);
-}
-
-auto is_scene(const std::shared_ptr<Item>& item) -> bool
-{
-    return is_scene(item.get());
-}
-
-auto as_scene(Item* const item) -> Scene*
-{
-    if (item == nullptr) {
-        return nullptr;
-    }
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::scene)) {
-        return nullptr;
-    }
-    return reinterpret_cast<Scene*>(item);
-}
-
-auto as_scene(const std::shared_ptr<Item>& item) -> std::shared_ptr<Scene>
-{
-    if (!item) {
-        return {};
-    }
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::scene)) {
-        return {};
-    }
-    return std::static_pointer_cast<Scene>(item);
 }
 
 } // namespace erhe::scene

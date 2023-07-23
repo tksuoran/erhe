@@ -196,11 +196,12 @@ void Physics_tool::on_message(Editor_message& message)
     return (scene_view != nullptr) ? scene_view->get_scene_root().get() : nullptr;
 }
 
-[[nodiscard]] auto Physics_tool::get_raytrace_scene() const -> erhe::raytrace::IScene*
-{
-    Scene_root* scene_root = get_scene_root();
-    return (scene_root != nullptr) ? &scene_root->get_raytrace_scene() : nullptr;
-}
+//// TODO RAYTRACE
+//// [[nodiscard]] auto Physics_tool::get_raytrace_scene() const -> erhe::raytrace::IScene*
+//// {
+////     Scene_root* scene_root = get_scene_root();
+////     return (scene_root != nullptr) ? &scene_root->get_raytrace_scene() : nullptr;
+//// }
 
 [[nodiscard]] auto Physics_tool::get_mode() const -> Physics_tool_mode
 {
@@ -280,7 +281,7 @@ auto Physics_tool::acquire_target() -> bool
         m_depth
     );
 
-    m_target_mesh     = content.mesh;
+    m_target_mesh     = std::static_pointer_cast<erhe::scene::Mesh>(content.mesh->shared_from_this());
     m_target_distance = glm::distance(view_position, target_position);
     m_target_position_in_mesh = m_target_mesh->get_node()->transform_point_from_world_to_local(
         target_position
@@ -443,7 +444,7 @@ void Physics_tool::tool_hover(Scene_view* scene_view)
     }
 
     const auto& hover = scene_view->get_hover(Hover_entry::content_slot);
-    m_hover_mesh = hover.mesh;
+    m_hover_mesh = std::static_pointer_cast<erhe::scene::Mesh>(hover.mesh->shared_from_this());
 }
 
 auto Physics_tool::on_drag() -> bool
@@ -478,9 +479,13 @@ auto Physics_tool::on_drag() -> bool
 
         float max_radius = 0.0f;
         for (const auto& primitive : m_target_mesh->mesh_data.primitives) {
+            const auto& geometry_primitive = primitive.geometry_primitive;
+            if (!geometry_primitive) {
+                continue;
+            }
             max_radius = std::max(
                 max_radius,
-                primitive.gl_primitive_geometry.bounding_sphere.radius
+                primitive.geometry_primitive->gl_geometry_mesh.bounding_sphere.radius
             );
         }
         m_target_mesh_size   = max_radius;

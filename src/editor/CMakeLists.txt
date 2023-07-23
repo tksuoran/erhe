@@ -175,8 +175,8 @@ erhe_target_sources_grouped(
     windows/layers_window.hpp
     windows/network_window.cpp
     windows/network_window.hpp
-    windows/node_tree_window.cpp
-    windows/node_tree_window.hpp
+    windows/item_tree_window.cpp
+    windows/item_tree_window.hpp
     windows/operations.cpp
     windows/operations.hpp
     windows/post_processing_window.cpp

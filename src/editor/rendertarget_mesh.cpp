@@ -5,7 +5,6 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_view.hpp"
 #include "windows/viewport_config_window.hpp"
 
@@ -19,6 +18,7 @@
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/math_util.hpp"
 
@@ -35,7 +35,7 @@ Rendertarget_mesh::Rendertarget_mesh(
     : erhe::scene::Mesh {"Rendertarget Node"}
     , m_pixels_per_meter{pixels_per_meter}
 {
-    enable_flag_bits(erhe::scene::Item_flags::rendertarget | erhe::scene::Item_flags::translucent);
+    enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::translucent);
 
     resize_rendertarget(graphics_instance, mesh_memory, width, height);
 }
@@ -43,14 +43,9 @@ Rendertarget_mesh::Rendertarget_mesh(
 auto Rendertarget_mesh::get_static_type() -> uint64_t
 {
     return
-        erhe::scene::Item_type::node_attachment |
-        erhe::scene::Item_type::mesh            |
-        erhe::scene::Item_type::rendertarget;
-}
-
-auto Rendertarget_mesh::get_static_type_name() -> const char*
-{
-    return "Rendertarget_mesh";
+        erhe::Item_type::node_attachment |
+        erhe::Item_type::mesh            |
+        erhe::Item_type::rendertarget;
 }
 
 auto Rendertarget_mesh::get_type() const -> uint64_t
@@ -58,9 +53,9 @@ auto Rendertarget_mesh::get_type() const -> uint64_t
     return get_static_type();
 }
 
-auto Rendertarget_mesh::get_type_name() const -> const char*
+auto Rendertarget_mesh::get_type_name() const -> std::string_view
 {
-    return get_static_type_name();
+    return static_type_name;
 }
 
 void Rendertarget_mesh::resize_rendertarget(
@@ -137,31 +132,27 @@ void Rendertarget_mesh::resize_rendertarget(
         std::move(geometry)
     );
 
-    auto primitive = erhe::primitive::make_primitive(
-        *shared_geometry.get(),
-        erhe::primitive::Build_info{
-            .primitive_types{ .fill_triangles = true },
-            .buffer_info = mesh_memory.buffer_info
-        }
-    );
-
     mesh_data.primitives.emplace_back(
         erhe::primitive::Primitive{
-            .material              = m_material,
-            .gl_primitive_geometry = primitive
+            .material           = m_material,
+            .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+                shared_geometry,
+                erhe::primitive::Build_info{
+                    .primitive_types{ .fill_triangles = true },
+                    .buffer_info = mesh_memory.buffer_info
+                }
+            )
         }
     );
 
     mesh_memory.gl_buffer_transfer_queue.flush();
 
     enable_flag_bits(
-        erhe::scene::Item_flags::visible      |
-        erhe::scene::Item_flags::translucent  |
-        erhe::scene::Item_flags::id           |
-        erhe::scene::Item_flags::rendertarget
+        erhe::Item_flags::visible      |
+        erhe::Item_flags::translucent  |
+        erhe::Item_flags::id           |
+        erhe::Item_flags::rendertarget
     );
-
-    m_node_raytrace = std::make_shared<Node_raytrace>(shared_geometry);
 }
 
 auto Rendertarget_mesh::texture() const -> std::shared_ptr<erhe::graphics::Texture>
@@ -336,11 +327,6 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
     };
 }
 
-[[nodiscard]] auto Rendertarget_mesh::get_node_raytrace() -> std::shared_ptr<Node_raytrace>
-{
-    return m_node_raytrace;
-}
-
 void Rendertarget_mesh::bind()
 {
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, m_framebuffer->gl_name());
@@ -398,42 +384,18 @@ void Rendertarget_mesh::render_done(Editor_context& context)
     return m_pixels_per_meter;
 }
 
-auto is_rendertarget(const erhe::scene::Item* const scene_item) -> bool
+auto is_rendertarget(const erhe::Item* const scene_item) -> bool
 {
     if (scene_item == nullptr) {
         return false;
     }
     using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(scene_item->get_type(), erhe::scene::Item_type::rendertarget);
+    return test_all_rhs_bits_set(scene_item->get_type(), erhe::Item_type::rendertarget);
 }
 
-auto is_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
+auto is_rendertarget(const std::shared_ptr<erhe::Item>& scene_item) -> bool
 {
     return is_rendertarget(scene_item.get());
-}
-
-auto as_rendertarget(erhe::scene::Item* const scene_item) -> Rendertarget_mesh*
-{
-    if (scene_item == nullptr) {
-        return nullptr;
-    }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_type(), erhe::scene::Item_type::rendertarget)) {
-        return nullptr;
-    }
-    return static_cast<Rendertarget_mesh*>(scene_item);
-}
-
-auto as_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>
-{
-    if (!scene_item) {
-        return {};
-    }
-    using namespace erhe::toolkit;
-    if (!test_all_rhs_bits_set(scene_item->get_type(), erhe::scene::Item_type::rendertarget)) {
-        return {};
-    }
-    return std::static_pointer_cast<Rendertarget_mesh>(scene_item);
 }
 
 auto get_rendertarget(
@@ -441,7 +403,7 @@ auto get_rendertarget(
 ) -> std::shared_ptr<Rendertarget_mesh>
 {
     for (const auto& attachment : node->get_attachments()) {
-        auto rendertarget = as_rendertarget(attachment);
+        auto rendertarget = as<Rendertarget_mesh>(attachment);
         if (rendertarget) {
             return rendertarget;
         }

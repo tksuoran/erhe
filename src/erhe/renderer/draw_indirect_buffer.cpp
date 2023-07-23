@@ -34,7 +34,7 @@ Draw_indirect_buffer::Draw_indirect_buffer(
 auto Draw_indirect_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
     erhe::primitive::Primitive_mode                            primitive_mode,
-    const erhe::scene::Item_filter&                            filter
+    const erhe::Item_filter&                                   filter
 ) -> Draw_indirect_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -75,8 +75,8 @@ auto Draw_indirect_buffer::update(
         }
 
         for (auto& primitive : mesh->mesh_data.primitives) {
-            const auto& primitive_geometry = primitive.gl_primitive_geometry;
-            const auto  index_range        = primitive_geometry.index_range(primitive_mode);
+            const auto& geometry_mesh = primitive.geometry_primitive->gl_geometry_mesh;
+            const auto  index_range   = geometry_mesh.index_range(primitive_mode);
             if (index_range.index_count == 0) {
                 continue;
             }
@@ -92,9 +92,9 @@ auto Draw_indirect_buffer::update(
                 index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
             }
 
-            const uint32_t base_index  = primitive_geometry.base_index();
+            const uint32_t base_index  = geometry_mesh.base_index();
             const uint32_t first_index = static_cast<uint32_t>(index_range.first_index + base_index);
-            const uint32_t base_vertex = primitive_geometry.base_vertex();
+            const uint32_t base_vertex = geometry_mesh.base_vertex();
 
             const gl::Draw_elements_indirect_command draw_command{
                 index_count,

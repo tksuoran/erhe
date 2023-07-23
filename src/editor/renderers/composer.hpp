@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/scene/item.hpp"
+#include "erhe/item/item.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -13,16 +13,16 @@ class Render_context;
 class Renderpass;
 
 class Composer
-    : public erhe::scene::Item
+    : public erhe::Item
 {
 public:
     explicit Composer(const std::string_view name);
 
     // Implements Item
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    [[nodiscard]] auto get_type     () const -> uint64_t override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
+    static constexpr std::string_view static_type_name{"Composer"};
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::composer; }
+    [[nodiscard]] auto get_type     () const -> uint64_t         override;
+    [[nodiscard]] auto get_type_name() const -> std::string_view override;
 
     void render(const Render_context& context) const;
 

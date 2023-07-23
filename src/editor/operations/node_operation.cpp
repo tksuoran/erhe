@@ -6,6 +6,7 @@
 #include "tools/selection_tool.hpp"
 
 #include "erhe/log/log_glm.hpp"
+#include "erhe/scene/node_attachment.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 #include <glm/gtx/matrix_decompose.hpp>
@@ -205,10 +206,10 @@ auto Item_parent_change_operation::describe() const -> std::string
 Item_parent_change_operation::Item_parent_change_operation() = default;
 
 Item_parent_change_operation::Item_parent_change_operation(
-    const std::shared_ptr<erhe::scene::Item>& parent,
-    const std::shared_ptr<erhe::scene::Item>& child,
-    const std::shared_ptr<erhe::scene::Item>  place_before,
-    const std::shared_ptr<erhe::scene::Item>  place_after
+    const std::shared_ptr<erhe::Hierarchy>& parent,
+    const std::shared_ptr<erhe::Hierarchy>& child,
+    const std::shared_ptr<erhe::Hierarchy>  place_before,
+    const std::shared_ptr<erhe::Hierarchy>  place_after
 )
     : m_child        {child}
     , m_parent_before{child->get_parent()}
@@ -262,9 +263,9 @@ void Item_parent_change_operation::undo(Editor_context& context)
 Item_reposition_in_parent_operation::Item_reposition_in_parent_operation() = default;
 
 Item_reposition_in_parent_operation::Item_reposition_in_parent_operation(
-    const std::shared_ptr<erhe::scene::Item>& child_node,
-    const std::shared_ptr<erhe::scene::Item>  place_before,
-    const std::shared_ptr<erhe::scene::Item>  place_after
+    const std::shared_ptr<erhe::Hierarchy>& child_node,
+    const std::shared_ptr<erhe::Hierarchy>  place_before,
+    const std::shared_ptr<erhe::Hierarchy>  place_after
 )
     : m_child       {child_node  }
     , m_place_before{place_before}

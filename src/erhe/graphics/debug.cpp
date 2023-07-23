@@ -57,10 +57,17 @@ void erhe_opengl_callback(
     // id:       0x020092
     // severity: GL_DEBUG_SEVERITY_MEDIUM
     // Program/shader state performance warning: Fragment shader in program 63 is being recompiled based on GL state.
+    //
+    // source:   GL_DEBUG_SOURCE_API
+    // type:     GL_DEBUG_TYPE_OTHER
+    // id:       0x020043
+    // severity: GL_DEBUG_SEVERITY_LOW
+    // Rasterization quality warning: A non-fullscreen clear caused a fallback from CSAA to MSAA.
     if (
         (id == 0x020071) ||
         (id == 0x020061) ||
         (id == 0x020092) ||
+        (id == 0x020043) ||
         (id == 0x000008) ||
         (id == 0x000002)
     ) {

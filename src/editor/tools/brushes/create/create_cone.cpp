@@ -5,9 +5,10 @@
 #include "renderers/render_context.hpp"
 #include "tools/brushes/brush.hpp"
 
-#include "erhe/renderer/line_renderer.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/shapes/cone.hpp"
+#include "erhe/renderer/line_renderer.hpp"
+#include "erhe/scene/node.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

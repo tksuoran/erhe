@@ -1,13 +1,14 @@
 #pragma once
 
 #include "editor_context.hpp"
+#include "editor_log.hpp"
 #include "tools/brushes/brush.hpp"
 #include "graphics/icon_set.hpp"
 
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/animation.hpp"
-#include "erhe/scene/item.hpp"
+#include "erhe/item/item.hpp"
 #include "erhe/scene/mesh.hpp"
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
@@ -15,6 +16,7 @@
 #include "erhe/toolkit/verify.hpp"
 
 #include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 #include <algorithm>
 #include <memory>
@@ -45,24 +47,24 @@ template <typename T>
 class Library
 {
 public:
-    // T is derived from erhe::scene::Item
+    // T is derived from erhe::Item
     Library() 
         : m_type_code{T::get_static_type()}
-        , m_type_name{T::get_static_type_name()}
+        , m_type_name{T::static_type_name}
     {
     }
 
-    // T is NOT derived from erhe::scene::Item
-    explicit Library(
-        const uint64_t item_type,
-        const char*    type_name
+    // T is NOT derived from erhe::Item
+    Library(
+        const uint64_t         item_type,
+        const std::string_view type_name
     )
         : m_type_code{item_type}
         , m_type_name{type_name}
     {}
 
-    [[nodiscard]] auto get_type_code() const -> uint64_t { return m_type_code; }
-    [[nodiscard]] auto get_type_name() const -> const char* { return m_type_name; }
+    [[nodiscard]] auto get_type_code() const -> uint64_t         { return m_type_code; }
+    [[nodiscard]] auto get_type_name() const -> std::string_view { return m_type_name; }
     [[nodiscard]] auto entries() -> std::vector<std::shared_ptr<T>>&;
     [[nodiscard]] auto entries() const -> const std::vector<std::shared_ptr<T>>&;
 
@@ -83,7 +85,7 @@ public:
 private:
     mutable std::mutex              m_mutex;
     uint64_t                        m_type_code;
-    const char*                     m_type_name;
+    std::string_view                m_type_name;
     std::vector<std::shared_ptr<T>> m_entries;
 };
 
@@ -93,14 +95,14 @@ public:
     ~Content_library() noexcept;
 
     bool                               is_shown_in_ui{true};
-    Library<Brush>                     brushes {erhe::scene::Item_type::brush, "Brush"};
+    Library<Brush>                     brushes {erhe::Item_type::brush, "Brush"};
     Library<erhe::scene::Animation>    animations;
     Library<erhe::scene::Camera>       cameras;
     Library<erhe::scene::Light>        lights;
     Library<erhe::scene::Mesh>         meshes;
     Library<erhe::scene::Skin>         skins;
-    Library<erhe::primitive::Material> materials{erhe::scene::Item_type::material, "Material"};
-    Library<erhe::graphics::Texture>   textures {erhe::scene::Item_type::texture,  "Texture"};
+    Library<erhe::primitive::Material> materials{erhe::Item_type::material, "Material"};
+    Library<erhe::graphics::Texture>   textures {erhe::Item_type::texture,  "Texture"};
 };
 
 template <typename T>
@@ -143,7 +145,8 @@ auto Library<T>::combo(
     const bool empty_entry = empty_option || (!in_out_selected_entry);
     const char* preview_value = in_out_selected_entry ? in_out_selected_entry->get_label().c_str() : "(none)";
     bool selection_changed = false;
-    if (ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge)) {
+    const bool begin = ImGui::BeginCombo(label, preview_value, ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge);
+    if (begin) {
         if (empty_entry) {
             bool is_selected = !in_out_selected_entry;
             if (ImGui::Selectable("(none)", is_selected)) {
@@ -173,6 +176,26 @@ auto Library<T>::combo(
             }
         }
         ImGui::EndCombo();
+    } else if (ImGui::BeginDragDropTarget()) {
+        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(T::static_type_name.data());
+        if (payload != nullptr) {
+            log_tree_frame->trace("Dnd payload is {}", T::static_type_name.data());
+            const auto payload_id = *static_cast<std::size_t*>(payload->Data);
+            for (const auto& entry : m_entries) {
+                if (!entry) {
+                    continue;
+                }
+                if (entry->get_id() == payload_id) {
+                    in_out_selected_entry = entry;
+                    selection_changed = true;
+                    break;
+                }
+            }
+        } else {
+            log_tree_frame->trace("Dnd payload is not {}", T::static_type_name.data());
+        }
+        ImGui::EndDragDropTarget();
+        return false;
     }
 
     return selection_changed;

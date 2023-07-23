@@ -1,11 +1,12 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/primitive/primitive_builder.hpp"
+#include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/buffer_writer.hpp"
 #include "erhe/primitive/index_range.hpp"
 #include "erhe/primitive/primitive_log.hpp"
-#include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/primitive/geometry_mesh.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/geometry/property_map.hpp"
 #include "erhe/gl/enum_string_functions.hpp"
@@ -45,11 +46,11 @@ using mat4 = glm::mat4;
 Build_context_root::Build_context_root(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
-    Primitive_geometry*             primitive_geometry
+    Geometry_mesh*                  geometry_mesh
 )
     : geometry          {geometry}
     , build_info        {build_info}
-    , primitive_geometry{primitive_geometry}
+    , geometry_mesh{geometry_mesh}
     , vertex_format     {build_info.buffer_info.vertex_format}
     , vertex_stride     {vertex_format.stride()}
 {
@@ -85,10 +86,10 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::triangles,
             mi.index_count_fill_triangles,
-            primitive_geometry->triangle_fill_indices
+            geometry_mesh->triangle_fill_indices
         );
         const std::size_t primitive_count = mi.index_count_fill_triangles;
-        primitive_geometry->primitive_id_to_polygon_id.resize(primitive_count);
+        geometry_mesh->primitive_id_to_polygon_id.resize(primitive_count);
     }
 
     if (primitive_types.edge_lines) {
@@ -97,7 +98,7 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::lines,
             mi.index_count_edge_lines,
-            primitive_geometry->edge_line_indices
+            geometry_mesh->edge_line_indices
         );
     }
 
@@ -107,7 +108,7 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::points,
             mi.index_count_corner_points,
-            primitive_geometry->corner_point_indices
+            geometry_mesh->corner_point_indices
         );
     }
 
@@ -117,7 +118,7 @@ void Build_context_root::get_mesh_info()
         allocate_index_range(
             gl::Primitive_type::points,
             mi.polygon_count,
-            primitive_geometry->polygon_centroid_indices
+            geometry_mesh->polygon_centroid_indices
         );
     }
 
@@ -151,7 +152,7 @@ void Build_context_root::allocate_vertex_buffer()
 {
     Expects(total_vertex_count > 0);
 
-    primitive_geometry->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
+    geometry_mesh->vertex_buffer_range = build_info.buffer_info.buffer_sink.allocate_vertex_buffer(
         total_vertex_count, vertex_stride
     );
 }
@@ -172,7 +173,7 @@ void Build_context_root::allocate_index_buffer()
         index_type_size
     );
 
-    primitive_geometry->index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
+    geometry_mesh->index_buffer_range = build_info.buffer_info.buffer_sink.allocate_index_buffer(
         total_index_count,
         index_type_size
     );
@@ -229,14 +230,14 @@ void Build_context_root::calculate_bounding_volume(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(primitive_geometry != nullptr);
+    Expects(geometry_mesh != nullptr);
 
     const Geometry_point_source point_source{geometry, point_locations};
 
     erhe::toolkit::calculate_bounding_volume(
         point_source,
-        primitive_geometry->bounding_box,
-        primitive_geometry->bounding_sphere
+        geometry_mesh->bounding_box,
+        geometry_mesh->bounding_sphere
     );
 }
 
@@ -251,20 +252,19 @@ Primitive_builder::Primitive_builder(
 {
 }
 
-auto Primitive_builder::build() -> Primitive_geometry
+auto Primitive_builder::build() -> Geometry_mesh
 {
-    Primitive_geometry primitive_geometry;
-    build(&primitive_geometry);
-    return primitive_geometry;
+    Geometry_mesh geometry_mesh;
+    build(&geometry_mesh);
+    return geometry_mesh;
 }
 
-void Primitive_builder::build(Primitive_geometry* primitive_geometry)
+void Primitive_builder::build(Geometry_mesh* geometry_mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
-    Expects(primitive_geometry != nullptr);
+    Expects(geometry_mesh != nullptr);
 
-    //m_primitive_geometry = primitive_geometry;
     SPDLOG_LOGGER_INFO(
         log_primitive_builder,
         "Primitive_builder::build(usage = {}, normal_style = {}) geometry = {}",
@@ -277,7 +277,7 @@ void Primitive_builder::build(Primitive_geometry* primitive_geometry)
         m_geometry,
         m_build_info,
         m_normal_style,
-        primitive_geometry
+        geometry_mesh
     };
 
     const Primitive_types& primitive_types = m_build_info.primitive_types;
@@ -298,9 +298,9 @@ Build_context::Build_context(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
     const Normal_style              normal_style,
-    Primitive_geometry*             primitive_geometry
+    Geometry_mesh*                  geometry_mesh
 )
-    : root         {geometry, build_info, primitive_geometry}
+    : root         {geometry, build_info, geometry_mesh}
     , normal_style {normal_style}
     , vertex_writer{*this, build_info.buffer_info.buffer_sink}
     , index_writer {*this, build_info.buffer_info.buffer_sink}
@@ -492,8 +492,7 @@ void Build_context::build_vertex_bitangent()
 
     vec4 bitangent{0.0f, 0.0f, 1.0, 1.0f};
     bool found{false};
-    if (property_maps.corner_bitangents != nullptr)
-    {
+    if (property_maps.corner_bitangents != nullptr) {
         found = property_maps.corner_bitangents->maybe_get(corner_id, bitangent);
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
         if (found) {
@@ -504,8 +503,7 @@ void Build_context::build_vertex_bitangent()
     if (!found && (property_maps.point_bitangents != nullptr)) {
         found = property_maps.point_bitangents->maybe_get(point_id, bitangent);
 #if SPDLOG_ACTIVE_LEVEL <= SPDLOG_LEVEL_TRACE
-        if (found)
-        {
+        if (found) {
             SPDLOG_LOGGER_TRACE(log_primitive_builder, "point {} corner {} point bitangent {}", point_id, corner_id, bitangent);
         }
 #endif
@@ -754,7 +752,7 @@ void Build_context::build_triangle_fill_index()
     if (root.build_info.primitive_types.fill_triangles) {
         if (previous_index != first_index) {
             index_writer.write_triangle(first_index, vertex_index, previous_index);
-            root.primitive_geometry->primitive_id_to_polygon_id[primitive_index] = polygon_id;
+            root.geometry_mesh->primitive_id_to_polygon_id[primitive_index] = polygon_id;
             ++primitive_index;
         }
     }
@@ -780,7 +778,7 @@ void Build_context::build_polygon_fill()
     //    root.build_info.format.features.normal_smooth;
 
     const Polygon_id polygon_id_end = root.geometry.get_polygon_count();
-    root.primitive_geometry->corner_to_vertex_id.resize(root.geometry.get_corner_count());
+    root.geometry_mesh->corner_to_vertex_id.resize(root.geometry.get_corner_count());
     for (polygon_id = 0; polygon_id < polygon_id_end; ++polygon_id) {
         const Polygon& polygon = root.geometry.polygons[polygon_id];
         first_index    = vertex_index;
@@ -804,7 +802,7 @@ void Build_context::build_polygon_fill()
             const Corner& corner = root.geometry.corners[corner_id];
             point_id             = corner.point_id;
 
-            root.primitive_geometry->corner_to_vertex_id[corner_id] = vertex_index;
+            root.geometry_mesh->corner_to_vertex_id[corner_id] = vertex_index;
 
             build_polygon_id          ();
             build_vertex_position     ();
@@ -921,17 +919,16 @@ void Build_context_root::allocate_index_range(
 
     // If index buffer has not yet been allocated, no check for enough room for index range
     ERHE_VERIFY(
-        (primitive_geometry->index_buffer_range.count == 0) ||
-        (next_index_range_start <= primitive_geometry->index_buffer_range.count)
+        (geometry_mesh->index_buffer_range.count == 0) ||
+        (next_index_range_start <= geometry_mesh->index_buffer_range.count)
     );
 }
 
-
-auto make_primitive(
+auto make_geometry_mesh(
     const erhe::geometry::Geometry& geometry,
     const Build_info&               build_info,
     const Normal_style              normal_style
-) -> Primitive_geometry
+) -> Geometry_mesh
 {
     ERHE_PROFILE_FUNCTION();
 

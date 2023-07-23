@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <cstdint>
 
 namespace erhe::raytrace
@@ -28,11 +29,11 @@ public:
 class Hit
 {
 public:
-    glm::vec3    normal      {0.0f};
-    glm::vec2    uv          {0.0f};
-    unsigned int primitive_id{0};
-    IGeometry*   geometry    {nullptr};
-    IInstance*   instance    {nullptr};
+    glm::vec3    normal     {0.0f};
+    glm::vec2    uv         {0.0f};
+    unsigned int triangle_id{0};
+    IGeometry*   geometry   {nullptr};
+    IInstance*   instance   {nullptr};
 };
 
 } // namespace erhe::raytrace

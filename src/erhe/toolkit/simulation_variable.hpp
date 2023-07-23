@@ -3,8 +3,7 @@
 namespace erhe::toolkit
 {
 
-enum class Simulation_variable_control : unsigned int
-{
+enum class Simulation_variable_control : unsigned int {
     less = 0,
     more = 1,
     stop = 2,

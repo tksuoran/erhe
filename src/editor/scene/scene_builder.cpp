@@ -13,6 +13,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
+#include "windows/item_tree_window.hpp"
 #include "windows/settings.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
@@ -69,7 +70,7 @@ using erhe::geometry::shapes::make_cylinder;
 using erhe::scene::Light;
 using erhe::scene::Node;
 using erhe::scene::Projection;
-using erhe::scene::Item_flags;
+using erhe::Item_flags;
 using erhe::geometry::shapes::make_box;
 using erhe::primitive::Normal_style;
 using glm::mat3;
@@ -133,9 +134,12 @@ Scene_builder::Scene_builder(
 
     m_scene_root = std::make_shared<Scene_root>(
         scene_message_bus,
+        &editor_scenes,
         content_library,
-        "Scene"
+        "Default Scene"
     );
+    auto browser_window = m_scene_root->make_browser_window(imgui_renderer, imgui_windows, editor_context, editor_settings);
+    browser_window->show();
 
     setup_cameras(
         graphics_instance,
@@ -153,8 +157,6 @@ Scene_builder::Scene_builder(
     make_brushes   (graphics_instance, editor_settings, mesh_memory);
     make_mesh_nodes();
     add_room       ();
-
-    editor_scenes.register_scene_root(m_scene_root);
 }
 
 void Scene_builder::add_rendertarget_viewports(int count)
@@ -783,34 +785,22 @@ void Scene_builder::make_brushes(
              8 * std::max(1, config.detail)
         );
         ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
-        auto rotate_ring_pg = make_primitive(ring_geometry, build_info(mesh_memory));
-        const auto shared_geometry = std::make_shared<erhe::geometry::Geometry>(
+        const auto ring_geometry_shared = std::make_shared<erhe::geometry::Geometry>(
             std::move(ring_geometry)
+        );
+        auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+            ring_geometry_shared,
+            build_info(mesh_memory),
+            erhe::primitive::Normal_style::point_normals
         );
 
         using erhe::scene::Transform;
-        auto make_mesh_node =
-        [
-            &aniso_material,
-            &rotate_ring_pg,
-            &shared_geometry,
-            this
-        ]
-        (
-            const char*      name,
-            const Transform& transform
-        )
-        {
+        auto make_mesh_node = [&](const char* name, const Transform& transform) {
             auto mesh = std::make_shared<erhe::scene::Mesh>(name);
             mesh->mesh_data.primitives.push_back(
                 erhe::primitive::Primitive{
-                    .material              = aniso_material,
-                    .gl_primitive_geometry = rotate_ring_pg,
-                    .rt_primitive_geometry = {},
-                    .rt_vertex_buffer      = {},
-                    .rt_index_buffer       = {},
-                    .source_geometry       = shared_geometry,
-                    .normal_style          = erhe::primitive::Normal_style::point_normals
+                    .material           = aniso_material,
+                    .geometry_primitive = geometry_primitive
                 }
             );
             mesh->enable_flag_bits(
@@ -872,11 +862,6 @@ void Scene_builder::make_brushes(
 
     mesh_memory.gl_buffer_transfer_queue.flush();
 }
-
-//auto Scene_builder::buffer_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
-//{
-//    return m_mesh_memory.gl_buffer_transfer_queue;
-//}
 
 void Scene_builder::add_room()
 {
@@ -1012,6 +997,7 @@ void Scene_builder::make_mesh_nodes()
         }
     }
 
+
     {
         ERHE_PROFILE_SCOPE("make instances");
 
@@ -1019,7 +1005,15 @@ void Scene_builder::make_mesh_nodes()
         const auto& materials        = material_library.entries();
         std::size_t material_index   = 0;
 
+        std::size_t visible_material_count = 0;
+        for (const auto& material : materials) {
+            if (material->is_shown_in_ui()) {
+                ++visible_material_count;
+            }
+        }
+
         ERHE_VERIFY(!materials.empty());
+        ERHE_VERIFY(visible_material_count > 0);
 
         for (auto& entry : pack_entries) {
             // TODO this will lock up if there are no visible materials
@@ -1071,10 +1065,15 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
 
     m_scene_root->get_scene().sanity_check();
 
-    auto& material_library = m_scene_root->content_library()->materials;
-    auto  material         = material_library.make("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
-    auto  cube             = make_cube(0.1f);
-    auto  cube_pg          = make_primitive(cube, build_info(mesh_memory), Normal_style::polygon_normals);
+    auto& material_library   = m_scene_root->content_library()->materials;
+    auto  material           = material_library.make("cube", vec3{1.0, 1.0f, 1.0f}, glm::vec2{0.3f, 0.4f}, 0.0f);
+    auto  geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+        make_geometry_mesh(
+            make_cube(0.1f),
+            build_info(mesh_memory),
+            Normal_style::polygon_normals
+        )
+    );
 
     constexpr float scale   = 0.5f;
     constexpr int   x_count = 20;
@@ -1082,8 +1081,8 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
     constexpr int   z_count = 20;
 
     const erhe::primitive::Primitive primitive{
-        .material              = material,
-        .gl_primitive_geometry = cube_pg
+        .material           = material,
+        .geometry_primitive = geometry_primitive
     };
     for (int i = 0; i < x_count; ++i) {
         const float x_rel = static_cast<float>(i) - static_cast<float>(x_count) * 0.5f;

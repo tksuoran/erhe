@@ -1,4 +1,5 @@
 #include "erhe/scene/node.hpp"
+#include "erhe/scene/node_attachment.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/scene_host.hpp"
 #include "erhe/scene/scene_log.hpp"
@@ -14,6 +15,8 @@
 namespace erhe::scene
 {
 
+using namespace erhe;
+
 uint64_t Node_transforms::s_global_update_serial = 0;
 
 auto Node_transforms::get_current_serial() -> uint64_t
@@ -26,108 +29,29 @@ auto Node_transforms::get_next_serial() -> uint64_t
     return ++s_global_update_serial;
 }
 
-// -----------------------------------------------------------------------------
-#pragma region Node_attachment
-Node_attachment::Node_attachment()
+auto Node::get_static_type() -> uint64_t
+{
+    return erhe::Item_type::node;
+}
+
+auto Node::get_type() const -> uint64_t
+{
+    return get_static_type();
+}
+
+auto Node::get_type_name() const -> std::string_view
+{
+    return static_type_name;
+}
+
+Node::Node()
+    : erhe::Hierarchy{erhe::toolkit::Unique_id<Node>{}.get_id()}
 {
 }
 
-Node_attachment::Node_attachment(const std::string_view name)
-    : Item{name}
-{
-}
-
-Node_attachment::~Node_attachment() noexcept
-{
-    log->trace("~Node_attachment `{}`", get_name());
-
-    Node* const host_node = get_node();
-    if (host_node != nullptr) {
-        host_node->detach(this);
-    }
-}
-
-auto Node_attachment::get_node() -> Node*
-{
-    return m_node;
-}
-
-auto Node_attachment::get_node() const -> const Node*
-{
-    return m_node;
-}
-
-auto Node_attachment::get_item_host() const -> Item_host*
-{
-    if (m_node == nullptr) {
-        return nullptr;
-    }
-    return m_node->get_item_host();
-}
-
-void Node_attachment::handle_node_update(
-    Node* const old_node,
-    Node* const new_node
-)
-{
-    const uint64_t old_flag_bits = old_node ? old_node->get_flag_bits() : 0;
-    const uint64_t new_flag_bits = new_node ? new_node->get_flag_bits() : 0;
-    const bool     visible       = (new_flag_bits & Item_flags::visible) == Item_flags::visible;
-    if (old_flag_bits != new_flag_bits) {
-        handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
-    }
-    set_visible(visible);
-}
-
-void Node_attachment::handle_node_flag_bits_update(
-    const uint64_t old_node_flag_bits,
-    const uint64_t new_node_flag_bits
-)
-{
-    static_cast<void>(old_node_flag_bits);
-    const bool visible = (new_node_flag_bits & Item_flags::visible) == Item_flags::visible;
-    set_visible(visible);
-};
-
-void Node_attachment::set_node(
-    Node* const       node,
-    const std::size_t position
-)
-{
-    if (m_node == node) {
-        return;
-    }
-    Node* const old_node = m_node;
-    Item_host* const old_host = (m_node != nullptr) ? m_node->get_item_host() : nullptr;
-    m_node = node;
-    Item_host* const new_host = (m_node != nullptr) ? m_node->get_item_host() : nullptr;
-
-    if (old_node != nullptr) {
-        old_node->handle_remove_attachment(this);
-    }
-    if (node != nullptr) {
-        auto weak_this = weak_from_this();
-        ERHE_VERIFY(!weak_this.expired());
-        auto shared_this = std::static_pointer_cast<Node_attachment>(weak_this.lock());
-        node->handle_add_attachment(shared_this, position);
-
-        handle_node_update(old_node, node);
-        if (new_host != old_host) {
-            handle_item_host_update(old_host, new_host);
-            if (m_node != nullptr) {
-                handle_node_transform_update();
-            }
-        }
-    }
-};
-
-#pragma endregion Node_attachment
-// -----------------------------------------------------------------------------
-
-Node::Node() = default;
 
 Node::Node(const std::string_view name)
-    : Item{name}
+    : erhe::Hierarchy{name, erhe::toolkit::Unique_id<Node>{}.get_id()}
 {
 }
 
@@ -139,7 +63,7 @@ Node::~Node() noexcept
         "~Node '{}' depth = {} child count = {}",
         get_name(),
         get_depth(),
-        item_data.children.size()
+        get_child_count()
     );
 
     while (!node_data.attachments.empty()) {
@@ -148,52 +72,34 @@ Node::~Node() noexcept
     }
 }
 
-auto Node::get_static_type() -> uint64_t
+auto Node::shared_node_from_this() -> std::shared_ptr<Node>
 {
-    return Item_type::node;
-}
-
-auto Node::get_static_type_name() -> const char*
-{
-    return Item_type::c_bit_labels[Item_type::index_node];
-}
-
-auto Node::get_type() const -> uint64_t
-{
-    return get_static_type();
-}
-
-auto Node::get_type_name() const -> const char*
-{
-    return get_static_type_name();
+    return std::static_pointer_cast<Node>(shared_from_this());
 }
 
 auto Node::get_parent_node() const -> std::shared_ptr<Node>
 {
-    std::shared_ptr<Item> shared_parent_item = item_data.parent.lock();
-
-    if (!is_node(shared_parent_item)) {
-        return std::shared_ptr<Node>{};
-    }
+    const auto shared_parent_item = get_parent().lock();
     return std::static_pointer_cast<Node>(shared_parent_item);
 }
 
 void Node::set_parent(Node* const new_parent_node, const std::size_t position)
 {
     if (new_parent_node != nullptr) {
-        set_parent(new_parent_node->shared_from_this(), position);
+        auto shared_parent_node = std::static_pointer_cast<erhe::Hierarchy>(new_parent_node->shared_from_this());
+        set_parent(shared_parent_node, position);
     } else {
-        set_parent(std::shared_ptr<Item>{}, position);
+        set_parent(std::shared_ptr<erhe::Hierarchy>{}, position);
     }
 }
 
 void Node::set_parent(
-    const std::shared_ptr<Item>& new_parent_item,
-    const std::size_t            position
+    const std::shared_ptr<erhe::Hierarchy>& new_parent_item,
+    const std::size_t                       position
 )
 {
     const auto& world_from_node = world_from_node_transform();
-    Item::set_parent(new_parent_item, position);
+    Hierarchy::set_parent(new_parent_item, position);
 
     // NOTE: For now, we do not care about transforms of orphan nodes.
     //       If we want to change that (to remove the check below), we
@@ -213,7 +119,7 @@ void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
 
     log->trace(
         "{} (attach({} {})",
-        get_name(),
+        describe(),
         attachment->get_type_name(),
         attachment->get_name()
     );
@@ -254,7 +160,7 @@ auto Node::detach(Node_attachment* attachment) -> bool
     return true;
 }
 
-auto Node::get_attachment_count(const Item_filter& filter) const -> std::size_t
+auto Node::get_attachment_count(const erhe::Item_filter& filter) const -> std::size_t
 {
     std::size_t result{};
     for (const auto& attachment : node_data.attachments) {
@@ -309,9 +215,12 @@ void Node::handle_remove_attachment(
     }
 }
 
-void Node::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
+void Node::handle_flag_bits_update(
+    const uint64_t old_flag_bits,
+    const uint64_t new_flag_bits
+)
 {
-    for (const auto& attachment : node_data.attachments) {
+    for (const auto& attachment : get_attachments()) {
         attachment->handle_node_flag_bits_update(old_flag_bits, new_flag_bits);
     }
 }
@@ -323,7 +232,7 @@ auto Node::get_attachments() const -> const std::vector<std::shared_ptr<Node_att
 
 #pragma endregion Node attachments
 
-auto Node::get_item_host() const -> Item_host*
+auto Node::get_item_host() const -> erhe::Item_host*
 {
     return node_data.host;
 }
@@ -336,55 +245,59 @@ auto Node::get_scene() const -> Scene*
 }
 
 void Node::handle_parent_update(
-    Item* const old_parent_item,
-    Item* const new_parent_item
+    erhe::Hierarchy* const old_parent_item,
+    erhe::Hierarchy* const new_parent_item
 )
 {
     // Keep this alive to make it simple to call node_sanity_check()
     auto shared_this = weak_from_this().lock();
 
     ERHE_VERIFY(old_parent_item != new_parent_item);
-    ERHE_VERIFY((old_parent_item == nullptr) || is_node(old_parent_item));
-    ERHE_VERIFY((new_parent_item == nullptr) || is_node(new_parent_item));
-    Node*      const old_parent     = reinterpret_cast<Node* const>(old_parent_item);
-    Node*      const new_parent     = reinterpret_cast<Node* const>(new_parent_item);
-    Item_host* const old_scene_host = old_parent != nullptr ? old_parent->get_item_host() : nullptr;
-    Item_host* const new_scene_host = new_parent != nullptr ? new_parent->get_item_host() : nullptr;
-    if (old_scene_host != new_scene_host) {
-        handle_scene_host_update(old_scene_host, new_scene_host);
+    ERHE_VERIFY((old_parent_item == nullptr) || is<Node>(old_parent_item));
+    ERHE_VERIFY((new_parent_item == nullptr) || is<Node>(new_parent_item));
+    Node* const old_parent = static_cast<Node* const>(old_parent_item);
+    Node* const new_parent = static_cast<Node* const>(new_parent_item);
+    erhe::Item_host* const old_item_host = (old_parent != nullptr) ? old_parent->get_item_host() : nullptr;
+    erhe::Item_host* const new_item_host = (new_parent != nullptr) ? new_parent->get_item_host() : nullptr;
+    if (old_item_host != new_item_host) {
+        handle_item_host_update(old_item_host, new_item_host);
     }
 
-    node_sanity_check();
+    hierarchy_sanity_check();
 }
 
-void Node::handle_scene_host_update(
-    Item_host* const old_item_host,
-    Item_host* const new_item_host
+void Node::handle_item_host_update(
+    erhe::Item_host* const old_item_host,
+    erhe::Item_host* const new_item_host
 )
 {
     ERHE_VERIFY(old_item_host != new_item_host);
 
     ERHE_VERIFY(old_item_host == node_data.host);
 
+    const auto shared_this = shared_node_from_this(); // Keep alive guarantee
+
+    Scene_host* old_scene_host = static_cast<Scene_host*>(old_item_host);
+    Scene_host* new_scene_host = static_cast<Scene_host*>(new_item_host);
+
+    if (old_scene_host != nullptr) {
+        old_scene_host->unregister_node(shared_this);
+    }
+    if (new_scene_host != nullptr) {
+        new_scene_host->register_node(shared_this); // updates node_data.host from Scene::register_node()
+    }
+
+    // This must come *after* node_data.host has been updated
     for (const auto& attachment : node_data.attachments) {
         attachment->handle_item_host_update(old_item_host, new_item_host);
     }
 
-    const auto shared_this = std::static_pointer_cast<Node>(shared_from_this()); // Keep alive guarantee
-
-    if (old_item_host != nullptr) {
-        old_item_host->unregister_node(shared_this);
-    }
-    if (new_item_host != nullptr) {
-        new_item_host->register_node(shared_this);
-    }
-
-    for (const auto& child : item_data.children) {
-        auto child_node = as_node(child);
+    for (const auto& child : get_children()) {
+        auto child_node = as<Node>(child);
         if (!child_node) {
             continue;
         }
-        child_node->handle_scene_host_update(old_item_host, new_item_host);
+        child_node->handle_item_host_update(old_item_host, new_item_host);
     }
     // Set by new_item_host->register_node()
     ERHE_VERIFY(node_data.host == new_item_host);
@@ -468,21 +381,23 @@ void Node::update_world_from_node()
 
 void Node::node_sanity_check() const
 {
-    for (const auto& child : item_data.children) {
-        Item_host* child_host  = child->get_item_host();
-        Item_host* self_host   = get_item_host();
-        Scene*     child_scene = (child_host != nullptr) ? child_host->get_hosted_scene() : nullptr;
-        Scene*     self_scene  = (self_host  != nullptr) ? self_host ->get_hosted_scene() : nullptr;
+    for (const auto& child : get_children()) {
+        erhe::Item_host* child_host  = child->get_item_host();
+        erhe::Item_host* self_host   = get_item_host();
+        Scene_host*      child_scene_host = static_cast<Scene_host*>(child_host);
+        Scene_host*      self_scene_host  = static_cast<Scene_host*>(self_host);
+        Scene*           child_scene = (child_host != nullptr) ? child_scene_host->get_hosted_scene() : nullptr;
+        Scene*           self_scene  = (self_host  != nullptr) ? self_scene_host ->get_hosted_scene() : nullptr;
 
         if (child_host != self_host) {
             log->error(
                 "Scene host mismatch: parent node = `{}` host = `{}` scene = `{}`, child node = `{}` host = `{}` scene = `{}`",
                 get_name(),
                 (self_host  != nullptr) ? self_host ->get_host_name() : "(none)",
-                (self_scene != nullptr) ? self_scene->get_name()      : "(none)",
+                (self_scene != nullptr) ? self_scene->get_name() : "(none)",
                 child->get_name(),
                 (child_host  != nullptr) ? child_host ->get_host_name() : "(none)",
-                (child_scene != nullptr) ? child_scene->get_name()      : "(none)"
+                (child_scene != nullptr) ? child_scene->get_name() : "(none)"
             );
         }
     }
@@ -502,7 +417,7 @@ void Node::node_sanity_check() const
         }
     }
 
-    item_sanity_check();
+    hierarchy_sanity_check();
 }
 
 auto Node::parent_from_node_transform() const -> const Trs_transform&
@@ -703,55 +618,18 @@ auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)
     return mask;
 }
 
-#pragma region Item type casts
-using namespace erhe::toolkit;
-
 auto is_node(const Item* const item) -> bool
 {
     if (item == nullptr) {
         return false;
     }
-    return test_all_rhs_bits_set(item->get_type(), Item_type::node);
+    return erhe::toolkit::test_all_rhs_bits_set(item->get_type(), erhe::Item_type::node);
 }
 
-auto is_node(const std::shared_ptr<Item>& item) -> bool
+auto is_node(const std::shared_ptr<erhe::Item>& item) -> bool
 {
     return is_node(item.get());
 }
-
-auto as_node(Item* const item) -> Node*
-{
-    if (item == nullptr) {
-        return nullptr;
-    }
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::node)) {
-        return nullptr;
-    }
-    return reinterpret_cast<Node*>(item);
-}
-
-auto as_node(const std::shared_ptr<Item>& item) -> std::shared_ptr<Node>
-{
-    if (!item) {
-        return {};
-    }
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::node)) {
-        return {};
-    }
-    return std::static_pointer_cast<Node>(item);
-}
-
-auto as_node_attachment(const std::shared_ptr<Item>& item) -> std::shared_ptr<Node_attachment>
-{
-    if (!item) {
-        return {};
-    }
-    if (!test_all_rhs_bits_set(item->get_type(), Item_type::node_attachment)) {
-        return {};
-    }
-    return std::static_pointer_cast<Node_attachment>(item);
-}
-#pragma endregion Item type casts
 
 
 } // namespace erhe::scene

@@ -119,6 +119,7 @@ public:
     void rotation   (int rx, int ry, int rz);
 
     // Commands
+    void on_hover_viewport_change();
     auto try_ready() -> bool;
     auto try_move(
         Variable                                   variable,

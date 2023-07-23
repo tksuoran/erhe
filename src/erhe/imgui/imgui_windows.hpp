@@ -47,6 +47,7 @@ public:
     void unregister_imgui_viewport(Imgui_viewport* viewport);
     void register_imgui_window    (Imgui_window* window);
     void register_imgui_window    (Imgui_window* window, bool visible);
+    void unregister_imgui_window  (Imgui_window* window);
     void make_current             (const Imgui_viewport* imgui_viewport);
     void imgui_windows            ();
     void window_menu              (Imgui_viewport* imgui_viewport);

@@ -87,8 +87,8 @@ Editor_rendering::Editor_rendering(
     commands.register_command(&m_capture_frame_command);
     commands.bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
 
-    using Item_filter = erhe::scene::Item_filter;
-    using Item_flags  = erhe::scene::Item_flags;
+    using Item_filter = erhe::Item_filter;
+    using Item_flags  = erhe::Item_flags;
     using namespace erhe::primitive;
     const Item_filter opaque_not_selected_filter{
         .require_all_bits_set         = Item_flags::visible     | Item_flags::opaque,
@@ -154,7 +154,7 @@ Editor_rendering::Editor_rendering(
     sky->mesh_layers    = {};
     sky->passes         = { &m_pipeline_renderpasses.sky };
     sky->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
-    sky->filter = erhe::scene::Item_filter{
+    sky->filter = erhe::Item_filter{
         .require_all_bits_set         = 0,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
@@ -180,7 +180,7 @@ Editor_rendering::Editor_rendering(
     brush->mesh_layers    = { Mesh_layer_id::brush };
     brush->passes         = { &m_pipeline_renderpasses.brush_back, &m_pipeline_renderpasses.brush_front };
     brush->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
-    brush->filter = erhe::scene::Item_filter{
+    brush->filter = erhe::Item_filter{
         .require_all_bits_set         = Item_flags::visible | Item_flags::brush,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0
@@ -191,7 +191,7 @@ Editor_rendering::Editor_rendering(
     rendertarget->mesh_layers    = { Mesh_layer_id::rendertarget };
     rendertarget->passes         = { &m_pipeline_renderpasses.rendertarget_meshes };
     rendertarget->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
-    rendertarget->filter = erhe::scene::Item_filter{
+    rendertarget->filter = erhe::Item_filter{
         .require_all_bits_set         = Item_flags::visible | Item_flags::rendertarget,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0

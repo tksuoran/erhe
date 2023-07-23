@@ -12,7 +12,8 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/graphics/vertex_attribute.hpp"
 #include "erhe/primitive/material.hpp"
-
+#include "erhe/raytrace/ibuffer.hpp"
+#include "erhe/raytrace/igeometry.hpp"
 #include "erhe/scene/animation.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/projection.hpp"
@@ -308,7 +309,7 @@ namespace {
 }
 }
 
-using Item_flags = erhe::scene::Item_flags;
+using Item_flags = erhe::Item_flags;
 
 [[nodiscard]] auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
 {
@@ -838,7 +839,7 @@ private:
             new_material->roughness.x   = pbr_metallic_roughness.roughness_factor;
             new_material->roughness.y   = pbr_metallic_roughness.roughness_factor;
             new_material->emissive      = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
-            new_material->m_shown_in_ui = true;
+            new_material->enable_flag_bits(erhe::Item_flags::show_in_ui);
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_metallic_roughness.base_color_factor[0],
@@ -1404,9 +1405,10 @@ private:
     class Geometry_entry
     {
     public:
-        cgltf_size                                index_accessor;
-        std::vector<cgltf_size>                   attribute_accessors;
-        std::shared_ptr<erhe::geometry::Geometry> geometry;
+        cgltf_size                                           index_accessor;
+        std::vector<cgltf_size>                              attribute_accessors;
+        std::shared_ptr<erhe::geometry::Geometry>            geometry;
+        std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
     };
     std::vector<Geometry_entry> m_geometries;
     void load_new_primitive_geometry(const cgltf_primitive* primitive, Geometry_entry& geometry_entry)
@@ -1419,7 +1421,11 @@ private:
             }
             primitive_to_geometry.geometry->compute_tangents();
         }
+        geometry_entry.geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+            geometry_entry.geometry
+        );
         m_data_out.geometries.push_back(primitive_to_geometry.geometry);
+        m_data_out.geometry_primitives.push_back(geometry_entry.geometry_primitive);
     }
     auto get_primitive_geometry(const cgltf_primitive* primitive, Geometry_entry& geometry_entry)
     {
@@ -1465,8 +1471,7 @@ private:
                 .material        = (primitive->material != nullptr)
                     ? m_data_out.materials.at(primitive->material - m_data->materials)
                     : std::shared_ptr<erhe::primitive::Material>{},
-                .source_geometry = geometry_entry.geometry,
-                .normal_style    = erhe::primitive::Normal_style::corner_normals
+                .geometry_primitive = geometry_entry.geometry_primitive
             }
         );
     }

@@ -35,24 +35,26 @@ Controller_visualization::Controller_visualization(
     controller_geometry.reverse_polygons();
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
-    auto controller_pg = erhe::primitive::make_primitive(
-        controller_geometry,
-        erhe::primitive::Build_info{
-            .primitive_types = {.fill_triangles = true },
-            .buffer_info = mesh_memory.buffer_info
-        },
-        erhe::primitive::Normal_style::corner_normals
+    auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+        erhe::primitive::make_geometry_mesh(
+            controller_geometry,
+            erhe::primitive::Build_info{
+                .primitive_types = {.fill_triangles = true },
+                .buffer_info = mesh_memory.buffer_info
+            },
+            erhe::primitive::Normal_style::corner_normals
+        )
     );
 
     erhe::primitive::Primitive primitive{
-        .material              = controller_material,
-        .gl_primitive_geometry = controller_pg
+        .material           = controller_material,
+        .geometry_primitive = geometry_primitive
     };
 
     m_controller_node = std::make_shared<erhe::scene::Node>("Controller node");
     m_controller_mesh = std::make_shared<erhe::scene::Mesh>("Controller", primitive);
-    m_controller_node->enable_flag_bits(erhe::scene::Item_flags::visible);
-    m_controller_mesh->enable_flag_bits(erhe::scene::Item_flags::controller | erhe::scene::Item_flags::opaque);
+    m_controller_node->enable_flag_bits(erhe::Item_flags::visible);
+    m_controller_mesh->enable_flag_bits(erhe::Item_flags::controller | erhe::Item_flags::opaque);
     m_controller_mesh->mesh_data.layer_id = scene_root.layers().content()->id;
     m_controller_node->attach(m_controller_mesh);
     m_controller_node->set_parent(view_root);

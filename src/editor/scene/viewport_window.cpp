@@ -393,39 +393,37 @@ void Viewport_window::update_hover_with_id_render()
         return;
     }
 
-    Hover_entry entry
-    {
-        .valid       = id_query.valid,
-        .mesh        = id_query.mesh,
-        .position    = position_in_world_viewport_depth(id_query.depth),
-        .primitive   = id_query.mesh_primitive_index,
-        .local_index = id_query.local_index
+    Hover_entry entry{
+        .valid           = id_query.valid,
+        .mesh            = id_query.mesh,
+        .primitive_index = id_query.primitive_index,
+        .position        = position_in_world_viewport_depth(id_query.depth),
+        .triangle_id     = id_query.triangle_id
     };
 
     SPDLOG_LOGGER_TRACE(log_controller_ray, "position in world = {}", entry.position.value());
 
-    if (entry.mesh) {
+    if (entry.mesh != nullptr) {
         const erhe::scene::Node* node = entry.mesh->get_node();
-        if (node != nullptr) {
-            const auto& primitive = entry.mesh->mesh_data.primitives[entry.primitive];
-            entry.geometry = primitive.source_geometry;
-            if (entry.geometry != nullptr) {
-                const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(entry.local_index);
-                if (polygon_id < entry.geometry->get_polygon_count()) {
-                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
-                    auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(
-                        erhe::geometry::c_polygon_normals
-                    );
-                    if (
-                        (polygon_normals != nullptr) &&
-                        polygon_normals->has(polygon_id)
-                    ) {
-                        const auto local_normal    = polygon_normals->get(polygon_id);
-                        const auto world_from_node = node->world_from_node();
-                        entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                        SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
-                    }
-                }
+        ERHE_VERIFY(node != nullptr);
+        const auto& primitive          = entry.mesh->mesh_data.primitives[entry.primitive_index];
+        const auto& geometry_primitive = primitive.geometry_primitive;
+        ERHE_VERIFY(geometry_primitive);
+        entry.geometry = geometry_primitive->source_geometry;
+        if (entry.geometry) {
+            const auto triangle_id = static_cast<erhe::geometry::Polygon_id>(entry.triangle_id);
+            const auto polygon_id  = geometry_primitive->gl_geometry_mesh.primitive_id_to_polygon_id[triangle_id];
+            ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
+            auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+            if (
+                (polygon_normals != nullptr) &&
+                polygon_normals->has(polygon_id)
+            ) {
+                const auto local_normal    = polygon_normals->get(polygon_id);
+                const auto world_from_node = node->world_from_node();
+                entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
             }
         }
     }
@@ -434,10 +432,10 @@ void Viewport_window::update_hover_with_id_render()
 
     const uint64_t flags = id_query.mesh ? entry.mesh->get_flag_bits() : 0;
 
-    const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::content     );
-    const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::tool        );
-    const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::brush       );
-    const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::scene::Item_flags::rendertarget);
+    const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::content     );
+    const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::tool        );
+    const bool hover_brush        = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::brush       );
+    const bool hover_rendertarget = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::rendertarget);
     SPDLOG_LOGGER_TRACE(
         log_frame,
         "hover mesh = {} primitive = {} local index {} {}{}{}{}",
@@ -526,14 +524,18 @@ auto Viewport_window::viewport_toolbar() -> bool
         hovered = true;
     }
     ImGui::SameLine();
-    auto       old_scene_root = m_scene_root;
-    auto       scene_root     = get_scene_root();
+    auto                        old_scene_root = m_scene_root;
+    std::shared_ptr<Scene_root> scene_root     = get_scene_root();
+    Scene_root*                 scene_root_raw = scene_root.get();
     ImGui::SetNextItemWidth(110.0f);
-    const bool combo_used     = m_context.editor_scenes->scene_combo("##Scene", scene_root, false);
+    const bool combo_used     = m_context.editor_scenes->scene_combo("##Scene", scene_root_raw, false);
     if (ImGui::IsItemHovered()) {
         hovered = true;
     }
     if (combo_used) {
+        scene_root = (scene_root_raw != nullptr) 
+            ? scene_root_raw->shared_from_this()
+            : std::shared_ptr<Scene_root>{};
         m_scene_root = scene_root;
         if (old_scene_root.lock() != scene_root) {
             if (scene_root) {
@@ -544,7 +546,6 @@ auto Viewport_window::viewport_toolbar() -> bool
             }
         }
     }
-    scene_root = get_scene_root();
     if (!scene_root) {
         return hovered;
     }

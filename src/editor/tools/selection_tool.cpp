@@ -41,7 +41,7 @@ Range_selection::Range_selection(Selection& selection)
 }
 
 void Range_selection::set_terminator(
-    const std::shared_ptr<erhe::scene::Item>& item
+    const std::shared_ptr<erhe::Item>& item
 )
 {
     if (!m_primary_terminator) {
@@ -75,7 +75,7 @@ void Range_selection::set_terminator(
 }
 
 void Range_selection::entry(
-    const std::shared_ptr<erhe::scene::Item>& item
+    const std::shared_ptr<erhe::Item>& item
 )
 {
     m_entries.push_back(item);
@@ -95,7 +95,7 @@ void Range_selection::end()
     }
     log_selection->trace("setting selection since range was modified");
 
-    std::vector<std::shared_ptr<erhe::scene::Item>> selection;
+    std::vector<std::shared_ptr<erhe::Item>> selection;
     bool between_terminators{false};
 
     auto primary_terminator   = m_primary_terminator;
@@ -289,7 +289,7 @@ void Selection_tool::handle_priority_update(
     }
 }
 
-auto Selection::get_selection() const -> const std::vector<std::shared_ptr<erhe::scene::Item>>&
+auto Selection::get_selection() const -> const std::vector<std::shared_ptr<erhe::Item>>&
 {
     return m_selection;
 }
@@ -302,12 +302,18 @@ auto Selection::delete_selection() -> bool
 
     Compound_operation::Parameters compound_parameters;
     for (auto& item : m_selection) {
+        // TODO
+        auto hierarchy = as<erhe::Hierarchy>(item);
+        if (!hierarchy) {
+            continue;
+        }
+
         compound_parameters.operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
                 Item_insert_remove_operation::Parameters{
                     .context = m_context,
-                    .item    = item,
-                    .parent  = item->get_parent().lock(),
+                    .item    = hierarchy,
+                    .parent  = hierarchy->get_parent().lock(),
                     .mode    = Scene_item_operation::Mode::remove,
                 }
             )
@@ -319,7 +325,7 @@ auto Selection::delete_selection() -> bool
 
     const auto op = std::make_shared<Compound_operation>(std::move(compound_parameters));
 
-    m_context.operation_stack->push(op);
+    m_context.operation_stack->queue(op);
     return true;
 }
 
@@ -328,7 +334,7 @@ auto Selection::range_selection() -> Range_selection&
     return m_range_selection;
 }
 
-auto Selection::get(erhe::scene::Item_filter filter, const std::size_t index) -> std::shared_ptr<erhe::scene::Item>
+auto Selection::get(erhe::Item_filter filter, const std::size_t index) -> std::shared_ptr<erhe::Item>
 {
     std::size_t i = 0;
     for (const auto& item : m_selection) {
@@ -357,7 +363,7 @@ template <typename T>
     ) != items.end();
 }
 
-void Selection::set_selection(const std::vector<std::shared_ptr<erhe::scene::Item>>& selection)
+void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item>>& selection)
 {
     for (auto& item : m_selection) {
         if (
@@ -407,10 +413,11 @@ auto Selection::on_viewport_select_try_ready() -> bool
 
 auto Selection::on_viewport_select() -> bool
 {
-    const bool was_selected = is_in_selection(m_hover_mesh);
+    auto shared_hover_mesh = std::static_pointer_cast<erhe::scene::Mesh>(m_hover_mesh->shared_from_this());
+    const bool was_selected = is_in_selection(shared_hover_mesh);
     if (m_context.input_state->control) {
         if (m_hover_content) {
-            toggle_mesh_selection(m_hover_mesh, was_selected, false);
+            toggle_mesh_selection(shared_hover_mesh, was_selected, false);
             return true;
         }
         return false;
@@ -420,16 +427,17 @@ auto Selection::on_viewport_select() -> bool
         clear_selection();
     } else {
         m_range_selection.reset();
-        toggle_mesh_selection(m_hover_mesh, was_selected, true);
+        toggle_mesh_selection(shared_hover_mesh, was_selected, true);
     }
     return true;
 }
 
 auto Selection::on_viewport_select_toggle() -> bool
 {
+    auto shared_hover_mesh = std::static_pointer_cast<erhe::scene::Mesh>(m_hover_mesh->shared_from_this());
     if (m_hover_content) {
-        const bool was_selected = is_in_selection(m_hover_mesh);
-        toggle_mesh_selection(m_hover_mesh, was_selected, false);
+        const bool was_selected = is_in_selection(shared_hover_mesh);
+        toggle_mesh_selection(shared_hover_mesh, was_selected, false);
         return true;
     }
     return false;
@@ -465,7 +473,7 @@ void Selection::toggle_mesh_selection(
 {
     const bool mesh_lock_viewport_select = erhe::toolkit::test_all_rhs_bits_set(
         mesh->get_flag_bits(),
-        erhe::scene::Item_flags::lock_viewport_selection
+        erhe::Item_flags::lock_viewport_selection
     );
     if (mesh_lock_viewport_select) {
         return;
@@ -475,7 +483,7 @@ void Selection::toggle_mesh_selection(
     if (node != nullptr) {
         const bool node_lock_viewport_select = erhe::toolkit::test_all_rhs_bits_set(
             node->get_flag_bits(),
-            erhe::scene::Item_flags::lock_viewport_selection
+            erhe::Item_flags::lock_viewport_selection
         );
         if (node_lock_viewport_select) {
             return;
@@ -529,7 +537,7 @@ void Selection::toggle_mesh_selection(
 }
 
 auto Selection::is_in_selection(
-    const std::shared_ptr<erhe::scene::Item>& item
+    const std::shared_ptr<erhe::Item>& item
 ) const -> bool
 {
     if (!item) {
@@ -544,7 +552,7 @@ auto Selection::is_in_selection(
 }
 
 auto Selection::add_to_selection(
-    const std::shared_ptr<erhe::scene::Item>& item
+    const std::shared_ptr<erhe::Item>& item
 ) -> bool
 {
     if (!item) {
@@ -566,7 +574,7 @@ auto Selection::add_to_selection(
 }
 
 auto Selection::remove_from_selection(
-    const std::shared_ptr<erhe::scene::Item>& item
+    const std::shared_ptr<erhe::Item>& item
 ) -> bool
 {
     if (!item) {
@@ -593,7 +601,7 @@ auto Selection::remove_from_selection(
 }
 
 void Selection::update_selection_from_scene_item(
-    const std::shared_ptr<erhe::scene::Item>& item,
+    const std::shared_ptr<erhe::Item>& item,
     const bool                                added
 )
 {
@@ -627,7 +635,7 @@ void Selection::sanity_check()
         const auto& scene = scene_root->get_scene();
         const auto& flat_nodes = scene.get_flat_nodes();
         for (const auto& node : flat_nodes) {
-            const auto item = std::static_pointer_cast<erhe::scene::Item>(node);
+            const auto item = std::static_pointer_cast<erhe::Item>(node);
             if (
                 node->is_selected() &&
                 !is_in(item, m_selection)

@@ -17,6 +17,7 @@
 #include "erhe/imgui/scoped_imgui_context.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 

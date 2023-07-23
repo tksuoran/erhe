@@ -4,6 +4,7 @@
 
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/iworld.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -22,7 +23,8 @@ using erhe::scene::Node_attachment;
 Node_physics::Node_physics(
     const IRigid_body_create_info& create_info
 )
-    : m_rigidbody_from_node{}
+    : erhe::scene::Node_attachment{erhe::toolkit::Unique_id<Node_physics>{}.get_id()}
+    , m_rigidbody_from_node{}
     , m_node_from_rigidbody{}
     , m_motion_mode        {
         (create_info.mass == 0.0f)
@@ -42,12 +44,7 @@ Node_physics::~Node_physics() noexcept
 
 auto Node_physics::get_static_type() -> uint64_t
 {
-    return erhe::scene::Item_type::node_attachment | erhe::scene::Item_type::physics;
-}
-
-auto Node_physics::get_static_type_name() -> const char*
-{
-    return "Node_physics";
+    return erhe::Item_type::node_attachment | erhe::Item_type::physics;
 }
 
 auto Node_physics::get_type() const -> uint64_t
@@ -55,9 +52,9 @@ auto Node_physics::get_type() const -> uint64_t
     return get_static_type();
 }
 
-auto Node_physics::get_type_name() const -> const char*
+auto Node_physics::get_type_name() const -> std::string_view
 {
-    return get_static_type_name();
+    return static_type_name;
 }
 
 void Node_physics::set_physics_world(erhe::physics::IWorld* value)
@@ -74,8 +71,8 @@ auto Node_physics::get_physics_world() const -> erhe::physics::IWorld*
 }
 
 void Node_physics::handle_item_host_update(
-    erhe::scene::Item_host* const old_item_host,
-    erhe::scene::Item_host* const new_item_host
+    erhe::Item_host* const old_item_host,
+    erhe::Item_host* const new_item_host
 )
 {
     ERHE_VERIFY(old_item_host != new_item_host);
@@ -277,7 +274,7 @@ auto Node_physics::get_rigid_body() const -> const IRigid_body*
     return (m_physics_world != nullptr) ? m_rigid_body.get() : nullptr;
 }
 
-auto is_physics(const erhe::scene::Item* const scene_item) -> bool
+auto is_physics(const erhe::Item* const scene_item) -> bool
 {
     if (scene_item == nullptr) {
         return false;
@@ -285,49 +282,13 @@ auto is_physics(const erhe::scene::Item* const scene_item) -> bool
     using namespace erhe::toolkit;
     return test_all_rhs_bits_set(
         scene_item->get_type(),
-        erhe::scene::Item_type::physics
+        erhe::Item_type::physics
     );
 }
 
-auto is_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
+auto is_physics(const std::shared_ptr<erhe::Item>& scene_item) -> bool
 {
     return is_physics(scene_item.get());
-}
-
-auto as_physics(erhe::scene::Item* scene_item) -> Node_physics*
-{
-    if (scene_item == nullptr) {
-        return nullptr;
-    }
-    using namespace erhe::toolkit;
-    if (
-        !test_all_rhs_bits_set(
-            scene_item->get_type(),
-            erhe::scene::Item_type::physics
-        )
-    ) {
-        return nullptr;
-    }
-    return static_cast<Node_physics*>(scene_item);
-}
-
-auto as_physics(
-    const std::shared_ptr<erhe::scene::Item>& scene_item
-) -> std::shared_ptr<Node_physics>
-{
-    if (!scene_item) {
-        return {};
-    }
-    using namespace erhe::toolkit;
-    if (
-        !test_all_rhs_bits_set(
-            scene_item->get_type(),
-            erhe::scene::Item_type::physics
-        )
-    ) {
-        return {};
-    }
-    return std::static_pointer_cast<Node_physics>(scene_item);
 }
 
 auto get_node_physics(
@@ -335,7 +296,7 @@ auto get_node_physics(
 ) -> std::shared_ptr<Node_physics>
 {
     for (const auto& attachment : node->get_attachments()) {
-        auto node_physics = as_physics(attachment);
+        auto node_physics = as<Node_physics>(attachment);
         if (node_physics) {
             return node_physics;
         }

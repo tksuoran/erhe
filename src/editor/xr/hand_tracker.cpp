@@ -6,6 +6,7 @@
 
 #include "erhe/renderer/line_renderer.hpp"
 #include "renderers/render_context.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
