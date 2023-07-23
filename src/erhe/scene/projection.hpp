@@ -14,8 +14,7 @@ class Transform;
 class Projection
 {
 public:
-    enum class Type : unsigned int
-    {
+    enum class Type : unsigned int {
         other = 0,            // Projection is done by shader in unusual way - hemispherical for example
         perspective_horizontal,
         perspective_vertical,
@@ -28,8 +27,7 @@ public:
         generic_frustum       // Generic frustum
     };
 
-    static constexpr const char* c_type_strings[] =
-    {
+    static constexpr const char* c_type_strings[] = {
         "Other",
         "Perspective Horizontal",
         "Perspective Vertical",

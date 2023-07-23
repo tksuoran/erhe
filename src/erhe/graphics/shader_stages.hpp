@@ -146,6 +146,8 @@ public:
         Instance&                        graphics_instance,
         const Shader_stages_create_info& create_info
     );
+    Reloadable_shader_stages(Reloadable_shader_stages&&);
+    Reloadable_shader_stages& operator=(Reloadable_shader_stages&&);
 
     Shader_stages_create_info create_info;
     Shader_stages             shader_stages;

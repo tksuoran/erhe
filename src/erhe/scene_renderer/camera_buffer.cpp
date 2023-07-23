@@ -53,14 +53,14 @@ Camera_buffer::Camera_buffer(
         gl::Buffer_target::uniform_buffer,
         m_camera_interface.camera_block.binding_point(),
         // TODO
-        8 * m_camera_interface.camera_block.size_bytes()
+        20 * m_camera_interface.camera_struct.size_bytes()
     );
 }
 
 auto Camera_buffer::update(
     const erhe::scene::Projection& camera_projection,
     const erhe::scene::Node&       camera_node,
-    erhe::toolkit::Viewport          viewport,
+    erhe::toolkit::Viewport        viewport,
     float                          exposure
 ) -> erhe::renderer::Buffer_range
 {

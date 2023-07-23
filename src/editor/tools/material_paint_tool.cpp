@@ -169,13 +169,11 @@ auto Material_paint_tool::on_paint() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || !hover.mesh) {
+    if (!hover.valid || (hover.mesh == nullptr)) {
         return false;
     }
-    const auto& target_mesh      = hover.mesh;
-    const auto  target_primitive = hover.primitive; // TODO currently always 0
-    auto&       hover_primitive  = target_mesh->mesh_data.primitives.at(target_primitive);
-    hover_primitive.material     = m_material;
+    auto& hover_primitive = hover.mesh->mesh_data.primitives.at(hover.primitive_index);
+    hover_primitive.material = m_material;
 
     return true;
 }
@@ -187,12 +185,10 @@ auto Material_paint_tool::on_pick() -> bool
         return false;
     }
     const Hover_entry& hover = viewport_window->get_hover(Hover_entry::content_slot);
-    if (!hover.valid || !hover.mesh) {
+    if (!hover.valid || (hover.mesh == nullptr)) {
         return false;
     }
-    const auto& target_mesh      = hover.mesh;
-    const auto  target_primitive = hover.primitive; // TODO currently always 0
-    auto&       hover_primitive  = target_mesh->mesh_data.primitives.at(target_primitive);
+    auto& hover_primitive = hover.mesh->mesh_data.primitives.at(hover.primitive_index);
     m_material = hover_primitive.material;
 
     return true;

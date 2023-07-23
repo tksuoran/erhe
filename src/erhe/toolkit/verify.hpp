@@ -24,7 +24,7 @@
 #include <cstdlib>
 #include <source_location>
 
-#define ERHE_FATAL(format, ...) do { printf("%s:%d " format "\n", std::source_location::current().file_name(), std::source_location::current().line(), ##__VA_ARGS__); DebugBreak(); abort(); } while (1)
+#define ERHE_FATAL(format, ...) do { printf("%s:%u " format "\n", std::source_location::current().file_name(), std::source_location::current().line(), ##__VA_ARGS__); DebugBreak(); abort(); } while (1)
 #define ERHE_VERIFY(expression) do { if (!(expression)) { ERHE_FATAL("assert %s failed in %s", #expression, __func__); } } while (0)
 
 #else

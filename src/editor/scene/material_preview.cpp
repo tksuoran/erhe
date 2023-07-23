@@ -62,11 +62,12 @@ Material_preview::Material_preview(
 
     m_scene_root = std::make_shared<Scene_root>(
         scene_message_bus,
+        nullptr, // Don't register to Editor_scenes
         m_content_library,
         "Material preview scene"
     );
 
-    m_scene_root->get_scene().disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
+    m_scene_root->get_scene().disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     make_preview_scene(mesh_memory);
     make_rendertarget(graphics_instance);
@@ -166,30 +167,28 @@ void Material_preview::make_rendertarget(
 
 void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 {
-    erhe::geometry::Geometry sphere_geometry = erhe::geometry::shapes::make_sphere(
-        m_radius,
-        std::max(1, m_slice_count),
-        std::max(1, m_stack_count)
-    );
-    erhe::primitive::Primitive_geometry gl_primitive_geometry = erhe::primitive::make_primitive(
-        sphere_geometry,
-        erhe::primitive::Build_info{
-            .primitive_types = { .fill_triangles = true },
-            .buffer_info     = mesh_memory.buffer_info
-        },
-        erhe::primitive::Normal_style::corner_normals
-    );
-
     m_node = std::make_shared<erhe::scene::Node>("Material Preview Node");
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     m_mesh->mesh_data.primitives.push_back(
         erhe::primitive::Primitive{
-            .gl_primitive_geometry = gl_primitive_geometry,
-            .normal_style          = erhe::primitive::Normal_style::corner_normals
+            .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+                erhe::primitive::make_geometry_mesh(
+                    erhe::geometry::shapes::make_sphere(
+                        m_radius,
+                        std::max(1, m_slice_count),
+                        std::max(1, m_stack_count)
+                    ),
+                    erhe::primitive::Build_info{
+                        .primitive_types = { .fill_triangles = true },
+                        .buffer_info     = mesh_memory.buffer_info
+                    },
+                    erhe::primitive::Normal_style::corner_normals
+                )
+            )
         }
     );
 
-    using Item_flags = erhe::scene::Item_flags;
+    using Item_flags = erhe::Item_flags;
     m_mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
     m_mesh->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::opaque);
     m_node->attach          (m_mesh);
@@ -200,8 +199,8 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 
     m_key_light_node  = std::make_shared<erhe::scene::Node>("Key Light Node");
     m_key_light       = std::make_shared<erhe::scene::Light>("Key Light");
-    m_key_light_node ->enable_flag_bits(erhe::scene::Item_flags::content);
-    m_key_light      ->enable_flag_bits(erhe::scene::Item_flags::content);
+    m_key_light_node ->enable_flag_bits(erhe::Item_flags::content);
+    m_key_light      ->enable_flag_bits(erhe::Item_flags::content);
     m_key_light      ->layer_id = m_scene_root->layers().light()->id;
     m_key_light_node ->attach(m_key_light);
     m_key_light_node ->set_parent(paremt);
@@ -215,14 +214,14 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
 
     //// m_fill_light_node = std::make_shared<erhe::scene::Node>("Fill Light Node");
     //// m_fill_light      = std::make_shared<erhe::scene::Light>("Fill Light");
-    //// m_fill_light_node->enable_flag_bits(erhe::scene::Item_flags::content);
-    //// m_fill_light     ->enable_flag_bits(erhe::scene::Item_flags::content);
+    //// m_fill_light_node->enable_flag_bits(erhe::Item_flags::content);
+    //// m_fill_light     ->enable_flag_bits(erhe::Item_flags::content);
     //// m_fill_light     ->layer_id = m_scene_root->layers().light()->id;
 
     m_camera_node = std::make_shared<erhe::scene::Node>("Camera node");
     m_camera      = std::make_shared<erhe::scene::Camera>("Camera");
     m_camera_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    m_camera     ->enable_flag_bits(erhe::scene::Item_flags::content | Item_flags::show_in_ui);
+    m_camera     ->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
     m_camera     ->projection()->fov_y  =  0.3f;
     m_camera     ->projection()->z_near =  4.0f;
     m_camera     ->projection()->z_far  = 12.0f;
@@ -245,7 +244,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     auto renderpass = std::make_shared<Renderpass>("Material Preview Renderpass");
     renderpass->mesh_layers      = { Mesh_layer_id::content };
     renderpass->primitive_mode   = erhe::primitive::Primitive_mode::polygon_fill;
-    renderpass->filter           = erhe::scene::Item_filter{};
+    renderpass->filter           = erhe::Item_filter{};
     renderpass->passes           = { &m_pipeline_renderpass };
     m_composer.renderpasses.push_back(renderpass);
 }

@@ -6,6 +6,7 @@
 #include "erhe/graphics/texture.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/light.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/scene/transform.hpp"
 #include "erhe/scene_renderer/scene_renderer_log.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -75,26 +76,26 @@ Light_buffer::Light_buffer(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_block.binding_point(),
         // TODO
-        16 * m_light_interface.light_block.size_bytes()
+        8 * (m_light_interface.offsets.light_struct + m_light_interface.max_light_count * m_light_interface.light_struct.size_bytes())
     );
 
     m_control_buffer.allocate(
         gl::Buffer_target::uniform_buffer,
         m_light_interface.light_control_block.binding_point(),
         // TODO
-        8 * m_light_interface.light_control_block.size_bytes() * 40
+        8 * (m_light_interface.light_control_block.size_bytes())
     );
 }
 
 Light_projections::Light_projections()
-    : shadow_map_texture_handle{0}
+    : shadow_map_texture_handle{0xffffffffu}
 {
 }
 
 Light_projections::Light_projections(
     const gsl::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const erhe::scene::Camera*                                  view_camera,
-    const erhe::toolkit::Viewport&                                light_texture_viewport,
+    const erhe::toolkit::Viewport&                              light_texture_viewport,
     const std::shared_ptr<erhe::graphics::Texture>&             shadow_map_texture,
     uint64_t                                                    shadow_map_texture_handle
 )
@@ -174,7 +175,7 @@ auto Light_buffer::update(
     uint32_t       point_light_count      {0u};
     const uint32_t uvec4_zero[4]          {0u, 0u, 0u, 0u};
     const uint32_t shadow_map_texture_handle_uvec2[2] = {
-        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle & 0xffffffffu)) : 0,
+        light_projections ? static_cast<uint32_t>((light_projections->shadow_map_texture_handle & 0xffffffffu)) : 0xffffffffu,
         light_projections ? static_cast<uint32_t>( light_projections->shadow_map_texture_handle >> 32u) : 0
     };
 

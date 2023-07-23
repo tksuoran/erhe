@@ -4,7 +4,7 @@
 #include "erhe/scene_renderer/primitive_buffer.hpp"
 
 #include "erhe/primitive/enums.hpp"
-#include "erhe/scene/item.hpp"
+#include "erhe/item/item.hpp"
 
 #include <string_view>
 
@@ -34,7 +34,7 @@ public:
 };
 
 class Render_style
-    : public erhe::scene::Item
+    : public erhe::Item
 {
 public:
     Render_style();

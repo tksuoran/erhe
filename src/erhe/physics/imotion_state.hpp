@@ -5,8 +5,7 @@
 namespace erhe::physics
 {
 
-enum class Motion_mode : unsigned int
-{
+enum class Motion_mode : unsigned int {
     e_invalid                = 0,
     e_static                 = 1, // immovable
     e_kinematic_non_physical = 2, // movable from scene graph (instant, does not create kinetic energy), not movable from physics simulation
@@ -14,8 +13,7 @@ enum class Motion_mode : unsigned int
     e_dynamic                = 4  // not movable from scene graph, movable from physics simulation
 };
 
-static constexpr const char* c_motion_mode_strings[] =
-{
+static constexpr const char* c_motion_mode_strings[] = {
     "Static",
     "Kinematic Non-Physical",
     "Kinematic Physical",

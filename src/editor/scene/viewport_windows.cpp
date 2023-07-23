@@ -306,7 +306,7 @@ auto Viewport_windows::create_imgui_viewport_window(
         imgui_windows,
         rendergraph,
         fmt::format("Viewport {}", m_imgui_viewport_windows.size()),
-        nullptr,
+        "",
         viewport_window
     );
     m_imgui_viewport_windows.push_back(imgui_viewport_window);
@@ -331,9 +331,9 @@ auto Viewport_windows::open_new_viewport_window(
 
     const int msaa_sample_count = m_context.settings_window->get_msaa_sample_count();
     if (scene_root) {
-        for (const auto& entry : m_context.selection->get_selection()) {
-            if (is_camera(entry)) {
-                const auto camera = as_camera(entry);
+        for (const auto& item : m_context.selection->get_selection()) {
+            const auto camera = as<erhe::scene::Camera>(item);
+            if (camera) {
                 return create_viewport_window(
                     *m_context.graphics_instance,
                     *m_context.rendergraph,
@@ -341,7 +341,6 @@ auto Viewport_windows::open_new_viewport_window(
                     *m_context.editor_rendering,
                     *m_context.tools,
                     *m_context.viewport_config_window,
-
                     name,
                     scene_root,
                     camera,

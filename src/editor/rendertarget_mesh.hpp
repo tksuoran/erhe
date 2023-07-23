@@ -8,6 +8,9 @@
 
 #include <glm/glm.hpp>
 
+namespace erhe {
+    class Item_host;
+}
 namespace erhe::graphics {
     class Framebuffer;
     class Instance;
@@ -16,9 +19,6 @@ namespace erhe::graphics {
 }
 namespace erhe::primitive {
     class Material;
-}
-namespace erhe::scene {
-    class Item_host;
 }
 
 namespace editor
@@ -29,7 +29,6 @@ class Editor_message;
 class Forward_renderer;
 class Hand_tracker;
 class Mesh_memory;
-class Node_raytrace;
 class Render_context;
 class Scene_root;
 class Scene_view;
@@ -49,10 +48,10 @@ public:
     );
 
     // Implements Item
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    [[nodiscard]] auto get_type     () const -> uint64_t    override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
+    static constexpr std::string_view static_type_name{"Rendertarget_mesh"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    [[nodiscard]] auto get_type     () const -> uint64_t         override;
+    [[nodiscard]] auto get_type_name() const -> std::string_view override;
 
     // Public API
     [[nodiscard]] auto texture         () const -> std::shared_ptr<erhe::graphics::Texture>;
@@ -62,8 +61,6 @@ public:
     [[nodiscard]] auto pixels_per_meter() const -> float;
     [[nodiscard]] auto get_pointer     () const -> std::optional<glm::vec2>;
     [[nodiscard]] auto world_to_window (glm::vec3 world_position) const -> std::optional<glm::vec2>;
-
-    [[nodiscard]] auto get_node_raytrace() -> std::shared_ptr<Node_raytrace>;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     void update_headset();
@@ -82,8 +79,6 @@ public:
     );
 
 private:
-    void make_primitive(Mesh_memory& mesh_memory);
-
     float                                        m_pixels_per_meter{0.0f};
     float                                        m_local_width     {0.0f};
     float                                        m_local_height    {0.0f};
@@ -92,7 +87,6 @@ private:
     std::shared_ptr<erhe::graphics::Sampler>     m_sampler;
     std::shared_ptr<erhe::primitive::Material>   m_material;
     std::shared_ptr<erhe::graphics::Framebuffer> m_framebuffer;
-    std::shared_ptr<Node_raytrace>               m_node_raytrace;
     std::optional<glm::vec2>                     m_pointer;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -101,10 +95,8 @@ private:
 #endif
 };
 
-[[nodiscard]] auto is_rendertarget(const erhe::scene::Item* scene_item) -> bool;
-[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
-[[nodiscard]] auto as_rendertarget(erhe::scene::Item* scene_item) -> Rendertarget_mesh*;
-[[nodiscard]] auto as_rendertarget(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Rendertarget_mesh>;
+[[nodiscard]] auto is_rendertarget(const erhe::Item* item) -> bool;
+[[nodiscard]] auto is_rendertarget(const std::shared_ptr<erhe::Item>& item) -> bool;
 
 [[nodiscard]] auto get_rendertarget(const erhe::scene::Node* node) -> std::shared_ptr<Rendertarget_mesh>;
 

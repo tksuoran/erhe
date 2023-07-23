@@ -1,6 +1,7 @@
 #include "tools/transform/handle_visualizations.hpp"
 
 #include "editor_context.hpp"
+#include "editor_log.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/node_raytrace.hpp"
@@ -19,6 +20,7 @@
 #include "erhe/geometry/shapes/cone.hpp"
 #include "erhe/geometry/shapes/torus.hpp"
 #include "erhe/graphics/buffer_transfer_queue.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/mesh.hpp"
@@ -28,6 +30,16 @@
 
 namespace editor
 {
+
+auto Handle_visualizations::c_str(const Mode mode) -> const char*
+{
+    switch (mode) {
+        case Mode::Normal: return "normal";
+        case Mode::Hover : return "hover";
+        case Mode::Active: return "active";
+        default:           return "?";
+    }
+}
 
 Handle_visualizations::Handle_visualizations(
     Editor_context& editor_context,
@@ -52,9 +64,9 @@ Handle_visualizations::Handle_visualizations(
     m_y_active_material = make_material(tools, "y active", glm::vec3{0.23f, 1.00f, 0.0f}, Mode::Active);
     m_z_active_material = make_material(tools, "z active", glm::vec3{0.00f, 0.23f, 1.0f}, Mode::Active);
 
-    m_x_material->m_shown_in_ui = false;
-    m_y_material->m_shown_in_ui = false;
-    m_z_material->m_shown_in_ui = false;
+    m_x_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
+    m_y_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
+    m_z_material->disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;
 
@@ -228,14 +240,25 @@ void Handle_visualizations::update_mesh_visibility(
         );
 
     erhe::scene::Node* node = mesh->get_node();
-    node->set_visible(visible);
+    const bool is_visible = node->is_visible();
+    if (is_visible != visible) {
+        node->set_visible(visible);
+    }
 
     const Mode mode = (active_handle == handle) || translate
         ? Mode::Active
         : (hover_handle == handle)
             ? Mode::Hover
             : Mode::Normal;
-    mesh->mesh_data.primitives.front().material = get_handle_material(handle, mode);
+
+    const auto& material = get_handle_material(handle, mode);
+
+    mesh->mesh_data.primitives.front().material = material;
+
+    log_trs_tool->trace(
+        "{}->set_visible({}) mode = {}, material = {}",
+        node->get_name(), visible, c_str(mode), material->get_name()
+    );
 }
 
 void Handle_visualizations::update_visibility()
@@ -314,28 +337,17 @@ auto Handle_visualizations::make_mesh(
     auto mesh = std::make_shared<erhe::scene::Mesh>(
         name,
         erhe::primitive::Primitive{
-            .material              = material,
-            .gl_primitive_geometry = part.primitive_geometry,
-            .rt_primitive_geometry = part.raytrace_primitive
-                ? part.raytrace_primitive->primitive_geometry
-                : erhe::primitive::Primitive_geometry{}
+            .material           = material,
+            .geometry_primitive = part.geometry_primitive
         }
     );
 
     mesh->enable_flag_bits(
-        //erhe::scene::Item_flags::visible |
-        erhe::scene::Item_flags::tool |
-        erhe::scene::Item_flags::id
+        //erhe::Item_flags::visible |
+        erhe::Item_flags::tool |
+        erhe::Item_flags::id
     );
-
     node->attach(mesh);
-    if (part.raytrace_primitive) {
-        auto node_raytrace = std::make_shared<Node_raytrace>(
-            part.geometry,
-            part.raytrace_primitive
-        );
-        node->attach(node_raytrace);
-    }
 
     const auto scene_root    = tools.get_tool_scene_root();
     const auto tool_layer_id = scene_root->layers().tool()->id;
@@ -361,18 +373,14 @@ Handle_visualizations::Part::Part(
     Mesh_memory&                                     mesh_memory,
     const std::shared_ptr<erhe::geometry::Geometry>& geometry
 )
-    : geometry{geometry}
-    , primitive_geometry{
-        make_primitive(
-            *geometry.get(),
+    : geometry_primitive{
+        std::make_shared<erhe::primitive::Geometry_primitive>(
+            geometry,
             erhe::primitive::Build_info{
                 .primitive_types{ .fill_triangles = true },
                 .buffer_info = mesh_memory.buffer_info
             }
         )
-    },
-    raytrace_primitive{
-        std::make_shared<Raytrace_primitive>(geometry)
     }
 {
 }
@@ -476,11 +484,13 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
         return;
     }
 
-    const auto&     settings = m_context.transform_tool->shared.settings;
-    const glm::mat4 scale    = erhe::toolkit::create_scale<float>(m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f);
+    const auto&     settings     = m_context.transform_tool->shared.settings;
+    const float     scalar_scale = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+    const glm::mat4 scale        = erhe::toolkit::create_scale<float>(scalar_scale);
     const glm::mat4 world_from_anchor = settings.local
         ? m_world_from_anchor.get_matrix()
         : erhe::toolkit::create_translation<float>(m_world_from_anchor.get_translation());
+    const glm::vec3 origin = glm::vec3{world_from_anchor * glm::vec4{0.0f, 0.0, 0.0f, 1.0}};
 
     m_tool_node->set_parent_from_node(world_from_anchor * scale);
 }

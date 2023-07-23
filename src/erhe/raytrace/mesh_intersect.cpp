@@ -1,6 +1,7 @@
 #include "erhe/raytrace/mesh_intersect.hpp"
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/verify.hpp"
 
 namespace erhe::raytrace
@@ -89,8 +90,8 @@ auto intersect(
     out_t = std::numeric_limits<float>::max();
 
     for (auto& primitive : mesh.mesh_data.primitives) {
-        //const auto& primitive_geometry = primitive.gl_primitive_geometry;
-        auto* geometry = primitive.source_geometry.get();
+        const auto& geometry_primitive = primitive.geometry_primitive;
+        auto* geometry = geometry_primitive->source_geometry.get();
         if (geometry == nullptr) {
             continue;
         }
@@ -101,8 +102,7 @@ auto intersect(
         }
 
         //erhe::raytrace::log_geometry.trace("raytrace {}\n", geometry->name);
-        geometry->for_each_polygon_const([&](auto& i)
-        {
+        geometry->for_each_polygon_const([&](auto& i) {
             const Corner_id first_corner_id = geometry->polygon_corners[i.polygon.first_polygon_corner_id];
             const Corner&   first_corner    = geometry->corners[first_corner_id];
             const Point_id  first_point_id  = first_corner.point_id;

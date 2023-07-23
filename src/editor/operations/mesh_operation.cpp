@@ -2,10 +2,15 @@
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
+#include "editor_settings.hpp"
+#include "scene/node_physics.hpp"
+#include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/physics/icollision_shape.hpp"
+//#include "erhe/physics/iconvex_hull_collision_shape.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/toolkit/verify.hpp"
@@ -35,23 +40,31 @@ auto Mesh_operation::describe() const -> std::string
     return ss.str();
 }
 
-Mesh_operation::~Mesh_operation() noexcept
-{
-}
+Mesh_operation::~Mesh_operation() noexcept = default;
 
 void Mesh_operation::execute(Editor_context&)
 {
     log_operations->trace("Op Execute {}", describe());
 
     for (const auto& entry : m_entries) {
-        const auto* node = entry.mesh->get_node();
-        ERHE_VERIFY(node != nullptr);
-        auto* scene_root = static_cast<Scene_root*>(node->node_data.host);
-        ERHE_VERIFY(scene_root);
-        const auto& scene = scene_root->get_scene();
-        scene.sanity_check();
-        entry.mesh->mesh_data = entry.after;
-        scene.sanity_check();
+        auto* node = entry.mesh->get_node();
+        entry.mesh->mesh_data.primitives = entry.after.primitives;
+
+        auto old_node_physics = get_node_physics(node);
+        if (old_node_physics) {
+            node->detach(old_node_physics.get());
+        }
+        if (entry.after.node_physics) {
+            node->attach(entry.after.node_physics);
+        }
+
+        auto old_node_raytrace = get_node_raytrace(node);
+        if (old_node_raytrace) {
+            node->detach(old_node_raytrace.get());
+        }
+        if (entry.after.node_raytrace) {
+            node->attach(entry.after.node_raytrace);
+        }
     }
 }
 
@@ -60,14 +73,24 @@ void Mesh_operation::undo(Editor_context&)
     log_operations->trace("Op Undo {}", describe());
 
     for (const auto& entry : m_entries) {
-        const auto* mesh_node = entry.mesh->get_node();
-        ERHE_VERIFY(mesh_node != nullptr);
-        auto* scene_root = static_cast<Scene_root*>(mesh_node->node_data.host);
-        ERHE_VERIFY(scene_root);
-        const auto& scene = scene_root->get_scene();
-        scene.sanity_check();
-        entry.mesh->mesh_data = entry.before;
-        scene.sanity_check();
+        auto* node = entry.mesh->get_node();
+        entry.mesh->mesh_data.primitives = entry.before.primitives;
+
+        auto old_node_physics = get_node_physics(node);
+        if (old_node_physics) {
+            node->detach(old_node_physics.get());
+        }
+        if (entry.before.node_physics) {
+            node->attach(entry.before.node_physics);
+        }
+
+        auto old_node_raytrace = get_node_raytrace(node);
+        if (old_node_raytrace) {
+            node->detach(old_node_raytrace.get());
+        }
+        if (entry.before.node_raytrace) {
+            node->attach(entry.before.node_raytrace);
+        }
     }
 }
 
@@ -106,40 +129,67 @@ void Mesh_operation::make_entries(
     scene.sanity_check();
 
     for (auto& item : selected_items) {
-        auto mesh = as_mesh(item);
+        auto* node = as<erhe::scene::Node>(item).get();
+        auto mesh = as<erhe::scene::Mesh>(item);
         if (!mesh) {
-            const auto node = as_node(item);
-            if (node){
-                mesh = get_mesh(node.get());
+            if (node != nullptr) {
+                mesh = erhe::scene::get_mesh(node);
             }
         }
         if (!mesh) {
             continue;
         }
+        if (node == nullptr) {
+            node = mesh->get_node();
+        }
 
         Entry entry{
             .mesh   = mesh,
-            .before = mesh->mesh_data,
-            .after  = mesh->mesh_data
+            .before = {
+                .node_physics  = get_node_physics(node),
+                .node_raytrace = get_node_raytrace(node),
+                .primitives    = mesh->mesh_data.primitives
+            },
         };
 
-        for (auto& primitive : entry.after.primitives) {
-            const auto& geometry = primitive.source_geometry;
-            auto* g = geometry.get();
-            if (g == nullptr) {
+        for (auto& primitive : mesh->mesh_data.primitives) {
+            if (!primitive.geometry_primitive->source_geometry) {
                 continue;
             }
-            auto& gr = *g;
-            auto result_geometry = operation(gr);
-            result_geometry.sanity_check();
-            primitive.source_geometry = std::make_shared<erhe::geometry::Geometry>(
-                std::move(result_geometry)
+            auto after_geometry = std::make_shared<erhe::geometry::Geometry>(
+                std::move(operation(*primitive.geometry_primitive->source_geometry.get()))
             );
-            primitive.gl_primitive_geometry = make_primitive(
-                *primitive.source_geometry.get(),
-                m_parameters.build_info,
-                primitive.normal_style
+            entry.after.primitives.push_back(
+                erhe::primitive::Primitive{
+                    primitive.material,
+                    std::make_shared<erhe::primitive::Geometry_primitive>(
+                        after_geometry,
+                        m_parameters.build_info,
+                        primitive.geometry_primitive->normal_style
+                    )
+                }
             );
+            entry.after.node_raytrace = std::make_shared<Node_raytrace>(entry.mesh, entry.after.primitives);
+            if (m_parameters.context.editor_settings->physics_static_enable) {
+                auto& physics_world = scene_root->get_physics_world();
+
+                auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                    reinterpret_cast<const float*>(
+                        after_geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations)->values.data()
+                    ),
+                    static_cast<int>(after_geometry->get_point_count()),
+                    static_cast<int>(sizeof(glm::vec3))
+                );
+
+                const erhe::physics::IRigid_body_create_info rigid_body_create_info{
+                    .world           = physics_world,
+                    .collision_shape = collision_shape,
+                    .debug_label     = after_geometry->name.c_str()
+                };
+
+                entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+            }
+
         }
         add_entry(std::move(entry));
     }

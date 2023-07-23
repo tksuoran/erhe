@@ -34,6 +34,7 @@ Primitive_interface::Primitive_interface(
     ini->get("max_primitive_count", max_primitive_count);
 
     primitive_block.add_struct("primitives", &primitive_struct, erhe::graphics::Shader_resource::unsized_array);
+    primitive_block.set_readonly(true);
 }
 
 Primitive_buffer::Primitive_buffer(
@@ -68,7 +69,7 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Primitive_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    const erhe::scene::Item_filter&                            filter,
+    const erhe::Item_filter&                            filter,
     const Primitive_interface_settings&                        settings,
     bool                                                       use_id_ranges
 ) -> erhe::renderer::Buffer_range
@@ -147,11 +148,11 @@ auto Primitive_buffer::update(
             ////     m_writer.write_offset
             //// );
 
-            const auto&    primitive_geometry = primitive.gl_primitive_geometry;
-            const uint32_t count              = static_cast<uint32_t>(primitive_geometry.triangle_fill_indices.index_count);
-            const uint32_t power_of_two       = erhe::toolkit::next_power_of_two(count);
-            const uint32_t mask               = power_of_two - 1;
-            const uint32_t current_bits       = m_id_offset & mask;
+            const auto&    geometry_mesh = primitive.geometry_primitive->gl_geometry_mesh;
+            const uint32_t count         = static_cast<uint32_t>(geometry_mesh.triangle_fill_indices.index_count);
+            const uint32_t power_of_two  = erhe::toolkit::next_power_of_two(count);
+            const uint32_t mask          = power_of_two - 1;
+            const uint32_t current_bits  = m_id_offset & mask;
             if (current_bits != 0) {
                 const auto add = power_of_two - current_bits;
                 m_id_offset += add;
@@ -195,7 +196,7 @@ auto Primitive_buffer::update(
                     Id_range{
                         .offset          = m_id_offset,
                         .length          = count,
-                        .mesh            = mesh,
+                        .mesh            = mesh.get(),
                         .primitive_index = mesh_primitive_index++
                     }
                 );

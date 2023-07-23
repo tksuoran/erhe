@@ -9,8 +9,7 @@ struct ImGuiIO;
 namespace erhe::imgui
 {
 
-enum class Item_mode : unsigned int
-{
+enum class Item_mode : unsigned int {
     normal = 0, // normal button
     disabled,   // disabled button
     active      // button in active state

@@ -65,9 +65,11 @@ public:
 
     [[nodiscard]] auto can_undo() const -> bool;
     [[nodiscard]] auto can_redo() const -> bool;
-    void push(const std::shared_ptr<IOperation>& operation);
+    void queue(const std::shared_ptr<IOperation>& operation);
     void undo();
     void redo();
+
+    void update();
 
     // Implements Window
     void imgui() override;
@@ -85,6 +87,7 @@ private:
 
     std::vector<std::shared_ptr<IOperation>> m_executed;
     std::vector<std::shared_ptr<IOperation>> m_undone;
+    std::vector<std::shared_ptr<IOperation>> m_queued;
 };
 
 } // namespace editor

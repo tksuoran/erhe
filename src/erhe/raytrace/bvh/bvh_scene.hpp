@@ -33,11 +33,11 @@ public:
     void detach   (IGeometry* geometry) override;
     void detach   (IInstance* geometry) override;
     void commit   () override;
-    void intersect(Ray& ray, Hit& hit) override;
+    auto intersect(Ray& ray, Hit& hit) -> bool override;
     [[nodiscard]] auto debug_label() const -> std::string_view override;
 
     // Bvh_scene public API
-    void intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance);
+    auto intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool;
     //// void collect_spheres   (
     ////     std::vector<bvh::Sphere<float>>& spheres,
     ////     std::vector<Bvh_instance*>&      instances,
@@ -51,10 +51,10 @@ private:
 
     //// std::vector<bvh::Sphere<float>> m_collected_spheres;   // flat
     std::vector<Bvh_instance*>   m_collected_instances; // flat
-    bvh::v2::BBox<float, 3>      m_global_bbox;
-    bvh::v2::Bvh<
-         bvh::v2::Node<float, 3>
-    >                            m_bvh;
+    //bvh::v2::BBox<float, 3>      m_global_bbox;
+    //bvh::v2::Bvh<
+    //     bvh::v2::Node<float, 3>
+    //>                            m_bvh;
 };
 
 }

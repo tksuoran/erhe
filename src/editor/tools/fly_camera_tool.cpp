@@ -255,6 +255,10 @@ Fly_camera_tool::Fly_camera_tool(
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
             Tool::on_message(message);
+            using namespace erhe::toolkit;
+            if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
+                on_hover_viewport_change();
+            }
         }
     );
 
@@ -357,6 +361,13 @@ void Fly_camera_tool::rotation(
     m_camera_controller->rotate_x.adjust(m_sensitivity * static_cast<float>(rx) / scale);
     m_camera_controller->rotate_y.adjust(m_sensitivity * static_cast<float>(ry) / scale);
     m_camera_controller->rotate_z.adjust(m_sensitivity * static_cast<float>(rz) / scale);
+}
+
+void Fly_camera_tool::on_hover_viewport_change()
+{
+    m_camera_controller->translate_x.reset();
+    m_camera_controller->translate_y.reset();
+    m_camera_controller->translate_z.reset();
 }
 
 auto Fly_camera_tool::try_move(

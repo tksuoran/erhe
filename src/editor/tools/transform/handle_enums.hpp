@@ -5,8 +5,7 @@
 namespace editor
 {
 
-enum class Handle : unsigned int
-{
+enum class Handle : unsigned int {
     e_handle_none         =  0,
     e_handle_translate_x  =  1,
     e_handle_translate_y  =  2,
@@ -26,40 +25,35 @@ enum class Handle : unsigned int
     e_handle_scale_xyz    = 16
 };
 
-enum class Handle_tool : unsigned int
-{
+enum class Handle_tool : unsigned int {
     e_handle_tool_none      = 0,
     e_handle_tool_translate = 1,
     e_handle_tool_rotate    = 2,
     e_handle_tool_scale     = 3
 };
 
-enum class Handle_class : unsigned int
-{
+enum class Handle_class : unsigned int {
     e_handle_class_none    = 0,
     e_handle_class_axis    = 1,
     e_handle_class_plane   = 2,
     e_handle_class_uniform = 3
 };
 
-enum class Handle_axis : unsigned int
-{
+enum class Handle_axis : unsigned int {
     e_handle_axis_none = 0,
     e_handle_axis_x = 1,
     e_handle_axis_y = 2,
     e_handle_axis_z = 3,
 };
 
-enum class Handle_plane : unsigned int
-{
+enum class Handle_plane : unsigned int {
     e_handle_plane_none = 0,
     e_handle_plane_xy = 1,
     e_handle_plane_xz = 2,
     e_handle_plane_yz = 3,
 };
 
-enum class Handle_type : unsigned int
-{
+enum class Handle_type : unsigned int {
     e_handle_type_none            = 0,
     e_handle_type_translate_axis  = 1,
     e_handle_type_translate_plane = 2,

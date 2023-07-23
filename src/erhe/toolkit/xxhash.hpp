@@ -71,15 +71,13 @@ namespace compiletime_xxhash::detail::xxh32 {
 
     constexpr uint32_t xxh32_finalize(const char* input, int inputLen, int pos, uint32_t h32) {
         // XXH_PROCESS4
-        while ((inputLen - pos) >= 4)
-        {
+        while ((inputLen - pos) >= 4) {
             h32 += read_u32le(input, pos) * prime32_3;
             h32 = rotl(h32, 17) * prime32_4;
             pos += 4;
         }
         // XXH_PROCESS1
-        while ((inputLen - pos) > 0)
-        {
+        while ((inputLen - pos) > 0) {
             h32 += read_u8(input, pos) * prime32_5;
             h32 = rotl(h32, 11) * prime32_1;
             pos += 1;
@@ -98,12 +96,9 @@ namespace compiletime_xxhash::detail::xxh32 {
     )
     {
         uint32_t h32 = 0;
-        if (inputLen >= 16)
-        {
+        if (inputLen >= 16) {
             h32 = rotl(v1, 1) + rotl(v2, 7) + rotl(v3, 12) + rotl(v4, 18);
-        }
-        else
-        {
+        } else {
             h32 = v3 + prime32_5;
         }
         h32 += inputLen;
@@ -126,7 +121,7 @@ namespace compiletime_xxhash::detail::xxh32 {
         uint32_t v3 = seed;
         uint32_t v4 = seed - prime32_1;
         int pos = 0;
-        while(pos+16 <= inputLen) {
+        while (pos + 16 <= inputLen) {
             v1 = xxh32_round(v1, input, pos + 0*4);
             v2 = xxh32_round(v2, input, pos + 1*4);
             v3 = xxh32_round(v3, input, pos + 2*4);
@@ -148,8 +143,7 @@ namespace compiletime_xxhash {
 constexpr int compiletime_strlen(const char* input)
 {
     int i = 0;
-    while (input[i] != 0)
-    {
+    while (input[i] != 0) {
         ++i;
     }
     return i;

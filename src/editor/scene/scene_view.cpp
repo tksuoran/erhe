@@ -14,6 +14,7 @@
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/raytrace/igeometry.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
@@ -28,10 +29,7 @@ static const std::string empty_string{};
 
 void Hover_entry::reset()
 {
-    raytrace_node = nullptr;
-    mesh.reset();
-    grid = nullptr;
-    geometry.reset();
+    *this = Hover_entry{};
 }
 
 [[nodiscard]] auto Hover_entry::get_name() const -> const std::string&
@@ -265,6 +263,38 @@ void Scene_view::update_hover_with_raytrace()
     const glm::vec3 ray_direction = get_control_ray_direction_in_world().value();
 
     Scene_root* tool_scene_root = m_context.tools->get_tool_scene_root().get();
+
+    // Optimization: Check if there are any hits. This helps to avoid doing
+    // multiple masked raycasts later in case there are no hits at all.
+    const bool any_hit = [&]() {
+        erhe::raytrace::Ray ray{
+            .origin    = ray_origin,
+            .t_near    = 0.0f,
+            .direction = ray_direction,
+            .time      = 0.0f,
+            .t_far     = 9999.0f,
+            .mask      = std::numeric_limits<uint32_t>::max(),
+            .id        = 0,
+            .flags     = 0
+        };
+        erhe::raytrace::Hit hit;
+        if (tool_scene_root != nullptr) {
+            tool_scene_root->get_raytrace_scene().intersect(ray, hit);
+            if (hit.instance != nullptr) {
+                return true;
+            }
+        }
+        rt_scene.intersect(ray, hit);
+        if (hit.instance != nullptr) {
+            return true;
+        }
+        return false;
+    }();
+    if (!any_hit) {
+        reset_hover_slots();
+        return;
+    }
+
     for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot) {
         const uint32_t slot_mask = Hover_entry::raytrace_slot_masks[slot];
         Hover_entry entry {
@@ -291,91 +321,46 @@ void Scene_view::update_hover_with_raytrace()
         }
         entry.valid = (hit.instance != nullptr);
         if (entry.valid) {
-            void* user_data     = hit.instance->get_user_data();
-            entry.uv            = hit.uv;
-            entry.raytrace_node = static_cast<Node_raytrace*>(user_data);
-            entry.position      = ray.origin + ray.t_far * ray.direction;
-            entry.local_index   = std::numeric_limits<std::size_t>::max();
-
-            SPDLOG_LOGGER_TRACE(
-                log_controller_ray,
-                "{}: Hit position: {}",
-                Hover_entry::slot_names[slot],
-                entry.position.value()
-            );
-
-            if (entry.raytrace_node != nullptr) {
-                auto* node = entry.raytrace_node->get_node();
-                if (node != nullptr) {
-                    SPDLOG_LOGGER_TRACE(
-                        log_controller_ray,
-                        "{}: Hit node: {}",
-                        Hover_entry::slot_names[slot],
-                        node->get_name()
-                    );
-                    const auto* rt_instance = entry.raytrace_node->raytrace_instance();
-                    if (rt_instance != nullptr) {
-                        SPDLOG_LOGGER_TRACE(
-                            log_controller_ray,
-                            "{}: RT instance: {}",
-                            Hover_entry::slot_names[slot],
-                            rt_instance->is_enabled()
-                                ? "enabled"
-                                : "disabled"
-                        );
-                    }
-                }
-                entry.mesh = get_mesh(node);
-                if (entry.mesh) {
-                    auto* primitive = entry.raytrace_node->raytrace_primitive();
-                    if (primitive != nullptr) {
-                        entry.geometry = entry.raytrace_node->source_geometry();
-                        if (entry.geometry) {
-                            SPDLOG_LOGGER_TRACE(
-                                log_controller_ray,
-                                "{}: Hit geometry: {}",
-                                Hover_entry::slot_names[slot],
-                                entry.geometry->name
-                            );
-                        }
-                        if (hit.primitive_id < primitive->primitive_geometry.primitive_id_to_polygon_id.size()) {
-                            const auto polygon_id = primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
-                            SPDLOG_LOGGER_TRACE(
-                                log_controller_ray,
-                                "{}: Hit polygon: {}",
-                                Hover_entry::slot_names[slot],
-                                polygon_id
-                            );
-                            entry.local_index = polygon_id;
-
-                            entry.normal = {};
-                            if (entry.geometry != nullptr) {
-                                if (polygon_id < entry.geometry->get_polygon_count()) {
-                                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover polygon = {}", polygon_id);
-                                    auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(
-                                        erhe::geometry::c_polygon_normals
-                                    );
-                                    if (
-                                        (polygon_normals != nullptr) &&
-                                        polygon_normals->has(polygon_id)
-                                    ) {
-                                        const auto local_normal    = polygon_normals->get(polygon_id);
-                                        const auto world_from_node = node->world_from_node();
-                                        entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
-                                        SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
-                                    }
-                                }
-                            }
-                        }
-                    }
+            void* node_instance_user_data = hit.instance->get_user_data();
+            auto* raytrace_primitive      = static_cast<Raytrace_primitive*>(node_instance_user_data);
+            ERHE_VERIFY(raytrace_primitive != nullptr);
+            entry.uv                      = hit.uv;
+            entry.position                = ray.origin + ray.t_far * ray.direction;
+            entry.triangle_id             = std::numeric_limits<std::size_t>::max();
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit position: {}", Hover_entry::slot_names[slot], entry.position.value());
+            entry.mesh            = raytrace_primitive->mesh;
+            entry.primitive_index = raytrace_primitive->primitive_index;
+            ERHE_VERIFY(entry.mesh != nullptr);
+            auto* const node = entry.mesh->get_node();
+            ERHE_VERIFY(node != nullptr);
+            auto& mesh_data = entry.mesh->mesh_data;
+            ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_data.primitives.size());
+            const auto& primitive = entry.mesh->mesh_data.primitives[raytrace_primitive->primitive_index];
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit node: {}", Hover_entry::slot_names[slot], node->get_name());
+            ERHE_VERIFY(raytrace_primitive->rt_instance);
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
+            const auto& geometry_primitive = primitive.geometry_primitive;
+            ERHE_VERIFY(geometry_primitive);
+            entry.geometry = geometry_primitive->source_geometry;
+            if (entry.geometry) {
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->name);
+                const auto& geometry_mesh = geometry_primitive->gl_geometry_mesh;
+                ERHE_VERIFY(hit.triangle_id < geometry_mesh.primitive_id_to_polygon_id.size());
+                const auto polygon_id = geometry_mesh.primitive_id_to_polygon_id[hit.triangle_id];
+                ERHE_VERIFY(polygon_id < entry.geometry->get_polygon_count());
+                SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit polygon: {}", Hover_entry::slot_names[slot], polygon_id);
+                entry.polygon_id = polygon_id;
+                entry.normal = {};
+                auto* const polygon_normals = entry.geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
+                if ((polygon_normals != nullptr) && polygon_normals->has(polygon_id)) {
+                    const auto local_normal    = polygon_normals->get(polygon_id);
+                    const auto world_from_node = node->world_from_node();
+                    entry.normal = glm::vec3{world_from_node * glm::vec4{local_normal, 0.0f}};
+                    SPDLOG_LOGGER_TRACE(log_controller_ray, "hover normal = {}", entry.normal.value());
                 }
             }
         } else {
-            SPDLOG_LOGGER_TRACE(
-                log_controller_ray,
-                "{}: no hit",
-                Hover_entry::slot_names[slot]
-            );
+            SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: no hit", Hover_entry::slot_names[slot]);
         }
         set_hover(slot, entry);
     }

@@ -99,15 +99,13 @@ public:
     std::optional<Handle_visualizations> visualization;
 };
 
-enum class Reference_mode : unsigned int
-{
+enum class Reference_mode : unsigned int {
     local = 0,
     parent,
     world,
 };
 
-static constexpr std::array<std::string_view, 3> c_reference_mode_strings =
-{
+static constexpr std::array<std::string_view, 3> c_reference_mode_strings = {
     "Local",
     "Parent",
     "World"

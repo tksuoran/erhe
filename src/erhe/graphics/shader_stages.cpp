@@ -43,6 +43,19 @@ Reloadable_shader_stages::Reloadable_shader_stages(
 {
 }
 
+Reloadable_shader_stages::Reloadable_shader_stages(Reloadable_shader_stages&& other)
+    : create_info  {std::move(other.create_info)}
+    , shader_stages{std::move(other.shader_stages)}
+{
+}
+
+Reloadable_shader_stages& Reloadable_shader_stages::operator=(Reloadable_shader_stages&& other)
+{
+    create_info   = std::move(other.create_info);
+    shader_stages = std::move(other.shader_stages);
+    return *this;
+}
+
 Shader_stage::Shader_stage(gl::Shader_type type, const std::string_view source)
     : type  {type}
     , source{source}

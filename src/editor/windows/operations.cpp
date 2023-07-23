@@ -38,14 +38,14 @@ auto Operations::count_selected_meshes() const -> size_t
     const auto& selection = m_context.selection->get_selection();
     std::size_t count = 0;
     for (const auto& item : selection) {
-        auto node = as_node(item);
+        auto node = as<erhe::scene::Node>(item);
         if (node) {
             for (const auto& attachment : node->get_attachments()) {
-                if (is_mesh(attachment)) {
+                if (erhe::scene::is_mesh(attachment)) {
                     ++count;
                 }
             }
-        } else if (is_mesh(item)) {
+        } else if (erhe::scene::is_mesh(item)) {
             ++count;
         }
     }
@@ -116,7 +116,7 @@ void Operations::imgui()
         const auto& node0 = selection.get<erhe::scene::Node>(0);
         const auto& node1 = selection.get<erhe::scene::Node>(1);
         if (node0 && node1) {
-            operation_stack.push(
+            operation_stack.queue(
                 std::make_shared<Item_parent_change_operation>(
                     node1,
                     node0,
@@ -134,7 +134,7 @@ void Operations::imgui()
     if (make_button("Unparent", has_selection_mode, button_size)) {
         const auto& node0 = selection.get<erhe::scene::Node>();
         if (node0) {
-            m_context.operation_stack->push(
+            m_context.operation_stack->queue(
                 std::make_shared<Item_parent_change_operation>(
                     std::shared_ptr<erhe::scene::Node>{},
                     node0,
@@ -146,7 +146,7 @@ void Operations::imgui()
     }
 
     if (make_button("Merge", multi_select_meshes, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Merge_operation>(
                 Merge_operation::Parameters{
                     .context = m_context,
@@ -160,91 +160,91 @@ void Operations::imgui()
     }
 
     if (make_button("Catmull-Clark", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Catmull_clark_subdivision_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Sqrt3", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Sqrt3_subdivision_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Triangulate", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Triangulate_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Join", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Join_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Kis", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Kis_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Meta", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Meta_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Ortho", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Subdivide_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Gyro", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Gyro_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Dual", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Dual_operator>(
                 mesh_context()
             )
         );
     }
     if (make_button("Ambo", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Ambo_operator>(
                 mesh_context()
             )
         );
     }
     if (make_button("Truncate", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Truncate_operator>(
                 mesh_context()
             )
         );
     }
     if (make_button("Normalize", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Normalize_operation>(
                 mesh_context()
             )
         );
     }
     if (make_button("Reverse", has_selection_mode, button_size)) {
-        m_context.operation_stack->push(
+        m_context.operation_stack->queue(
             std::make_shared<Reverse_operation>(
                 mesh_context()
             )

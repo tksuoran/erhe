@@ -1,9 +1,8 @@
 #include "operations/insert_operation.hpp"
 
 #include "editor_context.hpp"
-#include "operations/node_operation.hpp"
-
 #include "editor_log.hpp"
+#include "operations/node_operation.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/scene/scene.hpp"
@@ -49,8 +48,8 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
                 std::make_shared<Item_parent_change_operation>(
                     parent,
                     child,
-                    std::shared_ptr<erhe::scene::Item>{},
-                    std::shared_ptr<erhe::scene::Item>{}
+                    std::shared_ptr<erhe::Hierarchy>{},
+                    std::shared_ptr<erhe::Hierarchy>{}
                 )
             );
         }
@@ -73,8 +72,8 @@ void Item_insert_remove_operation::execute(Editor_context& context)
                 std::make_shared<Item_parent_change_operation>(
                     m_before_parent,
                     child,
-                    std::shared_ptr<erhe::scene::Item>{},
-                    std::shared_ptr<erhe::scene::Item>{}
+                    std::shared_ptr<erhe::Hierarchy>{},
+                    std::shared_ptr<erhe::Hierarchy>{}
                 )
             );
         }

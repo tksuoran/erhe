@@ -2,7 +2,7 @@
 
 #include "erhe/toolkit/simulation_variable.hpp"
 
-#include "erhe/scene/node.hpp"
+#include "erhe/scene/node_attachment.hpp"
 
 #include <glm/glm.hpp>
 
@@ -15,8 +15,7 @@ namespace erhe::scene {
 namespace editor
 {
 
-enum class Variable : unsigned int
-{
+enum class Variable : unsigned int {
     translate_x = 0,
     translate_y = 1,
     translate_z = 2,
@@ -31,12 +30,12 @@ class Frame_controller
 public:
     Frame_controller();
 
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
+    static constexpr std::string_view static_type_name{"Frame_controller"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
 
     // Implements Node_attachment
     [[nodiscard]] auto get_type     () const -> uint64_t                                        override;
-    [[nodiscard]] auto get_type_name() const -> const char*                                     override;
+    [[nodiscard]] auto get_type_name() const -> std::string_view                                override;
     void handle_node_update          (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;
     void handle_node_transform_update()                                                         override;
 
@@ -74,10 +73,10 @@ private:
     bool      m_transform_update{false};
 };
 
-auto is_frame_controller(const erhe::scene::Item* item) -> bool;
-auto is_frame_controller(const std::shared_ptr<erhe::scene::Item>& item) -> bool;
-auto as_frame_controller(erhe::scene::Item* item) -> Frame_controller*;
-auto as_frame_controller(const std::shared_ptr<erhe::scene::Item>& item) -> std::shared_ptr<Frame_controller>;
+auto is_frame_controller(const erhe::Item* item) -> bool;
+auto is_frame_controller(const std::shared_ptr<erhe::Item>& item) -> bool;
+//auto as_frame_controller(erhe::Item* item) -> Frame_controller*;
+//auto as_frame_controller(const std::shared_ptr<erhe::Item>& item) -> std::shared_ptr<Frame_controller>;
 
 auto get_frame_controller(const erhe::scene::Node* node) -> std::shared_ptr<Frame_controller>;
 

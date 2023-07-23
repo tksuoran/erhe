@@ -1,4 +1,5 @@
 #include "scene/node_raytrace.hpp"
+
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
@@ -14,6 +15,7 @@
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/iscene.hpp"
 #include "erhe/raytrace/ray.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/scene/scene_host.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/defer.hpp"
@@ -26,9 +28,9 @@ namespace editor
 using erhe::raytrace::IGeometry;
 using erhe::raytrace::IInstance;
 using erhe::scene::Node_attachment;
-using erhe::scene::Item_flags;
+using erhe::Item_flags;
 
-auto raytrace_node_mask(erhe::scene::Item& item) -> uint32_t
+auto raytrace_node_mask(erhe::Item& item) -> uint32_t
 {
     uint32_t result{0};
     const uint64_t flags = item.get_flag_bits();
@@ -42,151 +44,73 @@ auto raytrace_node_mask(erhe::scene::Item& item) -> uint32_t
 }
 
 Raytrace_primitive::Raytrace_primitive(
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry
+    erhe::scene::Mesh*         mesh,
+    std::size_t                primitive_index,
+    erhe::raytrace::IGeometry* rt_geometry
 )
+    : mesh           {mesh}
+    , primitive_index{primitive_index}
 {
-    const erhe::graphics::Vertex_format vertex_format{
-        erhe::graphics::Vertex_attribute::position_float3()
-    };
-    const std::size_t index_stride = 4;
-    const erhe::geometry::Mesh_info mesh_info = geometry->get_mesh_info();
-    vertex_buffer = erhe::raytrace::IBuffer::create_shared(
-        geometry->name + "_vertex",
-        mesh_info.vertex_count_corners * vertex_format.stride()
-    );
-    index_buffer = erhe::raytrace::IBuffer::create_shared(
-        geometry->name + "_index",
-        mesh_info.index_count_fill_triangles * index_stride
-    );
-    erhe::primitive::Raytrace_buffer_sink buffer_sink{
-        *vertex_buffer.get(),
-        *index_buffer.get()
-    };
-    const erhe::primitive::Build_info build_info{
-        .primitive_types = {
-            .fill_triangles = true,
-        },
-        .buffer_info = {
-            .normal_style  = erhe::primitive::Normal_style::corner_normals,
-            .index_type    = gl::Draw_elements_type::unsigned_int,
-            .vertex_format = vertex_format,
-            .buffer_sink   = buffer_sink
-        }
-    };
-
-    primitive_geometry = make_primitive(
-        *geometry.get(),
-        build_info,
-        erhe::primitive::Normal_style::none
-    );
-}
-
-Node_raytrace::Node_raytrace(
-    const std::shared_ptr<erhe::geometry::Geometry>& source_geometry
-)
-    : m_primitive      {std::make_shared<Raytrace_primitive>(source_geometry)}
-    , m_source_geometry{source_geometry}
-{
-    initialize();
-}
-
-void Node_raytrace::initialize()
-{
-    ERHE_PROFILE_FUNCTION();
-
-    m_geometry = erhe::raytrace::IGeometry::create_unique(
-        m_source_geometry->name + "_triangle_geometry",
-        erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
-    );
-
-    const auto& vertex_buffer_range   = m_primitive->primitive_geometry.vertex_buffer_range;
-    const auto& index_buffer_range    = m_primitive->primitive_geometry.index_buffer_range;
-    const auto& triangle_fill_indices = m_primitive->primitive_geometry.triangle_fill_indices;
-
-    m_geometry->set_buffer(
-        erhe::raytrace::Buffer_type::BUFFER_TYPE_VERTEX,
-        0, // slot
-        erhe::raytrace::Format::FORMAT_FLOAT3,
-        m_primitive->vertex_buffer.get(),
-        vertex_buffer_range.byte_offset,
-        vertex_buffer_range.element_size,
-        vertex_buffer_range.count
-    );
-
-    ERHE_VERIFY(index_buffer_range.element_size == 4);
-    const auto index_count    = index_buffer_range.count;
-    const auto index_size     = index_buffer_range.element_size;
-    const auto triangle_count = index_count / 3;
-    const auto triangle_size  = index_size * 3;
-    m_geometry->set_buffer(
-        erhe::raytrace::Buffer_type::BUFFER_TYPE_INDEX,
-        0, // slot
-        erhe::raytrace::Format::FORMAT_UINT3,
-        m_primitive->index_buffer.get(),
-        index_buffer_range.byte_offset + triangle_fill_indices.first_index * index_buffer_range.element_size,
-        triangle_size,
-        triangle_count
-    );
-    SPDLOG_LOGGER_TRACE(log_raytrace, "{}:", m_source_geometry->name);
-
-    {
-        ERHE_PROFILE_SCOPE("geometry commit");
-        m_geometry->commit();
-    }
-
-    {
-        ERHE_PROFILE_SCOPE("create scene");
-        m_scene = erhe::raytrace::IScene::create_unique(
-            m_source_geometry->name + "_scene"
-        );
-    }
-
-    m_scene->attach(m_geometry.get());
-
-    m_instance = erhe::raytrace::IInstance::create_unique(
-        m_source_geometry->name + "_instance_geometry"
-    );
-
-    m_instance->set_scene(m_scene.get());
-    {
-        ERHE_PROFILE_SCOPE("instance commit");
-        m_instance->commit();
-    }
-    m_instance->set_user_data(this);
-
-    const bool visible = is_visible();
-    if (visible) {
-        m_instance->enable();
+    const std::string name = fmt::format("{}[{}]", mesh->get_name(), primitive_index);
+    rt_instance = erhe::raytrace::IInstance::create_unique(name);
+    rt_scene    = erhe::raytrace::IScene::create_unique(name);
+    rt_instance->set_user_data(this);
+    rt_instance->set_scene(rt_scene.get());
+    rt_scene   ->attach(rt_geometry);
+    if (mesh->is_visible()) {
+        rt_instance->enable();
     } else {
-        m_instance->disable();
+        rt_instance->disable();
     }
+    rt_scene   ->commit();
+    rt_instance->commit();
 }
 
 Node_raytrace::Node_raytrace(
-    const std::shared_ptr<erhe::geometry::Geometry>& source_geometry,
-    const std::shared_ptr<Raytrace_primitive>&       primitive
+    const std::shared_ptr<erhe::scene::Mesh>& mesh
 )
-    : m_primitive      {primitive}
-    , m_source_geometry{source_geometry}
 {
-    initialize();
+    initialize(mesh, mesh->mesh_data.primitives);
+}
+
+Node_raytrace::Node_raytrace(
+    const std::shared_ptr<erhe::scene::Mesh>&      mesh,
+    const std::vector<erhe::primitive::Primitive>& primitives
+)
+{
+    initialize(mesh, primitives);
+}
+
+void Node_raytrace::initialize(
+    const std::shared_ptr<erhe::scene::Mesh>&      mesh,
+    const std::vector<erhe::primitive::Primitive>& primitives
+)
+{
+    for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
+        const auto primitive = primitives[i];
+        const auto& geometry_primitive = primitive.geometry_primitive;
+        if (!geometry_primitive) {
+            continue;
+        }
+        const auto& rt_geometry = geometry_primitive->raytrace.rt_geometry;
+        if (rt_geometry) {
+            m_rt_primitives.emplace_back(mesh.get(), i, rt_geometry.get());
+        } else {
+            log_raytrace->info("No raytrace geometry in {}", mesh->get_name());
+        }
+    }
 }
 
 Node_raytrace::~Node_raytrace() noexcept
 {
-    // TODO
+    if (m_rt_scene != nullptr) {
+        detach_from_scene(m_rt_scene);
+    }
 }
 
 auto Node_raytrace::get_static_type() -> uint64_t
 {
-    return
-        erhe::scene::Item_type::node_attachment |
-        erhe::scene::Item_type::raytrace;
-}
-
-auto Node_raytrace::get_static_type_name() -> const char*
-{
-    return "Node_raytrace";
+    return erhe::Item_type::node_attachment | erhe::Item_type::raytrace;
 }
 
 auto Node_raytrace::get_type() const -> uint64_t
@@ -194,14 +118,14 @@ auto Node_raytrace::get_type() const -> uint64_t
     return get_static_type();
 }
 
-auto Node_raytrace::get_type_name() const -> const char*
+auto Node_raytrace::get_type_name() const -> std::string_view
 {
-    return get_static_type_name();
+    return static_type_name;
 }
 
 void Node_raytrace::handle_item_host_update(
-    erhe::scene::Item_host* const old_item_host,
-    erhe::scene::Item_host* const new_item_host
+    erhe::Item_host* const old_item_host,
+    erhe::Item_host* const new_item_host
 )
 {
     ERHE_VERIFY(old_item_host != new_item_host);
@@ -229,103 +153,71 @@ void Node_raytrace::handle_node_transform_update()
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_instance->set_transform(m_node->world_from_node());
-    m_instance->commit();
+    for (auto& rt_primitive : m_rt_primitives) {
+        rt_primitive.rt_instance->set_transform(m_node->world_from_node());
+        rt_primitive.rt_instance->commit();
+    }
 }
 
 void Node_raytrace::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
     const bool visibility_changed = (
-        (old_flag_bits ^ new_flag_bits) & erhe::scene::Item_flags::visible
-    ) == erhe::scene::Item_flags::visible;
+        (old_flag_bits ^ new_flag_bits) & erhe::Item_flags::visible
+    ) == erhe::Item_flags::visible;
     if (!visibility_changed) {
         return;
     }
 
-    ERHE_VERIFY(m_instance);
-
-    const bool visible = (new_flag_bits & erhe::scene::Item_flags::visible) == erhe::scene::Item_flags::visible;
-    if (visible && !m_instance->is_enabled()) {
-        SPDLOG_LOGGER_TRACE(log_raytrace, "enabling {} node raytrace", get_node()->name());
-        m_instance->enable();
-    } else if (!visible && m_instance->is_enabled()) {
-        SPDLOG_LOGGER_TRACE(log_raytrace, "disable {} node raytrace", get_node()->name());
-        m_instance->disable();
-    }
-
-    SPDLOG_LOGGER_TRACE(
-        log_raytrace,
-        "node raytrace enabled = {}",
-        get_node()->name(),
-        node_visible,
-        m_instance->is_enabled()
-    );
-}
-
-auto Node_raytrace::source_geometry() const -> std::shared_ptr<erhe::geometry::Geometry>
-{
-    return m_source_geometry;
-}
-
-auto Node_raytrace::raytrace_primitive() -> Raytrace_primitive*
-{
-    return m_primitive.get();
-}
-
-auto Node_raytrace::raytrace_primitive() const -> const Raytrace_primitive*
-{
-    return m_primitive.get();
-}
-
-auto Node_raytrace::raytrace_geometry() -> IGeometry*
-{
-    return m_geometry.get();
-}
-
-auto Node_raytrace::raytrace_geometry() const -> const IGeometry*
-{
-    return m_geometry.get();
-}
-
-auto Node_raytrace::raytrace_instance() -> IInstance*
-{
-    return m_instance.get();
-}
-
-auto Node_raytrace::raytrace_instance() const -> const IInstance*
-{
-    return m_instance.get();
-}
-
-[[nodiscard]] auto Node_raytrace::get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
-{
-    auto* node = get_node();
-    if (node == nullptr) {
-        return {};
-    }
-    if (!m_primitive || !m_source_geometry) {
-        return {};
-    }
-    if (hit.primitive_id > m_primitive->primitive_geometry.primitive_id_to_polygon_id.size()) {
-        return {};
-    }
-
-    const auto polygon_id = m_primitive->primitive_geometry.primitive_id_to_polygon_id[hit.primitive_id];
-    if (polygon_id < m_source_geometry->get_polygon_count()) {
-        auto* const polygon_normals = m_source_geometry->polygon_attributes().find<glm::vec3>(
-            erhe::geometry::c_polygon_normals
-        );
-        if (
-            (polygon_normals != nullptr) &&
-            polygon_normals->has(polygon_id)
-        ) {
-            return polygon_normals->get(polygon_id);
+    for (auto& rt_primitive : m_rt_primitives) {
+        const bool visible = (new_flag_bits & erhe::Item_flags::visible) == erhe::Item_flags::visible;
+        if (visible && !rt_primitive.rt_instance->is_enabled()) {
+            rt_primitive.rt_instance->enable();
+        } else if (!visible && rt_primitive.rt_instance->is_enabled()) {
+            rt_primitive.rt_instance->disable();
         }
     }
-    return {};
 }
 
-auto is_raytrace(const erhe::scene::Item* const scene_item) -> bool
+void Node_raytrace::properties_imgui()
+{
+    ImGui::Text("%d instances", static_cast<int>(m_rt_primitives.size()));
+    for (auto& rt_primitive : m_rt_primitives) {
+        ImGui::BulletText(
+            "%s %s",
+            rt_primitive.rt_instance->debug_label().data(),
+            rt_primitive.rt_instance->is_enabled() ? "Enabled" : "Disabled"
+        );
+    }
+}
+
+void Node_raytrace::set_mask(const uint32_t mask)
+{
+    for (auto& rt_primitive : m_rt_primitives) {
+        rt_primitive.rt_instance->set_mask(mask);
+    }
+}
+
+void Node_raytrace::attach_to_scene(erhe::raytrace::IScene* rt_scene)
+{
+    ERHE_VERIFY(rt_scene != nullptr);
+    ERHE_VERIFY(m_rt_scene == nullptr);
+    for (auto& rt_primitive : m_rt_primitives) {
+        rt_scene->attach(rt_primitive.rt_instance.get());
+    }
+    m_rt_scene = rt_scene;
+}
+
+void Node_raytrace::detach_from_scene(erhe::raytrace::IScene* rt_scene)
+{
+    ERHE_VERIFY(rt_scene == m_rt_scene);
+    ERHE_VERIFY(m_rt_scene != nullptr);
+    for (auto& rt_primitive : m_rt_primitives) {
+        rt_scene->detach(rt_primitive.rt_instance.get());
+    }
+    m_rt_scene = nullptr;
+}
+
+auto is_raytrace(const erhe::Item* const scene_item) -> bool
 {
     if (scene_item == nullptr) {
         return false;
@@ -333,60 +225,113 @@ auto is_raytrace(const erhe::scene::Item* const scene_item) -> bool
     using namespace erhe::toolkit;
     return test_all_rhs_bits_set(
         scene_item->get_type(),
-        erhe::scene::Item_type::raytrace
+        erhe::Item_type::raytrace
     );
 }
 
-auto is_raytrace(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool
+auto is_raytrace(const std::shared_ptr<erhe::Item>& scene_item) -> bool
 {
     return is_raytrace(scene_item.get());
 }
 
-auto as_raytrace(erhe::scene::Item* scene_item) -> Node_raytrace*
-{
-    if (scene_item == nullptr) {
-        return nullptr;
-    }
-    using namespace erhe::toolkit;
-    if (
-        !test_all_rhs_bits_set(
-            scene_item->get_type(),
-            erhe::scene::Item_type::raytrace
-        )
-    ) {
-        return nullptr;
-    }
-    return static_cast<Node_raytrace*>(scene_item);
-}
-
-auto as_raytrace(
-    const std::shared_ptr<erhe::scene::Item>& scene_item
-) -> std::shared_ptr<Node_raytrace>
-{
-    if (!scene_item) {
-        return {};
-    }
-    using namespace erhe::toolkit;
-    if (
-        !test_all_rhs_bits_set(
-            scene_item->get_type(),
-            erhe::scene::Item_type::raytrace
-        )
-    ) {
-        return {};
-    }
-    return std::static_pointer_cast<Node_raytrace>(scene_item);
-}
-
-auto get_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
+auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_raytrace>
 {
     for (const auto& attachment : node->get_attachments()) {
-        auto node_raytrace = as_raytrace(attachment);
+        auto node_raytrace = as<Node_raytrace>(attachment);
         if (node_raytrace) {
             return node_raytrace;
         }
     }
     return {};
+}
+
+[[nodiscard]] auto get_hit_node(const erhe::raytrace::Hit& hit) -> erhe::scene::Node*
+{
+    if ((hit.geometry == nullptr) || (hit.instance == nullptr)) {
+        return nullptr;
+    }
+
+    void* const user_data          = hit.instance->get_user_data();
+    auto* const raytrace_primitive = static_cast<Raytrace_primitive*>(user_data);
+    if (raytrace_primitive == nullptr) {
+        log_raytrace->error("This should not happen");
+        return nullptr;
+    }
+
+    auto* const mesh = raytrace_primitive->mesh;
+    if (mesh == nullptr) {
+        log_raytrace->error("This should not happen");
+        return nullptr;
+    }
+    return mesh->get_node();
+}
+
+[[nodiscard]] auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
+{
+    if ((hit.geometry == nullptr) || (hit.instance == nullptr)) {
+        return {};
+    }
+
+    void* const user_data          = hit.instance->get_user_data();
+    auto* const raytrace_primitive = static_cast<Raytrace_primitive*>(user_data);
+    if (raytrace_primitive == nullptr) {
+        log_raytrace->error("This should not happen");
+        return {};
+    }
+    auto* const mesh = raytrace_primitive->mesh;
+    if (mesh == nullptr) {
+        log_raytrace->error("This should not happen");
+        return {};
+    }
+    auto* const node = mesh->get_node();
+    if (node == nullptr) {
+        log_raytrace->error("This should not happen");
+        return {};
+    }
+
+    if (raytrace_primitive->primitive_index >= mesh->mesh_data.primitives.size()) {
+        log_raytrace->error("This should not happen");
+        return {};
+    }
+
+    const auto& primitive = mesh->mesh_data.primitives[raytrace_primitive->primitive_index];
+    if (!primitive.geometry_primitive) {
+        log_raytrace->error("This should not happen");
+        return {};
+    }
+
+    using namespace erhe::primitive;
+    const Geometry_primitive& geometry_primitive        = *primitive.geometry_primitive.get();
+    const Geometry_mesh&      geometry_mesh             = geometry_primitive.gl_geometry_mesh;
+    const auto&               triangle_id_to_polygon_id = geometry_mesh.primitive_id_to_polygon_id;
+    if (hit.triangle_id >= triangle_id_to_polygon_id.size()) {
+        log_raytrace->error("This should not happen");
+        return {};
+    }
+    const auto polygon_id = triangle_id_to_polygon_id[hit.triangle_id];
+
+    using namespace erhe::geometry;
+    const auto& geometry = geometry_primitive.source_geometry;
+    if (!geometry) {
+        return {};
+    }
+
+    if (polygon_id >= geometry->get_polygon_count()) {
+        log_raytrace->error("This should not happen");
+        return {};
+    }
+
+    auto* const polygon_normals = geometry->polygon_attributes().find<glm::vec3>(
+        erhe::geometry::c_polygon_normals
+    );
+    if (
+        (polygon_normals == nullptr) ||
+        !polygon_normals->has(polygon_id)
+    ) {
+        return {};
+    }
+
+    return polygon_normals->get(polygon_id);
 }
 
 void draw_ray_hit(
@@ -396,20 +341,19 @@ void draw_ray_hit(
     const Ray_hit_style&           style
 )
 {
-    void* user_data     = hit.instance->get_user_data();
-    auto* raytrace_node = static_cast<Node_raytrace*>(user_data);
-    if (raytrace_node == nullptr) {
+    erhe::scene::Node* node = get_hit_node(hit);
+    if (node == nullptr) {
         return;
     }
 
-    const auto local_normal_opt = raytrace_node->get_hit_normal(hit);
+    const auto local_normal_opt = get_hit_normal(hit);
     if (!local_normal_opt.has_value()) {
         return;
     }
 
     const glm::vec3 position        = ray.origin + ray.t_far * ray.direction;
     const glm::vec3 local_normal    = local_normal_opt.value();
-    const glm::mat4 world_from_node = raytrace_node->get_node()->world_from_node();
+    const glm::mat4 world_from_node = node->world_from_node();
     const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
     const glm::vec3 T = erhe::toolkit::safe_normalize_cross<float>(N, ray.direction);
     const glm::vec3 B = erhe::toolkit::safe_normalize_cross<float>(T, N);
@@ -454,7 +398,7 @@ void draw_ray_hit(
     ERHE_PROFILE_FUNCTION();
 
     erhe::scene::Node*             ignore_node     = ignore_mesh->get_node();
-    std::shared_ptr<Node_raytrace> ignore_raytrace = get_raytrace(ignore_node);
+    std::shared_ptr<Node_raytrace> ignore_raytrace = get_node_raytrace(ignore_node);
     bool stored_ignore_hidden_state{false};
     if (ignore_raytrace) {
         stored_ignore_hidden_state = ignore_raytrace->is_hidden();
@@ -467,19 +411,7 @@ void draw_ray_hit(
     );
 
     raytrace_scene->intersect(ray, hit);
-    if (hit.instance == nullptr) {
-        return false;
-    }
-    void* user_data     = hit.instance->get_user_data();
-    auto* raytrace_node = static_cast<Node_raytrace*>(user_data);
-    if (raytrace_node == nullptr) {
-        return false;
-    }
-    auto* node = raytrace_node->get_node(); // TODO get_mesh() ?
-    if (node == nullptr) {
-        return false;
-    }
-    return true;
+    return hit.instance != nullptr;
 }
 
 }

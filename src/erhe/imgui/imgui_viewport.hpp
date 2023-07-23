@@ -24,8 +24,7 @@ public:
     bool stack_tool  {false};
 };
 
-enum class Imgui_event_type : unsigned int
-{
+enum class Imgui_event_type : unsigned int {
     no_event           = 0,
     key_event          = 1,
     char_event         = 2,

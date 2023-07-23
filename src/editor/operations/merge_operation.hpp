@@ -50,8 +50,8 @@ private:
     Parameters                                                 m_parameters;
     std::vector<Entry>                                         m_sources;
     Entry                                                      m_combined;
-    std::vector<std::shared_ptr<erhe::scene::Item>>            m_selection_before;
-    std::vector<std::shared_ptr<erhe::scene::Item>>            m_selection_after;
+    std::vector<std::shared_ptr<erhe::Item>>                   m_selection_before;
+    std::vector<std::shared_ptr<erhe::Item>>                   m_selection_after;
     std::vector<std::shared_ptr<erhe::scene::Node>>            m_hold_nodes;
     std::vector<std::shared_ptr<erhe::scene::Node_attachment>> m_hold_node_attachments;
 };

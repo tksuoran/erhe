@@ -8,14 +8,14 @@ erhe_target_sources_grouped(
     animation.hpp
     camera.cpp
     camera.hpp
-    item.cpp
-    item.hpp
     light.cpp
     light.hpp
     mesh.cpp
     mesh.hpp
     node.cpp
     node.hpp
+    node_attachment.cpp
+    node_attachment.hpp
     projection.cpp
     projection.hpp
     scene.cpp
@@ -33,8 +33,6 @@ erhe_target_sources_grouped(
     transform.hpp
     trs_transform.cpp
     trs_transform.hpp
-    #viewport.cpp
-    #viewport.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
@@ -42,6 +40,7 @@ target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 target_link_libraries(
     ${_target}
     PRIVATE
+        erhe::item
         erhe::gl
         erhe::log
         erhe::message_bus

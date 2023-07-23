@@ -49,8 +49,7 @@ auto is_error_fatal              (int error_code) -> bool;
 auto is_error_busy               (int error_code) -> bool;
 auto is_socket_good              (SOCKET socket) -> bool;
 
-enum class Socket_option : unsigned int
-{
+enum class Socket_option : unsigned int {
     Error             = 0,
     NonBlocking       = 1,
     ReceiveBufferSize = 2,

@@ -15,16 +15,15 @@
 #include <memory>
 #include <vector>
 
-namespace erhe::graphics
-{
+namespace erhe {
+    class Item_filter;
+}
+namespace erhe::graphics {
     class Instance;
     class Texture;
 }
-
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
-    class Item_filter;
     class Light;
     class Mesh;
     class Mesh_layer;
@@ -65,7 +64,7 @@ public:
         Primitive_interface_settings                                       primitive_settings{};
         const erhe::graphics::Texture*                                     shadow_texture{nullptr};
         const erhe::toolkit::Viewport&                                     viewport;
-        const erhe::scene::Item_filter                                     filter{};
+        const erhe::Item_filter                                     filter{};
         const erhe::graphics::Shader_stages*                               override_shader_stages{nullptr};
         const erhe::graphics::Shader_stages*                               error_shader_stages{nullptr};
         const glm::uvec4&                                                  debug_joint_indices{0, 0, 0, 0};

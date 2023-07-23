@@ -123,10 +123,10 @@ void Imgui_windows::make_current(const Imgui_viewport* imgui_viewport)
 void Imgui_windows::register_imgui_window(Imgui_window* window)
 {
     bool show_window{false};
-    const char* ini_label = window->ini_label();
-    if (ini_label != nullptr) {
+    const std::string& ini_label = window->get_ini_label();
+    if (!ini_label.empty()) {
         auto ini = erhe::configuration::get_ini("erhe.ini", "windows");
-        ini->get(ini_label, show_window);
+        ini->get(ini_label.c_str(), show_window);
     }
     register_imgui_window(window, show_window);
 }
@@ -146,7 +146,7 @@ void Imgui_windows::register_imgui_window(
 #ifndef NDEBUG
     const auto i = std::find(m_imgui_windows.begin(), m_imgui_windows.end(), window);
     if (i != m_imgui_windows.end()) {
-        log_windows->error("Window {} already registered as ImGui Window", window->title());
+        log_windows->error("Window {} already registered as ImGui Window", window->get_title());
     } else
 #endif
     {
@@ -154,14 +154,26 @@ void Imgui_windows::register_imgui_window(
         std::sort(
             m_imgui_windows.begin(),
             m_imgui_windows.end(),
-            [](const Imgui_window* lhs, const Imgui_window* rhs)
-            {
-                return lhs->title() < rhs->title();
+            [](const Imgui_window* lhs, const Imgui_window* rhs) {
+                return lhs->get_title() < rhs->get_title();
             }
         );
     }
 
     window->set_viewport(m_window_imgui_viewport.get());
+}
+
+void Imgui_windows::unregister_imgui_window(Imgui_window* window)
+{
+    ERHE_VERIFY(!m_iterating);
+    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
+
+    const auto i = std::remove(m_imgui_windows.begin(), m_imgui_windows.end(), window);
+    if (i == m_imgui_windows.end()) {
+        log_windows->error("Imgui_window 'title = {}, ini_label = {}' is not registered in Imgui_windows", window->get_title(), window->get_ini_label());
+    } else {
+        m_imgui_windows.erase(i, m_imgui_windows.end());
+    }
 }
 
 void Imgui_windows::imgui_windows()
@@ -249,7 +261,7 @@ void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
                 continue;
             }
             bool enabled = window->is_visible();
-            if (ImGui::MenuItem(window->title().data(), "", &enabled)) {
+            if (ImGui::MenuItem(window->get_title().data(), "", &enabled)) {
                 if (enabled) {
                     window->show();
                     window->set_viewport(imgui_viewport);

@@ -1,33 +1,24 @@
 #include "renderers/composer.hpp"
-#include "renderers/renderpass.hpp"
 #include "editor_log.hpp"
+#include "renderers/renderpass.hpp"
 
 namespace editor
 {
 
 Composer::Composer(const std::string_view name)
-    : erhe::scene::Item{name}
+    : erhe::Item{name, erhe::toolkit::Unique_id<Composer>{}.get_id()}
 {
 }
 
-[[nodiscard]] auto Composer::get_static_type() -> uint64_t
-{
-    return erhe::scene::Item_type::composer;
-}
-
-[[nodiscard]] auto Composer::get_static_type_name() -> const char*
-{
-    return "composer";
-}
 
 [[nodiscard]] auto Composer::get_type() const -> uint64_t
 {
     return get_static_type();
 }
 
-[[nodiscard]] auto Composer::get_type_name() const -> const char*
+[[nodiscard]] auto Composer::get_type_name() const -> std::string_view
 {
-    return get_static_type_name();
+    return static_type_name;
 }
 
 void Composer::render(const Render_context& context) const

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "tools/transform/transform_tool_settings.hpp"
-#include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/primitive/geometry_mesh.hpp"
 #include "erhe/scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
@@ -15,6 +15,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::primitive {
+    class Geometry_primitive;
     class Material;
 }
 namespace erhe::scene {
@@ -43,12 +44,13 @@ public:
         Tools&          tools
     );
 
-    enum class Mode : unsigned int
-    {
+    enum class Mode : unsigned int {
         Normal = 0,
         Hover  = 1,
         Active = 2
     };
+
+    [[nodiscard]] auto c_str(Mode mode) -> const char*;
 
     class Part
     {
@@ -58,9 +60,7 @@ public:
             const std::shared_ptr<erhe::geometry::Geometry>& geometry
         );
 
-        std::shared_ptr<erhe::geometry::Geometry> geometry;
-        erhe::primitive::Primitive_geometry       primitive_geometry;
-        std::shared_ptr<Raytrace_primitive>       raytrace_primitive;
+        std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
     };
 
     [[nodiscard]] auto get_handle           (erhe::scene::Mesh* mesh) const -> Handle;

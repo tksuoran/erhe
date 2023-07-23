@@ -8,8 +8,7 @@ namespace erhe::scene
 class Node;
 class Scene;
 
-enum class Scene_event_type : int
-{
+enum class Scene_event_type : int {
     invalid,
     node_added_to_scene,
     node_removed_from_scene,

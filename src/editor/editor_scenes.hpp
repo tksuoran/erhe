@@ -23,7 +23,8 @@ public:
         Time&           time
     );
 
-    void register_scene_root                     (const std::shared_ptr<Scene_root>& scene_root);
+    void register_scene_root                     (Scene_root* scene_root);
+    void unregister_scene_root                   (Scene_root* scene_root);
     void sanity_check                            ();
     void update_physics_simulation_fixed_step    (const Time_context& time);
     void update_physics_simulation_once_per_frame();
@@ -32,17 +33,17 @@ public:
     void update_fixed_step    (const Time_context&) override;
     void update_once_per_frame(const Time_context&) override;
 
-    [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
+    [[nodiscard]] auto get_scene_roots() -> const std::vector<Scene_root*>&;
     [[nodiscard]] auto scene_combo(
-        const char*                  label,
-        std::shared_ptr<Scene_root>& in_out_selected_entry,
-        const bool                   empty_option
+        const char*  label,
+        Scene_root*& in_out_selected_entry,
+        const bool   empty_option
     ) const -> bool;
 
 private:
-    Editor_context&                          m_context;
-    std::mutex                               m_mutex;
-    std::vector<std::shared_ptr<Scene_root>> m_scene_roots;
+    Editor_context&          m_context;
+    std::mutex               m_mutex;
+    std::vector<Scene_root*> m_scene_roots;
 };
 
 } // namespace editor

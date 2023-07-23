@@ -8,6 +8,7 @@
 
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/renderer/line_renderer.hpp"
+#include "erhe/scene/node.hpp"
 
 #include <imgui.h>
 
@@ -16,8 +17,7 @@ namespace editor
 
 namespace {
 
-enum class Note : unsigned int
-{
+enum class Note : unsigned int {
     c = 0,
     c_sharp, // d_flat
     d,

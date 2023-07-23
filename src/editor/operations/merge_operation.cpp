@@ -61,20 +61,20 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     m_selection_before = m_parameters.context.selection->get_selection();
 
     for (const auto& item : m_selection_before) {
-        auto shared_node = as_node(item);
+        auto shared_node = as<erhe::scene::Node>(item);
         if (!shared_node) {
             continue;
         }
         auto* node = shared_node.get();
 
-        const auto& mesh = get_mesh(node);
+        const auto& mesh = erhe::scene::get_mesh(node);
         if (!mesh) {
             continue;
         }
 
         mat4 transform;
         const auto node_physics  = get_node_physics(node);
-        const auto node_raytrace = get_raytrace    (node);
+        const auto node_raytrace = get_node_raytrace(node);
 
         //rt_primitive = std::make_shared<Raytrace_primitive>(geometry);
         Entry source_entry{
@@ -112,14 +112,14 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         for (auto& primitive : mesh->mesh_data.primitives) {
-            const auto& geometry = primitive.source_geometry;
+            const auto& geometry = primitive.geometry_primitive->source_geometry;
             if (!geometry) {
                 continue;
             }
             combined_geometry.merge(*geometry, transform);
             source_entry.primitives.push_back(primitive);
             if (normal_style == Normal_style::none) {
-                normal_style = primitive.normal_style;
+                normal_style = primitive.geometry_primitive->normal_style;
             }
             if (!material) {
                 material = primitive.material;
@@ -157,24 +157,18 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         erhe::geometry::operation::weld(combined_geometry)
     );;
 
-    m_combined.node_raytrace = std::make_shared<Node_raytrace>(welded_geometry);
-    const auto* rt_primitive = m_combined.node_raytrace->raytrace_primitive();
-
     m_combined.primitives.push_back(
         erhe::primitive::Primitive{
-            .material              = material,
-            .gl_primitive_geometry = make_primitive(
-                *welded_geometry.get(),
+            material,
+            std::make_shared<erhe::primitive::Geometry_primitive>(
+                welded_geometry,
                 parameters.build_info,
                 normal_style
-            ),
-            .rt_primitive_geometry = rt_primitive->primitive_geometry,
-            .rt_vertex_buffer      = rt_primitive->vertex_buffer,
-            .rt_index_buffer       = rt_primitive->index_buffer,
-            .source_geometry       = welded_geometry,
-            .normal_style          = normal_style
+            )
         }
     );
+
+    m_combined.node_raytrace = std::make_shared<Node_raytrace>(m_combined.mesh, m_combined.primitives);
 }
 
 void Merge_operation::execute(Editor_context& context)
@@ -196,11 +190,7 @@ void Merge_operation::execute(Editor_context& context)
     bool first_entry = true;
     for (const auto& entry : m_sources) {
         const auto& mesh = entry.mesh;
-
-        if (entry.node == nullptr) {
-            continue;
-        }
-
+        ERHE_VERIFY(entry.node != nullptr);
         erhe::scene::Node* node = entry.node.get();
 
         if (first_entry) {
@@ -223,7 +213,7 @@ void Merge_operation::execute(Editor_context& context)
                 node->attach(m_combined.node_physics);
             }
 
-            auto old_node_raytrace = get_raytrace(node);
+            auto old_node_raytrace = get_node_raytrace(node);
             if (old_node_raytrace) {
                 node->detach(old_node_raytrace.get());
             }
@@ -285,9 +275,9 @@ void Merge_operation::undo(Editor_context& context)
                 node->attach(entry.node_physics);
             }
 
-            auto old_node_raytrace = get_raytrace(node);
+            auto old_node_raytrace = get_node_raytrace(node);
             if (old_node_raytrace) {
-                node->detach(old_node_physics.get());
+                node->detach(old_node_raytrace.get());
             }
             if (entry.node_raytrace) {
                 node->attach(entry.node_raytrace);

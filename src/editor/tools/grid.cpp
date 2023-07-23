@@ -22,18 +22,19 @@ namespace editor
 
 using glm::vec3;
 
-Grid::~Grid() noexcept = default;
-
-[[nodiscard]] auto Grid::get_type() const -> uint64_t
+Grid::Grid()
+    : erhe::scene::Node_attachment{erhe::toolkit::Unique_id<Grid>{}.get_id()}
 {
-    return
-        erhe::scene::Item_type::node_attachment |
-        erhe::scene::Item_type::grid;
 }
 
-[[nodiscard]] auto Grid::get_type_name() const -> const char*
+auto Grid::get_type() const -> uint64_t
 {
-    return "Grid";
+    return erhe::Item_type::node_attachment | erhe::Item_type::grid;
+}
+
+auto Grid::get_type_name() const -> std::string_view
+{
+    return static_type_name;
 }
 
 auto Grid::get_name() const -> const std::string&

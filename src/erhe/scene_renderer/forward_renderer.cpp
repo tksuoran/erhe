@@ -90,11 +90,11 @@ void Forward_renderer::render(const Render_parameters& parameters)
         //(g_shadow_renderer != nullptr) &&
         (!lights.empty()) &&
         (parameters.shadow_texture != nullptr) &&
-        (parameters.light_projections->shadow_map_texture_handle != 0);
+        (parameters.light_projections->shadow_map_texture_handle != 0xffffffffu);
 
     const uint64_t shadow_texture_handle = enable_shadows
         ? parameters.light_projections->shadow_map_texture_handle
-        : 0;
+        : 0xffffffffu;
     const uint64_t fallback_texture_handle = m_graphics_instance.get_handle(
         *m_dummy_texture.get(),
         m_nearest_sampler

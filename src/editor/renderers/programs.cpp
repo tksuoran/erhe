@@ -24,8 +24,11 @@ Programs::Shader_stages_builder::Shader_stages_builder(
 {
 }
 
-Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& other) = default;
-
+Programs::Shader_stages_builder::Shader_stages_builder(Shader_stages_builder&& other)
+    : reloadable_shader_stages{other.reloadable_shader_stages}
+    , prototype               {std::move(other.prototype)}
+{
+}
 
 Programs::Programs(
     erhe::graphics::Instance&                graphics_instance,

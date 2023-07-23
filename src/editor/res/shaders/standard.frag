@@ -5,12 +5,13 @@ in vec2      v_aniso_control;
 in mat3      v_TBN;
 in flat uint v_material_index;
 
-const float m_pi   = 3.1415926535897932384626434;
-const float m_i_pi = 0.3183098861837906715377675;
+const float m_pi    = 3.1415926535897932384626434;
+const float m_i_pi  = 0.3183098861837906715377675;
+const uint  max_u32 = 4294967295;
 
 vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 {
-    if ((texture_handle.x == 0) && (texture_handle.y == 0)) {
+    if (texture_handle.x == max_u32) {
         return vec4(1.0, 1.0, 1.0, 1.0);
     }
 #if defined(ERHE_BINDLESS_TEXTURE)
@@ -23,7 +24,7 @@ vec4 sample_texture(uvec2 texture_handle, vec2 texcoord)
 
 vec4 sample_texture_lod_bias(uvec2 texture_handle, vec2 texcoord, float lod_bias)
 {
-    if ((texture_handle.x == 0) && (texture_handle.y == 0)) {
+    if (texture_handle.x == max_u32) {
         return vec4(1.0, 1.0, 1.0, 1.0);
     }
 #if defined(ERHE_BINDLESS_TEXTURE)
@@ -36,6 +37,9 @@ vec4 sample_texture_lod_bias(uvec2 texture_handle, vec2 texcoord, float lod_bias
 
 vec2 get_texture_size(uvec2 texture_handle)
 {
+    if (texture_handle.x == max_u32) {
+        return vec2(1.0, 1.0);
+    }
 #if defined(ERHE_BINDLESS_TEXTURE)
     sampler2D s_texture = sampler2D(texture_handle);
     return textureSize(s_texture, 0);

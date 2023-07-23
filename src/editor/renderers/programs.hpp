@@ -13,8 +13,7 @@ namespace erhe::scene_renderer {
 
 namespace editor {
 
-enum class Shader_stages_variant : int
-{
+enum class Shader_stages_variant : int {
     standard,
     error,
     anisotropic_slope,
@@ -136,6 +135,7 @@ public:
             std::filesystem::path                     shader_path
         );
         Shader_stages_builder(Shader_stages_builder&& other);
+        //Shader_stages_builder& operator=(Shader_stages_builder&& other);
 
         erhe::graphics::Reloadable_shader_stages& reloadable_shader_stages;
         erhe::graphics::Shader_stages_prototype   prototype;

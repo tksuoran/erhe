@@ -1,7 +1,9 @@
 #include "editor_scenes.hpp"
 
 #include "editor_context.hpp"
+#include "editor_log.hpp"
 #include "editor_settings.hpp"
+#include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe/physics/iworld.hpp"
@@ -22,12 +24,31 @@ Editor_scenes::Editor_scenes(
 }
 
 void Editor_scenes::register_scene_root(
-    const std::shared_ptr<Scene_root>& scene_root
+    Scene_root* scene_root
 )
 {
     std::lock_guard<std::mutex> lock{m_mutex};
 
-    m_scene_roots.push_back(scene_root);
+    const auto i = std::find(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
+    if (i != m_scene_roots.end()) {
+        log_scene->error("Scene '{}' is already in registered in Editor_scenes", scene_root->get_name());
+    } else {
+        m_scene_roots.push_back(scene_root);
+    }
+}
+
+void Editor_scenes::unregister_scene_root(
+    Scene_root* scene_root
+)
+{
+    std::lock_guard<std::mutex> lock{m_mutex};
+
+    const auto i = std::remove(m_scene_roots.begin(), m_scene_roots.end(), scene_root);
+    if (i == m_scene_roots.end()) {
+        log_scene->error("Scene '{}' not registered in Editor_scenes", scene_root->get_name());
+    } else {
+        m_scene_roots.erase(i, m_scene_roots.end());
+    }
 }
 
 void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& time_context)
@@ -63,6 +84,9 @@ void Editor_scenes::update_node_transforms()
     for (const auto& scene_root : m_scene_roots) {
         scene_root->get_scene().update_node_transforms();
     }
+
+    // Not in m_scene_roots
+    m_context.tools->get_tool_scene_root()->get_hosted_scene()->update_node_transforms();
 }
 
 void Editor_scenes::update_fixed_step(const Time_context& time_context)
@@ -76,7 +100,7 @@ void Editor_scenes::update_once_per_frame(const Time_context&)
     update_node_transforms();
 }
 
-[[nodiscard]] auto Editor_scenes::get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&
+[[nodiscard]] auto Editor_scenes::get_scene_roots() -> const std::vector<Scene_root*>&
 {
     return m_scene_roots;
 }
@@ -91,15 +115,15 @@ void Editor_scenes::sanity_check()
 }
 
 auto Editor_scenes::scene_combo(
-    const char*                  label,
-    std::shared_ptr<Scene_root>& in_out_selected_entry,
-    const bool                   empty_option
+    const char*  label,
+    Scene_root*& in_out_selected_entry,
+    const bool   empty_option
 ) const -> bool
 {
     int selection_index = 0;
     int index = 0;
     std::vector<const char*> names;
-    std::vector<std::shared_ptr<Scene_root>> entries;
+    std::vector<Scene_root*> entries;
     const bool empty_entry = empty_option || (!in_out_selected_entry);
     if (empty_entry) {
         names.push_back("(none)");

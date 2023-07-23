@@ -23,8 +23,8 @@ erhe_target_sources_grouped(
     primitive.hpp
     primitive_builder.cpp
     primitive_builder.hpp
-    primitive_geometry.hpp
-    primitive_geometry.cpp
+    geometry_mesh.hpp
+    geometry_mesh.cpp
     primitive_log.cpp
     primitive_log.hpp
     property_maps.hpp

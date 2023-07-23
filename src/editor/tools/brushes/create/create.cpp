@@ -74,23 +74,20 @@ void Create::brush_create_button(const char* label, Create_shape* create_shape)
 auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
 {
     const auto selected_node   = m_context.selection->get<erhe::scene::Node>();
-    const auto selected_scene  = m_context.selection->get<erhe::scene::Scene>();
     const auto viewport_window = m_context.viewport_windows->last_window();
 
     Scene_view* scene_view = get_hover_scene_view();
-    erhe::scene::Item_host* scene_host = selected_node
-        ? static_cast<Scene_root*>(selected_node->get_item_host())
-        : selected_scene
-            ? static_cast<Scene_root*>(selected_scene->get_root_node()->get_item_host())
-            : viewport_window
-                ? viewport_window->get_scene_root().get()
-                : (scene_view != nullptr)
-                    ? scene_view->get_scene_root().get()
-                    : nullptr;
-    if (scene_host == nullptr) {
+    erhe::Item_host* item_host = selected_node
+        ? selected_node->get_item_host()
+        : viewport_window
+            ? viewport_window->get_scene_root().get()
+            : (scene_view != nullptr)
+                ? scene_view->get_scene_root().get()
+                : nullptr;
+    if (item_host == nullptr) {
         return {};
     }
-    auto* scene_root = static_cast<Scene_root*>(scene_host);
+    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
 
     const auto parent = selected_node
         ? selected_node
@@ -163,7 +160,7 @@ void Create::imgui()
 
             m_brush = m_create_shape->create(brush_create_info);
             if (m_brush && create_instance) {
-                using Item_flags = erhe::scene::Item_flags;
+                using Item_flags = erhe::Item_flags;
                 const uint64_t node_flags =
                     Item_flags::visible     |
                     Item_flags::content     |
@@ -176,8 +173,7 @@ void Create::imgui()
                     Item_flags::id          |
                     Item_flags::show_in_ui;
 
-                const Instance_create_info brush_instance_create_info
-                {
+                const Instance_create_info brush_instance_create_info{
                     .node_flags      = node_flags,
                     .mesh_flags      = mesh_flags,
                     .scene_root      = scene_root,
@@ -195,7 +191,7 @@ void Create::imgui()
                         .mode    = Scene_item_operation::Mode::insert
                     }
                 );
-                m_context.operation_stack->push(op);
+                m_context.operation_stack->queue(op);
             }
             m_create_shape = nullptr;
         }
@@ -210,12 +206,15 @@ void Create::imgui()
         if (!selection.empty()) {
             std::shared_ptr<erhe::geometry::Geometry> source_geometry;
             for (const auto& node : selection) {
-                const auto& mesh = as_mesh(node);
+                const auto& mesh = as<erhe::scene::Mesh>(node);
                 if (mesh) {
                     for (const auto& primitive : mesh->mesh_data.primitives) {
-                        if (primitive.source_geometry) {
-                            source_geometry = primitive.source_geometry;
-                            break;
+                        const auto& geometry_primitive = primitive.geometry_primitive;
+                        if (geometry_primitive) {
+                            if (geometry_primitive->source_geometry) {
+                                source_geometry = geometry_primitive->source_geometry;
+                                break;
+                            }
                         }
                     }
                     if (source_geometry) {

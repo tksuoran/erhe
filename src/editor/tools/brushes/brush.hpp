@@ -17,7 +17,8 @@ namespace erhe::physics {
 }
 namespace erhe::primitive {
     class Material;
-    class Primitive_geometry;
+    class Geometry_mesh;
+    class Geometry_primitive;
 }
 namespace erhe::scene {
     class Mesh;
@@ -102,13 +103,12 @@ public:
     class Scaled
     {
     public:
-        int                                              scale_key;
-        std::shared_ptr<erhe::geometry::Geometry>        geometry;
-        erhe::primitive::Primitive_geometry              gl_primitive_geometry;
-        std::shared_ptr<Raytrace_primitive>              rt_primitive;
-        std::shared_ptr<erhe::physics::ICollision_shape> collision_shape;
-        float                                            volume;
-        glm::mat4                                        local_inertia;
+        int                                                  scale_key;
+        std::shared_ptr<erhe::geometry::Geometry>            geometry;
+        std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
+        std::shared_ptr<erhe::physics::ICollision_shape>     collision_shape;
+        float                                                volume;
+        glm::mat4                                            local_inertia;
     };
 
     explicit Brush(const Brush_data& create_info);
@@ -145,8 +145,7 @@ public:
     Brush_data                                           data;
     std::string                                          label;
     erhe::toolkit::Unique_id<Brush>                      id;
-    std::unique_ptr<erhe::primitive::Primitive_geometry> gl_primitive_geometry;
-    std::shared_ptr<Raytrace_primitive>                  rt_primitive;
+    std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
     std::vector<Reference_frame>                         reference_frames;
     std::vector<Scaled>                                  scaled_entries;
 };

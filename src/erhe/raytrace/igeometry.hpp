@@ -11,8 +11,7 @@ class IScene;
 class Ray;
 class Hit;
 
-enum class Buffer_type : int
-{
+enum class Buffer_type : int {
     BUFFER_TYPE_INDEX                = 0,
     BUFFER_TYPE_VERTEX               = 1,
     BUFFER_TYPE_VERTEX_ATTRIBUTE     = 2,
@@ -30,8 +29,7 @@ enum class Buffer_type : int
     BUFFER_TYPE_FLAGS                = 32
 };
 
-enum class Format : int
-{
+enum class Format : int {
     FORMAT_UNDEFINED = 0,
 
     // 8-bit unsigned integer
@@ -126,8 +124,7 @@ enum class Format : int
     FORMAT_GRID = 0xA001
 };
 
-enum class Geometry_type : int
-{
+enum class Geometry_type : int {
     GEOMETRY_TYPE_TRIANGLE    = 0, // triangle mesh
     GEOMETRY_TYPE_QUAD        = 1, // quad (triangle pair) mesh
     GEOMETRY_TYPE_SUBDIVISION = 8, // Catmull-Clark subdivision surface

@@ -14,6 +14,7 @@
 #include "erhe/graphics/vertex_attribute_mappings.hpp"
 #include "erhe/graphics/vertex_format.hpp"
 #include "erhe/scene/camera.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/toolkit/viewport.hpp"
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"

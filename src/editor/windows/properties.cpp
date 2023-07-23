@@ -17,7 +17,7 @@
 
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/primitive/primitive.hpp"
-#include "erhe/primitive/primitive_geometry.hpp"
+#include "erhe/primitive/geometry_mesh.hpp"
 #include "erhe/primitive/material.hpp"
 #include "erhe/scene/animation.hpp"
 #include "erhe/scene/camera.hpp"
@@ -320,7 +320,11 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
 
     int primitive_index = 0;
     for (auto& primitive : mesh_data.primitives) {
-        const auto& geometry = primitive.source_geometry;
+        const auto& geometry_primitive = primitive.geometry_primitive;
+        if (!geometry_primitive) {
+            continue;
+        }
+        const auto& geometry = geometry_primitive->source_geometry;
 
         ++primitive_index;
         ImGui::PushID(primitive_index);
@@ -350,8 +354,8 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
                 ImGui::TreePop();
             }
             if (ImGui::TreeNodeEx("Debug")) {
-                float bbox_volume    = primitive.gl_primitive_geometry.bounding_box.volume();
-                float bsphere_volume = primitive.gl_primitive_geometry.bounding_sphere.volume();
+                float bbox_volume    = geometry_primitive->gl_geometry_mesh.bounding_box.volume();
+                float bsphere_volume = geometry_primitive->gl_geometry_mesh.bounding_sphere.volume();
                 ImGui::Indent(indent);
                 ImGui::InputFloat("BBox Volume",    &bbox_volume,    0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
                 ImGui::InputFloat("BSphere Volume", &bsphere_volume, 0, 0, "%.4f", ImGuiInputTextFlags_ReadOnly);
@@ -462,7 +466,12 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
     }
 }
 
-void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
+void Properties::node_raytrace_properties(Node_raytrace& node_raytrace) const
+{
+    node_raytrace.properties_imgui();
+}
+
+void Properties::item_flags(const std::shared_ptr<erhe::Item>& item)
 {
     if (!ImGui::TreeNodeEx("Flags")) {
         return;
@@ -471,7 +480,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
     ImGui::Indent(indent);
 
     using namespace erhe::toolkit;
-    using Item_flags = erhe::scene::Item_flags;
+    using Item_flags = erhe::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();
     for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
@@ -495,7 +504,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
     ImGui::TreePop();
 }
 
-[[nodiscard]] auto show_item_details(const erhe::scene::Item* const item)
+[[nodiscard]] auto show_item_details(const erhe::Item* const item)
 {
     return
         !is_physics         (item) &&
@@ -504,23 +513,24 @@ void Properties::item_flags(const std::shared_ptr<erhe::scene::Item>& item)
         !is_rendertarget    (item);
 }
 
-void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
+void Properties::item_properties(const std::shared_ptr<erhe::Item>& item)
 {
-    if (is_raytrace(item)) { // currently nothing to show, so hidden from user
+    if (is_raytrace(item)) { // currently hidden from user
         return;
     }
 
-    const auto node_physics = as_physics     (item);
-    const auto camera       = as_camera      (item);
-    const auto light        = as_light       (item);
-    const auto mesh         = as_mesh        (item);
-    const auto rendertarget = as_rendertarget(item);
+    const auto node_physics  = as<Node_physics       >(item);
+    const auto node_raytrace = as<Node_raytrace      >(item);
+    const auto rendertarget  = as<Rendertarget_mesh  >(item);
+    const auto camera        = as<erhe::scene::Camera>(item);
+    const auto light         = as<erhe::scene::Light >(item);
+    const auto mesh          = as<erhe::scene::Mesh  >(item);
 
     const bool default_open = !node_physics;
 
     if (
         !ImGui::TreeNodeEx(
-            item->get_type_name(),
+            item->get_type_name().data(),
             ImGuiTreeNodeFlags_Framed |
             (default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0)
         )
@@ -542,7 +552,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
 
         item_flags(item);
 
-        if (!is_light(item)) { // light uses light color, so hide item color
+        if (!erhe::scene::is_light(item)) { // light uses light color, so hide item color
             glm::vec4 color = item->get_wireframe_color();
             if (
                 ImGui::ColorEdit4(
@@ -559,6 +569,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::scene::Item>& item)
 
     if (node_physics) {
         node_physics_properties(*node_physics);
+    }
+
+    if (node_raytrace) {
+        node_raytrace_properties(*node_raytrace);
     }
 
     if (camera) {
@@ -622,7 +636,7 @@ void Properties::imgui()
         ERHE_VERIFY(item);
         item_properties(item);
 
-        const auto node = as_node(item);
+        const auto node = as<erhe::scene::Node>(item);
         if (!node) {
             continue;
         }

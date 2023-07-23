@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe/toolkit/viewport.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe/scene/node_attachment.hpp"
 #include "erhe/scene/projection.hpp"
 #include "erhe/scene/transform.hpp"
 
@@ -10,6 +10,8 @@
 
 namespace erhe::scene
 {
+
+class Camera;
 
 class Camera_projection_transforms
 {
@@ -22,17 +24,18 @@ class Camera
     : public Node_attachment
 {
 public:
+    Camera();
     explicit Camera(const std::string_view name);
     ~Camera() noexcept override;
 
-    // Implements Node_attachment
-    void handle_item_host_update(Item_host* old_item_host, Item_host* new_item_host) override;
-
     // Implements Item
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    [[nodiscard]] auto get_type     () const -> uint64_t override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
+    static constexpr std::string_view static_type_name{"Camera"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+
+    // Implements Node_attachment
+    void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
     // Public API
     [[nodiscard]] auto projection           () -> Projection*;
@@ -52,8 +55,6 @@ private:
 
 [[nodiscard]] auto is_camera(const Item* scene_item) -> bool;
 [[nodiscard]] auto is_camera(const std::shared_ptr<Item>& scene_item) -> bool;
-[[nodiscard]] auto as_camera(Item* scene_item) -> Camera*;
-[[nodiscard]] auto as_camera(const std::shared_ptr<Item>& node) -> std::shared_ptr<Camera>;
 
 auto get_camera(const erhe::scene::Node* node) -> std::shared_ptr<Camera>;
 

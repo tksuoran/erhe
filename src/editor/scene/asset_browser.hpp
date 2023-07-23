@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe/imgui/imgui_window.hpp"
+#include "erhe/item/hierarchy.hpp"
 
 #include <glm/glm.hpp>
 
@@ -15,28 +16,61 @@ namespace editor
 {
 
 class Editor_context;
+class Item_tree_window;
 
 class Asset_node
+    : public erhe::Hierarchy
 {
 public:
-    Asset_node();
-    Asset_node(Editor_context& context, const std::filesystem::path& path, std::size_t depth);
+    Asset_node(const std::filesystem::path& path, std::size_t id);
 
-    bool                     is_directory{false};
-    bool                     is_gltf     {false};
-    bool                     is_scanned  {false};
-    glm::vec2                icon        {0.0f, 0.0f};
-    glm::vec4                icon_color  {1.0f, 1.0f, 1.0f, 1.0f};
-    std::string              label;
+    glm::vec2 icon      {0.0f, 0.0f};
+    glm::vec4 icon_color{1.0f, 1.0f, 1.0f, 1.0f};
+};
+
+class Asset_folder
+    : public Asset_node
+{
+public:
+    Asset_folder(const std::filesystem::path& path);
+
+    // Implements Item
+    static constexpr std::string_view static_type_name{"Asset_folder"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+};
+
+class Asset_file_gltf
+    : public Asset_node
+{
+public:
+    Asset_file_gltf(const std::filesystem::path& path);
+
+    // Implements Item
+    static constexpr std::string_view static_type_name{"Asset_file_gltf"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
+
+    bool                     is_scanned{false};
     std::vector<std::string> contents;
-    std::filesystem::path    path;
-    std::vector<Asset_node>  children;
-    std::size_t              depth;
-    static int s_counter;
+};
+
+class Asset_file_other
+    : public Asset_node
+{
+public:
+    Asset_file_other(const std::filesystem::path& path);
+
+    // Implements Item
+    static constexpr std::string_view static_type_name{"Asset_file_other"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 };
 
 class Asset_browser
-    : public erhe::imgui::Imgui_window
 {
 public:
     Asset_browser(
@@ -45,17 +79,18 @@ public:
         Editor_context&              editor_context
     );
 
-    // Implements Imgui_window
-    void imgui() override;
-
 private:
     void scan();
-    void scan(const std::filesystem::path& path, Asset_node& parent);
-    void imgui(Asset_node& node);
+    void scan(const std::filesystem::path& path, Asset_node* parent);
+
+    auto make_node    (const std::filesystem::path& path, Asset_node* parent) -> std::shared_ptr<Asset_node>;
+    auto item_callback(const std::shared_ptr<erhe::Item>& item) -> bool;
 
     Editor_context& m_context;
-    Asset_node      m_root_node;
     Asset_node*     m_popup_node{nullptr};
+
+    std::shared_ptr<Asset_node>       m_root;
+    std::shared_ptr<Item_tree_window> m_node_tree_window;
 };
 
 } // namespace editor

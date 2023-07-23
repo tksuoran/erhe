@@ -5,12 +5,14 @@
 #endif
 
 #include "erhe/raytrace/bvh/bvh_scene.hpp"
+#include "erhe/log/log_glm.hpp"
 #include "erhe/raytrace/bvh/bvh_geometry.hpp"
 #include "erhe/raytrace/bvh/bvh_instance.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/raytrace/raytrace_log.hpp"
 #include "erhe/raytrace/ray.hpp"
 #include "erhe/toolkit/profile.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 namespace erhe::raytrace
 {
@@ -33,12 +35,20 @@ auto IScene::create_unique(const std::string_view debug_label) -> std::unique_pt
 Bvh_scene::Bvh_scene(const std::string_view debug_label)
     : m_debug_label{debug_label}
 {
+    log_scene->trace("Created Bvh_scene '{}'", debug_label);
 }
 
-Bvh_scene::~Bvh_scene() noexcept = default;
+Bvh_scene::~Bvh_scene() noexcept
+{
+    log_scene->trace("Destroyed Bvh_scene '{}'", m_debug_label);
+}
 
 void Bvh_scene::attach(IGeometry* geometry)
 {
+    log_scene->trace("Bvh_scene {} attach geometry {}", m_debug_label, geometry->debug_label());
+
+    ERHE_VERIFY(geometry != nullptr);
+
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
 #ifndef NDEBUG
@@ -54,6 +64,10 @@ void Bvh_scene::attach(IGeometry* geometry)
 
 void Bvh_scene::attach(IInstance* instance)
 {
+    log_scene->trace("Bvh_scene {} attach instance {}", m_debug_label, instance->debug_label());
+
+    ERHE_VERIFY(instance != nullptr);
+
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
 #ifndef NDEBUG
@@ -69,6 +83,10 @@ void Bvh_scene::attach(IInstance* instance)
 
 void Bvh_scene::detach(IGeometry* geometry)
 {
+    log_scene->trace("Bvh_scene {} detach geometry {}", m_debug_label, geometry->debug_label());
+
+    ERHE_VERIFY(geometry != nullptr);
+
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
     const auto i = std::remove(m_geometries.begin(), m_geometries.end(), bvh_geometry);
@@ -81,6 +99,10 @@ void Bvh_scene::detach(IGeometry* geometry)
 
 void Bvh_scene::detach(IInstance* instance)
 {
+    log_scene->trace("Bvh_scene {} detach instance {}", m_debug_label, instance->debug_label());
+
+    ERHE_VERIFY(instance != nullptr);
+
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
     const auto i = std::remove(m_instances.begin(), m_instances.end(), bvh_instance);
@@ -93,7 +115,7 @@ void Bvh_scene::detach(IInstance* instance)
 
 void Bvh_scene::commit()
 {
-    // WIP - not really used
+    // WIP - not really used (yet)
 #if 0
     m_collected_spheres.clear();
     m_collected_instances.clear();
@@ -120,29 +142,50 @@ void Bvh_scene::commit()
 #endif
 }
 
-void Bvh_scene::intersect(Ray& ray, Hit& hit)
+auto Bvh_scene::intersect(Ray& ray, Hit& hit) -> bool
 {
+    log_frame->trace(
+        "Bvh_scene {} intersect mask = {:04x} instances = {}, geometries = {}, ray origin = {}, direction = {}",
+        m_debug_label, ray.mask, m_instances.size(), m_geometries.size(), ray.origin, ray.direction
+    );
+
     ERHE_PROFILE_FUNCTION();
 
+    bool is_hit = false;
     for (const auto& instance : m_instances) {
-        instance->intersect(ray, hit);
+        const bool instance_is_hit = instance->intersect(ray, hit);
+        if (instance_is_hit) {
+            is_hit = true;
+        }
     }
     for (const auto& geometry : m_geometries) {
-        geometry->intersect_instance(ray, hit, nullptr);
+        const bool geometry_is_hit = geometry->intersect_instance(ray, hit, nullptr);
+        if (geometry_is_hit) {
+            is_hit = true;
+        }
     }
+    return is_hit;
 }
 
-void Bvh_scene::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* in_instance)
+auto Bvh_scene::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* in_instance) -> bool
 {
+    bool is_hit = false;
     if (in_instance == nullptr) {
         for (const auto& instance : m_instances) {
-            instance->intersect(ray, hit);
+            const bool instance_is_hit = instance->intersect(ray, hit);
+            if (instance_is_hit) {
+                is_hit = true;
+            }
         }
     } else {
         for (const auto& geometry : m_geometries) {
-            geometry->intersect_instance(ray, hit, in_instance);
+            const bool geometry_is_hit = geometry->intersect_instance(ray, hit, in_instance);
+            if (geometry_is_hit) {
+                is_hit = true;
+            }
         }
     }
+    return is_hit;
 }
 
 // WIP - not ready / used

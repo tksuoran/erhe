@@ -229,13 +229,14 @@ void Brush_tool::on_motion()
         Hover_entry::grid_bit
     );
 
-    if (
-        (m_hover.geometry != nullptr) &&
-        (m_hover.local_index > m_hover.geometry->get_polygon_count())
-    ) {
-        m_hover.local_index = 0;
-        m_hover.geometry    = nullptr;
-    }
+    //// if (
+    ////     (m_hover.geometry_primitive != nullptr) &&
+    ////     (m_hover.geometry_primitive->source_geometry) &&
+    ////     (m_hover.local_index > m_hover.geometry_primitive->source_geometry->get_polygon_count())
+    //// ) {
+    ////     m_hover.local_index        = 0;
+    ////     m_hover.geometry_primitive = nullptr;
+    //// }
 
     if (
         m_hover.mesh &&
@@ -256,16 +257,18 @@ auto Brush_tool::get_hover_mesh_transform() -> mat4
     auto brush = m_context.content_library_window->selected_brush();
 
     if (
-        (m_hover.mesh == nullptr) ||
-        (m_hover.geometry == nullptr) ||
-        (m_hover.local_index >= m_hover.geometry->get_polygon_count())
+        (m_hover.mesh == nullptr)                                            ||
+        (m_hover.primitive_index == std::numeric_limits<std::size_t>::max()) ||
+        (!m_hover.geometry)
     ) {
         return mat4{1};
     }
+    auto* geometry = m_hover.geometry.get();
+    ERHE_VERIFY(m_hover.polygon_id < geometry->get_polygon_count());
 
-    const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(m_hover.local_index);
-    const Polygon&  polygon    = m_hover.geometry->polygons[polygon_id];
-    Reference_frame hover_frame(*m_hover.geometry, polygon_id, 0, 0);
+    const auto polygon_id = static_cast<erhe::geometry::Polygon_id>(m_hover.polygon_id);
+    const Polygon&  polygon    = geometry->polygons[polygon_id];
+    Reference_frame hover_frame(*geometry, polygon_id, 0, 0);
 
     Reference_frame brush_frame = brush->get_reference_frame(
         polygon.corner_count,
@@ -342,9 +345,7 @@ void Brush_tool::update_mesh_node_transform()
         return;
     }
 
-    const auto  transform    = m_hover.mesh
-        ? get_hover_mesh_transform()
-        : get_hover_grid_transform();
+    const auto  transform    = m_hover.mesh ? get_hover_mesh_transform() : get_hover_grid_transform();
     const auto& brush_scaled = brush->get_scaled(m_transform_scale);
     if (m_hover.mesh) {
         m_brush_node->set_parent(m_hover.mesh->get_node());
@@ -359,10 +360,7 @@ void Brush_tool::update_mesh_node_transform()
     }
 
     auto& primitive = m_brush_mesh->mesh_data.primitives.front();
-    primitive.gl_primitive_geometry = brush_scaled.gl_primitive_geometry;
-    primitive.rt_primitive_geometry = brush_scaled.rt_primitive->primitive_geometry;
-    primitive.rt_vertex_buffer      = brush_scaled.rt_primitive->vertex_buffer;
-    primitive.rt_index_buffer       = brush_scaled.rt_primitive->index_buffer;
+    primitive.geometry_primitive = brush_scaled.geometry_primitive;
 }
 
 void Brush_tool::do_insert_operation()
@@ -385,16 +383,16 @@ void Brush_tool::do_insert_operation()
         ? get_hover_mesh_transform()
         : get_hover_grid_transform();
     const uint64_t mesh_flags =
-        erhe::scene::Item_flags::visible     |
-        erhe::scene::Item_flags::content     |
-        erhe::scene::Item_flags::opaque      |
-        erhe::scene::Item_flags::shadow_cast |
-        erhe::scene::Item_flags::id          |
-        erhe::scene::Item_flags::show_in_ui;
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::content     |
+        erhe::Item_flags::opaque      |
+        erhe::Item_flags::shadow_cast |
+        erhe::Item_flags::id          |
+        erhe::Item_flags::show_in_ui;
     const uint64_t node_flags =
-        erhe::scene::Item_flags::visible     |
-        erhe::scene::Item_flags::content     |
-        erhe::scene::Item_flags::show_in_ui;
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::content     |
+        erhe::Item_flags::show_in_ui;
 
     auto* scene_view = get_hover_scene_view();
     ERHE_VERIFY(scene_view != nullptr);
@@ -430,7 +428,7 @@ void Brush_tool::do_insert_operation()
             .mode    = Scene_item_operation::Mode::insert
         }
     );
-    m_context.operation_stack->push(op);
+    m_context.operation_stack->queue(op);
 }
 
 void Brush_tool::add_brush_mesh()
@@ -462,25 +460,20 @@ void Brush_tool::add_brush_mesh()
     m_brush_mesh = std::make_shared<erhe::scene::Mesh>(
         name,
         erhe::primitive::Primitive{
-            .material              = material,
-            .gl_primitive_geometry = brush_scaled.gl_primitive_geometry,
-            .rt_primitive_geometry = brush_scaled.rt_primitive->primitive_geometry,
-            .rt_vertex_buffer      = brush_scaled.rt_primitive->vertex_buffer,
-            .rt_index_buffer       = brush_scaled.rt_primitive->index_buffer,
-            .source_geometry       = brush_scaled.geometry,
-            .normal_style          = brush->data.normal_style
+            .material           = material,
+            .geometry_primitive = brush_scaled.geometry_primitive,
         }
     );
     m_brush_node->enable_flag_bits(
-        erhe::scene::Item_flags::brush       |
-        erhe::scene::Item_flags::visible     |
-        erhe::scene::Item_flags::no_message
+        erhe::Item_flags::brush       |
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::no_message
     );
     m_brush_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::brush       |
-        erhe::scene::Item_flags::visible     |
-        erhe::scene::Item_flags::translucent | // redundant
-        erhe::scene::Item_flags::no_message
+        erhe::Item_flags::brush       |
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::translucent | // redundant
+        erhe::Item_flags::no_message
     );
 
     m_brush_mesh->mesh_data.layer_id = scene_root->layers().brush()->id;

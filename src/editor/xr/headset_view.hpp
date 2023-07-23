@@ -71,8 +71,8 @@ private:
 };
 
 class Headset_view
-    : public Scene_view
-    , public std::enable_shared_from_this<Headset_view>
+    : public std::enable_shared_from_this<Headset_view>
+    , public Scene_view
     , public Renderable
 {
 public:

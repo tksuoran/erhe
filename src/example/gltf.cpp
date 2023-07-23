@@ -15,6 +15,8 @@
 #include "erhe/log/log_glm.hpp"
 #include "erhe/primitive/buffer_sink.hpp"
 #include "erhe/primitive/material.hpp"
+#include "erhe/raytrace/ibuffer.hpp"
+#include "erhe/raytrace/igeometry.hpp"
 #include "erhe/scene/animation.hpp"
 #include "erhe/scene/camera.hpp"
 #include "erhe/scene/projection.hpp"
@@ -303,7 +305,7 @@ namespace {
 }
 }
 
-using Item_flags = erhe::scene::Item_flags;
+using Item_flags = erhe::Item_flags;
 
 [[nodiscard]] auto to_gl(erhe::graphics::Image_format format) -> gl::Internal_format
 {
@@ -814,7 +816,7 @@ private:
             new_material->roughness.x   = pbr_metallic_roughness.roughness_factor;
             new_material->roughness.y   = pbr_metallic_roughness.roughness_factor;
             new_material->emissive      = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
-            new_material->m_shown_in_ui = true;
+            new_material->enable_flag_bits(erhe::Item_flags::show_in_ui);
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_metallic_roughness.base_color_factor[0],
@@ -953,7 +955,12 @@ private:
 
         log_gltf->trace("Primitive type: {}", c_str(primitive->type));
 
-        erhe::primitive::Primitive_geometry erhe_gl_primitive;
+        // NOTE: If same geometry is used in multiple primitives,
+        //       this naive loader will create duplicate vertex
+        //       and index buffer sections for each.
+        //       Parser in erhe::gltf does better job, but it goes
+        //       through erhe::geometry::Geometry.
+        erhe::primitive::Geometry_mesh erhe_gl_primitive;
 
         // Index buffer
         {
@@ -1130,9 +1137,10 @@ private:
         const cgltf_size material_index = primitive->material - m_data->materials;
         erhe_mesh->mesh_data.primitives.push_back(
             erhe::primitive::Primitive{
-                .material              = m_materials.at(material_index),
-                .gl_primitive_geometry = erhe_gl_primitive,
-                .normal_style          = erhe::primitive::Normal_style::corner_normals
+                .material           = m_materials.at(material_index),
+                .geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+                    std::move(erhe_gl_primitive)
+                )
             }
         );
     }

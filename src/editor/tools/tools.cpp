@@ -225,7 +225,6 @@ Tools::Tools(
     erhe::scene::Scene_message_bus& scene_message_bus,
     Editor_context&                 editor_context,
     Editor_rendering&               editor_rendering,
-    Editor_scenes&                  editor_scenes,
     Mesh_memory&                    mesh_memory,
     Programs&                       programs
 )
@@ -236,21 +235,19 @@ Tools::Tools(
     tools_content_library->is_shown_in_ui = false;
     m_scene_root = std::make_shared<Scene_root>(
         scene_message_bus,
+        nullptr, // Do not register to Editor_scenes
         tools_content_library,
         "Tool scene"
     );
 
-    // TODO Maybe this is not needed/useful?
-    editor_scenes.register_scene_root(m_scene_root);
-
-    m_scene_root->get_scene().disable_flag_bits(erhe::scene::Item_flags::show_in_ui);
+    m_scene_root->get_scene().disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     for (const auto& tool : m_tools) {
         const auto priority = tool->get_priority();
         tool->handle_priority_update(priority + 1, priority);
     }
 
-    using Item_flags = erhe::scene::Item_flags;
+    using Item_flags = erhe::Item_flags;
     auto tool = editor_rendering.make_renderpass("Tool");
     tool->mesh_layers    = { Mesh_layer_id::tool };
     tool->passes         = {
@@ -262,7 +259,7 @@ Tools::Tools(
         &m_pipeline_renderpasses.tool6_hidden_color      // require_stencil_tag_depth_hidden_and_blend,
     };
     tool->primitive_mode = erhe::primitive::Primitive_mode::polygon_fill;
-    tool->filter         = erhe::scene::Item_filter{
+    tool->filter         = erhe::Item_filter{
         .require_all_bits_set         = Item_flags::visible | Item_flags::tool,
         .require_at_least_one_bit_set = 0,
         .require_all_bits_clear       = 0

@@ -33,7 +33,7 @@ Hover_tool::Hover_tool(
     Editor_message_bus&          editor_message_bus,
     Tools&                       tools
 )
-    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover"}
+    : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Hover Tool", "hover_tool"}
     , Tool                     {editor_context}
 {
     set_flags      (Tool_flags::background | Tool_flags::toolbox);
@@ -71,11 +71,15 @@ void Hover_tool::imgui()
 
     if (nearest.valid) {
         {
-            const std::string text = fmt::format("Nearest Primitive: {}", nearest.primitive);
+            const std::string text = fmt::format("Nearest Primitive Index: {}", nearest.primitive_index);
             ImGui::TextUnformatted(text.c_str());
         }
         {
-            const std::string text = fmt::format("Nearest local_index: {}", nearest.local_index);
+            const std::string text = fmt::format("Nearest triangle Id: {}", nearest.triangle_id);
+            ImGui::TextUnformatted(text.c_str());
+        }
+        {
+            const std::string text = fmt::format("Nearest polygon Id: {}", nearest.polygon_id);
             ImGui::TextUnformatted(text.c_str());
         }
         if (nearest.position.has_value()) {

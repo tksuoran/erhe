@@ -11,9 +11,7 @@ namespace erhe::scene
 
 class Node;
 
-
-enum class Animation_path : int
-{
+enum class Animation_path : int {
     INVALID     = 0,
     TRANSLATION = 1,
     ROTATION    = 2,
@@ -23,8 +21,7 @@ enum class Animation_path : int
 
 [[nodiscard]] auto c_str(Animation_path path) -> const char*;
 
-enum class Animation_interpolation_mode : int
-{
+enum class Animation_interpolation_mode : int {
     INVALID     = 0,
     STEP        = 1,
     LINEAR      = 2,
@@ -82,10 +79,10 @@ public:
     ~Animation() noexcept override;
 
     // Implements Item
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    [[nodiscard]] auto get_type     () const -> uint64_t override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
+    static constexpr std::string_view static_type_name{"Animation"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    [[nodiscard]] auto get_type     () const -> uint64_t         override;
+    [[nodiscard]] auto get_type_name() const -> std::string_view override;
 
     // Public API
     [[nodiscard]] auto evaluate(float time_current, std::size_t channel_index, std::size_t component) -> float;

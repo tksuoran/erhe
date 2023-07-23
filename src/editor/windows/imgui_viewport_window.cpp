@@ -24,7 +24,7 @@ Imgui_viewport_window::Imgui_viewport_window(
     erhe::imgui::Imgui_windows&             imgui_windows,
     erhe::rendergraph::Rendergraph&         rendergraph,
     const std::string_view                  name,
-    const char*                             ini_label,
+    const std::string_view                  ini_label,
     const std::shared_ptr<Viewport_window>& viewport_window
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, name, ini_label}

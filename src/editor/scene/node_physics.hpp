@@ -1,16 +1,16 @@
 #pragma once
 
-#include "erhe/scene/node.hpp"
+#include "erhe/scene/node_attachment.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/physics/imotion_state.hpp"
 
 #include <functional>
 
+namespace erhe {
+    class Item_host;
+}
 namespace erhe::physics {
     class IWorld;
-}
-namespace erhe::scene {
-    class Item_host;
 }
 
 namespace editor
@@ -27,16 +27,13 @@ public:
     ~Node_physics() noexcept override;
 
     // Implements Item
-    [[nodiscard]] static auto get_static_type     () -> uint64_t;
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    [[nodiscard]] auto get_type     () const -> uint64_t override;
-    [[nodiscard]] auto get_type_name() const -> const char* override;
+    static constexpr std::string_view static_type_name{"Node_physics"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    [[nodiscard]] auto get_type     () const -> uint64_t         override;
+    [[nodiscard]] auto get_type_name() const -> std::string_view override;
 
-    // Implements Node_attachment
-    void handle_item_host_update(
-        erhe::scene::Item_host* old_item_host,
-        erhe::scene::Item_host* new_item_host
-    ) override;
+    // Implements / overrides Node_attachment
+    void handle_item_host_update     (erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
     void handle_node_transform_update() override;
 
     // Implements IMotion_state
@@ -69,10 +66,8 @@ private:
     glm::vec3                                        m_scale{1.0f, 1.0f, 1.0f}; // TODO hack
 };
 
-auto is_physics(const erhe::scene::Item* scene_item) -> bool;
-auto is_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> bool;
-auto as_physics(erhe::scene::Item* scene_item) -> Node_physics*;
-auto as_physics(const std::shared_ptr<erhe::scene::Item>& scene_item) -> std::shared_ptr<Node_physics>;
+auto is_physics(const erhe::Item* item) -> bool;
+auto is_physics(const std::shared_ptr<erhe::Item>& item) -> bool;
 
 auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>;
 

@@ -19,6 +19,7 @@
 #include "erhe/renderer/pipeline_renderpass.hpp"
 #include "erhe/renderer/renderer_log.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/scene_log.hpp"
 #include "erhe/scene/scene_message_bus.hpp"
@@ -179,7 +180,7 @@ public:
                 .primitive_settings     = erhe::scene_renderer::Primitive_interface_settings{},
                 .shadow_texture         = nullptr,
                 .viewport               = viewport,
-                .filter                 = erhe::scene::Item_filter{},
+                .filter                 = erhe::Item_filter{},
                 .override_shader_stages = nullptr
             }
         );
@@ -256,7 +257,7 @@ private:
         const glm::vec3        look_at
     ) -> std::shared_ptr<erhe::scene::Camera>
     {
-        using Item_flags = erhe::scene::Item_flags;
+        using Item_flags = erhe::Item_flags;
 
         auto node   = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
         auto camera = std::make_shared<erhe::scene::Camera>(name);
@@ -286,7 +287,7 @@ private:
         const float            intensity
     ) -> std::shared_ptr<erhe::scene::Light>
     {
-        using Item_flags = erhe::scene::Item_flags;
+        using Item_flags = erhe::Item_flags;
 
         auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
         auto light = std::make_shared<erhe::scene::Light>(name);
@@ -317,7 +318,7 @@ private:
         const float            intensity
     ) -> std::shared_ptr<erhe::scene::Light>
     {
-        using Item_flags = erhe::scene::Item_flags;
+        using Item_flags = erhe::Item_flags;
 
         auto node  = std::make_shared<erhe::scene::Node>(fmt::format("{} node", name));
         auto light = std::make_shared<erhe::scene::Light>(name);

@@ -346,7 +346,7 @@ void Headset_view::render_headset()
                     .editor_context  = m_context,
                     .scene_view      = *this,
                     .viewport_config = viewport_config,
-                    .camera          = *as_camera(view_resources->camera.get()),
+                    .camera          = *view_resources->camera.get(),
                     .viewport        = viewport
                 };
 

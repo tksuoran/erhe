@@ -4,12 +4,12 @@ namespace editor
 {
 
 Render_style::Render_style()
-    : erhe::scene::Item{""}
+    : erhe::Item{erhe::toolkit::Unique_id<Render_style>{}.get_id()}
 {
 }
 
 Render_style::Render_style(const std::string_view name)
-    : erhe::scene::Item{name}
+    : erhe::Item{name, erhe::toolkit::Unique_id<Render_style>{}.get_id()}
 {
 }
 

@@ -22,13 +22,11 @@ namespace erhe::scene_renderer
 
 namespace example {
 
-enum class Shader_stages_variant : int
-{
+enum class Shader_stages_variant : int {
     standard
 };
 
-static constexpr const char* c_shader_stages_variant_strings[] =
-{
+static constexpr const char* c_shader_stages_variant_strings[] = {
     "Standard"
 };
 

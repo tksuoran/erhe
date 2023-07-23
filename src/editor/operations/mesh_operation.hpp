@@ -19,6 +19,8 @@ namespace editor
 {
 
 class Editor_context;
+class Node_physics;
+class Node_raytrace;
 
 class Mesh_operation
     : public IOperation
@@ -36,8 +38,16 @@ protected:
     {
     public:
         std::shared_ptr<erhe::scene::Mesh> mesh;
-        erhe::scene::Mesh_data             before;
-        erhe::scene::Mesh_data             after;
+
+        class Version
+        {
+        public:
+            std::shared_ptr<Node_physics>           node_physics;
+            std::shared_ptr<Node_raytrace>          node_raytrace;
+            std::vector<erhe::primitive::Primitive> primitives{};
+        };
+        Version before;
+        Version after;
     };
 
     explicit Mesh_operation(Parameters&& parameters);

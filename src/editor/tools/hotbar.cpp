@@ -176,7 +176,6 @@ Hotbar::Hotbar(
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
             on_message(message);
-
         }
     );
 }
@@ -206,8 +205,8 @@ void Hotbar::init_hotbar()
     m_rendertarget_mesh->mesh_data.layer_id = scene_root->layers().rendertarget()->id;
 
     m_rendertarget_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::visible     |
-        erhe::scene::Item_flags::translucent
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::translucent
     );
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
@@ -222,11 +221,9 @@ void Hotbar::init_hotbar()
 
     m_rendertarget_node = std::make_shared<erhe::scene::Node>("Hotbar RT node");
     m_rendertarget_node->attach(m_rendertarget_mesh);
-    auto node_raytrace = m_rendertarget_mesh->get_node_raytrace();
-    if (node_raytrace) {
-        m_rendertarget_node->attach(node_raytrace);
-        m_rendertarget_node->show();
-    }
+
+    m_node_raytrace = std::make_shared<Node_raytrace>(m_rendertarget_mesh);
+    m_rendertarget_node->attach(m_node_raytrace);
 
     m_rendertarget_imgui_viewport->set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
 
@@ -262,23 +259,21 @@ void Hotbar::init_radial_menu(
         )
     );
 
-    auto primitive_geometry = erhe::primitive::make_primitive(
-        *disc_geometry_shared.get(),
-        erhe::primitive::Build_info{
-            .primitive_types = { .fill_triangles = true },
-            .buffer_info     = mesh_memory.buffer_info
-        }
+    auto geometry_primitive = std::make_shared<erhe::primitive::Geometry_primitive>(
+        erhe::primitive::make_geometry_mesh(
+            *disc_geometry_shared.get(),
+            erhe::primitive::Build_info{
+                .primitive_types = { .fill_triangles = true },
+                .buffer_info     = mesh_memory.buffer_info
+            }
+        )
     );
-
-    auto raytrace_primitive = std::make_shared<Raytrace_primitive>(disc_geometry_shared);
 
     m_radial_menu_background_mesh = std::make_shared<erhe::scene::Mesh>(
         "Radiaul Menu Mesh",
         erhe::primitive::Primitive{
-            .material              = disc_material,
-            .gl_primitive_geometry = primitive_geometry,
-            .rt_primitive_geometry = raytrace_primitive->primitive_geometry,
-            .source_geometry       = disc_geometry_shared
+            .material           = disc_material,
+            .geometry_primitive = geometry_primitive
         }
     );
 
@@ -289,25 +284,19 @@ void Hotbar::init_radial_menu(
     m_radial_menu_background_mesh->mesh_data.layer_id = scene_root.layers().content()->id;
 
     m_radial_menu_background_mesh->enable_flag_bits(
-        erhe::scene::Item_flags::content     |
-        erhe::scene::Item_flags::visible     |
-        erhe::scene::Item_flags::translucent |
-        erhe::scene::Item_flags::show_in_ui
+        erhe::Item_flags::content     |
+        erhe::Item_flags::visible     |
+        erhe::Item_flags::translucent |
+        erhe::Item_flags::show_in_ui
     );
 
     m_radial_menu_node = std::make_shared<erhe::scene::Node>("Radial menu node");
     m_radial_menu_node->attach(m_radial_menu_background_mesh);
     m_radial_menu_node->enable_flag_bits(
-        erhe::scene::Item_flags::content    |
-        erhe::scene::Item_flags::visible    |
-        erhe::scene::Item_flags::show_in_ui
+        erhe::Item_flags::content    |
+        erhe::Item_flags::visible    |
+        erhe::Item_flags::show_in_ui
     );
-
-    // TODO auto node_raytrace = m_radial_menu_background_mesh->get_node_raytrace();
-    // if (node_raytrace) {
-    //     m_rendertarget_node->attach(node_raytracm_radial_menu_background_mesh);
-    //     m_rendertarget_node->show();
-    // }
 }
 
 void Hotbar::get_all_tools()
@@ -332,7 +321,6 @@ void Hotbar::get_all_tools()
 void Hotbar::on_message(Editor_message& message)
 {
     Scene_view* const old_scene_view = get_hover_scene_view();
-
     Tool::on_message(message);
 
     if (!m_enabled || !m_show) {
@@ -624,6 +612,7 @@ void Hotbar::set_visibility(const bool value)
     if (m_rendertarget_mesh) {
         m_rendertarget_imgui_viewport->set_enabled(value);
         m_rendertarget_mesh->set_visible(value);
+        m_node_raytrace->set_visible(value);
         log_hud->trace("horizontal menu visibility set to {}", value);
     }
 
