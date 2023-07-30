@@ -85,7 +85,7 @@ auto make_box(
     return Geometry{
         "box",
         [=](auto& geometry) {
-            Property_map<Corner_id, vec2>* corner_texcoords = geometry.corner_attributes().create<vec2>(c_corner_texcoords);
+            Property_map<Corner_id, vec2>* corner_texcoords = geometry.corner_attributes(). template create<vec2>(c_corner_texcoords);
 
             geometry.make_point(min_x, min_y, min_z); // 0    2------4
             geometry.make_point(max_x, min_y, min_z); // 1   /|     /|

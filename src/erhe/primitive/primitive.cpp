@@ -150,7 +150,7 @@ Geometry_raytrace::Geometry_raytrace(
 
 Geometry_raytrace& Geometry_raytrace::operator=(Geometry_raytrace&& other) = default;
 
-Geometry_raytrace::~Geometry_raytrace() = default;
+Geometry_raytrace::~Geometry_raytrace() noexcept = default;
 
 Geometry_primitive::Geometry_primitive(
     const std::shared_ptr<erhe::geometry::Geometry>& geometry

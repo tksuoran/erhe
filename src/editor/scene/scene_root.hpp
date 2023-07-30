@@ -139,16 +139,17 @@ public:
     void register_to_editor_scenes    (Editor_scenes& editor_scenes);
     void unregister_from_editor_scenes(Editor_scenes& editor_scenes);
 
-    void register_node          (const std::shared_ptr<erhe::scene::Node>&   node);
-    void unregister_node        (const std::shared_ptr<erhe::scene::Node>&   node);
-    void register_camera        (const std::shared_ptr<erhe::scene::Camera>& camera);
-    void unregister_camera      (const std::shared_ptr<erhe::scene::Camera>& camera);
-    void register_mesh          (const std::shared_ptr<erhe::scene::Mesh>&   mesh);
-    void unregister_mesh        (const std::shared_ptr<erhe::scene::Mesh>&   mesh);
-    void register_skin          (const std::shared_ptr<erhe::scene::Skin>&   skin);
-    void unregister_skin        (const std::shared_ptr<erhe::scene::Skin>&   skin);
-    void register_light         (const std::shared_ptr<erhe::scene::Light>&  light);
-    void unregister_light       (const std::shared_ptr<erhe::scene::Light>&  light);
+    void register_node          (const std::shared_ptr<erhe::scene::Node>&   node)   override;
+    void unregister_node        (const std::shared_ptr<erhe::scene::Node>&   node)   override;
+    void register_camera        (const std::shared_ptr<erhe::scene::Camera>& camera) override;
+    void unregister_camera      (const std::shared_ptr<erhe::scene::Camera>& camera) override;
+    void register_mesh          (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
+    void unregister_mesh        (const std::shared_ptr<erhe::scene::Mesh>&   mesh)   override;
+    void register_skin          (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
+    void unregister_skin        (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
+    void register_light         (const std::shared_ptr<erhe::scene::Light>&  light)  override;
+    void unregister_light       (const std::shared_ptr<erhe::scene::Light>&  light)  override;
+    auto get_hosted_scene       () -> erhe::scene::Scene* override;
 
     void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
     void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
@@ -159,7 +160,6 @@ public:
     void update_physics_simulation_fixed_step    (double dt);
     void update_physics_simulation_once_per_frame();
 
-    [[nodiscard]] auto get_hosted_scene  () -> erhe::scene::Scene*;
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
     [[nodiscard]] auto get_physics_world () -> erhe::physics::IWorld&;
