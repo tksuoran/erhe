@@ -26,6 +26,18 @@ class Editor_rendering;
 class Scene_root;
 class Scene_view;
 
+enum class Visualization_mode {
+    None     = 0,
+    Selected = 1,
+    All      = 2
+};
+
+static constexpr const char* c_visualization_mode_strings[] = {
+    "None",
+    "Selected",
+    "All"
+};
+
 class Debug_visualizations
     : public erhe::imgui::Imgui_window
     , public Renderable
@@ -60,7 +72,7 @@ private:
         glm::vec4                            half_light_color{0};
     };
 
-    void mesh_selection_visualization(
+    void mesh_visualization(
         const Render_context& render_context,
         erhe::scene::Mesh*    mesh
     );
@@ -99,21 +111,25 @@ private:
         const std::string_view label_text
     );
 
+    void make_combo(const char* label, Visualization_mode& visualization);
+
     Editor_context& m_context;
     Scene_view*     m_hover_scene_view{nullptr};
     erhe::toolkit::Bounding_volume_combiner m_selection_bounding_volume;
 
     float m_gap      {0.003f};
     bool  m_tool_hide{false};
-    bool  m_physics  {false};
     bool  m_raytrace {false};
     bool  m_selection{true};
-    bool  m_lights   {false};
-    bool  m_cameras  {false};
-    bool  m_skins    {true};
+    Visualization_mode m_lights {Visualization_mode::None};
+    Visualization_mode m_cameras{Visualization_mode::None};
+    Visualization_mode m_skins  {Visualization_mode::None};
 
     bool      m_selection_bounding_points_visible{false};
-    bool      m_selection_node_axis_visible      {false};
+
+    Visualization_mode m_node_axis_visualization   {Visualization_mode::None};
+    Visualization_mode m_physics_axis_visualization{Visualization_mode::None};
+
     bool      m_selection_box                    {false};
     bool      m_selection_sphere                 {true};
     float     m_selection_node_axis_width        {4.0f};
@@ -127,12 +143,11 @@ private:
     float     m_light_visualization_width        {4.0f};
     int       m_sphere_step_count                {80};
 
-    int       m_max_labels               {400};
-    bool      m_show_only_selection      {true};
-    bool      m_show_points              {false};
-    bool      m_show_polygons            {false};
-    bool      m_show_edges               {false};
-    bool      m_show_corners             {false};
+    int                m_max_labels      {400};
+    Visualization_mode m_show_points     {Visualization_mode::None};
+    Visualization_mode m_show_polygons   {Visualization_mode::None};
+    Visualization_mode m_show_edges      {Visualization_mode::None};
+    Visualization_mode m_show_corners    {Visualization_mode::None};
     glm::vec4 m_point_label_text_color   {0.3f, 1.0f, 0.3f, 1.0f};
     glm::vec4 m_point_label_line_color   {0.0f, 0.8f, 0.0f, 1.0f};
     float     m_point_label_line_width   {1.5f};
