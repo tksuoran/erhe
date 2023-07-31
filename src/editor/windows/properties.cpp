@@ -422,7 +422,7 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
 
     float           mass    = rigid_body->get_mass();
     const glm::mat4 inertia = rigid_body->get_local_inertia();
-    if (ImGui::SliderFloat("Mass", &mass, 0.0f, 1000.0f)) {
+    if (ImGui::SliderFloat("Mass", &mass, 0.01f, 1000.0f)) {
         rigid_body->set_mass_properties(mass, inertia);
     }
     float friction = rigid_body->get_friction();
