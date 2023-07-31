@@ -12,6 +12,8 @@
 #   include <imgui/imgui.h>
 #endif
 
+#include <taskflow/taskflow.hpp>
+
 namespace editor
 {
 
@@ -75,8 +77,17 @@ Operation_stack::Operation_stack(
     commands.bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
     commands.bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
 
+    m_executor = std::make_unique<tf::Executor>();
+
     m_undo_command.set_host(this);
     m_redo_command.set_host(this);
+}
+
+Operation_stack::~Operation_stack() = default;
+
+auto Operation_stack::get_executor() -> tf::Executor&
+{
+    return *m_executor.get();
 }
 
 void Operation_stack::queue(

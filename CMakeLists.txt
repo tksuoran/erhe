@@ -109,6 +109,8 @@ FetchContent_MakeAvailable(nlohmann_json)
 include(vscode)
 vscode_support()
 
+FetchContent_MakeAvailable(taskflow)
+
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     message("Fetching cpp-terminal")
     FetchContent_MakeAvailable(cpp-terminal)

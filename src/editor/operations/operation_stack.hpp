@@ -12,6 +12,9 @@ namespace erhe::commands {
 namespace erhe::imgui {
     class Imgui_windows;
 }
+namespace tf {
+    class Executor;
+}
 
 namespace editor
 {
@@ -62,6 +65,7 @@ public:
         erhe::imgui::Imgui_windows&  imgui_windows,
         Editor_context&              editor_context
     );
+    ~Operation_stack();
 
     [[nodiscard]] auto can_undo() const -> bool;
     [[nodiscard]] auto can_redo() const -> bool;
@@ -74,6 +78,8 @@ public:
     // Implements Window
     void imgui() override;
 
+    [[nodiscard]] auto get_executor() -> tf::Executor&;
+
 private:
     void imgui(
         const char*                                     stack_label,
@@ -84,6 +90,8 @@ private:
 
     Undo_command m_undo_command;
     Redo_command m_redo_command;
+
+    std::unique_ptr<tf::Executor> m_executor;
 
     std::vector<std::shared_ptr<IOperation>> m_executed;
     std::vector<std::shared_ptr<IOperation>> m_undone;

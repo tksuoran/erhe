@@ -18,6 +18,8 @@
 #   include <imgui.h>
 #endif
 
+#include <taskflow/taskflow.hpp>  // Taskflow is header-only
+
 namespace editor
 {
 
@@ -160,11 +162,14 @@ void Operations::imgui()
     }
 
     if (make_button("Catmull-Clark", has_selection_mode, button_size)) {
+        tf::Executor& executor = m_context.operation_stack->get_executor();
+        executor.silent_async([this, mesh_context](){
         m_context.operation_stack->queue(
-            std::make_shared<Catmull_clark_subdivision_operation>(
-                mesh_context()
-            )
-        );
+                std::make_shared<Catmull_clark_subdivision_operation>(
+                    mesh_context()
+                )
+            );
+        });
     }
     if (make_button("Sqrt3", has_selection_mode, button_size)) {
         m_context.operation_stack->queue(

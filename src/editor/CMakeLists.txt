@@ -339,6 +339,7 @@ target_link_libraries(
     mINI
     RectangleBinPack
     rapidjson
+    Taskflow
 )
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
@@ -398,7 +399,6 @@ target_link_libraries(
     mINI
     RectangleBinPack
     rapidjson
-    #taskflow
 )
 
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
