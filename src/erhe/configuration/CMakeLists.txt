@@ -6,20 +6,14 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     configuration.cpp
     configuration.hpp
-    configuration_log.cpp
-    configuration_log.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
 
 target_link_libraries(${_target}
     PUBLIC
-        cxxopts
-        fmt::fmt
-        etl::etl
-        erhe::log
-        erhe::toolkit
         mINI
+        glm::glm
 )
 
 if (DEFINED ERHE_PROFILE_TARGET)

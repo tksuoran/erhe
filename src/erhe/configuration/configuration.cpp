@@ -1,7 +1,4 @@
 #include "erhe/configuration/configuration.hpp"
-#include "erhe/configuration/configuration_log.hpp"
-
-#include <cxxopts.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -188,11 +185,11 @@ public:
     Ini_impl(const char* path, const char* section_name)
     {
         mINI::INIFile file{path};
-        if (!file.read(ini)) {
-            const auto current_path = std::filesystem::current_path();
-            log_configuration->warn("Unable to read ini file '{}' in '{}'", path, current_path.string());
+        if (file.read(ini)) {
+            section = ini.get(section_name);
+            //const auto current_path = std::filesystem::current_path();
+            //log_configuration->warn("Unable to read ini file '{}' in '{}'", path, current_path.string());
         }
-        section = ini.get(section_name);
     }
     ~Ini_impl() noexcept override = default;
     Ini_impl& operator=(const Ini_impl&) = default;

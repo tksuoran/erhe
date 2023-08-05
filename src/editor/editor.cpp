@@ -56,7 +56,6 @@
 #include "erhe/commands/commands.hpp"
 #include "erhe/commands/commands_log.hpp"
 #include "erhe/configuration/configuration.hpp"
-#include "erhe/configuration/configuration_log.hpp"
 #include "erhe/geometry/geometry_log.hpp"
 #include "erhe/gl/gl_log.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -514,7 +513,6 @@ void run_editor()
     erhe::log::initialize_log_sinks();
     gl::initialize_logging();
     erhe::commands::initialize_logging();
-    erhe::configuration::initialize_logging();
     erhe::gltf::initialize_logging();
     erhe::geometry::initialize_logging();
     erhe::graphics::initialize_logging();

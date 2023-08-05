@@ -282,7 +282,7 @@ erhe_target_sources_grouped(
     erhe.ini
     logging.ini
     presets.ini
-    user.ini
+    #user.ini
     windows.ini
 )
 

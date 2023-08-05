@@ -157,7 +157,7 @@ void Mesh_operation::make_entries(
                 continue;
             }
             auto after_geometry = std::make_shared<erhe::geometry::Geometry>(
-                std::move(operation(*primitive.geometry_primitive->source_geometry.get()))
+                operation(*primitive.geometry_primitive->source_geometry.get())
             );
             entry.after.primitives.push_back(
                 erhe::primitive::Primitive{
