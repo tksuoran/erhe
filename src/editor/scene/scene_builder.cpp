@@ -190,8 +190,6 @@ void Scene_builder::add_rendertarget_viewports(int count)
             "Rendertarget ImGui Viewport 1"
         );
 
-        g_imgui_windows->register_imgui_viewport(imgui_viewport_1);
-
         g_grid_tool->set_viewport(imgui_viewport_1.get());
         g_grid_tool->show();
 
@@ -243,7 +241,6 @@ void Scene_builder::add_rendertarget_viewports(int count)
             rendertarget_mesh_2.get(),
             "Rendertarget ImGui Viewport 2"
         );
-        g_imgui_windows->register_imgui_viewport(imgui_viewport_2);
 
         secondary_imgui_viewport_window->set_viewport(imgui_viewport_2.get());
         secondary_imgui_viewport_window->show();

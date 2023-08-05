@@ -9,7 +9,7 @@ namespace erhe::imgui
 {
 
 class Imgui_viewport;
-class Imgui_windows;
+class Imgui_renderer;
 
 class Scoped_imgui_context
 {
@@ -18,7 +18,7 @@ public:
     ~Scoped_imgui_context() noexcept;
 
 private:
-    Imgui_windows& m_imgui_windows;
+    Imgui_renderer& m_imgui_renderer;
 };
 
 } // namespace erhe::imgui

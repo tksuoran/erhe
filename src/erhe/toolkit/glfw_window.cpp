@@ -385,6 +385,28 @@ Context_window::Context_window(Context_window* share)
     ERHE_VERIFY(ok);
 }
 
+[[nodiscard]] auto get_monitor(const int x, const int y) -> GLFWmonitor*
+{
+    int monitor_count{0};
+    GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
+    for (int i = 0; i < monitor_count; ++i) {
+        int monitor_xpos  {0};
+        int monitor_ypos  {0};
+        int monitor_width {0};
+        int monitor_height{0};
+        glfwGetMonitorWorkarea(monitors[i], &monitor_xpos, &monitor_ypos, &monitor_width, &monitor_height);
+        if (
+            (x >= monitor_xpos) &&
+            (y >= monitor_ypos) &&
+            (x < monitor_xpos + monitor_width) &&
+            (y < monitor_ypos + monitor_height)
+        ) {
+            return monitors[i];
+        }
+    }
+    return glfwGetPrimaryMonitor();
+}
+
 // Currently this is not thread safe.
 // For now, only call this from main thread.
 auto Context_window::open(
@@ -469,6 +491,27 @@ auto Context_window::open(
             glfwTerminate();
         }
         return false;
+    }
+
+    { // Center window
+        int window_xpos  {0};
+        int window_ypos  {0};
+        int window_width {0};
+        int window_height{0};
+        glfwGetWindowPos(m_glfw_window, &window_xpos, &window_ypos);
+        glfwGetWindowSize(m_glfw_window, &window_width, &window_height);
+
+        monitor = get_monitor(window_xpos + window_width / 2, window_ypos + window_height / 2);
+        int monitor_xpos  {0};
+        int monitor_ypos  {0};
+        int monitor_width {0};
+        int monitor_height{0};
+        glfwGetMonitorWorkarea(monitor, &monitor_xpos, &monitor_ypos, &monitor_width, &monitor_height);
+        glfwSetWindowPos(
+            m_glfw_window,
+            monitor_xpos + (monitor_width / 2) - (window_width / 2),
+            monitor_ypos + (monitor_height / 2) - (window_height / 2)
+        );
     }
 
     s_window_count++;
@@ -759,10 +802,19 @@ auto Context_window::get_window_handle() const -> void*
 
 auto Context_window::get_scale_factor() const -> float
 {
-    GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
+    // TODO Use glfwSetWindowContentScaleCallback()
+
+    int window_xpos  {0};
+    int window_ypos  {0};
+    int window_width {0};
+    int window_height{0};
+    glfwGetWindowPos(m_glfw_window, &window_xpos, &window_ypos);
+    glfwGetWindowSize(m_glfw_window, &window_width, &window_height);
+
+    GLFWmonitor* monitor = get_monitor(window_xpos + window_width / 2, window_ypos + window_height / 2);
     float x_scale = 1.0f;
     float y_scale = 1.0f;
-    glfwGetMonitorContentScale(primary_monitor, &x_scale, &y_scale);
+    glfwGetMonitorContentScale(monitor, &x_scale, &y_scale);
     return (x_scale + y_scale) / 2.0f;
 }
 

@@ -22,6 +22,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string_view>
@@ -39,6 +40,8 @@ namespace erhe::toolkit {
 }
 
 namespace erhe::imgui {
+
+class Imgui_viewport;
 
 class Imgui_draw_parameter_block_offsets
 {
@@ -138,6 +141,8 @@ public:
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
     void use_as_backend_renderer_on_context(ImGuiContext* imgui_context);
 
+    void on_font_config_changed();
+
     auto image(
         const std::shared_ptr<erhe::graphics::Texture>& texture,
         int                                             width,
@@ -174,19 +179,26 @@ public:
     auto vr_primary_font() const -> ImFont*;
     auto vr_mono_font   () const -> ImFont*;
 
-    class Config
+    class Font_config
     {
     public:
-        float       padding     {2.0f};
-        float       rounding    {3.0f};
         std::string primary_font{"res/fonts/SourceSansPro-Regular.otf"};
         std::string mono_font   {"res/fonts/SourceCodePro-Semibold.otf"};
         float       font_size   {17.0f};
         float       vr_font_size{22.0f};
     };
-    Config config;
+    Font_config font_config;
+
+    void make_current             (const Imgui_viewport* imgui_viewport);
+    void register_imgui_viewport  (Imgui_viewport* viewport);
+    void unregister_imgui_viewport(Imgui_viewport* viewport);
+    [[nodiscard]] auto get_imgui_viewports() const -> const std::vector<Imgui_viewport*>&;
+    void lock_mutex();
+    void unlock_mutex();
 
 private:
+    void apply_font_config_changes();
+
     erhe::graphics::Instance&                m_graphics_instance;
     Imgui_program_interface                  m_imgui_program_interface;
     ImFontAtlas                              m_font_atlas;
@@ -200,6 +212,10 @@ private:
     erhe::graphics::Sampler                  m_linear_sampler;
     erhe::graphics::Sampler                  m_linear_mipmap_linear_sampler;
     erhe::graphics::Gpu_timer                m_gpu_timer;
+
+    std::recursive_mutex                     m_mutex;
+    std::vector<Imgui_viewport*>             m_imgui_viewports;
+    const Imgui_viewport*                    m_current_viewport{nullptr}; // current context
 
     std::set<std::shared_ptr<erhe::graphics::Texture>> m_used_textures;
     std::set<uint64_t>                                 m_used_texture_handles;

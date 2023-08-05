@@ -22,7 +22,6 @@ public:
         Imgui_renderer&                 imgui_renderer,
         erhe::toolkit::Context_window&  context_window,
         erhe::rendergraph::Rendergraph& rendergraph,
-        Imgui_windows&                  imgui_windows,
         const std::string_view          name
     );
     ~Window_imgui_viewport() override;

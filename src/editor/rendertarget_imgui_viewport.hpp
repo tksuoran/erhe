@@ -24,7 +24,6 @@ class Rendertarget_imgui_viewport
 public:
     Rendertarget_imgui_viewport(
         erhe::imgui::Imgui_renderer&    imgui_renderer,
-        erhe::imgui::Imgui_windows&     imgui_windows,
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_context&                 editor_context,
         Rendertarget_mesh*              rendertarget_mesh,
@@ -74,11 +73,8 @@ public:
         int                                 depth = 0
     ) const -> erhe::toolkit::Viewport override;
 
-    // Public API
-    void set_menu_visible(bool visible);
-
 private:
-    Editor_context& m_context;
+    Editor_context&    m_context;
 
     Rendertarget_mesh* m_rendertarget_mesh{nullptr};
     glm::vec4          m_clear_color {0.0f, 0.0f, 0.0f, 0.2f};

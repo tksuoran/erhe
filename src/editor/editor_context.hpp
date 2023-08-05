@@ -37,6 +37,7 @@ class Editor_message_bus;
 class Editor_rendering;
 class Editor_scenes;
 class Editor_settings;
+class Editor_windows;
 class Fly_camera_tool;
 class Grid_tool;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -92,6 +93,7 @@ public:
     Editor_rendering*                       editor_rendering      {nullptr};
     Editor_scenes*                          editor_scenes         {nullptr};
     Editor_settings*                        editor_settings       {nullptr};
+    Editor_windows*                         editor_windows        {nullptr};
     Fly_camera_tool*                        fly_camera_tool       {nullptr};
     Grid_tool*                              grid_tool             {nullptr};
 #if defined(ERHE_XR_LIBRARY_OPENXR)

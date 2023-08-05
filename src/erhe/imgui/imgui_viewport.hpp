@@ -6,23 +6,15 @@
 #include <imgui/imgui.h>
 
 #include <cstdint>
+#include <functional>
 #include <string_view>
 
 namespace erhe::imgui
 {
 
-class Imgui_windows;
+class Imgui_renderer;
 class View;
 class Window;
-
-class Imgui_builtin_windows
-{
-public:
-    bool demo        {false};
-    bool style_editor{false};
-    bool metrics     {false};
-    bool stack_tool  {false};
-};
 
 enum class Imgui_event_type : unsigned int {
     no_event           = 0,
@@ -86,8 +78,7 @@ class Imgui_event
 {
 public:
     Imgui_event_type type;
-    union Imgui_event_union
-    {
+    union Imgui_event_union {
         Key_event          key_event;
         Char_event         char_event;
         Focus_event        focus_event;
@@ -113,7 +104,7 @@ class Imgui_viewport
 public:
     Imgui_viewport(
         erhe::rendergraph::Rendergraph& rendergraph,
-        Imgui_windows&                  imgui_windows,
+        Imgui_renderer&                 imgui_renderer,
         const std::string_view          name,
         bool                            imgui_ini,
         ImFontAtlas*                    font_atlas
@@ -123,6 +114,8 @@ public:
     [[nodiscard]] virtual auto begin_imgui_frame() -> bool = 0;
     virtual void end_imgui_frame() = 0;
 
+    void set_begin_callback(const std::function<void(Imgui_viewport& viewport)>& callback);
+
     [[nodiscard]] virtual auto get_scale_value() const -> float;
 
     [[nodiscard]] auto name                 () const -> const std::string&;
@@ -130,9 +123,6 @@ public:
     [[nodiscard]] auto want_capture_mouse   () const -> bool;
     [[nodiscard]] auto has_cursor           () const -> bool;
     [[nodiscard]] auto imgui_context        () const -> ImGuiContext*;
-
-    void builtin_imgui_window_menu();
-    void menu                     ();
 
     void update_input_request(bool request_keyboard, bool request_mouse);
 
@@ -153,24 +143,24 @@ public:
     void on_event(const Mouse_wheel_event&  mouse_wheel_event);
 
     [[nodiscard]] auto get_mouse_position() const -> glm::vec2;
-    [[nodiscard]] auto get_imgui_windows () -> Imgui_windows&;
+    [[nodiscard]] auto get_imgui_renderer() -> Imgui_renderer&;
+    [[nodiscard]] auto get_imgui_context () -> ImGuiContext*;
 
 protected:
     void flush_queud_events();
 
+    std::function<void(Imgui_viewport& viewport)> m_begin_callback;
     std::string              m_imgui_ini_path;
-    bool                     m_show_menu       {false};
     double                   m_time            {0.0};
     bool                     m_has_cursor      {false};
     bool                     m_request_keyboard{false}; // hovered window requests keyboard events
     bool                     m_request_mouse   {false}; // hovered winodw requests mouse events
-    Imgui_builtin_windows    m_imgui_builtin_windows;
 
     std::mutex               m_event_mutex;
     std::vector<Imgui_event> m_events;
 
-    Imgui_windows& m_imgui_windows;
-    ImGuiContext*  m_imgui_context{nullptr};
+    Imgui_renderer& m_imgui_renderer;
+    ImGuiContext*   m_imgui_context{nullptr};
 };
 
 } // namespace erhe::imgui

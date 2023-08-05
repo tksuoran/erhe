@@ -3,6 +3,7 @@
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_log.hpp"
+#include "erhe/imgui/imgui_viewport.hpp"
 
 #include "erhe/gl/command_info.hpp"
 #include "erhe/gl/draw_indirect.hpp"
@@ -121,136 +122,7 @@ void main()
 
 } // anonymous namespace
 
-auto get_config(erhe::toolkit::Context_window& context_window) -> Imgui_renderer::Config
-{
-    Imgui_renderer::Config config;
-
-    using namespace erhe::configuration;
-    mINI::INIFile file{"erhe.ini"};
-    mINI::INIStructure ini;
-    if (file.read(ini)) {
-        if (ini.has("imgui")) {
-            const auto& section = ini["imgui"];
-            ini_get(section, "primary_font", config.primary_font);
-            ini_get(section, "mono_font",    config.mono_font);
-            ini_get(section, "font_size",    config.font_size);
-            ini_get(section, "vr_font_size", config.vr_font_size);
-        }
-    }
-
-    config.font_size *= context_window.get_scale_factor();
-
-    return config;
-}
-
-auto make_font_texture_create_info(
-    erhe::graphics::Instance& graphics_instance,
-    ImFontAtlas&              font_atlas
-) -> Texture::Create_info
-{
-    ERHE_PROFILE_FUNCTION();
-
-    // Build texture atlas
-    Texture::Create_info create_info{
-        .instance        = graphics_instance,
-        .internal_format = gl::Internal_format::rgba8
-    };
-
-    unsigned char* pixels = nullptr;
-    font_atlas.GetTexDataAsAlpha8(&pixels, &create_info.width, &create_info.height);
-    return create_info;
-}
-
-auto get_font_atlas_pixel_data(ImFontAtlas& font_atlas) -> std::vector<uint8_t>
-{
-    unsigned char* pixels = nullptr;
-    int width = 0;
-    int height = 0;
-    font_atlas.GetTexDataAsAlpha8(&pixels, &width, &height);
-    const std::size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
-    const std::size_t byte_count  = 4 * pixel_count;
-    std::vector<uint8_t> post_processed_data;
-    post_processed_data.resize(byte_count);
-    const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels);
-    for (size_t i = 0; i < pixel_count; ++i) {
-        const uint8_t a = *src++;
-        post_processed_data[i * 4 + 0] = a;
-        post_processed_data[i * 4 + 1] = a;
-        post_processed_data[i * 4 + 2] = a;
-        post_processed_data[i * 4 + 3] = a;
-    }
-    return post_processed_data;
-}
-
-Imgui_renderer::Imgui_renderer(
-    erhe::graphics::Instance&      graphics_instance,
-    erhe::toolkit::Context_window& context_window
-)
-    // Parse config
-    : config{get_config(context_window)}
-
-    , m_graphics_instance{graphics_instance}
-
-    // Compile shader program
-    , m_imgui_program_interface{graphics_instance}
-
-    // Load fonts
-    , m_font_atlas     {}
-    , m_primary_font   {m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.font_size)}
-    , m_mono_font      {m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.font_size)}
-    , m_vr_primary_font{m_font_atlas.AddFontFromFileTTF(config.primary_font.c_str(), config.vr_font_size)}
-    , m_vr_mono_font   {m_font_atlas.AddFontFromFileTTF(config.mono_font   .c_str(), config.vr_font_size)}
-
-    // Create textures
-    , m_dummy_texture{graphics_instance.create_dummy_texture()}
-    , m_font_texture{
-        std::make_shared<erhe::graphics::Texture>(
-            make_font_texture_create_info(graphics_instance, m_font_atlas)
-        )
-    }
-
-    // Create samplers
-    , m_nearest_sampler{{
-        .min_filter  = gl::Texture_min_filter::nearest,
-        .mag_filter  = gl::Texture_mag_filter::nearest,
-        .debug_label = "Imgui_renderer nearest"
-    }}
-    , m_linear_sampler{{
-        .min_filter  = gl::Texture_min_filter::linear,
-        .mag_filter  = gl::Texture_mag_filter::linear,
-        .debug_label = "Imgui_renderer linear"
-    }}
-    , m_linear_mipmap_linear_sampler{{
-        .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
-        .mag_filter  = gl::Texture_mag_filter::linear,
-        .debug_label = "Imgui_renderer linear mipmap"
-    }}
-    , m_gpu_timer{"Imgui_renderer"}
-{
-    ERHE_PROFILE_FUNCTION();
-
-    // Finalize font texture
-    const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
-    const gsl::span<const std::byte> image_data{
-        reinterpret_cast<const std::byte*>(pixel_data.data()),
-        pixel_data.size()
-    };
-    m_font_texture->upload(
-        gl::Internal_format::rgba8,
-        image_data,
-        m_font_texture->width(),
-        m_font_texture->height()
-    );
-    m_font_texture->set_debug_label("ImGui Font");
-
-    // Store our handle
-    const uint64_t handle = m_graphics_instance.get_handle(
-        *m_font_texture.get(),
-        m_linear_sampler
-    );
-    m_font_atlas.SetTexID(handle);
-}
-
+#pragma region Multi_pipeline
 Multi_pipeline::Multi_pipeline(const std::string_view name)
     : m_name{name}
 {
@@ -310,6 +182,8 @@ void Multi_pipeline::allocate(
     return m_pipelines.at(m_current_slot);
 }
 
+#pragma endregion Multi_pipeline
+#pragma region Imgui_program_interface
 auto get_shader_extensions(erhe::graphics::Instance& graphics_instance) -> std::vector<erhe::graphics::Shader_stage_extension>
 {
     std::vector<erhe::graphics::Shader_stage_extension> extensions;
@@ -505,6 +379,227 @@ void Imgui_program_interface::next_frame()
     draw_parameter_buffer.next_frame();
     draw_indirect_buffer .next_frame();
     pipeline             .next_frame();
+}
+#pragma endregion Imgui_program_interface
+
+auto get_font_config(erhe::toolkit::Context_window& context_window) -> Imgui_renderer::Font_config
+{
+    Imgui_renderer::Font_config font_config;
+
+    using namespace erhe::configuration;
+    mINI::INIFile file{"erhe.ini"};
+    mINI::INIStructure ini;
+    if (file.read(ini)) {
+        if (ini.has("imgui")) {
+            const auto& section = ini["imgui"];
+            ini_get(section, "primary_font", font_config.primary_font);
+            ini_get(section, "mono_font",    font_config.mono_font);
+            ini_get(section, "font_size",    font_config.font_size);
+            ini_get(section, "vr_font_size", font_config.vr_font_size);
+        }
+    }
+
+    font_config.font_size *= context_window.get_scale_factor();
+
+    return font_config;
+}
+
+auto make_font_texture_create_info(
+    erhe::graphics::Instance& graphics_instance,
+    ImFontAtlas&              font_atlas
+) -> Texture::Create_info
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Build texture atlas
+    Texture::Create_info create_info{
+        .instance        = graphics_instance,
+        .internal_format = gl::Internal_format::rgba8
+    };
+
+    unsigned char* pixels = nullptr;
+    font_atlas.GetTexDataAsAlpha8(&pixels, &create_info.width, &create_info.height);
+    return create_info;
+}
+
+auto get_font_atlas_pixel_data(ImFontAtlas& font_atlas) -> std::vector<uint8_t>
+{
+    unsigned char* pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    font_atlas.GetTexDataAsAlpha8(&pixels, &width, &height);
+    const std::size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
+    const std::size_t byte_count  = 4 * pixel_count;
+    std::vector<uint8_t> post_processed_data;
+    post_processed_data.resize(byte_count);
+    const uint8_t* src = reinterpret_cast<const uint8_t*>(pixels);
+    for (size_t i = 0; i < pixel_count; ++i) {
+        const uint8_t a = *src++;
+        post_processed_data[i * 4 + 0] = a;
+        post_processed_data[i * 4 + 1] = a;
+        post_processed_data[i * 4 + 2] = a;
+        post_processed_data[i * 4 + 3] = a;
+    }
+    return post_processed_data;
+}
+
+Imgui_renderer::Imgui_renderer(
+    erhe::graphics::Instance&      graphics_instance,
+    erhe::toolkit::Context_window& context_window
+)
+    // Parse config
+    : font_config{get_font_config(context_window)}
+    , m_graphics_instance{graphics_instance}
+
+    // Compile shader program
+    , m_imgui_program_interface{graphics_instance}
+
+    , m_dummy_texture{graphics_instance.create_dummy_texture()}
+
+    // Create samplers
+    , m_nearest_sampler{{
+        .min_filter  = gl::Texture_min_filter::nearest,
+        .mag_filter  = gl::Texture_mag_filter::nearest,
+        .debug_label = "Imgui_renderer nearest"
+    }}
+    , m_linear_sampler{{
+        .min_filter  = gl::Texture_min_filter::linear,
+        .mag_filter  = gl::Texture_mag_filter::linear,
+        .debug_label = "Imgui_renderer linear"
+    }}
+    , m_linear_mipmap_linear_sampler{{
+        .min_filter  = gl::Texture_min_filter::linear_mipmap_linear,
+        .mag_filter  = gl::Texture_mag_filter::linear,
+        .debug_label = "Imgui_renderer linear mipmap"
+    }}
+    , m_gpu_timer{"Imgui_renderer"}
+{
+    ERHE_PROFILE_FUNCTION();
+
+    apply_font_config_changes();
+}
+
+void Imgui_renderer::lock_mutex()
+{
+    m_mutex.lock();
+}
+
+void Imgui_renderer::unlock_mutex()
+{
+    m_mutex.unlock();
+}
+
+void Imgui_renderer::make_current(const Imgui_viewport* imgui_viewport)
+{
+    m_current_viewport = imgui_viewport;
+    if (imgui_viewport != nullptr) {
+        ImGui::SetCurrentContext(imgui_viewport->imgui_context());
+    } else {
+        ImGui::SetCurrentContext(nullptr);
+    }
+}
+
+void Imgui_renderer::register_imgui_viewport(
+    Imgui_viewport* viewport
+)
+{
+    //ERHE_VERIFY(!m_iterating);
+    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
+#if !defined(NDEBUG)
+    const auto i = std::find_if(
+        m_imgui_viewports.begin(),
+        m_imgui_viewports.end(),
+        [viewport](Imgui_viewport* entry) {
+            return entry == viewport;
+        }
+    );
+    if (i != m_imgui_viewports.end()) {
+        log_imgui->error("Imgui_viewport '{}' is already registered to Imgui_windows", viewport->get_name());
+        return;
+    }
+#endif
+
+    m_imgui_viewports.push_back(viewport);
+
+}
+
+void Imgui_renderer::unregister_imgui_viewport(
+    Imgui_viewport* viewport
+)
+{
+    //ERHE_VERIFY(!m_iterating);
+
+    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
+    const auto i = std::find_if(
+        m_imgui_viewports.begin(),
+        m_imgui_viewports.end(),
+        [viewport](Imgui_viewport* entry) {
+            return entry == viewport;
+        }
+    );
+    if (i == m_imgui_viewports.end()) {
+        log_imgui->error("Imgui_windows::unregister_imgui_viewport(): viewport '{}' is not registered", viewport->get_name());
+        return;
+    }
+    m_imgui_viewports.erase(i);
+}
+
+[[nodiscard]] auto Imgui_renderer::get_imgui_viewports() const -> const std::vector<Imgui_viewport*>&
+{
+    return m_imgui_viewports;
+}
+
+void Imgui_renderer::on_font_config_changed()
+{
+    at_end_of_frame(
+        [this](){
+            apply_font_config_changes();
+        }
+    );
+}
+
+void Imgui_renderer::apply_font_config_changes()
+{
+    m_font_atlas.Clear();
+    m_primary_font    = m_font_atlas.AddFontFromFileTTF(font_config.primary_font.c_str(), font_config.font_size);
+    m_mono_font       = m_font_atlas.AddFontFromFileTTF(font_config.mono_font   .c_str(), font_config.font_size);
+    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(font_config.primary_font.c_str(), font_config.vr_font_size);
+    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(font_config.mono_font   .c_str(), font_config.vr_font_size);
+
+    // Create textures
+    m_font_texture = std::make_shared<erhe::graphics::Texture>(
+        make_font_texture_create_info(m_graphics_instance, m_font_atlas)
+    );
+
+    for (auto viewport : m_imgui_viewports) {
+        auto* context = viewport->get_imgui_context();
+        if (context == nullptr) {
+            continue;
+        }
+        ImGuiIO& io = context->IO;
+        io.Fonts       = &m_font_atlas;
+        io.FontDefault = m_primary_font;
+    }
+
+    const auto pixel_data = get_font_atlas_pixel_data(m_font_atlas);
+    const gsl::span<const std::byte> image_data{
+        reinterpret_cast<const std::byte*>(pixel_data.data()),
+        pixel_data.size()
+    };
+    m_font_texture->upload(
+        gl::Internal_format::rgba8,
+        image_data,
+        m_font_texture->width(),
+        m_font_texture->height()
+    );
+    m_font_texture->set_debug_label("ImGui Font");
+
+    // Store our handle
+    const uint64_t handle = m_graphics_instance.get_handle(
+        *m_font_texture.get(),
+        m_linear_sampler
+    );
+    m_font_atlas.SetTexID(handle);
 }
 
 auto Imgui_renderer::primary_font() const -> ImFont*

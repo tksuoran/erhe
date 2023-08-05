@@ -31,7 +31,6 @@ namespace editor
 
 Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
     erhe::imgui::Imgui_renderer&    imgui_renderer,
-    erhe::imgui::Imgui_windows&     imgui_windows,
     erhe::rendergraph::Rendergraph& rendergraph,
     Editor_context&                 editor_context,
     Rendertarget_mesh*              rendertarget_mesh,
@@ -40,7 +39,7 @@ Rendertarget_imgui_viewport::Rendertarget_imgui_viewport(
 )
     : erhe::imgui::Imgui_viewport{
         rendergraph,
-        imgui_windows,
+        imgui_renderer,
         name,
         imgui_ini,
         imgui_renderer.get_font_atlas()
@@ -88,11 +87,6 @@ template <typename T>
 [[nodiscard]] auto Rendertarget_imgui_viewport::get_scale_value() const -> float
 {
     return 2.0f;
-}
-
-void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
-{
-    m_show_menu = visible;
 }
 
 [[nodiscard]] auto Rendertarget_imgui_viewport::begin_imgui_frame() -> bool
@@ -259,8 +253,8 @@ void Rendertarget_imgui_viewport::set_menu_visible(const bool visible)
     ImGui::NewFrame();
     ////ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
-    if (m_show_menu) {
-        menu();
+    if (m_begin_callback) {
+        m_begin_callback(*this);
     }
 
     flush_queud_events();

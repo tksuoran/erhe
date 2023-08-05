@@ -209,6 +209,8 @@ erhe_target_sources_grouped(
     editor_scenes.hpp
     editor_settings.cpp
     editor_settings.hpp
+    editor_windows.cpp
+    editor_windows.hpp
     input_state.cpp
     input_state.hpp
     main.cpp

@@ -10,7 +10,6 @@ public:
     bool node_tree_show_all          {false};
 
     // Physics
-
     bool physics_static_enable {true};
     bool physics_dynamic_enable{true};
 };

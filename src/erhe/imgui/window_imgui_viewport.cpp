@@ -26,12 +26,11 @@ Window_imgui_viewport::Window_imgui_viewport(
     Imgui_renderer&                 imgui_renderer,
     erhe::toolkit::Context_window&  context_window,
     erhe::rendergraph::Rendergraph& rendergraph,
-    Imgui_windows&                  imgui_windows,
     const std::string_view          name
 )
     : Imgui_viewport{
         rendergraph,
-        imgui_windows,
+        imgui_renderer,
         name,
         true,
         imgui_renderer.get_font_atlas()
@@ -62,7 +61,6 @@ Window_imgui_viewport::Window_imgui_viewport(
     ImGui::SetCurrentContext(nullptr);
 
     m_time = 0.0;
-
 
     //bool window_viewport   = true;
     //// {
@@ -125,7 +123,9 @@ auto Window_imgui_viewport::begin_imgui_frame() -> bool
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport(nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
-    menu();
+    if (m_begin_callback) {
+        m_begin_callback(*this);
+    }
 
     flush_queud_events();
 

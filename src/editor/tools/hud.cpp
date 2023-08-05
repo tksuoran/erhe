@@ -12,6 +12,7 @@
 #include "erhe/commands/commands.hpp"
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/rendergraph/rendergraph.hpp"
 #include "erhe/rendergraph/rendergraph_node.hpp"
 #include "erhe/scene/scene.hpp"
@@ -184,7 +185,6 @@ Hud::Hud(
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         imgui_renderer,
-        imgui_windows,
         rendergraph,
         editor_context,
         m_rendertarget_mesh.get(),
@@ -192,8 +192,7 @@ Hud::Hud(
         true
     );
 
-    m_rendertarget_imgui_viewport->set_menu_visible(true);
-    imgui_windows.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
+    imgui_renderer.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
 
     set_visibility(m_is_visible);
 

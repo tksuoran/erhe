@@ -1,7 +1,7 @@
 ﻿// #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/imgui/imgui_viewport.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/scoped_imgui_context.hpp"
 #include "erhe/imgui/imgui_log.hpp"
 #include "erhe/toolkit/window.hpp"
@@ -138,14 +138,14 @@ void update_key_modifiers(ImGuiIO& io, const uint32_t modifier_mask)
 
 Imgui_viewport::Imgui_viewport(
     erhe::rendergraph::Rendergraph& rendergraph,
-    Imgui_windows&                  imgui_windows,
+    Imgui_renderer&                 imgui_renderer,
     const std::string_view          name,
     const bool                      imgui_ini,
     ImFontAtlas*                    font_atlas
 )
     : Rendergraph_node{rendergraph, fmt::format("Viewport {}", name)}
     , m_imgui_ini_path{imgui_ini ? fmt::format("imgui_{}.ini", name) : ""}
-    , m_imgui_windows {imgui_windows}
+    , m_imgui_renderer{imgui_renderer}
 {
     IMGUI_CHECKVERSION();
     m_imgui_context = ImGui::CreateContext(font_atlas);
@@ -165,23 +165,28 @@ Imgui_viewport::Imgui_viewport(
         erhe::rendergraph::Rendergraph_node_key::window
     );
 
-    imgui_windows.register_imgui_viewport(this);
+    imgui_renderer.register_imgui_viewport(this);
 }
 
 Imgui_viewport::~Imgui_viewport()
 {
-    m_imgui_windows.unregister_imgui_viewport(this);
+    m_imgui_renderer.unregister_imgui_viewport(this);
 
     ImGui::DestroyContext(m_imgui_context);
     m_imgui_context = nullptr;
 }
 
-[[nodiscard]] auto Imgui_viewport::get_imgui_windows() -> Imgui_windows&
+auto Imgui_viewport::get_imgui_renderer() -> Imgui_renderer&
 {
-    return m_imgui_windows;
+    return m_imgui_renderer;
 }
 
-[[nodiscard]] auto Imgui_viewport::name() const -> const std::string&
+auto Imgui_viewport::get_imgui_context() -> ImGuiContext*
+{
+    return m_imgui_context;
+}
+
+auto Imgui_viewport::name() const -> const std::string&
 {
     return m_name;
 }
@@ -209,6 +214,11 @@ auto Imgui_viewport::want_capture_mouse() const -> bool
     return m_imgui_context;
 }
 
+void Imgui_viewport::set_begin_callback(const std::function<void(Imgui_viewport& viewport)>& callback)
+{
+    m_begin_callback = callback;
+}
+
 [[nodiscard]] auto Imgui_viewport::get_scale_value() const -> float
 {
     return 1.0f;
@@ -227,42 +237,6 @@ auto Imgui_viewport::get_mouse_position() const -> glm::vec2
 {
     ImGuiIO& io = m_imgui_context->IO;
     return glm::vec2{io.MousePos.x, io.MousePos.y};
-}
-
-void Imgui_viewport::builtin_imgui_window_menu()
-{
-    if (ImGui::BeginMenu("ImGui")) {
-        ImGui::MenuItem("Demo",             "", &m_imgui_builtin_windows.demo);
-        ImGui::MenuItem("Style Editor",     "", &m_imgui_builtin_windows.style_editor);
-        ImGui::MenuItem("Metrics/Debugger", "", &m_imgui_builtin_windows.metrics);
-        ImGui::MenuItem("Stack Tool",       "", &m_imgui_builtin_windows.stack_tool);
-        ImGui::EndMenu();
-    }
-}
-
-void Imgui_viewport::menu()
-{
-    if (ImGui::BeginMainMenuBar()) {
-        m_imgui_windows.window_menu(this);
-        ImGui::EndMainMenuBar();
-    }
-    if (m_imgui_builtin_windows.demo) {
-        ImGui::ShowDemoWindow(&m_imgui_builtin_windows.demo);
-    }
-
-    if (m_imgui_builtin_windows.style_editor) {
-        ImGui::Begin("Dear ImGui Style Editor", &m_imgui_builtin_windows.style_editor);
-        ImGui::ShowStyleEditor();
-        ImGui::End();
-    }
-
-    if (m_imgui_builtin_windows.metrics) {
-        ImGui::ShowMetricsWindow(&m_imgui_builtin_windows.metrics);
-    }
-
-    if (m_imgui_builtin_windows.stack_tool) {
-        ImGui::ShowStackToolWindow(&m_imgui_builtin_windows.stack_tool);
-    }
 }
 
 #pragma region Events

@@ -39,19 +39,16 @@ public:
     );
 
     // Public API
-    void lock_mutex               ();
-    void unlock_mutex             ();
-    void queue                    (std::function<void()>&& operation);
-    void flush_queue              ();
-    void register_imgui_viewport  (Imgui_viewport* viewport);
-    void unregister_imgui_viewport(Imgui_viewport* viewport);
-    void register_imgui_window    (Imgui_window* window);
-    void unregister_imgui_window  (Imgui_window* window);
-    void make_current             (const Imgui_viewport* imgui_viewport);
-    void imgui_windows            ();
-    void window_menu              (Imgui_viewport* imgui_viewport);
-    auto get_windows              () -> std::vector<Imgui_window*>&;
-    void save_window_state        ();
+    void lock_mutex             ();
+    void unlock_mutex           ();
+    void queue                  (std::function<void()>&& operation);
+    void flush_queue            ();
+    void register_imgui_window  (Imgui_window* window);
+    void unregister_imgui_window(Imgui_window* window);
+    void imgui_windows          ();
+    void window_menu_entries    (Imgui_viewport& imgui_viewport);
+    auto get_windows            () -> std::vector<Imgui_window*>&;
+    void save_window_state      ();
 
     [[nodiscard]] auto get_window_viewport  () -> std::shared_ptr<Window_imgui_viewport>;
     [[nodiscard]] auto want_capture_keyboard() const -> bool;
@@ -68,13 +65,12 @@ public:
     auto on_mouse_wheel (float x, float y) -> bool                                         override;
 
 private:
+    Imgui_renderer&                        m_imgui_renderer;
     std::recursive_mutex                   m_mutex;
     bool                                   m_iterating{false};
-    std::vector<Imgui_viewport*>           m_imgui_viewports;
     std::vector<Imgui_window*>             m_imgui_windows;
     std::mutex                             m_queued_operations_mutex;
     std::vector<std::function<void()>>     m_queued_operations;
-    const Imgui_viewport*                  m_current_viewport{nullptr}; // current context
     erhe::rendergraph::Rendergraph&        m_rendergraph;
 
     std::shared_ptr<Window_imgui_viewport> m_window_imgui_viewport;

@@ -6,6 +6,7 @@
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
 #include "editor_settings.hpp"
+#include "editor_windows.hpp"
 #include "input_state.hpp"
 #include "time.hpp"
 
@@ -166,6 +167,7 @@ public:
 
         , m_imgui_windows         {m_imgui_renderer,    &m_context_window,   m_rendergraph}
         , m_editor_scenes         {m_editor_context,    m_time}
+        , m_editor_windows        {m_editor_context}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_context, m_editor_scenes}
         , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_context_window, m_programs}
@@ -293,12 +295,18 @@ public:
 
         auto& root_event_handler = m_context_window.get_root_window_event_handler();
         root_event_handler.attach(this, 3);
+        const auto window_viewport = m_imgui_windows.get_window_viewport();
+        window_viewport->set_begin_callback(
+            [this](erhe::imgui::Imgui_viewport& imgui_viewport) {
+                m_editor_windows.viewport_menu(imgui_viewport);
+            }
+        );
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         if (m_headset_view.config.openxr) {
             // TODO Create windows directly to correct viewport?
             // Move all imgui windows that have window viewport to hud viewport
             const auto viewport        = m_hud.get_rendertarget_imgui_viewport();
-            const auto window_viewport = m_imgui_windows.get_window_viewport();
             if (viewport) {
                 auto& windows = m_imgui_windows.get_windows();
                 for (auto window : windows) {
@@ -339,6 +347,7 @@ public:
         m_editor_context.editor_rendering       = &m_editor_rendering      ;
         m_editor_context.editor_scenes          = &m_editor_scenes         ;
         m_editor_context.editor_settings        = &m_editor_settings       ;
+        m_editor_context.editor_windows         = &m_editor_windows        ;
         m_editor_context.fly_camera_tool        = &m_fly_camera_tool       ;
         m_editor_context.grid_tool              = &m_grid_tool             ;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -443,6 +452,7 @@ public:
 
     erhe::imgui::Imgui_windows              m_imgui_windows;
     Editor_scenes                           m_editor_scenes;
+    Editor_windows                          m_editor_windows;
 
     Asset_browser                           m_asset_browser;
     Content_library_window                  m_content_library_window;

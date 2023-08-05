@@ -211,7 +211,6 @@ void Hotbar::init_hotbar()
 
     m_rendertarget_imgui_viewport = std::make_shared<editor::Rendertarget_imgui_viewport>(
         *m_context.imgui_renderer,
-        *m_context.imgui_windows,
         *m_context.rendergraph,
         m_context,
         m_rendertarget_mesh.get(),

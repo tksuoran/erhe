@@ -5,6 +5,7 @@
 #include "editor_message_bus.hpp"
 
 #include "erhe/configuration/configuration.hpp"
+#include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
 #include "erhe/gl/wrapper_enums.hpp"
@@ -193,7 +194,17 @@ void Settings_window::write_ini()
 void Settings_window::imgui()
 {
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-
+    const bool font_size_changed = ImGui::DragFloat(
+        "UI Font Size",
+        &m_context.imgui_renderer->font_config.font_size,
+        0.1f,
+        4.0f,
+        100.0f,
+        "%.1f"
+    );
+    if (font_size_changed) {
+        m_context.imgui_renderer->on_font_config_changed();
+    }
     ImGui::Text("Used Preset: %s", m_used_settings.c_str());
     if (!m_settings.empty()) {
         m_settings_names.resize(m_settings.size());

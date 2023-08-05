@@ -1,6 +1,7 @@
 #include "scene/scene_commands.hpp"
 
 #include "editor_context.hpp"
+#include "editor_windows.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/node_operation.hpp"
@@ -253,7 +254,6 @@ auto Scene_commands::create_new_rendertarget(
 
     auto rendertarget_imgui_viewport = std::make_shared<Rendertarget_imgui_viewport>(
         *m_context.imgui_renderer,
-        *m_context.imgui_windows,
         *m_context.rendergraph,
         m_context,
         new_mesh.get(),
@@ -261,10 +261,9 @@ auto Scene_commands::create_new_rendertarget(
         true
     );
 
-    rendertarget_imgui_viewport->set_menu_visible(true);
-    m_context.imgui_windows->queue(
-        [this, rendertarget_imgui_viewport]() {
-            m_context.imgui_windows->register_imgui_viewport(rendertarget_imgui_viewport.get());
+    rendertarget_imgui_viewport->set_begin_callback(
+        [this](erhe::imgui::Imgui_viewport& imgui_viewport) {
+            m_context.editor_windows->viewport_menu(imgui_viewport);
         }
     );
 

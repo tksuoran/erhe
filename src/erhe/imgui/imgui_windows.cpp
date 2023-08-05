@@ -21,27 +21,17 @@ Imgui_windows::Imgui_windows(
     erhe::toolkit::Context_window*  context_window,
     erhe::rendergraph::Rendergraph& rendergraph
 )
-    : m_rendergraph{rendergraph}
+    : m_imgui_renderer{imgui_renderer}
+    , m_rendergraph   {rendergraph}
 {
     if (context_window != nullptr) {
         m_window_imgui_viewport = std::make_shared<erhe::imgui::Window_imgui_viewport>(
             imgui_renderer,
             *context_window,
             rendergraph,
-            *this,
             "window_imgui_viewport"
         );
     }
-}
-
-void Imgui_windows::lock_mutex()
-{
-    m_mutex.lock();
-}
-
-void Imgui_windows::unlock_mutex()
-{
-    m_mutex.unlock();
 }
 
 [[nodiscard]] auto Imgui_windows::get_window_viewport() -> std::shared_ptr<Window_imgui_viewport>
@@ -65,59 +55,14 @@ void Imgui_windows::flush_queue()
     }
 }
 
-void Imgui_windows::register_imgui_viewport(
-    Imgui_viewport* viewport
-)
+void Imgui_windows::lock_mutex()
 {
-    ERHE_VERIFY(!m_iterating);
-    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
-#if !defined(NDEBUG)
-    const auto i = std::find_if(
-        m_imgui_viewports.begin(),
-        m_imgui_viewports.end(),
-        [viewport](Imgui_viewport* entry) {
-            return entry == viewport;
-        }
-    );
-    if (i != m_imgui_viewports.end()) {
-        log_imgui->error("Imgui_viewport '{}' is already registered to Imgui_windows", viewport->get_name());
-        return;
-    }
-#endif
-
-    m_imgui_viewports.push_back(viewport);
-
+    m_mutex.lock();
 }
 
-void Imgui_windows::unregister_imgui_viewport(
-    Imgui_viewport* viewport
-)
+void Imgui_windows::unlock_mutex()
 {
-    ERHE_VERIFY(!m_iterating);
-
-    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
-    const auto i = std::find_if(
-        m_imgui_viewports.begin(),
-        m_imgui_viewports.end(),
-        [viewport](Imgui_viewport* entry) {
-            return entry == viewport;
-        }
-    );
-    if (i == m_imgui_viewports.end()) {
-        log_imgui->error("Imgui_windows::unregister_imgui_viewport(): viewport '{}' is not registered", viewport->get_name());
-        return;
-    }
-    m_imgui_viewports.erase(i);
-}
-
-void Imgui_windows::make_current(const Imgui_viewport* imgui_viewport)
-{
-    m_current_viewport = imgui_viewport;
-    if (imgui_viewport != nullptr) {
-        ImGui::SetCurrentContext(imgui_viewport->imgui_context());
-    } else {
-        ImGui::SetCurrentContext(nullptr);
-    }
+    m_mutex.unlock();
 }
 
 void Imgui_windows::register_imgui_window(
@@ -182,7 +127,8 @@ void Imgui_windows::imgui_windows()
 
     //Scoped_imgui_context scoped_context{m_imgui_context};
     m_iterating = true;
-    for (const auto& viewport : m_imgui_viewports) {
+    const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
+    for (const auto& viewport : imgui_viewports) {
         Scoped_imgui_context imgui_context{*viewport};
 
         if (viewport->begin_imgui_frame()) {
@@ -246,54 +192,32 @@ void Imgui_windows::imgui_windows()
     flush_queue();
 }
 
-void Imgui_windows::window_menu(Imgui_viewport* imgui_viewport)
+void Imgui_windows::window_menu_entries(Imgui_viewport& imgui_viewport)
 {
-    ERHE_VERIFY(m_current_viewport != nullptr);
     bool was_iterating = m_iterating;
     m_iterating = true;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
-    if (ImGui::BeginMenu("Window")) {
-        for (const auto& window : m_imgui_windows) {
-            if (!window->show_in_menu()) {
-                continue;
-            }
-            bool enabled = window->is_visible();
-            if (ImGui::MenuItem(window->get_title().data(), "", &enabled)) {
-                if (enabled) {
-                    window->show();
-                    window->set_viewport(imgui_viewport);
-                } else {
-                    window->hide();
-                }
-            }
+    for (const auto& window : m_imgui_windows) {
+        if (!window->show_in_menu()) {
+            continue;
         }
-
-        ImGui::Separator();
-
-        imgui_viewport->builtin_imgui_window_menu();
-
-        ImGui::Separator();
-        if (ImGui::MenuItem("Close All")) {
-            for (const auto& window : m_imgui_windows) {
+        bool enabled = window->is_visible();
+        if (ImGui::MenuItem(window->get_title().data(), "", &enabled)) {
+            if (enabled) {
+                window->show();
+                window->set_viewport(&imgui_viewport);
+            } else {
                 window->hide();
             }
         }
-        if (ImGui::MenuItem("Open All")) {
-            for (const auto& window : m_imgui_windows) {
-                window->show();
-            }
-        }
-        ImGui::EndMenu();
     }
 
-    ImGui::PopStyleVar();
     m_iterating = was_iterating;
 }
 
 auto Imgui_windows::get_windows() -> std::vector<Imgui_window*>&
 {
-    ERHE_VERIFY(!m_iterating);
+    //ERHE_VERIFY(!m_iterating);
     return m_imgui_windows;
 }
 
@@ -373,7 +297,8 @@ auto Imgui_windows::on_mouse_button(
     const bool     pressed
 ) -> bool
 {
-    for (const auto& viewport : m_imgui_viewports) {
+    const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
+    for (const auto& viewport : imgui_viewports) {
         viewport->on_mouse_button(button, pressed);
     }
 
@@ -387,7 +312,8 @@ auto Imgui_windows::on_mouse_wheel(
     const float y
 ) -> bool
 {
-    for (const auto& viewport : m_imgui_viewports) {
+    const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
+    for (const auto& viewport : imgui_viewports) {
         viewport->on_mouse_wheel(x, y);
     }
 
@@ -402,7 +328,8 @@ auto Imgui_windows::on_key(
     const bool       pressed
 ) -> bool
 {
-    for (const auto& viewport : m_imgui_viewports) {
+    const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
+    for (const auto& viewport : imgui_viewports) {
         viewport->on_key(keycode, modifier_mask, pressed);
     }
 
@@ -413,7 +340,8 @@ auto Imgui_windows::on_char(
     const unsigned int codepoint
 ) -> bool
 {
-    for (const auto& viewport : m_imgui_viewports) {
+    const auto& imgui_viewports = m_imgui_renderer.get_imgui_viewports();
+    for (const auto& viewport : imgui_viewports) {
         viewport->on_char(codepoint);
     }
 
