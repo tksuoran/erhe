@@ -261,29 +261,43 @@ void Paint_tool::paint_vertex(
     const std::size_t vertex_offset = vertex_id * vertex_format.stride() + attribute->offset;
 
     std::vector<std::uint8_t> buffer;
-    buffer.resize(sizeof(float) * 4);
-    auto* const ptr = reinterpret_cast<float*>(buffer.data());
-    ptr[0] = color.x;
-    ptr[1] = color.y;
-    ptr[2] = color.z;
-    ptr[3] = color.w;
-
-    ERHE_VERIFY(attribute.get()->data_type.type == gl::Vertex_attrib_type::float_);
 
     for (const auto& primitive : mesh.mesh_data.primitives) {
         const auto& geometry_primitive = primitive.geometry_primitive;
         if (!geometry_primitive) {
             continue;
         }
-        if (geometry_primitive->source_geometry.get() == &geometry) {
-            const std::size_t range_byte_offset = geometry_primitive->gl_geometry_mesh.vertex_buffer_range.byte_offset;
+        if (geometry_primitive->source_geometry.get() != &geometry) {
+            continue;
+        }
+        const std::size_t range_byte_offset = geometry_primitive->gl_geometry_mesh.vertex_buffer_range.byte_offset;
+        if (attribute.get()->data_type.type == gl::Vertex_attrib_type::float_) {
+            buffer.resize(sizeof(float) * 4);
+            auto* const ptr = reinterpret_cast<float*>(buffer.data());
+            ptr[0] = color.x;
+            ptr[1] = color.y;
+            ptr[2] = color.z;
+            ptr[3] = color.w;
             mesh_memory.gl_buffer_transfer_queue.enqueue(
                 mesh_memory.gl_vertex_buffer,
                 range_byte_offset + vertex_offset,
                 std::move(buffer)
             );
-            break;
+        } else if (attribute.get()->data_type.type == gl::Vertex_attrib_type::unsigned_byte) {
+            buffer.resize(sizeof(uint8_t) * 4);
+            auto* const ptr = reinterpret_cast<uint8_t*>(buffer.data());
+            ptr[0] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.x, 255.0f)));
+            ptr[1] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.y, 255.0f)));
+            ptr[2] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.z, 255.0f)));
+            ptr[3] = static_cast<uint8_t>(std::max(0.0f, std::min(255.0f * color.w, 255.0f)));
+            mesh_memory.gl_buffer_transfer_queue.enqueue(
+                mesh_memory.gl_vertex_buffer,
+                range_byte_offset + vertex_offset,
+                std::move(buffer)
+            );
         }
+
+        break;
     }
 }
 

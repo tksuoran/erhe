@@ -3,6 +3,7 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
+#include "graphics/icon_set.hpp"
 
 #include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
@@ -205,6 +206,28 @@ void Settings_window::imgui()
     if (font_size_changed) {
         m_context.imgui_renderer->on_font_config_changed();
     }
+    const bool small_icon_size_changed = ImGui::DragInt(
+        "Small Icon Size",
+        &m_context.icon_set->config.small_icon_size,
+        0.1f,
+        4,
+        512
+    );
+    const bool large_icon_size_changed = ImGui::DragInt(
+        "Large Icon Size",
+        &m_context.icon_set->config.large_icon_size,
+        0.1f,
+        4,
+        512
+    );
+    if (small_icon_size_changed || large_icon_size_changed) {
+        m_context.icon_set->load_icons(
+            *m_context.graphics_instance,
+            *m_context.imgui_renderer,
+            *m_context.programs
+        );
+    }
+
     ImGui::Text("Used Preset: %s", m_used_settings.c_str());
     if (!m_settings.empty()) {
         m_settings_names.resize(m_settings.size());

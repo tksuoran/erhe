@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -99,6 +100,12 @@ public:
         Programs&                      programs
     );
 
+    void load_icons(
+        erhe::graphics::Instance&      graphics_instance,
+        erhe::imgui::Imgui_renderer&   imgui_renderer,
+        Programs&                      programs
+    );
+
     [[nodiscard]] auto load    (const std::filesystem::path& path) -> glm::vec2;
     [[nodiscard]] auto get_icon(const erhe::scene::Light_type type) const -> const glm::vec2;
 
@@ -111,13 +118,14 @@ public:
     Config config;
 
 private:
-    int                m_row_count   {0};
-    int                m_column_count{0};
-    int                m_row         {0};
-    int                m_column      {1};
-    Icon_rasterization m_small;
-    Icon_rasterization m_large;
-    Icon_rasterization m_hotbar;
+
+    int                                 m_row_count   {0};
+    int                                 m_column_count{0};
+    int                                 m_row         {0};
+    int                                 m_column      {1};
+    std::unique_ptr<Icon_rasterization> m_small;
+    std::unique_ptr<Icon_rasterization> m_large;
+    std::unique_ptr<Icon_rasterization> m_hotbar;
 
 public:
     Icons                                 icons;

@@ -1,4 +1,4 @@
-#include "icon_set.hpp"
+#include "graphics/icon_set.hpp"
 
 #include "editor_context.hpp"
 #include "editor_log.hpp"
@@ -36,17 +36,26 @@ Icon_set::Icon_set(
     erhe::toolkit::Context_window& context_window,
     Programs&                      programs
 )
-    : config        {context_window}
-    , m_row_count   {16}
-    , m_column_count{16}
-    , m_row         {0}
-    , m_column      {0}
-    , m_small       {graphics_instance, imgui_renderer, programs, config.small_icon_size,  m_column_count, m_row_count}
-    , m_large       {graphics_instance, imgui_renderer, programs, config.large_icon_size,  m_column_count, m_row_count}
-    , m_hotbar      {graphics_instance, imgui_renderer, programs, config.hotbar_icon_size, m_column_count, m_row_count}
+    : config{context_window}
 {
+    load_icons(graphics_instance, imgui_renderer, programs);
+}
 
+void Icon_set::load_icons(
+    erhe::graphics::Instance&    graphics_instance,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    Programs&                    programs
+)
+{
     const auto icon_directory = std::filesystem::path("res") / "icons";
+
+    m_row_count    = 16;
+    m_column_count = 16;
+    m_row          = 0;
+    m_column       = 0;
+    m_small  = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, config.small_icon_size,  m_column_count, m_row_count);
+    m_large  = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, config.large_icon_size,  m_column_count, m_row_count);
+    m_hotbar = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, config.hotbar_icon_size, m_column_count, m_row_count);
 
     icons.anim              = load(icon_directory / "anim.svg");
     icons.bone              = load(icon_directory / "bone_data.svg");
@@ -146,9 +155,9 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
     const float u = static_cast<float>(m_column) / static_cast<float>(m_column_count);
     const float v = static_cast<float>(m_row   ) / static_cast<float>(m_row_count);
 
-    m_small .rasterize(*document.get(), m_column, m_row);
-    m_large .rasterize(*document.get(), m_column, m_row);
-    m_hotbar.rasterize(*document.get(), m_column, m_row);
+    m_small ->rasterize(*document.get(), m_column, m_row);
+    m_large ->rasterize(*document.get(), m_column, m_row);
+    m_hotbar->rasterize(*document.get(), m_column, m_row);
 
     ++m_column;
     if (m_column >= m_column_count) {
@@ -176,17 +185,17 @@ auto Icon_set::get_icon(const erhe::scene::Light_type type) const -> const glm::
 
 [[nodiscard]] auto Icon_set::get_small_rasterization() const -> const Icon_rasterization&
 {
-    return m_small;
+    return *m_small.get();
 }
 
 [[nodiscard]] auto Icon_set::get_large_rasterization() const -> const Icon_rasterization&
 {
-    return m_large;
+    return *m_large.get();
 }
 
 [[nodiscard]] auto Icon_set::get_hotbar_rasterization() const -> const Icon_rasterization&
 {
-    return m_hotbar;
+    return *m_hotbar.get();
 }
 
 } // namespace editor
