@@ -9,6 +9,7 @@
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe/toolkit/window.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>
@@ -16,20 +17,26 @@
 
 namespace editor {
 
-Icon_set::Config::Config()
+Icon_set::Config::Config() = default;
+
+Icon_set::Config::Config(erhe::toolkit::Context_window& context_window)
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "icons");
     ini->get("small_icon_size",  small_icon_size);
     ini->get("large_icon_size",  large_icon_size);
     ini->get("hotbar_icon_size", hotbar_icon_size);
+    small_icon_size  = static_cast<int>(static_cast<float>(small_icon_size ) * context_window.get_scale_factor());
+    large_icon_size  = static_cast<int>(static_cast<float>(large_icon_size ) * context_window.get_scale_factor());
+    hotbar_icon_size = static_cast<int>(static_cast<float>(hotbar_icon_size) * context_window.get_scale_factor());
 }
 
 Icon_set::Icon_set(
-    erhe::graphics::Instance&    graphics_instance,
-    erhe::imgui::Imgui_renderer& imgui_renderer,
-    Programs&                    programs
+    erhe::graphics::Instance&      graphics_instance,
+    erhe::imgui::Imgui_renderer&   imgui_renderer,
+    erhe::toolkit::Context_window& context_window,
+    Programs&                      programs
 )
-    : config        {}
+    : config        {context_window}
     , m_row_count   {16}
     , m_column_count{16}
     , m_row         {0}

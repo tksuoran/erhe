@@ -152,7 +152,7 @@ public:
 
         , m_context_window{create_window()}
         , m_graphics_instance     {m_context_window}
-        , m_imgui_renderer        {m_graphics_instance}
+        , m_imgui_renderer        {m_graphics_instance, m_context_window}
         , m_image_transfer        {m_graphics_instance}
         , m_line_renderer_set     {m_graphics_instance}
         , m_program_interface     {m_graphics_instance}
@@ -168,7 +168,7 @@ public:
         , m_editor_scenes         {m_editor_context,    m_time}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_context, m_editor_scenes}
-        , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_programs}
+        , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_context_window, m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
         , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_shadow_renderer, m_editor_context, m_editor_message_bus}

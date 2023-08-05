@@ -34,6 +34,9 @@ namespace erhe::graphics {
     class Vertex_attribute_mappings;
     class Vertex_input_state;
 }
+namespace erhe::toolkit {
+    class Context_window;
+}
 
 namespace erhe::imgui {
 
@@ -123,7 +126,8 @@ class Imgui_renderer final
 {
 public:
     explicit Imgui_renderer(
-        erhe::graphics::Instance& graphics_instance
+        erhe::graphics::Instance&      graphics_instance,
+        erhe::toolkit::Context_window& context_window
     );
 
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures

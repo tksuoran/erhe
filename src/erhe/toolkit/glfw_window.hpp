@@ -71,8 +71,9 @@ public:
     void set_cursor         (Mouse_cursor cursor);
     void capture_mouse      (bool capture);
 
-    auto get_device_pointer() const -> void*;
-    auto get_window_handle () const -> void*;
+    [[nodiscard]] auto get_device_pointer() const -> void*;
+    [[nodiscard]] auto get_window_handle () const -> void*;
+    [[nodiscard]] auto get_scale_factor  () const -> float;
 
 private:
     void get_extensions();

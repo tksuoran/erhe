@@ -757,6 +757,14 @@ auto Context_window::get_window_handle() const -> void*
 #endif
 }
 
+auto Context_window::get_scale_factor() const -> float
+{
+    GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
+    float x_scale = 1.0f;
+    float y_scale = 1.0f;
+    return (x_scale + y_scale) / 2.0f;
+}
+
 } // namespace erhe::toolkit
 
 #endif // defined(ERHE_WINDOW_LIBRARY_GLFW)

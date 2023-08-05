@@ -58,7 +58,7 @@ public:
         , m_graphics_instance{m_context_window}
         , m_text_renderer    {m_graphics_instance}
         , m_rendergraph      {m_graphics_instance}
-        , m_imgui_renderer   {m_graphics_instance}
+        , m_imgui_renderer   {m_graphics_instance, m_context_window}
         , m_imgui_windows    {m_imgui_renderer, &m_context_window, m_rendergraph}
         , m_tiles            {}
         , m_tile_renderer    {m_graphics_instance, m_imgui_renderer, m_tiles}

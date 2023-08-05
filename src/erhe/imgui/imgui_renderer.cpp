@@ -24,6 +24,7 @@
 #include "erhe/toolkit/math_util.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
+#include "erhe/toolkit/window.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -120,7 +121,7 @@ void main()
 
 } // anonymous namespace
 
-auto get_config() -> Imgui_renderer::Config
+auto get_config(erhe::toolkit::Context_window& context_window) -> Imgui_renderer::Config
 {
     Imgui_renderer::Config config;
 
@@ -136,6 +137,9 @@ auto get_config() -> Imgui_renderer::Config
             ini_get(section, "vr_font_size", config.vr_font_size);
         }
     }
+
+    config.font_size *= context_window.get_scale_factor();
+
     return config;
 }
 
@@ -179,10 +183,11 @@ auto get_font_atlas_pixel_data(ImFontAtlas& font_atlas) -> std::vector<uint8_t>
 }
 
 Imgui_renderer::Imgui_renderer(
-    erhe::graphics::Instance& graphics_instance
+    erhe::graphics::Instance&      graphics_instance,
+    erhe::toolkit::Context_window& context_window
 )
     // Parse config
-    : config{get_config()}
+    : config{get_config(context_window)}
 
     , m_graphics_instance{graphics_instance}
 
