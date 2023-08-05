@@ -5,7 +5,9 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <string>
 #include <vector>
+
 
 namespace erhe::physics
 {
@@ -73,9 +75,10 @@ public:
     [[nodiscard]] static auto create_uniform_scaling_shape_shared(ICollision_shape* shape, float scale) -> std::shared_ptr<ICollision_shape>;
 
                   virtual void calculate_local_inertia           (float mass, glm::mat4& inertia) const = 0;
-    [[nodiscard]] virtual auto is_convex                         () const -> bool = 0;
-    [[nodiscard]] virtual auto get_center_of_mass                () const -> glm::vec3 = 0;
-    [[nodiscard]] virtual auto get_mass_properties               () const -> Mass_properties = 0;
+    [[nodiscard]] virtual auto is_convex                         () const -> bool                       = 0;
+    [[nodiscard]] virtual auto get_center_of_mass                () const -> glm::vec3                  = 0;
+    [[nodiscard]] virtual auto get_mass_properties               () const -> Mass_properties            = 0;
+    [[nodiscard]] virtual auto describe                          () const -> std::string                = 0;
 
     //virtual void calculate_principal_axis_transform(
     //    const std::vector<float>& child_masses,

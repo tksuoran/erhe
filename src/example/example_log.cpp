@@ -8,8 +8,9 @@ std::shared_ptr<spdlog::logger> log_gltf;
 
 void initialize_logging()
 {
-    log_startup = erhe::log::make_logger("example::startup", spdlog::level::info);
-    log_gltf    = erhe::log::make_logger("example::gltf",    spdlog::level::info);
+    using namespace erhe::log;
+    log_startup = make_logger("example.startup");
+    log_gltf    = make_logger("example.gltf"   );
 }
 
 }

@@ -4,6 +4,9 @@
 
 #include "erhe/imgui/imgui_window.hpp"
 
+#include <string>
+#include <vector>
+
 
 namespace erhe::imgui {
     class Imgui_windows;
@@ -34,8 +37,13 @@ public:
     // Implements Imgui_window
     void imgui() override;
 
+    void add_line(const std::string& line);
+
 private:
     bool m_show_snapped_grid_position{false};
+
+    std::vector<std::string> m_text_lines;
+
 };
 
 } // namespace editor

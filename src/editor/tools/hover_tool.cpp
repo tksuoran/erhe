@@ -16,6 +16,7 @@
 #include "erhe/log/log_glm.hpp"
 #include "erhe/physics/irigid_body.hpp"
 #include "erhe/scene/mesh.hpp"
+#include "erhe/toolkit/defer.hpp"
 #include "erhe/toolkit/profile.hpp"
 
 #include <fmt/core.h>
@@ -137,11 +138,20 @@ void Hover_tool::imgui()
     }
 }
 
+void Hover_tool::add_line(const std::string& line)
+{
+    m_text_lines.push_back(line);
+}
+
 void Hover_tool::tool_render(
     const Render_context& context
 )
 {
     ERHE_PROFILE_FUNCTION();
+
+    ERHE_DEFER(
+        m_text_lines.clear();
+    );
 
     if (get_hover_scene_view() == nullptr) {
         return;
@@ -151,10 +161,7 @@ void Hover_tool::tool_render(
         Hover_entry::content_bit | Hover_entry::grid_bit
     );
 
-    if (
-        !entry.valid ||
-        !entry.position.has_value()
-    ) {
+    if (!entry.valid || !entry.position.has_value()) {
         return;
     }
 
@@ -165,24 +172,14 @@ void Hover_tool::tool_render(
         line_renderer.set_thickness(10.0f);
         line_renderer.add_lines(
             get_line_color_from_slot(entry.slot),
-            {
-                {
-                    glm::vec3{p0},
-                    glm::vec3{p1}
-                }
-            }
+            {{ glm::vec3{p0}, glm::vec3{p1} }}
         );
         if (m_show_snapped_grid_position && entry.grid) {
             const auto sp0 = entry.grid->snap_world_position(p0);
             const auto sp1 = sp0 + entry.normal.value();
             line_renderer.add_lines(
                 glm::vec4{1.0f, 1.0f, 0.0f, 1.0},
-                {
-                    {
-                        glm::vec3{sp0},
-                        glm::vec3{sp1}
-                    }
-                }
+                {{ glm::vec3{sp0}, glm::vec3{sp1} }}
             );
         }
     }
@@ -203,34 +200,17 @@ void Hover_tool::tool_render(
     const uint32_t text_color = get_text_color_from_slot(entry.slot);
 
     const auto position_in_viewport = position_in_viewport_opt.value();
-    const glm::vec3 position_at_fixed_depth{
+    glm::vec3 position_at_fixed_depth{
         position_in_viewport.x + 50.0f,
         position_in_viewport.y,
         -0.5f
     };
 
-    const std::string text = entry.get_name();
-
-    m_context.text_renderer->print(
-        position_at_fixed_depth,
-        text_color,
-        text
-    );
-
-    const glm::vec3 position_at_fixed_depth_line_2{
-        position_in_viewport.x + 50.0f,
-        position_in_viewport.y + 16.0f,
-        -0.5f
-    };
-    const std::string text_line_2 = fmt::format(
+    add_line(entry.get_name());
+    add_line(fmt::format(
         "Position in world: {}",
         entry.position.value()
-    );
-    m_context.text_renderer->print(
-        position_at_fixed_depth_line_2,
-        text_color,
-        text_line_2
-    );
+    ));
 
     const glm::vec3 position_at_fixed_depth_line_3{
         position_in_viewport.x + 50.0f,
@@ -239,37 +219,41 @@ void Hover_tool::tool_render(
     };
     if (entry.mesh) {
         const auto* node = entry.mesh->get_node();
+        const glm::vec3 node_position_in_world = glm::vec3{node->position_in_world()};
+        add_line(fmt::format(
+            "Node position in world: {}",
+            node_position_in_world
+        ));
         auto node_physics = get_node_physics(node);
         if (node_physics) {
             erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
             if (rigid_body) {
                 const glm::vec3 local_position = node->transform_point_from_world_to_local(entry.position.value());
-                const std::string text_line_3 = fmt::format(
+                add_line(fmt::format(
                     "Position in {}: {}",
                     entry.mesh->get_name(),
                     local_position
-                );
-                m_context.text_renderer->print(
-                    position_at_fixed_depth_line_3,
-                    text_color,
-                    text_line_3.c_str()
-                );
+                ));
             }
         }
     } else if (entry.grid) {
         const glm::vec3 local_position = glm::vec3{
             entry.grid->grid_from_world() * glm::vec4{entry.position.value(), 1.0f}
         };
-        const std::string text_line_3 = fmt::format(
+        add_line(fmt::format(
             "Position in {}: {}",
             entry.grid->get_name(),
             local_position
-        );
+        ));
+    }
+
+    for (const auto& text_line : m_text_lines) {
         m_context.text_renderer->print(
-            position_at_fixed_depth_line_3,
+            position_at_fixed_depth,
             text_color,
-            text_line_3.c_str() // erhe::physics::c_motion_mode_strings[motion_mode_index]
+            text_line.c_str()
         );
+        position_at_fixed_depth.y += 16.0f;
     }
 }
 

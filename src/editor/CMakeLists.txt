@@ -280,7 +280,10 @@ erhe_target_sources_grouped(
     res/shaders/wide_lines.frag
 
     erhe.ini
-
+    logging.ini
+    presets.ini
+    user.ini
+    windows.ini
 )
 
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")

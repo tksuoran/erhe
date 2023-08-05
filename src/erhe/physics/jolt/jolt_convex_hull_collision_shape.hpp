@@ -19,10 +19,8 @@ public:
         int          stride
     );
 
-    auto get_shape_settings() -> JPH::ShapeSettings& override
-    {
-        return *m_shape_settings.GetPtr();
-    }
+    auto get_shape_settings() -> JPH::ShapeSettings& override;
+    auto describe          () const -> std::string   override;
 
 private:
     JPH::Ref<JPH::ConvexHullShapeSettings> m_shape_settings;

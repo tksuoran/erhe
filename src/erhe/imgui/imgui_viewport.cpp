@@ -231,8 +231,7 @@ auto Imgui_viewport::get_mouse_position() const -> glm::vec2
 
 void Imgui_viewport::builtin_imgui_window_menu()
 {
-    if (ImGui::BeginMenu("ImGui"))
-    {
+    if (ImGui::BeginMenu("ImGui")) {
         ImGui::MenuItem("Demo",             "", &m_imgui_builtin_windows.demo);
         ImGui::MenuItem("Style Editor",     "", &m_imgui_builtin_windows.style_editor);
         ImGui::MenuItem("Metrics/Debugger", "", &m_imgui_builtin_windows.metrics);

@@ -9,8 +9,9 @@ std::shared_ptr<spdlog::logger> log_primitive        ;
 
 void initialize_logging()
 {
-    log_primitive_builder = erhe::log::make_logger("erhe::primitive::primitive_builder", spdlog::level::warn);
-    log_primitive         = erhe::log::make_logger("erhe::primitive::primitive",         spdlog::level::warn);
+    using namespace erhe::log;
+    log_primitive_builder = make_logger("erhe.primitive.primitive_builder");
+    log_primitive         = make_logger("erhe.primitive.primitive"        );
 }
 
 } // namespace erhe::primitive

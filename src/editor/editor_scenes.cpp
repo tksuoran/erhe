@@ -65,7 +65,7 @@ void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& tim
     }
 }
 
-void Editor_scenes::update_physics_simulation_once_per_frame()
+void Editor_scenes::before_physics_simulation_steps()
 {
     if (
         !m_context.editor_settings->physics_static_enable ||
@@ -75,7 +75,7 @@ void Editor_scenes::update_physics_simulation_once_per_frame()
     }
 
     for (const auto& scene_root : m_scene_roots) {
-        scene_root->update_physics_simulation_once_per_frame();
+        scene_root->before_physics_simulation_steps();
     }
 }
 
@@ -94,10 +94,18 @@ void Editor_scenes::update_fixed_step(const Time_context& time_context)
     update_physics_simulation_fixed_step(time_context);
 }
 
-void Editor_scenes::update_once_per_frame(const Time_context&)
+void Editor_scenes::after_physics_simulation_steps()
 {
-    update_physics_simulation_once_per_frame();
-    update_node_transforms();
+    if (
+        !m_context.editor_settings->physics_static_enable ||
+        !m_context.editor_settings->physics_dynamic_enable
+    ) {
+        return;
+    }
+
+    for (const auto& scene_root : m_scene_roots) {
+        scene_root->after_physics_simulation_steps();
+    }
 }
 
 [[nodiscard]] auto Editor_scenes::get_scene_roots() -> const std::vector<Scene_root*>&

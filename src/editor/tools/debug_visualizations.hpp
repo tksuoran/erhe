@@ -95,8 +95,8 @@ private:
         const erhe::scene::Camera* camera
     );
     void selection_visualization     (const Render_context& context);
-    void physics_nodes_visualization (const std::shared_ptr<Scene_root>& scene_root);
-    void raytrace_nodes_visualization(const std::shared_ptr<Scene_root>& scene_root);
+    void physics_nodes_visualization (const Render_context& context);
+    void raytrace_nodes_visualization(const Render_context& context);
     void mesh_labels(
         const Render_context& context,
         erhe::scene::Mesh*    mesh
@@ -117,19 +117,21 @@ private:
     Scene_view*     m_hover_scene_view{nullptr};
     erhe::toolkit::Bounding_volume_combiner m_selection_bounding_volume;
 
-    float m_gap      {0.003f};
-    bool  m_tool_hide{false};
-    bool  m_raytrace {false};
-    bool  m_selection{true};
-    Visualization_mode m_lights {Visualization_mode::None};
-    Visualization_mode m_cameras{Visualization_mode::None};
-    Visualization_mode m_skins  {Visualization_mode::None};
+    Visualization_mode m_lights                 {Visualization_mode::None};
+    Visualization_mode m_cameras                {Visualization_mode::None};
+    Visualization_mode m_skins                  {Visualization_mode::None};
+    Visualization_mode m_node_axis_visualization{Visualization_mode::None};
+    Visualization_mode m_physics_visualization  {Visualization_mode::None};
+    Visualization_mode m_point_labels           {Visualization_mode::None};
+    Visualization_mode m_polygon_labels         {Visualization_mode::None};
+    Visualization_mode m_edge_labels            {Visualization_mode::None};
+    Visualization_mode m_corner_labels          {Visualization_mode::None};
+    Visualization_mode m_raytrace_visualization {Visualization_mode::None};
 
+    float     m_gap                              {0.003f};
+    bool      m_tool_hide                        {false};
+    bool      m_selection                        {true};
     bool      m_selection_bounding_points_visible{false};
-
-    Visualization_mode m_node_axis_visualization   {Visualization_mode::None};
-    Visualization_mode m_physics_axis_visualization{Visualization_mode::None};
-
     bool      m_selection_box                    {false};
     bool      m_selection_sphere                 {true};
     float     m_selection_node_axis_width        {4.0f};
@@ -142,29 +144,24 @@ private:
     float     m_camera_visualization_width       {4.0f};
     float     m_light_visualization_width        {4.0f};
     int       m_sphere_step_count                {80};
-
-    int                m_max_labels      {400};
-    Visualization_mode m_show_points     {Visualization_mode::None};
-    Visualization_mode m_show_polygons   {Visualization_mode::None};
-    Visualization_mode m_show_edges      {Visualization_mode::None};
-    Visualization_mode m_show_corners    {Visualization_mode::None};
-    glm::vec4 m_point_label_text_color   {0.3f, 1.0f, 0.3f, 1.0f};
-    glm::vec4 m_point_label_line_color   {0.0f, 0.8f, 0.0f, 1.0f};
-    float     m_point_label_line_width   {1.5f};
-    float     m_point_label_line_length  {0.1f};
-    glm::vec4 m_edge_label_text_color    {1.0f, 0.3f, 0.3f, 1.0f};
-    float     m_edge_label_text_offset   {0.1f};
-    glm::vec4 m_edge_label_line_color    {0.8f, 0.0f, 0.0f, 1.0f};
-    float     m_edge_label_line_width    {1.5f};
-    float     m_edge_label_line_length   {0.5f};
-    glm::vec4 m_polygon_label_text_color {1.0f, 1.0f, 5.0f, 1.0f};
-    glm::vec4 m_polygon_label_line_color {1.0f, 0.5f, 0.0f, 1.0f};
-    float     m_polygon_label_line_width {1.5f};
-    float     m_polygon_label_line_length{0.1f};
-    glm::vec4 m_corner_label_text_color  {0.5f, 1.0f, 1.0f, 1.0f};
-    glm::vec4 m_corner_label_line_color  {0.0f, 0.5f, 0.5f, 1.0f};
-    float     m_corner_label_line_length {0.05f};
-    float     m_corner_label_line_width  {1.5f};
+    int       m_max_labels                       {400};
+    glm::vec4 m_point_label_text_color           {0.3f, 1.0f, 0.3f, 1.0f};
+    glm::vec4 m_point_label_line_color           {0.0f, 0.8f, 0.0f, 1.0f};
+    float     m_point_label_line_width           {1.5f};
+    float     m_point_label_line_length          {0.1f};
+    glm::vec4 m_edge_label_text_color            {1.0f, 0.3f, 0.3f, 1.0f};
+    float     m_edge_label_text_offset           {0.1f};
+    glm::vec4 m_edge_label_line_color            {0.8f, 0.0f, 0.0f, 1.0f};
+    float     m_edge_label_line_width            {1.5f};
+    float     m_edge_label_line_length           {0.5f};
+    glm::vec4 m_polygon_label_text_color         {1.0f, 1.0f, 5.0f, 1.0f};
+    glm::vec4 m_polygon_label_line_color         {1.0f, 0.5f, 0.0f, 1.0f};
+    float     m_polygon_label_line_width         {1.5f};
+    float     m_polygon_label_line_length        {0.1f};
+    glm::vec4 m_corner_label_text_color          {0.5f, 1.0f, 1.0f, 1.0f};
+    glm::vec4 m_corner_label_line_color          {0.0f, 0.5f, 0.5f, 1.0f};
+    float     m_corner_label_line_length         {0.05f};
+    float     m_corner_label_line_width          {1.5f};
     //// std::vector<std::string> m_lines;
 };
 

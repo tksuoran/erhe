@@ -24,17 +24,8 @@ Node_physics::Node_physics(
     const IRigid_body_create_info& create_info
 )
     : erhe::scene::Node_attachment{erhe::toolkit::Unique_id<Node_physics>{}.get_id()}
-    , m_rigidbody_from_node{}
-    , m_node_from_rigidbody{}
-    , m_motion_mode        {
-        (create_info.mass == 0.0f)
-            ? erhe::physics::Motion_mode::e_static
-            : erhe::physics::Motion_mode::e_dynamic
-    }
-    , m_rigid_body     {IRigid_body::create_rigid_body_shared(create_info, this)}
-    , m_collision_shape{create_info.collision_shape}
+    , m_create_info{create_info}
 {
-    log_physics->trace("Created Node_physics {}", create_info.debug_label);
 }
 
 Node_physics::~Node_physics() noexcept
@@ -83,185 +74,58 @@ void Node_physics::handle_item_host_update(
     if (old_item_host != nullptr) {
         Scene_root* old_scene_root = static_cast<Scene_root*>(old_item_host);
         old_scene_root->unregister_node_physics(shared_this);
+        m_rigid_body.reset();
     }
     if (new_item_host != nullptr) {
-        log_physics->trace("attaching {} to physics world", m_rigid_body->get_debug_label());
         Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
+        auto& physics_world = new_scene_root->get_physics_world();
+
+        log_physics->trace("making rigid body for {}", get_node()->get_name());
+        m_rigid_body = physics_world.create_rigid_body_shared(m_create_info);
+        m_rigid_body->set_owner(this);
         new_scene_root->register_node_physics(shared_this);
     }
 }
 
-// This is called from scene graph (Node) when mode is moved
-void Node_physics::handle_node_transform_update()
+void Node_physics::before_physics_simulation()
 {
-    // This can happen if node has been detached from scene
-    if (m_physics_world == nullptr) {
-        log_physics_frame->warn("Node_physics '{}' is not in physics world", m_rigid_body->get_debug_label());
-        return;
-    }
-    // TODO ERHE_VERIFY(m_node != nullptr);
-
-    if (m_transform_change_from_physics) {
-        return;
-    }
-
-    // TODO This is a hack, remove when Node_physics handles shape scale
-    const glm::mat4 m = get_node()->world_from_node();
-    glm::vec3 scale;
-    glm::quat orientation;
-    glm::vec3 translation;
-    glm::vec3 skew;
-    glm::vec4 perspective;
-    glm::decompose(m, scale, orientation, translation, skew, perspective);
-    m_scale = scale;
-
-    const erhe::physics::Transform world_from_node = get_world_from_node();
-
-    log_physics_frame->trace(
-        "handle_node_transform_update {} pos = {}",
-        m_rigid_body->get_debug_label(),
-        world_from_node.origin
-    );
-
-    ERHE_VERIFY(m_rigid_body);
-    m_rigid_body->set_world_transform(world_from_node * m_node_from_rigidbody);
-}
-
-void Node_physics::set_rigidbody_from_node(const erhe::physics::Transform rigidbody_from_node)
-{
-    m_rigidbody_from_node = rigidbody_from_node;
-    m_node_from_rigidbody = inverse(rigidbody_from_node);
-}
-
-// This gets called by Motion_state_adapter
-auto Node_physics::get_world_from_rigidbody() const -> erhe::physics::Transform
-{
-    return get_world_from_node() * m_node_from_rigidbody;
-}
-
-auto Node_physics::get_motion_mode() const -> erhe::physics::Motion_mode
-{
-    return m_motion_mode;
-}
-
-void Node_physics::set_motion_mode(const erhe::physics::Motion_mode motion_mode)
-{
-    m_motion_mode = motion_mode;
-}
-
-auto Node_physics::get_world_from_node() const -> erhe::physics::Transform
-{
-    ERHE_PROFILE_FUNCTION();
-
-    if (get_node() == nullptr) {
-        return erhe::physics::Transform{};
-    }
-
-    const glm::mat4 m = get_node()->world_from_node();
-    const glm::vec3 p = glm::vec3{m[3]};
-
-    return erhe::physics::Transform{
-        glm::mat3{m},
-        p
+    const erhe::scene::Trs_transform& world_from_node_transform = get_node()->world_from_node_transform();
+    erhe::physics::Transform transform{
+        glm::mat3_cast(world_from_node_transform.get_rotation()),
+        world_from_node_transform.get_translation()
     };
-}
+    m_rigid_body->set_world_transform(transform);
 
-
-void Node_physics::set_world_from_rigidbody(
-    const glm::mat4& world_from_rigidbody
-)
-{
-    const auto& m = m_rigidbody_from_node.basis;
-    glm::mat4 rigidbody_from_node{m};
-    rigidbody_from_node[3] = glm::vec4{
-        m_rigidbody_from_node.origin.x,
-        m_rigidbody_from_node.origin.y,
-        m_rigidbody_from_node.origin.z,
-        1.0f
-    };
-
-    set_world_from_node(world_from_rigidbody * rigidbody_from_node);
-}
-
-void Node_physics::set_world_from_rigidbody(
-    const erhe::physics::Transform world_from_rigidbody
-)
-{
-    set_world_from_node(world_from_rigidbody * m_rigidbody_from_node);
+    const auto get_transform = m_rigid_body->get_world_transform();
+    const glm::vec3 get_world_position = glm::vec3{get_transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
 }
 
 // This is intended to be called from physics backend
-void Node_physics::set_world_from_node(
-    const glm::mat4& world_from_node_no_scale
-)
+void Node_physics::after_physics_simulation()
 {
     ERHE_PROFILE_FUNCTION();
 
-    // TODO ERHE_VERIFY(m_node != nullptr);
-    if (m_node == nullptr) {
-        return; // TODO FIX
+    ERHE_VERIFY(m_node != nullptr);
+    ERHE_VERIFY(m_rigid_body);
+
+    const auto motion_mode = m_rigid_body->get_motion_mode();
+    if (motion_mode != erhe::physics::Motion_mode::e_dynamic) {
+        return;
     }
 
-    // TODO This is a hack, remove when Node_physics handles shape scale
-    const glm::mat4 scale = erhe::toolkit::create_scale<float>(m_scale);
-    const glm::mat4& world_from_node = world_from_node_no_scale * scale;
+    const auto transform = m_rigid_body->get_world_transform();
+    const glm::vec3 world_position = glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
 
-    // TODO Take center of mass into account
-
-    log_physics_frame->trace("physics transform update for {}, depth = {}", m_node->get_name(), m_node->get_depth());
-
-    m_transform_change_from_physics = true;
-
-    const glm::vec3 world_position = glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
     if (world_position.y < -100.0f) {
         const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
-        m_rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{world_from_node}, respawn_location});
+        m_rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{1.0f}, respawn_location});
         m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
         m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
         const glm::mat4 matrix = erhe::toolkit::create_translation<float>(respawn_location);
         get_node()->set_world_from_node(matrix);
     } else {
-        get_node()->set_world_from_node(world_from_node);
+        get_node()->set_world_from_node(transform);
     }
-    m_transform_change_from_physics = false;
-}
-
-void Node_physics::set_world_from_node(
-    const erhe::physics::Transform world_from_node
-)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    // TDOO ERHE_VERIFY(m_node != nullptr);
-    if (m_node == nullptr) {
-        return; // TODO FIX
-    }
-
-    // TODO Take center of mass into account
-
-    if (world_from_node.origin.y < -100.0f) {
-        const glm::vec3 respawn_location{0.0f, 8.0f, 0.0f};
-        m_rigid_body->set_world_transform (erhe::physics::Transform{world_from_node.basis, respawn_location});
-        m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
-        m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
-    }
-
-    m_transform_change_from_physics = true;
-
-    const auto& m = world_from_node.basis;
-    glm::mat4 matrix{m};
-    matrix[3] = glm::vec4{
-        world_from_node.origin.x,
-        world_from_node.origin.y,
-        world_from_node.origin.z,
-        1.0f
-    };
-
-    log_physics_frame->trace("physics transform update for {}, depth = {}", m_node->get_name(), m_node->get_depth());
-
-    get_node()->set_world_from_node(matrix);
-
-    m_transform_change_from_physics = false;
 }
 
 auto Node_physics::get_rigid_body() -> IRigid_body*
@@ -291,9 +155,7 @@ auto is_physics(const std::shared_ptr<erhe::Item>& scene_item) -> bool
     return is_physics(scene_item.get());
 }
 
-auto get_node_physics(
-    const erhe::scene::Node* node
-) -> std::shared_ptr<Node_physics>
+auto get_node_physics(const erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
 {
     for (const auto& attachment : node->get_attachments()) {
         auto node_physics = as<Node_physics>(attachment);

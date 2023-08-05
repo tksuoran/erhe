@@ -14,13 +14,14 @@ std::shared_ptr<spdlog::logger> log_frame   ;
 
 void initialize_logging()
 {
-    log_buffer   = erhe::log::make_logger("erhe::raytrace::buffer",   spdlog::level::info);
-    log_device   = erhe::log::make_logger("erhe::raytrace::device",   spdlog::level::info);
-    log_geometry = erhe::log::make_logger("erhe::raytrace::geometry", spdlog::level::info);
-    log_instance = erhe::log::make_logger("erhe::raytrace::instance", spdlog::level::info);
-    log_scene    = erhe::log::make_logger("erhe::raytrace::scene",    spdlog::level::info);
-    log_embree   = erhe::log::make_logger("erhe::raytrace::embree",   spdlog::level::info);
-    log_frame    = erhe::log::make_logger("erhe::raytrace::frame",    spdlog::level::info, false);
+    using namespace erhe::log;
+    log_buffer   = make_logger      ("erhe.raytrace.buffer"  );
+    log_device   = make_logger      ("erhe.raytrace.device"  );
+    log_geometry = make_logger      ("erhe.raytrace.geometry");
+    log_instance = make_logger      ("erhe.raytrace.instance");
+    log_scene    = make_logger      ("erhe.raytrace.scene"   );
+    log_embree   = make_logger      ("erhe.raytrace.embree"  );
+    log_frame    = make_frame_logger("erhe.raytrace.frame"   );
 }
 
 } // namespace erhe::raytrace

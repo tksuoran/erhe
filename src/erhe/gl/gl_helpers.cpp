@@ -23,7 +23,7 @@ static bool enable_error_checking = true;
 
 void initialize_logging()
 {
-    log_gl = erhe::log::make_logger("gl", spdlog::level::info);
+    log_gl = erhe::log::make_logger("erhe.gl");
 }
 
 void set_error_checking(const bool enable)

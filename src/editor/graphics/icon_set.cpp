@@ -130,7 +130,6 @@ auto Icon_set::load(const std::filesystem::path& path) -> glm::vec2
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
     Expects(m_row < m_row_count);
 
-    //const auto  current_path = std::filesystem::current_path();
     const auto document = lunasvg::Document::loadFromFile(path.string());
     if (!document) {
         log_svg->error("Unable to load {}", path.string());

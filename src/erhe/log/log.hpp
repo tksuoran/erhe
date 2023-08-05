@@ -6,6 +6,7 @@
 
 #include <deque>
 #include <memory>
+#include <string>
 
 namespace erhe::log
 {
@@ -15,11 +16,8 @@ void initialize_log_sinks();
 void log_to_console();
 
 // creates and configures logger
-auto make_logger(
-    std::string               name,
-    spdlog::level::level_enum level,
-    bool                      tail = true
-) -> std::shared_ptr<spdlog::logger>;
+auto make_logger(const std::string& name, bool tail = true) -> std::shared_ptr<spdlog::logger>;
+auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logger>;
 
 class Entry
 {
@@ -34,11 +32,11 @@ public:
 };
 
 // Sink that keeps log entries in deqeue
-class store_log_sink final
+class Store_log_sink final
     : public spdlog::sinks::base_sink<std::mutex>
 {
 public:
-    store_log_sink();
+    Store_log_sink();
 
     [[nodiscard]] auto get_serial() const -> uint64_t;
     [[nodiscard]] auto get_log   () -> std::deque<Entry>&;
@@ -53,8 +51,11 @@ private:
     std::deque<Entry> m_entries;
 };
 
-auto get_tail_store_log () -> const std::shared_ptr<store_log_sink>&;
-auto get_frame_store_log() -> const std::shared_ptr<store_log_sink>&;
+[[nodiscard]] auto get_tail_store_log () -> const std::shared_ptr<Store_log_sink>&;
+[[nodiscard]] auto get_frame_store_log() -> const std::shared_ptr<Store_log_sink>&;
+[[nodiscard]] auto get_groupname      (const std::string& s) -> std::string;
+[[nodiscard]] auto get_basename       (const std::string& s) -> std::string;
+[[nodiscard]] auto get_levelname      (spdlog::level::level_enum level) -> std::string;
 
 } // namespace erhe::log
 

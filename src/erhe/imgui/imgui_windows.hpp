@@ -46,12 +46,12 @@ public:
     void register_imgui_viewport  (Imgui_viewport* viewport);
     void unregister_imgui_viewport(Imgui_viewport* viewport);
     void register_imgui_window    (Imgui_window* window);
-    void register_imgui_window    (Imgui_window* window, bool visible);
     void unregister_imgui_window  (Imgui_window* window);
     void make_current             (const Imgui_viewport* imgui_viewport);
     void imgui_windows            ();
     void window_menu              (Imgui_viewport* imgui_viewport);
     auto get_windows              () -> std::vector<Imgui_window*>&;
+    void save_window_state        ();
 
     [[nodiscard]] auto get_window_viewport  () -> std::shared_ptr<Window_imgui_viewport>;
     [[nodiscard]] auto want_capture_keyboard() const -> bool;

@@ -54,5 +54,19 @@ Jolt_compound_shape::Jolt_compound_shape(
     m_jolt_shape = result.Get();
 }
 
+auto Jolt_compound_shape::is_convex() const -> bool
+{
+    return false;
+}
+
+auto Jolt_compound_shape::get_shape_settings() -> JPH::ShapeSettings&
+{
+    return *m_shape_settings.GetPtr();
+}
+
+auto Jolt_compound_shape::describe() const -> std::string
+{
+    return "Jolt_compound_shape";
+}
 
 } // namespace erhe::physics

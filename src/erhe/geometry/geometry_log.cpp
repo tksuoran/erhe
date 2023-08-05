@@ -22,21 +22,22 @@ std::shared_ptr<spdlog::logger> log_weld             ;
 
 void initialize_logging()
 {
-    log_geometry          = erhe::log::make_logger("erhe::geometry::geometry",          spdlog::level::info);
-    log_build_edges       = erhe::log::make_logger("erhe::geometry::build_edges",       spdlog::level::info);
-    log_tangent_gen       = erhe::log::make_logger("erhe::geometry::tangent_gen",       spdlog::level::info);
-    log_cone              = erhe::log::make_logger("erhe::geometry::cone",              spdlog::level::info);
-    log_torus             = erhe::log::make_logger("erhe::geometry::torus",             spdlog::level::info);
-    log_sphere            = erhe::log::make_logger("erhe::geometry::sphere",            spdlog::level::info);
-    log_polygon_texcoords = erhe::log::make_logger("erhe::geometry::polygon_texcoords", spdlog::level::info);
-    log_interpolate       = erhe::log::make_logger("erhe::geometry::interpolate",       spdlog::level::info);
-    log_operation         = erhe::log::make_logger("erhe::geometry::operation",         spdlog::level::info);
-    log_catmull_clark     = erhe::log::make_logger("erhe::geometry::catmull_clark",     spdlog::level::info);
-    log_triangulate       = erhe::log::make_logger("erhe::geometry::triangulate",       spdlog::level::info);
-    log_subdivide         = erhe::log::make_logger("erhe::geometry::subdivide",         spdlog::level::info);
-    log_attribute_maps    = erhe::log::make_logger("erhe::geometry::attribute_maps",    spdlog::level::info);
-    log_merge             = erhe::log::make_logger("erhe::geometry::merge",             spdlog::level::info);
-    log_weld              = erhe::log::make_logger("erhe::geometry::weld",              spdlog::level::info);
+    using namespace erhe::log;
+    log_geometry          = make_logger("erhe.geometry.geometry"         );
+    log_build_edges       = make_logger("erhe.geometry.build_edges"      );
+    log_tangent_gen       = make_logger("erhe.geometry.tangent_gen"      );
+    log_cone              = make_logger("erhe.geometry.cone"             );
+    log_torus             = make_logger("erhe.geometry.torus"            );
+    log_sphere            = make_logger("erhe.geometry.sphere"           );
+    log_polygon_texcoords = make_logger("erhe.geometry.polygon_texcoords");
+    log_interpolate       = make_logger("erhe.geometry.interpolate"      );
+    log_operation         = make_logger("erhe.geometry.operation"        );
+    log_catmull_clark     = make_logger("erhe.geometry.catmull_clark"    );
+    log_triangulate       = make_logger("erhe.geometry.triangulate"      );
+    log_subdivide         = make_logger("erhe.geometry.subdivide"        );
+    log_attribute_maps    = make_logger("erhe.geometry.attribute_maps"   );
+    log_merge             = make_logger("erhe.geometry.merge"            );
+    log_weld              = make_logger("erhe.geometry.weld"             );
 }
 
 } // namespace erhe::geometry

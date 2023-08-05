@@ -211,6 +211,7 @@ Jolt_world::~Jolt_world() noexcept = default;
 
 void Jolt_world::update_fixed_step(const double dt)
 {
+    log_physics_frame->trace("update_fixed_step()");
     // If you take larger steps than 1 / 60th of a second you need to do
     // multiple collision steps in order to keep the simulation stable.
     // Do 1 collision step per 1 / 60th of a second (round up).
@@ -231,18 +232,25 @@ void Jolt_world::update_fixed_step(const double dt)
         &m_temp_allocator,
         &m_job_system
     );
+}
 
-    //const auto num_active_bodies = m_physics_system.GetNumActiveBodies();
-    //const auto num_bodies        = m_physics_system.GetNumBodies();
-    //// const auto body_stats = m_physics_system.GetBodyStats();
-    //log_physics_frame.info("num active bodies = {}", num_active_bodies);
-    //log_physics_frame.info("num bodies = {}", num_bodies);
-    //// info_fmt(log_physics_frame, "num active dynamic = {}\n",   body_stats.mNumActiveBodiesDynamic);
-    //// info_fmt(log_physics_frame, "num dynamic = {}\n",          body_stats.mNumBodiesDynamic);
-    //// info_fmt(log_physics_frame, "num active kinematic = {}\n", body_stats.mNumActiveBodiesKinematic);
-    //// info_fmt(log_physics_frame, "num kinematic = {}\n",        body_stats.mNumBodiesKinematic);
-    //// info_fmt(log_physics_frame, "num static = {}\n",           body_stats.mNumBodiesStatic);
-    //// info_fmt(log_physics_frame, "num bodies = {}\n",           body_stats.mNumBodies);
+auto Jolt_world::describe() const -> std::vector<std::string>
+{
+    std::vector<std::string> out;
+    const auto num_constraints   = m_physics_system.GetConstraints().size();
+    const auto num_active_bodies = m_physics_system.GetNumActiveBodies();
+    const auto num_bodies        = m_physics_system.GetNumBodies();
+    const auto body_stats        = m_physics_system.GetBodyStats();
+    out.push_back(fmt::format("num constraints = {}",      num_constraints));
+    out.push_back(fmt::format("num active bodies = {}",    num_active_bodies));
+    out.push_back(fmt::format("num bodies = {}",           num_bodies));
+    out.push_back(fmt::format("num active dynamic = {}",   body_stats.mNumActiveBodiesDynamic));
+    out.push_back(fmt::format("num dynamic = {}",          body_stats.mNumBodiesDynamic));
+    out.push_back(fmt::format("num active kinematic = {}", body_stats.mNumActiveBodiesKinematic));
+    out.push_back(fmt::format("num kinematic = {}",        body_stats.mNumBodiesKinematic));
+    out.push_back(fmt::format("num static = {}",           body_stats.mNumBodiesStatic));
+    out.push_back(fmt::format("num bodies = {}",           body_stats.mNumBodies));
+    return out;
 }
 
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
@@ -258,7 +266,6 @@ void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
         return;
     }
 
-    log_physics->trace("add rigid body {} id = {}", rigid_body->get_debug_label(), jolt_body->GetID().GetIndex());
 
 #ifndef NDEBUG
     const auto i = std::find(m_rigid_bodies.begin(), m_rigid_bodies.end(), jolt_rigid_body);
@@ -273,6 +280,13 @@ void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
         );
         m_rigid_bodies.push_back(jolt_rigid_body);
     }
+
+    log_physics->trace(
+        "added rigid body {} id = {} (total {})",
+        rigid_body->get_debug_label(),
+        jolt_body->GetID().GetIndex(),
+        m_physics_system.GetNumBodies()
+    );
 }
 
 void Jolt_world::remove_rigid_body(IRigid_body* rigid_body)
@@ -349,6 +363,16 @@ auto Jolt_world::get_gravity() const -> glm::vec3
     return m_gravity;
 }
 
+auto Jolt_world::get_rigid_body_count() const -> std::size_t
+{
+    return m_physics_system.GetNumBodies();
+}
+
+auto Jolt_world::get_constraint_count() const -> std::size_t
+{
+    return m_physics_system.GetConstraints().size();
+}
+
 void Jolt_world::set_debug_drawer(IDebug_draw* debug_draw)
 {
     static_cast<void>(debug_draw);
@@ -365,20 +389,49 @@ auto Jolt_world::get_physics_system() -> JPH::PhysicsSystem&
     return m_physics_system;
 }
 
+void Jolt_world::set_on_body_activated(std::function<void(IRigid_body*)> callback)
+{
+    m_on_body_activated_callback = callback;
+}
+
+void Jolt_world::set_on_body_deactivated(std::function<void(IRigid_body*)> callback)
+{
+    m_on_body_deactivated_callback = callback;
+}
+
+void Jolt_world::for_each_active_body(std::function<void(IRigid_body*)> callback)
+{
+    const JPH::BodyID*  active_bodies     = m_physics_system.GetActiveBodiesUnsafe();
+    const JPH::uint32   active_body_count = m_physics_system.GetNumActiveBodies();
+    JPH::BodyInterface& body_interface    = m_physics_system.GetBodyInterfaceNoLock();
+    for (JPH::uint32 i = 0; i < active_body_count; ++i) {
+        JPH::BodyID      body_id         = active_bodies[i];
+        JPH::uint64      user_data       = body_interface.GetUserData(body_id);
+        Jolt_rigid_body* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(user_data);
+        if (jolt_rigid_body == nullptr) {
+            continue;
+        }
+        callback(jolt_rigid_body);
+    }
+}
+
 void Jolt_world::OnBodyActivated(
     const JPH::BodyID& inBodyID,
     JPH::uint64        inBodyUserData
 )
 {
+    if (!m_on_body_activated_callback) {
+        return;
+    }
     //const auto userdata = m_physics_system.GetBodyInterface().GetUserData(inBodyID);
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
+    ERHE_VERIFY(body != nullptr);
+    m_on_body_activated_callback(body);
 
     log_physics->trace(
         "Body activated ID = {}, name = {}",
         inBodyID.GetIndex(),
-        (body != nullptr)
-            ? body->get_debug_label()
-            : "()"
+        body->get_debug_label()
     );
 }
 
@@ -387,14 +440,16 @@ void Jolt_world::OnBodyDeactivated(
     JPH::uint64        inBodyUserData
 )
 {
+    if (!m_on_body_deactivated_callback) {
+        return;
+    }
     auto* body = reinterpret_cast<Jolt_rigid_body*>(inBodyUserData);
-
+    ERHE_VERIFY(body != nullptr);
+    m_on_body_deactivated_callback(body);
     log_physics->trace(
         "Body deactivated ID = {}, name = {}",
         inBodyID.GetIndex(),
-        (body != nullptr)
-            ? body->get_debug_label()
-            : "()"
+        body->get_debug_label()
     );
 }
 
@@ -426,7 +481,7 @@ void Jolt_world::OnContactPersisted(
     JPH::ContactSettings&       ioSettings
 )
 {
-    //log_physics.info("contact persisted\n");
+    //log_physics->trace("contact persisted");
     static_cast<void>(inBody1);
     static_cast<void>(inBody2);
     static_cast<void>(inManifold);
@@ -458,6 +513,24 @@ void Jolt_world::OnContactRemoved(
 
 void Jolt_world::sanity_check()
 {
+}
+
+auto Jolt_world::create_rigid_body(
+    const IRigid_body_create_info& create_info,
+    glm::vec3                      position,
+    glm::quat                      orientation
+) -> IRigid_body*
+{
+    return new Jolt_rigid_body(*this, create_info, position, orientation);
+}
+
+auto Jolt_world::create_rigid_body_shared(
+    const IRigid_body_create_info& create_info,
+    glm::vec3                      position,
+    glm::quat                      orientation
+) -> std::shared_ptr<IRigid_body>
+{
+    return std::make_shared<Jolt_rigid_body>(*this, create_info, position, orientation);
 }
 
 } // namespace erhe::physics

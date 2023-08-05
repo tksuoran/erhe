@@ -77,7 +77,7 @@ Font::Font(
         //m_hint_mode = FT_LOAD_FORCE_AUTOHINT;
         m_hint_mode = 0;
     } else {
-        m_hint_mode = FT_LOAD_NO_HINTING; // NOLINT(hicpp-signed-bitwise)
+        m_hint_mode = FT_LOAD_TARGET_LIGHT; // NOLINT(hicpp-signed-bitwise)
     }
 
     m_chars =

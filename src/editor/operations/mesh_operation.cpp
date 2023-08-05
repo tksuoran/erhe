@@ -171,8 +171,6 @@ void Mesh_operation::make_entries(
             );
             entry.after.node_raytrace = std::make_shared<Node_raytrace>(entry.mesh, entry.after.primitives);
             if (m_parameters.context.editor_settings->physics_static_enable) {
-                auto& physics_world = scene_root->get_physics_world();
-
                 auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
                     reinterpret_cast<const float*>(
                         after_geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations)->values.data()
@@ -182,7 +180,6 @@ void Mesh_operation::make_entries(
                 );
 
                 const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                    .world           = physics_world,
                     .collision_shape = collision_shape,
                     .debug_label     = after_geometry->name.c_str()
                 };

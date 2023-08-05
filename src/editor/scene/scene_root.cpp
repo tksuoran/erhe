@@ -114,8 +114,44 @@ Scene_root::Scene_root(
     //m_scene->enable_flag_bits(erhe::Item_flags::show_in_ui);
     m_scene->get_root_node()->enable_flag_bits(erhe::Item_flags::invisible_parent);
     m_physics_world  = erhe::physics::IWorld::create_unique();
+    m_physics_world->set_on_body_activated(
+        [this](erhe::physics::IRigid_body* rigid_body) {
+            ERHE_VERIFY(rigid_body != nullptr);
+            if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
+                return;
+            }
+            void* owner = rigid_body->get_owner();
+            Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
+            if (node_physics == nullptr) {
+                return;
+            }
+            erhe::scene::Node* node = node_physics->get_node();
+            if (node == nullptr) {
+                return;
+            }
+            node->enable_flag_bits(erhe::Item_flags::no_transform_update);
+        }
+    );
+    m_physics_world->set_on_body_deactivated(
+        [this](erhe::physics::IRigid_body* rigid_body) {
+            ERHE_VERIFY(rigid_body != nullptr);
+            //if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
+            //    return;
+            //}
+            void* owner = rigid_body->get_owner();
+            Node_physics* node_physics = reinterpret_cast<Node_physics*>(owner);
+            if (node_physics == nullptr) {
+                return;
+            }
+            erhe::scene::Node* node = node_physics->get_node();
+            if (node == nullptr) {
+                return;
+            }
+            node->disable_flag_bits(erhe::Item_flags::no_transform_update);
+        }
+    );
 
-    m_raytrace_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
+    m_raytrace_visualization_scene = erhe::raytrace::IScene::create_unique("rt_root_scene");
 
     if (editor_scenes != nullptr) {
         register_to_editor_scenes(*editor_scenes);
@@ -383,6 +419,17 @@ void Scene_root::unregister_node_physics(const std::shared_ptr<Node_physics>& no
     node_physics->set_physics_world(nullptr);
 }
 
+void Scene_root::before_physics_simulation_steps()
+{
+    for (const auto& node_physics : m_node_physics) {
+        auto* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body == nullptr) {
+            continue;
+        }
+        node_physics->before_physics_simulation();
+    }
+}
+
 void Scene_root::update_physics_simulation_fixed_step(const double dt)
 {
     if (m_physics_world) {
@@ -390,7 +437,7 @@ void Scene_root::update_physics_simulation_fixed_step(const double dt)
     }
 }
 
-void Scene_root::update_physics_simulation_once_per_frame()
+void Scene_root::after_physics_simulation_steps()
 {
     if (!m_physics_world) {
         return;
@@ -410,16 +457,14 @@ void Scene_root::update_physics_simulation_once_per_frame()
                 return lhs_node->get_depth() < rhs_node->get_depth();
             }
         );
+        m_node_physics_sorted = true;
     }
 
     for (const auto& node_physics : m_node_physics) {
         auto* rigid_body = node_physics->get_rigid_body();
         if (rigid_body) {
             if (rigid_body->is_active()) {
-                const glm::mat4 transform = rigid_body->get_world_transform();
-                node_physics->set_world_from_node(transform);
-            } else {
-                log_physics_frame->trace("{} is sleeping", rigid_body->get_debug_label());
+                node_physics->after_physics_simulation();
             }
         }
     }
@@ -428,7 +473,7 @@ void Scene_root::update_physics_simulation_once_per_frame()
 void Scene_root::register_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace)
 {
     log_raytrace->trace("RT add {} node {} to {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
-    if (!m_raytrace_scene) {
+    if (!m_raytrace_visualization_scene) {
         return;
     }
 
@@ -443,7 +488,7 @@ void Scene_root::register_node_raytrace(const std::shared_ptr<Node_raytrace>& no
         m_node_raytraces.push_back(node_raytrace);
     }
 
-    node_raytrace->attach_to_scene(m_raytrace_scene.get());
+    node_raytrace->attach_to_scene(m_raytrace_visualization_scene.get());
 
     uint32_t mask = 0;
     for (const auto& node_attachment : node_raytrace->get_node()->get_attachments()) {
@@ -456,7 +501,7 @@ void Scene_root::register_node_raytrace(const std::shared_ptr<Node_raytrace>& no
 void Scene_root::unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace)
 {
     log_raytrace->trace("RT remove {} node {} from {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
-    if (!m_raytrace_scene) {
+    if (!m_raytrace_visualization_scene) {
         return;
     }
 
@@ -477,8 +522,8 @@ void Scene_root::unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& 
     }
 
     //erhe::raytrace::IInstance* rt_instance = node_raytrace->raytrace_instance();
-    //m_raytrace_scene->detach(rt_instance);
-    node_raytrace->detach_from_scene(m_raytrace_scene.get());
+    //m_raytrace_visualization_scene->detach(rt_instance);
+    node_raytrace->detach_from_scene(m_raytrace_visualization_scene.get());
     log_raytrace->trace("RT {} node {} detached from {}", node_raytrace->get_label(), node_raytrace->get_node()->get_name(), m_scene->get_name());
 }
 
@@ -500,8 +545,8 @@ auto Scene_root::get_physics_world() -> erhe::physics::IWorld&
 
 auto Scene_root::get_raytrace_scene() -> erhe::raytrace::IScene&
 {
-    ERHE_VERIFY(m_raytrace_scene);
-    return *m_raytrace_scene.get();
+    ERHE_VERIFY(m_raytrace_visualization_scene);
+    return *m_raytrace_visualization_scene.get();
 }
 
 auto Scene_root::get_scene() -> erhe::scene::Scene&
@@ -696,6 +741,67 @@ auto Scene_root::content_library() const -> std::shared_ptr<Content_library>
 void Scene_root::sanity_check()
 {
     m_scene->sanity_check();
+}
+
+void Scene_root::update_physics_disabled_nodes(
+    const std::vector<std::shared_ptr<erhe::Item>>& items
+)
+{
+    std::vector<std::shared_ptr<erhe::Item>> physics_nodes;
+
+    // Gather nodes with physics
+    std::copy_if(
+        items.begin(),
+        items.end(),
+        std::back_inserter(physics_nodes),
+        [](const std::shared_ptr<erhe::Item>& item) {
+            const auto node = as<erhe::scene::Node>(item);
+            if (!node) {
+                return false;
+            }
+            const auto node_physics = get_node_physics(node.get());
+            return node_physics.get() != nullptr;
+        }
+    );
+
+    std::sort(physics_nodes.begin(), physics_nodes.end());
+
+    // "release" nodes that are no longer to be disabled
+    std::vector<std::shared_ptr<erhe::Item>> release_set;
+    std::set_difference(
+        m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(),
+        physics_nodes.begin(), physics_nodes.end(),
+        std::back_inserter(release_set)
+    );
+    for (const auto& item : release_set) {
+        const auto node         = as<erhe::scene::Node>(item);
+        const auto node_physics = get_node_physics(node.get());
+        auto*      rigid_body   = node_physics->get_rigid_body();
+        log_trs_tool->warn("release {} orig. motion mode = {}", node->get_name(), erhe::physics::c_str(node_physics->physics_motion_mode));
+        rigid_body->set_motion_mode     (node_physics->physics_motion_mode);
+        rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
+        rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
+        rigid_body->end_move            (); // allows sleeping
+    }
+
+    // "acquire" nodes that are newly disabled
+    std::vector<std::shared_ptr<erhe::Item>> acquire_set;
+    std::set_difference(
+        physics_nodes.begin(), physics_nodes.end(),
+        m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(),
+        std::back_inserter(acquire_set)
+    );
+    for (const auto& item : acquire_set) {
+        const auto node         = as<erhe::scene::Node>(item);
+        const auto node_physics = get_node_physics(node.get());
+        auto*      rigid_body   = node_physics->get_rigid_body();
+        node_physics->physics_motion_mode = rigid_body->get_motion_mode();
+        log_trs_tool->warn("acquire {} orig. motion mode = {}", node->get_name(), erhe::physics::c_str(node_physics->physics_motion_mode));
+        rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
+        rigid_body->begin_move();
+    }
+
+    m_physics_disabled_nodes = std::move(physics_nodes);
 }
 
 } // namespace editor

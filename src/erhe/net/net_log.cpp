@@ -11,10 +11,11 @@ std::shared_ptr<spdlog::logger> log_server;
 
 void initialize_logging()
 {
-    log_net    = erhe::log::make_logger("erhe::net::net",    spdlog::level::info);
-    log_socket = erhe::log::make_logger("erhe::net::socket", spdlog::level::info);
-    log_client = erhe::log::make_logger("erhe::net::client", spdlog::level::info);
-    log_server = erhe::log::make_logger("erhe::net::server", spdlog::level::info);
+    using namespace erhe::log;
+    log_net    = make_logger("erhe.net.net");
+    log_socket = make_logger("erhe.net.socket");
+    log_client = make_logger("erhe.net.client");
+    log_server = make_logger("erhe.net.server");
 }
 
 } // namespace erhe::net

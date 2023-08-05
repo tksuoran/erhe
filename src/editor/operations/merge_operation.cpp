@@ -141,10 +141,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         );
 
         if (parameters.context.editor_settings->physics_static_enable) {
-            auto& physics_world = scene_root->get_physics_world();
-
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                .world           = physics_world,
                 .collision_shape = combined_collision_shape,
                 .debug_label     = "merged" // TODO
             };

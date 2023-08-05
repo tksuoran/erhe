@@ -416,16 +416,15 @@ auto Brush::make_instance(
             ERHE_PROFILE_SCOPE("make brush node physics");
 
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                .world            = instance_create_info.scene_root->get_physics_world(),
                 .collision_shape  = scaled.collision_shape,
                 .mass             = data.density * scaled.volume,
                 .inertia_override = scaled.local_inertia,
-                .debug_label      = name.c_str()
+                .debug_label      = name.c_str(),
+                .motion_mode      = instance_create_info.motion_mode,
             };
             auto node_physics = std::make_shared<Node_physics>(rigid_body_create_info); // TODO use content library?
             node->attach(node_physics);
         }
-
     }
 
     return node;

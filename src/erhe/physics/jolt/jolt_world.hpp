@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe/physics/iworld.hpp"
-#include "erhe/physics/imotion_state.hpp"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/TempAllocator.h>
@@ -16,6 +15,8 @@
 
 namespace erhe::physics
 {
+
+enum class Motion_mode : unsigned int;
 
 class ICollision_shape;
 class Jolt_rigid_body;
@@ -59,16 +60,34 @@ public:
     virtual ~Jolt_world() noexcept override;
 
     // Implements IWorld
-    [[nodiscard]] auto get_gravity() const -> glm::vec3 override;
-    void update_fixed_step (double dt)                override;
-    void set_gravity       (const glm::vec3& gravity) override;
-    void add_rigid_body    (IRigid_body* rigid_body)  override;
-    void remove_rigid_body (IRigid_body* rigid_body)  override;
-    void add_constraint    (IConstraint* constraint)  override;
-    void remove_constraint (IConstraint* constraint)  override;
-    void set_debug_drawer  (IDebug_draw* debug_draw)  override;
-    void debug_draw        ()                         override;
-    void sanity_check      ()                         override;
+    auto create_rigid_body(
+        const IRigid_body_create_info& create_info,
+        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
+        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
+    ) -> IRigid_body*                 override;
+    auto create_rigid_body_shared(
+        const IRigid_body_create_info& create_info,
+        glm::vec3                      position    = glm::vec3{0.0f, 0.0f, 0.0f},
+        glm::quat                      orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}
+    ) -> std::shared_ptr<IRigid_body> override;
+
+    auto get_gravity         () const -> glm::vec3                override;
+    auto get_rigid_body_count() const -> std::size_t              override;
+    auto get_constraint_count() const -> std::size_t              override;
+    auto describe            () const -> std::vector<std::string> override;
+    void update_fixed_step   (double dt)                          override;
+    void set_gravity         (const glm::vec3& gravity)           override;
+    void add_rigid_body      (IRigid_body* rigid_body)            override;
+    void remove_rigid_body   (IRigid_body* rigid_body)            override;
+    void add_constraint      (IConstraint* constraint)            override;
+    void remove_constraint   (IConstraint* constraint)            override;
+    void set_debug_drawer    (IDebug_draw* debug_draw)            override;
+    void debug_draw          ()                                   override;
+    void sanity_check        ()                                   override;
+
+    void set_on_body_activated  (std::function<void(IRigid_body*)> callback) override;
+    void set_on_body_deactivated(std::function<void(IRigid_body*)> callback) override;
+    void for_each_active_body   (std::function<void(IRigid_body*)> callback) override;
 
     // Implements BodyActivationListener
     void OnBodyActivated  (const JPH::BodyID& inBodyID, JPH::uint64 inBodyUserData) override;
@@ -108,6 +127,9 @@ private:
     std::unique_ptr<JPH::BroadPhaseLayerInterface> m_broad_phase_layer_interface;
     JPH::PhysicsSystem                             m_physics_system;
     //std::unique_ptr<Jolt_debug_renderer>           m_debug_renderer;
+
+    std::function<void(Jolt_rigid_body*)> m_on_body_activated_callback;
+    std::function<void(Jolt_rigid_body*)> m_on_body_deactivated_callback;
 
     std::vector<Jolt_rigid_body*>                  m_rigid_bodies;
     std::vector<Jolt_constraint*>                  m_constraints;

@@ -8,7 +8,7 @@
 
 #include "erhe/commands/command.hpp"
 #include "erhe/imgui/imgui_window.hpp"
-#include "erhe/physics/imotion_state.hpp"
+#include "erhe/physics/irigid_body.hpp"
 #include "erhe/scene/node.hpp"
 
 #include <glm/glm.hpp>
@@ -68,23 +68,6 @@ public:
     erhe::physics::Motion_mode                motion_mode{erhe::physics::Motion_mode::e_invalid};
 };
 
-//class Debug_rendering
-//{
-//public:
-//    glm::vec3 m_P0{};
-//    glm::vec3 m_P1{};
-//    glm::vec3 m_Q0{};
-//    glm::vec3 m_Q1{};
-//    glm::vec3 m_R0{};
-//    glm::vec3 m_R1{};
-//    glm::vec2 m_ss_closest{};
-//    uint32_t  m_debug_color{0x00000000u};
-//    float     m_v_dot_n{0.0f};
-//    glm::vec3 m_pw{};
-//    glm::vec3 m_q0{};
-//    glm::vec3 m_q{};
-//};
-
 class Transform_tool_shared
 {
 public:
@@ -95,7 +78,6 @@ public:
     erhe::scene::Trs_transform           world_from_anchor_initial_state;
     erhe::scene::Trs_transform           world_from_anchor;
     bool                                 touched          {false};
-    //Debug_rendering                      debug_rendering;
     std::optional<Handle_visualizations> visualization;
 };
 
@@ -170,13 +152,11 @@ public:
     Transform_tool_shared shared;
 
 private:
-    void on_message          (Editor_message& message);
-    void acquire_node_physics();
-    void release_node_physics();
-    void update_entry        ();
-    void update_for_view     (Scene_view* scene_view);
-    void update_hover        ();
-    void render_rays         (erhe::scene::Node& node);
+    void on_message     (Editor_message& message);
+    void update_entry   ();
+    void update_for_view(Scene_view* scene_view);
+    void update_hover   ();
+    void render_rays    (erhe::scene::Node& node);
 
     Transform_tool_drag_command         m_drag_command;
     erhe::commands::Redirect_command    m_drag_redirect_update_command;

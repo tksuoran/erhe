@@ -24,30 +24,12 @@ class Jolt_point_to_point_constraint
     : public Jolt_constraint
 {
 public:
-    explicit Jolt_point_to_point_constraint(
-        const Point_to_point_constraint_settings& settings
-    )
-    {
-        m_settings.mSpace       = JPH::EConstraintSpace::LocalToBodyCOM;
-        m_settings.mPoint1      = to_jolt(settings.pivot_in_a);
-        m_settings.mPoint2      = to_jolt(settings.pivot_in_b);
-        m_settings.mMinDistance = 0.0f;
-        m_settings.mMaxDistance = 0.0f;
-        auto* const body_a = reinterpret_cast<Jolt_rigid_body*>(settings.rigid_body_a)->get_jolt_body();
-        auto* const body_b = reinterpret_cast<Jolt_rigid_body*>(settings.rigid_body_b)->get_jolt_body();
-        m_constraint = m_settings.Create(
-            *body_a,
-            *body_b
-        );
-    }
+    explicit Jolt_point_to_point_constraint(const Point_to_point_constraint_settings& settings);
+    ~Jolt_point_to_point_constraint() noexcept;
 
-    [[nodiscard]] auto get_jolt_constraint() const -> JPH::Constraint* override
-    {
-        return m_constraint;
-    }
+    [[nodiscard]] auto get_jolt_constraint() const -> JPH::Constraint* override;
 
 private:
-    //JPH::PointConstraintSettings m_settings;
     JPH::DistanceConstraintSettings m_settings;
     JPH::Constraint*                m_constraint;
 };

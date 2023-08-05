@@ -113,7 +113,6 @@ Hud::Hud(
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "hud");
     ini->get("enabled", config.enabled);
-    ini->get("show",    config.show);
     ini->get("locked",  config.locked);
     ini->get("width",   config.width);
     ini->get("height",  config.height);
@@ -122,11 +121,10 @@ Hud::Hud(
     ini->get("y",       config.y);
     ini->get("z",       config.z);
 
-    m_enabled    = config.enabled;
-    m_is_visible = config.show;
-    m_x          = config.x;
-    m_y          = config.y;
-    m_z          = config.z;
+    m_enabled = config.enabled;
+    m_x       = config.x;
+    m_y       = config.y;
+    m_z       = config.z;
 
     if (!m_enabled) {
         hide();

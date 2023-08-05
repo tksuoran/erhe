@@ -60,6 +60,7 @@ public:
     {
     public:
         Config();
+        float camera_exposure            {1.0f};
         float directional_light_intensity{20.0f};
         float directional_light_radius   {6.0f};
         float directional_light_height   {10.0f};

@@ -190,6 +190,11 @@ void Node_raytrace::properties_imgui()
     }
 }
 
+auto Node_raytrace::get_rt_primitives() const -> const std::vector<Raytrace_primitive>&
+{
+    return m_rt_primitives;
+}
+
 void Node_raytrace::set_mask(const uint32_t mask)
 {
     for (auto& rt_primitive : m_rt_primitives) {

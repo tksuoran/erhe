@@ -77,7 +77,6 @@ public:
     {
     public:
         bool  enabled{true};
-        bool  show   {true};
         bool  locked {false};
         int   width  {1024};
         int   height {1024};

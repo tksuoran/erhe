@@ -72,6 +72,7 @@ public:
     void handle_node_transform_update() override;
 
     // Public API
+    [[nodiscard]] auto get_rt_primitives() const -> const std::vector<Raytrace_primitive>&;
     void set_mask         (uint32_t rt_mask);
     void attach_to_scene  (erhe::raytrace::IScene* rt_scene);
     void detach_from_scene(erhe::raytrace::IScene* rt_scene);

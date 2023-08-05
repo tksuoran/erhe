@@ -12,12 +12,13 @@ std::shared_ptr<spdlog::logger> log_input_events            ;
 
 void initialize_logging()
 {
-    log_command_state_transition = erhe::log::make_logger("command_state_transition", spdlog::level::info);
-    log_input                    = erhe::log::make_logger("input",                    spdlog::level::info);
-    log_input_event              = erhe::log::make_logger("input_event",              spdlog::level::info);
-    log_input_event_consumed     = erhe::log::make_logger("input_event_consumed",     spdlog::level::info);
-    log_input_event_filtered     = erhe::log::make_logger("input_event_filtered",     spdlog::level::info);
-    log_input_events             = erhe::log::make_logger("input_events",             spdlog::level::info);
+    using namespace erhe::log;
+    log_command_state_transition = make_logger("erhe.commands.command_state_transition");
+    log_input                    = make_logger("erhe.commands.input"                   );
+    log_input_event              = make_logger("erhe.commands.input_event"             );
+    log_input_event_consumed     = make_logger("erhe.commands.input_event_consumed"    );
+    log_input_event_filtered     = make_logger("erhe.commands.input_event_filtered"    );
+    log_input_events             = make_logger("erhe.commands.input_events"            );
 }
 
 } // namespace erhe::commands

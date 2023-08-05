@@ -3,8 +3,8 @@
 #include "tools/tool.hpp"
 #include "scene/node_raytrace.hpp"
 
+#include "erhe/physics/irigid_body.hpp"
 #include "erhe/commands/command.hpp"
-#include "erhe/physics/imotion_state.hpp"
 
 #include <glm/glm.hpp>
 
@@ -56,8 +56,7 @@ private:
 };
 
 class Physics_tool
-    : public erhe::physics::IMotion_state
-    , public Tool
+    : public Tool
 {
 public:
     static constexpr int c_priority{2};
@@ -77,13 +76,6 @@ public:
     void tool_render    (const Render_context& context) override;
     void tool_properties()                              override;
 
-    // Implements erhe::physics::IMotion_state
-    [[nodiscard]] auto get_world_from_rigidbody() const -> erhe::physics::Transform   override;
-    [[nodiscard]] auto get_motion_mode         () const -> erhe::physics::Motion_mode override;
-    void set_world_from_rigidbody(const glm::mat4&                 transform  ) override;
-    void set_world_from_rigidbody(const erhe::physics::Transform   transform  ) override;
-    void set_motion_mode         (const erhe::physics::Motion_mode motion_mode) override;
-
     // Public API
     auto acquire_target() -> bool;
     void release_target();
@@ -102,7 +94,6 @@ private:
     void move_drag_point_kinematic(glm::vec3 position);
 
     [[nodiscard]] auto get_scene_root    () const -> Scene_root*;
-    //// TODO RAYTRACE [[nodiscard]] auto get_raytrace_scene() const -> erhe::raytrace::IScene*;
 
     // Commands
     Physics_tool_drag_command                 m_drag_command;
@@ -118,10 +109,10 @@ private:
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
     std::shared_ptr<erhe::scene::Mesh>          m_last_target_mesh;
     std::shared_ptr<Node_physics>               m_target_node_physics;
-    float                                       m_target_distance        {1.0f};
-    glm::vec3                                   m_target_position_in_mesh{0.0f, 0.0f, 0.0f};
-    glm::vec3                                   m_target_position_start  {0.0f, 0.0f, 0.0f};
-    glm::vec3                                   m_target_position_end    {0.0f, 0.0f, 0.0f};
+    float                                       m_target_distance       {1.0f};
+    glm::vec3                                   m_grab_position_in_mesh {0.0f, 0.0f, 0.0f}; // Where object drag started in local space
+    glm::vec3                                   m_grab_position_world   {0.0f, 0.0f, 0.0f}; // Where object drag started in world space
+    glm::vec3                                   m_goal_position_in_world{0.0f, 0.0f, 0.0f}; // Goal position for drag point in world space
 
     erhe::physics::IWorld*                      m_physics_world{nullptr};
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
@@ -148,7 +139,7 @@ private:
     glm::vec3 m_to_start_direction{0.0f};
     float     m_target_mesh_size  {0.0f};
 
-    bool       m_show_drag_body{false};
+    bool       m_show_drag_body{true};
 
     Ray_hit_style m_ray_hit_style
     {

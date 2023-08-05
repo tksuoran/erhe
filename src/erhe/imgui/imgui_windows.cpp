@@ -120,28 +120,12 @@ void Imgui_windows::make_current(const Imgui_viewport* imgui_viewport)
     }
 }
 
-void Imgui_windows::register_imgui_window(Imgui_window* window)
-{
-    bool show_window{false};
-    const std::string& ini_label = window->get_ini_label();
-    if (!ini_label.empty()) {
-        auto ini = erhe::configuration::get_ini("erhe.ini", "windows");
-        ini->get(ini_label.c_str(), show_window);
-    }
-    register_imgui_window(window, show_window);
-}
-
 void Imgui_windows::register_imgui_window(
-    Imgui_window* window,
-    const bool    visible
+    Imgui_window* window
 )
 {
     ERHE_VERIFY(!m_iterating);
     const std::lock_guard<std::recursive_mutex> lock{m_mutex};
-
-    if (!visible) {
-        window->hide();
-    }
 
 #ifndef NDEBUG
     const auto i = std::find(m_imgui_windows.begin(), m_imgui_windows.end(), window);
@@ -174,6 +158,20 @@ void Imgui_windows::unregister_imgui_window(Imgui_window* window)
     } else {
         m_imgui_windows.erase(i, m_imgui_windows.end());
     }
+}
+
+void Imgui_windows::save_window_state()
+{
+    mINI::INIFile file("windows.ini");
+    mINI::INIStructure ini;
+    for (auto& imgui_window : m_imgui_windows) {
+        const auto label = imgui_window->get_ini_label();
+        if (label.empty()) {
+            continue;
+        }
+        ini["windows"][label.c_str()] = imgui_window->is_visible() ? "true" : "false";
+    }
+    file.generate(ini);
 }
 
 void Imgui_windows::imgui_windows()

@@ -18,6 +18,7 @@ target_link_libraries(${_target}
         fmt::fmt
         glm::glm
     PRIVATE
+        erhe::configuration
         Microsoft.GSL::GSL
 )
 

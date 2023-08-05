@@ -4,6 +4,7 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe/geometry/types.hpp"
+#include "erhe/physics/irigid_body.hpp"
 #include "erhe/primitive/enums.hpp"
 #include "erhe/primitive/primitive_builder.hpp"
 #include "erhe/primitive/build_info.hpp"
@@ -93,6 +94,7 @@ public:
     std::shared_ptr<erhe::primitive::Material> material;
     float                                      scale          {1.0f};
     bool                                       physics_enabled{true};
+    erhe::physics::Motion_mode                 motion_mode    {erhe::physics::Motion_mode::e_dynamic};
 };
 
 class Brush final

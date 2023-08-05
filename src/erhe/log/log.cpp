@@ -1,5 +1,8 @@
 #include "erhe/log/log.hpp"
+#include "erhe/configuration/configuration.hpp"
+#include "erhe/toolkit/hash.hpp"
 #include "erhe/toolkit/timestamp.hpp"
+#include "erhe/toolkit/verify.hpp"
 
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -39,21 +42,21 @@ void console_init()
 #endif
 }
 
-store_log_sink::store_log_sink()
+Store_log_sink::Store_log_sink()
 {
 }
 
-auto store_log_sink::get_serial() const -> uint64_t
+auto Store_log_sink::get_serial() const -> uint64_t
 {
     return m_serial;
 }
 
-auto store_log_sink::get_log() -> std::deque<Entry>&
+auto Store_log_sink::get_log() -> std::deque<Entry>&
 {
     return m_entries;
 }
 
-void store_log_sink::trim(const std::size_t trim_size)
+void Store_log_sink::trim(const std::size_t trim_size)
 {
     if (m_entries.size() > trim_size) {
         const auto trim_count = m_entries.size() - trim_size;
@@ -65,7 +68,7 @@ void store_log_sink::trim(const std::size_t trim_size)
     }
 }
 
-void store_log_sink::sink_it_(const spdlog::details::log_msg& msg)
+void Store_log_sink::sink_it_(const spdlog::details::log_msg& msg)
 {
     ++m_serial;
     m_entries.push_back(
@@ -80,7 +83,7 @@ void store_log_sink::sink_it_(const spdlog::details::log_msg& msg)
     );
 }
 
-void store_log_sink::flush_()
+void Store_log_sink::flush_()
 {
 }
 
@@ -91,17 +94,17 @@ std::shared_ptr<spdlog::sinks::msvc_sink_mt>         sink_msvc;
 #endif
 std::shared_ptr<spdlog::sinks::stdout_color_sink_mt> sink_console;
 std::shared_ptr<spdlog::sinks::basic_file_sink_mt>   sink_log_file;
-std::shared_ptr<store_log_sink>                      tail_store_log;
-std::shared_ptr<store_log_sink>                      frame_store_log;
+std::shared_ptr<Store_log_sink>                      tail_store_log;
+std::shared_ptr<Store_log_sink>                      frame_store_log;
 bool s_log_to_console{false};
 
 }
 
-auto get_tail_store_log() -> const std::shared_ptr<store_log_sink>&
+auto get_tail_store_log() -> const std::shared_ptr<Store_log_sink>&
 {
     return tail_store_log;
 }
-auto get_frame_store_log() -> const std::shared_ptr<store_log_sink>&
+auto get_frame_store_log() -> const std::shared_ptr<Store_log_sink>&
 {
     return frame_store_log;
 }
@@ -118,18 +121,56 @@ void initialize_log_sinks()
 #endif
     sink_console    = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     sink_log_file   = std::make_shared<spdlog::sinks::basic_file_sink_mt>("log.txt", true);
-    tail_store_log  = std::make_shared<store_log_sink>();
-    frame_store_log = std::make_shared<store_log_sink>();
+    tail_store_log  = std::make_shared<Store_log_sink>();
+    frame_store_log = std::make_shared<Store_log_sink>();
 
     sink_log_file->set_pattern("[%H:%M:%S %z] [%n] [%L] [%t] %v");
 }
 
+auto get_groupname(const std::string& s) -> std::string
+{
+    std::string::size_type pos = s.find_last_of('.');
+    if (pos != std::string::npos) {
+        return s.substr(0, pos);
+    } else {
+        return std::string{};
+    }
+}
+
+auto get_basename(const std::string& s) -> std::string
+{
+    std::string::size_type pos = s.find_last_of('.');
+    if (pos != std::string::npos && ((pos + 1) < s.size())) {
+        return s.substr(pos + 1);
+    } else {
+        return std::string{};
+    }
+}
+
+auto get_levelname(spdlog::level::level_enum level) -> std::string
+{
+    const auto sv = spdlog::level::to_string_view(level);;
+    return std::string{sv.begin(), sv.begin() + sv.size()};
+}
+
+auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logger>
+{
+    return make_logger(name, false);
+}
+
 auto make_logger(
-    std::string               name,
-    spdlog::level::level_enum level,
-    bool                      tail
+    const std::string& name,
+    const bool         tail
 ) -> std::shared_ptr<spdlog::logger>
 {
+    ERHE_VERIFY(!name.empty());
+    const auto groupname = get_groupname(name);
+    const auto basename  = get_basename(name);
+    auto ini = erhe::configuration::get_ini("logging.ini", groupname.c_str());
+    std::string levelname;
+    ini->get(basename.c_str(), levelname);
+    const spdlog::level::level_enum level_parsed = spdlog::level::from_str(levelname);
+
     auto logger = std::make_shared<spdlog::logger>(
         name,
         spdlog::sinks_init_list{
@@ -145,7 +186,7 @@ auto make_logger(
         logger->sinks().push_back(sink_console);
     }
     spdlog::register_logger(logger);
-    logger->set_level(level);
+    logger->set_level(level_parsed);
     logger->flush_on(spdlog::level::trace);
     return logger;
 }

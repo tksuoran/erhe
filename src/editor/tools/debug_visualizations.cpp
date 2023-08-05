@@ -20,6 +20,7 @@
 #include "erhe/imgui/imgui_windows.hpp"
 #include "erhe/geometry/geometry.hpp"
 #include "erhe/log/log_glm.hpp"
+#include "erhe/physics/icollision_shape.hpp"
 #include "erhe/primitive/geometry_mesh.hpp"
 #include "erhe/raytrace/iinstance.hpp"
 #include "erhe/scene/camera.hpp"
@@ -55,8 +56,37 @@ constexpr vec3 axis_x         { 1.0f,  0.0f, 0.0f};
 constexpr vec3 axis_y         { 0.0f,  1.0f, 0.0f};
 constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
 
+[[nodiscard]] auto should_visualize(
+    const Visualization_mode mode,
+    const bool               is_selected
+)
+{
+    if (mode == Visualization_mode::All) {
+        return true;
+    }
+    if (is_selected && (mode == Visualization_mode::Selected)) {
+        return true;
+    }
+    return false;
 }
 
+[[nodiscard]] auto should_visualize(
+    const Visualization_mode           mode,
+    const std::shared_ptr<erhe::Item>& item
+)
+{
+    return should_visualize(mode, item->is_selected());
+}
+
+[[nodiscard]] auto should_visualize(
+    const Visualization_mode mode,
+    const erhe::Item* const  item
+)
+{
+    return should_visualize(mode, item->is_selected());
+}
+
+}
 
 Debug_visualizations::Debug_visualizations(
     erhe::imgui::Imgui_renderer& imgui_renderer,
@@ -765,81 +795,149 @@ void Debug_visualizations::selection_visualization(
 }
 
 void Debug_visualizations::physics_nodes_visualization(
-    const std::shared_ptr<Scene_root>& scene_root
+    const Render_context& context
 )
 {
     ERHE_PROFILE_FUNCTION();
 
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
-    for (const auto& mesh : scene_root->layers().content()->meshes) {
-        if (
-            (m_physics_axis_visualization == Visualization_mode::All) ||
-            (
-                mesh->is_selected() &&
-                (m_physics_axis_visualization == Visualization_mode::Selected)
-            )
-        ) {
-            const auto* node = mesh->get_node();
-            if (node == nullptr) {
-                continue;
-            }
+    const auto& scene_root = context.scene_view.get_scene_root();    
+    if (!scene_root) {
+        return;
+    }
 
-            const auto& node_physics = get_node_physics(node);
-            if (node_physics) {
-                const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
-                if (rigid_body != nullptr) {
-                    const glm::mat4 m = rigid_body->get_world_transform();
-                    {
-                        const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
-                        const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
-                        const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
-                        line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
-                        line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
-                        line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
-                    }
-                    {
-                        const glm::vec4 cyan{0.0f, 1.0f, 1.0f, 1.0f};
-                        const glm::vec3 velocity = rigid_body->get_linear_velocity();
-                        line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
-                    }
+    const auto&     camera                = context.camera;
+    const auto      projection_transforms = camera.projection_transforms(context.viewport);
+    const glm::mat4 clip_from_world       = projection_transforms.clip_from_world.get_matrix();
+
+    for (const auto& mesh : scene_root->layers().content()->meshes) {
+        if (!should_visualize(m_physics_visualization, mesh)) {
+            continue;
+        }
+        const auto* node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+
+        const auto& node_physics = get_node_physics(node);
+        if (!node_physics) {
+            continue;
+        }
+
+        const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body == nullptr) {
+            continue;
+        }
+        const glm::mat4 m = rigid_body->get_world_transform();
+
+        const glm::vec4 p4_in_world  = m * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+        const glm::vec3 p3_in_window = context.viewport.project_to_screen_space(
+            clip_from_world,
+            glm::vec3{p4_in_world},
+            0.0f,
+            1.0f
+        );
+        const auto label_text = "<" + node->describe() + ">"; // node_physics->describe();
+        const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
+        const glm::vec3 p3_in_window_z_negated{
+             p3_in_window.x - label_size.x * 0.5,
+             p3_in_window.y - label_size.y * 0.5,
+            -p3_in_window.z
+        };
+        glm::vec4 label_text_color{0.3f, 1.0f, 0.3f, 1.0f};
+        const uint32_t text_color = erhe::toolkit::convert_float4_to_uint32(label_text_color);
+
+        m_context.text_renderer->print(
+            p3_in_window_z_negated,
+            text_color,
+            label_text
+        );
+        for (const auto& marker : node_physics->markers) {
+            const glm::vec4 blue{0.0f, 0.0f, 1.0f, 1.0f};
+            const glm::vec3 dx{0.1f, 0.0f, 0.0f};
+            const glm::vec3 dy{0.0f, 0.1f, 0.0f};
+            const glm::vec3 dz{0.0f, 0.0f, 0.1f};
+            line_renderer.add_lines(
+                m,
+                blue,
+                {
+                    { marker - dx, marker + dx },
+                    { marker - dy, marker + dy },
+                    { marker - dz, marker + dz },
                 }
-            }
+            );
+        }
+
+        {
+            const glm::vec4 half_red  {0.5f, 0.0f, 0.0f, 0.5f};
+            const glm::vec4 half_green{0.0f, 0.5f, 0.0f, 0.5f};
+            const glm::vec4 half_blue {0.0f, 0.0f, 0.5f, 0.5f};
+            line_renderer.add_lines( m, half_red,   {{ O, axis_x }} );
+            line_renderer.add_lines( m, half_green, {{ O, axis_y }} );
+            line_renderer.add_lines( m, half_blue,  {{ O, axis_z }} );
+        }
+        {
+            const glm::vec4 cyan{0.0f, 1.0f, 1.0f, 0.5f};
+            const glm::vec3 velocity = rigid_body->get_linear_velocity();
+            line_renderer.add_lines( m, cyan, {{ O, 4.0f * velocity }} );
+        }
+
+        const auto collision_shape = rigid_body->get_collision_shape();
+        if (!collision_shape) {
+            continue;
+        }
+        {
+            const glm::vec4 purple{1.0f, 0.0f, 1.0f, 1.0f};
+            // This would return center of mass in world space
+            //const glm::vec3 center_of_mass = rigid_body->get_center_of_mass();
+            const glm::vec3 center_of_mass = collision_shape->get_center_of_mass();
+            line_renderer.add_lines( m, purple, {{ O, center_of_mass }} );
         }
     }
 }
 
 void Debug_visualizations::raytrace_nodes_visualization(
-    const std::shared_ptr<Scene_root>& scene_root
+    const Render_context& context
 )
 {
-    static_cast<void>(scene_root);
+    if (m_raytrace_visualization == Visualization_mode::None) {
+        return;
+    }
 
-    //// ERHE_PROFILE_FUNCTION();
-    //// 
-    //// auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
-    //// 
-    //// const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
-    //// const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
-    //// const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-    //// 
-    //// for (const auto& mesh : scene_root->layers().content()->meshes) {
-    ////     const auto* node = mesh->get_node();
-    ////     if (node == nullptr) {
-    ////         continue;
-    ////     }
+    const auto& scene_root = context.scene_view.get_scene_root();
+    if (!scene_root) {
+        return;
+    }
 
-        //// TODO RAYTRACE
-        ////
-        //// const auto& node_raytrace = get_node_raytrace(node);
-        //// if (node_raytrace) {
-        ////     const erhe::raytrace::IInstance* instance = node_raytrace->raytrace_instance();
-        ////     const auto m = instance->get_transform();
-        ////     line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-        ////     line_renderer.add_lines( m, green, {{ O, axis_y }} );
-        ////     line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
-        //// }
-    //// }
+    ERHE_PROFILE_FUNCTION();
+
+    auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
+
+    const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+    const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+    const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+
+    for (const auto& mesh : scene_root->layers().content()->meshes) {
+        const auto* node = mesh->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        if (!should_visualize(m_raytrace_visualization, node)) {
+            continue;
+        }
+
+        const auto& node_raytrace = get_node_raytrace(node);
+        if (!node_raytrace) {
+            continue;
+        }
+        for (const auto& rt_primitive : node_raytrace->get_rt_primitives()) {
+            const auto m = rt_primitive.rt_instance->get_transform();
+            line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+            line_renderer.add_lines( m, green, {{ O, axis_y }} );
+            line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
+        }
+    }
 }
 
 void Debug_visualizations::mesh_labels(
@@ -876,16 +974,7 @@ void Debug_visualizations::mesh_labels(
         const auto* point_locations = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations);
         const bool selected = mesh->is_selected();
 
-        if (
-            (point_locations != nullptr) &&
-            (
-                (m_show_points == Visualization_mode::All) ||
-                (
-                    selected &&
-                    (m_show_points == Visualization_mode::Selected)
-                )
-            )
-        ) {
+        if ((point_locations != nullptr) && should_visualize(m_point_labels, selected)) {
             auto* point_normals        = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals);
             auto* point_normals_smooth = geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_normals_smooth);
 
@@ -920,22 +1009,13 @@ void Debug_visualizations::mesh_labels(
             }
         }
 
-        auto polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals  );
+        auto polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
         if (polygon_normals == nullptr) {
             geometry->compute_polygon_normals();
-            polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals  );
+            polygon_normals = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_normals);
         }
 
-        if (
-            (point_locations != nullptr) &&
-            (
-                (m_show_edges == Visualization_mode::All) ||
-                (
-                    selected &&
-                    (m_show_edges == Visualization_mode::Selected)
-                )
-            )
-        ) {
+        if ((point_locations != nullptr) && should_visualize(m_edge_labels, selected)) {
             const uint32_t end = (std::min)(
                 static_cast<uint32_t>(m_max_labels),
                 geometry->get_edge_count()
@@ -954,8 +1034,7 @@ void Debug_visualizations::mesh_labels(
                 edge.for_each_polygon_const(
                     *geometry.get(),
                     [&normal_sum, &polygon_normals, &polygon_count, this, edge_id]
-                    (erhe::geometry::Edge::Edge_polygon_context_const& context)
-                    {
+                    (erhe::geometry::Edge::Edge_polygon_context_const& context) {
                         glm::vec3 polygon_normal;
                         if (polygon_normals->maybe_get(context.polygon_id, polygon_normal)) {
                             normal_sum += polygon_normal;
@@ -992,16 +1071,7 @@ void Debug_visualizations::mesh_labels(
         }
 
         const auto polygon_centroids = geometry->polygon_attributes().find<glm::vec3>(erhe::geometry::c_polygon_centroids);
-        if (
-            (polygon_centroids != nullptr) &&
-            (
-                (m_show_polygons == Visualization_mode::All) ||
-                (
-                    selected &&
-                    (m_show_polygons == Visualization_mode::Selected)
-                )
-            )
-        ) {
+        if ((polygon_centroids != nullptr) && should_visualize(m_polygon_labels, selected)) {
             const uint32_t end = (std::min)(
                 static_cast<uint32_t>(m_max_labels),
                 geometry->get_polygon_count()
@@ -1021,7 +1091,7 @@ void Debug_visualizations::mesh_labels(
                 line_renderer.add_lines(
                     world_from_node,
                     m_polygon_label_line_color,
-                    { { p, l } }
+                    {{ p, l }}
                 );
 
                 const std::string label_text = fmt::format("{}", polygon_id);
@@ -1030,16 +1100,9 @@ void Debug_visualizations::mesh_labels(
 
                 label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
 
-                if (
-                    (m_show_corners == Visualization_mode::All) ||
-                    (
-                        selected &&
-                        (m_show_corners == Visualization_mode::Selected)
-                    )
-                ) {
+                if (should_visualize(m_corner_labels, selected)) {
                     const erhe::geometry::Polygon polygon = geometry->polygons.at(polygon_id);
-                    polygon.for_each_corner_const(*geometry.get(), [&](auto& i)
-                    {
+                    polygon.for_each_corner_const(*geometry.get(), [&](auto& i) {
                         const auto corner_p    = point_locations->get(i.corner.point_id);
                         const auto to_centroid = glm::normalize(l - corner_p);
                         const auto label_p     = corner_p + m_corner_label_line_length * to_centroid;
@@ -1048,7 +1111,7 @@ void Debug_visualizations::mesh_labels(
                         line_renderer.add_lines(
                             world_from_node,
                             m_corner_label_line_color,
-                            { { corner_p, label_p } }
+                            {{ corner_p, label_p }}
                         );
 
                         const std::string label_text = fmt::format("{}", i.corner_id);
@@ -1081,14 +1144,10 @@ void Debug_visualizations::label(
     const glm::vec2 label_size = m_context.text_renderer->measure(label_text).size();
     const glm::vec3 p3_in_window_z_negated{
          p3_in_window.x - label_size.x * 0.5,
-         p3_in_window.y - label_size.x * 0.5,
+         p3_in_window.y - label_size.y * 0.5,
         -p3_in_window.z
     };
-    m_context.text_renderer->print(
-        p3_in_window_z_negated,
-        text_color,
-        label_text
-    );
+    m_context.text_renderer->print(p3_in_window_z_negated, text_color, label_text);
 }
 
 
@@ -1125,23 +1184,15 @@ void Debug_visualizations::render(
     auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
 
     for (const auto& node : scene_root->get_hosted_scene()->get_flat_nodes()) {
-        if (node) {
-            if (
-                (m_node_axis_visualization == Visualization_mode::All) ||
-                (
-                    (m_node_axis_visualization == Visualization_mode::Selected) &&
-                    (node->is_selected())
-                )
-            ) {
-                const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
-                const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
-                const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
-                const mat4 m{node->world_from_node()};
-                line_renderer.set_thickness(m_selection_node_axis_width);
-                line_renderer.add_lines( m, red,   {{ O, axis_x }} );
-                line_renderer.add_lines( m, green, {{ O, axis_y }} );
-                line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
-            }
+        if (node && should_visualize(m_node_axis_visualization, node)) {
+            const glm::vec4 red  {1.0f, 0.0f, 0.0f, 1.0f};
+            const glm::vec4 green{0.0f, 1.0f, 0.0f, 1.0f};
+            const glm::vec4 blue {0.0f, 0.0f, 1.0f, 1.0f};
+            const mat4 m{node->world_from_node()};
+            line_renderer.set_thickness(m_selection_node_axis_width);
+            line_renderer.add_lines( m, red,   {{ O, axis_x }} );
+            line_renderer.add_lines( m, green, {{ O, axis_y }} );
+            line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
         }
     }
 
@@ -1150,26 +1201,14 @@ void Debug_visualizations::render(
     }
 
     for (const auto& light : scene_root->layers().light()->lights) {
-        if (
-            (m_lights == Visualization_mode::All) ||
-            (
-                (m_lights == Visualization_mode::Selected) &&
-                light->is_selected()
-            )
-        ) {
+        if (should_visualize(m_lights, light)) {
             light_visualization(context, selected_camera, light.get());
         }
     }
 
     //if (m_viewport_config->debug_visualizations.camera == Visualization_mode::all)
     for (const auto& camera : scene_root->get_scene().get_cameras()) {
-        if (
-            (m_cameras == Visualization_mode::All) ||
-            (
-                (m_cameras == Visualization_mode::Selected) &&
-                camera->is_selected()
-            )
-        ) {
+        if (should_visualize(m_cameras, camera)) {
             camera_visualization(context, camera.get());
         }
     }
@@ -1178,27 +1217,17 @@ void Debug_visualizations::render(
     // Visualize each skin only once.
     std::set<erhe::scene::Skin*> skins;
     for (const auto& mesh : scene_root->layers().content()->meshes) {
-        if (
-            (m_skins == Visualization_mode::All) ||
-            (
-                (m_skins == Visualization_mode::Selected) &&
-                mesh->is_selected()
-            )
-        ) {
-            if (mesh->mesh_data.skin) {
-                skins.insert(mesh->mesh_data.skin.get());
-            }
+        if (mesh->mesh_data.skin && should_visualize(m_skins, mesh)) {
+            skins.insert(mesh->mesh_data.skin.get());
         }
     }
     for (auto* skin : skins) {
         skin_visualization(context, *skin);
     }
 
-    physics_nodes_visualization(scene_root);
+    physics_nodes_visualization(context);
 
-    if (m_raytrace) {
-        raytrace_nodes_visualization(scene_root);
-    }
+    raytrace_nodes_visualization(context);
 }
 
 void Debug_visualizations::make_combo(const char* label, Visualization_mode& visualization)
@@ -1237,8 +1266,9 @@ void Debug_visualizations::imgui()
         }
     }
 
-    make_combo("Node Axises",    m_node_axis_visualization);
-    make_combo("Physics Axises", m_physics_axis_visualization);
+    make_combo("Node Axises", m_node_axis_visualization);
+    make_combo("Physics",     m_physics_visualization);
+    make_combo("Raytrace",    m_raytrace_visualization);
 
     ImGui::Checkbox   ("Selection Box",         &m_selection_box);
     ImGui::Checkbox   ("Selection Sphere",      &m_selection_sphere);
@@ -1251,7 +1281,7 @@ void Debug_visualizations::imgui()
     ImGui::SliderInt  ("Sphere Step Count",     &m_sphere_step_count, 1, 200);
     ImGui::SliderFloat("Gap",                   &m_gap, 0.0001f, 0.1f);
     ImGui::Checkbox   ("Tool Hide",             &m_tool_hide);
-    //ImGui::Checkbox   ("Raytrace",              &m_raytrace);
+    //ImGui::Checkbox   ("Raytrace",              &m_raytrace_visualization);
 
     make_combo("Lights",  m_lights);
     make_combo("Cameras", m_cameras);
@@ -1271,10 +1301,10 @@ void Debug_visualizations::imgui()
     }
     ImGui::SliderInt("Max Labels",     &m_max_labels, 0, 2000);
     
-    make_combo("Show Points",   m_show_points);
-    make_combo("Show Polygons", m_show_polygons);
-    make_combo("Show Edges",    m_show_edges);
-    make_combo("Show Corners",  m_show_corners);
+    make_combo("Show Points",   m_point_labels);
+    make_combo("Show Polygons", m_polygon_labels);
+    make_combo("Show Edges",    m_edge_labels);
+    make_combo("Show Corners",  m_corner_labels);
 
     ImGui::ColorEdit4 ("Point Label Text Color",    &m_point_label_text_color.x, ImGuiColorEditFlags_Float);
     ImGui::ColorEdit4 ("Point Label Line Color",    &m_point_label_line_color.x, ImGuiColorEditFlags_Float);

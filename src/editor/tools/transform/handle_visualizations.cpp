@@ -203,6 +203,10 @@ void Handle_visualizations::update_for_view(
     const glm::vec3 view_position_in_world   = glm::vec3{camera_node->position_in_world()};
     const glm::vec3 anchor_position_in_world = glm::vec3{m_world_from_anchor.get_translation()};
     m_view_distance = glm::length(anchor_position_in_world - glm::vec3{view_position_in_world});
+    if (!isfinite(m_view_distance)) {
+        log_trs_tool->error("!isfinite()");
+    }
+
 }
 
 auto Handle_visualizations::get_handle_visibility(const Handle handle) const -> bool
@@ -484,8 +488,12 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
         return;
     }
 
-    const auto&     settings     = m_context.transform_tool->shared.settings;
-    const float     scalar_scale = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+    const auto& settings     = m_context.transform_tool->shared.settings;
+    const float scalar_scale = m_scene_view->get_config().gizmo_scale * m_view_distance / 100.0f;
+
+    if (!isfinite(scalar_scale)) {
+        log_trs_tool->error("!isfinite()");
+    }
     const glm::mat4 scale        = erhe::toolkit::create_scale<float>(scalar_scale);
     const glm::mat4 world_from_anchor = settings.local
         ? m_world_from_anchor.get_matrix()

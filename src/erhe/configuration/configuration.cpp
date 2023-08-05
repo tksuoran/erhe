@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <string>
 
 namespace erhe::configuration {
@@ -188,7 +189,8 @@ public:
     {
         mINI::INIFile file{path};
         if (!file.read(ini)) {
-            log_configuration->warn("Unable to read ini file '{}'", path);
+            const auto current_path = std::filesystem::current_path();
+            log_configuration->warn("Unable to read ini file '{}' in '{}'", path, current_path.string());
         }
         section = ini.get(section_name);
     }

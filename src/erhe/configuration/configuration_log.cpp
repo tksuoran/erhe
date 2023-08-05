@@ -7,7 +7,8 @@ std::shared_ptr<spdlog::logger> log_configuration;
 
 void initialize_logging()
 {
-    log_configuration = erhe::log::make_logger("configuration", spdlog::level::info);
+    using namespace erhe::log;
+    log_configuration = make_logger("erhe.configuration");
 }
 
 }

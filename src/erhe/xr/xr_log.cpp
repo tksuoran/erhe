@@ -8,7 +8,8 @@ std::shared_ptr<spdlog::logger> log_xr;
 
 void initialize_logging()
 {
-    log_xr = erhe::log::make_logger("erhe::xr::log", spdlog::level::info);
+    using namespace erhe::log;
+    log_xr = make_logger("erhe.xr.log");
 }
 
 } // namespace erhe::ui

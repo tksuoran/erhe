@@ -12,11 +12,12 @@ std::shared_ptr<spdlog::logger> log_multi_buffer;
 
 void initialize_logging()
 {
-    log_draw          = erhe::log::make_logger("renderer::draw"         , spdlog::level::info);
-    log_render        = erhe::log::make_logger("renderer::render"       , spdlog::level::info, false);
-    log_startup       = erhe::log::make_logger("renderer::startup"      , spdlog::level::info);
-    log_buffer_writer = erhe::log::make_logger("renderer::buffer_writer", spdlog::level::info, false);
-    log_multi_buffer  = erhe::log::make_logger("renderer::multi_buffer" , spdlog::level::info, false);
+    using namespace erhe::log;
+    log_draw          = make_logger      ("erhe.renderer.draw"         );
+    log_render        = make_frame_logger("erhe.renderer.render"       );
+    log_startup       = make_logger      ("erhe.renderer.startup"      );
+    log_buffer_writer = make_frame_logger("erhe.renderer.buffer_writer");
+    log_multi_buffer  = make_frame_logger("erhe.renderer.multi_buffer" );
 }
 
 } // namespace erhe::renderer

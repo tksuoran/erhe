@@ -157,8 +157,9 @@ public:
     void register_node_raytrace  (const std::shared_ptr<Node_raytrace>& node_raytrace);
     void unregister_node_raytrace(const std::shared_ptr<Node_raytrace>& node_raytrace);
 
-    void update_physics_simulation_fixed_step    (double dt);
-    void update_physics_simulation_once_per_frame();
+    void before_physics_simulation_steps     ();
+    void update_physics_simulation_fixed_step(double dt);
+    void after_physics_simulation_steps      ();
 
     [[nodiscard]] auto layers            () -> Scene_layers&;
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
@@ -194,6 +195,8 @@ public:
 
     void sanity_check();
 
+    void update_physics_disabled_nodes(const std::vector<std::shared_ptr<erhe::Item>>& items);
+
 private:
     // Live longest
     mutable std::mutex                              m_mutex;
@@ -209,8 +212,10 @@ private:
     std::vector<std::shared_ptr<Node_raytrace>>     m_node_raytraces;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 
+    std::vector<std::shared_ptr<erhe::Item>>        m_physics_disabled_nodes;
+
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
-    std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
+    std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_visualization_scene;
 
     std::unique_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;

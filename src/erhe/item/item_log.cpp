@@ -9,8 +9,9 @@ std::shared_ptr<spdlog::logger> log_frame;
 
 void initialize_logging()
 {
-    log       = erhe::log::make_logger("erhe::item::log",       spdlog::level::info);
-    log_frame = erhe::log::make_logger("erhe::item::log_frame", spdlog::level::info, false);
+    using namespace erhe::log;
+    log       = make_logger      ("erhe.item.log");
+    log_frame = make_frame_logger("erhe.item.log_frame");
 }
 
 } // namespace erhe::item

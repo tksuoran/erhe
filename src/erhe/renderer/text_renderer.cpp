@@ -201,7 +201,7 @@ Text_renderer::Text_renderer(
         m_graphics_instance,
         "res/fonts/SourceSansPro-Regular.otf",
         config.font_size,
-        1.0f
+        0.0f // TODO reimplement outline better 1.0f
     );
 
     {

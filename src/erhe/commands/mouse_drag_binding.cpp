@@ -58,7 +58,7 @@ auto Mouse_drag_binding::on_button(
         bool consumed = false;
         if (command->get_command_state() != State::Inactive) {
             // Drag binding consumes button release event only
-            // if command was ini active state.
+            // if command was in active state.
             consumed = command->get_command_state() == State::Active;
             command->set_inactive();
             log_input_event_consumed->trace(

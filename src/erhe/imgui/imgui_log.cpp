@@ -5,13 +5,14 @@ namespace erhe::imgui {
 
 std::shared_ptr<spdlog::logger> log_imgui;
 std::shared_ptr<spdlog::logger> log_performance;
-std::shared_ptr<spdlog::logger> log_windows                 ;
+std::shared_ptr<spdlog::logger> log_windows;
 
 void initialize_logging()
 {
-    log_imgui       = erhe::log::make_logger("imgui",       spdlog::level::info);
-    log_performance = erhe::log::make_logger("performance", spdlog::level::info);
-    log_windows     = erhe::log::make_logger("windows",     spdlog::level::info);
+    using namespace erhe::log;
+    log_imgui       = make_logger("erhe.imgui.imgui"      );
+    log_performance = make_logger("erhe.imgui.performance");
+    log_windows     = make_logger("erhe.imgui.windows"    );
 }
 
 }

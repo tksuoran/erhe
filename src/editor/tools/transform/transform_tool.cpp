@@ -223,7 +223,7 @@ void Transform_tool::imgui()
         settings.local = false;
     }
 
-    //ImGui::SliderFloat("Scale", &settings.gizmo_scale, 1.0f, 10.0f);
+    ImGui::TextUnformatted(is_transform_tool_active() ? "Active" : "Inactive");
 
     //const bool show_translate = settings.show_translate;
     //const bool show_rotate    = settings.show_rotate;
@@ -262,13 +262,21 @@ void Transform_tool::imgui()
 
 void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
+    auto* scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return;
+    }
+
     const auto& selection = m_context.selection->get_selection();
+
+    const auto& scene_root = scene_view->get_scene_root();
+    scene_root->update_physics_disabled_nodes(selection);
 
     vec3 cumulative_world_translation{0.0f, 0.0f, 0.0f};
     quat cumulative_world_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
     vec3 cumulative_world_scale      {0.0f, 0.0f, 0.0f};
     std::size_t node_count{0};
-    release_node_physics();
+
     if (node_filter == nullptr) {
         shared.entries.clear();
     }
@@ -302,13 +310,16 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
             ++i;
         }
     }
-    acquire_node_physics();
 
-    shared.world_from_anchor_initial_state.set_trs(
-        cumulative_world_translation / static_cast<float>(node_count),
-        cumulative_world_rotation,
-        cumulative_world_scale / static_cast<float>(node_count)
-    );
+    if (node_count == 0) {
+        shared.world_from_anchor_initial_state = erhe::scene::Trs_transform{};
+    } else {
+        shared.world_from_anchor_initial_state.set_trs(
+            cumulative_world_translation / static_cast<float>(node_count),
+            cumulative_world_rotation,
+            cumulative_world_scale / static_cast<float>(node_count)
+        );
+    }
 
     shared.world_from_anchor = shared.world_from_anchor_initial_state;
 
@@ -567,69 +578,6 @@ void Transform_tool::end_drag()
     shared.initial_drag_distance = 0.0;
 
     log_trs_tool->trace("drag ended");
-}
-
-void Transform_tool::acquire_node_physics()
-{
-    if (!m_context.editor_settings->physics_dynamic_enable) {
-        return;
-    }
-
-    for (auto& entry : shared.entries) {
-        auto& node = entry.node;
-        if (!node) {
-            continue;
-        }
-        const auto node_physics = get_node_physics(node.get());
-        auto* const rigid_body = node_physics
-            ? node_physics->get_rigid_body()
-            : nullptr;
-
-        if (rigid_body == nullptr) {
-            log_trs_tool->trace("TRS begin_move - no rigid body");
-            continue;
-        }
-
-        entry.original_motion_mode = rigid_body->get_motion_mode();
-        rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
-        rigid_body->begin_move();
-    }
-}
-
-void Transform_tool::release_node_physics()
-{
-    if (!m_context.editor_settings->physics_dynamic_enable) {
-        return;
-    }
-
-    for (auto& entry : shared.entries) {
-        auto& node = entry.node;
-        if (!node) {
-            continue;
-        }
-        const auto node_physics = get_node_physics(node.get());
-
-        // TODO Make it so that release will be called when node physics is removed by any means
-        //      This would require Transform_tool to listen to node attachment or something.
-        if (!node_physics) {
-            continue;
-        }
-        auto* const rigid_body = node_physics->get_rigid_body();
-        if (rigid_body == nullptr) {
-            continue;
-        }
-        if (entry.original_motion_mode.has_value()) {
-            log_trs_tool->trace("S restoring old physics node");
-            rigid_body->set_motion_mode(entry.original_motion_mode.value());
-        }
-        rigid_body->set_linear_velocity (vec3{0.0f, 0.0f, 0.0f});
-        rigid_body->set_angular_velocity(vec3{0.0f, 0.0f, 0.0f});
-        rigid_body->end_move            ();
-        node_physics->handle_node_transform_update();
-        entry.original_motion_mode.reset();
-    }
-    shared.touched = false;
-    log_trs_tool->trace("TRS end_move");
 }
 
 auto Transform_tool::get_active_handle() const -> Handle

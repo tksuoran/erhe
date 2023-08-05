@@ -56,6 +56,7 @@
 #include "erhe/commands/commands.hpp"
 #include "erhe/commands/commands_log.hpp"
 #include "erhe/configuration/configuration.hpp"
+#include "erhe/configuration/configuration_log.hpp"
 #include "erhe/geometry/geometry_log.hpp"
 #include "erhe/gl/gl_log.hpp"
 #include "erhe/gl/wrapper_functions.hpp"
@@ -188,7 +189,10 @@ public:
         , m_rendergraph_window    {m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_tool_properties_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
         , m_viewport_config_window{m_imgui_renderer, m_imgui_windows, m_editor_context}
-        , m_log_window            {m_commands, m_imgui_renderer, m_imgui_windows}
+        , m_logs                  {m_commands, m_imgui_renderer}
+        , m_log_settings_window   {m_imgui_renderer, m_imgui_windows, m_logs}
+        , m_tail_log_window       {m_imgui_renderer, m_imgui_windows, m_logs}
+        , m_frame_log_window      {m_imgui_renderer, m_imgui_windows, m_logs}
         , m_performance_window    {m_imgui_renderer, m_imgui_windows}
         , m_pipelines             {m_imgui_renderer, m_imgui_windows}
 
@@ -382,7 +386,14 @@ public:
         m_editor_message_bus.update(); // Flushes queued messages
         m_graphics_instance.shader_monitor.update_once_per_frame();
         m_mesh_memory.gl_buffer_transfer_queue.flush();
+
+        m_editor_scenes.before_physics_simulation_steps();
+
         m_time.update();
+
+        m_editor_scenes.after_physics_simulation_steps();
+        m_editor_scenes.update_node_transforms();
+
         m_editor_rendering.begin_frame();
         m_imgui_windows.imgui_windows();
         m_rendergraph.execute();
@@ -456,7 +467,10 @@ public:
     Rendergraph_window                      m_rendergraph_window;
     Tool_properties_window                  m_tool_properties_window;
     Viewport_config_window                  m_viewport_config_window;
-    erhe::imgui::Log_window                 m_log_window;
+    erhe::imgui::Logs                       m_logs;
+    erhe::imgui::Log_settings_window        m_log_settings_window;
+    erhe::imgui::Tail_log_window            m_tail_log_window;
+    erhe::imgui::Frame_log_window           m_frame_log_window;
     erhe::imgui::Performance_window         m_performance_window;
     erhe::imgui::Pipelines                  m_pipelines;
 
@@ -500,6 +514,7 @@ void run_editor()
     erhe::log::initialize_log_sinks();
     gl::initialize_logging();
     erhe::commands::initialize_logging();
+    erhe::configuration::initialize_logging();
     erhe::gltf::initialize_logging();
     erhe::geometry::initialize_logging();
     erhe::graphics::initialize_logging();

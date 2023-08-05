@@ -9,8 +9,9 @@ std::shared_ptr<spdlog::logger> log_font       ;
 
 void initialize_logging()
 {
-    log_text_buffer = erhe::log::make_logger("erhe::ui::text_buffer", spdlog::level::info);
-    log_font        = erhe::log::make_logger("erhe::ui::font",        spdlog::level::info);
+    using namespace erhe::log;
+    log_text_buffer = make_logger("erhe.ui.text_buffer");
+    log_font        = make_logger("erhe.ui.font"       );
 }
 
 } // namespace erhe::ui

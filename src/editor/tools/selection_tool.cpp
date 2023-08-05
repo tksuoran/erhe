@@ -480,14 +480,16 @@ void Selection::toggle_mesh_selection(
     }
 
     erhe::scene::Node* const node = mesh->get_node();
-    if (node != nullptr) {
-        const bool node_lock_viewport_select = erhe::toolkit::test_all_rhs_bits_set(
-            node->get_flag_bits(),
-            erhe::Item_flags::lock_viewport_selection
-        );
-        if (node_lock_viewport_select) {
-            return;
-        }
+    if (node == nullptr) {
+        return;
+    }
+
+    const bool node_lock_viewport_select = erhe::toolkit::test_all_rhs_bits_set(
+        node->get_flag_bits(),
+        erhe::Item_flags::lock_viewport_selection
+    );
+    if (node_lock_viewport_select) {
+        return;
     }
 
     bool add{false};
@@ -507,30 +509,13 @@ void Selection::toggle_mesh_selection(
 
     ERHE_VERIFY(!add || !remove);
 
+    const auto item = node->shared_from_this();
+
     if (add) {
-        if (m_context.editor_settings->node_tree_expand_attachments) {
-            add_to_selection(mesh);
-            m_range_selection.set_terminator(mesh);
-        } else if (node != nullptr) {
-            const auto node_item = node->shared_from_this();
-            add_to_selection(node_item);
-            m_range_selection.set_terminator(node_item);
-            for (auto& attachment : node->get_attachments()) {
-                add_to_selection(attachment);
-                m_range_selection.set_terminator(attachment);
-            }
-        }
+        add_to_selection(item);
+        m_range_selection.set_terminator(item);
     } else if (remove) {
-        if (m_context.editor_settings->node_tree_expand_attachments) {
-            remove_from_selection(mesh);
-        } else if (node != nullptr) {
-            const auto node_item = node->shared_from_this();
-            remove_from_selection(node_item);
-            m_range_selection.set_terminator(node_item);
-            for (auto& attachment : node->get_attachments()) {
-                remove_from_selection(attachment);
-            }
-        }
+        remove_from_selection(item);
     }
 
     send_selection_change_message();

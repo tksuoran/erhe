@@ -1,4 +1,5 @@
 #include "erhe/imgui/imgui_window.hpp"
+#include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/imgui/imgui_viewport.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
@@ -19,6 +20,11 @@ Imgui_window::Imgui_window(
     , m_title         {title}
     , m_ini_label     {ini_label}
 {
+    if (!ini_label.empty()) {
+        auto ini = erhe::configuration::get_ini("windows.ini", "windows");
+        ini->get(ini_label.data(), m_is_visible);
+    }
+
     imgui_windows.register_imgui_window(this);
 }
 
@@ -56,22 +62,28 @@ void Imgui_window::set_viewport(Imgui_viewport* imgui_viewport)
 
 void Imgui_window::set_visibility(const bool visible)
 {
+    if (m_is_visible == visible) {
+        return;
+    }
     m_is_visible = visible;
+    if (!m_ini_label.empty()) {
+        m_imgui_windows.save_window_state();
+    }
 }
 
 void Imgui_window::show()
 {
-    m_is_visible = true;
+    set_visibility(true);
 }
 
 void Imgui_window::hide()
 {
-    m_is_visible = false;
+    set_visibility(false);
 }
 
 void Imgui_window::toggle_visibility()
 {
-    m_is_visible = !m_is_visible;
+    set_visibility(!m_is_visible);
 }
 
 auto Imgui_window::show_in_menu() const -> bool

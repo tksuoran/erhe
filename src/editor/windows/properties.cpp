@@ -16,6 +16,7 @@
 #include "erhe/imgui/imgui_helpers.hpp"
 
 #include "erhe/geometry/geometry.hpp"
+#include "erhe/physics/icollision_shape.hpp"
 #include "erhe/primitive/primitive.hpp"
 #include "erhe/primitive/geometry_mesh.hpp"
 #include "erhe/primitive/material.hpp"
@@ -408,16 +409,27 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
         return;
     }
 
-    ImGui::Text("Rigid Body: %s",     rigid_body->get_debug_label());
-    ImGui::Text("Is Active: %s",      rigid_body->is_active         () ? "Yes" : "No");
+    const auto transform = rigid_body->get_world_transform();
+    const glm::vec3 pos = glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
 
-    bool allow_sleeping = rigid_body->get_allow_sleeping();
-    ImGui::Text("Allow Sleeping: %s", allow_sleeping ? "Yes" : "No");
-    if (allow_sleeping && ImGui::Button("Disallow Sleeping")) {
-        rigid_body->set_allow_sleeping(false);
-    }
-    if (!allow_sleeping && ImGui::Button("Allow Sleeping")) {
-        rigid_body->set_allow_sleeping(true);
+    ImGui::Text("Rigid Body: %s",             rigid_body->get_debug_label());
+    ImGui::Text("Position: %.2f, %.2f, %.2f", pos.x, pos.y, pos.z);
+    ImGui::Text("Is Active: %s",              rigid_body->is_active() ? "Yes" : "No");
+
+    //bool allow_sleeping = rigid_body->get_allow_sleeping();
+    //ImGui::Text("Allow Sleeping: %s", allow_sleeping ? "Yes" : "No");
+    //if (allow_sleeping && ImGui::Button("Disallow Sleeping")) {
+    //    rigid_body->set_allow_sleeping(false);
+    //}
+    //if (!allow_sleeping && ImGui::Button("Allow Sleeping")) {
+    //    rigid_body->set_allow_sleeping(true);
+    //}
+
+    const auto collision_shape = rigid_body->get_collision_shape();
+    if (collision_shape) {
+        const auto com = collision_shape->get_center_of_mass();
+        ImGui::TextUnformatted(collision_shape->describe().c_str());
+        ImGui::Text("Local center of mass: %.2f, %.2f, %.2f", com.x, com.y, com);
     }
 
     float           mass    = rigid_body->get_mass();
@@ -453,16 +465,17 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
         }
     }
 
-    int motion_mode = static_cast<int>(rigid_body->get_motion_mode());
+    const auto motion_mode = rigid_body->get_motion_mode();
+    int i_motion_mode = static_cast<int>(motion_mode);
     if (
         ImGui::Combo(
             "Motion Mode",
-            &motion_mode,
+            &i_motion_mode,
             erhe::physics::c_motion_mode_strings,
             IM_ARRAYSIZE(erhe::physics::c_motion_mode_strings)
         )
     ) {
-        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(motion_mode));
+        rigid_body->set_motion_mode(static_cast<erhe::physics::Motion_mode>(i_motion_mode));
     }
 }
 
@@ -526,7 +539,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item>& item)
     const auto light         = as<erhe::scene::Light >(item);
     const auto mesh          = as<erhe::scene::Mesh  >(item);
 
-    const bool default_open = !node_physics;
+    const bool default_open = true; // !node_physics;
 
     if (
         !ImGui::TreeNodeEx(

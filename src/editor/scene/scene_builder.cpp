@@ -85,6 +85,7 @@ constexpr bool global_instantiate = true;
 Scene_builder::Config::Config()
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "scene");
+    ini->get("camera_exposure",             camera_exposure);
     ini->get("directional_light_intensity", directional_light_intensity);
     ini->get("directional_light_radius",    directional_light_radius);
     ini->get("directional_light_height",    directional_light_height);
@@ -269,6 +270,7 @@ auto Scene_builder::make_camera(
     camera->projection()->z_near          = 0.03f;
     camera->projection()->z_far           = 80.0f;
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    camera->set_exposure(config.camera_exposure);
     node->attach(camera);
     node->set_parent(m_scene_root->get_scene().get_root_node());
 
@@ -887,7 +889,8 @@ void Scene_builder::add_room()
         .scene_root      = m_scene_root.get(),
         .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
         .material        = floor_material,
-        .scale           = 1.0f
+        .scale           = 1.0f,
+        .motion_mode     = erhe::physics::Motion_mode::e_static
     };
 
     auto floor_instance_node = m_floor_brush->make_instance(

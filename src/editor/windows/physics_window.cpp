@@ -1,6 +1,7 @@
 #include "windows/physics_window.hpp"
 
 #include "editor_context.hpp"
+#include "editor_scenes.hpp"
 #include "editor_settings.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_window.hpp"
@@ -71,6 +72,21 @@ void Physics_window::imgui()
             ImGui::SetTooltip("erhe.ini has [physics] static_enable = false");
         }
     }
+
+    const auto& scene_roots = m_context.editor_scenes->get_scene_roots();
+    for (const auto& scene_root : scene_roots) {
+        if (!ImGui::TreeNodeEx(scene_root->get_name().c_str(), ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+            continue;
+        }
+
+        const auto& physics_world = scene_root->get_physics_world();
+        const auto& debug_info = physics_world.describe();
+        for (const auto& line : debug_info) {
+            ImGui::TextUnformatted(line.c_str());
+        }
+        ImGui::TreePop();
+    }
+
 
     //// if (g_debug_draw != nullptr) {  TODO
     ////     if (ImGui::CollapsingHeader("Visualizations")) {

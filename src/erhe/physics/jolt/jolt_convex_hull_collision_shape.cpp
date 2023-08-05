@@ -60,6 +60,16 @@ Jolt_convex_hull_collision_shape::Jolt_convex_hull_collision_shape(
     m_jolt_shape = result.Get();
 }
 
+auto Jolt_convex_hull_collision_shape::get_shape_settings() -> JPH::ShapeSettings&
+{
+    return *m_shape_settings.GetPtr();
+}
+
+auto Jolt_convex_hull_collision_shape::describe() const -> std::string
+{
+    return "Jolt_convex_hull_collision_shape";
+}
+
 //    std::vector<JPH::Vec3> points;
 //    points.resize(numPoints);
 //    for (int i = 0; i < numPoints; ++i) {

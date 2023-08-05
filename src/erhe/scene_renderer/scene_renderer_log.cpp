@@ -12,11 +12,12 @@ std::shared_ptr<spdlog::logger> log_startup;
 
 void initialize_logging()
 {
-    log_draw              = erhe::log::make_logger("scene_renderer::draw"                 , spdlog::level::info);
-    log_render            = erhe::log::make_logger("scene_renderer::render"               , spdlog::level::info, false);
-    log_program_interface = erhe::log::make_logger("scene_renderer::log_program_interface", spdlog::level::info);
-    log_shadow_renderer   = erhe::log::make_logger("scene_renderer::shadow_renderer"      , spdlog::level::info, false);
-    log_startup           = erhe::log::make_logger("scene_renderer::startup"              , spdlog::level::info);
+    using namespace erhe::log;
+    log_draw              = make_logger      ("erhe.scene_renderer.draw"                 );
+    log_render            = make_frame_logger("erhe.scene_renderer.render"               );
+    log_program_interface = make_logger      ("erhe.scene_renderer.log_program_interface");
+    log_shadow_renderer   = make_frame_logger("erhe.scene_renderer.shadow_renderer"      );
+    log_startup           = make_logger      ("erhe.scene_renderer.startup"              );
 }
 
 } // namespace erhe::scene_renderer
