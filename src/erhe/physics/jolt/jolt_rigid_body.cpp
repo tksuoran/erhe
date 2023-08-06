@@ -260,19 +260,6 @@ auto Jolt_rigid_body::get_center_of_mass_transform() const -> Transform
     };
 }
 
-void Jolt_rigid_body::set_center_of_mass_transform(const Transform& transform)
-{
-    if (m_body == nullptr) {
-        log_physics->error("Fixed world body cannot be modified");
-        return;
-    }
-
-    static_cast<void>(transform);
-    // TODO
-    //const auto rotation = m_body->GetRotation();
-    //const auto position = m_body->GetCenterOfMassPosition();
-}
-
 auto Jolt_rigid_body::get_world_transform() const -> glm::mat4
 {
     if (m_body == nullptr) {

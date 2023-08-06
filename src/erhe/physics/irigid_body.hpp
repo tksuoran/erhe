@@ -81,7 +81,6 @@ public:
     virtual void begin_move                  ()                                             = 0;
     virtual void end_move                    ()                                             = 0;
     virtual void set_angular_velocity        (const glm::vec3& velocity)                    = 0;
-    virtual void set_center_of_mass_transform(const Transform& transform)                   = 0;
     virtual void set_damping                 (float linear_damping, float angular_damping)  = 0;
     virtual void set_friction                (float friction)                               = 0;
     virtual void set_gravity_factor          (float gravity_factor)                         = 0;

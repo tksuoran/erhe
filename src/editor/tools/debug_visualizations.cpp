@@ -853,11 +853,11 @@ void Debug_visualizations::physics_nodes_visualization(
             text_color,
             label_text
         );
+        const glm::vec3 dx{0.1f, 0.0f, 0.0f};
+        const glm::vec3 dy{0.0f, 0.1f, 0.0f};
+        const glm::vec3 dz{0.0f, 0.0f, 0.1f};
         for (const auto& marker : node_physics->markers) {
             const glm::vec4 blue{0.0f, 0.0f, 1.0f, 1.0f};
-            const glm::vec3 dx{0.1f, 0.0f, 0.0f};
-            const glm::vec3 dy{0.0f, 0.1f, 0.0f};
-            const glm::vec3 dz{0.0f, 0.0f, 0.1f};
             line_renderer.add_lines(
                 m,
                 blue,
@@ -892,7 +892,17 @@ void Debug_visualizations::physics_nodes_visualization(
             // This would return center of mass in world space
             //const glm::vec3 center_of_mass = rigid_body->get_center_of_mass();
             const glm::vec3 center_of_mass = collision_shape->get_center_of_mass();
-            line_renderer.add_lines( m, purple, {{ O, center_of_mass }} );
+            line_renderer.add_lines(
+                m,
+                purple,
+                {
+                    { O, center_of_mass },
+                    { center_of_mass - dx, center_of_mass + dx },
+                    { center_of_mass - dy, center_of_mass + dy },
+                    { center_of_mass - dz, center_of_mass + dz },
+                }
+            );
+
         }
     }
 }

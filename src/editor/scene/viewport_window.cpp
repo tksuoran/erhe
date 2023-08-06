@@ -430,7 +430,7 @@ void Viewport_window::update_hover_with_id_render()
 
     using erhe::toolkit::test_all_rhs_bits_set;
 
-    const uint64_t flags = id_query.mesh ? entry.mesh->get_flag_bits() : 0;
+    const uint64_t flags = (id_query.mesh != nullptr) ? entry.mesh->get_flag_bits() : 0;
 
     const bool hover_content      = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::content     );
     const bool hover_tool         = id_query.mesh && test_all_rhs_bits_set(flags, erhe::Item_flags::tool        );

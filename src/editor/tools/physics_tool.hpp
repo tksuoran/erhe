@@ -109,10 +109,11 @@ private:
     std::shared_ptr<erhe::scene::Mesh>          m_target_mesh;
     std::shared_ptr<erhe::scene::Mesh>          m_last_target_mesh;
     std::shared_ptr<Node_physics>               m_target_node_physics;
-    float                                       m_target_distance       {1.0f};
-    glm::vec3                                   m_grab_position_in_mesh {0.0f, 0.0f, 0.0f}; // Where object drag started in local space
-    glm::vec3                                   m_grab_position_world   {0.0f, 0.0f, 0.0f}; // Where object drag started in world space
-    glm::vec3                                   m_goal_position_in_world{0.0f, 0.0f, 0.0f}; // Goal position for drag point in world space
+    float                                       m_target_distance                 {1.0f};
+    glm::vec3                                   m_grab_position_in_node           {0.0f, 0.0f, 0.0f}; // Where object drag started in local node space
+    glm::vec3                                   m_grab_position_in_collision_shape{0.0f, 0.0f, 0.0f}; // Where object drag started in local node space
+    glm::vec3                                   m_grab_position_world             {0.0f, 0.0f, 0.0f}; // Where object drag started in world space
+    glm::vec3                                   m_goal_position_in_world          {0.0f, 0.0f, 0.0f}; // Goal position for drag point in world space
 
     erhe::physics::IWorld*                      m_physics_world{nullptr};
     std::unique_ptr<erhe::physics::IConstraint> m_target_constraint;
@@ -127,8 +128,14 @@ private:
     float m_depth                   {0.00f}; // TODO requires transform for mouse position 0.0 = surface, 1.0 = center of gravity
     float m_override_linear_damping {0.90f};
     float m_override_angular_damping{0.90f};
-    float m_override_friction       {0.01f};
-    float m_override_gravity        {0.40f};
+    float m_override_friction_value {0.01f};
+    float m_override_gravity_value  {0.40f};
+    bool  m_override_gravity_enable {true};
+    bool  m_override_friction_enable{true};
+    bool  m_override_damping_enable {true};
+    bool  m_extra_damping_enable    {true};
+    float m_extra_linear_damping    {0.2f};
+    float m_extra_angular_damping   {0.2f};
 
     float m_original_linear_damping {0.00f};
     float m_original_angular_damping{0.00f};
@@ -139,10 +146,8 @@ private:
     glm::vec3 m_to_start_direction{0.0f};
     float     m_target_mesh_size  {0.0f};
 
-    bool       m_show_drag_body{true};
-
-    Ray_hit_style m_ray_hit_style
-    {
+    bool          m_show_drag_body{true};
+    Ray_hit_style m_ray_hit_style{
         .ray_color     = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f},
         .ray_thickness = 8.0f,
         .ray_length    = 1.0f,

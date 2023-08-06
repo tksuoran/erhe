@@ -404,14 +404,14 @@ void draw_ray_hit(
 
     erhe::scene::Node*             ignore_node     = ignore_mesh->get_node();
     std::shared_ptr<Node_raytrace> ignore_raytrace = get_node_raytrace(ignore_node);
-    bool stored_ignore_hidden_state{false};
+    bool stored_visibility_state{false};
     if (ignore_raytrace) {
-        stored_ignore_hidden_state = ignore_raytrace->is_hidden();
+        stored_visibility_state = ignore_raytrace->is_visible();
         ignore_raytrace->hide();
     }
     ERHE_DEFER(
         if (ignore_raytrace) {
-            ignore_raytrace->set_visible(stored_ignore_hidden_state);
+            ignore_raytrace->set_visible(stored_visibility_state);
         }
     );
 

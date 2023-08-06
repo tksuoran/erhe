@@ -778,10 +778,8 @@ void Scene_root::update_physics_disabled_nodes(
         const auto node_physics = get_node_physics(node.get());
         auto*      rigid_body   = node_physics->get_rigid_body();
         log_trs_tool->warn("release {} orig. motion mode = {}", node->get_name(), erhe::physics::c_str(node_physics->physics_motion_mode));
-        rigid_body->set_motion_mode     (node_physics->physics_motion_mode);
-        rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
-        rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
-        rigid_body->end_move            (); // allows sleeping
+        rigid_body->set_motion_mode(node_physics->physics_motion_mode);
+        rigid_body->end_move       (); // allows sleeping
     }
 
     // "acquire" nodes that are newly disabled
