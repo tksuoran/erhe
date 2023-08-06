@@ -429,7 +429,7 @@ void Properties::node_physics_properties(Node_physics& node_physics) const
     if (collision_shape) {
         const auto com = collision_shape->get_center_of_mass();
         ImGui::TextUnformatted(collision_shape->describe().c_str());
-        ImGui::Text("Local center of mass: %.2f, %.2f, %.2f", com.x, com.y, com);
+        ImGui::Text("Local center of mass: %.2f, %.2f, %.2f", com.x, com.y, com.z);
     }
 
     float           mass    = rigid_body->get_mass();

@@ -32,8 +32,8 @@ auto Logs_toggle_pause_command::try_call() -> bool
 }
 
 Logs::Logs(erhe::commands::Commands& commands, Imgui_renderer& imgui_renderer)
-    : m_toggle_pause_command{commands, *this}
-    , m_imgui_renderer{imgui_renderer}
+    : m_imgui_renderer{imgui_renderer}
+    , m_toggle_pause_command{commands, *this}
 {
     commands.register_command   (&m_toggle_pause_command);
     commands.bind_command_to_key(&m_toggle_pause_command, erhe::toolkit::Key_escape);
