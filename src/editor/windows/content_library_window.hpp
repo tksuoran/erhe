@@ -51,6 +51,7 @@ private:
         {
             constexpr ImGuiTreeNodeFlags parent_flags{
                 ImGuiTreeNodeFlags_OpenOnArrow       |
+                ImGuiTreeNodeFlags_DefaultOpen       |
                 ImGuiTreeNodeFlags_OpenOnDoubleClick |
                 ImGuiTreeNodeFlags_SpanFullWidth
             };

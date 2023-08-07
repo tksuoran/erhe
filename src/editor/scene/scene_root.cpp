@@ -776,8 +776,13 @@ void Scene_root::update_physics_disabled_nodes(
     for (const auto& item : release_set) {
         const auto node         = as<erhe::scene::Node>(item);
         const auto node_physics = get_node_physics(node.get());
-        auto*      rigid_body   = node_physics->get_rigid_body();
-        log_trs_tool->warn("release {} orig. motion mode = {}", node->get_name(), erhe::physics::c_str(node_physics->physics_motion_mode));
+        if (!node_physics) {
+            continue;
+        }
+        auto* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body == nullptr) {
+            continue;
+        }
         rigid_body->set_motion_mode(node_physics->physics_motion_mode);
         rigid_body->end_move       (); // allows sleeping
     }
@@ -792,9 +797,14 @@ void Scene_root::update_physics_disabled_nodes(
     for (const auto& item : acquire_set) {
         const auto node         = as<erhe::scene::Node>(item);
         const auto node_physics = get_node_physics(node.get());
-        auto*      rigid_body   = node_physics->get_rigid_body();
+        if (!node_physics) {
+            continue;
+        }
+        auto* rigid_body = node_physics->get_rigid_body();
+        if (rigid_body == nullptr) {
+            continue;
+        }
         node_physics->physics_motion_mode = rigid_body->get_motion_mode();
-        log_trs_tool->warn("acquire {} orig. motion mode = {}", node->get_name(), erhe::physics::c_str(node_physics->physics_motion_mode));
         rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
         rigid_body->begin_move();
     }

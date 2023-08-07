@@ -414,7 +414,8 @@ auto Selection::on_viewport_select_try_ready() -> bool
 auto Selection::on_viewport_select() -> bool
 {
     auto shared_hover_mesh = std::static_pointer_cast<erhe::scene::Mesh>(m_hover_mesh->shared_from_this());
-    const bool was_selected = is_in_selection(shared_hover_mesh);
+    auto shared_hover_node = m_hover_mesh->get_node()->shared_from_this();
+    const bool was_selected = is_in_selection(shared_hover_mesh) || is_in_selection(shared_hover_node);
     if (m_context.input_state->control) {
         if (m_hover_content) {
             toggle_mesh_selection(shared_hover_mesh, was_selected, false);
@@ -435,8 +436,9 @@ auto Selection::on_viewport_select() -> bool
 auto Selection::on_viewport_select_toggle() -> bool
 {
     auto shared_hover_mesh = std::static_pointer_cast<erhe::scene::Mesh>(m_hover_mesh->shared_from_this());
+    auto shared_hover_node = m_hover_mesh->get_node()->shared_from_this();
     if (m_hover_content) {
-        const bool was_selected = is_in_selection(shared_hover_mesh);
+        const bool was_selected = is_in_selection(shared_hover_mesh) || is_in_selection(shared_hover_node);
         toggle_mesh_selection(shared_hover_mesh, was_selected, false);
         return true;
     }

@@ -53,7 +53,7 @@ public:
     std::optional<glm::mat4>          inertia_override {};
     std::string                       debug_label      {};
     bool                              enable_collisions{true};
-    erhe::physics::Motion_mode        motion_mode      {Motion_mode::e_kinematic_physical};
+    erhe::physics::Motion_mode        motion_mode      {Motion_mode::e_dynamic};
 };
 
 class IRigid_body

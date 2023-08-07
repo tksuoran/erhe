@@ -59,6 +59,29 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     auto        normal_style              = Normal_style::none;
 
     m_selection_before = m_parameters.context.selection->get_selection();
+    // Sorting nodes ensures first node is not child of some other node.
+    // Other nodes will be detached from the scene.
+
+    // TODO Re-parent children of nodes that will be detached to
+    //      the remaining (first) node.
+    std::sort(
+        m_selection_before.begin(),
+        m_selection_before.end(),
+        [](const std::shared_ptr<erhe::Item>& lhs, const std::shared_ptr<erhe::Item>& rhs) {
+            auto lhs_hierarchy = as<erhe::Hierarchy>(lhs);
+            auto rhs_hierarchy = as<erhe::Hierarchy>(rhs);
+            if (lhs_hierarchy && !rhs_hierarchy) {
+                return true;
+            }
+            if (rhs_hierarchy && !lhs_hierarchy) {
+                return false;
+            }
+            if (!lhs_hierarchy && !rhs_hierarchy) {
+                return true;
+            }
+            return lhs_hierarchy->get_depth() < rhs_hierarchy->get_depth();
+        }
+    );
 
     for (const auto& item : m_selection_before) {
         auto shared_node = as<erhe::scene::Node>(item);
@@ -93,7 +116,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             transform                 = mat4{1};
             first_mesh                = false;
             m_selection_after.push_back(mesh);
-            m_combined.mesh = mesh;
+            m_first_mesh_primitives_before = mesh->mesh_data.primitives;
         } else {
             transform = reference_node_from_world * node->world_from_node();
         }
@@ -117,7 +140,6 @@ Merge_operation::Merge_operation(Parameters&& parameters)
                 continue;
             }
             combined_geometry.merge(*geometry, transform);
-            source_entry.primitives.push_back(primitive);
             if (normal_style == Normal_style::none) {
                 normal_style = primitive.geometry_primitive->normal_style;
             }
@@ -143,10 +165,11 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         if (parameters.context.editor_settings->physics_static_enable) {
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
                 .collision_shape = combined_collision_shape,
-                .debug_label     = "merged" // TODO
+                .debug_label     = "merged", // TODO
+                .motion_mode     = erhe::physics::Motion_mode::e_dynamic
             };
 
-            m_combined.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+            m_combined_node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
         }
     }
 
@@ -154,7 +177,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         erhe::geometry::operation::weld(combined_geometry)
     );;
 
-    m_combined.primitives.push_back(
+    m_first_mesh_primitives_after.push_back(
         erhe::primitive::Primitive{
             material,
             std::make_shared<erhe::primitive::Geometry_primitive>(
@@ -165,7 +188,10 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
     );
 
-    m_combined.node_raytrace = std::make_shared<Node_raytrace>(m_combined.mesh, m_combined.primitives);
+    m_combined_node_raytrace = std::make_shared<Node_raytrace>(
+        m_sources.front().mesh,
+        m_first_mesh_primitives_after
+    );
 }
 
 void Merge_operation::execute(Editor_context& context)
@@ -184,55 +210,47 @@ void Merge_operation::execute(Editor_context& context)
 
     scene.sanity_check();
 
+    // First node should have a mesh
+    ERHE_VERIFY(m_sources.front().mesh);
+
     bool first_entry = true;
     for (const auto& entry : m_sources) {
-        const auto& mesh = entry.mesh;
         ERHE_VERIFY(entry.node != nullptr);
         erhe::scene::Node* node = entry.node.get();
+        auto& mesh = entry.mesh;
 
         if (first_entry) {
             // For first mesh: Replace mesh primitives
-            mesh->mesh_data.primitives = m_combined.primitives;
-
-            auto old_mesh = erhe::scene::get_mesh(node);
-            if (old_mesh) {
-                node->detach(old_mesh.get());
-            }
-            if (entry.mesh) {
-                node->attach(m_combined.mesh);
-            }
+            mesh->mesh_data.primitives = m_first_mesh_primitives_after;
 
             auto old_node_physics = get_node_physics(node);
             if (old_node_physics) {
                 node->detach(old_node_physics.get());
             }
-            if (m_combined.node_physics) {
-                node->attach(m_combined.node_physics);
+            if (m_combined_node_physics) {
+                node->attach(m_combined_node_physics);
             }
 
             auto old_node_raytrace = get_node_raytrace(node);
             if (old_node_raytrace) {
                 node->detach(old_node_raytrace.get());
             }
-            if (m_combined.node_raytrace) {
-                node->attach(m_combined.node_raytrace);
+            if (m_combined_node_raytrace) {
+                node->attach(m_combined_node_raytrace);
             }
 
             first_entry = false;
         } else {
-            entry.node->set_parent({});
+            node->set_parent({});
         }
     }
     context.selection->set_selection(m_selection_after);
 
     scene.sanity_check();
-    log_operations->trace("end Op Execute {}", describe());
 }
 
 void Merge_operation::undo(Editor_context& context)
 {
-    log_operations->trace("Op Undo {}", describe());
-
     if (m_sources.empty()) {
         return;
     }
@@ -247,22 +265,13 @@ void Merge_operation::undo(Editor_context& context)
 
     bool first_entry = true;
     for (const auto& entry : m_sources) {
-        // For all entries:
         auto& mesh = entry.mesh;
-        mesh->mesh_data.primitives = entry.primitives;
 
         erhe::scene::Node* node = entry.node.get();
 
         if (first_entry) {
             first_entry = false;
-
-            auto old_mesh = erhe::scene::get_mesh(node);
-            if (old_mesh) {
-                node->detach(old_mesh.get());
-            }
-            if (entry.mesh) {
-                node->attach(entry.mesh);
-            }
+            mesh->mesh_data.primitives = m_first_mesh_primitives_before;
 
             auto old_node_physics = get_node_physics(node);
             if (old_node_physics) {

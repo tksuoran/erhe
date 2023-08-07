@@ -39,17 +39,20 @@ private:
     class Entry
     {
     public:
-        std::shared_ptr<erhe::scene::Mesh>      mesh;
-        std::shared_ptr<erhe::scene::Node>      node;
-        std::shared_ptr<erhe::scene::Node>      before_parent;
-        std::shared_ptr<Node_physics>           node_physics;
-        std::shared_ptr<Node_raytrace>          node_raytrace;
-        std::vector<erhe::primitive::Primitive> primitives{};
+        std::shared_ptr<erhe::scene::Mesh> mesh;
+        std::shared_ptr<erhe::scene::Node> node;
+        std::shared_ptr<erhe::scene::Node> before_parent;
+        std::shared_ptr<Node_physics>      node_physics;
+        std::shared_ptr<Node_raytrace>     node_raytrace;
     };
 
     Parameters                                                 m_parameters;
     std::vector<Entry>                                         m_sources;
-    Entry                                                      m_combined;
+    std::shared_ptr<Node_physics>                              m_combined_node_physics;
+    std::shared_ptr<Node_raytrace>                             m_combined_node_raytrace;
+    std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_before{};
+    std::vector<erhe::primitive::Primitive>                    m_first_mesh_primitives_after{};
+
     std::vector<std::shared_ptr<erhe::Item>>                   m_selection_before;
     std::vector<std::shared_ptr<erhe::Item>>                   m_selection_after;
     std::vector<std::shared_ptr<erhe::scene::Node>>            m_hold_nodes;
