@@ -279,6 +279,10 @@ public:
     {
         ERHE_PROFILE_GPU_CONTEXT
 
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        m_selection.setup_xr_bindings(m_commands, m_headset_view);
+#endif
+
         fill_editor_context();
 
         auto ini = erhe::configuration::get_ini("erhe.ini", "physics");
