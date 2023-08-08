@@ -44,6 +44,8 @@
 #   include <imgui.h>
 #endif
 
+#include <unordered_map>
+
 namespace editor
 {
 
@@ -262,15 +264,7 @@ void Transform_tool::imgui()
 
 void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
 {
-    auto* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr) {
-        return;
-    }
-
     const auto& selection = m_context.selection->get_selection();
-
-    const auto& scene_root = scene_view->get_scene_root();
-    scene_root->update_physics_disabled_nodes(selection);
 
     vec3 cumulative_world_translation{0.0f, 0.0f, 0.0f};
     quat cumulative_world_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
@@ -281,6 +275,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         shared.entries.clear();
     }
     std::size_t i = 0;
+
     for (const auto& item : selection) {
         std::shared_ptr<erhe::scene::Node> node = as<erhe::scene::Node>(item);
         if (!node) {
@@ -309,6 +304,19 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
             }
             ++i;
         }
+    }
+
+    std::unordered_map<Scene_root*, std::vector<std::shared_ptr<erhe::Item>>> target_nodes;
+    for (const auto& entry : shared.entries) {
+        erhe::Item_host* item_host = entry.node->get_item_host();
+        if (item_host == nullptr) {
+            continue;
+        }
+        Scene_root* scene_root = static_cast<Scene_root*>(item_host);
+        target_nodes[scene_root].push_back(entry.node);
+    }
+    for (auto kvp : target_nodes) {
+        kvp.first->update_physics_disabled_nodes(kvp.second);
     }
 
     if (node_count == 0) {
