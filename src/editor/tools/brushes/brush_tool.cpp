@@ -224,10 +224,14 @@ void Brush_tool::on_motion()
         return;
     }
 
-    m_hover = scene_view->get_nearest_hover(
+    const Hover_entry* nearest_hover = scene_view->get_nearest_hover(
         Hover_entry::content_bit |
         Hover_entry::grid_bit
     );
+    if (nearest_hover == nullptr) {
+        return;
+    }
+    m_hover = *nearest_hover;
 
     //// if (
     ////     (m_hover.geometry_primitive != nullptr) &&

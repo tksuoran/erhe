@@ -138,9 +138,9 @@ auto Scene_view::get_hover(size_t slot) const -> const Hover_entry&
     return m_hover_entries.at(slot);
 }
 
-auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entry&
+auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entry*
 {
-    std::size_t nearest_slot = 0;
+    std::optional<std::size_t> nearest_slot;
     if (m_world_from_control.has_value()) {
         float nearest_distance = std::numeric_limits<float>::max();
         for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot){
@@ -164,7 +164,10 @@ auto Scene_view::get_nearest_hover(uint32_t slot_mask) const -> const Hover_entr
             }
         }
     }
-    return m_hover_entries.at(nearest_slot);
+    if (!nearest_slot.has_value()) {
+        return nullptr;
+    }
+    return &m_hover_entries.at(nearest_slot.value());
 }
 
 auto Scene_view::as_viewport_window() -> Viewport_window*

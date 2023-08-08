@@ -139,7 +139,7 @@ public:
     [[nodiscard]] auto get_control_ray_direction_in_world       () const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_control_position_in_world_at_distance(float distance) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_hover                                (std::size_t slot) const -> const Hover_entry&;
-    [[nodiscard]] auto get_nearest_hover                        (uint32_t slot_mask) const -> const Hover_entry&;
+    [[nodiscard]] auto get_nearest_hover                        (uint32_t slot_mask) const -> const Hover_entry*;
 
 protected:
     void set_hover(std::size_t slot, const Hover_entry& entry);

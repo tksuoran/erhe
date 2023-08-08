@@ -2,6 +2,7 @@
 
 #include "editor_context.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_windows.hpp"
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -96,6 +97,7 @@ Hud::Hud(
     erhe::rendergraph::Rendergraph& rendergraph,
     Editor_context&                 editor_context,
     Editor_message_bus&             editor_message_bus,
+    Editor_windows&                 editor_windows,
     Headset_view&                   headset_view,
     Mesh_memory&                    mesh_memory,
     Scene_builder&                  scene_builder,
@@ -192,6 +194,12 @@ Hud::Hud(
         true
     );
 
+    m_rendertarget_imgui_viewport->set_begin_callback(
+        [&editor_windows](erhe::imgui::Imgui_viewport& imgui_viewport) {
+            editor_windows.viewport_menu(imgui_viewport);
+        }
+    );
+
     imgui_renderer.register_imgui_viewport(m_rendertarget_imgui_viewport.get());
 
     set_visibility(m_is_visible);
@@ -269,15 +277,13 @@ auto Hud::try_begin_drag() -> bool
         return false;
     }
 
-    const auto& drag_entry = scene_view->get_nearest_hover(
-        Hover_entry::content_bit      |
+    const auto* drag_entry = scene_view->get_nearest_hover(
         Hover_entry::rendertarget_bit
-        //Hover_entry::grid_bit
     );
-    if (!drag_entry.valid || !drag_entry.mesh) {
+    if ((drag_entry == nullptr) || !drag_entry->valid || (drag_entry->mesh == nullptr)) {
         return false;
     }
-    auto* node = drag_entry.mesh->get_node();
+    auto* node = drag_entry->mesh->get_node();
     if (node == nullptr) {
         return false;
     }

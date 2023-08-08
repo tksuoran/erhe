@@ -59,9 +59,12 @@ void Hover_tool::imgui()
     const auto& tool         = scene_view->get_hover(Hover_entry::tool_slot);
     const auto& rendertarget = scene_view->get_hover(Hover_entry::rendertarget_slot);
     const auto& grid         = scene_view->get_hover(Hover_entry::grid_slot);
-    const auto& nearest      = scene_view->get_nearest_hover(Hover_entry::all_bits);
+    const auto* nearest      = scene_view->get_nearest_hover(Hover_entry::all_bits);
+    if (nearest == nullptr) {
+        return;
+    }
     ImGui::Checkbox("Show Snapped Grid Position", &m_show_snapped_grid_position);
-    ImGui::Text("Nearest: %s",      nearest.valid ? nearest.get_name().c_str() : "");
+    ImGui::Text("Nearest: %s",      nearest->valid ? nearest->get_name().c_str() : "");
     ImGui::Text("Content: %s",      (hover       .valid && hover       .mesh) ? hover       .mesh->get_name().c_str() : "");
     ImGui::Text("Tool: %s",         (tool        .valid && tool        .mesh) ? tool        .mesh->get_name().c_str() : "");
     ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget.mesh) ? rendertarget.mesh->get_name().c_str() : "");
@@ -70,29 +73,29 @@ void Hover_tool::imgui()
         ImGui::TextUnformatted(text.c_str());
     }
 
-    if (nearest.valid) {
+    if (nearest->valid) {
         {
-            const std::string text = fmt::format("Nearest Primitive Index: {}", nearest.primitive_index);
-            ImGui::TextUnformatted(text.c_str());
-        }
-        {
-            const std::string text = fmt::format("Nearest triangle Id: {}", nearest.triangle_id);
+            const std::string text = fmt::format("Nearest Primitive Index: {}", nearest->primitive_index);
             ImGui::TextUnformatted(text.c_str());
         }
         {
-            const std::string text = fmt::format("Nearest polygon Id: {}", nearest.polygon_id);
+            const std::string text = fmt::format("Nearest triangle Id: {}", nearest->triangle_id);
             ImGui::TextUnformatted(text.c_str());
         }
-        if (nearest.position.has_value()) {
-            const std::string text = fmt::format("Nearest Position: {}", nearest.position.value());
+        {
+            const std::string text = fmt::format("Nearest polygon Id: {}", nearest->polygon_id);
             ImGui::TextUnformatted(text.c_str());
         }
-        if (nearest.normal.has_value()) {
-            const std::string text = fmt::format("Nearest Normal: {}", nearest.normal.value());
+        if (nearest->position.has_value()) {
+            const std::string text = fmt::format("Nearest Position: {}", nearest->position.value());
             ImGui::TextUnformatted(text.c_str());
         }
-        if (nearest.uv.has_value()) {
-            const std::string text = fmt::format("Nearest UV: {}", nearest.uv.value());
+        if (nearest->normal.has_value()) {
+            const std::string text = fmt::format("Nearest Normal: {}", nearest->normal.value());
+            ImGui::TextUnformatted(text.c_str());
+        }
+        if (nearest->uv.has_value()) {
+            const std::string text = fmt::format("Nearest UV: {}", nearest->uv.value());
             ImGui::TextUnformatted(text.c_str());
         }
     }
@@ -157,26 +160,26 @@ void Hover_tool::tool_render(
         return;
     }
 
-    const auto& entry = context.scene_view.get_nearest_hover(
+    const auto* entry = context.scene_view.get_nearest_hover(
         Hover_entry::content_bit | Hover_entry::grid_bit
     );
 
-    if (!entry.valid || !entry.position.has_value()) {
+    if ((entry == nullptr) || !entry->valid || !entry->position.has_value()) {
         return;
     }
 
-    if (entry.normal.has_value()) {
+    if (entry->normal.has_value()) {
         auto& line_renderer = *m_context.line_renderer_set->hidden.at(2).get();
-        const auto p0 = entry.position.value();
-        const auto p1 = entry.position.value() + entry.normal.value();
+        const auto p0 = entry->position.value();
+        const auto p1 = entry->position.value() + entry->normal.value();
         line_renderer.set_thickness(10.0f);
         line_renderer.add_lines(
-            get_line_color_from_slot(entry.slot),
+            get_line_color_from_slot(entry->slot),
             {{ glm::vec3{p0}, glm::vec3{p1} }}
         );
-        if (m_show_snapped_grid_position && entry.grid) {
-            const auto sp0 = entry.grid->snap_world_position(p0);
-            const auto sp1 = sp0 + entry.normal.value();
+        if (m_show_snapped_grid_position && entry->grid) {
+            const auto sp0 = entry->grid->snap_world_position(p0);
+            const auto sp1 = sp0 + entry->normal.value();
             line_renderer.add_lines(
                 glm::vec4{1.0f, 1.0f, 0.0f, 1.0},
                 {{ glm::vec3{sp0}, glm::vec3{sp1} }}
@@ -188,7 +191,7 @@ void Hover_tool::tool_render(
         return;
     }
 
-    const auto position_in_viewport_opt = context.viewport_window->project_to_viewport(entry.position.value());
+    const auto position_in_viewport_opt = context.viewport_window->project_to_viewport(entry->position.value());
     if (!position_in_viewport_opt.has_value()) {
         return;
     }
@@ -197,7 +200,7 @@ void Hover_tool::tool_render(
     //constexpr uint32_t blue  = 0xffff0000u;
     //constexpr uint32_t white = 0xffffffffu;
 
-    const uint32_t text_color = get_text_color_from_slot(entry.slot);
+    const uint32_t text_color = get_text_color_from_slot(entry->slot);
 
     const auto position_in_viewport = position_in_viewport_opt.value();
     glm::vec3 position_at_fixed_depth{
@@ -206,10 +209,10 @@ void Hover_tool::tool_render(
         -0.5f
     };
 
-    add_line(entry.get_name());
+    add_line(entry->get_name());
     add_line(fmt::format(
         "Position in world: {}",
-        entry.position.value()
+        entry->position.value()
     ));
 
     const glm::vec3 position_at_fixed_depth_line_3{
@@ -217,8 +220,8 @@ void Hover_tool::tool_render(
         position_in_viewport.y + 16.0f * 2,
         -0.5f
     };
-    if (entry.mesh) {
-        const auto* node = entry.mesh->get_node();
+    if (entry->mesh != nullptr) {
+        const auto* node = entry->mesh->get_node();
         const glm::vec3 node_position_in_world = glm::vec3{node->position_in_world()};
         add_line(fmt::format(
             "Node position in world: {}",
@@ -228,21 +231,21 @@ void Hover_tool::tool_render(
         if (node_physics) {
             erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
             if (rigid_body) {
-                const glm::vec3 local_position = node->transform_point_from_world_to_local(entry.position.value());
+                const glm::vec3 local_position = node->transform_point_from_world_to_local(entry->position.value());
                 add_line(fmt::format(
                     "Position in {}: {}",
-                    entry.mesh->get_name(),
+                    entry->mesh->get_name(),
                     local_position
                 ));
             }
         }
-    } else if (entry.grid) {
+    } else if (entry->grid != nullptr) {
         const glm::vec3 local_position = glm::vec3{
-            entry.grid->grid_from_world() * glm::vec4{entry.position.value(), 1.0f}
+            entry->grid->grid_from_world() * glm::vec4{entry->position.value(), 1.0f}
         };
         add_line(fmt::format(
             "Position in {}: {}",
-            entry.grid->get_name(),
+            entry->grid->get_name(),
             local_position
         ));
     }

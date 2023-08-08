@@ -240,8 +240,8 @@ public:
         }
         , m_hud{
             m_commands,       m_graphics_instance,  m_imgui_renderer, m_imgui_windows, m_rendergraph,
-            m_editor_context, m_editor_message_bus, m_headset_view,   m_mesh_memory,   m_scene_builder,
-            m_tools
+            m_editor_context, m_editor_message_bus, m_editor_windows, m_headset_view,  m_mesh_memory,
+            m_scene_builder,  m_tools
         }
         , m_hotbar{
             m_commands,    m_graphics_instance, m_imgui_renderer,     m_imgui_windows,

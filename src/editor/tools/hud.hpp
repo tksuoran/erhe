@@ -26,6 +26,7 @@ namespace editor
 class Editor_context;
 class Editor_message;
 class Editor_message_bus;
+class Editor_windows;
 class Headset_view;
 class Icon_set;
 class Mesh_memory;
@@ -95,6 +96,7 @@ public:
         erhe::rendergraph::Rendergraph& rendergraph,
         Editor_context&                 editor_context,
         Editor_message_bus&             editor_message_bus,
+        Editor_windows&                 editor_windows,
         Headset_view&                   headset_view,
         Mesh_memory&                    mesh_memory,
         Scene_builder&                  scene_builder,
