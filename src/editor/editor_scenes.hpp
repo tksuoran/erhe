@@ -40,6 +40,8 @@ public:
         const bool   empty_option
     ) const -> bool;
 
+    void imgui();
+
 private:
     Editor_context&          m_context;
     std::mutex               m_mutex;

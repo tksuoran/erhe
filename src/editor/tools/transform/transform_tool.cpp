@@ -306,19 +306,6 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         }
     }
 
-    std::unordered_map<Scene_root*, std::vector<std::shared_ptr<erhe::Item>>> target_nodes;
-    for (const auto& entry : shared.entries) {
-        erhe::Item_host* item_host = entry.node->get_item_host();
-        if (item_host == nullptr) {
-            continue;
-        }
-        Scene_root* scene_root = static_cast<Scene_root*>(item_host);
-        target_nodes[scene_root].push_back(entry.node);
-    }
-    for (auto kvp : target_nodes) {
-        kvp.first->update_physics_disabled_nodes(kvp.second);
-    }
-
     if (node_count == 0) {
         shared.world_from_anchor_initial_state = erhe::scene::Trs_transform{};
     } else {

@@ -4,7 +4,6 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_scenes.hpp"
-#include "editor_settings.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
@@ -363,8 +362,37 @@ template <typename T>
     ) != items.end();
 }
 
+auto item_set_sort_predicate(
+    const std::shared_ptr<erhe::Item>& lhs,
+    const std::shared_ptr<erhe::Item>& rhs
+) -> bool {
+    const auto lhs_hierarchy = as<erhe::Hierarchy>(lhs);
+    const auto rhs_hierarchy = as<erhe::Hierarchy>(rhs);
+    if (lhs_hierarchy && !rhs_hierarchy) {
+        return true;
+    }
+    if (rhs_hierarchy && !lhs_hierarchy) {
+        return false;
+    }
+    if (!lhs_hierarchy && !rhs_hierarchy) {
+        return true;
+    }
+    return lhs_hierarchy->get_depth() < rhs_hierarchy->get_depth();
+}
+
+[[nodiscard]] auto get_sorted(
+    const std::vector<std::shared_ptr<erhe::Item>>& in_items
+) -> std::vector<std::shared_ptr<erhe::Item>>
+{
+    std::vector<std::shared_ptr<erhe::Item>> out_items = in_items;
+    std::sort(out_items.begin(), out_items.end(), item_set_sort_predicate);
+    return out_items;
+}
+
 void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item>>& selection)
 {
+    Scoped_selection_change selection_change{*this};
+
     for (auto& item : m_selection) {
         if (
             item->is_selected() &&
@@ -376,8 +404,60 @@ void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item>>& se
     for (auto& item : selection) {
         item->set_selected(true);
     }
+
     m_selection = selection;
-    send_selection_change_message();
+}
+
+Scoped_selection_change::Scoped_selection_change(Selection& selection)
+    : selection{selection}
+{
+    selection.begin_selection_change();
+}
+
+Scoped_selection_change::~Scoped_selection_change()
+{
+    selection.end_selection_change();
+}
+
+void Selection::begin_selection_change()
+{
+    ++m_selection_change_depth;
+    if (m_selection_change_depth == 1) {
+        m_begin_selection_change_state = m_selection;
+    }
+}
+
+void Selection::end_selection_change()
+{
+    --m_selection_change_depth;
+    ERHE_VERIFY(m_selection_change_depth >= 0);
+    if (m_selection_change_depth > 0) {
+        return;
+    }
+    const auto sorted_old = get_sorted(m_begin_selection_change_state);
+    const auto sorted_new = get_sorted(m_selection);
+
+    Editor_message selection_changed_message{
+        .update_flags = Message_flag_bit::c_flag_bit_selection,
+    };
+
+    std::vector<std::shared_ptr<erhe::Item>> no_longer_selected;
+    std::set_difference(
+        sorted_old.begin(), sorted_old.end(),
+        sorted_new.begin(), sorted_new.end(),
+        std::back_inserter(selection_changed_message.no_longer_selected),
+        item_set_sort_predicate
+    );
+
+    std::vector<std::shared_ptr<erhe::Item>> newly_selected;
+    std::set_difference(
+        sorted_new.begin(), sorted_new.end(),
+        sorted_old.begin(), sorted_old.end(),
+        std::back_inserter(selection_changed_message.newly_selected),
+        item_set_sort_predicate
+    );
+
+    m_context.editor_message_bus->send_message(selection_changed_message);
 }
 
 auto Selection::on_viewport_select_try_ready() -> bool
@@ -447,6 +527,8 @@ auto Selection::on_viewport_select_toggle() -> bool
 
 auto Selection::clear_selection() -> bool
 {
+    Scoped_selection_change selection_change{*this};
+
     if (m_selection.empty()) {
         return false;
     }
@@ -463,7 +545,7 @@ auto Selection::clear_selection() -> bool
     m_selection.clear();
     m_range_selection.reset();
     sanity_check();
-    send_selection_change_message();
+
     return true;
 }
 
@@ -473,6 +555,8 @@ void Selection::toggle_mesh_selection(
     const bool                                clear_others
 )
 {
+    Scoped_selection_change selection_change{*this};
+
     const bool mesh_lock_viewport_select = erhe::toolkit::test_all_rhs_bits_set(
         mesh->get_flag_bits(),
         erhe::Item_flags::lock_viewport_selection
@@ -519,8 +603,6 @@ void Selection::toggle_mesh_selection(
     } else if (remove) {
         remove_from_selection(item);
     }
-
-    send_selection_change_message();
 }
 
 auto Selection::is_in_selection(
@@ -542,6 +624,8 @@ auto Selection::add_to_selection(
     const std::shared_ptr<erhe::Item>& item
 ) -> bool
 {
+    Scoped_selection_change selection_change{*this};
+
     if (!item) {
         log_selection->warn("Trying to add empty item to selection");
         return false;
@@ -552,7 +636,6 @@ auto Selection::add_to_selection(
     if (!is_in_selection(item)) {
         log_selection->trace("Adding {} to selection", item->get_name());
         m_selection.push_back(item);
-        send_selection_change_message();
         return true;
     }
 
@@ -564,6 +647,8 @@ auto Selection::remove_from_selection(
     const std::shared_ptr<erhe::Item>& item
 ) -> bool
 {
+    Scoped_selection_change selection_change{*this};
+
     if (!item) {
         log_selection->warn("Trying to remove empty item from selection");
         return false;
@@ -579,7 +664,6 @@ auto Selection::remove_from_selection(
     if (i != m_selection.end()) {
         log_selection->trace("Removing item {} from selection", item->get_name());
         m_selection.erase(i, m_selection.end());
-        send_selection_change_message();
         return true;
     }
 
@@ -592,10 +676,11 @@ void Selection::update_selection_from_scene_item(
     const bool                                added
 )
 {
+    Scoped_selection_change selection_change{*this};
+
     if (item->is_selected() && added) {
         if (!is_in(item, m_selection)) {
             m_selection.push_back(item);
-            send_selection_change_message();
         }
     } else {
         if (is_in(item, m_selection)) {
@@ -606,7 +691,6 @@ void Selection::update_selection_from_scene_item(
             );
             if (i != m_selection.end()) {
                 m_selection.erase(i, m_selection.end());
-                send_selection_change_message();
             }
         }
     }
@@ -643,15 +727,6 @@ void Selection::sanity_check()
         log_selection->error("Selection errors: {}", error_count);
     }
 #endif
-}
-
-void Selection::send_selection_change_message() const
-{
-    m_context.editor_message_bus->send_message(
-        Editor_message{
-            .update_flags = Message_flag_bit::c_flag_bit_selection
-        }
-    );
 }
 
 //// void Selection::imgui()

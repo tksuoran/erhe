@@ -235,6 +235,7 @@ Tools::Tools(
     tools_content_library->is_shown_in_ui = false;
     m_scene_root = std::make_shared<Scene_root>(
         scene_message_bus,
+        nullptr, // Do not process editor messages
         nullptr, // Do not register to Editor_scenes
         tools_content_library,
         "Tool scene"

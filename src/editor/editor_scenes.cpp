@@ -51,6 +51,13 @@ void Editor_scenes::unregister_scene_root(
     }
 }
 
+void Editor_scenes::imgui()
+{
+    for (const auto& scene_root : m_scene_roots) {
+        scene_root->imgui();
+    }
+}
+
 void Editor_scenes::update_physics_simulation_fixed_step(const Time_context& time_context)
 {
     if (

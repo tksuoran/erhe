@@ -63,6 +63,7 @@ void Scene_open_operation::execute(Editor_context& context)
 
         m_scene_root = std::make_shared<Scene_root>(
             *context.scene_message_bus,
+            context.editor_message_bus,
             context.editor_scenes, // registers into Editor_scenes
             m_content_library,
             m_path.filename().string()

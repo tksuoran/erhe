@@ -124,6 +124,8 @@ public:
     //void update_hover();
     void update_hover(erhe::imgui::Imgui_viewport* imgui_viewport);
 
+    void debug_imgui();
+
     /// <summary>
     /// Returns the Viewport_window instance which is currently under pointer
     /// (mouse cursor).

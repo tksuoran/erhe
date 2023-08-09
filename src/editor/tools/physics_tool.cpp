@@ -154,10 +154,8 @@ void Physics_tool::on_message(Editor_message& message)
 
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
-        if (get_last_hover_scene_view() != message.scene_view) {
-            //Scene_view* old_scene_view = scene_view;
+        if (get_hover_scene_view() != message.scene_view) {
             set_hover_scene_view(message.scene_view);
-            //Scene_view* new_scene_view = scene_view;
 
             if (m_physics_world != nullptr) {
                 if (m_target_constraint) {

@@ -62,6 +62,7 @@ Material_preview::Material_preview(
 
     m_scene_root = std::make_shared<Scene_root>(
         scene_message_bus,
+        nullptr, // Don't process editor messages
         nullptr, // Don't register to Editor_scenes
         m_content_library,
         "Material preview scene"

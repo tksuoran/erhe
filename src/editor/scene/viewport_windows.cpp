@@ -427,6 +427,24 @@ void Viewport_windows::open_new_imgui_viewport_window()
 //    }
 //}
 
+void Viewport_windows::debug_imgui()
+{
+    ImGui::TextUnformatted("Window hover stack:");
+    for (auto& i : m_hover_stack) {
+        auto window = i.lock();
+        if (!window) {
+            continue;
+        }
+        ImGui::BulletText("%s", window->get_name().c_str());
+    }
+    ImGui::Text(
+        "Hover window: %s",
+        m_hover_window
+            ? m_hover_window->get_name().c_str()
+            : ""
+    );
+}
+
 void Viewport_windows::update_hover(
     erhe::imgui::Imgui_viewport* imgui_viewport
 )
@@ -459,6 +477,7 @@ void Viewport_windows::update_hover(
         : m_hover_stack.back().lock();
 
     if (old_window != m_hover_window) {
+        log_pointer->trace("Changing hover scene view to: {}", m_hover_window ? m_hover_window->get_name().c_str() : "");
         m_context.editor_message_bus->send_message(
             Editor_message{
                 .update_flags = Message_flag_bit::c_flag_bit_hover_viewport | Message_flag_bit::c_flag_bit_hover_scene_view,
@@ -482,8 +501,7 @@ void Viewport_windows::update_hover_from_imgui_viewport_windows(
             continue;
         }
 
-        if (imgui_viewport_window->is_hovered())
-        {
+        if (imgui_viewport_window->is_hovered()) {
             m_last_window = viewport_window;
             m_hover_stack.push_back(m_last_window);
         }

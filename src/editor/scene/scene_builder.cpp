@@ -119,6 +119,7 @@ Scene_builder::Scene_builder(
     erhe::scene::Scene_message_bus&        scene_message_bus,
     erhe::scene_renderer::Shadow_renderer& shadow_renderer,
     Editor_context&                        editor_context,
+    Editor_message_bus&                    editor_message_bus,
     Editor_rendering&                      editor_rendering,
     Editor_scenes&                         editor_scenes,
     Editor_settings&                       editor_settings,
@@ -135,6 +136,7 @@ Scene_builder::Scene_builder(
 
     m_scene_root = std::make_shared<Scene_root>(
         scene_message_bus,
+        &editor_message_bus,
         &editor_scenes,
         content_library,
         "Default Scene"

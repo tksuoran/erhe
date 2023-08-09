@@ -123,6 +123,16 @@ public:
     void viewport_toolbar(bool& hovered);
 };
 
+class Scoped_selection_change
+{
+public:
+    Scoped_selection_change(Selection& selection);
+    ~Scoped_selection_change();
+
+private:
+    Selection& selection;
+};
+
 class Selection
     : public erhe::commands::Command_host
 {
@@ -167,8 +177,10 @@ public:
 
     auto delete_selection() -> bool;
 
+    void begin_selection_change();
+    void end_selection_change();
+
 private:
-    void send_selection_change_message() const;
     void toggle_mesh_selection(
         const std::shared_ptr<erhe::scene::Mesh>& mesh,
         bool                                      was_selected,
@@ -187,6 +199,9 @@ private:
     erhe::scene::Mesh*                       m_hover_mesh   {nullptr};
     bool                                     m_hover_content{false};
     bool                                     m_hover_tool   {false};
+
+    int                                      m_selection_change_depth{0};
+    std::vector<std::shared_ptr<erhe::Item>> m_begin_selection_change_state;
 };
 
 template <typename T>

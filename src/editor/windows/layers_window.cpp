@@ -4,6 +4,7 @@
 #include "editor_scenes.hpp"
 #include "graphics/icon_set.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe/imgui/imgui_windows.hpp"
@@ -24,7 +25,7 @@ using Light_type = erhe::scene::Light_type;
 Layers_window::Layers_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
-    Editor_context&               editor_context
+    Editor_context&              editor_context
 )
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Layers", "layers"}
     , m_context                {editor_context}
@@ -98,6 +99,10 @@ void Layers_window::imgui()
             }
         }
     }
+
+    m_context.editor_scenes->imgui();
+
+    m_context.viewport_windows->debug_imgui();
 #endif
 }
 

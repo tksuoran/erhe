@@ -209,6 +209,7 @@ public:
             m_scene_message_bus,
             m_shadow_renderer,
             m_editor_context,
+            m_editor_message_bus,
             m_editor_rendering,
             m_editor_scenes,
             m_editor_settings,

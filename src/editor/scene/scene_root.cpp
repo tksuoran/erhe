@@ -1,6 +1,7 @@
 #include "scene/scene_root.hpp"
 
 #include "editor_log.hpp"
+#include "editor_message_bus.hpp"
 #include "editor_scenes.hpp"
 #include "editor_settings.hpp"
 #include "rendertarget_mesh.hpp"
@@ -21,6 +22,7 @@
 #include "erhe/scene/node.hpp"
 #include "erhe/scene/scene.hpp"
 #include "erhe/scene/skin.hpp"
+#include "erhe/toolkit/bit_helpers.hpp"
 #include "erhe/toolkit/profile.hpp"
 #include "erhe/toolkit/verify.hpp"
 
@@ -94,6 +96,7 @@ auto Scene_layers::light() const -> erhe::scene::Light_layer*
 
 Scene_root::Scene_root(
     erhe::scene::Scene_message_bus&         scene_message_bus,
+    Editor_message_bus*                     editor_message_bus,
     Editor_scenes*                          editor_scenes,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name
@@ -155,6 +158,72 @@ Scene_root::Scene_root(
 
     if (editor_scenes != nullptr) {
         register_to_editor_scenes(*editor_scenes);
+    }
+
+    if (editor_message_bus != nullptr) {
+        editor_message_bus->add_receiver(
+            [this](Editor_message& message) {
+                using namespace erhe::toolkit;
+                if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
+                    for (const auto& item : message.no_longer_selected) {
+                        if (item->get_item_host() != this) {
+                            continue;
+                        }
+                        const auto node = as<erhe::scene::Node>(item);
+                        if (!node) {
+                            continue;
+                        }
+                        const auto node_physics = get_node_physics(node.get());
+                        if (!node_physics) {
+                            continue;
+                        }
+                        auto* rigid_body = node_physics->get_rigid_body();
+                        if (rigid_body == nullptr) {
+                            continue;
+                        }
+                        log_physics->trace("release physics: {}", node->describe());
+                        rigid_body->set_motion_mode(node_physics->physics_motion_mode);
+                        rigid_body->end_move       (); // allows sleeping
+                        const auto i = std::remove(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
+                        if (i == m_physics_disabled_nodes.end()) {
+                            log_physics->error("node {} not in physics disabled nodes", item->get_name());
+                        } else {
+                            m_physics_disabled_nodes.erase(i, m_physics_disabled_nodes.end());
+                        }
+                    }
+
+                    for (const auto& item : message.newly_selected) {
+                        if (item->get_item_host() != this) {
+                            continue;
+                        }
+                        const auto node = as<erhe::scene::Node>(item);
+                        if (!node) {
+                            continue;
+                        }
+                        const auto node_physics = get_node_physics(node.get());
+                        if (!node_physics) {
+                            continue;
+                        }
+                        auto* rigid_body = node_physics->get_rigid_body();
+                        if (rigid_body == nullptr) {
+                            continue;
+                        }
+                        log_physics->trace("acquire physics: {}", node->describe());
+                        node_physics->physics_motion_mode = rigid_body->get_motion_mode();
+                        rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
+                        rigid_body->begin_move();
+
+#ifndef NDEBUG
+                        const auto i = std::find(m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(), item);
+                        if (i != m_physics_disabled_nodes.end()) {
+                            log_physics->error("node {} already in physics disabled nodes", item->get_name());
+                        } else
+#endif
+                            m_physics_disabled_nodes.push_back(item);
+                        }
+                }
+            }
+        );
     }
 }
 
@@ -743,73 +812,12 @@ void Scene_root::sanity_check()
     m_scene->sanity_check();
 }
 
-void Scene_root::update_physics_disabled_nodes(
-    const std::vector<std::shared_ptr<erhe::Item>>& items
-)
+void Scene_root::imgui()
 {
-    std::vector<std::shared_ptr<erhe::Item>> physics_nodes;
-
-    // Gather nodes with physics
-    std::copy_if(
-        items.begin(),
-        items.end(),
-        std::back_inserter(physics_nodes),
-        [](const std::shared_ptr<erhe::Item>& item) {
-            const auto node = as<erhe::scene::Node>(item);
-            if (!node) {
-                return false;
-            }
-            const auto node_physics = get_node_physics(node.get());
-            return node_physics.get() != nullptr;
-        }
-    );
-
-    std::sort(physics_nodes.begin(), physics_nodes.end());
-
-    // "release" nodes that are no longer to be disabled
-    std::vector<std::shared_ptr<erhe::Item>> release_set;
-    std::set_difference(
-        m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(),
-        physics_nodes.begin(), physics_nodes.end(),
-        std::back_inserter(release_set)
-    );
-    for (const auto& item : release_set) {
-        const auto node         = as<erhe::scene::Node>(item);
-        const auto node_physics = get_node_physics(node.get());
-        if (!node_physics) {
-            continue;
-        }
-        auto* rigid_body = node_physics->get_rigid_body();
-        if (rigid_body == nullptr) {
-            continue;
-        }
-        rigid_body->set_motion_mode(node_physics->physics_motion_mode);
-        rigid_body->end_move       (); // allows sleeping
+    ImGui::Text("Scene_root %s disabled items:", get_name().c_str());
+    for (const auto& item : m_physics_disabled_nodes) {
+        ImGui::BulletText("%s", item->describe().c_str());
     }
-
-    // "acquire" nodes that are newly disabled
-    std::vector<std::shared_ptr<erhe::Item>> acquire_set;
-    std::set_difference(
-        physics_nodes.begin(), physics_nodes.end(),
-        m_physics_disabled_nodes.begin(), m_physics_disabled_nodes.end(),
-        std::back_inserter(acquire_set)
-    );
-    for (const auto& item : acquire_set) {
-        const auto node         = as<erhe::scene::Node>(item);
-        const auto node_physics = get_node_physics(node.get());
-        if (!node_physics) {
-            continue;
-        }
-        auto* rigid_body = node_physics->get_rigid_body();
-        if (rigid_body == nullptr) {
-            continue;
-        }
-        node_physics->physics_motion_mode = rigid_body->get_motion_mode();
-        rigid_body->set_motion_mode(erhe::physics::Motion_mode::e_kinematic_physical);
-        rigid_body->begin_move();
-    }
-
-    m_physics_disabled_nodes = std::move(physics_nodes);
 }
 
 } // namespace editor

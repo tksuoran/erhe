@@ -118,6 +118,7 @@ class Scene_root
 public:
     Scene_root(
         erhe::scene::Scene_message_bus&         scene_message_bus,
+        Editor_message_bus*                     editor_message_bus,
         Editor_scenes*                          editor_scenes,
         const std::shared_ptr<Content_library>& content_library,
         const std::string_view                  name
@@ -169,6 +170,8 @@ public:
     [[nodiscard]] auto get_scene         () const -> const erhe::scene::Scene&;
     [[nodiscard]] auto get_name          () const -> const std::string&;
 
+    void imgui();
+
     auto camera_combo(
         const char*           label,
         erhe::scene::Camera*& camera,
@@ -194,8 +197,6 @@ public:
     void update_pointer_for_rendertarget_meshes(Scene_view* scene_view);
 
     void sanity_check();
-
-    void update_physics_disabled_nodes(const std::vector<std::shared_ptr<erhe::Item>>& items);
 
 private:
     // Live longest
