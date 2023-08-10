@@ -5,6 +5,8 @@
 
 #include "erhe/imgui/imgui_viewport.hpp"
 #include "erhe/imgui/imgui_windows.hpp"
+#include "erhe/gl/wrapper_functions.hpp"
+#include "erhe/gl/gl_helpers.hpp"
 #include "erhe/graphics/framebuffer.hpp"
 #include "erhe/graphics/texture.hpp"
 #include "erhe/toolkit/profile.hpp"
@@ -18,6 +20,44 @@ namespace editor
 
 using erhe::graphics::Framebuffer;
 using erhe::graphics::Texture;
+
+[[nodiscard]] auto choose_depth_stencil_format() 
+{
+    gl::Internal_format formats[] = {
+        gl::Internal_format::depth32f_stencil8,
+        gl::Internal_format::depth24_stencil8,
+        gl::Internal_format::depth_stencil,
+        gl::Internal_format::stencil_index8,
+        gl::Internal_format::depth_component32f,
+        gl::Internal_format::depth_component,
+        gl::Internal_format::depth_component16
+    };
+
+    for (const auto format : formats) {
+        if (gl_helpers::has_depth(format)) {
+            GLint depth_renderable{};
+            gl::get_internalformat_iv(
+                gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::depth_renderable, 1,
+                &depth_renderable
+            );
+            if (depth_renderable == GL_FALSE) {
+                continue;
+            }
+        }
+        if (gl_helpers::has_stencil(format)) {
+            GLint stencil_renderable{};
+            gl::get_internalformat_iv(
+                gl::Texture_target::texture_2d, format, gl::Internal_format_p_name::stencil_renderable, 1,
+                &stencil_renderable
+            );
+            if (stencil_renderable == GL_FALSE) {
+                continue;
+            }
+        }
+        return format;
+    }
+    return gl::Internal_format::depth_component; // fallback
+}
 
 Imgui_viewport_window::Imgui_viewport_window(
     erhe::imgui::Imgui_renderer&            imgui_renderer,
@@ -35,7 +75,7 @@ Imgui_viewport_window::Imgui_viewport_window(
             .input_key            = erhe::rendergraph::Rendergraph_node_key::viewport,
             .output_key           = erhe::rendergraph::Rendergraph_node_key::window,
             .color_format         = gl::Internal_format::rgba16f,
-            .depth_stencil_format = gl::Internal_format::depth24_stencil8
+            .depth_stencil_format = choose_depth_stencil_format()
         }
     }
     , m_viewport_window{viewport_window}

@@ -54,6 +54,8 @@ void Node_attachment::handle_node_flag_bits_update(
     static_cast<void>(old_node_flag_bits);
     const bool visible = (new_node_flag_bits & Item_flags::visible) == Item_flags::visible;
     set_visible(visible);
+    const bool selected = (new_node_flag_bits & Item_flags::selected) == Item_flags::selected;
+    set_selected(selected);
 };
 
 void Node_attachment::set_node(

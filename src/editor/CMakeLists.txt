@@ -258,6 +258,9 @@ erhe_target_sources_grouped(
     res/shaders/edge_lines.frag
     res/shaders/id.vert
     res/shaders/id.frag
+    res/shaders/fat_triangle.vert
+    res/shaders/fat_triangle.geom
+    res/shaders/fat_triangle.frag
     res/shaders/line.vert
     res/shaders/line.geom
     res/shaders/line.frag

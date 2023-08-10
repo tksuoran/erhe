@@ -64,6 +64,7 @@ public:
 
     erhe::graphics::Vertex_input_state  m_empty_vertex_input;
     erhe::renderer::Pipeline_renderpass polygon_fill_standard_opaque;
+    erhe::renderer::Pipeline_renderpass polygon_fill_standard_opaque_selected;
     erhe::renderer::Pipeline_renderpass polygon_fill_standard_translucent;
     erhe::renderer::Pipeline_renderpass line_hidden_blend;
     erhe::renderer::Pipeline_renderpass brush_back;
@@ -124,7 +125,8 @@ private:
 
     [[nodiscard]] auto get_pipeline_renderpass(
         const Renderpass&          renderpass,
-        erhe::renderer::Blend_mode blend_mode
+        erhe::renderer::Blend_mode blend_mode,
+        bool                       selected
     ) -> erhe::renderer::Pipeline_renderpass*;
 
     [[nodiscard]] auto width () const -> int;

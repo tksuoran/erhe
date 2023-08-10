@@ -69,7 +69,7 @@ auto Primitive_buffer::id_ranges() const -> const std::vector<Id_range>&
 
 auto Primitive_buffer::update(
     const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,
-    const erhe::Item_filter&                            filter,
+    const erhe::Item_filter&                                   filter,
     const Primitive_interface_settings&                        settings,
     bool                                                       use_id_ranges
 ) -> erhe::renderer::Buffer_range
@@ -111,12 +111,13 @@ auto Primitive_buffer::update(
         ++mesh_index;
 
         ERHE_VERIFY(mesh);
-        if (!filter(mesh->get_flag_bits())) {
-            continue;
-        }
 
         const auto* node = mesh->get_node();
         if (node == nullptr) {
+            continue;
+        }
+
+        if (!filter(mesh->get_flag_bits())) {
             continue;
         }
 

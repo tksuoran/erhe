@@ -117,7 +117,13 @@ Editor_rendering::Editor_rendering(
     opaque_fill_not_selected->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_not_selected->filter           = opaque_not_selected_filter;
     opaque_fill_not_selected->get_render_style = render_style_not_selected;
-    opaque_fill_not_selected->passes           = { get_pipeline_renderpass(*opaque_fill_not_selected.get(), Blend_mode::opaque) };
+    opaque_fill_not_selected->passes           = {
+        get_pipeline_renderpass(
+            *opaque_fill_not_selected.get(),
+            Blend_mode::opaque,
+            false
+        )
+    };
 
     const auto& render_style_selected = [](const Render_context& context) -> const Render_style_data& {
         return context.viewport_config.render_style_selected;
@@ -128,7 +134,13 @@ Editor_rendering::Editor_rendering(
     opaque_fill_selected->primitive_mode   = Primitive_mode::polygon_fill;
     opaque_fill_selected->filter           = opaque_selected_filter;
     opaque_fill_selected->get_render_style = render_style_selected;
-    opaque_fill_selected->passes           = { get_pipeline_renderpass(*opaque_fill_selected.get(), Blend_mode::opaque) };
+    opaque_fill_selected->passes           = {
+        get_pipeline_renderpass(
+            *opaque_fill_selected.get(),
+            Blend_mode::opaque,
+            true
+        )
+    };
 
     auto opaque_outline_not_selected = make_renderpass("Content outline opaque not selected");
     opaque_outline_not_selected->mesh_layers      = { Mesh_layer_id::content };
@@ -137,7 +149,13 @@ Editor_rendering::Editor_rendering(
     opaque_outline_not_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_outline_not_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_outline_not_selected->get_render_style = render_style_not_selected;
-    opaque_outline_not_selected->passes           = { get_pipeline_renderpass(*opaque_outline_not_selected.get(), Blend_mode::opaque) };
+    opaque_outline_not_selected->passes           = {
+        get_pipeline_renderpass(
+            *opaque_outline_not_selected.get(),
+            Blend_mode::opaque,
+            false
+        )
+    };
     opaque_outline_not_selected->allow_shader_stages_override = false;
 
     auto opaque_outline_selected = make_renderpass("Content outline opaque selected");
@@ -147,7 +165,13 @@ Editor_rendering::Editor_rendering(
     opaque_outline_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_outline_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
     opaque_outline_selected->get_render_style = render_style_selected;
-    opaque_outline_selected->passes           = { get_pipeline_renderpass(*opaque_outline_selected.get(), Blend_mode::opaque) };
+    opaque_outline_selected->passes           = {
+        get_pipeline_renderpass(
+            *opaque_outline_selected.get(),
+            Blend_mode::opaque,
+            true
+        )
+    };
     opaque_outline_selected->allow_shader_stages_override = false;
 
     auto sky = make_renderpass("Sky");
@@ -166,7 +190,13 @@ Editor_rendering::Editor_rendering(
     translucent_fill->mesh_layers    = { Mesh_layer_id::content };
     translucent_fill->primitive_mode = Primitive_mode::polygon_fill;
     translucent_fill->filter         = translucent_filter;
-    translucent_fill->passes         = { get_pipeline_renderpass(*translucent_fill.get(), Blend_mode::translucent) };
+    translucent_fill->passes         = {
+        get_pipeline_renderpass(
+            *translucent_fill.get(),
+            Blend_mode::translucent,
+            false
+        )
+    };
 
     auto translucent_outline = make_renderpass("Content outline translucent");
     translucent_outline->mesh_layers    = { Mesh_layer_id::content };
@@ -174,7 +204,13 @@ Editor_rendering::Editor_rendering(
     translucent_outline->filter         = translucent_filter;
     translucent_outline->begin          = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
     translucent_outline->end            = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
-    translucent_outline->passes         = { get_pipeline_renderpass(*translucent_outline.get(), Blend_mode::translucent) };
+    translucent_outline->passes         = {
+        get_pipeline_renderpass(
+            *translucent_outline.get(),
+            Blend_mode::translucent,
+            false
+        )
+    };
 
     auto brush = make_renderpass("Brush");
     brush->mesh_layers    = { Mesh_layer_id::brush };
@@ -290,16 +326,22 @@ auto Editor_rendering::get_all_shadow_nodes() -> const std::vector<std::shared_p
 
 auto Editor_rendering::get_pipeline_renderpass(
     const Renderpass&                renderpass,
-    const erhe::renderer::Blend_mode blend_mode
+    const erhe::renderer::Blend_mode blend_mode,
+    const bool                       selected
 ) -> erhe::renderer::Pipeline_renderpass*
 {
     using namespace erhe::primitive;
     switch (renderpass.primitive_mode) {
         case Primitive_mode::polygon_fill:
             switch (blend_mode) {
-                case erhe::renderer::Blend_mode::opaque:      return &m_pipeline_renderpasses.polygon_fill_standard_opaque;
-                case erhe::renderer::Blend_mode::translucent: return &m_pipeline_renderpasses.polygon_fill_standard_translucent;
-                default:                                      return nullptr;
+                case erhe::renderer::Blend_mode::opaque:
+                    return selected
+                        ? &m_pipeline_renderpasses.polygon_fill_standard_opaque_selected
+                        : &m_pipeline_renderpasses.polygon_fill_standard_opaque;
+                case erhe::renderer::Blend_mode::translucent:
+                    return &m_pipeline_renderpasses.polygon_fill_standard_translucent;
+                default:
+                    return nullptr;
             }
             break;
 
@@ -345,6 +387,38 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .depth_stencil  = Depth_stencil_state::depth_test_enabled_stencil_test_disabled(REVERSE_DEPTH),
         .color_blend    = Color_blend_state::color_blend_disabled
     }}}
+    , polygon_fill_standard_opaque_selected{erhe::graphics::Pipeline{{
+        .name           = "Polygon Fill Opaque Selected",
+        .shader_stages  = &programs.circular_brushed_metal.shader_stages,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil  = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = true,
+            .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::less),
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::replace,
+                .z_fail_op       = gl::Stencil_op::replace,
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::always,
+                .reference       = 1,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::replace,
+                .z_fail_op       = gl::Stencil_op::replace,
+                .z_pass_op       = gl::Stencil_op::replace,
+                .function        = gl::Stencil_function::always,
+                .reference       = 1,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+        },
+        .color_blend    = Color_blend_state::color_blend_disabled
+    }}}
     , polygon_fill_standard_translucent{erhe::graphics::Pipeline{{
         .name           = "Polygon Fill Translucent",
         .shader_stages  = &programs.circular_brushed_metal.shader_stages,
@@ -364,7 +438,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .depth_test_enable      = true,
             .depth_write_enable     = false,
             .depth_compare_op       = graphics_instance.depth_function(gl::Depth_function::greater),
-            .stencil_test_enable = true,
+            .stencil_test_enable = true, //// TODO Why?
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
@@ -383,7 +457,6 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
-
         },
         .color_blend = {
             .enabled                = true,
@@ -429,7 +502,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .depth_test_enable   = true,
             .depth_write_enable  = true,
             .depth_compare_op    = graphics_instance.depth_function(gl::Depth_function::lequal),
-            .stencil_test_enable = true,
+            .stencil_test_enable = true, //// TODO Why?
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
@@ -481,7 +554,7 @@ Pipeline_renderpasses::Pipeline_renderpasses(
     }}}
     , sky{
         erhe::graphics::Pipeline{
-            {
+            erhe::graphics::Pipeline_data{
                 .name           = "Sky",
                 .shader_stages  = &programs.sky.shader_stages,
                 .vertex_input   = &mesh_memory.vertex_input,

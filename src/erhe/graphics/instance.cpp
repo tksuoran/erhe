@@ -275,10 +275,24 @@ Instance::Instance(erhe::toolkit::Context_window& context_window)
             gl::Internal_format::depth_component,
             gl::Internal_format::depth_component32f,
             gl::Internal_format::depth24_stencil8,
+            gl::Internal_format::depth32f_stencil8,
+            gl::Internal_format::depth_stencil,
             gl::Internal_format::stencil_index8
         };
 
         for (const auto format : formats) {
+            GLint supported{};
+            gl::get_internalformat_iv(
+                gl::Texture_target::texture_2d,
+                format,
+                gl::Internal_format_p_name::internalformat_supported,
+                1,
+                &supported
+            );
+            if (supported == GL_FALSE) {
+                continue;
+            }
+
             GLint num_virtual_page_sizes{};
             gl::get_internalformat_iv(
                 gl::Texture_target::texture_2d,

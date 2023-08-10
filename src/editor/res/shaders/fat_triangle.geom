@@ -3,7 +3,7 @@
 //#define ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES
 //#define ERHE_LINE_SHADER_STRIP
 
-layout(lines) in;
+layout(triangles) in;
 
 #if ERHE_LINE_SHADER_SHOW_DEBUG_LINES || ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES
 layout(line_strip, max_vertices = 10) out;
@@ -24,10 +24,10 @@ out float v_line_width;
 
 float get_line_width(vec4 position, float thickness)
 {
-    float fov_left         = view.fov[0];
-    float fov_right        = view.fov[1];
+    float fov_left         = camera.cameras[0].fov[0];
+    float fov_right        = camera.cameras[0].fov[1];
     float fov_width        = fov_right - fov_left;
-    float viewport_width   = view.viewport[2];
+    float viewport_width   = camera.cameras[0].viewport[2];
     float scaled_thickness = (thickness < 0.0)
         ? -thickness
         : max(thickness / position.w, 0.01);
@@ -149,14 +149,14 @@ void do_line(uint i0, uint i1)
     float width0      = get_line_width(v0_clipped, line_width0);
     float width1      = get_line_width(v1_clipped, line_width1);
 
-    vec2 vp_size         = view.viewport.zw;
+    vec2 vp_size         = camera.cameras[0].viewport.zw;
 
     // Compute line axis and side vector in screen space
     vec2 v0_in_ndc       = v0_clipped.xy / v0_clipped.w;       //  clip to NDC: homogenize and drop z
     vec2 v1_in_ndc       = v1_clipped.xy / v1_clipped.w;
     vec2 line_in_ndc     = v1_in_ndc - v0_in_ndc;
-    vec2 v0_in_screen    = (0.5 * v0_in_ndc + vec2(0.5)) * vp_size + view.viewport.xy;
-    vec2 v1_in_screen    = (0.5 * v1_in_ndc + vec2(0.5)) * vp_size + view.viewport.xy;
+    vec2 v0_in_screen    = (0.5 * v0_in_ndc + vec2(0.5)) * vp_size + camera.cameras[0].viewport.xy;
+    vec2 v1_in_screen    = (0.5 * v1_in_ndc + vec2(0.5)) * vp_size + camera.cameras[0].viewport.xy;
     vec2 line_in_screen  = line_in_ndc * vp_size;       //  NDC to window (direction vector)
     vec2 axis_in_screen  = normalize(line_in_screen);
     vec2 side_in_screen  = vec2(-axis_in_screen.y, axis_in_screen.x); // rotate
@@ -229,4 +229,6 @@ void do_line(uint i0, uint i1)
 void main(void)
 {
     do_line(0, 1);
+    do_line(1, 2);
+    do_line(2, 0);
 }
