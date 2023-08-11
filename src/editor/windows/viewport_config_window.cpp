@@ -61,6 +61,9 @@ Viewport_config_window::Viewport_config_window(
     config.render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
     //data.render_style_selected.edge_lines = false;
 
+    config.selection_outline_primitive_settings.constant_color = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f};
+    config.selection_outline_primitive_settings.constant_size = -5.0f;
+
     config.gizmo_scale               = gizmo_scale;
     config.selection_bounding_box    = selection_bounding_box;
     config.selection_bounding_sphere = selection_bounding_sphere;
@@ -147,7 +150,8 @@ void Viewport_config_window::imgui()
         ImGuiTreeNodeFlags_Framed            |
         ImGuiTreeNodeFlags_OpenOnArrow       |
         ImGuiTreeNodeFlags_OpenOnDoubleClick |
-        ImGuiTreeNodeFlags_SpanFullWidth
+        ImGuiTreeNodeFlags_SpanFullWidth     |
+        ImGuiTreeNodeFlags_DefaultOpen
     };
 
     if (edit_data != nullptr) {
@@ -161,6 +165,12 @@ void Viewport_config_window::imgui()
 
         if (ImGui::TreeNodeEx("Selection", flags)) {
             render_style_ui(edit_data->render_style_selected);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Selection Outline", flags)) {
+            ImGui::ColorEdit4 ("Color", &edit_data->selection_outline_primitive_settings.constant_color.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("Size",  &edit_data->selection_outline_primitive_settings.constant_size, -20.0f, 40.0f);
             ImGui::TreePop();
         }
 

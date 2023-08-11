@@ -142,37 +142,50 @@ Editor_rendering::Editor_rendering(
         )
     };
 
-    auto opaque_outline_not_selected = make_renderpass("Content outline opaque not selected");
-    opaque_outline_not_selected->mesh_layers      = { Mesh_layer_id::content };
-    opaque_outline_not_selected->primitive_mode   = Primitive_mode::edge_lines;
-    opaque_outline_not_selected->filter           = opaque_not_selected_filter;
-    opaque_outline_not_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
-    opaque_outline_not_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
-    opaque_outline_not_selected->get_render_style = render_style_not_selected;
-    opaque_outline_not_selected->passes           = {
+    auto opaque_edge_lines_not_selected = make_renderpass("Content edge lines opaque not selected");
+    opaque_edge_lines_not_selected->mesh_layers      = { Mesh_layer_id::content };
+    opaque_edge_lines_not_selected->primitive_mode   = Primitive_mode::edge_lines;
+    opaque_edge_lines_not_selected->filter           = opaque_not_selected_filter;
+    opaque_edge_lines_not_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_edge_lines_not_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_edge_lines_not_selected->get_render_style = render_style_not_selected;
+    opaque_edge_lines_not_selected->passes           = {
         get_pipeline_renderpass(
-            *opaque_outline_not_selected.get(),
+            *opaque_edge_lines_not_selected.get(),
             Blend_mode::opaque,
             false
         )
     };
-    opaque_outline_not_selected->allow_shader_stages_override = false;
+    opaque_edge_lines_not_selected->allow_shader_stages_override = false;
 
-    auto opaque_outline_selected = make_renderpass("Content outline opaque selected");
-    opaque_outline_selected->mesh_layers      = { Mesh_layer_id::content };
-    opaque_outline_selected->primitive_mode   = Primitive_mode::edge_lines;
-    opaque_outline_selected->filter           = opaque_selected_filter;
-    opaque_outline_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
-    opaque_outline_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
-    opaque_outline_selected->get_render_style = render_style_selected;
-    opaque_outline_selected->passes           = {
+    auto opaque_edge_lines_selected = make_renderpass("Content edge lines opaque selected");
+    opaque_edge_lines_selected->mesh_layers      = { Mesh_layer_id::content };
+    opaque_edge_lines_selected->primitive_mode   = Primitive_mode::edge_lines;
+    opaque_edge_lines_selected->filter           = opaque_selected_filter;
+    opaque_edge_lines_selected->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_edge_lines_selected->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
+    opaque_edge_lines_selected->get_render_style = render_style_selected;
+    opaque_edge_lines_selected->passes           = {
         get_pipeline_renderpass(
-            *opaque_outline_selected.get(),
+            *opaque_edge_lines_selected.get(),
             Blend_mode::opaque,
             true
         )
     };
-    opaque_outline_selected->allow_shader_stages_override = false;
+    opaque_edge_lines_selected->allow_shader_stages_override = false;
+
+    selection_outline = make_renderpass("Content outline opaque selected");
+    selection_outline->mesh_layers      = { Mesh_layer_id::content };
+    selection_outline->primitive_mode   = Primitive_mode::polygon_fill;
+    selection_outline->filter           = opaque_selected_filter;
+    selection_outline->begin            = []() { gl::enable (gl::Enable_cap::sample_alpha_to_coverage); };
+    selection_outline->end              = []() { gl::disable(gl::Enable_cap::sample_alpha_to_coverage); };
+    selection_outline->passes           = { &m_pipeline_renderpasses.selection_outline };
+    selection_outline->allow_shader_stages_override = false;
+    selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+        .constant_color = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f},
+        .constant_size = -5.0f
+    };
 
     auto sky = make_renderpass("Sky");
     sky->mesh_layers    = {};
@@ -522,7 +535,38 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                 .write_mask      = 0xffu
             }
         },
-
+        .color_blend    = Color_blend_state::color_blend_premultiplied
+    }}}
+    , selection_outline{erhe::graphics::Pipeline{{
+        .name           = "Selection Outline",
+        .shader_stages  = &programs.fat_triangle.shader_stages,
+        .vertex_input   = &mesh_memory.vertex_input,
+        .input_assembly = Input_assembly_state::triangles,
+        .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
+        .depth_stencil = {
+            .depth_test_enable   = true,
+            .depth_write_enable  = true,
+            .depth_compare_op    = gl::Depth_function::always,
+            .stencil_test_enable = true,
+            .stencil_front = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::keep,
+                .function        = gl::Stencil_function::notequal,
+                .reference       = 1,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            },
+            .stencil_back = {
+                .stencil_fail_op = gl::Stencil_op::keep,
+                .z_fail_op       = gl::Stencil_op::keep,
+                .z_pass_op       = gl::Stencil_op::keep,
+                .function        = gl::Stencil_function::notequal,
+                .reference       = 1,
+                .test_mask       = 0xffu,
+                .write_mask      = 0xffu
+            }
+        },
         .color_blend    = Color_blend_state::color_blend_premultiplied
     }}}
     , corner_points{erhe::graphics::Pipeline{{

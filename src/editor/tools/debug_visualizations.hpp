@@ -130,7 +130,7 @@ private:
 
     float     m_gap                              {0.003f};
     bool      m_tool_hide                        {false};
-    bool      m_selection                        {true};
+    bool      m_selection                        {false};
     bool      m_selection_bounding_points_visible{false};
     bool      m_selection_box                    {false};
     bool      m_selection_sphere                 {true};

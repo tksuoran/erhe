@@ -6,9 +6,9 @@
 layout(triangles) in;
 
 #if ERHE_LINE_SHADER_SHOW_DEBUG_LINES || ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES
-layout(line_strip, max_vertices = 10) out;
+layout(line_strip, max_vertices = 30) out; // 3 * 10 = 30
 #else
-layout(triangle_strip, max_vertices = 6) out;
+layout(triangle_strip, max_vertices = 18) out; // 6 * 3 = 18
 #endif
 
 in vec3  vs_position  [];

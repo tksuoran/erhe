@@ -40,6 +40,9 @@ void Renderpass::render(const Render_context& context) const
 {
     ERHE_PROFILE_FUNCTION();
 
+    // TODO This is a bit hacky, route this better.
+    context.editor_context.editor_rendering->selection_outline->primitive_settings = context.viewport_config.selection_outline_primitive_settings;
+
     const auto scene_root = this->override_scene_root
         ? override_scene_root
         : context.scene_view.get_scene_root();
@@ -90,9 +93,12 @@ void Renderpass::render(const Render_context& context) const
                 .mesh_spans             = {},
                 .passes                 = this->passes,
                 .primitive_mode         = this->primitive_mode,
-                .primitive_settings     = (render_style != nullptr)
-                    ? render_style->get_primitive_settings(this->primitive_mode)
-                    : erhe::scene_renderer::Primitive_interface_settings{},
+                .primitive_settings     = 
+                    primitive_settings.has_value()
+                        ? primitive_settings.value()
+                        : (render_style != nullptr)
+                            ? render_style->get_primitive_settings(this->primitive_mode)
+                            : erhe::scene_renderer::Primitive_interface_settings{},
                 .shadow_texture         = nullptr,
                 .viewport               = context.viewport,
                 .override_shader_stages = this->allow_shader_stages_override ? context.override_shader_stages : nullptr,
@@ -136,9 +142,12 @@ void Renderpass::render(const Render_context& context) const
                 .mesh_spans             = mesh_spans,
                 .passes                 = this->passes,
                 .primitive_mode         = this->primitive_mode,
-                .primitive_settings     = (render_style != nullptr)
-                    ? render_style->get_primitive_settings(this->primitive_mode)
-                    : erhe::scene_renderer::Primitive_interface_settings{},
+                .primitive_settings     = 
+                    primitive_settings.has_value()
+                        ? primitive_settings.value()
+                        : (render_style != nullptr)
+                            ? render_style->get_primitive_settings(this->primitive_mode)
+                            : erhe::scene_renderer::Primitive_interface_settings{},
                 .shadow_texture         = context.scene_view.get_shadow_texture(),
                 .viewport               = context.viewport,
                 .filter                 = this->filter,

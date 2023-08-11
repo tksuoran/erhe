@@ -45,6 +45,7 @@ public:
     std::shared_ptr<Scene_root>                       override_scene_root{};
     bool                                              allow_shader_stages_override{true};
 
+    std::optional<erhe::scene_renderer::Primitive_interface_settings> primitive_settings;
     std::function<void()>                                                  begin;
     std::function<void()>                                                  end; 
     std::function<const Render_style_data&(const Render_context& context)> get_render_style;

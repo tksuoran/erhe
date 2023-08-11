@@ -16,6 +16,7 @@ public:
     // TODO Use Render_style instead of Render_style_data?
     Render_style_data render_style_not_selected;
     Render_style_data render_style_selected;
+    erhe::scene_renderer::Primitive_interface_settings selection_outline_primitive_settings;
     glm::vec4         clear_color{0.0f, 0.0f, 0.0, 0.4f};
     float             gizmo_scale{4.5f};
 

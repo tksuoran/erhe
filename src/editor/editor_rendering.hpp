@@ -70,6 +70,7 @@ public:
     erhe::renderer::Pipeline_renderpass brush_back;
     erhe::renderer::Pipeline_renderpass brush_front;
     erhe::renderer::Pipeline_renderpass edge_lines;
+    erhe::renderer::Pipeline_renderpass selection_outline;
     erhe::renderer::Pipeline_renderpass corner_points;
     erhe::renderer::Pipeline_renderpass polygon_centroids;
     erhe::renderer::Pipeline_renderpass rendertarget_meshes;
@@ -119,6 +120,7 @@ public:
 
     glm::uvec4             debug_joint_indices{0, 0, 0, 0};
     std::vector<glm::vec4> debug_joint_colors;
+    std::shared_ptr<Renderpass> selection_outline;
 
 private:
     void handle_graphics_settings_changed();
