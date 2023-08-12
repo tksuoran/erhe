@@ -152,12 +152,13 @@ void Mesh_operation::make_entries(
             },
         };
 
+        // TODO collision geometry
         for (auto& primitive : mesh->mesh_data.primitives) {
-            if (!primitive.geometry_primitive->source_geometry) {
+            if (!primitive.geometry_primitive->source_render_geometry) {
                 continue;
             }
             auto after_geometry = std::make_shared<erhe::geometry::Geometry>(
-                operation(*primitive.geometry_primitive->source_geometry.get())
+                operation(*primitive.geometry_primitive->source_render_geometry.get())
             );
             entry.after.primitives.push_back(
                 erhe::primitive::Primitive{

@@ -51,7 +51,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
     using glm::mat4;
 
     erhe::physics::Compound_shape_create_info  compound_shape_create_info;
-    erhe::geometry::Geometry                   combined_geometry;
+    erhe::geometry::Geometry                   combined_render_geometry;
     std::shared_ptr<erhe::primitive::Material> material;
     Scene_root* scene_root                = nullptr;
     bool        first_mesh                = true;
@@ -135,16 +135,15 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         for (auto& primitive : mesh->mesh_data.primitives) {
-            const auto& geometry = primitive.geometry_primitive->source_geometry;
-            if (!geometry) {
-                continue;
-            }
-            combined_geometry.merge(*geometry, transform);
-            if (normal_style == Normal_style::none) {
-                normal_style = primitive.geometry_primitive->normal_style;
-            }
-            if (!material) {
-                material = primitive.material;
+            const auto& render_geometry = primitive.geometry_primitive->source_render_geometry;
+            if (render_geometry) {
+                combined_render_geometry.merge(*render_geometry, transform);
+                if (normal_style == Normal_style::none) {
+                    normal_style = primitive.geometry_primitive->normal_style;
+                }
+                if (!material) {
+                    material = primitive.material;
+                }
             }
         }
 
@@ -173,15 +172,16 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
     }
 
-    std::shared_ptr<erhe::geometry::Geometry> welded_geometry = std::make_shared<erhe::geometry::Geometry>(
-        erhe::geometry::operation::weld(combined_geometry)
-    );;
+    std::shared_ptr<erhe::geometry::Geometry> welded_render_geometry = std::make_shared<erhe::geometry::Geometry>(
+        erhe::geometry::operation::weld(combined_render_geometry)
+    );
 
     m_first_mesh_primitives_after.push_back(
         erhe::primitive::Primitive{
             material,
             std::make_shared<erhe::primitive::Geometry_primitive>(
-                welded_geometry,
+                welded_render_geometry,
+                welded_render_geometry,
                 parameters.build_info,
                 normal_style
             )

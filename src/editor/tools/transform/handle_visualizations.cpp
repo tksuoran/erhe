@@ -361,25 +361,30 @@ auto Handle_visualizations::make_mesh(
 }
 
 namespace {
-    constexpr float arrow_cylinder_length    = 2.5f;
-    constexpr float arrow_cylinder_radius    = 0.08f;
-    constexpr float arrow_cone_length        = 1.0f;
-    constexpr float arrow_cone_radius        = 0.35f;
-    constexpr float box_half_thickness       = 0.1f;
-    constexpr float box_length               = 1.0f;
-    constexpr float rotate_ring_major_radius = 4.0f;
-    constexpr float rotate_ring_minor_radius = 0.1f;
+    constexpr float arrow_cylinder_length              = 2.5f;
+    constexpr float arrow_cylinder_radius_render       = 0.04f;
+    constexpr float arrow_cylinder_radius_collision    = 0.22f;
+    constexpr float arrow_cone_length                  = 0.8f;
+    constexpr float arrow_cone_radius                  = 0.25f;
+    constexpr float box_half_thickness                 = 0.1f;
+    constexpr float box_length_render                  = 1.0f;
+    constexpr float box_length_collision               = 1.2f;
+    constexpr float rotate_ring_major_radius           = 4.0f;
+    constexpr float rotate_ring_minor_radius_render    = 0.1f;
+    constexpr float rotate_ring_minor_radius_collision = 0.3f;
 
     constexpr float arrow_tip = arrow_cylinder_length + arrow_cone_length;
 }
 
 Handle_visualizations::Part::Part(
     Mesh_memory&                                     mesh_memory,
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry
+    const std::shared_ptr<erhe::geometry::Geometry>& render_geometry,
+    const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
 )
     : geometry_primitive{
         std::make_shared<erhe::primitive::Geometry_primitive>(
-            geometry,
+            render_geometry,
+            collision_geometry,
             erhe::primitive::Build_info{
                 .primitive_types{ .fill_triangles = true },
                 .buffer_info = mesh_memory.buffer_info
@@ -399,11 +404,22 @@ auto Handle_visualizations::make_arrow_cylinder(Mesh_memory& mesh_memory) -> Par
             erhe::geometry::shapes::make_cylinder(
                 -arrow_cylinder_length,
                 arrow_cylinder_length,
-                arrow_cylinder_radius,
+                arrow_cylinder_radius_render,
                 true,
                 true,
                 32,
                 4
+            )
+        ),
+        std::make_shared<erhe::geometry::Geometry>(
+            erhe::geometry::shapes::make_cylinder(
+                -arrow_cylinder_length,
+                arrow_cylinder_length,
+                arrow_cylinder_radius_collision,
+                true,
+                true,
+                20,
+                1
             )
         )
     };
@@ -424,6 +440,16 @@ auto Handle_visualizations::make_arrow_cone(Mesh_memory& mesh_memory) -> Part
                 32,
                 4
             )
+        ),
+        std::make_shared<erhe::geometry::Geometry>(
+            erhe::geometry::shapes::make_cone(
+                arrow_cylinder_length,
+                arrow_tip,
+                arrow_cone_radius,
+                true,
+                22,
+                1
+            )
         )
     };
 }
@@ -436,12 +462,22 @@ auto Handle_visualizations::make_box(Mesh_memory& mesh_memory, const bool unifor
         mesh_memory,
         std::make_shared<erhe::geometry::Geometry>(
             erhe::geometry::shapes::make_box(
-                -box_length,
-                 box_length,
-                -box_length,
-                 box_length,
-                (uniform ? -box_length : -box_half_thickness),
-                (uniform ?  box_length :  box_half_thickness)
+                -box_length_render,
+                 box_length_render,
+                -box_length_render,
+                 box_length_render,
+                (uniform ? -box_length_render : -box_half_thickness),
+                (uniform ?  box_length_render :  box_half_thickness)
+            )
+        ),
+        std::make_shared<erhe::geometry::Geometry>(
+            erhe::geometry::shapes::make_box(
+                -box_length_collision,
+                 box_length_collision,
+                -box_length_collision,
+                 box_length_collision,
+                (uniform ? -box_length_collision : -box_half_thickness),
+                (uniform ?  box_length_collision :  box_half_thickness)
             )
         )
     };
@@ -455,9 +491,17 @@ auto Handle_visualizations::make_rotate_ring(Mesh_memory& mesh_memory) -> Part
         std::make_shared<erhe::geometry::Geometry>(
             erhe::geometry::shapes::make_torus(
                 rotate_ring_major_radius,
-                rotate_ring_minor_radius,
+                rotate_ring_minor_radius_render,
                 80,
                 32
+            )
+        ),
+        std::make_shared<erhe::geometry::Geometry>(
+            erhe::geometry::shapes::make_torus(
+                rotate_ring_major_radius,
+                rotate_ring_minor_radius_collision,
+                80,
+                20
             )
         )
     };

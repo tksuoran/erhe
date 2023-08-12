@@ -409,7 +409,7 @@ void Viewport_window::update_hover_with_id_render()
         const auto& primitive          = entry.mesh->mesh_data.primitives[entry.primitive_index];
         const auto& geometry_primitive = primitive.geometry_primitive;
         ERHE_VERIFY(geometry_primitive);
-        entry.geometry = geometry_primitive->source_geometry;
+        entry.geometry = geometry_primitive->source_collision_geometry; // TODO render or collision
         if (entry.geometry) {
             const auto triangle_id = static_cast<erhe::geometry::Polygon_id>(entry.triangle_id);
             const auto polygon_id  = geometry_primitive->gl_geometry_mesh.primitive_id_to_polygon_id[triangle_id];

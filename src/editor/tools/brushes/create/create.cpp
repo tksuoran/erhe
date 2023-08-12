@@ -211,8 +211,8 @@ void Create::imgui()
                     for (const auto& primitive : mesh->mesh_data.primitives) {
                         const auto& geometry_primitive = primitive.geometry_primitive;
                         if (geometry_primitive) {
-                            if (geometry_primitive->source_geometry) {
-                                source_geometry = geometry_primitive->source_geometry;
+                            if (geometry_primitive->source_render_geometry) {
+                                source_geometry = geometry_primitive->source_render_geometry;
                                 break;
                             }
                         }

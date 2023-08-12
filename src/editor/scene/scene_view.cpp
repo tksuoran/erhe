@@ -344,7 +344,7 @@ void Scene_view::update_hover_with_raytrace()
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
             const auto& geometry_primitive = primitive.geometry_primitive;
             ERHE_VERIFY(geometry_primitive);
-            entry.geometry = geometry_primitive->source_geometry;
+            entry.geometry = geometry_primitive->source_render_geometry;
             if (entry.geometry) {
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->name);
                 const auto& geometry_mesh = geometry_primitive->gl_geometry_mesh;

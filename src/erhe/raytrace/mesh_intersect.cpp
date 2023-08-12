@@ -91,7 +91,7 @@ auto intersect(
 
     for (auto& primitive : mesh.mesh_data.primitives) {
         const auto& geometry_primitive = primitive.geometry_primitive;
-        auto* geometry = geometry_primitive->source_geometry.get();
+        auto* geometry = geometry_primitive->source_collision_geometry.get();
         if (geometry == nullptr) {
             continue;
         }

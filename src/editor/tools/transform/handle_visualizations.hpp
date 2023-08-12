@@ -57,7 +57,8 @@ public:
     public:
         Part(
             Mesh_memory&                                     mesh_memory,
-            const std::shared_ptr<erhe::geometry::Geometry>& geometry
+            const std::shared_ptr<erhe::geometry::Geometry>& render_geometry,
+            const std::shared_ptr<erhe::geometry::Geometry>& collision_geometry
         );
 
         std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;

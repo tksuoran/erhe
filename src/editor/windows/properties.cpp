@@ -325,7 +325,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh) const
         if (!geometry_primitive) {
             continue;
         }
-        const auto& geometry = geometry_primitive->source_geometry;
+        const auto& geometry = geometry_primitive->source_render_geometry;
 
         ++primitive_index;
         ImGui::PushID(primitive_index);
