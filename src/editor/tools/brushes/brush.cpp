@@ -101,23 +101,33 @@ auto Reference_frame::transform() const -> mat4
     };
 }
 
-Brush::Brush(const Brush_data& create_info)
-    : data{create_info}
+auto Brush_data::get_name() const -> const std::string&
 {
-    if (data.name.empty() && data.geometry) {
-        data.name = data.geometry->name;
+    if (name.empty() && geometry) {
+        return geometry->name;
     }
-    label = fmt::format("{}##Node{}", data.name, id.get_id());
+    return name;
 }
 
-auto Brush::get_static_type_name() -> const char*
+auto Brush::get_static_type() -> uint64_t
 {
-    return "Brush";
+    return erhe::Item_type::brush;
 }
 
-auto Brush::is_shown_in_ui() const -> bool
+auto Brush::get_type() const -> uint64_t
 {
-    return true;
+    return get_static_type();
+}
+
+auto Brush::get_type_name() const -> std::string_view
+{
+    return static_type_name;
+}
+
+Brush::Brush(const Brush_data& create_info)
+    : erhe::Item{create_info.get_name(), erhe::toolkit::Unique_id<Brush>{}.get_id()}
+    , data{create_info}
+{
 }
 
 void Brush::late_initialize()
@@ -351,16 +361,6 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
 }
 
 const std::string empty_string = {};
-
-auto Brush::get_name() const -> const std::string&
-{
-    return data.name;
-}
-
-auto Brush::get_label() const -> const std::string&
-{
-    return label;
-}
 
 auto Brush::get_geometry() -> std::shared_ptr<erhe::geometry::Geometry>
 {

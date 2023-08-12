@@ -70,6 +70,8 @@ using Geometry_generator = std::function<std::shared_ptr<erhe::geometry::Geometr
 class Brush_data
 {
 public:
+    [[nodiscard]] auto get_name() const -> const std::string&;
+
     Editor_context&                                  context;
     Editor_settings&                                 editor_settings;
     std::string                                      name                       {};
@@ -97,7 +99,8 @@ public:
     erhe::physics::Motion_mode                 motion_mode    {erhe::physics::Motion_mode::e_dynamic};
 };
 
-class Brush final
+class Brush
+    : public erhe::Item
 {
 public:
     static constexpr float c_scale_factor = 65536.0f;
@@ -119,12 +122,13 @@ public:
     Brush         (Brush&& other) noexcept;
     void operator=(Brush&&)      = delete;
 
-    // Public API
-    [[nodiscard]] static auto get_static_type_name() -> const char*;
-    [[nodiscard]] auto is_shown_in_ui() const -> bool;
-    [[nodiscard]] auto get_name      () const -> const std::string&;
-    [[nodiscard]] auto get_label     () const -> const std::string&;
+    // Implements Item
+    static constexpr std::string_view static_type_name{"Brush"};
+    [[nodiscard]] static auto get_static_type() -> uint64_t;
+    auto get_type     () const -> uint64_t                             override;
+    auto get_type_name() const -> std::string_view                     override;
 
+    // Public API
     void late_initialize();
 
     [[nodiscard]] auto get_reference_frame(
@@ -145,8 +149,6 @@ public:
     [[nodiscard]] auto get_geometry    () -> std::shared_ptr<erhe::geometry::Geometry>;
 
     Brush_data                                           data;
-    std::string                                          label;
-    erhe::toolkit::Unique_id<Brush>                      id;
     std::shared_ptr<erhe::primitive::Geometry_primitive> geometry_primitive;
     std::vector<Reference_frame>                         reference_frames;
     std::vector<Scaled>                                  scaled_entries;

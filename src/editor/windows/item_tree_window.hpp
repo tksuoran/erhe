@@ -3,14 +3,17 @@
 #include "operations/compound_operation.hpp"
 
 #include "erhe/imgui/imgui_window.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe/item/item.hpp"
 #include "erhe/toolkit/unique_id.hpp"
 
-#include "robin_hood.h"
+#include <imgui.h>
 
 #include <functional>
 #include <memory>
 
+namespace erhe {
+    class Hierarchy;
+}
 namespace erhe::imgui {
     class Imgui_windows;
 }
@@ -80,19 +83,28 @@ private:
 
     void move_selection(
         const std::shared_ptr<erhe::Item>& target,
-        std::size_t                        payload_id,
+        erhe::Item*                        payload_item,
         Placement                          placement
     );
     void attach_selection_to(
         const std::shared_ptr<erhe::Item>& target_node,
-        std::size_t                        payload_id
+        erhe::Item*                        payload_item
     );
 
     void item_popup_menu      (const std::shared_ptr<erhe::Item>& item);
     void item_icon            (const std::shared_ptr<erhe::Item>& item);
-    auto item_icon_and_text   (const std::shared_ptr<erhe::Item>& item, bool update) -> Tree_node_state;
+    auto item_icon_and_text   (const std::shared_ptr<erhe::Item>& item, bool update, bool force_expand) -> Tree_node_state;
     void item_update_selection(const std::shared_ptr<erhe::Item>& item);
     void imgui_item_node      (const std::shared_ptr<erhe::Item>& item);
+
+    enum class Show_mode : unsigned int {
+        Hide          = 0,
+        Show          = 1,
+        Show_expanded = 2
+    };
+    [[nodiscard]] auto should_show(
+        const std::shared_ptr<erhe::Item>& item
+    ) -> Show_mode;
 
     auto get_item_by_id(
         std::size_t id
@@ -114,18 +126,9 @@ private:
     );
     void drag_and_drop_source(const std::shared_ptr<erhe::Item>& node);
 
-    robin_hood::unordered_map<
-        erhe::toolkit::Unique_id<erhe::Item>::id_type,
-        std::shared_ptr<erhe::Item>
-    > m_tree_items;
-
-    robin_hood::unordered_map<
-        erhe::toolkit::Unique_id<erhe::Item>::id_type,
-        std::shared_ptr<erhe::Item>
-    > m_tree_items_last_frame;
-
     Editor_context&                                         m_context;
     erhe::Item_filter                                       m_filter;
+    ImGuiTextFilter                                         m_text_filter;
     std::shared_ptr<erhe::Hierarchy>                        m_root;
     std::function<bool(const std::shared_ptr<erhe::Item>&)> m_item_callback;
 

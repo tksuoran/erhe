@@ -118,21 +118,9 @@ template <typename T, typename U>
     ) != items.end();
 }
 
-auto Item_tree_window::get_item_by_id(
-    const erhe::toolkit::Unique_id<erhe::Item>::id_type id
-) const -> std::shared_ptr<erhe::Item>
-{
-    const auto i = m_tree_items_last_frame.find(id);
-    if (i == m_tree_items_last_frame.end()) {
-        //// log_tools->warn("node for id = {} not found", id);
-        return {};
-    }
-    return i->second;
-}
-
 void Item_tree_window::move_selection(
     const std::shared_ptr<erhe::Item>& target_node,
-    const std::size_t                  payload_id,
+    erhe::Item*                        payload_item,
     const Placement                    placement
 )
 {
@@ -145,8 +133,8 @@ void Item_tree_window::move_selection(
     );
 
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = m_context.selection->get_selection();
-    const auto& drag_item = get_item_by_id(payload_id);
+    const auto&                       selection = m_context.selection->get_selection();
+    const std::shared_ptr<erhe::Item> drag_item = payload_item->shared_from_this();
 
     std::shared_ptr<erhe::Item> anchor = target_node;
     if (is_in(drag_item, selection)) {
@@ -361,7 +349,7 @@ void Item_tree_window::try_add_to_attach(
 
 void Item_tree_window::attach_selection_to(
     const std::shared_ptr<erhe::Item>& target,
-    const std::size_t                  payload_id
+    erhe::Item*                        payload_item
 )
 {
     SPDLOG_LOGGER_TRACE(
@@ -375,8 +363,8 @@ void Item_tree_window::attach_selection_to(
     ////     payload_id
     //// );
     Compound_operation::Parameters compound_parameters;
-    const auto& selection = m_context.selection->get_selection();
-    auto drag_item = get_item_by_id(payload_id);
+    const auto&                       selection = m_context.selection->get_selection();
+    const std::shared_ptr<erhe::Item> drag_item = payload_item->shared_from_this();
 
     if (is_in(drag_item, selection)) {
         for (const auto& item : selection) {
@@ -400,18 +388,17 @@ void Item_tree_window::drag_and_drop_source(
 
     log_tree_frame->trace("DnD source: '{}'", item->describe());
 
-    const auto id = item->get_id();
-    m_tree_items.emplace(id, item);
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-        ImGui::SetDragDropPayload(item->get_type_name().data(), &id, sizeof(id));
+        erhe::Item* item_raw = item.get();
+        ImGui::SetDragDropPayload(item->get_type_name().data(), &item_raw, sizeof(item_raw));
 
         const auto& selection = m_context.selection->get_selection();
         if (is_in(item, selection)) {
             for (const auto& selection_item : selection) {
-                item_icon_and_text(selection_item, false);
+                item_icon_and_text(selection_item, false, false);
             }
         } else {
-            item_icon_and_text(item, false);
+            item_icon_and_text(item, false, false);
         }
         ImGui::EndDragDropSource();
     }
@@ -504,8 +491,8 @@ auto Item_tree_window::drag_and_drop_target(
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (top rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
-                const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
-                move_selection(node, payload_id, Placement::Before_anchor);
+                erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
+                move_selection(node, payload_item, Placement::Before_anchor);
             } else {
                 log_tree_frame->trace("Dnd payload is not Node (top rect)");
             }
@@ -521,8 +508,8 @@ auto Item_tree_window::drag_and_drop_target(
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (middle rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
-                const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
-                attach_selection_to(node, payload_id);
+                erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
+                attach_selection_to(node, payload_item);
             } else {
                 log_tree_frame->trace("Dnd payload is not Node (middle rect)");
             }
@@ -538,8 +525,8 @@ auto Item_tree_window::drag_and_drop_target(
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (bottom rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
-                const auto payload_id = *(const erhe::toolkit::Unique_id<erhe::scene::Node>::id_type*)payload->Data;
-                move_selection(node, payload_id, Placement::After_anchor);
+                erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
+                move_selection(node, payload_item, Placement::After_anchor);
             } else {
                 log_tree_frame->trace("Dnd payload is not Node (bottom rect)");
             }
@@ -817,7 +804,8 @@ void Item_tree_window::item_icon(
 
 auto Item_tree_window::item_icon_and_text(
     const std::shared_ptr<erhe::Item>& item,
-    const bool                         update
+    const bool                         update,
+    const bool                         force_expand
 ) -> Tree_node_state
 {
     ERHE_PROFILE_FUNCTION();
@@ -845,7 +833,7 @@ auto Item_tree_window::item_icon_and_text(
 
     const ImGuiTreeNodeFlags flags =
         ImGuiTreeNodeFlags_SpanAvailWidth |
-        (scene
+        (scene || force_expand
             ? ImGuiTreeNodeFlags_DefaultOpen
             : ImGuiTreeNodeFlags_None
         ) |
@@ -906,6 +894,42 @@ auto Item_tree_window::item_icon_and_text(
     };
 }
 
+auto Item_tree_window::should_show(
+    const std::shared_ptr<erhe::Item>& item
+) -> Show_mode
+{
+    const bool show_by_type = m_filter(item->get_flag_bits());
+    const bool show_by_name = m_text_filter.PassFilter(item->get_name().c_str());
+    if (show_by_type && show_by_name) {
+        return Show_mode::Show;
+    }
+
+    bool show_by_attachments = false;
+    const auto& node = as<erhe::scene::Node>(item);
+    if (node) {
+        for (const auto& node_attachment : node->get_attachments()) {
+            if (should_show(node_attachment) != Show_mode::Hide) {
+                show_by_attachments = true;
+                break;
+            }
+        }
+    }
+    if (show_by_attachments) {
+        return Show_mode::Show;
+    }
+
+    const auto& hierarchy = as<erhe::Hierarchy>(item);
+    if (hierarchy) {
+        for (const auto& child_node : hierarchy->get_children()) {
+            if (should_show(child_node) != Show_mode::Hide) {
+                return Show_mode::Show_expanded;
+            }
+        }
+    }
+
+    return Show_mode::Hide;
+}
+
 void Item_tree_window::imgui_item_node(
     const std::shared_ptr<erhe::Item>& item
 )
@@ -923,14 +947,19 @@ void Item_tree_window::imgui_item_node(
 
     ERHE_PROFILE_FUNCTION();
 
-    if (!m_filter(item->get_flag_bits())) {
+    const Show_mode show = should_show(item);
+    if (show == Show_mode::Hide) {
         //// log_tree->info("filtered {}", item->describe());
         return;
     }
 
     m_context.selection->range_selection().entry(item);
 
-    const auto tree_node_state = item_icon_and_text(item, true);
+    const auto tree_node_state = item_icon_and_text(
+        item,
+        true,
+        show == Show_mode::Show_expanded
+    );
     if (tree_node_state.is_open) {
         if (m_context.editor_settings->node_tree_expand_attachments) {
             const auto& node = as<erhe::scene::Node>(item);
@@ -976,13 +1005,12 @@ void Item_tree_window::imgui()
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     ERHE_PROFILE_FUNCTION();
 
+    m_text_filter.Draw("?");
+
 #if 0 //// TODO
     ImGui::Checkbox("Expand Attachments", &m_context.editor_settings->node_tree_expand_attachments);
     ImGui::Checkbox("Show All",           &m_context.editor_settings->node_tree_show_all);
 #endif
-
-    m_tree_items_last_frame = m_tree_items;
-    m_tree_items.clear();
 
     m_context.selection->range_selection().begin();
 
