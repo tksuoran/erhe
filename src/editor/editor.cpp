@@ -380,6 +380,7 @@ public:
         m_editor_context.selection              = &m_selection             ;
         m_editor_context.selection_tool         = &m_selection_tool        ;
         m_editor_context.settings_window        = &m_settings_window       ;
+        m_editor_context.time                   = &m_time                  ;
         m_editor_context.tools                  = &m_tools                 ;
         m_editor_context.transform_tool         = &m_transform_tool        ;
         m_editor_context.viewport_config_window = &m_viewport_config_window;

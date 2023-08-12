@@ -142,7 +142,7 @@ Scene_builder::Scene_builder(
         "Default Scene"
     );
     auto browser_window = m_scene_root->make_browser_window(imgui_renderer, imgui_windows, editor_context, editor_settings);
-    browser_window->show();
+    //browser_window->show();
 
     setup_cameras(
         graphics_instance,

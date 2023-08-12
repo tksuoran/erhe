@@ -164,7 +164,7 @@ Tools_pipeline_renderpasses::Tools_pipeline_renderpasses(
                 .reference       = s_stencil_tool_mesh_visible,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
-            },
+            }
         },
         .color_blend             = Color_blend_state::color_blend_disabled
     }}}

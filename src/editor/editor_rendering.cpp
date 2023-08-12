@@ -544,25 +544,25 @@ Pipeline_renderpasses::Pipeline_renderpasses(
         .input_assembly = Input_assembly_state::triangles,
         .rasterization  = Rasterization_state::cull_mode_back_ccw(REVERSE_DEPTH),
         .depth_stencil = {
-            .depth_test_enable   = true,
-            .depth_write_enable  = true,
+            .depth_test_enable   = false,
+            .depth_write_enable  = false,
             .depth_compare_op    = gl::Depth_function::always,
             .stencil_test_enable = true,
             .stencil_front = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::keep,
-                .function        = gl::Stencil_function::notequal,
-                .reference       = 1,
+                .z_pass_op       = gl::Stencil_op::decr_wrap,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             },
             .stencil_back = {
                 .stencil_fail_op = gl::Stencil_op::keep,
                 .z_fail_op       = gl::Stencil_op::keep,
-                .z_pass_op       = gl::Stencil_op::keep,
-                .function        = gl::Stencil_function::notequal,
-                .reference       = 1,
+                .z_pass_op       = gl::Stencil_op::decr_wrap,
+                .function        = gl::Stencil_function::equal,
+                .reference       = 0,
                 .test_mask       = 0xffu,
                 .write_mask      = 0xffu
             }
@@ -608,7 +608,25 @@ Pipeline_renderpasses::Pipeline_renderpasses(
                     .depth_test_enable   = true,
                     .depth_write_enable  = false,
                     .depth_compare_op    = gl::Depth_function::equal, // Depth buffer must be cleared to the far plane value
-                    .stencil_test_enable = false
+                    .stencil_test_enable = true, // Require stencil clear value 0 (to prevent overdrawing selection silhouette)
+                    .stencil_front = {
+                        .stencil_fail_op = gl::Stencil_op::keep,
+                        .z_fail_op       = gl::Stencil_op::keep,
+                        .z_pass_op       = gl::Stencil_op::keep,
+                        .function        = gl::Stencil_function::equal,
+                        .reference       = 0,
+                        .test_mask       = 0xffu,
+                        .write_mask      = 0xffu
+                    },
+                    .stencil_back = {
+                        .stencil_fail_op = gl::Stencil_op::keep,
+                        .z_fail_op       = gl::Stencil_op::keep,
+                        .z_pass_op       = gl::Stencil_op::keep,
+                        .function        = gl::Stencil_function::equal,
+                        .reference       = 0,
+                        .test_mask       = 0xffu,
+                        .write_mask      = 0xffu
+                    },
                 },
                 .color_blend    = Color_blend_state::color_blend_disabled
             }

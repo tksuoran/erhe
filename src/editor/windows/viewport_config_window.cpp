@@ -59,10 +59,12 @@ Viewport_config_window::Viewport_config_window(
     config.render_style_selected.line_color        = selection_edge_color;
     config.render_style_selected.corner_color      = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f};
     config.render_style_selected.centroid_color    = glm::vec4{0.0f, 0.0f, 1.0f, 1.0f};
-    //data.render_style_selected.edge_lines = false;
 
-    config.selection_outline_primitive_settings.constant_color = glm::vec4{1.0f, 0.75f, 0.0f, 1.0f};
-    config.selection_outline_primitive_settings.constant_size = -5.0f;
+    config.selection_highlight_low        = glm::vec4{  0.0f,  0.0f, 0.0f, 0.0f};
+    config.selection_highlight_high       = glm::vec4{200.0f, 10.0f, 1.0f, 0.5f};
+    config.selection_highlight_width_low  =  0.0f;
+    config.selection_highlight_width_high = -3.0f;
+    config.selection_highlight_frequency  = 1.0f;
 
     config.gizmo_scale               = gizmo_scale;
     config.selection_bounding_box    = selection_bounding_box;
@@ -169,8 +171,11 @@ void Viewport_config_window::imgui()
         }
 
         if (ImGui::TreeNodeEx("Selection Outline", flags)) {
-            ImGui::ColorEdit4 ("Color", &edit_data->selection_outline_primitive_settings.constant_color.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("Size",  &edit_data->selection_outline_primitive_settings.constant_size, -20.0f, 40.0f);
+            ImGui::ColorEdit4 ("Color Low",  &edit_data->selection_highlight_low.x,  ImGuiColorEditFlags_Float);
+            ImGui::ColorEdit4 ("Color High", &edit_data->selection_highlight_high.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("Width Low",  &edit_data->selection_highlight_width_low,  -20.0f, 0.0f, "%.2f");
+            ImGui::SliderFloat("Width High", &edit_data->selection_highlight_width_high, -20.0f, 0.0f, "%.2f");
+            ImGui::SliderFloat("Frequency",  &edit_data->selection_highlight_frequency,    0.0f, 1.0f, "%.2f");
             ImGui::TreePop();
         }
 

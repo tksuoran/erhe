@@ -368,16 +368,23 @@ auto item_set_sort_predicate(
 ) -> bool {
     const auto lhs_hierarchy = as<erhe::Hierarchy>(lhs);
     const auto rhs_hierarchy = as<erhe::Hierarchy>(rhs);
-    if (lhs_hierarchy && !rhs_hierarchy) {
-        return true;
+    if (lhs_hierarchy && rhs_hierarchy) {
+        const auto lhs_depth = lhs_hierarchy->get_depth();
+        const auto rhs_depth = rhs_hierarchy->get_depth();
+        if (lhs_depth != rhs_depth) {
+            return lhs_depth < rhs_depth;
+        }
     }
-    if (rhs_hierarchy && !lhs_hierarchy) {
-        return false;
+
+    const auto lhs_type = lhs->get_type();
+    const auto rhs_type = rhs->get_type();
+    if (lhs_type != rhs_type) {
+        return lhs_type < rhs_type;
     }
-    if (!lhs_hierarchy && !rhs_hierarchy) {
-        return true;
-    }
-    return lhs_hierarchy->get_depth() < rhs_hierarchy->get_depth();
+
+    const auto lhs_id = lhs->get_id();
+    const auto rhs_id = rhs->get_id();
+    return lhs_id < rhs_id;
 }
 
 [[nodiscard]] auto get_sorted(
@@ -441,7 +448,6 @@ void Selection::end_selection_change()
         .update_flags = Message_flag_bit::c_flag_bit_selection,
     };
 
-    std::vector<std::shared_ptr<erhe::Item>> no_longer_selected;
     std::set_difference(
         sorted_old.begin(), sorted_old.end(),
         sorted_new.begin(), sorted_new.end(),
@@ -449,7 +455,6 @@ void Selection::end_selection_change()
         item_set_sort_predicate
     );
 
-    std::vector<std::shared_ptr<erhe::Item>> newly_selected;
     std::set_difference(
         sorted_new.begin(), sorted_new.end(),
         sorted_old.begin(), sorted_old.end(),

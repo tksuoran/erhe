@@ -3,6 +3,7 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_rendering.hpp"
+#include "time.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "renderers/render_context.hpp"
 #include "renderers/render_style.hpp"
@@ -36,12 +37,39 @@ Renderpass::Renderpass(const std::string_view name)
     return static_type_name;
 }
 
+[[nodiscard]] auto mix(float x, float y, float a) -> float
+{
+    return x * (1.0f - a) + y * a;
+}
+
+[[nodiscard]] auto triangle_wave(float t, float p) -> float
+{
+    return 2.0f * std::abs(2.0f * (t / p - std::floor(t / p + 0.5f))) - 1.0f;
+}
+
 void Renderpass::render(const Render_context& context) const
 {
     ERHE_PROFILE_FUNCTION();
 
     // TODO This is a bit hacky, route this better.
-    context.editor_context.editor_rendering->selection_outline->primitive_settings = context.viewport_config.selection_outline_primitive_settings;
+    const float t0     = static_cast<float>(context.editor_context.time->time());
+    const float period = 1.0f / context.viewport_config.selection_highlight_frequency;
+    const float t1     = std::fmodf(t0, period);
+    const float t2     = 0.5f + triangle_wave(t1, period) * 0.5f;
+    context.editor_context.editor_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
+        .color_source   = erhe::scene_renderer::Primitive_color_source::constant_color,
+        .constant_color = glm::mix(
+            context.viewport_config.selection_highlight_low,
+            context.viewport_config.selection_highlight_high,
+            t2
+        ),
+        .size_source    = erhe::scene_renderer::Primitive_size_source::constant_size,
+        .constant_size  = mix(
+            context.viewport_config.selection_highlight_width_low,
+            context.viewport_config.selection_highlight_width_high,
+            t2
+        )
+    };
 
     const auto scene_root = this->override_scene_root
         ? override_scene_root

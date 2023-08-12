@@ -280,7 +280,7 @@ public:
     void next_frame();
     void render(
         const erhe::toolkit::Viewport camera_viewport,
-        const erhe::scene::Camera&  camera
+        const erhe::scene::Camera&    camera
     );
 
 public:
