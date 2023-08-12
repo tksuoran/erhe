@@ -976,7 +976,7 @@ void Debug_visualizations::mesh_labels(
         if (!geometry_primitive) {
             continue;
         }
-        const auto& geometry = geometry_primitive->source_render_geometry;
+        const auto& geometry = geometry_primitive->source_geometry;
         if (!geometry) {
             continue;
         }

@@ -155,8 +155,7 @@ Geometry_raytrace::~Geometry_raytrace() noexcept = default;
 Geometry_primitive::Geometry_primitive(
     const std::shared_ptr<erhe::geometry::Geometry>& geometry
 )
-    : source_render_geometry   {geometry}
-    , source_collision_geometry{geometry}
+    : source_geometry{geometry}
 {
 }
 
@@ -173,11 +172,10 @@ Geometry_primitive::Geometry_primitive(
     const Build_info&                                build_info,
     const Normal_style                               normal_style
 )
-    : source_render_geometry   {geometry}
-    , source_collision_geometry{geometry}
-    , normal_style             {normal_style}
-    , gl_geometry_mesh         {make_geometry_mesh(*geometry.get(), build_info, normal_style)}
-    , raytrace                 {*geometry.get()}
+    : source_geometry {geometry}
+    , normal_style    {normal_style}
+    , gl_geometry_mesh{make_geometry_mesh(*geometry.get(), build_info, normal_style)}
+    , raytrace        {*geometry.get()}
 {
 }
 
@@ -187,11 +185,10 @@ Geometry_primitive::Geometry_primitive(
     const Build_info&                                build_info,
     const Normal_style                               normal_style
 )
-    : source_render_geometry   {render_geometry}
-    , source_collision_geometry{collision_geometry}
-    , normal_style             {normal_style}
-    , gl_geometry_mesh         {make_geometry_mesh(*render_geometry.get(), build_info, normal_style)}
-    , raytrace                 {*collision_geometry.get()}
+    : source_geometry {render_geometry}
+    , normal_style    {normal_style}
+    , gl_geometry_mesh{make_geometry_mesh(*render_geometry.get(), build_info, normal_style)}
+    , raytrace        {*collision_geometry.get()}
 {
 }
 
@@ -203,8 +200,8 @@ void Geometry_primitive::build_from_geometry(
 )
 {
     normal_style     = normal_style_in;
-    gl_geometry_mesh = make_geometry_mesh(*source_render_geometry.get(), build_info, normal_style);
-    raytrace         = Geometry_raytrace{*source_collision_geometry.get()};
+    gl_geometry_mesh = make_geometry_mesh(*source_geometry.get(), build_info, normal_style);
+    raytrace         = Geometry_raytrace{*source_geometry.get()};
 }
 
 

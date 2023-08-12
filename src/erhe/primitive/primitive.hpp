@@ -59,10 +59,9 @@ public:
         const Normal_style normal_style
     );
 
-    std::shared_ptr<erhe::geometry::Geometry> source_render_geometry   {};
-    std::shared_ptr<erhe::geometry::Geometry> source_collision_geometry{};
-    Normal_style                              normal_style             {Normal_style::none};
-    Geometry_mesh                             gl_geometry_mesh         {};
+    std::shared_ptr<erhe::geometry::Geometry> source_geometry {};
+    Normal_style                              normal_style    {Normal_style::none};
+    Geometry_mesh                             gl_geometry_mesh{};
     Geometry_raytrace                         raytrace;
 };
 

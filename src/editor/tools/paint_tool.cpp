@@ -95,7 +95,7 @@ auto vertex_id_from_corner_id(
     for (const auto& primitive : mesh.mesh_data.primitives) {
         const auto& geometry_primitive = primitive.geometry_primitive;
         if (geometry_primitive) {
-            if (geometry_primitive->source_render_geometry.get() == &geometry) {
+            if (geometry_primitive->source_geometry.get() == &geometry) {
                 return geometry_primitive->gl_geometry_mesh.corner_to_vertex_id.at(corner_id);
             }
         }
@@ -267,7 +267,7 @@ void Paint_tool::paint_vertex(
         if (!geometry_primitive) {
             continue;
         }
-        if (geometry_primitive->source_render_geometry.get() != &geometry) {
+        if (geometry_primitive->source_geometry.get() != &geometry) {
             continue;
         }
         const std::size_t range_byte_offset = geometry_primitive->gl_geometry_mesh.vertex_buffer_range.byte_offset;
@@ -444,7 +444,7 @@ void Paint_tool::imgui()
                 if (!geometry_primitive) {
                     continue;
                 }
-                const auto& geometry = geometry_primitive->source_render_geometry;
+                const auto& geometry = geometry_primitive->source_geometry;
                 if (!geometry) {
                     continue;
                 }

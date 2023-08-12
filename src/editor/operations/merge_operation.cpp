@@ -135,7 +135,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
 
         for (auto& primitive : mesh->mesh_data.primitives) {
-            const auto& render_geometry = primitive.geometry_primitive->source_render_geometry;
+            const auto& render_geometry = primitive.geometry_primitive->source_geometry;
             if (render_geometry) {
                 combined_render_geometry.merge(*render_geometry, transform);
                 if (normal_style == Normal_style::none) {

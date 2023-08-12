@@ -316,7 +316,7 @@ auto get_node_raytrace(const erhe::scene::Node* node) -> std::shared_ptr<Node_ra
     const auto polygon_id = triangle_id_to_polygon_id[hit.triangle_id];
 
     using namespace erhe::geometry;
-    const auto& geometry = geometry_primitive.source_render_geometry;
+    const auto& geometry = geometry_primitive.source_geometry;
     if (!geometry) {
         return {};
     }
