@@ -54,7 +54,7 @@ void Renderpass::render(const Render_context& context) const
     // TODO This is a bit hacky, route this better.
     const float t0     = static_cast<float>(context.editor_context.time->time());
     const float period = 1.0f / context.viewport_config.selection_highlight_frequency;
-    const float t1     = std::fmodf(t0, period);
+    const float t1     = ::fmodf(t0, period);
     const float t2     = 0.5f + triangle_wave(t1, period) * 0.5f;
     context.editor_context.editor_rendering->selection_outline->primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
         .color_source   = erhe::scene_renderer::Primitive_color_source::constant_color,
