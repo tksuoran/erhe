@@ -222,19 +222,22 @@ auto Physics_tool::acquire_target() -> bool
         return false;
     }
 
-    m_target_mesh = std::static_pointer_cast<erhe::scene::Mesh>(content.mesh->shared_from_this());
-    m_target_node_physics = get_node_physics(m_target_mesh->get_node());
-    if (!m_target_node_physics) {
+    auto target_mesh = std::static_pointer_cast<erhe::scene::Mesh>(content.mesh->shared_from_this());
+    auto target_node_physics = get_node_physics(target_mesh->get_node());
+    if (!target_node_physics) {
         log_physics->warn("Cant target: No physics mesh");
-        m_target_mesh.reset();
         return false;
     }
 
-    erhe::physics::IRigid_body* rigid_body = m_target_node_physics->get_rigid_body();
+    erhe::physics::IRigid_body* rigid_body = target_node_physics->get_rigid_body();
     if (rigid_body->get_motion_mode() == erhe::physics::Motion_mode::e_static) {
         log_physics->warn("Cant target: Static mesh");
         return false;
     }
+
+    m_target_mesh         = target_mesh;
+    m_target_node_physics = target_node_physics;
+
     const auto collision_shape = rigid_body->get_collision_shape();
     const glm::vec3 rigid_body_center_of_mass = collision_shape->get_center_of_mass();
 

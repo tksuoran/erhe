@@ -189,31 +189,21 @@ auto Light_buffer::update(
     std::size_t max_light_index{0};
 
     for (const auto& light : lights) {
-        //if ((writer.write_offset + entry_size) > writer.write_end)
-        //{
-        //    log_render->critical("light buffer capacity {} exceeded", buffer.capacity_byte_count());
-        //    ERHE_FATAL("light buffer capacity exceeded");
-        //    break;
-        //}
-
         ERHE_VERIFY(light);
         erhe::scene::Node* node = light->get_node();
         ERHE_VERIFY(node != nullptr);
 
         switch (light->type) {
-            //using enum erhe::scene::Light_type;
             case erhe::scene::Light_type::directional: ++directional_light_count; break;
             case erhe::scene::Light_type::point:       ++point_light_count; break;
             case erhe::scene::Light_type::spot:        ++spot_light_count; break;
             default: break;
         }
 
-        //ERHE_VERIFY(camera != nullptr);
         using vec2 = glm::vec2;
         using vec3 = glm::vec3;
         using vec4 = glm::vec4;
         using mat4 = glm::mat4;
-
         auto* light_projection_transforms = (light_projections != nullptr)
             ? light_projections->get_light_projection_transforms_for_light(light.get())
             : nullptr;
@@ -255,7 +245,6 @@ auto Light_buffer::update(
     write(light_gpu_data, common_offset + offsets.ambient_light,           as_span(ambient_light)            );
     write(light_gpu_data, common_offset + offsets.reserved_2,              as_span(uvec4_zero)               );
 
-    //writer.dump();
     writer.end();
     SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", max_light_index);
 
