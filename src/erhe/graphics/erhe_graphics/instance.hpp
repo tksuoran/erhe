@@ -27,6 +27,13 @@ public:
 class Texture;
 class Sampler;
 
+enum class Vendor : unsigned int {
+    Unknown = 0,
+    Nvidia  = 1,
+    Amd     = 2,
+    Intel   = 3
+};
+
 class Instance
 {
 public:
@@ -47,6 +54,8 @@ public:
     class Info
     {
     public:
+        Vendor vendor{Vendor::Unknown};
+
         int  gl_version             {0};
         int  glsl_version           {0};
         int  shader_model_version   {0};

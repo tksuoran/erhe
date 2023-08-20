@@ -107,6 +107,25 @@ Instance::Instance(erhe::window::Context_window& context_window)
     log_startup->info("GL Renderer:   {}", gl_renderer);
     log_startup->info("GL Version:    {}", gl_version_str.c_str());
 
+    auto gl_vendor_lc = gl_vendor;
+    std::transform(
+        gl_vendor_lc.begin(),
+        gl_vendor_lc.end(),
+        gl_vendor_lc.begin(),
+        [](unsigned char c) {
+            return std::tolower(c);
+        }
+    );
+    if (gl_vendor_lc.find("nvidia") != std::string::npos) {
+        info.vendor = Vendor::Nvidia;
+    } else if (gl_vendor_lc.find("amd") != std::string::npos) {
+        info.vendor = Vendor::Amd;
+    } else if (gl_vendor_lc.find("intel") != std::string::npos) {
+        info.vendor = Vendor::Intel;
+    } else {
+        info.vendor = Vendor::Unknown;
+    }
+
     auto versions = split(gl_version_str, '.');
 
     int major = !versions.empty() ? to_int(digits_only(versions[0])) : 0;
@@ -192,7 +211,6 @@ Instance::Instance(erhe::window::Context_window& context_window)
         info.compatibility_profile = true;
         log_startup->info("compatibility profile");
     }
-
 
     gl::get_integer_v(gl::Get_p_name::max_texture_buffer_size, &limits.max_texture_buffer_size);
 
@@ -290,6 +308,9 @@ Instance::Instance(erhe::window::Context_window& context_window)
 
     if (gl::is_extension_supported(gl::Extension::Extension_GL_ARB_bindless_texture)) {
         info.use_bindless_texture = true;
+    }
+    if (info.vendor == Vendor::Intel) {
+        info.use_bindless_texture = false;
     }
     log_startup->info("GL_ARB_bindless_texture supported : {}", info.use_bindless_texture);
 
