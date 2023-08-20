@@ -66,6 +66,10 @@ public:
     class Limits
     {
     public:
+        int max_compute_workgroup_count[3] = { 1, 1, 1 };
+        int max_compute_workgroup_size [3] = { 1, 1, 1 };
+        int max_compute_work_group_invocations       {1};
+        int max_compute_shared_memory_size           {1};
         int max_samples                              {0};
         int max_color_texture_samples                {0};
         int max_depth_texture_samples                {0};
@@ -81,6 +85,8 @@ public:
         int max_uniform_block_size                   {0};
         int max_shader_storage_buffer_bindings       {0};
         int max_uniform_buffer_bindings              {0};
+        int max_compute_shader_storage_blocks        {0};
+        int max_compute_uniform_blocks               {0};
         int max_vertex_shader_storage_blocks         {0};
         int max_vertex_uniform_blocks                {0};
         int max_fragment_shader_storage_blocks       {0};

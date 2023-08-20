@@ -13,8 +13,7 @@
 
 #include <initializer_list>
 
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Framebuffer;
     class Gpu_timer;
     class Instance;
@@ -23,8 +22,7 @@ namespace erhe::graphics
     class Vertex_input_state;
 }
 
-namespace erhe::scene
-{
+namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
@@ -36,21 +34,12 @@ namespace erhe::scene_renderer
 class Program_interface;
 class Scene_root;
 class Scene_view;
+class Settings;
 
 class Shadow_renderer
 {
 public:
     static const int shadow_texture_unit{15};
-
-    class Config
-    {
-    public:
-        bool enabled                   {true};
-        bool tight_frustum_fit         {true};
-        int  shadow_map_resolution     {2048};
-        int  shadow_map_max_light_count{8};
-    };
-    Config config;
 
     Shadow_renderer(
         erhe::graphics::Instance& graphics_instance,
@@ -96,11 +85,9 @@ private:
         const erhe::graphics::Vertex_input_state* vertex_input_state
     ) -> erhe::graphics::Pipeline&;
 
-    erhe::graphics::Instance&            m_graphics_instance;
-
-    uint64_t                             m_pipeline_cache_serial{0};
-    std::vector<Pipeline_cache_entry>    m_pipeline_cache_entries;
-
+    erhe::graphics::Instance&                m_graphics_instance;
+    uint64_t                                 m_pipeline_cache_serial{0};
+    std::vector<Pipeline_cache_entry>        m_pipeline_cache_entries;
     erhe::graphics::Reloadable_shader_stages m_shader_stages;
     erhe::graphics::Sampler                  m_nearest_sampler;
     erhe::graphics::Vertex_input_state       m_vertex_input;

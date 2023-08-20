@@ -187,8 +187,8 @@ erhe_target_sources_grouped(
     windows/properties.hpp
     windows/rendergraph_window.cpp
     windows/rendergraph_window.hpp
-    windows/settings.cpp
-    windows/settings.hpp
+    windows/settings_window.cpp
+    windows/settings_window.hpp
     windows/tool_properties_window.cpp
     windows/tool_properties_window.hpp
     windows/viewport_config_window.cpp
@@ -236,53 +236,56 @@ erhe_target_sources_grouped(
     res/icons/rotate.svg
     res/icons/spot_light.svg
 
-    res/shaders/brdf_slice.vert
-    res/shaders/brdf_slice.frag
-    res/shaders/brush.vert
-    res/shaders/brush.frag
-    res/shaders/anisotropic_slope.vert
-    res/shaders/anisotropic_slope.frag
-    res/shaders/anisotropic_engine_ready.vert
     res/shaders/anisotropic_engine_ready.frag
-    res/shaders/circular_brushed_metal.vert
+    res/shaders/anisotropic_engine_ready.vert
+    res/shaders/anisotropic_slope.frag
+    res/shaders/anisotropic_slope.vert
+    res/shaders/brdf_slice.frag
+    res/shaders/brdf_slice.vert
+    res/shaders/brush.frag
+    res/shaders/brush.vert
     res/shaders/circular_brushed_metal.frag
-    res/shaders/depth.vert
-    res/shaders/depth.frag
-    res/shaders/error.vert
-    res/shaders/error.frag
+    res/shaders/circular_brushed_metal.vert
     res/shaders/compose.frag
+    res/shaders/compute_before_line.comp
+    res/shaders/depth.frag
+    res/shaders/depth.vert
     res/shaders/downsample_x.frag
     res/shaders/downsample_y.frag
-    res/shaders/post_processing.vert
-    res/shaders/edge_lines.vert
     res/shaders/edge_lines.frag
-    res/shaders/id.vert
-    res/shaders/id.frag
-    res/shaders/fat_triangle.vert
-    res/shaders/fat_triangle.geom
+    res/shaders/edge_lines.vert
+    res/shaders/error.frag
+    res/shaders/error.vert
     res/shaders/fat_triangle.frag
-    res/shaders/line.vert
-    res/shaders/line.geom
+    res/shaders/fat_triangle.geom
+    res/shaders/fat_triangle.vert
+    res/shaders/id.frag
+    res/shaders/id.vert
+    res/shaders/line_after_compute.frag
+    res/shaders/line_after_compute.vert
     res/shaders/line.frag
-    res/shaders/points.vert
+    res/shaders/line.geom
+    res/shaders/line.vert
     res/shaders/points.frag
-    res/shaders/standard.vert
-    res/shaders/standard.frag
-    res/shaders/standard_debug.vert
-    res/shaders/standard_debug.frag
-    res/shaders/sky.vert
+    res/shaders/points.vert
+    res/shaders/post_processing.vert
     res/shaders/sky.frag
-    res/shaders/text.vert
+    res/shaders/sky.vert
+    res/shaders/standard_debug.frag
+    res/shaders/standard_debug.vert
+    res/shaders/standard.frag
+    res/shaders/standard.vert
     res/shaders/text.frag
-    res/shaders/textured.vert
+    res/shaders/text.vert
     res/shaders/textured.frag
-    res/shaders/tool.vert
+    res/shaders/textured.vert
     res/shaders/tool.frag
-    res/shaders/visualize_depth.vert
+    res/shaders/tool.vert
     res/shaders/visualize_depth.frag
-    res/shaders/wide_lines.vert
-    res/shaders/wide_lines.geom
+    res/shaders/visualize_depth.vert
     res/shaders/wide_lines.frag
+    res/shaders/wide_lines.geom
+    res/shaders/wide_lines.vert
 
     erhe.ini
     logging.ini

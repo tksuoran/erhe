@@ -29,6 +29,8 @@ namespace editor
 class Editor_context;
 class Editor_message_bus;
 class Editor_rendering;
+class Editor_settings;
+class Graphics_preset;
 class Headset_view;
 class Mesh_memory;
 class Programs;
@@ -90,10 +92,10 @@ public:
     );
 
     [[nodiscard]] auto create_shadow_node_for_scene_view(
-        erhe::graphics::Instance&              graphics_instance,
-        erhe::rendergraph::Rendergraph&        rendergraph,
-        erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-        Scene_view&                            scene_view
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        Editor_settings&                editor_settings,
+        Scene_view&                     scene_view
     ) -> std::shared_ptr<Shadow_render_node>;
 
     [[nodiscard]] auto get_shadow_node_for_view(const Scene_view& scene_view) -> std::shared_ptr<Shadow_render_node>;
@@ -118,12 +120,12 @@ public:
 
     void imgui();
 
-    glm::uvec4             debug_joint_indices{0, 0, 0, 0};
-    std::vector<glm::vec4> debug_joint_colors;
+    glm::uvec4                  debug_joint_indices{0, 0, 0, 0};
+    std::vector<glm::vec4>      debug_joint_colors;
     std::shared_ptr<Renderpass> selection_outline;
 
 private:
-    void handle_graphics_settings_changed();
+    void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
     [[nodiscard]] auto get_pipeline_renderpass(
         const Renderpass&          renderpass,

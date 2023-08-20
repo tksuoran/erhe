@@ -66,14 +66,14 @@ void Headset_view_node::execute_rendergraph_node()
 }
 
 Headset_view::Headset_view(
-    erhe::graphics::Instance&              graphics_instance,
-    erhe::rendergraph::Rendergraph&        rendergraph,
-    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-    erhe::toolkit::Context_window&         context_window,
-    Editor_context&                        editor_context,
-    Editor_rendering&                      editor_rendering,
-    Mesh_memory&                           mesh_memory,
-    Scene_builder&                         scene_builder
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    erhe::toolkit::Context_window&  context_window,
+    Editor_context&                 editor_context,
+    Editor_rendering&               editor_rendering,
+    Editor_settings&                editor_settings,
+    Mesh_memory&                    mesh_memory,
+    Scene_builder&                  scene_builder
 )
     : Scene_view{editor_context, Viewport_config{}}
 {
@@ -137,7 +137,7 @@ Headset_view::Headset_view(
     m_shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(
         graphics_instance,
         rendergraph,
-        shadow_renderer,
+        editor_settings,
         *this
     );
     rendergraph.connect(

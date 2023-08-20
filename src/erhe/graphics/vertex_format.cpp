@@ -104,11 +104,15 @@ auto Vertex_format::find_attribute(
     ERHE_FATAL("vertex_attribute not found");
 }
 
-void Vertex_format::add_to(Shader_resource& shader_resource)
+void Vertex_format::add_to(
+    Shader_resource& vertex_struct,
+    Shader_resource& vertices_block
+)
 {
     for (const auto& attribute : m_attributes) {
-        shader_resource.add(attribute);
+        vertex_struct.add(attribute);
     }
+    vertices_block.add_struct("vertices", &vertex_struct, erhe::graphics::Shader_resource::unsized_array);
 }
 
 } // namespace erhe::graphics

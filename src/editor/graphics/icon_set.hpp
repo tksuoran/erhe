@@ -15,9 +15,6 @@ namespace erhe::graphics {
 namespace erhe::scene {
     enum class Light_type : unsigned int;
 }
-namespace erhe::toolkit {
-    class Context_window;
-}
 
 namespace lunasvg {
     class Document;
@@ -78,32 +75,23 @@ public:
 };
 
 class Editor_context;
+class Icon_settings;
 
 class Icon_set
 {
 public:
-    class Config
-    {
-    public:
-        Config();
-        Config(erhe::toolkit::Context_window& context_window);
-
-        int small_icon_size {16};
-        int large_icon_size {32};
-        int hotbar_icon_size{128};
-    };
-
     Icon_set(
-        erhe::graphics::Instance&      graphics_instance,
-        erhe::imgui::Imgui_renderer&   imgui_renderer,
-        erhe::toolkit::Context_window& context_window,
-        Programs&                      programs
+        erhe::graphics::Instance&    graphics_instance,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        Icon_settings&               icon_settings,
+        Programs&                    programs
     );
 
     void load_icons(
-        erhe::graphics::Instance&      graphics_instance,
-        erhe::imgui::Imgui_renderer&   imgui_renderer,
-        Programs&                      programs
+        erhe::graphics::Instance&    graphics_instance,
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        Icon_settings&               icon_settings,
+        Programs&                    programs
     );
 
     [[nodiscard]] auto load    (const std::filesystem::path& path) -> glm::vec2;
@@ -114,8 +102,6 @@ public:
     [[nodiscard]] auto get_hotbar_rasterization() const -> const Icon_rasterization&;
 
     void add_icons(uint64_t item_type, float scale);
-
-    Config config;
 
 private:
 

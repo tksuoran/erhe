@@ -63,41 +63,6 @@ Shadow_renderer::Shadow_renderer(
     , m_gpu_timer            {"Shadow_renderer"}
 {
     ERHE_PROFILE_FUNCTION();
-
-    auto ini = erhe::configuration::get_ini("erhe.ini", "shadow_renderer");
-    ini->get("enabled",                    config.enabled);
-    ini->get("tight_frustum_fit",          config.tight_frustum_fit);
-    ini->get("shadow_map_resolution",      config.shadow_map_resolution);
-    ini->get("shadow_map_max_light_count", config.shadow_map_max_light_count);
-
-    if (!config.enabled) {
-        log_render->info("Shadow renderer disabled due to erhe.ini setting");
-        return;
-    } else {
-        log_render->info(
-            "Shadow renderer using shadow map resolution {0}x{0}, max {1} lights",
-            config.shadow_map_resolution,
-            config.shadow_map_max_light_count
-        );
-    }
-
-    erhe::graphics::Scoped_debug_group debug_group{c_shadow_renderer_initialize_component};
-
-    //ERHE_VERIFY(config.shadow_map_max_light_count <= program_interface.config.max_light_count);
-
-    //auto prototype = program_interface.make_prototype(
-    //    graphics_instance,
-    //    "res/shaders",
-    //    erhe::graphics::Shader_stages_create_info{
-    //        .instance       = graphics_instance,
-    //        .name           = "depth",
-    //        .dump_interface = false
-    //    }
-    //);
-    //
-    //prototype->compile_shaders();
-    //prototype->link_program();
-
     m_pipeline_cache_entries.resize(8);
 }
 
@@ -137,10 +102,6 @@ static constexpr std::string_view c_shadow_renderer_render{"Shadow_renderer::ren
 
 void Shadow_renderer::next_frame()
 {
-    if (!config.enabled) {
-        return;
-    }
-
     m_joint_buffers        .next_frame();
     m_light_buffers        .next_frame();
     m_draw_indirect_buffers.next_frame();
@@ -169,10 +130,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.texture,
         shadow_texture_handle
     };
-
-    if (!config.enabled) {
-        return false;
-    }
 
     ERHE_PROFILE_FUNCTION();
 

@@ -2,6 +2,7 @@
 
 #include "editor_rendering.hpp"
 #include "editor_scenes.hpp"
+#include "editor_settings.hpp"
 #include "task_queue.hpp"
 
 #include "tools/brushes/brush.hpp"
@@ -14,7 +15,7 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 #include "windows/item_tree_window.hpp"
-#include "windows/settings.hpp"
+#include "windows/settings_window.hpp"
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
@@ -112,22 +113,20 @@ Scene_builder::Config::Config()
 }
 
 Scene_builder::Scene_builder(
-    erhe::graphics::Instance&              graphics_instance,
-    erhe::imgui::Imgui_renderer&           imgui_renderer,
-    erhe::imgui::Imgui_windows&            imgui_windows,
-    erhe::rendergraph::Rendergraph&        rendergraph,
-    erhe::scene::Scene_message_bus&        scene_message_bus,
-    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-    Editor_context&                        editor_context,
-    Editor_message_bus&                    editor_message_bus,
-    Editor_rendering&                      editor_rendering,
-    Editor_scenes&                         editor_scenes,
-    Editor_settings&                       editor_settings,
-    Mesh_memory&                           mesh_memory,
-    Settings_window&                       settings_window,
-    Tools&                                 tools,
-    Viewport_config_window&                viewport_config_window,
-    Viewport_windows&                      viewport_windows
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    erhe::scene::Scene_message_bus& scene_message_bus,
+    Editor_context&                 editor_context,
+    Editor_message_bus&             editor_message_bus,
+    Editor_rendering&               editor_rendering,
+    Editor_scenes&                  editor_scenes,
+    Editor_settings&                editor_settings,
+    Mesh_memory&                    mesh_memory,
+    Tools&                          tools,
+    Viewport_config_window&         viewport_config_window,
+    Viewport_windows&               viewport_windows
 )
     : m_context{editor_context}
 {
@@ -149,9 +148,8 @@ Scene_builder::Scene_builder(
         imgui_renderer,
         imgui_windows,
         rendergraph,
-        shadow_renderer,
         editor_rendering,
-        settings_window,
+        editor_settings,
         tools,
         viewport_config_window,
         viewport_windows
@@ -285,16 +283,15 @@ auto Scene_builder::make_camera(
 }
 
 void Scene_builder::setup_cameras(
-    erhe::graphics::Instance&              graphics_instance,
-    erhe::imgui::Imgui_renderer&           imgui_renderer,
-    erhe::imgui::Imgui_windows&            imgui_windows,
-    erhe::rendergraph::Rendergraph&        rendergraph,
-    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-    Editor_rendering&                      editor_rendering,
-    Settings_window&                       settings_window,
-    Tools&                                 tools,
-    Viewport_config_window&                viewport_config_window,
-    Viewport_windows&                      viewport_windows
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::imgui::Imgui_renderer&    imgui_renderer,
+    erhe::imgui::Imgui_windows&     imgui_windows,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_rendering&               editor_rendering,
+    Editor_settings&                editor_settings,
+    Tools&                          tools,
+    Viewport_config_window&         viewport_config_window,
+    Viewport_windows&               viewport_windows
 )
 {
     const auto& camera_a = make_camera(
@@ -327,22 +324,19 @@ void Scene_builder::setup_cameras(
         return;
     }
 
-    const int msaa_sample_count = settings_window.get_msaa_sample_count();
+    const int msaa_sample_count = editor_settings.graphics.current_graphics_preset.msaa_sample_count;
     m_primary_viewport_window = viewport_windows.create_viewport_window(
         graphics_instance,
         rendergraph,
-        shadow_renderer,
         editor_rendering,
+        editor_settings,
         tools,
         viewport_config_window,
 
         "Primary Viewport",
         m_scene_root,
         camera_a,
-        std::max(
-            2,
-            msaa_sample_count
-        ), //// TODO Fix rendergraph
+        std::max(2, msaa_sample_count), //// TODO Fix rendergraph
         enable_post_processing
     );
     

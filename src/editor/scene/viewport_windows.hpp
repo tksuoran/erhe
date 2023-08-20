@@ -32,6 +32,7 @@ class Editor_context;
 class Editor_message;
 class Editor_message_bus;
 class Editor_rendering;
+class Editor_settings;
 class Imgui_viewport_window;
 class Post_processing;
 class Scene_root;
@@ -88,11 +89,10 @@ public:
     auto create_viewport_window(
         erhe::graphics::Instance&                   graphics_instance,
         erhe::rendergraph::Rendergraph&             rendergraph,
-        erhe::scene_renderer::Shadow_renderer&      shadow_renderer,
         Editor_rendering&                           editor_rendering,
+        Editor_settings&                            editor_settings,
         Tools&                                      tools,
         Viewport_config_window&                     viewport_config_window,
-
         const std::string_view                      name,
         const std::shared_ptr<Scene_root>&          scene_root,
         const std::shared_ptr<erhe::scene::Camera>& camera,
@@ -140,7 +140,7 @@ public:
 
 private:
     void on_message                      (Editor_message& message);
-    void handle_graphics_settings_changed();
+    void handle_graphics_settings_changed(Graphics_preset* graphics_preset);
 
     void update_hover_from_imgui_viewport_windows(erhe::imgui::Imgui_viewport* imgui_viewport);
     void update_hover_from_basic_viewport_windows();

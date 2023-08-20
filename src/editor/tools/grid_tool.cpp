@@ -1,6 +1,7 @@
 #include "tools/grid_tool.hpp"
 
 #include "editor_context.hpp"
+#include "editor_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/render_context.hpp"
 #include "tools/grid.hpp"
@@ -144,7 +145,6 @@ void Grid_tool::imgui()
     for (auto& grid : m_grids) {
         grid_names.push_back(grid->get_name().c_str());
     }
-    ImGui::SetNextItemWidth(300);
     ImGui::Combo(
         "Grid",
         &m_grid_index,
@@ -160,7 +160,8 @@ void Grid_tool::imgui()
 
     ImGui::NewLine();
 
-    constexpr ImVec2 button_size{110.0f, 0.0f};
+    const ImVec2 button_size{ImGui::GetContentRegionAvail().x, 0.0f};
+
     const bool add_pressed = ImGui::Button("Add Grid", button_size);
     if (add_pressed) {
         std::shared_ptr<Grid> new_grid = std::make_shared<Grid>();
@@ -168,7 +169,6 @@ void Grid_tool::imgui()
         m_grids.push_back(new_grid);
     }
 
-    ImGui::SameLine();
     if (ImGui::Button("Remove Grid", button_size)) {
         m_grids.erase(m_grids.begin() + m_grid_index);
     }

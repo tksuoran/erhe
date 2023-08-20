@@ -53,8 +53,8 @@ public:
     std::vector<std::string>                         pragmas                  {};
     std::vector<std::pair<std::string, std::string>> defines                  {};
     std::vector<Shader_stage_extension>              extensions               {};
-    std::vector<const Shader_resource*>              interface_blocks         {};
     std::vector<const Shader_resource*>              struct_types             {};
+    std::vector<const Shader_resource*>              interface_blocks         {};
     const Vertex_attribute_mappings*                 vertex_attribute_mappings{nullptr};
     const Fragment_outputs*                          fragment_outputs         {nullptr};
     const Shader_resource*                           default_uniform_block    {nullptr}; // contains sampler uniforms

@@ -40,6 +40,7 @@ namespace editor
 class Editor_context;
 class Editor_message_bus;
 class Editor_rendering;
+class Editor_settings;
 class Hud;
 class Mesh_memory;
 class Scene_builder;
@@ -90,14 +91,14 @@ public:
     Config config;
 
     Headset_view(
-        erhe::graphics::Instance&              graphics_instance,
-        erhe::rendergraph::Rendergraph&        rendergraph,
-        erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-        erhe::toolkit::Context_window&         context_window,
-        Editor_context&                        editor_context,
-        Editor_rendering&                      editor_rendering,
-        Mesh_memory&                           mesh_memory,
-        Scene_builder&                         scene_builder
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        erhe::toolkit::Context_window&  context_window,
+        Editor_context&                 editor_context,
+        Editor_rendering&               editor_rendering,
+        Editor_settings&                editor_settings,
+        Mesh_memory&                    mesh_memory,
+        Scene_builder&                  scene_builder
     );
 
     // Public API

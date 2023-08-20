@@ -13,6 +13,8 @@ namespace erhe::scene {
 namespace editor
 {
 
+class Graphics_preset;
+
 class Message_flag_bit
 {
 public:
@@ -38,6 +40,7 @@ public:
     erhe::scene::Node*                       node        {nullptr};
     std::vector<std::shared_ptr<erhe::Item>> no_longer_selected;
     std::vector<std::shared_ptr<erhe::Item>> newly_selected;
+    Graphics_preset*                         graphics_preset{nullptr};
 };
 
 }

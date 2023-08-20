@@ -25,6 +25,10 @@ erhe_target_sources_grouped(
     scene_renderer_log.hpp
     shadow_renderer.cpp
     shadow_renderer.hpp
+    #scene_renderer_message.hpp
+    #scene_renderer_message_bus.cpp
+    #scene_renderer_message_bus.hpp
+    #scene_renderer_settings.hpp
 )
 
 target_link_libraries(
@@ -36,6 +40,7 @@ target_link_libraries(
         erhe::gl
         erhe::graphics
         erhe::log
+        erhe::message_bus
         erhe::primitive
         erhe::scene
         erhe::toolkit

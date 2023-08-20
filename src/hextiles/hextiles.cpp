@@ -1,5 +1,6 @@
 #include "hextiles.hpp"
 #include "hextiles_log.hpp"
+#include "hextiles_settings.hpp"
 
 #include "map_editor/map_editor.hpp"
 #include "map_window.hpp"
@@ -54,11 +55,12 @@ public:
                 .title             = "erhe HexTiles by Timo Suoranta"
             }
         }
+        , m_settings         {m_context_window}
         , m_commands         {}
         , m_graphics_instance{m_context_window}
         , m_text_renderer    {m_graphics_instance}
         , m_rendergraph      {m_graphics_instance}
-        , m_imgui_renderer   {m_graphics_instance, m_context_window}
+        , m_imgui_renderer   {m_graphics_instance, m_settings.imgui}
         , m_imgui_windows    {m_imgui_renderer, &m_context_window, m_rendergraph}
         , m_tiles            {}
         , m_tile_renderer    {m_graphics_instance, m_imgui_renderer, m_tiles}
@@ -101,6 +103,7 @@ public:
     }
 
     erhe::toolkit::Context_window  m_context_window;
+    Hextiles_settings              m_settings;
     erhe::commands::Commands       m_commands;
     erhe::graphics::Instance       m_graphics_instance;
     erhe::renderer::Text_renderer  m_text_renderer;

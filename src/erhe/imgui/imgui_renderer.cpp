@@ -1,7 +1,6 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_log.hpp"
 #include "erhe/imgui/imgui_viewport.hpp"
 
@@ -331,8 +330,8 @@ Imgui_program_interface::Imgui_program_interface(
                 .name                      = "ImGui Renderer",
                 .defines                   = get_shader_defines(graphics_instance),
                 .extensions                = get_shader_extensions(graphics_instance),
-                .interface_blocks          = { &draw_parameter_block },
                 .struct_types              = { &draw_parameter_struct },
+                .interface_blocks          = { &draw_parameter_block },
                 .vertex_attribute_mappings = &attribute_mappings,
                 .fragment_outputs          = &fragment_outputs,
                 .default_uniform_block     = graphics_instance.info.use_bindless_texture
@@ -382,28 +381,6 @@ void Imgui_program_interface::next_frame()
 }
 #pragma endregion Imgui_program_interface
 
-auto get_font_config(erhe::toolkit::Context_window& context_window) -> Imgui_renderer::Font_config
-{
-    Imgui_renderer::Font_config font_config;
-
-    using namespace erhe::configuration;
-    mINI::INIFile file{"erhe.ini"};
-    mINI::INIStructure ini;
-    if (file.read(ini)) {
-        if (ini.has("imgui")) {
-            const auto& section = ini["imgui"];
-            ini_get(section, "primary_font", font_config.primary_font);
-            ini_get(section, "mono_font",    font_config.mono_font);
-            ini_get(section, "font_size",    font_config.font_size);
-            ini_get(section, "vr_font_size", font_config.vr_font_size);
-        }
-    }
-
-    font_config.font_size *= context_window.get_scale_factor();
-
-    return font_config;
-}
-
 auto make_font_texture_create_info(
     erhe::graphics::Instance& graphics_instance,
     ImFontAtlas&              font_atlas
@@ -444,12 +421,11 @@ auto get_font_atlas_pixel_data(ImFontAtlas& font_atlas) -> std::vector<uint8_t>
 }
 
 Imgui_renderer::Imgui_renderer(
-    erhe::graphics::Instance&      graphics_instance,
-    erhe::toolkit::Context_window& context_window
+    erhe::graphics::Instance& graphics_instance,
+    Imgui_settings&           settings
 )
     // Parse config
-    : font_config{get_font_config(context_window)}
-    , m_graphics_instance{graphics_instance}
+    : m_graphics_instance{graphics_instance}
 
     // Compile shader program
     , m_imgui_program_interface{graphics_instance}
@@ -476,7 +452,7 @@ Imgui_renderer::Imgui_renderer(
 {
     ERHE_PROFILE_FUNCTION();
 
-    apply_font_config_changes();
+    apply_font_config_changes(settings);
 }
 
 void Imgui_renderer::lock_mutex()
@@ -549,22 +525,22 @@ void Imgui_renderer::unregister_imgui_viewport(
     return m_imgui_viewports;
 }
 
-void Imgui_renderer::on_font_config_changed()
+void Imgui_renderer::on_font_config_changed(Imgui_settings& settings)
 {
     at_end_of_frame(
-        [this](){
-            apply_font_config_changes();
+        [this, settings](){
+            apply_font_config_changes(settings);
         }
     );
 }
 
-void Imgui_renderer::apply_font_config_changes()
+void Imgui_renderer::apply_font_config_changes(const Imgui_settings& settings)
 {
     m_font_atlas.Clear();
-    m_primary_font    = m_font_atlas.AddFontFromFileTTF(font_config.primary_font.c_str(), font_config.font_size);
-    m_mono_font       = m_font_atlas.AddFontFromFileTTF(font_config.mono_font   .c_str(), font_config.font_size);
-    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(font_config.primary_font.c_str(), font_config.vr_font_size);
-    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(font_config.mono_font   .c_str(), font_config.vr_font_size);
+    m_primary_font    = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.font_size);
+    m_mono_font       = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.font_size);
+    m_vr_primary_font = m_font_atlas.AddFontFromFileTTF(settings.primary_font.c_str(), settings.vr_font_size);
+    m_vr_mono_font    = m_font_atlas.AddFontFromFileTTF(settings.mono_font   .c_str(), settings.vr_font_size);
 
     // Create textures
     m_font_texture = std::make_shared<erhe::graphics::Texture>(

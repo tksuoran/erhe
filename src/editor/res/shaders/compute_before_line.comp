@@ -1,0 +1,202 @@
+
+layout(local_size_x = 32) in;
+
+float get_line_width(vec4 position, float thickness)
+{
+    float fov_left         = view.fov[0];
+    float fov_right        = view.fov[1];
+    float fov_width        = fov_right - fov_left;
+    float viewport_width   = view.viewport[2];
+    float scaled_thickness = (thickness < 0.0)
+        ? -thickness
+        : max(thickness / position.w, 0.01);
+    return (1.0 / 1024.0) * viewport_width * scaled_thickness / fov_width;
+}
+
+bool clip_line(
+    in  vec4  v0,
+    in  vec4  v1,
+    out vec4  clipped_v0,
+    out vec4  clipped_v1,
+    out float tmin,
+    out float tmax
+)
+{
+    vec4  l      = v1 - v0;
+    // Clipping in X and Y axis is disabled so that wide lines that
+    // are outside (left/right/above/below) viewport don't get culled
+    //float denom0 =  l.x + l.w; float num0 = -v0.x - v0.w; float t0 = num0 / denom0;
+    //float denom1 = -l.x + l.w; float num1 =  v0.x - v0.w; float t1 = num1 / denom1;
+    //float denom2 =  l.y + l.w; float num2 = -v0.y - v0.w; float t2 = num2 / denom2;
+    //float denom3 = -l.y + l.w; float num3 =  v0.y - v0.w; float t3 = num3 / denom3;
+    float denom4 =  l.z + l.w; float num4 = -v0.z - v0.w; float t4 = num4 / denom4;
+    float denom5 = -l.z + l.w; float num5 =  v0.z - v0.w; float t5 = num5 / denom5;
+    tmin = 0.0;
+    tmax = 1.0;
+    //if (denom0 > 0) {
+    //    if (t0 > tmax) return false;
+    //    if (t0 > tmin) tmin = t0;
+    //} else if (denom0 < 0) {
+    //    if (t0 < tmin) return false;
+    //    if (t0 < tmax) tmax = t0;
+    //} else if (num0 > 0) {
+    //    return false;
+    //}
+    //if (denom1 > 0) {
+    //    if (t1 > tmax) return false;
+    //    if (t1 > tmin) tmin = t1;
+    //} else if (denom1 < 0) {
+    //    if (t1 < tmin) return false;
+    //    if (t1 < tmax) tmax = t1;
+    //} else if (num1 > 0) {
+    //    return false;
+    //}
+    //if (denom2 > 0) {
+    //    if (t2 > tmax) return false;
+    //    if (t2 > tmin) tmin = t2;
+    //} else if (denom2 < 0) {
+    //    if (t2 < tmin) return false;
+    //    if (t2 < tmax) tmax = t2;
+    //} else if (num2 > 0) {
+    //    return false;
+    //}
+    //if (denom3 > 0) {
+    //    if (t3 > tmax) return false;
+    //    if (t3 > tmin) tmin = t3;
+    //} else if (denom3 < 0) {
+    //    if (t3 < tmin) return false;
+    //    if (t3 < tmax) tmax = t3;
+    //} else if (num3 > 0) {
+    //    return false;
+    //}
+    if (denom4 > 0) {
+        if (t4 > tmax) return false;
+        if (t4 > tmin) tmin = t4;
+    } else if (denom4 < 0) {
+        if (t4 < tmin) return false;
+        if (t4 < tmax) tmax = t4;
+    } else if (num4 > 0) {
+        return false;
+    }
+    if (denom5 > 0) {
+        if (t5 > tmax) return false;
+        if (t5 > tmin) tmin = t5;
+    } else if (denom5 < 0) {
+        if (t5 < tmin) return false;
+        if (t5 < tmax) tmax = t5;
+    } else if (num5 > 0) {
+        return false;
+    }
+    clipped_v0 = mix(v0, v1, tmin);
+    clipped_v1 = mix(v0, v1, tmax);
+    return true;
+}
+
+void do_wide_line(uint in_line_index, uint out_triangle_index)
+{
+    uint in_i0           = 2 * in_line_index;
+    uint in_i1           = 2 * in_line_index + 1; 
+    uint out_i0          = 3 * out_triangle_index;
+    mat4 clip_from_world = view.clip_from_world;
+    vec4 a_position0     = line_vertex_buffer.vertices[in_i0].position_0;
+    vec4 a_color0        = line_vertex_buffer.vertices[in_i0].color_0   ;
+    vec4 a_position1     = line_vertex_buffer.vertices[in_i1].position_0;
+    vec4 a_color1        = line_vertex_buffer.vertices[in_i1].color_0   ;
+
+    vec4 v0 = clip_from_world * vec4(a_position0.xyz, 1.0);
+    vec4 v1 = clip_from_world * vec4(a_position1.xyz, 1.0);
+
+    //  a - - - - - - - - - - - - - - - - b
+    //  |      |                   |      |
+    //  |      |                   |      |
+    //  |      |                   |      |
+    //  | - - -start - - - - - - end- - - |
+    //  |      |                   |      |
+    //  |      |                   |      |
+    //  |      |                   |      |
+    //  d - - - - - - - - - - - - - - - - c
+
+    vec4 v0_clipped, v1_clipped; float tmin, tmax;
+
+    if (clip_line(v0, v1, v0_clipped, v1_clipped, tmin, tmax) == false) {
+        triangle_vertex_buffer.vertices[out_i0    ].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 1].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 2].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+
+        triangle_vertex_buffer.vertices[out_i0 + 3].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 4].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        triangle_vertex_buffer.vertices[out_i0 + 5].position_0 = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    vec4  position0   = mix(a_position0, a_position1, tmin);
+    vec4  position1   = mix(a_position0, a_position1, tmax);
+    vec4  color0      = mix(a_color0,    a_color1,    tmin);
+    vec4  color1      = mix(a_color0,    a_color1,    tmax);
+    float line_width0 = position0.w;
+    float line_width1 = position1.w;
+
+    float width0      = get_line_width(v0_clipped, line_width0);
+    float width1      = get_line_width(v1_clipped, line_width1);
+
+    vec2 vp_size         = view.viewport.zw;
+
+    // Compute line axis and side vector in screen space
+    vec2 v0_in_ndc       = v0_clipped.xy / v0_clipped.w;       //  clip to NDC: homogenize and drop z
+    vec2 v1_in_ndc       = v1_clipped.xy / v1_clipped.w;
+    vec2 line_in_ndc     = v1_in_ndc - v0_in_ndc;
+    vec2 v0_in_screen    = (0.5 * v0_in_ndc + vec2(0.5)) * vp_size + view.viewport.xy;
+    vec2 v1_in_screen    = (0.5 * v1_in_ndc + vec2(0.5)) * vp_size + view.viewport.xy;
+    vec2 line_in_screen  = line_in_ndc * vp_size;       //  NDC to window (direction vector)
+    vec2 axis_in_screen  = normalize(line_in_screen);
+    vec2 side_in_screen  = vec2(-axis_in_screen.y, axis_in_screen.x); // rotate
+    vec2 axis_in_ndc     = axis_in_screen / vp_size;                  // screen to NDC
+    vec2 side_in_ndc     = side_in_screen / vp_size;
+    vec4 axis0           = vec4(axis_in_ndc, 0.0, 0.0) * width0;  // NDC to clip (delta vector)
+    vec4 axis1           = vec4(axis_in_ndc, 0.0, 0.0) * width1;  // NDC to clip (delta vector)
+    vec4 side0           = vec4(side_in_ndc, 0.0, 0.0) * width0;
+    vec4 side1           = vec4(side_in_ndc, 0.0, 0.0) * width1;
+
+    vec4 a0 = (v0_clipped + (side0 - axis0) * v0_clipped.w);
+    vec4 b0 = (v1_clipped + (side1 + axis1) * v1_clipped.w);
+    vec4 c0 = (v1_clipped - (side1 - axis1) * v1_clipped.w);
+    vec4 d0 = (v0_clipped - (side0 + axis0) * v0_clipped.w);
+
+    vec4 a = vec4(a0.xyz / a0.w, width0);
+    vec4 b = vec4(b0.xyz / b0.w, width1);
+    vec4 c = vec4(c0.xyz / c0.w, width1);
+    vec4 d = vec4(d0.xyz / d0.w, width0);
+
+    vec4 l_in_screen = vec4(v0_in_screen, v1_in_screen);
+
+    triangle_vertex_buffer.vertices[out_i0    ].position_0 = d;
+    triangle_vertex_buffer.vertices[out_i0    ].color_0    = color0;
+    triangle_vertex_buffer.vertices[out_i0    ].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 1].position_0 = a;
+    triangle_vertex_buffer.vertices[out_i0 + 1].color_0    = color0;
+    triangle_vertex_buffer.vertices[out_i0 + 1].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 2].position_0 = c;
+    triangle_vertex_buffer.vertices[out_i0 + 2].color_0    = color1;
+    triangle_vertex_buffer.vertices[out_i0 + 2].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 3].position_0 = c;
+    triangle_vertex_buffer.vertices[out_i0 + 3].color_0    = color1;
+    triangle_vertex_buffer.vertices[out_i0 + 3].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 4].position_0 = a;
+    triangle_vertex_buffer.vertices[out_i0 + 4].color_0    = color0;
+    triangle_vertex_buffer.vertices[out_i0 + 4].custom_0   = l_in_screen;
+
+    triangle_vertex_buffer.vertices[out_i0 + 5].position_0 = b;
+    triangle_vertex_buffer.vertices[out_i0 + 5].color_0    = color1;
+    triangle_vertex_buffer.vertices[out_i0 + 5].custom_0   = l_in_screen;
+}
+
+void main(void)
+{
+    uint in_line_index      = gl_GlobalInvocationID.x;
+    uint out_triangle_index = 2 * in_line_index;
+    do_wide_line(in_line_index, out_triangle_index);
+}

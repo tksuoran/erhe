@@ -1255,11 +1255,6 @@ void Debug_visualizations::imgui()
     ERHE_PROFILE_FUNCTION();
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-    //// for (const auto& line : m_lines)
-    //// {
-    ////     ImGui::TextUnformatted(line.c_str());
-    //// }
-    //// m_lines.clear();
     if (m_hover_scene_view == nullptr) {
         ImGui::Text("- No Scene_view - ");
     } else {

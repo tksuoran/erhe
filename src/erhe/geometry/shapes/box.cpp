@@ -199,9 +199,9 @@ public:
             point_normals->put(point_id, n);
             point_texcoords->put(point_id, vec2{s, t});
 
-            vec4 B;
             vec4 T;
-            ortho_basis_pixar_r1(n, B, T);
+            vec4 B;
+            ortho_basis_pixar_r1(n, T, B);
             point_tangents  ->put(point_id, T);
             point_bitangents->put(point_id, B);
         }

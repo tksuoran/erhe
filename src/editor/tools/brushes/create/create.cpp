@@ -2,6 +2,7 @@
 #include "tools/tool.hpp"
 
 #include "editor_context.hpp"
+#include "editor_settings.hpp"
 #include "operations/insert_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "renderers/mesh_memory.hpp"
@@ -52,16 +53,16 @@ Create::Create(
     tools.register_tool(this);
 }
 
-namespace
+
+auto Create::get_button_size() -> ImVec2
 {
-
-constexpr ImVec2 button_size{110.0f, 0.0f};
-
+    const float ui_scale = m_context.editor_settings->get_ui_scale();
+    return ImVec2{110.0f * ui_scale, 0.0f};
 }
 
 void Create::brush_create_button(const char* label, Create_shape* create_shape)
 {
-    if (ImGui::Button(label, button_size)) {
+    if (ImGui::Button(label, get_button_size())) {
         if (m_create_shape == create_shape) {
             m_create_shape = nullptr;
         } else {
@@ -112,6 +113,7 @@ void Create::imgui()
     const glm::mat4 world_from_node = parent->world_from_node();
 
     ImGui::Text("Nodes");
+    const auto button_size = get_button_size();
     if (ImGui::Button("Empty Node", button_size)) {
         m_context.scene_commands->create_new_empty_node(parent.get());
     }

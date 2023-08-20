@@ -545,6 +545,15 @@ auto Shader_resource::binding_point() const -> unsigned int
     return static_cast<unsigned int>(m_binding_point);
 }
 
+auto Shader_resource::get_binding_target() const->gl::Buffer_target
+{
+    switch (m_type) {
+        case Type::uniform_block:        return gl::Buffer_target::uniform_buffer;
+        case Type::shader_storage_block: return gl::Buffer_target::shader_storage_buffer;
+        default: return static_cast<gl::Buffer_target>(0);
+    }
+}
+
 auto Shader_resource::size_bytes() const -> std::size_t
 {
     if (m_type == Type::struct_type) {
@@ -1040,7 +1049,7 @@ auto Shader_resource::add_uint64(
     return new_member;
 }
 
-void Shader_resource::set_readonly (bool value)
+void Shader_resource::set_readonly(bool value)
 {
     m_readonly = value;
 }

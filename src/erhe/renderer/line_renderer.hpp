@@ -63,9 +63,15 @@ public:
     bool                                             reverse_depth{false};
     erhe::graphics::Fragment_outputs                 fragment_outputs;
     erhe::graphics::Vertex_attribute_mappings        attribute_mappings;
-    erhe::graphics::Vertex_format                    vertex_format;
+    erhe::graphics::Vertex_format                    line_vertex_format;
+    erhe::graphics::Vertex_format                    triangle_vertex_format;
+    std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_struct;
+    std::unique_ptr<erhe::graphics::Shader_resource> line_vertex_buffer_block;
+    std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_struct;
+    std::unique_ptr<erhe::graphics::Shader_resource> triangle_vertex_buffer_block;
     std::unique_ptr<erhe::graphics::Shader_resource> view_block;
-    std::unique_ptr<erhe::graphics::Shader_stages>   shader_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>   compute_shader_stages;
+    std::unique_ptr<erhe::graphics::Shader_stages>   graphics_shader_stages;
     std::size_t                                      clip_from_world_offset       {0};
     std::size_t                                      view_position_in_world_offset{0};
     std::size_t                                      viewport_offset              {0};
@@ -93,9 +99,9 @@ public:
     void end       ();
     void render(
         const erhe::toolkit::Viewport camera_viewport,
-        const erhe::scene::Camera&  camera,
-        const bool                  show_visible_lines,
-        const bool                  show_hidden_lines
+        const erhe::scene::Camera&    camera,
+        const bool                    show_visible_lines,
+        const bool                    show_hidden_lines
     );
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
     void imgui();
@@ -211,10 +217,11 @@ private:
             bool                                      reverse_depth,
             std::size_t                               view_stride,
             std::size_t                               view_count,
-            std::size_t                               vertex_count,
+            std::size_t                               line_count,
             erhe::graphics::Shader_stages*            shader_stages,
             erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-            erhe::graphics::Vertex_format&            vertex_format,
+            erhe::graphics::Vertex_format&            line_vertex_format,
+            erhe::graphics::Vertex_format&            triangle_vertex_format,
             const std::string&                        style_name,
             std::size_t                               slot
         );
@@ -224,9 +231,12 @@ private:
         Frame_resources(Frame_resources&&)      = delete;
         void operator= (Frame_resources&&)      = delete;
 
-        erhe::graphics::Buffer             vertex_buffer;
+        erhe::graphics::Shader_stages*     compute_shader_stages{nullptr};
+        erhe::graphics::Buffer             line_vertex_buffer;
+        erhe::graphics::Buffer             triangle_vertex_buffer;
         erhe::graphics::Buffer             view_buffer;
         erhe::graphics::Vertex_input_state vertex_input;
+        erhe::graphics::Pipeline           compute;
         erhe::graphics::Pipeline           pipeline_visible;
         erhe::graphics::Pipeline           pipeline_hidden;
 

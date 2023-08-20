@@ -11,6 +11,9 @@
 
 #include "erhe/imgui/imgui_window.hpp"
 
+#include <imgui/imgui.h>
+
+
 namespace erhe::imgui {
     class Imgui_windows;
 }
@@ -42,6 +45,8 @@ public:
     void tool_render(const Render_context& context) override;
 
 private:
+    [[nodiscard]] auto get_button_size() -> ImVec2;
+
     void brush_create_button(const char* label, Create_shape* brush_create);
 
     [[nodiscard]] auto find_parent() -> std::shared_ptr<erhe::scene::Node>;

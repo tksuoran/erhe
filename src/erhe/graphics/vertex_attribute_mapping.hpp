@@ -52,6 +52,32 @@ public:
             }
         };
     }
+    [[nodiscard]] static auto a_position0_float_vec4() -> Vertex_attribute_mapping
+    {
+        return Vertex_attribute_mapping{
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_position0",
+            .src_usage =
+            {
+                .type        = Vertex_attribute::Usage_type::position,
+                .index       = 0
+            }
+        };
+    }
+    [[nodiscard]] static auto a_position1_float_vec4() -> Vertex_attribute_mapping
+    {
+        return Vertex_attribute_mapping{
+            .layout_location = 0,
+            .shader_type     = gl::Attribute_type::float_vec4,
+            .name            = "a_position1",
+            .src_usage =
+            {
+                .type        = Vertex_attribute::Usage_type::position,
+                .index       = 1
+            }
+        };
+    }
     [[nodiscard]] static auto a_color_float_vec4() -> Vertex_attribute_mapping
     {
         return Vertex_attribute_mapping{

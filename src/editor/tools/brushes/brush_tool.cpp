@@ -233,15 +233,6 @@ void Brush_tool::on_motion()
     }
     m_hover = *nearest_hover;
 
-    //// if (
-    ////     (m_hover.geometry_primitive != nullptr) &&
-    ////     (m_hover.geometry_primitive->source_geometry) &&
-    ////     (m_hover.local_index > m_hover.geometry_primitive->source_geometry->get_polygon_count())
-    //// ) {
-    ////     m_hover.local_index        = 0;
-    ////     m_hover.geometry_primitive = nullptr;
-    //// }
-
     if (
         m_hover.mesh &&
         (m_hover.mesh->get_node() != nullptr) &&

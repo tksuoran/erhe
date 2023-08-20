@@ -192,7 +192,7 @@ inline void write_low(
             float scaled_x = std::max(0.0f, std::min(value.x * 255.0f, 255.0f));
             float scaled_y = std::max(0.0f, std::min(value.y * 255.0f, 255.0f));
             float scaled_z = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
-            float scaled_w = std::max(0.0f, std::min(value.z * 255.0f, 255.0f));
+            float scaled_w = std::max(0.0f, std::min(value.w * 255.0f, 255.0f));
             Expects(scaled_x <= 0xffU);
             Expects(scaled_y <= 0xffU);
             Expects(scaled_z <= 0xffU);

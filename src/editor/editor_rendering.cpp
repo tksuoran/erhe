@@ -3,6 +3,7 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_settings.hpp"
 #include "renderable.hpp"
 #include "renderers/composer.hpp"
 #include "renderers/id_renderer.hpp"
@@ -251,7 +252,7 @@ Editor_rendering::Editor_rendering(
         [&](Editor_message& message) {
             using namespace erhe::toolkit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
-                handle_graphics_settings_changed();
+                handle_graphics_settings_changed(message.graphics_preset);
             }
         }
     );
@@ -283,15 +284,15 @@ Editor_rendering::Editor_rendering(
 }
 
 auto Editor_rendering::create_shadow_node_for_scene_view(
-    erhe::graphics::Instance&              graphics_instance,
-    erhe::rendergraph::Rendergraph&        rendergraph,
-    erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-    Scene_view&                            scene_view
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    Editor_settings&                editor_settings,
+    Scene_view&                     scene_view
 ) -> std::shared_ptr<Shadow_render_node>
 {
-    const auto& shadow_config = shadow_renderer.config;
-    const int   resolution    = shadow_config.enabled ? shadow_config.shadow_map_resolution      : 1;
-    const int   light_count   = shadow_config.enabled ? shadow_config.shadow_map_max_light_count : 1;
+    const auto& preset      = editor_settings.graphics.current_graphics_preset;
+    const int   resolution  = preset.shadow_enable ? preset.shadow_resolution  : 1;
+    const int   light_count = preset.shadow_enable ? preset.shadow_light_count : 1;
     auto shadow_render_node = std::make_shared<Shadow_render_node>(
         graphics_instance,
         rendergraph,
@@ -304,11 +305,10 @@ auto Editor_rendering::create_shadow_node_for_scene_view(
     return shadow_render_node;
 }
 
-void Editor_rendering::handle_graphics_settings_changed()
+void Editor_rendering::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
-    const auto& shadow_config = m_context.shadow_renderer->config;
-    const int   resolution    = shadow_config.enabled ? shadow_config.shadow_map_resolution      : 1;
-    const int   light_count   = shadow_config.enabled ? shadow_config.shadow_map_max_light_count : 1;
+    const int resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
+    const int light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
 
     for (const auto& node : m_all_shadow_render_nodes) {
         node->reconfigure(*m_context.graphics_instance, resolution, light_count);

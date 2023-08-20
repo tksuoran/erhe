@@ -559,7 +559,6 @@ void Handle_visualizations::viewport_toolbar(bool& hovered)
     ImGui::PushID("Handle_visualizations::viewport_toolbar");
     const auto& icon_rasterication = m_context.icon_set->get_small_rasterization();
 
-    //ImGui::SameLine();
     auto& settings = m_context.transform_tool->shared.settings;
     const auto local_pressed = erhe::imgui::make_button(
         "L",

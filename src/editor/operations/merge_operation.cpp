@@ -161,7 +161,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
             compound_shape_create_info
         );
 
-        if (parameters.context.editor_settings->physics_static_enable) {
+        if (parameters.context.editor_settings->physics.static_enable) {
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
                 .collision_shape = combined_collision_shape,
                 .debug_label     = "merged", // TODO

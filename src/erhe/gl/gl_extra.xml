@@ -23,6 +23,7 @@
       <enum name="GL_CLIP_ORIGIN"/>
       <enum name="GL_MAX_SAMPLES"/>
       <enum name="GL_MAX_TEXTURE_MAX_ANISOTROPY"/>
+      <enum name="GL_MAX_COMPUTE_SHARED_MEMORY_SIZE"/>
     </group>
 
     <group name="GetMultisamplePNameNV">

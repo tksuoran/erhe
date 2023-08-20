@@ -1,15 +1,13 @@
 #include "graphics/icon_set.hpp"
+#include "editor_settings.hpp"
 
-#include "editor_context.hpp"
 #include "editor_log.hpp"
 
 #include "renderers/programs.hpp"
 
-#include "erhe/configuration/configuration.hpp"
 #include "erhe/imgui/imgui_renderer.hpp"
 #include "erhe/scene/light.hpp"
 #include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/window.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>
@@ -17,33 +15,20 @@
 
 namespace editor {
 
-Icon_set::Config::Config() = default;
-
-Icon_set::Config::Config(erhe::toolkit::Context_window& context_window)
-{
-    auto ini = erhe::configuration::get_ini("erhe.ini", "icons");
-    ini->get("small_icon_size",  small_icon_size);
-    ini->get("large_icon_size",  large_icon_size);
-    ini->get("hotbar_icon_size", hotbar_icon_size);
-    small_icon_size  = static_cast<int>(static_cast<float>(small_icon_size ) * context_window.get_scale_factor());
-    large_icon_size  = static_cast<int>(static_cast<float>(large_icon_size ) * context_window.get_scale_factor());
-    hotbar_icon_size = static_cast<int>(static_cast<float>(hotbar_icon_size) * context_window.get_scale_factor());
-}
-
 Icon_set::Icon_set(
-    erhe::graphics::Instance&      graphics_instance,
-    erhe::imgui::Imgui_renderer&   imgui_renderer,
-    erhe::toolkit::Context_window& context_window,
-    Programs&                      programs
+    erhe::graphics::Instance&    graphics_instance,
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    Icon_settings&               icon_settings,
+    Programs&                    programs
 )
-    : config{context_window}
 {
-    load_icons(graphics_instance, imgui_renderer, programs);
+    load_icons(graphics_instance, imgui_renderer, icon_settings, programs);
 }
 
 void Icon_set::load_icons(
     erhe::graphics::Instance&    graphics_instance,
     erhe::imgui::Imgui_renderer& imgui_renderer,
+    Icon_settings&               icon_settings,
     Programs&                    programs
 )
 {
@@ -53,9 +38,9 @@ void Icon_set::load_icons(
     m_column_count = 16;
     m_row          = 0;
     m_column       = 0;
-    m_small  = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, config.small_icon_size,  m_column_count, m_row_count);
-    m_large  = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, config.large_icon_size,  m_column_count, m_row_count);
-    m_hotbar = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, config.hotbar_icon_size, m_column_count, m_row_count);
+    m_small  = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, icon_settings.small_icon_size,  m_column_count, m_row_count);
+    m_large  = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, icon_settings.large_icon_size,  m_column_count, m_row_count);
+    m_hotbar = std::make_unique<Icon_rasterization>(graphics_instance, imgui_renderer, programs, icon_settings.hotbar_icon_size, m_column_count, m_row_count);
 
     icons.anim              = load(icon_directory / "anim.svg");
     icons.bone              = load(icon_directory / "bone_data.svg");

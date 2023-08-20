@@ -89,22 +89,20 @@ public:
     Config config;
 
     Scene_builder(
-        erhe::graphics::Instance&              graphics_instance,
-        erhe::imgui::Imgui_renderer&           imgui_renderer,
-        erhe::imgui::Imgui_windows&            imgui_windows,
-        erhe::rendergraph::Rendergraph&        rendergraph,
-        erhe::scene::Scene_message_bus&        scene_message_bus,
-        erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-        Editor_context&                        editor_context,
-        Editor_message_bus&                    editor_message_bus,
-        Editor_rendering&                      editor_rendering,
-        Editor_scenes&                         editor_scenes,
-        Editor_settings&                       editor_settings,
-        Mesh_memory&                           mesh_memory,
-        Settings_window&                       settings_window,
-        Tools&                                 tools,
-        Viewport_config_window&                viewport_config_window,
-        Viewport_windows&                      viewport_windows
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        erhe::imgui::Imgui_windows&     imgui_windows,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        erhe::scene::Scene_message_bus& scene_message_bus,
+        Editor_context&                 editor_context,
+        Editor_message_bus&             editor_message_bus,
+        Editor_rendering&               editor_rendering,
+        Editor_scenes&                  editor_scenes,
+        Editor_settings&                editor_settings,
+        Mesh_memory&                    mesh_memory,
+        Tools&                          tools,
+        Viewport_config_window&         viewport_config_window,
+        Viewport_windows&               viewport_windows
     );
 
     // Public API
@@ -162,16 +160,15 @@ private:
     [[nodiscard]] auto build_info(Mesh_memory& mesh_memory) -> erhe::primitive::Build_info;
 
     void setup_cameras(
-        erhe::graphics::Instance&              graphics_instance,
-        erhe::imgui::Imgui_renderer&           imgui_renderer,
-        erhe::imgui::Imgui_windows&            imgui_windows,
-        erhe::rendergraph::Rendergraph&        rendergraph,
-        erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-        Editor_rendering&                      editor_rendering,
-        Settings_window&                       settings_window,
-        Tools&                                 tools,
-        Viewport_config_window&                viewport_config_window,
-        Viewport_windows&                      viewport_windows
+        erhe::graphics::Instance&       graphics_instance,
+        erhe::imgui::Imgui_renderer&    imgui_renderer,
+        erhe::imgui::Imgui_windows&     imgui_windows,
+        erhe::rendergraph::Rendergraph& rendergraph,
+        Editor_rendering&               editor_rendering,
+        Editor_settings&                editor_settings,
+        Tools&                          tools,
+        Viewport_config_window&         viewport_config_window,
+        Viewport_windows&               viewport_windows
     );
     void animate_lights     (const double time_d);
     void add_room           ();

@@ -44,7 +44,10 @@ public:
 
     [[nodiscard]] auto match(const Vertex_format& other) const -> bool;
 
-    void add_to(Shader_resource& shader_resource);
+    void add_to(
+        Shader_resource& vertex_struct,
+        Shader_resource& vertices_block
+    );
 
 private:
     void align_to(std::size_t alignment);

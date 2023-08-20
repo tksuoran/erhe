@@ -41,6 +41,15 @@ namespace erhe::toolkit {
 
 namespace erhe::imgui {
 
+class Imgui_settings
+{
+public:
+    std::string primary_font{"res/fonts/SourceSansPro-Regular.otf"};
+    std::string mono_font   {"res/fonts/SourceCodePro-Semibold.otf"};
+    float       font_size   {17.0f};
+    float       vr_font_size{22.0f};
+};
+
 class Imgui_viewport;
 
 class Imgui_draw_parameter_block_offsets
@@ -128,9 +137,9 @@ public:
 class Imgui_renderer final
 {
 public:
-    explicit Imgui_renderer(
-        erhe::graphics::Instance&      graphics_instance,
-        erhe::toolkit::Context_window& context_window
+    Imgui_renderer(
+        erhe::graphics::Instance& graphics_instance,
+        Imgui_settings&           settings
     );
 
     static constexpr std::size_t s_uivec4_size = 4 * sizeof(uint32_t); // for non bindless textures
@@ -141,7 +150,7 @@ public:
     [[nodiscard]] auto get_font_atlas() -> ImFontAtlas*;
     void use_as_backend_renderer_on_context(ImGuiContext* imgui_context);
 
-    void on_font_config_changed();
+    void on_font_config_changed(Imgui_settings& settings);
 
     auto image(
         const std::shared_ptr<erhe::graphics::Texture>& texture,
@@ -179,16 +188,6 @@ public:
     auto vr_primary_font() const -> ImFont*;
     auto vr_mono_font   () const -> ImFont*;
 
-    class Font_config
-    {
-    public:
-        std::string primary_font{"res/fonts/SourceSansPro-Regular.otf"};
-        std::string mono_font   {"res/fonts/SourceCodePro-Semibold.otf"};
-        float       font_size   {17.0f};
-        float       vr_font_size{22.0f};
-    };
-    Font_config font_config;
-
     void make_current             (const Imgui_viewport* imgui_viewport);
     void register_imgui_viewport  (Imgui_viewport* viewport);
     void unregister_imgui_viewport(Imgui_viewport* viewport);
@@ -197,7 +196,7 @@ public:
     void unlock_mutex();
 
 private:
-    void apply_font_config_changes();
+    void apply_font_config_changes(const Imgui_settings& settings);
 
     erhe::graphics::Instance&                m_graphics_instance;
     Imgui_program_interface                  m_imgui_program_interface;

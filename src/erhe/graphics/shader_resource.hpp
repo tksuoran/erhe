@@ -121,13 +121,14 @@ public:
 
     // Only? for uniforms in default uniform block
     // For default uniform block, this is the next available location.
-    [[nodiscard]] auto location        () const -> int;
-    [[nodiscard]] auto index_in_parent () const -> std::size_t;
-    [[nodiscard]] auto offset_in_parent() const -> std::size_t;
-    [[nodiscard]] auto parent          () const -> Shader_resource*;
-    [[nodiscard]] auto member_count    () const -> std::size_t;
-    [[nodiscard]] auto member          (const std::string_view name) const -> Shader_resource*;
-    [[nodiscard]] auto binding_point   () const -> unsigned int;
+    [[nodiscard]] auto location          () const -> int;
+    [[nodiscard]] auto index_in_parent   () const -> std::size_t;
+    [[nodiscard]] auto offset_in_parent  () const -> std::size_t;
+    [[nodiscard]] auto parent            () const -> Shader_resource*;
+    [[nodiscard]] auto member_count      () const -> std::size_t;
+    [[nodiscard]] auto member            (const std::string_view name) const -> Shader_resource*;
+    [[nodiscard]] auto binding_point     () const -> unsigned int;
+    [[nodiscard]] auto get_binding_target() const -> gl::Buffer_target;
 
     // Returns size of block.
     // For arrays, size of one element is returned.

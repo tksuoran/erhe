@@ -36,6 +36,13 @@ public:
 
     Buffer(
         Instance&                  instance,
+        std::size_t                capacity_byte_count,
+        gl::Buffer_storage_mask    storage_mask,
+        gl::Map_buffer_access_mask map_buffer_access_mask
+    ) noexcept;
+
+    Buffer(
+        Instance&                  instance,
         gl::Buffer_target          target,
         std::size_t                capacity_byte_count,
         gl::Buffer_storage_mask    storage_mask,

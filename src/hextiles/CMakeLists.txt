@@ -14,6 +14,8 @@ erhe_target_sources_grouped(
     file_util.hpp
     hextiles_log.cpp
     hextiles_log.hpp
+    hextiles_settings.cpp
+    hextiles_settings.hpp
     game/game.cpp
     game/game.hpp
     game/player.cpp

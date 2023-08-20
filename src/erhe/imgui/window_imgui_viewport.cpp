@@ -35,7 +35,6 @@ Window_imgui_viewport::Window_imgui_viewport(
         true,
         imgui_renderer.get_font_atlas()
     }
-    , m_imgui_renderer{imgui_renderer}
     , m_context_window{context_window}
 {
     imgui_renderer.use_as_backend_renderer_on_context(m_imgui_context);

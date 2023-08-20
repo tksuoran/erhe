@@ -40,7 +40,6 @@ public:
     void end_imgui_frame() override;
 
 private:
-    Imgui_renderer&                m_imgui_renderer;
     erhe::toolkit::Context_window& m_context_window;
 };
 

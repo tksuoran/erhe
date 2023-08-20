@@ -170,7 +170,7 @@ void Mesh_operation::make_entries(
                 }
             );
             entry.after.node_raytrace = std::make_shared<Node_raytrace>(entry.mesh, entry.after.primitives);
-            if (m_parameters.context.editor_settings->physics_static_enable) {
+            if (m_parameters.context.editor_settings->physics.static_enable) {
                 auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
                     reinterpret_cast<const float*>(
                         after_geometry->point_attributes().find<glm::vec3>(erhe::geometry::c_point_locations)->values.data()

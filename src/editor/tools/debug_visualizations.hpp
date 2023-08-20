@@ -162,7 +162,6 @@ private:
     glm::vec4 m_corner_label_line_color          {0.0f, 0.5f, 0.5f, 1.0f};
     float     m_corner_label_line_length         {0.05f};
     float     m_corner_label_line_width          {1.5f};
-    //// std::vector<std::string> m_lines;
 };
 
 } // namespace editor

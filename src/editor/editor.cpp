@@ -43,7 +43,7 @@
 #include "windows/post_processing_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/rendergraph_window.hpp"
-#include "windows/settings.hpp"
+#include "windows/settings_window.hpp"
 #include "windows/tool_properties_window.hpp"
 #include "windows/viewport_config_window.hpp"
 
@@ -143,17 +143,17 @@ public:
     }
 
     Editor()
-        : m_editor_settings   {}
-        , m_commands          {}
+        : m_commands          {}
         , m_scene_message_bus {}
         , m_editor_message_bus{}
         , m_input_state       {}
         , m_time              {}
         , m_editor_context    {}
 
-        , m_context_window{create_window()}
+        , m_context_window        {create_window()}
+        , m_editor_settings       {m_editor_message_bus}
         , m_graphics_instance     {m_context_window}
-        , m_imgui_renderer        {m_graphics_instance, m_context_window}
+        , m_imgui_renderer        {m_graphics_instance, m_editor_settings.imgui}
         , m_image_transfer        {m_graphics_instance}
         , m_line_renderer_set     {m_graphics_instance}
         , m_program_interface     {m_graphics_instance}
@@ -169,15 +169,15 @@ public:
         , m_editor_scenes         {m_editor_context,    m_time}
         , m_editor_windows        {m_editor_context}
         , m_asset_browser         {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
-        , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_context, m_editor_scenes}
-        , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_context_window, m_programs}
+        , m_content_library_window{m_imgui_renderer,    m_imgui_windows,     m_editor_context,        m_editor_scenes}
+        , m_icon_set              {m_graphics_instance, m_imgui_renderer,    m_editor_settings.icons, m_programs}
         , m_post_processing       {m_graphics_instance, m_editor_context,    m_programs}
         , m_id_renderer           {m_graphics_instance, m_program_interface, m_mesh_memory,     m_programs}
-        , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_shadow_renderer, m_editor_context, m_editor_message_bus}
+        , m_settings_window       {m_imgui_renderer,    m_imgui_windows,     m_editor_context}
         , m_viewport_windows      {m_commands,          m_editor_context,    m_editor_message_bus}
-        , m_editor_rendering      {m_commands,          m_graphics_instance, m_editor_context, m_editor_message_bus, m_mesh_memory, m_programs}
+        , m_editor_rendering      {m_commands,          m_graphics_instance, m_editor_context,  m_editor_message_bus, m_mesh_memory, m_programs}
         , m_selection             {m_commands,          m_editor_context,    m_editor_message_bus}
-        , m_operation_stack       {m_commands,          m_imgui_renderer,    m_imgui_windows, m_editor_context}
+        , m_operation_stack       {m_commands,          m_imgui_renderer,    m_imgui_windows,   m_editor_context}
         , m_scene_commands        {m_commands,          m_editor_context}
         , m_animation_window      {m_imgui_renderer, m_imgui_windows, m_editor_context, m_editor_message_bus}
         , m_commands_window       {m_imgui_renderer, m_imgui_windows, m_editor_context}
@@ -207,14 +207,12 @@ public:
             m_imgui_windows,
             m_rendergraph,
             m_scene_message_bus,
-            m_shadow_renderer,
             m_editor_context,
             m_editor_message_bus,
             m_editor_rendering,
             m_editor_scenes,
             m_editor_settings,
             m_mesh_memory,
-            m_settings_window,
             m_tools,
             m_viewport_config_window,
             m_viewport_windows
@@ -222,10 +220,10 @@ public:
         , m_headset_view{
             m_graphics_instance,
             m_rendergraph,
-            m_shadow_renderer,
             m_context_window,
             m_editor_context,
             m_editor_rendering,
+            m_editor_settings,
             m_mesh_memory,
             m_scene_builder
         }
@@ -287,10 +285,10 @@ public:
         fill_editor_context();
 
         auto ini = erhe::configuration::get_ini("erhe.ini", "physics");
-        ini->get("static_enable",  m_editor_settings.physics_static_enable);
-        ini->get("dynamic_enable", m_editor_settings.physics_dynamic_enable);
-        if (!m_editor_settings.physics_static_enable) {
-            m_editor_settings.physics_dynamic_enable = false;
+        ini->get("static_enable",  m_editor_settings.physics.static_enable);
+        ini->get("dynamic_enable", m_editor_settings.physics.dynamic_enable);
+        if (!m_editor_settings.physics.static_enable) {
+            m_editor_settings.physics.dynamic_enable = false;
         }
 
         m_hotbar.get_all_tools();
@@ -434,7 +432,6 @@ public:
     bool m_openxr         {false};
 
     // No constructors
-    Editor_settings                m_editor_settings;
     erhe::commands::Commands       m_commands;
     erhe::scene::Scene_message_bus m_scene_message_bus;
     Editor_message_bus             m_editor_message_bus;
@@ -443,6 +440,7 @@ public:
     Editor_context                 m_editor_context;
 
     erhe::toolkit::Context_window           m_context_window;
+    Editor_settings                         m_editor_settings;
     erhe::graphics::Instance                m_graphics_instance;
     erhe::imgui::Imgui_renderer             m_imgui_renderer;
     Image_transfer                          m_image_transfer;

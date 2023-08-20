@@ -6,6 +6,7 @@
 #include "editor_log.hpp"
 #include "editor_message_bus.hpp"
 #include "editor_rendering.hpp"
+#include "editor_settings.hpp"
 #include "input_state.hpp"
 #include "graphics/icon_set.hpp"
 #include "rendergraph/basic_viewport_window.hpp"
@@ -17,7 +18,7 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 #include "windows/imgui_viewport_window.hpp"
-#include "windows/settings.hpp"
+#include "windows/settings_window.hpp"
 #include "windows/viewport_config_window.hpp"
 
 #include "erhe/commands/commands.hpp"
@@ -100,15 +101,15 @@ void Viewport_windows::on_message(Editor_message& message)
 {
     using namespace erhe::toolkit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
-        handle_graphics_settings_changed();
+        handle_graphics_settings_changed(message.graphics_preset);
     }
 }
 
-void Viewport_windows::handle_graphics_settings_changed()
+void Viewport_windows::handle_graphics_settings_changed(Graphics_preset* graphics_preset)
 {
     std::lock_guard<std::mutex> lock{m_mutex};
 
-    const int msaa_sample_count = m_context.settings_window->get_msaa_sample_count();
+    const int msaa_sample_count = graphics_preset != nullptr ? graphics_preset->msaa_sample_count : 1;
     for (const auto& viewport_window : m_viewport_windows) {
         viewport_window->reconfigure(msaa_sample_count);
     }
@@ -141,11 +142,10 @@ void Viewport_windows::erase(Basic_viewport_window* basic_viewport_window)
 auto Viewport_windows::create_viewport_window(
     erhe::graphics::Instance&                   graphics_instance,
     erhe::rendergraph::Rendergraph&             rendergraph,
-    erhe::scene_renderer::Shadow_renderer&      shadow_renderer,
     Editor_rendering&                           editor_rendering,
+    Editor_settings&                            editor_settings,
     Tools&                                      tools,
     Viewport_config_window&                     viewport_config_window,
-
     const std::string_view                      name,
     const std::shared_ptr<Scene_root>&          scene_root,
     const std::shared_ptr<erhe::scene::Camera>& camera,
@@ -169,12 +169,12 @@ auto Viewport_windows::create_viewport_window(
         m_viewport_windows.push_back(new_viewport_window);
     }
 
-    if (shadow_renderer.config.enabled) {
+    if (editor_settings.graphics.current_graphics_preset.shadow_enable) {
         //// TODO: Share Shadow_render_node for each unique (scene, camera) pair
         const auto shadow_render_node = editor_rendering.create_shadow_node_for_scene_view(
             graphics_instance,
             rendergraph,
-            shadow_renderer,
+            editor_settings,
             *new_viewport_window.get()
         );
         rendergraph.connect(
@@ -329,7 +329,7 @@ auto Viewport_windows::open_new_viewport_window(
 {
     const std::string name = fmt::format("Viewport {}", m_viewport_windows.size());
 
-    const int msaa_sample_count = m_context.settings_window->get_msaa_sample_count();
+    const int msaa_sample_count = m_context.editor_settings->graphics.current_graphics_preset.msaa_sample_count;
     if (scene_root) {
         for (const auto& item : m_context.selection->get_selection()) {
             const auto camera = as<erhe::scene::Camera>(item);
@@ -337,8 +337,8 @@ auto Viewport_windows::open_new_viewport_window(
                 return create_viewport_window(
                     *m_context.graphics_instance,
                     *m_context.rendergraph,
-                    *m_context.shadow_renderer,
                     *m_context.editor_rendering,
+                    *m_context.editor_settings,
                     *m_context.tools,
                     *m_context.viewport_config_window,
                     name,
@@ -354,11 +354,10 @@ auto Viewport_windows::open_new_viewport_window(
             return create_viewport_window(
                 *m_context.graphics_instance,
                 *m_context.rendergraph,
-                *m_context.shadow_renderer,
                 *m_context.editor_rendering,
+                *m_context.editor_settings,
                 *m_context.tools,
                 *m_context.viewport_config_window,
-
                 name,
                 scene_root,
                 camera,
@@ -371,11 +370,10 @@ auto Viewport_windows::open_new_viewport_window(
     return create_viewport_window(
         *m_context.graphics_instance,
         *m_context.rendergraph,
-        *m_context.shadow_renderer,
         *m_context.editor_rendering,
+        *m_context.editor_settings,
         *m_context.tools,
         *m_context.viewport_config_window,
-
         name,
         {},
         nullptr,

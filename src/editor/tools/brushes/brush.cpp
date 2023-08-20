@@ -145,7 +145,7 @@ void Brush::late_initialize()
     }
 
     if (
-        data.editor_settings.physics_static_enable &&
+        data.editor_settings.physics.static_enable &&
         !data.collision_shape &&
         !data.collision_shape_generator
     ) {
@@ -261,7 +261,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
     const auto  geometry = get_geometry();
     if (scale == 1.0f) {
         glm::mat4 local_inertia{0.0f};
-        if (data.editor_settings.physics_static_enable) {
+        if (data.editor_settings.physics.static_enable) {
             if (data.collision_shape) {
                 ERHE_VERIFY(data.collision_shape->is_convex());
                 const auto mass = data.density * data.volume;
@@ -315,7 +315,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
     );
 
     glm::mat4 local_inertia{0.0f};
-    if (data.editor_settings.physics_static_enable) {
+    if (data.editor_settings.physics.static_enable) {
         if (data.collision_shape) {
             ERHE_VERIFY(data.collision_shape->is_convex());
             const auto scaled_volume          = data.volume * scale * scale * scale;
@@ -411,7 +411,7 @@ auto Brush::make_instance(
     node->attach             (mesh);
     node->enable_flag_bits   (instance_create_info.node_flags);
 
-    if (data.editor_settings.physics_static_enable) {
+    if (data.editor_settings.physics.static_enable) {
         if (data.collision_shape || data.collision_shape_generator) {
             ERHE_PROFILE_SCOPE("make brush node physics");
 

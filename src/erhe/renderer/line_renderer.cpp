@@ -79,19 +79,76 @@ Line_renderer_pipeline::Line_renderer_pipeline(
     , attribute_mappings{
         graphics_instance,
         {
-            erhe::graphics::Vertex_attribute_mapping::a_position_float_vec4(),
-            erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4()
+            erhe::graphics::Vertex_attribute_mapping::a_position0_float_vec4(),
+            erhe::graphics::Vertex_attribute_mapping::a_color_float_vec4(),
+            erhe::graphics::Vertex_attribute_mapping{
+                .layout_location = 2,
+                .shader_type     = gl::Attribute_type::float_vec4,
+                .name            = "a_line_start_end",
+                .src_usage =
+                {
+                    .type        = erhe::graphics::Vertex_attribute::Usage_type::custom,
+                    .index       = 0
+                }
+            }
         }
     }
-    , vertex_format{
-        erhe::graphics::Vertex_attribute::position_float4(),
+    , line_vertex_format{
+        erhe::graphics::Vertex_attribute::position0_float4(),
         erhe::graphics::Vertex_attribute::color_float4()
     }
+    , triangle_vertex_format{
+        erhe::graphics::Vertex_attribute::position0_float4(), // gl_Position
+        erhe::graphics::Vertex_attribute::color_float4(),     // color
+        erhe::graphics::Vertex_attribute                      // clipped line start (xy) and end (zw)
+        {
+            .usage = {
+                .type      = erhe::graphics::Vertex_attribute::Usage_type::custom,
+                .index     = 0
+            },
+            .shader_type   = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 4
+            }
+        }
+    }
 {
+    // Line vertex buffer will contain vertex positions, width and colors.
+    // These are written by CPU are read by compute shader.
+    // Vertex colors are are also read by the vertex shader
+    line_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
+        graphics_instance,
+        "line_vertex_buffer",
+        0,
+        erhe::graphics::Shader_resource::Type::shader_storage_block
+    );
+    line_vertex_buffer_block->set_readonly(true);
+    line_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_instance, "line_vertex");
+    line_vertex_format.add_to(
+        *line_vertex_struct.get(),
+        *line_vertex_buffer_block.get()
+    );
+
+    // Triangle vertex buffer will contain triangle vertex positions.
+    // These are written by compute shader, after which they are read by vertex shader.
+    triangle_vertex_struct = std::make_unique<erhe::graphics::Shader_resource>(graphics_instance, "triangle_vertex");
+    triangle_vertex_buffer_block = std::make_unique<erhe::graphics::Shader_resource>(
+        graphics_instance,
+        "triangle_vertex_buffer",
+        1,
+        erhe::graphics::Shader_resource::Type::shader_storage_block
+    );
+    triangle_vertex_buffer_block->set_writeonly(true);
+    triangle_vertex_format.add_to(
+        *triangle_vertex_struct.get(),
+        *triangle_vertex_buffer_block.get()
+    );
+
     view_block = std::make_unique<erhe::graphics::Shader_resource>(
         graphics_instance,
         "view",
-        0,
+        3,
         erhe::graphics::Shader_resource::Type::uniform_block
     );
 
@@ -100,35 +157,46 @@ Line_renderer_pipeline::Line_renderer_pipeline(
     viewport_offset               = view_block->add_vec4("viewport"              )->offset_in_parent();
     fov_offset                    = view_block->add_vec4("fov"                   )->offset_in_parent();
 
+    const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
     {
-        ERHE_PROFILE_SCOPE("shader");
-
-        const auto shader_path = std::filesystem::path("res") / std::filesystem::path("shaders");
-        const std::filesystem::path vs_path = shader_path / std::filesystem::path("line.vert");
-        const std::filesystem::path gs_path = shader_path / std::filesystem::path("line.geom");
-        const std::filesystem::path fs_path = shader_path / std::filesystem::path("line.frag");
+        const std::filesystem::path comp_path = shader_path / std::filesystem::path("compute_before_line.comp");
         erhe::graphics::Shader_stages_create_info create_info{
-            .name                      = "line",
-            .defines                   = {
-                { "ERHE_LINE_SHADER_SHOW_DEBUG_LINES",        "0"},
-                { "ERHE_LINE_SHADER_PASSTHROUGH_BASIC_LINES", "0"},
-                { "ERHE_LINE_SHADER_STRIP",                   "1"}
-            },
+            .name             = "compute_before_line",
+            .struct_types     = { line_vertex_struct.get(), triangle_vertex_struct.get() },
+            .interface_blocks = { line_vertex_buffer_block.get(), triangle_vertex_buffer_block.get(), view_block.get() },
+            .shaders = { { gl::Shader_type::compute_shader, comp_path }, }
+        };
+
+        erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
+        if (prototype.is_valid()) {
+            compute_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+            graphics_instance.shader_monitor.add(create_info, compute_shader_stages.get());
+        } else {
+            const auto current_path = std::filesystem::current_path();
+            log_startup->error(
+                "Unable to load Line_renderer shader - check working directory '{}'",
+                current_path.string()
+            );
+        }
+    }
+    {
+        const std::filesystem::path vert_path = shader_path / std::filesystem::path("line_after_compute.vert");
+        const std::filesystem::path frag_path = shader_path / std::filesystem::path("line_after_compute.frag");
+        erhe::graphics::Shader_stages_create_info create_info{
+            .name                      = "line_after_compute",
             .interface_blocks          = { view_block.get() },
             .vertex_attribute_mappings = &attribute_mappings,
             .fragment_outputs          = &fragment_outputs,
             .shaders = {
-                { gl::Shader_type::vertex_shader,   vs_path },
-                { gl::Shader_type::geometry_shader, gs_path },
-                { gl::Shader_type::fragment_shader, fs_path }
+                { gl::Shader_type::vertex_shader,   vert_path },
+                { gl::Shader_type::fragment_shader, frag_path }
             }
         };
 
         erhe::graphics::Shader_stages_prototype prototype{graphics_instance, create_info};
         if (prototype.is_valid()) {
-            shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
-
-            graphics_instance.shader_monitor.add(create_info, shader_stages.get());
+            graphics_shader_stages = std::make_unique<erhe::graphics::Shader_stages>(std::move(prototype));
+            graphics_instance.shader_monitor.add(create_info, graphics_shader_stages.get());
         } else {
             const auto current_path = std::filesystem::current_path();
             log_startup->error(
@@ -211,10 +279,10 @@ void Line_renderer_set::render(
     const gl::Depth_function depth_compare_op  = reverse_depth ? erhe::graphics::reverse(depth_compare_op0) : depth_compare_op0;
     return erhe::graphics::Pipeline{
         {
-            .name           = "Line Renderer depth pass",
+            .name           = "Line Renderer",
             .shader_stages  = shader_stages,
             .vertex_input   = &vertex_input,
-            .input_assembly = erhe::graphics::Input_assembly_state::lines,
+            .input_assembly = erhe::graphics::Input_assembly_state::triangles,
             .rasterization  = erhe::graphics::Rasterization_state::cull_mode_none,
             .depth_stencil  = {
                 .depth_test_enable   = true,
@@ -241,7 +309,7 @@ void Line_renderer_set::render(
                 },
             },
 
-            .color_blend    = visible ? erhe::graphics::Color_blend_state::color_blend_premultiplied : erhe::graphics::Color_blend_state{
+            .color_blend = visible ? erhe::graphics::Color_blend_state::color_blend_premultiplied : erhe::graphics::Color_blend_state{
                 .enabled  = true,
                 .rgb      = {
                     .equation_mode      = gl::Blend_equation_mode::func_add,
@@ -265,23 +333,29 @@ Line_renderer::Frame_resources::Frame_resources(
     const bool                                reverse_depth,
     const std::size_t                         view_stride,
     const std::size_t                         view_count,
-    const std::size_t                         vertex_count,
+    const std::size_t                         line_count,
     erhe::graphics::Shader_stages* const      shader_stages,
     erhe::graphics::Vertex_attribute_mappings attribute_mappings,
-    erhe::graphics::Vertex_format&            vertex_format,
+    erhe::graphics::Vertex_format&            line_vertex_format,
+    erhe::graphics::Vertex_format&            triangle_vertex_format,
     const std::string&                        style_name,
     const std::size_t                         slot
 )
-    : vertex_buffer{
+    : compute_shader_stages{compute_shader_stages}
+    , line_vertex_buffer{
         graphics_instance,
-        gl::Buffer_target::array_buffer,
-        vertex_format.stride() * vertex_count,
+        line_vertex_format.stride() * 2 * line_count,
         storage_mask(graphics_instance),
         access_mask(graphics_instance)
     }
+    , triangle_vertex_buffer{
+        graphics_instance,
+        triangle_vertex_format.stride() * 6 * line_count,
+        static_cast<gl::Buffer_storage_mask>(0),    // Not accessed by the CPU
+        static_cast<gl::Map_buffer_access_mask>(0)  // Not accessed by the CPU
+    }
     , view_buffer{
         graphics_instance,
-        gl::Buffer_target::uniform_buffer,
         view_stride * view_count,
         storage_mask(graphics_instance),
         access_mask(graphics_instance)
@@ -289,16 +363,17 @@ Line_renderer::Frame_resources::Frame_resources(
     , vertex_input{
         erhe::graphics::Vertex_input_state_data::make(
             attribute_mappings,
-            vertex_format,
-            &vertex_buffer,
+            triangle_vertex_format,
+            &triangle_vertex_buffer,
             nullptr
         )
     }
     , pipeline_visible{make_pipeline(reverse_depth, shader_stages, true,  stencil_reference)}
     , pipeline_hidden {make_pipeline(reverse_depth, shader_stages, false, stencil_reference)}
 {
-    vertex_buffer.set_debug_label(fmt::format("Line Renderer {} Vertex {}", style_name, slot));
-    view_buffer  .set_debug_label(fmt::format("Line Renderer {} View {}",   style_name, slot));
+    line_vertex_buffer    .set_debug_label(fmt::format("Line Renderer {} Line Vertex {}",     style_name, slot));
+    triangle_vertex_buffer.set_debug_label(fmt::format("Line Renderer {} Triangle Vertex {}", style_name, slot));
+    view_buffer           .set_debug_label(fmt::format("Line Renderer {} View {}",            style_name, slot));
 }
 
 Line_renderer::Line_renderer(
@@ -316,9 +391,9 @@ Line_renderer::Line_renderer(
     ERHE_PROFILE_FUNCTION();
 
     const bool reverse_depth = graphics_instance.configuration.reverse_depth;
-    constexpr std::size_t vertex_count  = 512 * 1024;
-    constexpr std::size_t view_stride   = 256;
-    constexpr std::size_t view_count    = 16;
+    constexpr std::size_t line_count  = 64 * 1024;
+    constexpr std::size_t view_stride = 256;
+    constexpr std::size_t view_count  = 16;
     for (std::size_t slot = 0; slot < s_frame_resources_count; ++slot) {
         m_frame_resources.emplace_back(
             graphics_instance,
@@ -326,10 +401,11 @@ Line_renderer::Line_renderer(
             reverse_depth,
             view_stride,
             view_count,
-            vertex_count,
-            pipeline.shader_stages.get(),
+            line_count,
+            pipeline.graphics_shader_stages.get(),
             pipeline.attribute_mappings,
-            pipeline.vertex_format,
+            pipeline.line_vertex_format,
+            pipeline.triangle_vertex_format,
             m_name,
             slot
         );
@@ -354,7 +430,7 @@ void Line_renderer::begin()
 {
     ERHE_VERIFY(!m_inside_begin_end);
 
-    m_vertex_writer.begin(&current_frame_resources().vertex_buffer, 0); // map all
+    m_vertex_writer.begin(&current_frame_resources().line_vertex_buffer, 0); // map all
     m_line_count       = 0;
     m_inside_begin_end = true;
 }
@@ -386,6 +462,7 @@ void Line_renderer::put(
     gpu_float_data[word_offset++] = color.a;
 }
 
+#pragma region add
 void Line_renderer::add_lines(
     const mat4&                       transform,
     const std::initializer_list<Line> lines
@@ -393,7 +470,7 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline.vertex_format.stride();
+    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline.line_vertex_format.stride();
     const auto             vertex_gpu_data   = m_vertex_writer.subspan(vertex_byte_count);
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
@@ -418,7 +495,7 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline.vertex_format.stride();
+    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline.line_vertex_format.stride();
     const auto             vertex_gpu_data   = m_vertex_writer.subspan(vertex_byte_count);
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
@@ -477,7 +554,7 @@ void Line_renderer::add_lines(
 {
     ERHE_VERIFY(m_inside_begin_end);
 
-    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline.vertex_format.stride();
+    const std::size_t      vertex_byte_count = lines.size() * 2 * m_pipeline.line_vertex_format.stride();
     const auto             vertex_gpu_data   = m_vertex_writer.subspan(vertex_byte_count);
     std::byte* const       start             = vertex_gpu_data.data();
     const std::size_t      byte_count        = vertex_gpu_data.size_bytes();
@@ -565,13 +642,7 @@ void Line_renderer::add_bone(
     const vec3& end
 )
 {
-    add_lines(
-        transform,
-        color,
-        {
-            { start, end }
-        }
-    );
+    add_lines(transform, color, {{ start, end }} );
 }
 
 void Line_renderer::add_sphere(
@@ -1281,14 +1352,15 @@ void Line_renderer::add_torus(
         }
     }
 }
+#pragma endregion add
 
 static constexpr std::string_view c_line_renderer_render{"Line_renderer::render()"};
 
 void Line_renderer::render(
     const erhe::toolkit::Viewport viewport,
-    const erhe::scene::Camera&  camera,
-    const bool                  show_visible_lines,
-    const bool                  show_hidden_lines
+    const erhe::scene::Camera&    camera,
+    const bool                    show_visible_lines,
+    const bool                    show_hidden_lines
 )
 {
     if (m_line_count == 0) {
@@ -1305,11 +1377,13 @@ void Line_renderer::render(
 
     erhe::graphics::Scoped_debug_group line_renderer_initialization{c_line_renderer_render};
 
-    auto* const               view_buffer         = &current_frame_resources().view_buffer;
-    const auto                view_gpu_data       = m_view_writer.begin(view_buffer, m_pipeline.view_block->size_bytes());
-    std::byte* const          start               = view_gpu_data.data();
-    const std::size_t         byte_count          = view_gpu_data.size_bytes();
-    const std::size_t         word_count          = byte_count / sizeof(float);
+    auto* const               line_vertex_buffer     = &current_frame_resources().line_vertex_buffer;
+    auto* const               triangle_vertex_buffer = &current_frame_resources().triangle_vertex_buffer;
+    auto* const               view_buffer            = &current_frame_resources().view_buffer;
+    const auto                view_gpu_data          = m_view_writer.begin(view_buffer, m_pipeline.view_block->size_bytes());
+    std::byte* const          start                  = view_gpu_data.data();
+    const std::size_t         byte_count             = view_gpu_data.size_bytes();
+    const std::size_t         word_count             = byte_count / sizeof(float);
     const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
@@ -1340,22 +1414,42 @@ void Line_renderer::render(
     m_view_writer.write_offset += m_pipeline.view_block->size_bytes();
     m_view_writer.end();
 
-    gl::disable          (gl::Enable_cap::primitive_restart_fixed_index);
-    gl::enable           (gl::Enable_cap::sample_alpha_to_coverage);
-    gl::enable           (gl::Enable_cap::sample_alpha_to_one);
-    gl::viewport         (viewport.x, viewport.y, viewport.width, viewport.height);
+    const auto first_line = m_vertex_writer.range.first_byte_offset / m_pipeline.line_vertex_format.stride();
+    const auto draw_first = static_cast<GLint  >(6 * first_line);
+    const auto draw_count = static_cast<GLsizei>(6 * m_line_count);
+
     gl::bind_buffer_range(
-        view_buffer->target(),
+        m_pipeline.view_block->get_binding_target(),
         static_cast<GLuint>    (m_pipeline.view_block->binding_point()),
         static_cast<GLuint>    (view_buffer->gl_name()),
         static_cast<GLintptr>  (m_view_writer.range.first_byte_offset),
         static_cast<GLsizeiptr>(m_view_writer.range.byte_count)
     );
-
-    const auto first = static_cast<GLint>(
-        m_vertex_writer.range.first_byte_offset / m_pipeline.vertex_format.stride()
+    // line vertex buffer: 2 vertices per line
+    gl::bind_buffer_range(
+        m_pipeline.line_vertex_buffer_block->get_binding_target(),
+        static_cast<GLuint>    (m_pipeline.line_vertex_buffer_block->binding_point()),
+        static_cast<GLuint>    (line_vertex_buffer->gl_name()),
+        static_cast<GLintptr>  (m_vertex_writer.range.first_byte_offset),
+        static_cast<GLsizeiptr>(m_vertex_writer.range.byte_count)
     );
-    const auto count = static_cast<GLsizei>(m_line_count * 2);
+    // triangle vertex buffer: 6 vertices per line
+    gl::bind_buffer_range(
+        m_pipeline.triangle_vertex_buffer_block->get_binding_target(),
+        static_cast<GLuint>    (m_pipeline.triangle_vertex_buffer_block->binding_point()),
+        static_cast<GLuint>    (triangle_vertex_buffer->gl_name()),
+        static_cast<GLintptr>  (draw_first * m_pipeline.triangle_vertex_format.stride()),
+        static_cast<GLsizeiptr>(draw_count * m_pipeline.triangle_vertex_format.stride())
+    );
+
+    m_graphics_instance.opengl_state_tracker.shader_stages.execute(m_pipeline.compute_shader_stages.get());
+    gl::dispatch_compute(static_cast<unsigned int>(m_line_count), 1, 1);
+    gl::memory_barrier(gl::Memory_barrier_mask::vertex_attrib_array_barrier_bit);
+
+    gl::disable (gl::Enable_cap::primitive_restart_fixed_index);
+    gl::enable  (gl::Enable_cap::sample_alpha_to_coverage);
+    gl::enable  (gl::Enable_cap::sample_alpha_to_one);
+    gl::viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
     if (show_hidden_lines) {
         const auto& pipeline = current_frame_resources().pipeline_hidden;
@@ -1363,8 +1457,8 @@ void Line_renderer::render(
 
         gl::draw_arrays(
             pipeline.data.input_assembly.primitive_topology,
-            first,
-            count
+            draw_first,
+            draw_count
         );
     }
 
@@ -1374,8 +1468,8 @@ void Line_renderer::render(
 
         gl::draw_arrays(
             pipeline.data.input_assembly.primitive_topology,
-            first,
-            count
+            draw_first,
+            draw_count
         );
     }
 

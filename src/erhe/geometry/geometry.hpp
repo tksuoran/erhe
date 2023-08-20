@@ -289,10 +289,10 @@ public:
     {
     public:
         const Geometry&   geometry;
-        Polygon_corner_id polygon_corner_id;
-        Corner_id         corner_id;
+        Polygon_corner_id polygon_corner_id{0};
+        Corner_id         corner_id        {0};
         const Corner&     corner;
-        bool              break_{false};
+        bool              break_           {false};
 
         void break_iteration()
         {
@@ -335,12 +335,12 @@ public:
     {
     public:
         const Geometry&   geometry;
-        Polygon_corner_id prev_polygon_corner_id;
-        Polygon_corner_id polygon_corner_id;
-        Polygon_corner_id next_polygon_corner_id;
-        Corner_id         prev_corner_id;
-        Corner_id         corner_id;
-        Corner_id         next_corner_id;
+        Polygon_corner_id prev_polygon_corner_id{0};
+        Polygon_corner_id polygon_corner_id     {0};
+        Polygon_corner_id next_polygon_corner_id{0};
+        Corner_id         prev_corner_id{0};
+        Corner_id         corner_id     {0};
+        Corner_id         next_corner_id{0};
         const Corner&     prev_corner;
         const Corner&     corner;
         const Corner&     next_corner;
@@ -366,17 +366,17 @@ public:
 class Edge
 {
 public:
-    Point_id        a;
-    Point_id        b;
-    Edge_polygon_id first_edge_polygon_id;
-    uint32_t        polygon_count;
+    Point_id        a{0};
+    Point_id        b{0};
+    Edge_polygon_id first_edge_polygon_id{0};
+    uint32_t        polygon_count{0};
 
     class Edge_polygon_context
     {
     public:
         Geometry&       geometry;
-        Edge_polygon_id edge_polygon_id;
-        Polygon_id      polygon_id;
+        Edge_polygon_id edge_polygon_id{0};
+        Polygon_id      polygon_id     {0};
         Polygon&        polygon;
         bool            break_{false};
 
@@ -390,8 +390,8 @@ public:
     {
     public:
         const Geometry& geometry;
-        Edge_polygon_id edge_polygon_id;
-        Polygon_id      polygon_id;
+        Edge_polygon_id edge_polygon_id{0};
+        Polygon_id      polygon_id     {0};
         const Polygon&  polygon;
         bool            break_{false};
 

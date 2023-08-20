@@ -128,6 +128,28 @@ Buffer::Buffer(
 }
 
 Buffer::Buffer(
+    Instance& instance,
+    const std::size_t                capacity_byte_count,
+    const gl::Buffer_storage_mask    storage_mask,
+    const gl::Map_buffer_access_mask access_mask
+) noexcept
+    : m_instance           {instance}
+    , m_capacity_byte_count{capacity_byte_count}
+    , m_storage_mask       {storage_mask}
+    , m_access_mask        {access_mask}
+{
+    log_buffer->trace(
+        "Buffer::Buffer(capacity_byte_count = {}, storage_mask = {}, access_mask = {}) name = {}",
+        capacity_byte_count,
+        gl::to_string(storage_mask),
+        gl::to_string(access_mask),
+        gl_name()
+    );
+
+    allocate_storage();
+}
+
+Buffer::Buffer(
     Instance&                        instance,
     const gl::Buffer_target          target,
     const std::size_t                capacity_byte_count,

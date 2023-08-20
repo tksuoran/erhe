@@ -4,6 +4,7 @@
 
 #include "editor_context.hpp"
 #include "editor_message_bus.hpp"
+#include "editor_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "renderers/mesh_memory.hpp"
 #include "scene/scene_view.hpp"
@@ -397,7 +398,8 @@ void Paint_tool::paint()
 
 void Paint_tool::imgui()
 {
-    constexpr ImVec2 button_size{110.0f, 0.0f};
+    const float ui_scale = m_context.editor_settings->get_ui_scale();
+    const ImVec2 button_size{110.0f * ui_scale, 0.0f};
 
     ImGui::ColorEdit4("Color", &m_color.x, ImGuiColorEditFlags_Float);
 

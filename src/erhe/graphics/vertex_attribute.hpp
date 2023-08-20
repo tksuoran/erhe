@@ -89,11 +89,40 @@ public:
             }
         };
     }
-    [[nodiscard]] static auto position_float4() -> erhe::graphics::Vertex_attribute
+    [[nodiscard]] static auto position0_float4() -> erhe::graphics::Vertex_attribute
     {
         return Vertex_attribute{
             .usage = {
-                .type      = Usage_type::position
+                .type      = Usage_type::position,
+                .index     = 0
+            },
+            .shader_type   = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 4
+            }
+        };
+    }
+    [[nodiscard]] static auto position1_float4() -> erhe::graphics::Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::position,
+                .index     = 1
+            },
+            .shader_type   = gl::Attribute_type::float_vec4,
+            .data_type = {
+                .type      = gl::Vertex_attrib_type::float_,
+                .dimension = 4
+            }
+        };
+    }
+    [[nodiscard]] static auto position2_float4() -> erhe::graphics::Vertex_attribute
+    {
+        return Vertex_attribute{
+            .usage = {
+                .type      = Usage_type::position,
+                .index     = 2
             },
             .shader_type   = gl::Attribute_type::float_vec4,
             .data_type = {

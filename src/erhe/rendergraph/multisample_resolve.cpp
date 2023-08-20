@@ -36,6 +36,7 @@ Multisample_resolve_node::Multisample_resolve_node(
 
 void Multisample_resolve_node::reconfigure(const int sample_count)
 {
+    ERHE_VERIFY(sample_count > 0);
     if (m_sample_count == sample_count) {
         return;
     }

@@ -22,7 +22,7 @@ auto make_frame_logger(const std::string& name) -> std::shared_ptr<spdlog::logge
 class Entry
 {
 public:
-    uint64_t                  serial;
+    uint64_t                  serial  {0};
     bool                      selected{false};
     std::string               timestamp;
     std::string               message;
