@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/rendergraph/sink_rendergraph_node.hpp"
+#include "erhe_rendergraph/sink_rendergraph_node.hpp"
 
 #include <glm/glm.hpp>
 
@@ -9,7 +9,7 @@
 namespace erhe::rendergraph {
     class Rendergraph;
 }
-namespace erhe::toolkit {
+namespace erhe::window {
     class Window;
 }
 
@@ -34,13 +34,13 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
     [[nodiscard]] auto get_producer_output_viewport(
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
     [[nodiscard]] auto get_consumer_input_texture(
         erhe::rendergraph::Resource_routing resource_routing,
@@ -68,8 +68,8 @@ public:
 
     // Public API
     [[nodiscard]] auto get_viewport_window() const -> std::shared_ptr<Viewport_window>;
-    [[nodiscard]] auto get_viewport       () const -> const erhe::toolkit::Viewport&;
-    void set_viewport  (erhe::toolkit::Viewport viewport);
+    [[nodiscard]] auto get_viewport       () const -> const erhe::math::Viewport&;
+    void set_viewport  (erhe::math::Viewport viewport);
     void set_is_hovered(bool is_hovered);
 
 private:
@@ -77,7 +77,7 @@ private:
     // because layout is done by Viewport_windows.
     std::weak_ptr<Viewport_window> m_viewport_window;
     //Viewport_windows*              m_viewport_windows;
-    erhe::toolkit::Viewport          m_viewport;
+    erhe::math::Viewport           m_viewport;
 };
 
 } // namespace editor

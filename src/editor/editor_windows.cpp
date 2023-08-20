@@ -1,9 +1,9 @@
 #include "editor_windows.hpp"
 #include "editor_context.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_viewport.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 
 namespace editor {
 

@@ -24,7 +24,7 @@
 #include <GL/glext.h>
 #undef GL_GLEXT_PROTOTYPES
 
-#include "erhe/gl/wrapper_enums.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
 
 namespace gl
 {{

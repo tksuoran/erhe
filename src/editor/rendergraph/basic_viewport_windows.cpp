@@ -16,26 +16,26 @@
 #include "tools/tools.hpp"
 #include "windows/imgui_viewport_window.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_viewport.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/window_imgui_viewport.hpp"
-#include "erhe/rendergraph/multisample_resolve.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/imgui/windows/log_window.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/window_imgui_viewport.hpp"
+#include "erhe_rendergraph/multisample_resolve.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_imgui/windows/log_window.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -81,7 +81,7 @@ void Viewport_windows::initialize_component()
 {
     const auto commands = get<erhe::commands::Commands>();
     commands->register_command   (&m_open_new_viewport_window_command);
-    commands->bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+    commands->bind_command_to_key(&m_open_new_viewport_window_command, erhe::window::Key_f1, true);
 }
 
 void Viewport_windows::post_initialize()
@@ -343,22 +343,22 @@ auto Viewport_windows::last_window() -> std::shared_ptr<Viewport_window>
 }
 
 void Viewport_windows::update_keyboard(
-    const bool                   pressed,
-    const erhe::toolkit::Keycode code,
-    const uint32_t               modifier_mask
+    const bool                  pressed,
+    const erhe::window::Keycode code,
+    const uint32_t              modifier_mask
 )
 {
     static_cast<void>(pressed);
     static_cast<void>(code);
 
-    m_shift   = (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) == erhe::toolkit::Key_modifier_bit_shift;
-    m_alt     = (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) == erhe::toolkit::Key_modifier_bit_menu;
-    m_control = (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) == erhe::toolkit::Key_modifier_bit_ctrl;
+    m_shift   = (modifier_mask & erhe::window::Key_modifier_bit_shift) == erhe::window::Key_modifier_bit_shift;
+    m_alt     = (modifier_mask & erhe::window::Key_modifier_bit_menu ) == erhe::window::Key_modifier_bit_menu;
+    m_control = (modifier_mask & erhe::window::Key_modifier_bit_ctrl ) == erhe::window::Key_modifier_bit_ctrl;
 }
 
 void Viewport_windows::update_mouse(
-    const erhe::toolkit::Mouse_button button,
-    const int                         count
+    const erhe::window::Mouse_button button,
+    const int                        count
 )
 {
     SPDLOG_LOGGER_TRACE(log_pointer, "mouse {} count = {}", static_cast<int>(button), count);
@@ -391,15 +391,15 @@ auto Viewport_windows::alt_key_down() const -> bool
     return m_alt;
 }
 
-auto Viewport_windows::mouse_button_pressed(const erhe::toolkit::Mouse_button button) const -> bool
+auto Viewport_windows::mouse_button_pressed(const erhe::window::Mouse_button button) const -> bool
 {
-    Expects(button < erhe::toolkit::Mouse_button_count);
+    Expects(button < erhe::window::Mouse_button_count);
     return m_mouse_button[static_cast<int>(button)].pressed;
 }
 
-auto Viewport_windows::mouse_button_released(const erhe::toolkit::Mouse_button button) const -> bool
+auto Viewport_windows::mouse_button_released(const erhe::window::Mouse_button button) const -> bool
 {
-    Expects(button < erhe::toolkit::Mouse_button_count);
+    Expects(button < erhe::window::Mouse_button_count);
     return m_mouse_button[static_cast<int>(button)].released;
 }
 

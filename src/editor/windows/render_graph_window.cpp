@@ -2,9 +2,9 @@
 #include "editor_scenes.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

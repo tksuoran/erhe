@@ -4,9 +4,9 @@
 #include "tiles.hpp"
 #include "type_editors/type_editor.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 namespace hextiles
 {

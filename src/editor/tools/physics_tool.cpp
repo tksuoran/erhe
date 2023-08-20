@@ -12,26 +12,26 @@
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/physics/iconstraint.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/raytrace/ray.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_physics/iconstraint.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -112,7 +112,7 @@ Physics_tool::Physics_tool(
     tools.register_tool(this);
 
     commands.register_command(&m_drag_command);
-    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_right, true);
+    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = headset_view.get_headset();
     if (headset != nullptr) {
@@ -152,7 +152,7 @@ void Physics_tool::on_message(Editor_message& message)
 {
     // Re-implementing here Tool::on_message(message);
 
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (get_hover_scene_view() != message.scene_view) {
             set_hover_scene_view(message.scene_view);

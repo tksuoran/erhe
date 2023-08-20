@@ -9,17 +9,17 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 
-#include "erhe/commands/input_arguments.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/window_event_handler.hpp"
+#include "erhe_commands/input_arguments.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_window/window_event_handler.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -52,7 +52,7 @@ auto Fly_camera_tool::try_ready() -> bool
         }
         constexpr float border   = 32.0f;
         const glm::vec2 position = position_opt.value();
-        const erhe::toolkit::Viewport viewport = viewport_window->projection_viewport();
+        const erhe::math::Viewport viewport = viewport_window->projection_viewport();
         if (
             (position.x <  border) ||
             (position.y <  border) ||
@@ -153,11 +153,11 @@ auto Fly_camera_zoom_command::try_call_with_input(
 }
 
 Fly_camera_move_command::Fly_camera_move_command(
-    erhe::commands::Commands&                        commands,
-    Editor_context&                                  context,
-    const Variable                                   variable,
-    const erhe::toolkit::Simulation_variable_control control,
-    const bool                                       active
+    erhe::commands::Commands&                     commands,
+    Editor_context&                               context,
+    const Variable                                variable,
+    const erhe::math::Simulation_variable_control control,
+    const bool                                    active
 )
     : Command   {commands, "Fly_camera.move"}
     , m_context {context}
@@ -186,18 +186,18 @@ Fly_camera_tool::Fly_camera_tool(
     , Tool                            {editor_context}
     , m_turn_command                  {commands, editor_context}
     , m_zoom_command                  {commands, editor_context}
-    , m_move_up_active_command        {commands, editor_context, Variable::translate_y, erhe::toolkit::Simulation_variable_control::more, true }
-    , m_move_up_inactive_command      {commands, editor_context, Variable::translate_y, erhe::toolkit::Simulation_variable_control::more, false}
-    , m_move_down_active_command      {commands, editor_context, Variable::translate_y, erhe::toolkit::Simulation_variable_control::less, true }
-    , m_move_down_inactive_command    {commands, editor_context, Variable::translate_y, erhe::toolkit::Simulation_variable_control::less, false}
-    , m_move_left_active_command      {commands, editor_context, Variable::translate_x, erhe::toolkit::Simulation_variable_control::less, true }
-    , m_move_left_inactive_command    {commands, editor_context, Variable::translate_x, erhe::toolkit::Simulation_variable_control::less, false}
-    , m_move_right_active_command     {commands, editor_context, Variable::translate_x, erhe::toolkit::Simulation_variable_control::more, true }
-    , m_move_right_inactive_command   {commands, editor_context, Variable::translate_x, erhe::toolkit::Simulation_variable_control::more, false}
-    , m_move_forward_active_command   {commands, editor_context, Variable::translate_z, erhe::toolkit::Simulation_variable_control::less, true }
-    , m_move_forward_inactive_command {commands, editor_context, Variable::translate_z, erhe::toolkit::Simulation_variable_control::less, false}
-    , m_move_backward_active_command  {commands, editor_context, Variable::translate_z, erhe::toolkit::Simulation_variable_control::more, true }
-    , m_move_backward_inactive_command{commands, editor_context, Variable::translate_z, erhe::toolkit::Simulation_variable_control::more, false}
+    , m_move_up_active_command        {commands, editor_context, Variable::translate_y, erhe::math::Simulation_variable_control::more, true }
+    , m_move_up_inactive_command      {commands, editor_context, Variable::translate_y, erhe::math::Simulation_variable_control::more, false}
+    , m_move_down_active_command      {commands, editor_context, Variable::translate_y, erhe::math::Simulation_variable_control::less, true }
+    , m_move_down_inactive_command    {commands, editor_context, Variable::translate_y, erhe::math::Simulation_variable_control::less, false}
+    , m_move_left_active_command      {commands, editor_context, Variable::translate_x, erhe::math::Simulation_variable_control::less, true }
+    , m_move_left_inactive_command    {commands, editor_context, Variable::translate_x, erhe::math::Simulation_variable_control::less, false}
+    , m_move_right_active_command     {commands, editor_context, Variable::translate_x, erhe::math::Simulation_variable_control::more, true }
+    , m_move_right_inactive_command   {commands, editor_context, Variable::translate_x, erhe::math::Simulation_variable_control::more, false}
+    , m_move_forward_active_command   {commands, editor_context, Variable::translate_z, erhe::math::Simulation_variable_control::less, true }
+    , m_move_forward_inactive_command {commands, editor_context, Variable::translate_z, erhe::math::Simulation_variable_control::less, false}
+    , m_move_backward_active_command  {commands, editor_context, Variable::translate_z, erhe::math::Simulation_variable_control::more, true }
+    , m_move_backward_inactive_command{commands, editor_context, Variable::translate_z, erhe::math::Simulation_variable_control::more, false}
 {
     auto ini = erhe::configuration::get_ini("erhe.ini", "camera_controls");
     ini->get("invert_x",           config.invert_x);
@@ -224,21 +224,21 @@ Fly_camera_tool::Fly_camera_tool(
     commands.register_command(&m_move_forward_inactive_command);
     commands.register_command(&m_move_backward_active_command);
     commands.register_command(&m_move_backward_inactive_command);
-    commands.bind_command_to_key(&m_move_up_active_command,         erhe::toolkit::Key_r, true );
-    commands.bind_command_to_key(&m_move_up_inactive_command,       erhe::toolkit::Key_r, false);
-    commands.bind_command_to_key(&m_move_down_active_command,       erhe::toolkit::Key_f, true );
-    commands.bind_command_to_key(&m_move_down_inactive_command,     erhe::toolkit::Key_f, false);
-    commands.bind_command_to_key(&m_move_left_active_command,       erhe::toolkit::Key_a, true );
-    commands.bind_command_to_key(&m_move_left_inactive_command,     erhe::toolkit::Key_a, false);
-    commands.bind_command_to_key(&m_move_right_active_command,      erhe::toolkit::Key_d, true );
-    commands.bind_command_to_key(&m_move_right_inactive_command,    erhe::toolkit::Key_d, false);
-    commands.bind_command_to_key(&m_move_forward_active_command,    erhe::toolkit::Key_w, true );
-    commands.bind_command_to_key(&m_move_forward_inactive_command,  erhe::toolkit::Key_w, false);
-    commands.bind_command_to_key(&m_move_backward_active_command,   erhe::toolkit::Key_s, true );
-    commands.bind_command_to_key(&m_move_backward_inactive_command, erhe::toolkit::Key_s, false);
+    commands.bind_command_to_key(&m_move_up_active_command,         erhe::window::Key_r, true );
+    commands.bind_command_to_key(&m_move_up_inactive_command,       erhe::window::Key_r, false);
+    commands.bind_command_to_key(&m_move_down_active_command,       erhe::window::Key_f, true );
+    commands.bind_command_to_key(&m_move_down_inactive_command,     erhe::window::Key_f, false);
+    commands.bind_command_to_key(&m_move_left_active_command,       erhe::window::Key_a, true );
+    commands.bind_command_to_key(&m_move_left_inactive_command,     erhe::window::Key_a, false);
+    commands.bind_command_to_key(&m_move_right_active_command,      erhe::window::Key_d, true );
+    commands.bind_command_to_key(&m_move_right_inactive_command,    erhe::window::Key_d, false);
+    commands.bind_command_to_key(&m_move_forward_active_command,    erhe::window::Key_w, true );
+    commands.bind_command_to_key(&m_move_forward_inactive_command,  erhe::window::Key_w, false);
+    commands.bind_command_to_key(&m_move_backward_active_command,   erhe::window::Key_s, true );
+    commands.bind_command_to_key(&m_move_backward_inactive_command, erhe::window::Key_s, false);
 
     commands.register_command(&m_turn_command);
-    commands.bind_command_to_mouse_drag(&m_turn_command, erhe::toolkit::Mouse_button_left, false);
+    commands.bind_command_to_mouse_drag(&m_turn_command, erhe::window::Mouse_button_left, false);
 
     commands.register_command(&m_zoom_command);
     commands.bind_command_to_mouse_wheel(&m_zoom_command);
@@ -255,7 +255,7 @@ Fly_camera_tool::Fly_camera_tool(
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
             Tool::on_message(message);
-            using namespace erhe::toolkit;
+            using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 on_hover_viewport_change();
             }
@@ -371,9 +371,9 @@ void Fly_camera_tool::on_hover_viewport_change()
 }
 
 auto Fly_camera_tool::try_move(
-    const Variable                                   variable,
-    const erhe::toolkit::Simulation_variable_control control,
-    const bool                                       active
+    const Variable                                variable,
+    const erhe::math::Simulation_variable_control control,
+    const bool                                    active
 ) -> bool
 {
     const std::lock_guard<std::mutex> lock_fly_camera{m_mutex};

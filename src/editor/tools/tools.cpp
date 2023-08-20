@@ -11,12 +11,12 @@
 #include "scene/content_library.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
 
 
 namespace editor {
@@ -279,7 +279,7 @@ void Tools::register_tool(Tool* tool)
     const std::lock_guard<std::mutex> lock{m_mutex};
 
     const auto flags = tool->get_flags();
-    if (erhe::toolkit::test_all_rhs_bits_set(flags, Tool_flags::background)) {
+    if (erhe::bit::test_all_rhs_bits_set(flags, Tool_flags::background)) {
         m_background_tools.emplace_back(tool);
     } else {
         m_tools.emplace_back(tool);
@@ -321,7 +321,7 @@ void Tools::set_priority_tool(Tool* priority_tool)
     }
 
     {
-        using namespace erhe::toolkit;
+        using namespace erhe::bit;
         const bool allow_secondary =
             (m_priority_tool != nullptr) &&
             test_all_rhs_bits_set(m_priority_tool->get_flags(), Tool_flags::allow_secondary);

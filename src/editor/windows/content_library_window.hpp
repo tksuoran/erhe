@@ -3,10 +3,10 @@
 #include "editor_context.hpp"
 #include "scene/content_library.hpp"
 
-#include "erhe/graphics/texture.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/scene/animation.hpp"
-#include "erhe/scene/skin.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_scene/animation.hpp"
+#include "erhe_scene/skin.hpp"
 
 #include <memory>
 

@@ -6,10 +6,10 @@
 #include "tools/tools.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/physics/iworld.hpp"
-#include "erhe/scene/scene.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_scene/scene.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 namespace editor
 {

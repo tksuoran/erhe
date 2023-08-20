@@ -11,23 +11,23 @@
 #include "scene/node_raytrace.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe/primitive/material.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/raytrace/iinstance.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/skin.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_raytrace/iinstance.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 #include <algorithm>
@@ -163,7 +163,7 @@ Scene_root::Scene_root(
     if (editor_message_bus != nullptr) {
         editor_message_bus->add_receiver(
             [this](Editor_message& message) {
-                using namespace erhe::toolkit;
+                using namespace erhe::bit;
                 if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection)) {
                     for (const auto& item : message.no_longer_selected) {
                         if (item->get_item_host() != this) {

@@ -19,24 +19,24 @@
 #include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/commands/command.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 #include <glm/glm.hpp>
@@ -123,7 +123,7 @@ Brush_tool::Brush_tool(
     commands.register_command(&m_preview_command);
     commands.register_command(&m_insert_command);
     commands.bind_command_to_update      (&m_preview_command);
-    commands.bind_command_to_mouse_button(&m_insert_command, erhe::toolkit::Mouse_button_right, true);
+    commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = headset_view.get_headset();
@@ -151,7 +151,7 @@ Brush_tool::Brush_tool(
 void Brush_tool::on_message(Editor_message& message)
 {
     Tool::on_message(message);
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         on_motion();
     }
@@ -281,7 +281,7 @@ auto Brush_tool::get_hover_mesh_transform() -> mat4
 
     m_transform_scale = m_scale * scale;
     if (m_transform_scale != 1.0f) {
-        const mat4 scale_transform = erhe::toolkit::create_scale(m_transform_scale);
+        const mat4 scale_transform = erhe::math::create_scale(m_transform_scale);
         brush_frame.transform_by(scale_transform);
     }
 
@@ -311,7 +311,7 @@ auto Brush_tool::get_hover_grid_transform() -> mat4
         static_cast<uint32_t>(m_polygon_offset),
         static_cast<uint32_t>(m_corner_offset)
     );
-    const mat4 scale_transform = erhe::toolkit::create_scale(m_scale);
+    const mat4 scale_transform = erhe::math::create_scale(m_scale);
     brush_frame.transform_by(scale_transform);
     const mat4 brush_transform = brush_frame.transform();
     const mat4 inverse_brush   = inverse(brush_transform);
@@ -320,7 +320,7 @@ auto Brush_tool::get_hover_grid_transform() -> mat4
     const glm::vec3 position_in_grid  = m_snap_to_grid
         ? m_hover.grid->snap_grid_position(position_in_grid0)
         : position_in_grid0;
-    const glm::mat4 offset            = erhe::toolkit::create_translation<float>(position_in_grid);
+    const glm::mat4 offset            = erhe::math::create_translation<float>(position_in_grid);
     const glm::mat4 world_from_grid   = m_hover.grid->world_from_grid() * offset;
 
     const mat4 align = mat4{world_from_grid} * inverse_brush;

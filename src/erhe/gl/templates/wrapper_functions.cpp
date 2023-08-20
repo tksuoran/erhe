@@ -1,9 +1,9 @@
 {AUTOGENERATION_WARNING}
 
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/dynamic_load.hpp"
-#include "erhe/gl/gl_log.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/dynamic_load.hpp"
+#include "erhe_gl/gl_log.hpp"
 
 #include <spdlog/spdlog.h>
 

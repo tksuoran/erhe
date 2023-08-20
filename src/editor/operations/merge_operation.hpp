@@ -2,9 +2,9 @@
 
 #include "operations/ioperation.hpp"
 
-#include "erhe/primitive/build_info.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe_primitive/build_info.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 
 namespace erhe::primitive {
     class Buffer_info;

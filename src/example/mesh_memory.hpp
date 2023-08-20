@@ -1,14 +1,14 @@
 #pragma once
 
-#include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/shader_resource.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/primitive/build_info.hpp"
-#include "erhe/primitive/buffer_sink.hpp"
-#include "erhe/primitive/enums.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_primitive/build_info.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
+#include "erhe_primitive/enums.hpp"
 
 #include <memory>
 

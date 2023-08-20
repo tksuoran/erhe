@@ -17,7 +17,7 @@
 #   include "xr/headset_view.hpp"
 #endif
 
-#include "erhe/renderer/pipeline_renderpass.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
 
 #include <gsl/gsl>
 

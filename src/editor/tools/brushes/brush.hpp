@@ -3,11 +3,11 @@
 #include "scene/collision_generator.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/geometry/types.hpp"
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/primitive/enums.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/build_info.hpp"
+#include "erhe_geometry/types.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_primitive/enums.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/build_info.hpp"
 
 namespace erhe::geometry {
     class Geometry;
@@ -125,8 +125,8 @@ public:
     // Implements Item
     static constexpr std::string_view static_type_name{"Brush"};
     [[nodiscard]] static auto get_static_type() -> uint64_t;
-    auto get_type     () const -> uint64_t                             override;
-    auto get_type_name() const -> std::string_view                     override;
+    auto get_type     () const -> uint64_t         override;
+    auto get_type_name() const -> std::string_view override;
 
     // Public API
     void late_initialize();
@@ -145,7 +145,7 @@ public:
     [[nodiscard]] auto get_scaled      (float scale) -> const Scaled&;
     [[nodiscard]] auto create_scaled   (int scale_key) -> Scaled;
     [[nodiscard]] auto make_instance   (const Instance_create_info& instance_create_info) -> std::shared_ptr<erhe::scene::Node>;
-    [[nodiscard]] auto get_bounding_box() -> erhe::toolkit::Bounding_box;
+    [[nodiscard]] auto get_bounding_box() -> erhe::math::Bounding_box;
     [[nodiscard]] auto get_geometry    () -> std::shared_ptr<erhe::geometry::Geometry>;
 
     Brush_data                                           data;

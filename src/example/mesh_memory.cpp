@@ -1,7 +1,7 @@
 #include "mesh_memory.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
 
 namespace example {
 

@@ -7,13 +7,13 @@
 #include "tools/grid.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 #include <fmt/format.h>

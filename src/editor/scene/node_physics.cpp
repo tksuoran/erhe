@@ -2,13 +2,13 @@
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/log/log_glm.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/gtx/matrix_decompose.hpp>
 
@@ -23,7 +23,7 @@ using erhe::scene::Node_attachment;
 Node_physics::Node_physics(
     const IRigid_body_create_info& create_info
 )
-    : erhe::scene::Node_attachment{erhe::toolkit::Unique_id<Node_physics>{}.get_id()}
+    : erhe::scene::Node_attachment{erhe::Unique_id<Node_physics>{}.get_id()}
     , m_create_info{create_info}
 {
 }
@@ -121,7 +121,7 @@ void Node_physics::after_physics_simulation()
         m_rigid_body->set_world_transform (erhe::physics::Transform{glm::mat3{1.0f}, respawn_location});
         m_rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
         m_rigid_body->set_angular_velocity(glm::vec3{0.0f, 0.0f, 0.0f});
-        const glm::mat4 matrix = erhe::toolkit::create_translation<float>(respawn_location);
+        const glm::mat4 matrix = erhe::math::create_translation<float>(respawn_location);
         get_node()->set_world_from_node(matrix);
     } else {
         get_node()->set_world_from_node(transform);
@@ -143,8 +143,7 @@ auto is_physics(const erhe::Item* const scene_item) -> bool
     if (scene_item == nullptr) {
         return false;
     }
-    using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(
+    return erhe::bit::test_all_rhs_bits_set(
         scene_item->get_type(),
         erhe::Item_type::physics
     );

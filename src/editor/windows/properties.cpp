@@ -12,29 +12,29 @@
 #include "windows/animation_curve.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/primitive/primitive.hpp"
-#include "erhe/primitive/geometry_mesh.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/scene/animation.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/skin.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/animation.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
@@ -492,7 +492,7 @@ void Properties::item_flags(const std::shared_ptr<erhe::Item>& item)
 
     ImGui::Indent(indent);
 
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     using Item_flags = erhe::Item_flags;
 
     const uint64_t flags = item->get_flag_bits();

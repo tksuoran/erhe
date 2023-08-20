@@ -1,6 +1,3 @@
-@rem rd /S /Q build
-@rem -D CMAKE_GENERATOR_INSTANCE="C:/Program Files/Microsoft Visual Studio/2022/Professional" ^
-
 cmake ^
     -G "Visual Studio 17 2022" ^
     -A x64 ^

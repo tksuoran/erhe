@@ -2,11 +2,11 @@
 
 #include "operations/compound_operation.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/item/item.hpp"
-#include "erhe/toolkit/unique_id.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_item/unique_id.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 #include <functional>
 #include <memory>

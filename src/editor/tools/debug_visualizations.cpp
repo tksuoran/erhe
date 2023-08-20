@@ -13,27 +13,27 @@
 #include "tools/selection_tool.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/primitive/geometry_mesh.hpp"
-#include "erhe/raytrace/iinstance.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/skin.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_raytrace/iinstance.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -102,7 +102,7 @@ Debug_visualizations::Debug_visualizations(
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
-            using namespace erhe::toolkit;
+            using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 m_hover_scene_view = message.scene_view;
             }
@@ -330,7 +330,7 @@ void Debug_visualizations::light_visualization(
 {
     ERHE_PROFILE_FUNCTION();
 
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (!test_all_rhs_bits_set(light->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
         return;
     }
@@ -627,7 +627,7 @@ void Debug_visualizations::camera_visualization(
         return;
     }
 
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (!test_all_rhs_bits_set(camera->get_flag_bits(), erhe::Item_flags::show_debug_visualizations)) {
         return;
     }
@@ -675,7 +675,7 @@ void Debug_visualizations::selection_visualization(
 
     const auto& selection = m_context.selection->get_selection();
 
-    m_selection_bounding_volume = erhe::toolkit::Bounding_volume_combiner{}; // reset
+    m_selection_bounding_volume = erhe::math::Bounding_volume_combiner{}; // reset
     for (const auto& item : selection) {
         const auto& node = as<erhe::scene::Node>(item);
         if (node) {
@@ -747,9 +747,9 @@ void Debug_visualizations::selection_visualization(
             }
         }
 
-        erhe::toolkit::Bounding_box    selection_bounding_box;
-        erhe::toolkit::Bounding_sphere selection_bounding_sphere;
-        erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
+        erhe::math::Bounding_box    selection_bounding_box;
+        erhe::math::Bounding_sphere selection_bounding_sphere;
+        erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
         const float box_volume    = selection_bounding_box.volume();
         const float sphere_volume = selection_bounding_sphere.volume();
         if (
@@ -846,7 +846,7 @@ void Debug_visualizations::physics_nodes_visualization(
             -p3_in_window.z
         };
         glm::vec4 label_text_color{0.3f, 1.0f, 0.3f, 1.0f};
-        const uint32_t text_color = erhe::toolkit::convert_float4_to_uint32(label_text_color);
+        const uint32_t text_color = erhe::math::convert_float4_to_uint32(label_text_color);
 
         m_context.text_renderer->print(
             p3_in_window_z_negated,
@@ -1014,7 +1014,7 @@ void Debug_visualizations::mesh_labels(
                 );
 
                 const std::string label_text = fmt::format("{}", point_id);
-                const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_point_label_text_color);
+                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_point_label_text_color);
                 label(context, clip_from_world, world_from_node, p, text_color, label_text);
             }
         }
@@ -1075,7 +1075,7 @@ void Debug_visualizations::mesh_labels(
                 );
 
                 const std::string label_text = fmt::format("{}", edge_id);
-                const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_edge_label_text_color);
+                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_edge_label_text_color);
                 label(context, clip_from_world, world_from_node, p, text_color, label_text);
             }
         }
@@ -1106,7 +1106,7 @@ void Debug_visualizations::mesh_labels(
 
                 const std::string label_text = fmt::format("{}", polygon_id);
                 const glm::vec4   p4_in_node = glm::vec4{p + m_polygon_label_line_length * n, 1.0f};
-                const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_polygon_label_text_color);
+                const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_polygon_label_text_color);
 
                 label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
 
@@ -1125,7 +1125,7 @@ void Debug_visualizations::mesh_labels(
                         );
 
                         const std::string label_text = fmt::format("{}", i.corner_id);
-                        const uint32_t    text_color = erhe::toolkit::convert_float4_to_uint32(m_corner_label_text_color);
+                        const uint32_t    text_color = erhe::math::convert_float4_to_uint32(m_corner_label_text_color);
                         label(context, clip_from_world, world_from_node, label_p, text_color, label_text);
                     });
                 }
@@ -1295,9 +1295,9 @@ void Debug_visualizations::imgui()
     ImGui::Checkbox   ("Selection",             &m_selection);
     ImGui::Checkbox   ("Bounding points",       &m_selection_bounding_points_visible);
     if (m_selection_bounding_points_visible) {
-        erhe::toolkit::Bounding_box    selection_bounding_box;
-        erhe::toolkit::Bounding_sphere selection_bounding_sphere;
-        erhe::toolkit::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
+        erhe::math::Bounding_box    selection_bounding_box;
+        erhe::math::Bounding_sphere selection_bounding_sphere;
+        erhe::math::calculate_bounding_volume(m_selection_bounding_volume, selection_bounding_box, selection_bounding_sphere);
         const float    box_volume    = selection_bounding_box.volume();
         const float    sphere_volume = selection_bounding_sphere.volume();
         ImGui::Text("Box Volume: %f", box_volume);

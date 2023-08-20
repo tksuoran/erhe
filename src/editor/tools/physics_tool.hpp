@@ -3,8 +3,8 @@
 #include "tools/tool.hpp"
 #include "scene/node_raytrace.hpp"
 
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/commands/command.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_commands/command.hpp"
 
 #include <glm/glm.hpp>
 

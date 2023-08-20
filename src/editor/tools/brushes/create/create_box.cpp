@@ -5,14 +5,14 @@
 #include "scene/scene_view.hpp"
 #include "tools/brushes/brush.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/shapes/box.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/shapes/box.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -59,7 +59,7 @@ void Create_box::imgui()
         )
     );
 
-    //brush_create_info.geometry->transform(erhe::toolkit::mat4_swap_xy);
+    //brush_create_info.geometry->transform(erhe::math::mat4_swap_xy);
     brush_create_info.geometry->build_edges();
     brush_create_info.geometry->compute_polygon_normals();
     brush_create_info.geometry->compute_tangents();

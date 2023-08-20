@@ -2,7 +2,7 @@
 
 #include "editor_message.hpp"
 
-#include "erhe/message_bus/message_bus.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 namespace editor
 {

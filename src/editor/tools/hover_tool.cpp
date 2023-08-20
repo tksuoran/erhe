@@ -10,14 +10,14 @@
 #include "tools/grid.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/defer.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_defer/defer.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <fmt/core.h>
 #include <fmt/format.h>

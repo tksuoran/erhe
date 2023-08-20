@@ -6,15 +6,15 @@
 #include "renderers/programs.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/texture_rendergraph_node.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <imgui/imgui.h>
 
@@ -128,12 +128,12 @@ void Brdf_slice_rendergraph_node::set_area_size(const int size)
     erhe::rendergraph::Resource_routing resource_routing,
     int                                 key,
     int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return erhe::toolkit::Viewport{
+    return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,
         .width  = m_area_size,

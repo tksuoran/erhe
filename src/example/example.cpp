@@ -7,43 +7,44 @@
 #include "mesh_memory.hpp"
 #include "programs.hpp"
 
-#include "erhe/gl/enum_bit_mask_operators.hpp"
-#include "erhe/gl/gl_log.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/graphics_log.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/pipeline.hpp"
-#include "erhe/log/log.hpp"
-#include "erhe/primitive/primitive_log.hpp"
-#include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/renderer/renderer_log.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/scene_log.hpp"
-#include "erhe/scene/scene_message_bus.hpp"
-#include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
-#include "erhe/scene_renderer/scene_renderer_log.hpp"
-#include "erhe/toolkit/renderdoc_capture.hpp"
-#include "erhe/toolkit/toolkit_log.hpp"
-#include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/window_event_handler.hpp"
-#include "erhe/ui/ui_log.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_gl/gl_log.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/pipeline.hpp"
+#include "erhe_item/item_log.hpp"
+#include "erhe_log/log.hpp"
+#include "erhe_primitive/primitive_log.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_renderer/renderer_log.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/scene_log.hpp"
+#include "erhe_scene/scene_message_bus.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_window/renderdoc_capture.hpp"
+#include "erhe_window/window_log.hpp"
+#include "erhe_verify/verify.hpp"
+#include "erhe_window/window.hpp"
+#include "erhe_window/window.hpp"
+#include "erhe_window/window_event_handler.hpp"
+#include "erhe_ui/ui_log.hpp"
 
 namespace example {
 
 class Example
-    : public erhe::toolkit::Window_event_handler
+    : public erhe::window::Window_event_handler
 {
 public:
     virtual auto get_name() const -> const char* { return "Example"; }
 
     Example(
-        erhe::toolkit::Context_window&          window,
+        erhe::window::Context_window&           window,
         erhe::scene::Scene&                     scene,
         erhe::graphics::Instance&               graphics_instance,
         erhe::scene_renderer::Forward_renderer& forward_renderer,
@@ -143,7 +144,7 @@ public:
 
         passes.push_back(&standard_pipeline_renderpass);
 
-        erhe::toolkit::Viewport viewport{
+        erhe::math::Viewport viewport{
             .x             = 0,
             .y             = 0,
             .width         = m_window.get_width(),
@@ -160,7 +161,7 @@ public:
         erhe::scene_renderer::Light_projections light_projections{
             lights,
             m_camera.get(),
-            erhe::toolkit::Viewport{},
+            erhe::math::Viewport{},
             std::shared_ptr<erhe::graphics::Texture>{},
             0
         };
@@ -192,21 +193,21 @@ public:
         m_camera_controller->update_fixed_step();
     }
 
-    // Implements erhe::toolkit::Window_event_handler
+    // Implements erhe::window::Window_event_handler
     auto on_close() -> bool override
     {
         m_close_requested = true;
         return true;
     }
 
-    auto on_key(erhe::toolkit::Keycode code, uint32_t modifier_mask, bool pressed) -> bool override
+    auto on_key(erhe::window::Keycode code, uint32_t modifier_mask, bool pressed) -> bool override
     {
         static_cast<void>(modifier_mask);
         switch (code) {
-            case erhe::toolkit::Key_w: m_camera_controller->translate_z.set_less(pressed); return true;
-            case erhe::toolkit::Key_s: m_camera_controller->translate_z.set_more(pressed); return true;
-            case erhe::toolkit::Key_a: m_camera_controller->translate_x.set_less(pressed); return true;
-            case erhe::toolkit::Key_d: m_camera_controller->translate_x.set_more(pressed); return true;
+            case erhe::window::Key_w: m_camera_controller->translate_z.set_less(pressed); return true;
+            case erhe::window::Key_s: m_camera_controller->translate_z.set_more(pressed); return true;
+            case erhe::window::Key_a: m_camera_controller->translate_x.set_less(pressed); return true;
+            case erhe::window::Key_d: m_camera_controller->translate_x.set_more(pressed); return true;
             default: return false;
         }
     }
@@ -232,9 +233,9 @@ public:
         return true;
     }
 
-    auto on_mouse_button(erhe::toolkit::Mouse_button button, bool pressed) -> bool override
+    auto on_mouse_button(erhe::window::Mouse_button button, bool pressed) -> bool override
     {
-        if (button != erhe::toolkit::Mouse_button_left) {
+        if (button != erhe::window::Mouse_button_left) {
             return false;
         }
         m_mouse_pressed = pressed;
@@ -269,7 +270,7 @@ private:
         node->attach(camera);
         node->set_parent(m_scene.get_root_node());
 
-        const glm::mat4 m = erhe::toolkit::create_look_at(
+        const glm::mat4 m = erhe::math::create_look_at(
             position, // eye
             look_at,  // center
             glm::vec3{0.0f, 1.0f, 0.0f}  // up
@@ -301,7 +302,7 @@ private:
         node->set_parent      (m_scene.get_root_node());
         node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
-        const glm::mat4 m = erhe::toolkit::create_look_at(
+        const glm::mat4 m = erhe::math::create_look_at(
             position,                     // eye
             glm::vec3{0.0f, 0.0f, 0.0f},  // center
             glm::vec3{0.0f, 1.0f, 0.0f}   // up
@@ -332,13 +333,13 @@ private:
         node->set_parent      (m_scene.get_root_node());
         node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
-        const glm::mat4 m = erhe::toolkit::create_translation<float>(position);
+        const glm::mat4 m = erhe::math::create_translation<float>(position);
         node->set_parent_from_node(m);
 
         return light;
     }
 
-    erhe::toolkit::Context_window&          m_window;
+    erhe::window::Context_window&           m_window;
     erhe::scene::Scene&                     m_scene;
     erhe::graphics::Instance&               m_graphics_instance;
     erhe::scene_renderer::Forward_renderer& m_forward_renderer;
@@ -364,18 +365,19 @@ void run_example()
 {
     erhe::log::initialize_log_sinks();
     gl::initialize_logging();
+    erhe::item::initialize_logging();
     erhe::graphics::initialize_logging();
     erhe::primitive::initialize_logging();
     erhe::renderer::initialize_logging();
     erhe::scene::initialize_logging();
     erhe::scene_renderer::initialize_logging();
-    erhe::toolkit::initialize_logging();
+    erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
     example::initialize_logging();
-    erhe::toolkit::initialize_frame_capture();
+    erhe::window::initialize_frame_capture();
 
-    erhe::toolkit::Context_window window{
-        erhe::toolkit::Window_configuration{
+    erhe::window::Context_window window{
+        erhe::window::Window_configuration{
             .gl_major          = 4,
             .gl_minor          = 6,
             .width             = 1920,
@@ -399,7 +401,7 @@ void run_example()
         .vertex_format     = mesh_memory.vertex_format,
         .scene             = scene,
         .image_transfer    = image_transfer,
-        .path              = "res/models/BoxTextured.gltf"
+        .path              = "res/models/Box.gltf"
     };
     parse_gltf(parse_context);
     mesh_memory.gl_buffer_transfer_queue.flush();

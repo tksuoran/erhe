@@ -1,59 +1,57 @@
 set(_target "erhe_scene")
 add_library(${_target})
 add_library(erhe::scene ALIAS ${_target})
-
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    animation.cpp
-    animation.hpp
-    camera.cpp
-    camera.hpp
-    light.cpp
-    light.hpp
-    mesh.cpp
-    mesh.hpp
-    node.cpp
-    node.hpp
-    node_attachment.cpp
-    node_attachment.hpp
-    projection.cpp
-    projection.hpp
-    scene.cpp
-    scene.hpp
-    scene_host.cpp
-    scene_host.hpp
-    scene_log.cpp
-    scene_log.hpp
-    scene_message.hpp
-    scene_message_bus.cpp
-    scene_message_bus.hpp
-    skin.cpp
-    skin.hpp
-    transform.cpp
-    transform.hpp
-    trs_transform.cpp
-    trs_transform.hpp
+    erhe_scene/animation.cpp
+    erhe_scene/animation.hpp
+    erhe_scene/camera.cpp
+    erhe_scene/camera.hpp
+    erhe_scene/light.cpp
+    erhe_scene/light.hpp
+    erhe_scene/mesh.cpp
+    erhe_scene/mesh.hpp
+    erhe_scene/node.cpp
+    erhe_scene/node.hpp
+    erhe_scene/node_attachment.cpp
+    erhe_scene/node_attachment.hpp
+    erhe_scene/projection.cpp
+    erhe_scene/projection.hpp
+    erhe_scene/scene.cpp
+    erhe_scene/scene.hpp
+    erhe_scene/scene_host.cpp
+    erhe_scene/scene_host.hpp
+    erhe_scene/scene_log.cpp
+    erhe_scene/scene_log.hpp
+    erhe_scene/scene_message.hpp
+    erhe_scene/scene_message_bus.cpp
+    erhe_scene/scene_message_bus.hpp
+    erhe_scene/skin.cpp
+    erhe_scene/skin.hpp
+    erhe_scene/transform.cpp
+    erhe_scene/transform.hpp
+    erhe_scene/trs_transform.cpp
+    erhe_scene/trs_transform.hpp
 )
-
-target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
-
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+endif ()
 target_link_libraries(
     ${_target}
-    PRIVATE
+    PUBLIC
         erhe::item
+        erhe::math
+        erhe::message_bus
+        erhe::primitive
+        erhe::profile
+        glm::glm
+    PRIVATE
+        erhe::bit
         erhe::gl
         erhe::log
-        erhe::message_bus
         fmt::fmt
         Microsoft.GSL::GSL
-    PUBLIC
-        erhe::primitive
-        glm::glm
 )
-
-if (DEFINED ERHE_PROFILE_TARGET)
-    target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
-endif ()
-
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

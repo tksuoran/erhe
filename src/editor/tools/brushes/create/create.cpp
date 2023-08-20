@@ -18,17 +18,17 @@
 #include "tools/tools.hpp"
 #include "windows/content_library_window.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 

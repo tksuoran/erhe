@@ -1,8 +1,8 @@
 #include "parsers/json_polyhedron.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_file/file.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <string>
 
@@ -16,7 +16,7 @@ Json_library::Json_library(const std::filesystem::path& path)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto opt_text = erhe::toolkit::read("Json_library", path);
+    const auto opt_text = erhe::file::read("Json_library", path);
     if (!opt_text.has_value()) {
         return;
     }

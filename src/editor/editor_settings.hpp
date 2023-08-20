@@ -1,10 +1,10 @@
 #pragma once
 
-#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 
 #include <string>
 
-namespace erhe::toolkit {
+namespace erhe::window {
     class Context_window;
 }
 

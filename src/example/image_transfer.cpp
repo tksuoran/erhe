@@ -1,12 +1,12 @@
 #include "image_transfer.hpp"
 
-#include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/gl/enum_bit_mask_operators.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_graphics/gl_context_provider.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace example
 {

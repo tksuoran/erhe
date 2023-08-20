@@ -1,6 +1,6 @@
 #pragma once
 
-#include <erhe/concurrency/concurrent_queue.hpp>
+#include <erhe_concurrency/concurrent_queue.hpp>
 
 namespace editor {
 

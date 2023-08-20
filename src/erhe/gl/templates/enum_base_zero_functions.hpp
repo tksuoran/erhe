@@ -1,7 +1,7 @@
 #pragma once
 {AUTOGENERATION_WARNING}
 
-#include "erhe/gl/wrapper_enums.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
 
 #include <string>
 

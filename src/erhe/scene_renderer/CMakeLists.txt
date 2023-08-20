@@ -1,64 +1,46 @@
 set(_target "erhe_scene_renderer")
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(${_target})
 add_library(erhe::scene_renderer ALIAS ${_target})
-
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-
-    camera_buffer.cpp
-    camera_buffer.hpp
-    forward_renderer.cpp
-    forward_renderer.hpp
-    joint_buffer.cpp
-    joint_buffer.hpp
-    light_buffer.cpp
-    light_buffer.hpp
-    material_buffer.cpp
-    material_buffer.hpp
-    primitive_buffer.cpp
-    primitive_buffer.hpp
-    program_interface.cpp
-    program_interface.hpp
-    scene_renderer_log.cpp
-    scene_renderer_log.hpp
-    shadow_renderer.cpp
-    shadow_renderer.hpp
-    #scene_renderer_message.hpp
-    #scene_renderer_message_bus.cpp
-    #scene_renderer_message_bus.hpp
-    #scene_renderer_settings.hpp
+    erhe_scene_renderer/camera_buffer.cpp
+    erhe_scene_renderer/camera_buffer.hpp
+    erhe_scene_renderer/forward_renderer.cpp
+    erhe_scene_renderer/forward_renderer.hpp
+    erhe_scene_renderer/joint_buffer.cpp
+    erhe_scene_renderer/joint_buffer.hpp
+    erhe_scene_renderer/light_buffer.cpp
+    erhe_scene_renderer/light_buffer.hpp
+    erhe_scene_renderer/material_buffer.cpp
+    erhe_scene_renderer/material_buffer.hpp
+    erhe_scene_renderer/primitive_buffer.cpp
+    erhe_scene_renderer/primitive_buffer.hpp
+    erhe_scene_renderer/program_interface.cpp
+    erhe_scene_renderer/program_interface.hpp
+    erhe_scene_renderer/scene_renderer_log.cpp
+    erhe_scene_renderer/scene_renderer_log.hpp
+    erhe_scene_renderer/shadow_renderer.cpp
+    erhe_scene_renderer/shadow_renderer.hpp
 )
-
 target_link_libraries(
     ${_target}
     PUBLIC
+        erhe::graphics
+        erhe::math
+        erhe::primitive
         erhe::renderer
+        erhe::scene
     PRIVATE
         erhe::concurrency
+        erhe::file
         erhe::gl
-        erhe::graphics
         erhe::log
         erhe::message_bus
-        erhe::primitive
-        erhe::scene
-        erhe::toolkit
+        erhe::profile
 )
-
-if (DEFINED ERHE_PROFILE_TARGET)
-    target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
 endif ()
-
-target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
-set_target_properties(
-    ${_target} PROPERTIES
-    CXX_STANDARD                  20
-    CXX_STANDARD_REQUIRED         YES
-    CXX_EXTENSIONS                NO
-    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

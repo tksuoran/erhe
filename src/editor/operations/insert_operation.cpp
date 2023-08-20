@@ -5,8 +5,6 @@
 #include "operations/node_operation.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/scene/scene.hpp"
-
 #include <sstream>
 
 namespace editor

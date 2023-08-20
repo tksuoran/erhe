@@ -13,14 +13,14 @@
 #include "tools/tools.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/raytrace/igeometry.hpp"
-#include "erhe/raytrace/iinstance.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/raytrace/ray.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_raytrace/igeometry.hpp"
+#include "erhe_raytrace/iinstance.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 
 namespace editor
 {
@@ -195,7 +195,7 @@ void Scene_view::set_world_from_control(
     }
     const glm::mat4 camera_world_from_node = camera_node->world_from_node();
     const glm::vec3 camera_up_in_world     = glm::vec3{camera_world_from_node * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const glm::mat4 transform = erhe::toolkit::create_look_at(
+    const glm::mat4 transform = erhe::math::create_look_at(
         near_position_in_world,
         far_position_in_world,
         camera_up_in_world
@@ -381,7 +381,7 @@ auto Scene_view::get_closest_point_on_line(
     if (Q_origin_opt.has_value() && Q_direction_opt.has_value()) {
         const auto Q0 = Q_origin_opt.value();
         const auto Q1 = Q0 + Q_direction_opt.value();
-        const auto closest_points_q = erhe::toolkit::closest_points<float>(P0, P1, Q0, Q1);
+        const auto closest_points_q = erhe::math::closest_points<float>(P0, P1, Q0, Q1);
         if (closest_points_q.has_value()) {
             return closest_points_q.value().P;
         }
@@ -408,7 +408,7 @@ auto Scene_view::get_closest_point_on_plane(
     const vec3 Q1 = Q0 + Q_direction_opt.value();
     const vec3 v  = normalize(Q1 - Q0);
 
-    const auto intersection = erhe::toolkit::intersect_plane<float>(N, P, Q0, v);
+    const auto intersection = erhe::math::intersect_plane<float>(N, P, Q0, v);
     if (!intersection.has_value()) {
         return {};
     }

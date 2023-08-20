@@ -1,8 +1,8 @@
 #pragma once
 
 #include "tools/transform/transform_tool_settings.hpp"
-#include "erhe/primitive/geometry_mesh.hpp"
-#include "erhe/scene/trs_transform.hpp"
+#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
 

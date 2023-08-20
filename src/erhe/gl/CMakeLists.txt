@@ -22,14 +22,14 @@ set(GENERATED_SOURCES
     wrapper_functions.cpp
 )
 
-list(TRANSFORM GENERATED_SOURCES PREPEND "${CMAKE_CURRENT_BINARY_DIR}/")
+list(TRANSFORM GENERATED_SOURCES PREPEND "${CMAKE_CURRENT_BINARY_DIR}/erhe_gl/")
 
 set_source_files_properties(${GENERATED_SOURCES} GENERATED)
 
 set(GEN_COMMAND
     "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/generate_sources.py"
-    "${CMAKE_CURRENT_BINARY_DIR}")
+    "${CMAKE_CURRENT_BINARY_DIR}/erhe_gl")
 
 set(GEN_DEPENDS
     generate_sources.py
@@ -65,12 +65,12 @@ add_custom_command(
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    draw_indirect.hpp
-    enum_bit_mask_operators.hpp
-    gl_helpers.cpp
-    gl_helpers.hpp
-    gl_log.cpp
-    gl_log.hpp
+    erhe_gl/draw_indirect.hpp
+    erhe_gl/enum_bit_mask_operators.hpp
+    erhe_gl/gl_helpers.cpp
+    erhe_gl/gl_helpers.hpp
+    erhe_gl/gl_log.cpp
+    erhe_gl/gl_log.hpp
     generate_sources.py
     ${GEN_DEPENDS}
 )
@@ -84,11 +84,11 @@ erhe_target_sources_grouped(
 
 target_include_directories(${_target}
     PUBLIC
-        ${ERHE_INCLUDE_ROOT}
-        ${PROJECT_BINARY_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        #${PROJECT_BINARY_DIR}/src
+        ${CMAKE_CURRENT_BINARY_DIR}
         ${ERHE_ADDITIONAL_GL_INCLUDES}
 )
-
 target_link_libraries(${_target}
     PUBLIC
         fmt::fmt
@@ -96,7 +96,12 @@ target_link_libraries(${_target}
         OpenGL::GL
     PRIVATE
         erhe::log
+        erhe::verify
 )
+
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+endif ()
 
 target_compile_definitions(${_target} PUBLIC -DERHE_TRACY_GL)
 erhe_target_settings(${_target})

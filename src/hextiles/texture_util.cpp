@@ -1,9 +1,9 @@
 #include "texture_util.hpp"
 #include "hextiles_log.hpp"
 
-#include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_file/file.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <gsl/assert>
 
@@ -74,7 +74,7 @@ void Image::put_pixel(size_t x, size_t y, glm::vec4 color)
 
 auto load_png(const std::filesystem::path& path) -> Image
 {
-    const bool is_ok = erhe::toolkit::check_is_existing_non_empty_regular_file("load_png", path);
+    const bool is_ok = erhe::file::check_is_existing_non_empty_regular_file("load_png", path);
     if (!is_ok) {
         return {};
     }

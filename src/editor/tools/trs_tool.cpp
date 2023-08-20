@@ -18,23 +18,23 @@
 #include "tools/tools.hpp"
 #include "windows/operations.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/commands/command_binding.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/raytrace/ray.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/message_bus/message_bus.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/command_binding.hpp"
+#include "erhe_graphics/gl_context_provider.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_message_bus/message_bus.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>
@@ -173,7 +173,7 @@ void Trs_tool::initialize_component()
 
     const auto commands = get<erhe::commands::Commands>();
     commands->register_command(&m_drag_command);
-    commands->bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left);
+    commands->bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_left);
     commands->bind_command_to_controller_trigger_drag(&m_drag_command);
 
     get<Editor_message_bus>()->add_receiver(
@@ -188,7 +188,7 @@ void Trs_tool::on_message(Editor_message& message)
 {
     Tool::on_message(message);
 
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_selection))
     {
         set_node(m_selection_tool->get_first_selected_node());
@@ -524,7 +524,7 @@ auto Trs_tool::on_drag_ready(erhe::commands::Command_context& context) -> bool
                 .normal               = n,
                 .reference_direction  = direction,
                 .center_of_rotation   = center,
-                .start_rotation_angle = erhe::toolkit::angle_of_rotation<double>(direction, n, side),
+                .start_rotation_angle = erhe::math::angle_of_rotation<double>(direction, n, side),
                 .world_from_node      = target_node->world_from_node_transform()
             };
         }
@@ -620,7 +620,7 @@ void Trs_tool::update_axis_translate_2d(Viewport_window* viewport_window)
     }
     const dvec3 ss_P0      = ss_P0_opt.value();
     const dvec3 ss_P1      = ss_P1_opt.value();
-    const auto  ss_closest = erhe::toolkit::closest_point<double>(
+    const auto  ss_closest = erhe::math::closest_point<double>(
         dvec2{ss_P0},
         dvec2{ss_P1},
         dvec2{position_in_viewport_opt.value()}
@@ -634,7 +634,7 @@ void Trs_tool::update_axis_translate_2d(Viewport_window* viewport_window)
         {
             const auto R0 = R0_opt.value();
             const auto R1 = R1_opt.value();
-            const auto closest_points_r = erhe::toolkit::closest_points<double>(P0, P1, R0, R1);
+            const auto closest_points_r = erhe::math::closest_points<double>(P0, P1, R0, R1);
             if (closest_points_r.has_value())
             {
                 update_axis_translate_final(closest_points_r.value().P);
@@ -649,7 +649,7 @@ void Trs_tool::update_axis_translate_2d(Viewport_window* viewport_window)
         {
             const auto Q0 = Q0_opt.value();
             const auto Q1 = Q1_opt.value();
-            const auto closest_points_q = erhe::toolkit::closest_points<double>(P0, P1, Q0, Q1);
+            const auto closest_points_q = erhe::math::closest_points<double>(P0, P1, Q0, Q1);
             if (closest_points_q.has_value())
             {
                 update_axis_translate_final(closest_points_q.value().P);
@@ -677,7 +677,7 @@ void Trs_tool::update_axis_translate_3d(Scene_view* scene_view)
     {
         const auto Q0 = Q_origin_opt.value();
         const auto Q1 = Q0 + Q_direction_opt.value();
-        const auto closest_points_q = erhe::toolkit::closest_points<double>(P0, P1, Q0, Q1);
+        const auto closest_points_q = erhe::math::closest_points<double>(P0, P1, Q0, Q1);
         if (closest_points_q.has_value())
         {
             update_axis_translate_final(closest_points_q.value().P);
@@ -697,7 +697,7 @@ void Trs_tool::update_axis_translate_final(const dvec3 drag_position_in_world)
 {
     const dvec3 translation_vector  = drag_position_in_world - m_drag.initial_position_in_world;
     const dvec3 snapped_translation = snap_translate(translation_vector);
-    const dmat4 translation         = erhe::toolkit::create_translation<double>(snapped_translation);
+    const dmat4 translation         = erhe::math::create_translation<double>(snapped_translation);
     const dmat4 world_from_node     = translation * m_drag.initial_world_from_local;
 
     touch();
@@ -848,7 +848,7 @@ void Trs_tool::update_plane_translate_2d(Viewport_window* viewport_window)
     const dvec3 Q1 = Q1_opt.value();
     const dvec3 v  = normalize(Q1 - Q0);
 
-    const auto intersection = erhe::toolkit::intersect_plane<double>(world_n, p0, Q0, v);
+    const auto intersection = erhe::math::intersect_plane<double>(world_n, p0, Q0, v);
     if (!intersection.has_value())
     {
         return;
@@ -857,7 +857,7 @@ void Trs_tool::update_plane_translate_2d(Viewport_window* viewport_window)
     const dvec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
     const dvec3 translation_vector               = drag_point_new_position_in_world - m_drag.initial_position_in_world;
     const dvec3 snapped_translation              = snap_translate(translation_vector);
-    const dmat4 translation                      = erhe::toolkit::create_translation<double>(snapped_translation);
+    const dmat4 translation                      = erhe::math::create_translation<double>(snapped_translation);
     const dmat4 world_from_node                  = translation * m_drag.initial_world_from_local;
 
     touch();
@@ -889,7 +889,7 @@ void Trs_tool::update_plane_translate_3d(Scene_view* scene_view)
     const dvec3 Q1 = Q0 + Q_direction_opt.value();
     const dvec3 v  = normalize(Q1 - Q0);
 
-    const auto intersection = erhe::toolkit::intersect_plane<double>(world_n, p0, Q0, v);
+    const auto intersection = erhe::math::intersect_plane<double>(world_n, p0, Q0, v);
     if (!intersection.has_value())
     {
         return;
@@ -898,7 +898,7 @@ void Trs_tool::update_plane_translate_3d(Scene_view* scene_view)
     const dvec3 drag_point_new_position_in_world = Q0 + intersection.value() * v;
     const dvec3 translation_vector               = drag_point_new_position_in_world - m_drag.initial_position_in_world;
     const dvec3 snapped_translation              = snap_translate(translation_vector);
-    const dmat4 translation                      = erhe::toolkit::create_translation<double>(snapped_translation);
+    const dmat4 translation                      = erhe::math::create_translation<double>(snapped_translation);
     const dmat4 world_from_node                  = translation * m_drag.initial_world_from_local;
 
     touch();
@@ -957,7 +957,7 @@ auto Trs_tool::project_pointer_to_plane(Scene_view* scene_view, const dvec3 n, c
 
     const glm::dvec3 q0           = origin_opt.value();
     const glm::dvec3 v            = direction_opt.value();
-    const auto       intersection = erhe::toolkit::intersect_plane<double>(n, p, q0, v);
+    const auto       intersection = erhe::math::intersect_plane<double>(n, p, q0, v);
     if (intersection.has_value())
     {
         return q0 + intersection.value() * v;
@@ -1041,13 +1041,13 @@ void Trs_tool::update_rotate_final()
 {
     Expects(m_rotation.intersection.has_value());
 
-    const dvec3  q_                     = normalize                                (m_rotation.intersection.value() - m_rotation.center_of_rotation);
-    const double angle                  = erhe::toolkit::angle_of_rotation<double> (q_, m_rotation.normal, m_rotation.reference_direction);
-    const double snapped_angle          = snap_rotate                              (angle);
-    const dvec3  rotation_axis_in_world = get_axis_direction                       ();
-    const dmat4  rotation               = erhe::toolkit::create_rotation<double>   (snapped_angle, rotation_axis_in_world);
-    const dmat4  translate              = erhe::toolkit::create_translation<double>(dvec3{-m_rotation.center_of_rotation});
-    const dmat4  untranslate            = erhe::toolkit::create_translation<double>(dvec3{ m_rotation.center_of_rotation});
+    const dvec3  q_                     = normalize                             (m_rotation.intersection.value() - m_rotation.center_of_rotation);
+    const double angle                  = erhe::math::angle_of_rotation<double> (q_, m_rotation.normal, m_rotation.reference_direction);
+    const double snapped_angle          = snap_rotate                           (angle);
+    const dvec3  rotation_axis_in_world = get_axis_direction                    ();
+    const dmat4  rotation               = erhe::math::create_rotation<double>   (snapped_angle, rotation_axis_in_world);
+    const dmat4  translate              = erhe::math::create_translation<double>(dvec3{-m_rotation.center_of_rotation});
+    const dmat4  untranslate            = erhe::math::create_translation<double>(dvec3{ m_rotation.center_of_rotation});
     const dmat4  world_from_node        = untranslate * rotation * translate * m_drag.initial_world_from_local;
 
     m_rotation.current_angle = angle;

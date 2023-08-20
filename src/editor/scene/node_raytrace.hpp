@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe/primitive/geometry_mesh.hpp"
-#include "erhe/scene/node_attachment.hpp"
+#include "erhe_primitive/geometry_mesh.hpp"
+#include "erhe_scene/node_attachment.hpp"
 #include "scene/node_raytrace_mask.hpp"
 
 #include <functional>

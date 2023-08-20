@@ -8,23 +8,23 @@
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/headset.hpp"
-#   include "erhe/xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
 #endif
 
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/scoped_imgui_context.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/scoped_imgui_context.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <GLFW/glfw3.h> // TODO Fix dependency ?
 
-#include <imgui.h>
-#include <imgui_internal.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 namespace editor
 {
@@ -164,7 +164,7 @@ template <typename T>
             const auto controller_orientation = glm::mat4_cast(pose->orientation);
             const auto controller_direction   = glm::vec3{controller_orientation * glm::vec4{0.0f, 0.0f, -1.0f, 0.0f}};
 
-            const auto intersection = erhe::toolkit::intersect_plane<float>(
+            const auto intersection = erhe::math::intersect_plane<float>(
                 glm::vec3{node->direction_in_world()},
                 glm::vec3{node->position_in_world()},
                 pose->position,
@@ -337,12 +337,12 @@ auto Rendertarget_imgui_viewport::get_consumer_input_viewport(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return erhe::toolkit::Viewport{
+    return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,
         .width  = static_cast<int>(m_rendertarget_mesh->width()),
@@ -355,12 +355,12 @@ auto Rendertarget_imgui_viewport::get_producer_output_viewport(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return erhe::toolkit::Viewport{
+    return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,
         .width  = static_cast<int>(m_rendertarget_mesh->width()),

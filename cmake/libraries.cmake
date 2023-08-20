@@ -11,10 +11,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     bvh
-    GIT_REPOSITORY https://github.com/madmann91/bvh.git
-    GIT_TAG        origin/master
-    #GIT_REPOSITORY https://github.com/tksuoran/bvh.git
-    #GIT_TAG        dev
+    #GIT_REPOSITORY https://github.com/madmann91/bvh.git
+    #GIT_TAG        origin/master
+    GIT_REPOSITORY https://github.com/tksuoran/bvh.git
+    GIT_TAG        pch-workaround
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )

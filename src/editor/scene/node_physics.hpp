@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe/scene/node_attachment.hpp"
-#include "erhe/physics/irigid_body.hpp"
+#include "erhe_scene/node_attachment.hpp"
+#include "erhe_physics/irigid_body.hpp"
 
 #include <functional>
 

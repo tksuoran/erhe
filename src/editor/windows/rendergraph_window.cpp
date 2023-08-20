@@ -7,23 +7,22 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/ImNodesEz.h"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/gl_helpers.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/ImNodesEz.h"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
+#   include <imgui/imgui_internal.h>
 #endif
 
 #include <vector>
 #include <string>
-#include <imgui.h>
-#include <imgui_internal.h>
 
 
 namespace editor

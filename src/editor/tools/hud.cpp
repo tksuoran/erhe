@@ -10,20 +10,20 @@
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_viewport.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 namespace editor
@@ -139,7 +139,7 @@ Hud::Hud(
     tools.register_tool(this);
 
     commands.register_command   (&m_toggle_visibility_command);
-    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_e, true);
+    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::window::Key_e, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = headset_view.get_headset();
@@ -235,7 +235,7 @@ auto Hud::intersect_ray(
 {
     const glm::vec3 ray_origin_in_grid    = glm::vec3{node_from_world() * glm::vec4{ray_origin_in_world,    1.0f}};
     const glm::vec3 ray_direction_in_grid = glm::vec3{node_from_world() * glm::vec4{ray_direction_in_world, 0.0f}};
-    const auto intersection = erhe::toolkit::intersect_plane<float>(
+    const auto intersection = erhe::math::intersect_plane<float>(
         glm::vec3{0.0f, 1.0f, 0.0f},
         glm::vec3{0.0f, 0.0f, 0.0f},
         ray_origin_in_grid,
@@ -333,7 +333,7 @@ void Hud::on_message(Editor_message& message)
     Tool::on_message(message);
 
     if (m_locked_to_head) {
-        using namespace erhe::toolkit;
+        using namespace erhe::bit;
         if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_render_scene_view)) {
             const auto& camera = message.scene_view->get_camera();
             if (camera) {
@@ -358,7 +358,7 @@ void Hud::update_node_transform(const glm::mat4& world_from_camera)
     const glm::vec3 eye_position   {world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}};
     const glm::vec3 up_direction   {world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}};
 
-    const glm::mat4 m = erhe::toolkit::create_look_at(
+    const glm::mat4 m = erhe::math::create_look_at(
         eye_position,
         target_position,
         up_direction

@@ -2,8 +2,8 @@
 
 #include "operations/ioperation.hpp"
 
-#include "erhe/scene/node.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor
 {

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "erhe/graphics/gpu_timer.hpp"
-#include "erhe/renderer/draw_indirect_buffer.hpp"
-#include "erhe/scene_renderer/camera_buffer.hpp"
-#include "erhe/scene_renderer/primitive_buffer.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/camera_buffer.hpp"
+#include "erhe_scene_renderer/primitive_buffer.hpp"
 
-#include "erhe/graphics/pipeline.hpp"
-#include "erhe/toolkit/viewport.hpp"
+#include "erhe_graphics/pipeline.hpp"
+#include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 
@@ -63,8 +63,8 @@ public:
     class Render_parameters
     {
     public:
-        const erhe::toolkit::Viewport& viewport;
-        const erhe::scene::Camera&     camera;
+        const erhe::math::Viewport& viewport;
+        const erhe::scene::Camera&  camera;
         const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& content_mesh_spans;
         const std::initializer_list<const gsl::span<const std::shared_ptr<erhe::scene::Mesh>>>& tool_mesh_spans;
         const int                    x;
@@ -113,10 +113,10 @@ private:
 
     [[nodiscard]] auto current_id_frame_resources() -> Id_frame_resources&;
     void create_id_frame_resources();
-    void update_framebuffer       (const erhe::toolkit::Viewport viewport);
+    void update_framebuffer       (const erhe::math::Viewport viewport);
 
     bool                                          m_enabled{true};
-    erhe::toolkit::Viewport                       m_viewport{0, 0, 0, 0, true};
+    erhe::math::Viewport                          m_viewport{0, 0, 0, 0, true};
 
     // TODO Do not store these here?
     erhe::graphics::Instance&                     m_graphics_instance;

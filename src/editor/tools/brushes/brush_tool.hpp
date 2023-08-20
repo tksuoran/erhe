@@ -89,18 +89,18 @@ private:
     Brush_tool_preview_command m_preview_command;
     Brush_tool_insert_command  m_insert_command;
 
-    std::mutex                          m_brush_mutex;
-    bool                                m_snap_to_hover_polygon{true};
-    bool                                m_snap_to_grid         {true};
-    bool                                m_debug_visualization  {false};
-    Hover_entry                         m_hover;
-    std::shared_ptr<erhe::scene::Mesh>  m_brush_mesh;
-    std::shared_ptr<erhe::scene::Node>  m_brush_node;
-    bool                                m_with_physics   {true};
-    float                               m_scale          {1.0f};
-    float                               m_transform_scale{1.0f};
-    int                                 m_polygon_offset {0};
-    int                                 m_corner_offset  {0};
+    std::mutex                         m_brush_mutex;
+    bool                               m_snap_to_hover_polygon{true};
+    bool                               m_snap_to_grid         {true};
+    bool                               m_debug_visualization  {false};
+    Hover_entry                        m_hover;
+    std::shared_ptr<erhe::scene::Mesh> m_brush_mesh;
+    std::shared_ptr<erhe::scene::Node> m_brush_node;
+    bool                               m_with_physics   {true};
+    float                              m_scale          {1.0f};
+    float                              m_transform_scale{1.0f};
+    int                                m_polygon_offset {0};
+    int                                m_corner_offset  {0};
 };
 
 } // namespace editor

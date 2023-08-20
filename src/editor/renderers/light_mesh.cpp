@@ -1,17 +1,17 @@
 #include "renderers/light_mesh.hpp"
 
-#include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/geometry/shapes/regular_polygon.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/primitive/buffer_info.hpp"
-#include "erhe/primitive/buffer_sink.hpp"
-#include "erhe/primitive/primitive.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
-#include "erhe/toolkit/math_util.hpp"
+#include "erhe_geometry/shapes/cone.hpp"
+#include "erhe_geometry/shapes/regular_polygon.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_primitive/buffer_info.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <glm/glm.hpp>
 
@@ -101,7 +101,7 @@ auto Light_mesh::get_light_transform(const erhe::scene::Light& light) -> glm::ma
             const float apothem = length * std::tan(alpha * 0.5f);
             const float radius  = apothem / std::cos(glm::pi<float>() / static_cast<float>(m_light_cone_sides));
 
-            return erhe::toolkit::create_scale(radius, radius, length);
+            return erhe::math::create_scale(radius, radius, length);
         }
 
         default: {

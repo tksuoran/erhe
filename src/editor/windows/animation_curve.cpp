@@ -1,11 +1,11 @@
 #include "windows/animation_curve.hpp"
 
-#include "erhe/scene/animation.hpp"
+#include "erhe_scene/animation.hpp"
 
 #include <fmt/format.h>
 
-#include <imgui.h>
-#include <imgui_internal.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 namespace editor {
 

@@ -7,9 +7,9 @@
 #include "tile_shape.hpp"
 #include "types.hpp"
 
-#include "erhe/commands/command.hpp"
-#include "erhe/commands/input_arguments.hpp"
-#include "erhe/imgui/windows/framebuffer_window.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/input_arguments.hpp"
+#include "erhe_imgui/windows/framebuffer_window.hpp"
 
 #include <numeric>
 

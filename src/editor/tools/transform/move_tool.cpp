@@ -7,10 +7,10 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 #include <bit>

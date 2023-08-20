@@ -1,9 +1,9 @@
 #pragma once
 
 #include "time.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/net/client.hpp"
-#include "erhe/net/server.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_net/client.hpp"
+#include "erhe_net/server.hpp"
 
 #include <vector>
 

@@ -8,7 +8,7 @@
 #include "terrain_type.hpp"
 #include "types.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 #include "etl/vector.h"
 

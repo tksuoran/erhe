@@ -1,11 +1,11 @@
 #pragma once
 
-#include "erhe/rendergraph/texture_rendergraph_node.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/toolkit/viewport.hpp"
+#include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_math/viewport.hpp"
 
 namespace erhe::graphics {
     class Instance;
@@ -73,7 +73,7 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
     void set_area_size(int size);
 

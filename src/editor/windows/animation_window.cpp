@@ -7,14 +7,14 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/scene/animation.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/animation.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -31,7 +31,7 @@ Animation_window::Animation_window(
 {
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
-            using namespace erhe::toolkit;
+            using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 if (message.scene_view != nullptr) {
                     m_scene_root = message.scene_view->get_scene_root();

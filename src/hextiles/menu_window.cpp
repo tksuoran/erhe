@@ -15,23 +15,23 @@
 #include "type_editors/terrain_replacement_rule_editor_window.hpp"
 #include "type_editors/unit_editor_window.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_verify/verify.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace hextiles
 {
 
 Menu_window::Menu_window(
-    erhe::commands::Commands&            commands,
-    erhe::imgui::Imgui_renderer&         imgui_renderer,
-    erhe::imgui::Imgui_windows&          imgui_windows,
-    erhe::toolkit::Window_event_handler& window_event_handler,
-    Map_window&                          map_window,
-    Tiles&                               tiles,
-    Tile_renderer&                       tile_renderer
+    erhe::commands::Commands&           commands,
+    erhe::imgui::Imgui_renderer&        imgui_renderer,
+    erhe::imgui::Imgui_windows&         imgui_windows,
+    erhe::window::Window_event_handler& window_event_handler,
+    Map_window&                         map_window,
+    Tiles&                              tiles,
+    Tile_renderer&                      tile_renderer
 )
     : Imgui_window          {imgui_renderer, imgui_windows, "Menu", "menu"}
     , m_window_event_handler{window_event_handler}

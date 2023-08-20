@@ -4,9 +4,9 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_window.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/toolkit/math_util.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <array>
 
@@ -28,7 +28,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
     class Shadow_renderer;
 }
-namespace erhe::toolkit {
+namespace erhe::window {
     class Context_window;
 }
 
@@ -63,7 +63,7 @@ public:
         erhe::graphics::Instance&              graphics_instance,
         erhe::rendergraph::Rendergraph&        rendergraph,
         erhe::scene_renderer::Shadow_renderer& shadow_renderer,
-        erhe::toolkit::Context_window&         context_window,
+        erhe::window::Context_window&          context_window,
         Editor_context&                        editor_context,
         Editor_rendering&                      editor_rendering,
         Mesh_memory&                           mesh_memory,

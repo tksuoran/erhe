@@ -3,16 +3,7 @@
 namespace editor
 {
 
-Headset_view::Headset_view(
-    erhe::graphics::Instance&              ,
-    erhe::rendergraph::Rendergraph&        ,
-    erhe::scene_renderer::Shadow_renderer& ,
-    erhe::toolkit::Context_window&         ,
-    Editor_context&                        editor_context,
-    Editor_rendering&                      ,
-    Mesh_memory&                           ,
-    Scene_builder&                         
-)
+Headset_view::Headst_view(Editor_context& editor_context)
     : Scene_view{editor_context, Viewport_config{}}
 {
 }

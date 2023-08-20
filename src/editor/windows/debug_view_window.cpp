@@ -11,18 +11,18 @@
 #include "scene/scene_view.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/window_imgui_viewport.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/texture_rendergraph_node.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/window_imgui_viewport.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 
@@ -240,12 +240,12 @@ void Debug_view_node::set_area_size(const int size)
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(key); // TODO Validate
     static_cast<void>(depth);
-    return erhe::toolkit::Viewport{
+    return erhe::math::Viewport{
         .x      = 0,
         .y      = 0,
         .width  = m_area_size,

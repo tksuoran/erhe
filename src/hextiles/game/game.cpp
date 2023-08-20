@@ -7,11 +7,11 @@
 #include "tile_renderer.hpp"
 #include "game/game.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_verify/verify.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace hextiles
@@ -60,14 +60,14 @@ Game::Game(
     commands.register_command(&m_move_unit_nw_command);
     commands.register_command(&m_select_previous_unit_command);
     commands.register_command(&m_select_next_unit_command);
-    commands.bind_command_to_key(&m_move_unit_n_command ,         erhe::toolkit::Key_home,      false);
-    commands.bind_command_to_key(&m_move_unit_ne_command,         erhe::toolkit::Key_page_up,   false);
-    commands.bind_command_to_key(&m_move_unit_se_command,         erhe::toolkit::Key_page_down, false);
-    commands.bind_command_to_key(&m_move_unit_s_command ,         erhe::toolkit::Key_end,       false);
-    commands.bind_command_to_key(&m_move_unit_sw_command,         erhe::toolkit::Key_delete,    false);
-    commands.bind_command_to_key(&m_move_unit_nw_command,         erhe::toolkit::Key_insert,    false);
-    commands.bind_command_to_key(&m_select_previous_unit_command, erhe::toolkit::Key_left,      false);
-    commands.bind_command_to_key(&m_select_next_unit_command    , erhe::toolkit::Key_right,     false);
+    commands.bind_command_to_key(&m_move_unit_n_command ,         erhe::window::Key_home,      false);
+    commands.bind_command_to_key(&m_move_unit_ne_command,         erhe::window::Key_page_up,   false);
+    commands.bind_command_to_key(&m_move_unit_se_command,         erhe::window::Key_page_down, false);
+    commands.bind_command_to_key(&m_move_unit_s_command ,         erhe::window::Key_end,       false);
+    commands.bind_command_to_key(&m_move_unit_sw_command,         erhe::window::Key_delete,    false);
+    commands.bind_command_to_key(&m_move_unit_nw_command,         erhe::window::Key_insert,    false);
+    commands.bind_command_to_key(&m_select_previous_unit_command, erhe::window::Key_left,      false);
+    commands.bind_command_to_key(&m_select_next_unit_command    , erhe::window::Key_right,     false);
 
     hide();
 }

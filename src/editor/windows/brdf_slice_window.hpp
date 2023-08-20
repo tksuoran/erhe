@@ -1,10 +1,10 @@
 #pragma once
 
-#include "erhe/rendergraph/texture_rendergraph_node.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/toolkit/viewport.hpp"
+#include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_math/viewport.hpp"
 
 #include <memory>
 
@@ -49,7 +49,7 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
 private:
     erhe::scene_renderer::Forward_renderer& m_forward_renderer;

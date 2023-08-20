@@ -4,16 +4,16 @@
 #include "editor_log.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/gpu_timer.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/shader_stages.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <algorithm>
 
@@ -242,7 +242,7 @@ void Post_processing_node::viewport_toolbar()
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     return get_producer_output_viewport(resource_routing, key, depth + 1);
 }

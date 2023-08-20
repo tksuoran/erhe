@@ -1,6 +1,6 @@
 #include "time.hpp"
 
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_profile/profile.hpp"
 
 namespace editor {
 

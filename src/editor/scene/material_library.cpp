@@ -1,6 +1,6 @@
 #include "scene/material_library.hpp"
 
-#include "erhe/toolkit/math_util.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <fmt/format.h>
 
@@ -55,7 +55,7 @@ void add_default_materials(Library<erhe::primitive::Material>& library)
         const float saturation = 0.8f;
         const float value      = 0.25f;
         float R, G, B;
-        erhe::toolkit::hsv_to_rgb(hue, saturation, value, R, G, B);
+        erhe::math::hsv_to_rgb(hue, saturation, value, R, G, B);
         //const std::string label = fmt::format("Hue {}", static_cast<int>(hue));
         library.make(
             fmt::format("Hue {}", static_cast<int>(hue)),

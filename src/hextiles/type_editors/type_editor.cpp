@@ -6,11 +6,11 @@
 #include "tile_renderer.hpp"
 #include "tile_shape.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/graphics/texture.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_graphics/texture.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace hextiles

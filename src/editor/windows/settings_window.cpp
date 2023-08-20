@@ -5,12 +5,12 @@
 #include "editor_settings.hpp"
 #include "graphics/icon_set.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 

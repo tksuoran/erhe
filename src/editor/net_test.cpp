@@ -1,7 +1,7 @@
-#include "erhe/log/log.hpp"
-#include "erhe/net/client.hpp"
-#include "erhe/net/server.hpp"
-#include "erhe/net/net_log.hpp"
+#include "erhe_log/log.hpp"
+#include "erhe_net/client.hpp"
+#include "erhe_net/server.hpp"
+#include "erhe_net/net_log.hpp"
 
 #if defined(ERHE_TERMINAL_LIBRARY_CPP_TERMINAL)
 #   include "cpp-terminal/base.hpp"

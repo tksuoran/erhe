@@ -2,11 +2,11 @@
 #include "renderers/frustum_tiler.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/toolkit/math_util.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <sstream>
 
@@ -299,9 +299,9 @@ auto Frustum_tiler::get_center(const std::vector<glm::vec2>& points) -> glm::vec
 }
 
 void Frustum_tiler::get_frustum_hull(
-    const glm::mat4&              light_clip_from_world,
-    const erhe::scene::Camera&    view_camera,
-    const erhe::toolkit::Viewport view_camera_viewport
+    const glm::mat4&           light_clip_from_world,
+    const erhe::scene::Camera& view_camera,
+    const erhe::math::Viewport view_camera_viewport
 )
 {
     static constexpr std::array<glm::vec3, 8> clip_space_points = {
@@ -322,14 +322,14 @@ void Frustum_tiler::get_frustum_hull(
     const float h = static_cast<float>(m_viewport.height);
 
     std::array<glm::vec2, 8> window_space_points = {
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[0], w, h),
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[1], w, h),
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[2], w, h),
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[3], w, h),
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[4], w, h),
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[5], w, h),
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[6], w, h),
-        erhe::toolkit::project_to_screen_space_2d<float>(m, clip_space_points[7], w, h)
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[0], w, h),
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[1], w, h),
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[2], w, h),
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[3], w, h),
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[4], w, h),
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[5], w, h),
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[6], w, h),
+        erhe::math::project_to_screen_space_2d<float>(m, clip_space_points[7], w, h)
     };
 
 
@@ -444,10 +444,10 @@ auto Frustum_tiler::frustum_tile_intersection(Tile tile) const -> bool
 }
 
 void Frustum_tiler::update(
-    int                           texture_z,
-    const glm::mat4&              clip_from_world,
-    const erhe::scene::Camera&    view_camera,
-    const erhe::toolkit::Viewport view_camera_viewport
+    int                        texture_z,
+    const glm::mat4&           clip_from_world,
+    const erhe::scene::Camera& view_camera,
+    const erhe::math::Viewport view_camera_viewport
 )
 {
     if (

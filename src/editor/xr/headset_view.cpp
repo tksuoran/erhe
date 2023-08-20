@@ -13,26 +13,26 @@
 #include "xr/controller_visualization.hpp"
 #include "xr/hand_tracker.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/gl/enum_bit_mask_operators.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/xr/headset.hpp"
-#include "erhe/xr/xr_instance.hpp"
-#include "erhe/xr/xr_session.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_xr/headset.hpp"
+#include "erhe_xr/xr_instance.hpp"
+#include "erhe_xr/xr_session.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 namespace editor
 {
@@ -68,7 +68,7 @@ void Headset_view_node::execute_rendergraph_node()
 Headset_view::Headset_view(
     erhe::graphics::Instance&       graphics_instance,
     erhe::rendergraph::Rendergraph& rendergraph,
-    erhe::toolkit::Context_window&  context_window,
+    erhe::window::Context_window&   context_window,
     Editor_context&                 editor_context,
     Editor_rendering&               editor_rendering,
     Editor_settings&                editor_settings,
@@ -311,7 +311,7 @@ void Headset_view::render_headset()
                 log_headset->error("view framebuffer status = {}", gl::c_str(status));
             }
 
-            const erhe::toolkit::Viewport viewport {
+            const erhe::math::Viewport viewport {
                 .x             = 0,
                 .y             = 0,
                 .width         = static_cast<int>(render_view.width),
@@ -380,7 +380,7 @@ void Headset_view::setup_root_camera()
     projection.z_near          = 0.03f;
     projection.z_far           = 200.0f;
 
-    const glm::mat4 m = erhe::toolkit::create_look_at(
+    const glm::mat4 m = erhe::math::create_look_at(
         glm::vec3{0.0f, 0.0f, 0.0f}, // eye
         glm::vec3{0.0f, 0.0f, 0.0f}, // look at
         glm::vec3{0.0f, 1.0f, 0.0f}  // up

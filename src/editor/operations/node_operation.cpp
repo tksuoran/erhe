@@ -5,9 +5,9 @@
 #include "editor_message_bus.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/log/log_glm.hpp"
-#include "erhe/scene/node_attachment.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_scene/node_attachment.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/gtx/matrix_decompose.hpp>
 

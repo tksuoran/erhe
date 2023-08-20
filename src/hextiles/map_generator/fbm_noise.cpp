@@ -8,7 +8,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/noise.hpp>
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 namespace hextiles
 {

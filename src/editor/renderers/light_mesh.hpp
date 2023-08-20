@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/primitive/geometry_mesh.hpp"
+#include "erhe_primitive/geometry_mesh.hpp"
 
 #include <glm/glm.hpp>
 

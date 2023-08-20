@@ -4,10 +4,10 @@
 #include "tiles.hpp"
 #include "type_editors/type_editor.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_verify/verify.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 namespace hextiles
 {

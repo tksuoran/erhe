@@ -8,21 +8,21 @@
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/commands/input_arguments.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/input_arguments.hpp"
+#include "erhe_graphics/gl_context_provider.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_verify/verify.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 #include <gsl/assert>
 
@@ -180,14 +180,14 @@ Map_window::Map_window(
     commands.register_command(&m_zoom_out_command);
     commands.register_command(&m_grid_cycle_command);
     commands.bind_command_to_mouse_wheel(&m_free_zoom_command);
-    commands.bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::toolkit::Mouse_button_right, true);
-    commands.bind_command_to_key(&m_scroll_up_command,    erhe::toolkit::Key_w, false);
-    commands.bind_command_to_key(&m_scroll_left_command,  erhe::toolkit::Key_a, false);
-    commands.bind_command_to_key(&m_scroll_down_command,  erhe::toolkit::Key_s, false);
-    commands.bind_command_to_key(&m_scroll_right_command, erhe::toolkit::Key_d, false);
-    commands.bind_command_to_key(&m_zoom_in_command,      erhe::toolkit::Key_period, false);
-    commands.bind_command_to_key(&m_zoom_out_command,     erhe::toolkit::Key_comma,  false);
-    commands.bind_command_to_key(&m_grid_cycle_command,   erhe::toolkit::Key_g,  false);
+    commands.bind_command_to_mouse_drag (&m_mouse_scroll_command, erhe::window::Mouse_button_right, true);
+    commands.bind_command_to_key(&m_scroll_up_command,    erhe::window::Key_w, false);
+    commands.bind_command_to_key(&m_scroll_left_command,  erhe::window::Key_a, false);
+    commands.bind_command_to_key(&m_scroll_down_command,  erhe::window::Key_s, false);
+    commands.bind_command_to_key(&m_scroll_right_command, erhe::window::Key_d, false);
+    commands.bind_command_to_key(&m_zoom_in_command,      erhe::window::Key_period, false);
+    commands.bind_command_to_key(&m_zoom_out_command,     erhe::window::Key_comma,  false);
+    commands.bind_command_to_key(&m_grid_cycle_command,   erhe::window::Key_g,  false);
 
     hide();
 }
@@ -557,8 +557,8 @@ void Map_window::render()
     m_tile_renderer.end();
     int width  = static_cast<int>(extent_x);
     int height = static_cast<int>(extent_y);
-    m_tile_renderer.render(erhe::toolkit::Viewport{0, 0, width, height});
-    m_text_renderer.render(erhe::toolkit::Viewport{0, 0, width, height});
+    m_tile_renderer.render(erhe::math::Viewport{0, 0, width, height});
+    m_text_renderer.render(erhe::math::Viewport{0, 0, width, height});
     m_text_renderer.next_frame();
 
     gl::bind_framebuffer(gl::Framebuffer_target::draw_framebuffer, 0);

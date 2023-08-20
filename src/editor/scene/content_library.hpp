@@ -5,15 +5,15 @@
 #include "tools/brushes/brush.hpp"
 #include "graphics/icon_set.hpp"
 
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/scene/animation.hpp"
-#include "erhe/item/item.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/skin.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/animation.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>

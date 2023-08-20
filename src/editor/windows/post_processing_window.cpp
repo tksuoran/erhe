@@ -6,12 +6,12 @@
 #include "scene/viewport_window.hpp"
 #include "scene/viewport_windows.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor

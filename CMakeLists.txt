@@ -50,6 +50,7 @@ set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw or none"                       "glfw"     "glfw;none")
 set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either openxr, or none"                        "none"     "openxr;none")
 set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-terminal, or none"                       "none"     "cpp-terminal;none")
+set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "ON"       "ON;OFF")
 
 # These are in cmake/ directory
 message("Compiler = ${CMAKE_CXX_COMPILER_ID}")
@@ -100,8 +101,8 @@ FetchContent_MakeAvailable(GSL)
 message("Fetching MathGeoLib")
 FetchContent_MakeAvailable(MathGeoLib)
 
-message("Fetching meshoptimizer")
-FetchContent_MakeAvailable(meshoptimizer)
+#message("Fetching meshoptimizer")
+#FetchContent_MakeAvailable(meshoptimizer)
 
 message("Fetching nlohmann_json")
 FetchContent_MakeAvailable(nlohmann_json)
@@ -109,7 +110,8 @@ FetchContent_MakeAvailable(nlohmann_json)
 include(vscode)
 vscode_support()
 
-FetchContent_MakeAvailable(taskflow)
+include(taskflow)
+FetchContent_MakeAvailable_taskflow()
 
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     message("Fetching cpp-terminal")

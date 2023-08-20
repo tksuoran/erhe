@@ -4,7 +4,7 @@
 #   include "xr/hand_tracker.hpp"
 #endif
 
-#include "erhe/scene/mesh.hpp"
+#include "erhe_scene/mesh.hpp"
 
 #include <glm/glm.hpp>
 

@@ -6,10 +6,10 @@
 #include "tools/transform/rotation_inspector.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_scene/node.hpp"
 
 #include <glm/glm.hpp>
 

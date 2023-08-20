@@ -8,19 +8,19 @@
 #include "scene/scene_view.hpp"
 #include "windows/viewport_config_window.hpp"
 
-#include "erhe/gl/command_info.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/geometry/shapes/regular_polygon.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/sampler.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/math_util.hpp"
+#include "erhe_gl/command_info.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_geometry/shapes/regular_polygon.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_math/math_util.hpp"
 
 namespace editor
 {
@@ -194,7 +194,7 @@ void Rendertarget_mesh::update_headset()
 
     const auto pointer      = index_opt.value();
     const auto direction    = glm::vec3{pointer.orientation * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-    const auto intersection = erhe::toolkit::intersect_plane<float>(
+    const auto intersection = erhe::math::intersect_plane<float>(
         glm::vec3{node->direction_in_world()},
         glm::vec3{node->position_in_world()},
         pointer.position,
@@ -249,7 +249,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
 
     const glm::vec3 origo      {0.0f, 0.0f, 0.0f};
     const glm::vec3 unit_axis_z{0.0f, 0.0f, 1.0f};
-    const auto hit = erhe::toolkit::intersect_plane<float>(
+    const auto hit = erhe::math::intersect_plane<float>(
         unit_axis_z,
         origo,
         origin_in_mesh,
@@ -389,8 +389,7 @@ auto is_rendertarget(const erhe::Item* const scene_item) -> bool
     if (scene_item == nullptr) {
         return false;
     }
-    using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(scene_item->get_type(), erhe::Item_type::rendertarget);
+    return erhe::bit::test_all_rhs_bits_set(scene_item->get_type(), erhe::Item_type::rendertarget);
 }
 
 auto is_rendertarget(const std::shared_ptr<erhe::Item>& scene_item) -> bool

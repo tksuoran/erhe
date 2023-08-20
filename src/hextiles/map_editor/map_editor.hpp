@@ -7,7 +7,7 @@
 #include "map_generator/map_generator.hpp"
 #include "map_editor/map_tool_window.hpp"
 #include "map_editor/terrain_palette_window.hpp"
-#include "erhe/commands/command.hpp"
+#include "erhe_commands/command.hpp"
 
 #include <glm/glm.hpp>
 

@@ -6,8 +6,8 @@
 #include "xr/headset_view_resources.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/xr/headset.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_xr/headset.hpp"
 
 namespace erhe::graphics {
     class Instance;
@@ -27,7 +27,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
     class Shadow_renderer;
 }
-namespace erhe::toolkit {
+namespace erhe::window {
     class Context_window;
 }
 //namespace erhe::xr {
@@ -93,7 +93,7 @@ public:
     Headset_view(
         erhe::graphics::Instance&       graphics_instance,
         erhe::rendergraph::Rendergraph& rendergraph,
-        erhe::toolkit::Context_window&  context_window,
+        erhe::window::Context_window&   context_window,
         Editor_context&                 editor_context,
         Editor_rendering&               editor_rendering,
         Editor_settings&                editor_settings,
@@ -115,9 +115,9 @@ public:
     void render(const Render_context&);
 
     // Implements Scene_view
-    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>                    override;
-    [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera>           override;
-    [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                            override;
+    [[nodiscard]] auto get_scene_root        () const -> std::shared_ptr<Scene_root>          override;
+    [[nodiscard]] auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> override;
+    [[nodiscard]] auto get_shadow_render_node() const -> Shadow_render_node*                  override;
     [[nodiscard]] auto get_rendergraph_node  () -> erhe::rendergraph::Rendergraph_node*       override;
 
 private:

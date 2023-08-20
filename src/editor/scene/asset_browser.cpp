@@ -13,14 +13,14 @@
 #include "scene/scene_root.hpp"
 #include "windows/item_tree_window.hpp"
 
-#include "erhe/physics/iworld.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/scene_message_bus.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/scene_message_bus.hpp"
+#include "erhe_profile/profile.hpp"
 
-#include <imgui.h>
-#include <imgui_internal.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_internal.h>
 
 namespace editor
 {
@@ -115,17 +115,17 @@ Asset_node::Asset_node(const std::filesystem::path& path, std::size_t id)
 auto Asset_folder::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_folder; }
 auto Asset_folder::get_type       () const -> uint64_t        { return get_static_type(); }
 auto Asset_folder::get_type_name  () const -> std::string_view{ return static_type_name; }
-Asset_folder::Asset_folder(const std::filesystem::path& path) : Asset_node{path, erhe::toolkit::Unique_id<Asset_folder>{}.get_id()} {}
+Asset_folder::Asset_folder(const std::filesystem::path& path) : Asset_node{path, erhe::Unique_id<Asset_folder>{}.get_id()} {}
 
 auto Asset_file_gltf::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_gltf; }
 auto Asset_file_gltf::get_type       () const -> uint64_t        { return get_static_type(); }
 auto Asset_file_gltf::get_type_name  () const -> std::string_view{ return static_type_name; }
-Asset_file_gltf::Asset_file_gltf(const std::filesystem::path& path) : Asset_node{path, erhe::toolkit::Unique_id<Asset_file_gltf>{}.get_id()} {}
+Asset_file_gltf::Asset_file_gltf(const std::filesystem::path& path) : Asset_node{path, erhe::Unique_id<Asset_file_gltf>{}.get_id()} {}
 
 auto Asset_file_other::get_static_type()       -> uint64_t        { return erhe::Item_type::asset_file_other; }
 auto Asset_file_other::get_type       () const -> uint64_t        { return get_static_type(); }
 auto Asset_file_other::get_type_name  () const -> std::string_view{ return static_type_name; }
-Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Asset_node{path, erhe::toolkit::Unique_id<Asset_file_other>{}.get_id()} {}
+Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Asset_node{path, erhe::Unique_id<Asset_file_other>{}.get_id()} {}
 
 auto Asset_browser::make_node(
     const std::filesystem::path& path,

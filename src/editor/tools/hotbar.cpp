@@ -18,29 +18,29 @@
 #   include "xr/headset_view.hpp"
 #endif
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/geometry/shapes/disc.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_geometry/shapes/disc.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 // https://math.stackexchange.com/questions/1662616/calculate-the-diameter-of-an-inscribed-circle-inside-a-sector-of-circle
@@ -140,7 +140,7 @@ Hotbar::Hotbar(
     }
 
     commands.register_command   (&m_toggle_visibility_command);
-    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::toolkit::Key_space, true);
+    commands.bind_command_to_key(&m_toggle_visibility_command, erhe::window::Key_space, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     commands.register_command(&m_trackpad_command);
@@ -309,7 +309,7 @@ void Hotbar::get_all_tools()
         if (!opt_icon.has_value()) {
             continue;
         }
-        if (erhe::toolkit::test_all_rhs_bits_set(tool->get_flags(), Tool_flags::toolbox)) {
+        if (erhe::bit::test_all_rhs_bits_set(tool->get_flags(), Tool_flags::toolbox)) {
             m_slot_last = m_slots.size();
             m_slots.push_back(tool);
         }
@@ -326,7 +326,7 @@ void Hotbar::on_message(Editor_message& message)
         return;
     }
 
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         if (message.scene_view != old_scene_view) {
             if (m_use_radial) {
@@ -406,7 +406,7 @@ void Hotbar::update_node_transform()
         }
 
         const auto& world_from_camera = camera_node->world_from_node();
-        world_from_node = erhe::toolkit::create_look_at(
+        world_from_node = erhe::math::create_look_at(
             glm::vec3{world_from_camera * glm::vec4{m_x, m_y, m_z, 1.0}}, // eye
             glm::vec3{world_from_camera * glm::vec4{0.0, 0.0, 0.0, 1.0}}, // target
             glm::vec3{world_from_camera * glm::vec4{0.0, 1.0, 0.0, 0.0}}  // up

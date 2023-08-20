@@ -4,9 +4,9 @@
 #include "tools/tool.hpp"
 #include "scene/frame_controller.hpp"
 
-#include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/toolkit/window_event_handler.hpp" // keycode
+#include "erhe_commands/command.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_window/window_event_handler.hpp" // keycode
 
 namespace erhe::commands {
     class Commands;
@@ -61,20 +61,20 @@ class Fly_camera_move_command
 {
 public:
     Fly_camera_move_command(
-        erhe::commands::Commands&                  commands,
-        Editor_context&                            context,
-        Variable                                   variable,
-        erhe::toolkit::Simulation_variable_control control,
-        bool                                       active
+        erhe::commands::Commands&               commands,
+        Editor_context&                         context,
+        Variable                                variable,
+        erhe::math::Simulation_variable_control control,
+        bool                                    active
     );
 
     auto try_call() -> bool override;
 
 private:
-    Editor_context&                            m_context;
-    Variable                                   m_variable;
-    erhe::toolkit::Simulation_variable_control m_control;
-    bool                                       m_active;
+    Editor_context&                         m_context;
+    Variable                                m_variable;
+    erhe::math::Simulation_variable_control m_control;
+    bool                                    m_active;
 };
 
 class Fly_camera_tool
@@ -122,9 +122,9 @@ public:
     void on_hover_viewport_change();
     auto try_ready() -> bool;
     auto try_move(
-        Variable                                   variable,
-        erhe::toolkit::Simulation_variable_control item,
-        bool                                       active
+        Variable                                variable,
+        erhe::math::Simulation_variable_control item,
+        bool                                    active
     ) -> bool;
     auto turn_relative(float dx, float dy) -> bool;
     auto zoom         (float delta) -> bool;
@@ -155,8 +155,8 @@ private:
     bool                               m_use_viewport_camera{true};
 
 #if defined(ERHE_ENABLE_3D_CONNEXION_SPACE_MOUSE)
-    Fly_camera_space_mouse_listener       m_space_mouse_listener;
-    erhe::toolkit::Space_mouse_controller m_space_mouse_controller;
+    Fly_camera_space_mouse_listener      m_space_mouse_listener;
+    erhe::window::Space_mouse_controller m_space_mouse_controller;
 #endif
 };
 

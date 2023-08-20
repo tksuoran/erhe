@@ -11,14 +11,14 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_profile/profile.hpp"
 
 namespace editor
 {
 
 Renderpass::Renderpass(const std::string_view name)
-    : erhe::Item{name, erhe::toolkit::Unique_id<Renderpass>{}.get_id()}
+    : erhe::Item{name, erhe::Unique_id<Renderpass>{}.get_id()}
 {
 }
 

@@ -9,12 +9,12 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -94,7 +94,7 @@ auto Rotate_tool::begin(
     m_normal               = n;
     m_reference_direction  = normalize(intersection.value() - center);
     m_center_of_rotation   = center;
-    m_start_rotation_angle = erhe::toolkit::angle_of_rotation<float>(m_reference_direction, n, side);
+    m_start_rotation_angle = erhe::math::angle_of_rotation<float>(m_reference_direction, n, side);
 
     return true;
 }
@@ -163,11 +163,11 @@ void Rotate_tool::update_final()
 {
     Expects(m_intersection.has_value());
 
-    const vec3  q_                     = normalize                              (m_intersection.value() - m_center_of_rotation);
-    const float angle                  = erhe::toolkit::angle_of_rotation<float>(q_, m_normal, m_reference_direction);
-    const float snapped_angle          = snap                                   (angle);
-    const vec3  rotation_axis_in_world = get_axis_direction                     ();
-    const mat4  rotation               = erhe::toolkit::create_rotation<float>  (snapped_angle, rotation_axis_in_world);
+    const vec3  q_                     = normalize                           (m_intersection.value() - m_center_of_rotation);
+    const float angle                  = erhe::math::angle_of_rotation<float>(q_, m_normal, m_reference_direction);
+    const float snapped_angle          = snap                                (angle);
+    const vec3  rotation_axis_in_world = get_axis_direction                  ();
+    const mat4  rotation               = erhe::math::create_rotation<float>  (snapped_angle, rotation_axis_in_world);
 
     m_current_angle = angle;
 

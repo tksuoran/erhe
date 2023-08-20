@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 namespace erhe::commands {
     enum class State : unsigned int;

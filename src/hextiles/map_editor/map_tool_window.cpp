@@ -10,10 +10,10 @@
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_file/file.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <gsl/assert>
 
@@ -52,14 +52,14 @@ void Map_tool_window::imgui()
         m_map_generator.show();
     }
     if (ImGui::Button("Load Map")) {
-        const auto path_opt = erhe::toolkit::select_file();
+        const auto path_opt = erhe::file::select_file();
         if (path_opt.has_value()) {
             File_read_stream file{path_opt.value()};
             m_map_editor.get_map()->read(file);
         }
     }
     if (ImGui::Button("Save Map")) {
-        const auto path_opt = erhe::toolkit::select_file();
+        const auto path_opt = erhe::file::select_file();
         if (path_opt.has_value()) {
             File_write_stream file{path_opt.value()};
             m_map_editor.get_map()->write(file);

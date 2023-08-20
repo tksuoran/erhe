@@ -8,23 +8,23 @@
 #include "scene/scene_root.hpp"
 #include "scene/content_library.hpp"
 
-#include "erhe/graphics/instance.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/shapes/sphere.hpp"
-#include "erhe/gl/command_info.hpp"
-#include "erhe/gl/enum_bit_mask_operators.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/shapes/sphere.hpp"
+#include "erhe_gl/command_info.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
 
@@ -206,7 +206,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     m_key_light_node ->attach(m_key_light);
     m_key_light_node ->set_parent(paremt);
     m_key_light_node->set_parent_from_node(
-        erhe::toolkit::create_look_at(
+        erhe::math::create_look_at(
             glm::vec3{-8.0f, 8.0f, 8.0f},  // eye
             glm::vec3{ 0.0f, 0.0f, 0.0f},  // center
             glm::vec3{ 0.0f, 1.0f, 0.0f}   // up
@@ -229,7 +229,7 @@ void Material_preview::make_preview_scene(Mesh_memory& mesh_memory)
     m_camera_node->attach(m_camera);
     m_camera_node->set_parent(paremt);
     m_camera_node->set_parent_from_node(
-        erhe::toolkit::create_look_at(
+        erhe::math::create_look_at(
             glm::vec3{0.0f, 0.0f, 8.0f},  // eye
             glm::vec3{0.0f, 0.0f, 0.0f},  // center
             glm::vec3{0.0f, 1.0f, 0.0f}   // up
@@ -262,7 +262,7 @@ void Material_preview::render_preview(
 
     m_mesh->mesh_data.primitives.front().material = material;
 
-    const erhe::toolkit::Viewport viewport{0, 0, m_width, m_height};
+    const erhe::math::Viewport viewport{0, 0, m_width, m_height};
 
     gl::enable(gl::Enable_cap::scissor_test);
     gl::scissor(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -280,7 +280,7 @@ void Material_preview::render_preview(
     m_light_projections = erhe::scene_renderer::Light_projections{
         layers.light()->lights,
         m_camera.get(),
-        erhe::toolkit::Viewport{},
+        erhe::math::Viewport{},
         std::shared_ptr<erhe::graphics::Texture>{},
         0
     };
@@ -291,7 +291,7 @@ void Material_preview::render_preview(
         .viewport_config = m_viewport_config,
         .camera          = *m_camera.get(),
         .viewport_window = nullptr,
-        .viewport        = erhe::toolkit::Viewport{
+        .viewport        = erhe::math::Viewport{
             .x      = 0,
             .y      = 0,
             .width  = m_width,

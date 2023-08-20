@@ -3,16 +3,16 @@
 #include "editor_log.hpp"
 #include "scene/viewport_window.hpp"
 
-#include "erhe/imgui/imgui_viewport.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/gl/gl_helpers.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gl/gl_helpers.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -166,7 +166,7 @@ void Imgui_viewport_window::set_viewport(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
@@ -179,7 +179,7 @@ void Imgui_viewport_window::set_viewport(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
@@ -250,7 +250,7 @@ void Imgui_viewport_window::imgui()
             //ERHE_VERIFY(m_viewport.height == static_cast<int>(rect_max.y - rect_min.y));
 
             viewport_window->set_window_viewport(
-                erhe::toolkit::Viewport{
+                erhe::math::Viewport{
                     static_cast<int>(rect_min.x),
                     static_cast<int>(rect_min.y),
                     m_viewport.width,
@@ -260,7 +260,7 @@ void Imgui_viewport_window::imgui()
         }
     } else {
         m_is_hovered = false;
-        viewport_window->set_window_viewport(erhe::toolkit::Viewport{});
+        viewport_window->set_window_viewport(erhe::math::Viewport{});
     }
     viewport_window->set_is_hovered(m_is_hovered);
 

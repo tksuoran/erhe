@@ -4,14 +4,14 @@
 #include "renderers/render_context.hpp"
 #include "tools/brushes/brush.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/shapes/sphere.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/shapes/sphere.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_scene/node.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor

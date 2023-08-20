@@ -1,8 +1,8 @@
 #if 0
 #pragma once
 
-#include "erhe/graphics/instance.hpp"
-#include "erhe/toolkit/viewport.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 
@@ -35,7 +35,7 @@ public:
     const erhe::graphics::Tile_size m_tile_size;
     const int                       m_tile_count_x;
     const int                       m_tile_count_y;
-    const erhe::toolkit::Viewport   m_viewport;
+    const erhe::math::Viewport      m_viewport;
     std::vector<glm::vec2>          m_frustum_hull_points;
     glm::vec2                       m_frustum_hull_center;
 
@@ -49,9 +49,9 @@ public:
     static auto get_center(const std::vector<glm::vec2>& points) -> glm::vec2;
 
     void get_frustum_hull(
-        const glm::mat4&              light_clip_from_world,
-        const erhe::scene::Camera&    view_camera,
-        const erhe::toolkit::Viewport view_camera_viewport
+        const glm::mat4&           light_clip_from_world,
+        const erhe::scene::Camera& view_camera,
+        const erhe::math::Viewport view_camera_viewport
     );
 
     auto get_tile_hull  (Tile tile) const -> std::vector<glm::vec2>;
@@ -60,10 +60,10 @@ public:
     auto frustum_tile_intersection(Tile tile) const -> bool;
 
     void update(
-        int                           texture_z,
-        const glm::mat4&              clip_from_world,
-        const erhe::scene::Camera&    view_camera,
-        const erhe::toolkit::Viewport view_camera_viewport
+        int                        texture_z,
+        const glm::mat4&           clip_from_world,
+        const erhe::scene::Camera& view_camera,
+        const erhe::math::Viewport view_camera_viewport
     );
 };
 

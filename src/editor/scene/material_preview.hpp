@@ -3,10 +3,10 @@
 #include "renderers/composer.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/gl/wrapper_enums.hpp"
-#include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/toolkit/viewport.hpp"
-#include "erhe/scene_renderer/light_buffer.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_math/viewport.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
 
 #include <gsl/gsl>
 

@@ -11,25 +11,25 @@
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/primitive/primitive.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/vertex_attribute.hpp"
+#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 #include <fmt/core.h>
@@ -129,7 +129,7 @@ Paint_tool::Paint_tool(
     tools.register_tool(this);
 
     commands.register_command(&m_paint_vertex_command);
-    commands.bind_command_to_mouse_drag(&m_paint_vertex_command, erhe::toolkit::Mouse_button_left, true);
+    commands.bind_command_to_mouse_drag(&m_paint_vertex_command, erhe::window::Mouse_button_left, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = headset_view.get_headset();
     if (headset != nullptr) {

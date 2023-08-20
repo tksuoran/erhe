@@ -3,11 +3,11 @@
 #include "renderers/programs.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/toolkit/viewport.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 
@@ -103,7 +103,7 @@ public:
 
     // Public API
     void reconfigure               (int sample_count);
-    void set_window_viewport       (erhe::toolkit::Viewport viewport);
+    void set_window_viewport       (erhe::math::Viewport viewport);
     void set_is_hovered            (bool is_hovered);
     void set_camera                (const std::shared_ptr<erhe::scene::Camera>& camera);
     void update_pointer_2d_position(glm::vec2 position_in_viewport);
@@ -117,8 +117,8 @@ public:
     [[nodiscard]] auto project_to_viewport     (const glm::vec3 position_in_world ) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto unproject_to_world      (const glm::vec3 position_in_window) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto is_hovered              () const -> bool;
-    [[nodiscard]] auto window_viewport         () const -> const erhe::toolkit::Viewport&;
-    [[nodiscard]] auto projection_viewport     () const -> const erhe::toolkit::Viewport&;
+    [[nodiscard]] auto window_viewport         () const -> const erhe::math::Viewport&;
+    [[nodiscard]] auto projection_viewport     () const -> const erhe::math::Viewport&;
     [[nodiscard]] auto get_position_in_viewport() const -> std::optional<glm::vec2>;
     [[nodiscard]] auto position_in_world_viewport_depth(float viewport_depth) const -> std::optional<glm::vec3>;
     [[nodiscard]] auto viewport_toolbar        () -> bool;
@@ -145,8 +145,8 @@ private:
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<Scene_root>          m_tool_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_camera               {};
-    erhe::toolkit::Viewport            m_window_viewport      {0, 0, 0, 0, true};
-    erhe::toolkit::Viewport            m_projection_viewport  {0, 0, 0, 0, true};
+    erhe::math::Viewport               m_window_viewport      {0, 0, 0, 0, true};
+    erhe::math::Viewport               m_projection_viewport  {0, 0, 0, 0, true};
     //Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::standard};
     Shader_stages_variant              m_shader_stages_variant{Shader_stages_variant::circular_brushed_metal};
     bool                               m_is_hovered           {false};

@@ -9,17 +9,17 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/scene/mesh.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_scene/mesh.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -119,8 +119,8 @@ Material_paint_tool::Material_paint_tool(
 
     commands.register_command(&m_paint_command);
     commands.register_command(&m_pick_command);
-    commands.bind_command_to_mouse_button(&m_paint_command, erhe::toolkit::Mouse_button_left, false);
-    commands.bind_command_to_mouse_button(&m_pick_command,  erhe::toolkit::Mouse_button_right, true);
+    commands.bind_command_to_mouse_button(&m_paint_command, erhe::window::Mouse_button_left, false);
+    commands.bind_command_to_mouse_button(&m_pick_command,  erhe::window::Mouse_button_right, true);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = headset_view.get_headset();
     if (headset != nullptr) {

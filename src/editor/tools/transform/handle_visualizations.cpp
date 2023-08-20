@@ -15,18 +15,18 @@
 #include "tools/transform/rotate_tool.hpp"
 #include "tools/transform/scale_tool.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/geometry/shapes/box.hpp"
-#include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/geometry/shapes/torus.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/xxhash.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_geometry/shapes/box.hpp"
+#include "erhe_geometry/shapes/cone.hpp"
+#include "erhe_geometry/shapes/torus.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_hash/xxhash.hpp"
+#include "erhe_profile/profile.hpp"
 
 namespace editor
 {
@@ -127,7 +127,7 @@ Handle_visualizations::Handle_visualizations(
     m_handles[m_yz_scale_box_mesh    .get()] = Handle::e_handle_scale_yz;
 
     using erhe::scene::Transform;
-    using namespace erhe::toolkit;
+    using namespace erhe::math;
     const auto rotate_z_pos_90  = Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f})};
     const auto rotate_z_neg_90  = Transform{create_rotation<float>(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f})};
     const auto rotate_x_pos_90  = Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{1.0f, 0.0f, 0.0f})};
@@ -538,10 +538,10 @@ void Handle_visualizations::update_transforms() //const uint64_t serial)
     if (!isfinite(scalar_scale)) {
         log_trs_tool->error("!isfinite()");
     }
-    const glm::mat4 scale        = erhe::toolkit::create_scale<float>(scalar_scale);
+    const glm::mat4 scale             = erhe::math::create_scale<float>(scalar_scale);
     const glm::mat4 world_from_anchor = settings.local
         ? m_world_from_anchor.get_matrix()
-        : erhe::toolkit::create_translation<float>(m_world_from_anchor.get_translation());
+        : erhe::math::create_translation<float>(m_world_from_anchor.get_translation());
     const glm::vec3 origin = glm::vec3{world_from_anchor * glm::vec4{0.0f, 0.0, 0.0f, 1.0}};
 
     m_tool_node->set_parent_from_node(world_from_anchor * scale);

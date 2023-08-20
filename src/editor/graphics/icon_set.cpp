@@ -1,13 +1,12 @@
 #include "graphics/icon_set.hpp"
-#include "editor_settings.hpp"
-
 #include "editor_log.hpp"
-
+#include "editor_settings.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_bit/bit_helpers.hpp"
 
 #if defined(ERHE_SVG_LIBRARY_LUNASVG)
 #   include <lunasvg.h>
@@ -108,12 +107,10 @@ void Icon_set::add_icons(
     const float    scale
 )
 {
-    using namespace erhe::toolkit;
-    using Item_flags = erhe::Item_flags;
-
-    for (uint64_t bit_position = 0; bit_position < Item_flags::count; ++ bit_position) {
+    using namespace erhe::bit;
+    for (uint64_t bit_position = 0; bit_position < erhe::Item_flags::count; ++ bit_position) {
         const uint64_t bit_mask = (uint64_t{1} << bit_position);
-        if (erhe::toolkit::test_all_rhs_bits_set(item_type, bit_mask)) {
+        if (test_all_rhs_bits_set(item_type, bit_mask)) {
             const auto& icon_opt = type_icons.at(bit_position);
             if (icon_opt.has_value()) {
                 const auto& icon = icon_opt.value();

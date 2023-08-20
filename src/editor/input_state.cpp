@@ -10,9 +10,9 @@ auto Input_state::on_key(
 {
     static_cast<void>(keycode);
     static_cast<void>(pressed);
-    shift   = (modifier_mask & erhe::toolkit::Key_modifier_bit_shift) == erhe::toolkit::Key_modifier_bit_shift;
-    alt     = (modifier_mask & erhe::toolkit::Key_modifier_bit_menu ) == erhe::toolkit::Key_modifier_bit_menu;
-    control = (modifier_mask & erhe::toolkit::Key_modifier_bit_ctrl ) == erhe::toolkit::Key_modifier_bit_ctrl;
+    shift   = (modifier_mask & erhe::window::Key_modifier_bit_shift) == erhe::window::Key_modifier_bit_shift;
+    alt     = (modifier_mask & erhe::window::Key_modifier_bit_menu ) == erhe::window::Key_modifier_bit_menu;
+    control = (modifier_mask & erhe::window::Key_modifier_bit_ctrl ) == erhe::window::Key_modifier_bit_ctrl;
     return false; // not consumed
 }
 

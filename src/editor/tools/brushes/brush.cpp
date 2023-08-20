@@ -6,14 +6,14 @@
 #include "scene/node_raytrace.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/geometry/operation/clone.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_geometry/operation/clone.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 
 namespace editor
 {
@@ -125,7 +125,7 @@ auto Brush::get_type_name() const -> std::string_view
 }
 
 Brush::Brush(const Brush_data& create_info)
-    : erhe::Item{create_info.get_name(), erhe::toolkit::Unique_id<Brush>{}.get_id()}
+    : erhe::Item{create_info.get_name(), erhe::Unique_id<Brush>{}.get_id()}
     , data{create_info}
 {
 }
@@ -303,7 +303,7 @@ auto Brush::create_scaled(const int scale_key) -> Scaled
     auto scaled_geometry = std::make_shared<erhe::geometry::Geometry>(
         erhe::geometry::operation::clone(
             *geometry.get(),
-            erhe::toolkit::create_scale(scale)
+            erhe::math::create_scale(scale)
         )
     );
     scaled_geometry->name = fmt::format("{} scaled by {}", geometry->name, scale);
@@ -430,7 +430,7 @@ auto Brush::make_instance(
     return node;
 }
 
-[[nodiscard]] auto Brush::get_bounding_box() -> erhe::toolkit::Bounding_box
+[[nodiscard]] auto Brush::get_bounding_box() -> erhe::math::Bounding_box
 {
     if (!geometry_primitive) {
         ERHE_PROFILE_SCOPE("geometry primitive");

@@ -4,10 +4,10 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 #include "renderers/renderpass.hpp" // TODO remove - for Fill_mode, Blend_mode, Selection_mode
-#include "erhe/commands/command.hpp"
-#include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
 
 #include <glm/glm.hpp>
 
@@ -19,7 +19,7 @@ namespace erhe::commands {
 namespace erhe::imgui {
     class Imgui_windows;
 }
-namespace erhe::toolkit {
+namespace erhe::window {
     class Context_window;
 }
 

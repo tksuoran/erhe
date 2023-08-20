@@ -1,6 +1,6 @@
 {AUTOGENERATION_WARNING}
 
-#include "erhe/gl/enum_base_zero_functions.hpp"
+#include "erhe_gl/enum_base_zero_functions.hpp"
 
 #include <limits>
 

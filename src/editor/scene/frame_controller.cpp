@@ -1,10 +1,10 @@
 #include "scene/frame_controller.hpp"
 
-#include "erhe/scene/node.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/simulation_variable.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_math/simulation_variable.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
 
@@ -16,7 +16,7 @@ using glm::vec3;
 using glm::vec4;
 
 Frame_controller::Frame_controller()
-    : Node_attachment{"frame controller", erhe::toolkit::Unique_id<Frame_controller>{}.get_id()}
+    : Node_attachment{"frame controller", erhe::Unique_id<Frame_controller>{}.get_id()}
 {
     reset();
     rotate_x      .set_damp     (0.700f);
@@ -39,7 +39,7 @@ Frame_controller::Frame_controller()
 }
 
 auto Frame_controller::get_variable(const Variable control) 
--> erhe::toolkit::Simulation_variable&
+-> erhe::math::Simulation_variable&
 {
     switch (control) {
         case Variable::translate_x: return translate_x;
@@ -69,9 +69,9 @@ void Frame_controller::set_elevation(const float value)
 void Frame_controller::set_heading(const float value)
 {
     m_heading = value;
-    m_heading_matrix = erhe::toolkit::create_rotation(
+    m_heading_matrix = erhe::math::create_rotation(
         m_heading,
-        erhe::toolkit::vector_types<float>::vec3_unit_y()
+        erhe::math::vector_types<float>::vec3_unit_y()
     );
     update();
 }
@@ -117,13 +117,13 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
     m_position = position;
     float heading  {0.0f};
     float elevation{0.0f};
-    erhe::toolkit::cartesian_to_heading_elevation(direction, elevation, heading);
+    erhe::math::cartesian_to_heading_elevation(direction, elevation, heading);
     m_elevation = elevation;
     m_heading   = heading;
 
-    m_heading_matrix = erhe::toolkit::create_rotation(
+    m_heading_matrix = erhe::math::create_rotation(
         m_heading,
-        erhe::toolkit::vector_types<float>::vec3_unit_y()
+        erhe::math::vector_types<float>::vec3_unit_y()
     );
 }
 
@@ -167,9 +167,9 @@ void Frame_controller::update()
         return;
     }
 
-    const mat4 elevation_matrix = erhe::toolkit::create_rotation(
+    const mat4 elevation_matrix = erhe::math::create_rotation(
         m_elevation,
-        erhe::toolkit::vector_types<float>::vec3_unit_x()
+        erhe::math::vector_types<float>::vec3_unit_x()
     );
     m_rotation_matrix = m_heading_matrix * elevation_matrix;
 
@@ -231,13 +231,13 @@ void Frame_controller::update_fixed_step()
     ) {
         m_heading += rotate_y.current_value();
         m_elevation += rotate_x.current_value();
-        const mat4 elevation_matrix = erhe::toolkit::create_rotation(
+        const mat4 elevation_matrix = erhe::math::create_rotation(
             m_elevation,
-            erhe::toolkit::vector_types<float>::vec3_unit_x()
+            erhe::math::vector_types<float>::vec3_unit_x()
         );
-        m_heading_matrix = erhe::toolkit::create_rotation(
+        m_heading_matrix = erhe::math::create_rotation(
             m_heading,
-            erhe::toolkit::vector_types<float>::vec3_unit_y()
+            erhe::math::vector_types<float>::vec3_unit_y()
         );
         m_rotation_matrix = m_heading_matrix * elevation_matrix;
     }
@@ -252,8 +252,7 @@ auto is_frame_controller(
     if (item == nullptr) {
         return false;
     }
-    using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(
+    return erhe::bit::test_all_rhs_bits_set(
         item->get_type(),
         erhe::Item_type::frame_controller
     );
@@ -273,9 +272,8 @@ auto as_frame_controller(
     if (item == nullptr) {
         return nullptr;
     }
-    using namespace erhe::toolkit;
     if (
-        !test_all_rhs_bits_set(
+        !erhe::bit::test_all_rhs_bits_set(
             item->get_type(),
             erhe::Item_type::frame_controller
         )
@@ -292,9 +290,8 @@ auto as_frame_controller(
     if (!item) {
         return {};
     }
-    using namespace erhe::toolkit;
     if (
-        !test_all_rhs_bits_set(
+        !erhe::bit::test_all_rhs_bits_set(
             item->get_type(),
             erhe::Item_type::frame_controller
         )

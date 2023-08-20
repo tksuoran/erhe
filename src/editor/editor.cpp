@@ -51,51 +51,52 @@
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/hand_tracker.hpp"
 #   include "xr/theremin.hpp"
-#   include "erhe/xr/xr_log.hpp"
+#   include "erhe_xr/xr_log.hpp"
 #endif
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/commands/commands_log.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/geometry/geometry_log.hpp"
-#include "erhe/gl/gl_log.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/gltf/gltf_log.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/graphics_log.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/commands_log.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_file/file_log.hpp"
+#include "erhe_geometry/geometry_log.hpp"
+#include "erhe_gl/gl_log.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gltf/gltf_log.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include "erhe/imgui/imgui_log.hpp"
-#   include "erhe/imgui/imgui_renderer.hpp"
-#   include "erhe/imgui/imgui_windows.hpp"
-#   include "erhe/imgui/window_imgui_viewport.hpp"
-#   include "erhe/imgui/windows/log_window.hpp"
-#   include "erhe/imgui/windows/performance_window.hpp"
-#   include "erhe/imgui/windows/pipelines.hpp"
+#   include "erhe_imgui/imgui_log.hpp"
+#   include "erhe_imgui/imgui_renderer.hpp"
+#   include "erhe_imgui/imgui_windows.hpp"
+#   include "erhe_imgui/window_imgui_viewport.hpp"
+#   include "erhe_imgui/windows/log_window.hpp"
+#   include "erhe_imgui/windows/performance_window.hpp"
+#   include "erhe_imgui/windows/pipelines.hpp"
 #endif
-#include "erhe/item/item_log.hpp"
-#include "erhe/log/log.hpp"
-#include "erhe/net/net_log.hpp"
-#include "erhe/physics/physics_log.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/primitive/primitive_log.hpp"
-#include "erhe/raytrace/raytrace_log.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/renderer_log.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_log.hpp"
-#include "erhe/scene/scene_log.hpp"
-#include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
-#include "erhe/scene_renderer/scene_renderer_log.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/renderdoc_capture.hpp"
-#include "erhe/toolkit/toolkit_log.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/window_event_handler.hpp"
-#include "erhe/ui/ui_log.hpp"
+#include "erhe_item/item_log.hpp"
+#include "erhe_log/log.hpp"
+#include "erhe_net/net_log.hpp"
+#include "erhe_physics/physics_log.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_primitive/primitive_log.hpp"
+#include "erhe_raytrace/raytrace_log.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/renderer_log.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_log.hpp"
+#include "erhe_scene/scene_log.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_window/renderdoc_capture.hpp"
+#include "erhe_window/window_log.hpp"
+#include "erhe_window/window.hpp"
+#include "erhe_window/window_event_handler.hpp"
+#include "erhe_ui/ui_log.hpp"
 
 #if defined(ERHE_PROFILE_LIBRARY_NVTX)
 #   include <nvtx3/nvToolsExt.h>
@@ -104,26 +105,26 @@
 namespace editor {
 
 class Editor
-    : public erhe::toolkit::Window_event_handler
+    : public erhe::window::Window_event_handler
 {
 public:
     // Implements Window_event_handler
     [[nodiscard]] auto get_name() const -> const char* override { return "Editor"; }
 
-    [[nodiscard]] auto create_window() -> erhe::toolkit::Context_window
+    [[nodiscard]] auto create_window() -> erhe::window::Context_window
     {
         {
             auto ini = erhe::configuration::get_ini("erhe.ini", "headset");
             ini->get("openxr", m_openxr);
         }
 
-        erhe::toolkit::Window_configuration configuration{
+        erhe::window::Window_configuration configuration{
             .gl_major          = 4,
             .gl_minor          = 6,
             .width             = 1920,
             .height            = 1080,
             .msaa_sample_count = 0,
-            .title             = erhe::toolkit::format_window_title("erhe editor by Timo Suoranta")
+            .title             = erhe::window::format_window_title("erhe editor by Timo Suoranta")
         };
 
         bool show             = true;
@@ -139,7 +140,7 @@ public:
         ini->get("height",            configuration.height);
         ini->get("swap_interval",     configuration.swap_interval);
 
-        return erhe::toolkit::Context_window{configuration};
+        return erhe::window::Context_window{configuration};
     }
 
     Editor()
@@ -439,7 +440,7 @@ public:
     Time                           m_time;
     Editor_context                 m_editor_context;
 
-    erhe::toolkit::Context_window           m_context_window;
+    erhe::window::Context_window            m_context_window;
     Editor_settings                         m_editor_settings;
     erhe::graphics::Instance                m_graphics_instance;
     erhe::imgui::Imgui_renderer             m_imgui_renderer;
@@ -527,6 +528,7 @@ void run_editor()
     erhe::log::initialize_log_sinks();
     gl::initialize_logging();
     erhe::commands::initialize_logging();
+    erhe::file::initialize_logging();
     erhe::gltf::initialize_logging();
     erhe::geometry::initialize_logging();
     erhe::graphics::initialize_logging();
@@ -540,7 +542,7 @@ void run_editor()
     erhe::rendergraph::initialize_logging();
     erhe::scene::initialize_logging();
     erhe::scene_renderer::initialize_logging();
-    erhe::toolkit::initialize_logging();
+    erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::initialize_logging();
@@ -559,7 +561,7 @@ void run_editor()
     }
     if (enable_renderdoc_capture_support) {
         if (!openxr) {
-            erhe::toolkit::initialize_frame_capture();
+            erhe::window::initialize_frame_capture();
         } else {
             log_startup->warn(
                 "Renderdoc capture cannot be used together with OpenXR. "

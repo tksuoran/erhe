@@ -3,13 +3,13 @@
 #include "editor_message.hpp"
 #include "renderers/viewport_config.hpp"
 
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/message_bus/message_bus.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/toolkit/viewport.hpp"
-#include "erhe/toolkit/window_event_handler.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_message_bus/message_bus.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_math/viewport.hpp"
+#include "erhe_window/window_event_handler.hpp"
 
 #include <glm/glm.hpp>
 

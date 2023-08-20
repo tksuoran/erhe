@@ -6,22 +6,22 @@
 #include "tile_shape.hpp"
 #include "unit_type.hpp"
 
-#include "erhe/renderer/buffer_writer.hpp"
+#include "erhe_renderer/buffer_writer.hpp"
 
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/fragment_outputs.hpp"
-#include "erhe/graphics/pipeline.hpp"
-#include "erhe/graphics/sampler.hpp"
-#include "erhe/graphics/shader_resource.hpp"
-#include "erhe/graphics/shader_stages.hpp"
-#include "erhe/graphics/state/color_blend_state.hpp"
-#include "erhe/graphics/state/depth_stencil_state.hpp"
-#include "erhe/graphics/state/input_assembly_state.hpp"
-#include "erhe/graphics/state/rasterization_state.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/graphics/vertex_attribute_mappings.hpp"
-#include "erhe/toolkit/viewport.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/fragment_outputs.hpp"
+#include "erhe_graphics/pipeline.hpp"
+#include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/state/color_blend_state.hpp"
+#include "erhe_graphics/state/depth_stencil_state.hpp"
+#include "erhe_graphics/state/input_assembly_state.hpp"
+#include "erhe_graphics/state/rasterization_state.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_graphics/vertex_attribute_mappings.hpp"
+#include "erhe_math/viewport.hpp"
 
 #include <glm/glm.hpp>
 
@@ -98,7 +98,7 @@ public:
     void begin    ();
     void end      ();
 
-    void render    (erhe::toolkit::Viewport viewport);
+    void render    (erhe::math::Viewport viewport);
     void next_frame();
 
 private:

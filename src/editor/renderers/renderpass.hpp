@@ -1,10 +1,10 @@
 #pragma once
 
-#include "erhe/renderer/enums.hpp"
-#include "erhe/scene_renderer/primitive_buffer.hpp"
+#include "erhe_renderer/enums.hpp"
+#include "erhe_scene_renderer/primitive_buffer.hpp"
 
-#include "erhe/primitive/enums.hpp"
-#include "erhe/item/item.hpp"
+#include "erhe_primitive/enums.hpp"
+#include "erhe_item/item.hpp"
 
 #include <functional>
 #include <initializer_list>

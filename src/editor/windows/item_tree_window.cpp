@@ -12,26 +12,22 @@
 #include "operations/node_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/asset_browser.hpp"
-#include "scene/content_library.hpp"
 #include "scene/node_physics.hpp"
-#include "scene/node_raytrace.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/skin.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
-#   include <imgui_internal.h>
+#   include <imgui/imgui.h>
+#   include <imgui/imgui_internal.h>
 #endif
 
 namespace editor
@@ -490,7 +486,7 @@ auto Item_tree_window::drag_and_drop_target(
             drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (top rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
+                IM_ASSERT(payload->DataSize == sizeof(erhe::Unique_id<erhe::scene::Node>::id_type));
                 erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
                 move_selection(node, payload_item, Placement::Before_anchor);
             } else {
@@ -507,7 +503,7 @@ auto Item_tree_window::drag_and_drop_target(
             drag_and_drop_rectangle_preview(middle_rect);
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (middle rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
+                IM_ASSERT(payload->DataSize == sizeof(erhe::Unique_id<erhe::scene::Node>::id_type));
                 erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
                 attach_selection_to(node, payload_item);
             } else {
@@ -524,7 +520,7 @@ auto Item_tree_window::drag_and_drop_target(
             drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
             if (payload != nullptr) {
                 log_tree_frame->trace("Dnd payload is Node (bottom rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::toolkit::Unique_id<erhe::scene::Node>::id_type));
+                IM_ASSERT(payload->DataSize == sizeof(erhe::Unique_id<erhe::scene::Node>::id_type));
                 erhe::Item* payload_item = *(static_cast<erhe::Item**>(payload->Data));
                 move_selection(node, payload_item, Placement::After_anchor);
             } else {
@@ -935,7 +931,7 @@ void Item_tree_window::imgui_item_node(
 )
 {
     // Special handling for invisible parents (scene root)
-    if (erhe::toolkit::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
+    if (erhe::bit::test_all_rhs_bits_set(item->get_flag_bits(), erhe::Item_flags::invisible_parent)) {
         const auto& hierarchy = as<erhe::Hierarchy>(item);
         if (hierarchy) {
             for (const auto& child_node : hierarchy->get_children()) {
@@ -1034,7 +1030,7 @@ void Item_tree_window::imgui()
         camera_node->attach    (camera);
         camera_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
         camera_node->set_world_from_node(
-            erhe::toolkit::create_look_at(
+            erhe::math::create_look_at(
                 glm::vec3{0.0f, 1.0f, 1.0f},
                 glm::vec3{0.0f, 1.0f, 0.0f},
                 glm::vec3{0.0f, 1.0f, 0.0f}
@@ -1049,7 +1045,7 @@ void Item_tree_window::imgui()
         light_node->attach    (light);
         light_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
         light_node->set_world_from_node(
-            erhe::toolkit::create_look_at(
+            erhe::math::create_look_at(
                 glm::vec3{0.0f, 3.0f, 0.0f},
                 glm::vec3{0.0f, 0.0f, 0.0f},
                 glm::vec3{0.0f, 0.0f, 1.0f}

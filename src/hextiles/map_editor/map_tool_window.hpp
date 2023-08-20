@@ -2,7 +2,7 @@
 
 #include "coordinate.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 #include <string>
 

@@ -1,6 +1,6 @@
 {AUTOGENERATION_WARNING}
 
-#include "erhe/gl/dynamic_load.hpp"
+#include "erhe_gl/dynamic_load.hpp"
 
 namespace gl
 {{

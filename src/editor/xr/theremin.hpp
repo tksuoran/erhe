@@ -1,7 +1,7 @@
 #pragma once
 
 #include "renderable.hpp"
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 // #include <miniaudio.h>
 
@@ -58,7 +58,7 @@ private:
 
     Editor_context& m_context;
 
-    bool                 m_enable_audio          {false};   // master on/off switch
+    bool                 m_enable_audio          {false};  // master on/off switch
     float                m_antenna_distance      {0.0f};   // closest point of right hand to the frequency antenna
     float                m_antenna_distance_scale{100.0f}; // adjusts right hand antenna distance scaling
     std::optional<float> m_left_finger_distance;           // left hand distance between thumb and index finger tips

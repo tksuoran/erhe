@@ -4,13 +4,13 @@
 #include "editor_rendering.hpp"
 #include "xr/headset_view.hpp"
 
-#include "erhe/renderer/line_renderer.hpp"
+#include "erhe_renderer/line_renderer.hpp"
 #include "renderers/render_context.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
-#include "erhe/xr/headset.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
+#include "erhe_xr/headset.hpp"
 
 namespace editor
 {
@@ -155,7 +155,7 @@ auto Hand::get_closest_point_to_line(
                 m_joints[joint].location.pose.position.z
             };
             const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
-            const auto closest_point = erhe::toolkit::closest_point<float>(p0, p1, p);
+            const auto closest_point = erhe::math::closest_point<float>(p0, p1, p);
             if (closest_point.has_value()) {
                 const auto  q        = closest_point.value();
                 const float distance = glm::distance(p, q);
@@ -195,7 +195,7 @@ auto Hand::get_closest_point_to_line(
 ////                 m_joints[joint].location.pose.position.z
 ////             };
 ////             const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
-////             const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
+////             const auto closest_point = erhe::math::project_point_to_plane<float>(plane_normal, point_on_plane, p);
 ////             if (closest_point.has_value()) {
 ////                 const auto  q        = closest_point.value();
 ////                 const float distance = glm::distance(p, q);
@@ -230,7 +230,7 @@ auto Hand::get_closest_point_to_line(
 ////             m_joints[joint].location.pose.position.z
 ////         };
 ////         const auto p             = glm::vec3{transform * glm::vec4{pos, 1.0f}};
-////         const auto closest_point = erhe::toolkit::project_point_to_plane<float>(plane_normal, point_on_plane, p);
+////         const auto closest_point = erhe::math::project_point_to_plane<float>(plane_normal, point_on_plane, p);
 ////         if (closest_point.has_value()) {
 ////             const auto q = closest_point.value();
 ////             return Closest_finger{

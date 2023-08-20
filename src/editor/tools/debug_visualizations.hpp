@@ -2,8 +2,8 @@
 
 #include "renderable.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/toolkit/math_util.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_math/math_util.hpp"
 
 #include <memory>
 
@@ -115,7 +115,7 @@ private:
 
     Editor_context& m_context;
     Scene_view*     m_hover_scene_view{nullptr};
-    erhe::toolkit::Bounding_volume_combiner m_selection_bounding_volume;
+    erhe::math::Bounding_volume_combiner m_selection_bounding_volume;
 
     Visualization_mode m_lights                 {Visualization_mode::None};
     Visualization_mode m_cameras                {Visualization_mode::None};

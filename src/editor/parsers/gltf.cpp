@@ -6,14 +6,14 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/gltf/gltf.hpp"
-#include "erhe/gltf/image_transfer.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_gltf/gltf.hpp"
+#include "erhe_gltf/image_transfer.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
 
@@ -161,7 +161,7 @@ void import_gltf(
         node->attach(camera);
         node->set_parent(scene_root_node);
 
-        const glm::mat4 m = erhe::toolkit::create_look_at(
+        const glm::mat4 m = erhe::math::create_look_at(
             glm::vec3{0.0f, 1.80f, -8.0f}, // eye
             glm::vec3{0.0f, 1.80f,  0.0f}, // center
             glm::vec3{0.0f, 1.00f,  0.0f}  // up
@@ -183,7 +183,7 @@ void import_gltf(
         node->set_parent      (scene_root_node);
         node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
 
-        const glm::mat4 m = erhe::toolkit::create_look_at(
+        const glm::mat4 m = erhe::math::create_look_at(
             glm::vec3{0.0f, 8.0f, 0.0f}, // eye
             glm::vec3{0.0f, 0.0f, 0.0f}, // center
             glm::vec3{1.0f, 0.0f, 0.0f}  // up

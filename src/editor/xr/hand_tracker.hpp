@@ -2,10 +2,10 @@
 
 #include "renderable.hpp"
 
-#include "erhe/xr/xr.hpp"
+#include "erhe_xr/xr.hpp"
 
 #include <glm/glm.hpp>
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 #include <optional>
 

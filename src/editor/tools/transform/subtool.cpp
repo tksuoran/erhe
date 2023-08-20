@@ -5,7 +5,7 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/transform_tool.hpp"
 
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor
 {
@@ -168,7 +168,7 @@ auto Subtool::project_pointer_to_plane(
 
     const vec3 q0           = origin_opt.value();
     const vec3 v            = direction_opt.value();
-    const auto intersection = erhe::toolkit::intersect_plane<float>(n, p, q0, v);
+    const auto intersection = erhe::math::intersect_plane<float>(n, p, q0, v);
     if (intersection.has_value()) {
         return q0 + intersection.value() * v;
     }

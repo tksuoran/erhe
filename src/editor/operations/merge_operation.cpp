@@ -9,12 +9,11 @@
 #include "scene/node_raytrace.hpp"
 #include "scene/scene_root.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/geometry/operation/weld.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/weld.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <memory>
 #include <sstream>

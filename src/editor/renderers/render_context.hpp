@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/toolkit/viewport.hpp"
+#include "erhe_math/viewport.hpp"
 
 namespace erhe::graphics {
     class Shader_stages;
@@ -30,7 +30,7 @@ public:
     Viewport_config&               viewport_config;
     erhe::scene::Camera&           camera;
     Viewport_window*               viewport_window       {nullptr};
-    erhe::toolkit::Viewport        viewport              {0, 0, 0, 0, true};
+    erhe::math::Viewport           viewport              {0, 0, 0, 0, true};
     erhe::graphics::Shader_stages* override_shader_stages{nullptr};
 };
 

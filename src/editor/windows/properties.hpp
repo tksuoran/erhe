@@ -1,8 +1,8 @@
 #pragma once
 
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
-#include "erhe/scene/transform.hpp"
+#include "erhe_scene/transform.hpp"
 
 #include <vector>
 #include <memory>

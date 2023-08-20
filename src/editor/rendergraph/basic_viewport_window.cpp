@@ -66,7 +66,7 @@ Basic_viewport_window::Basic_viewport_window(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
@@ -79,7 +79,7 @@ Basic_viewport_window::Basic_viewport_window(
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
@@ -136,12 +136,12 @@ Basic_viewport_window::Basic_viewport_window(
     return {};
 }
 
-[[nodiscard]] auto Basic_viewport_window::get_viewport() const -> const erhe::toolkit::Viewport&
+[[nodiscard]] auto Basic_viewport_window::get_viewport() const -> const erhe::math::Viewport&
 {
     return m_viewport;
 }
 
-void Basic_viewport_window::set_viewport(erhe::toolkit::Viewport viewport)
+void Basic_viewport_window::set_viewport(erhe::math::Viewport viewport)
 {
     m_viewport = viewport;
 

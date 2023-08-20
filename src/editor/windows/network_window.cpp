@@ -2,14 +2,14 @@
 
 #include "editor_context.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/net/client.hpp"
-#include "erhe/net/server.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_net/client.hpp"
+#include "erhe_net/server.hpp"
 
-#include <imgui.h>
-#include <misc/cpp/imgui_stdlib.h>
+#include <imgui/imgui.h>
+#include <imgui/misc/cpp/imgui_stdlib.h>
 
 namespace editor
 {

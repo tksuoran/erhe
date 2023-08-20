@@ -8,14 +8,14 @@
 #include "renderers/mesh_memory.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 #include <taskflow/taskflow.hpp>  // Taskflow is header-only

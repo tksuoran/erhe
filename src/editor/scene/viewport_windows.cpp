@@ -21,28 +21,28 @@
 #include "windows/settings_window.hpp"
 #include "windows/viewport_config_window.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_viewport.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/window_imgui_viewport.hpp"
-#include "erhe/rendergraph/multisample_resolve.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/xxhash.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/window_imgui_viewport.hpp"
+#include "erhe_rendergraph/multisample_resolve.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
+#include "erhe_window/window.hpp"
+#include "erhe_hash/xxhash.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -86,7 +86,7 @@ Viewport_windows::Viewport_windows(
     Command_host::set_description("Viewport_windows");
 
     commands.register_command   (&m_open_new_viewport_window_command);
-    commands.bind_command_to_key(&m_open_new_viewport_window_command, erhe::toolkit::Key_f1, true);
+    commands.bind_command_to_key(&m_open_new_viewport_window_command, erhe::window::Key_f1, true);
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
@@ -99,7 +99,7 @@ Viewport_windows::Viewport_windows(
 
 void Viewport_windows::on_message(Editor_message& message)
 {
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
         handle_graphics_settings_changed(message.graphics_preset);
     }
@@ -277,7 +277,7 @@ void Viewport_windows::layout_basic_viewport_windows()
     int y = 0;
     for (const auto& basic_viewport_window : m_basic_viewport_windows) {
         basic_viewport_window->set_viewport(
-            erhe::toolkit::Viewport{
+            erhe::math::Viewport{
                 .x      = x * window_width,
                 .y      = y * window_height,
                 .width  = viewport_width,
@@ -517,7 +517,7 @@ void Viewport_windows::update_hover_from_basic_viewport_windows()
             continue;
         }
 
-        const erhe::toolkit::Viewport& viewport = basic_viewport_window->get_viewport();
+        const erhe::math::Viewport& viewport = basic_viewport_window->get_viewport();
         const bool is_hoverered = viewport.hit_test(
             static_cast<int>(std::round(pointer_window_position.x)),
             static_cast<int>(std::round(pointer_window_position.y))

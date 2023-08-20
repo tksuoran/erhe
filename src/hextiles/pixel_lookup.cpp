@@ -4,7 +4,7 @@
 #include "hextiles_log.hpp"
 #include "tiles.hpp"
 
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <bitset>
 #include <limits>

@@ -1,9 +1,9 @@
 #include "editor_settings.hpp"
 #include "editor_message_bus.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/gl/wrapper_enums.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
 
 #include <fmt/format.h>
 

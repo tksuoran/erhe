@@ -1,6 +1,6 @@
 {AUTOGENERATION_WARNING}
 
-#include "erhe/gl/enum_string_functions.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
 
 #include <sstream>
 #include <unordered_map>

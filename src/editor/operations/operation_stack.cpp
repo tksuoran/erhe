@@ -4,9 +4,9 @@
 #include "operations/ioperation.hpp"
 #include "tools/tool.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui/imgui.h>
@@ -74,8 +74,8 @@ Operation_stack::Operation_stack(
 {
     commands.register_command(&m_undo_command);
     commands.register_command(&m_redo_command);
-    commands.bind_command_to_key(&m_undo_command, erhe::toolkit::Key_z, true, erhe::toolkit::Key_modifier_bit_ctrl);
-    commands.bind_command_to_key(&m_redo_command, erhe::toolkit::Key_y, true, erhe::toolkit::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_undo_command, erhe::window::Key_z, true, erhe::window::Key_modifier_bit_ctrl);
+    commands.bind_command_to_key(&m_redo_command, erhe::window::Key_y, true, erhe::window::Key_modifier_bit_ctrl);
 
     m_executor = std::make_unique<tf::Executor>();
 

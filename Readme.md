@@ -7,7 +7,7 @@ erhe is a C++ library for modern OpenGL experiments.
 
 -   Uses direct state access (DSA)
 -   Uses bindless textures (when supported by driver)
--   Uses persistently mapped buffers
+-   Uses persistently mapped buffers (can be disabled)
 -   Uses multi draw indirect
 -   Uses latest OpenGL and GLSL versions
 -   Uses multiple threads and OpenGL contexts
@@ -61,7 +61,7 @@ For IDE:
 
 -   `git clone https://github.com/tksuoran/erhe`
 -   In *x64 native tools command prompt for vs 2022*, cd to the *erhe* directory
--   `scripts\configure_msbuild.bat`
+-   `scripts\configure_vs2022.bat`
 -   Open solution from the *build* directory with Visual Studio
 -   Build solution, or editor executable
 
@@ -121,13 +121,14 @@ Main purposes of these configuration options are
 
 ### ERHE_PHYSICS_LIBRARY
 
-The main physics backend is currently `bullet`. The `jolt` physics backend is less complete,
-and requires more work before it is usable.
+The main physics backend is currently `jolt`. The `bullet` physics backend has been
+rotting for a while, it would require some work to get it back to working.
 
 ### ERHE_RAYTRACE_LIBRARY
 
-The main raytrace backend is currently `embree`. Even the `embree` backend is incomplete,
-causing performance issues when creating larger scenes.
+The main raytrace backend is currently `bvh`. Even the `bvh` backend is incomplete,
+causing performance issues when creating larger scenes. The `embree` raytrace backend
+has been rotting for a while, it would require some work to get it back to working.
 
 erhe (editor) can be configured to use raytrace for mouse picking models from 3D viewports.
 By default, and when raytrace backend is set to `none`, mouse picking uses GPU rendering
@@ -185,7 +186,7 @@ but might be resurrected.
 
 Disabling font layout library removes native text rendering in erhe. ImGui content is not affected.
 
-# erhe
+# erhe executables
 
 ## editor
 
@@ -201,17 +202,19 @@ Editor is a sandbox like experimentation executable with a random set of functio
 -   Scene model geometries can be manipulated with operations such as Catmull-Clark
 -   Scene models can be created using a brush tool (must have selected brush *and* material)
 
-## erhe::geometry namespace
+# erhe libraries
 
-`erhe::geometry` namespace provides classes manipulating geometric, polygon
-based 3D objects.
+Major libraries
+## erhe::geometry
+
+`erhe::geometry` provides classes manipulating geometric, polygon based 3D objects.
 
 Geometry is collection of `Point`s, `Polygon`s, `Corner`s and their attributes.
 
 Arbitrary attributes can be associated with each `Point`, `Polygon` and `Corner`.
 
 These classes are designed for manipulating 3D objects, not for rendering them.
-See `erhe::mesh` how to render geometry objects.
+See `erhe::scene` and `erhe::scene_renderer` how to render geometry objects.
 
 Some features:
 
@@ -223,56 +226,99 @@ Some features:
     -   Truncate
     -   Gyro
 
-## erhe::gl namespace
+## erhe::gl
 
-`erhe::gl` namespace provides python generated low level C++ wrappers for GL API.
+`erhe::gl` provides python generated low level C++ wrappers for OpenGL API.
 
 Some features:
 
 -  Strongly typed C++ enums
 -  Optional API call logging, with enum and bitfield values shown as human readable strings
 -  Queries for checking GL extension and command support
--  Helper functions to map enum values to/from zero based integers, to help with ImGui, hashing, serialization
+-  Helper functions to map enum values to/from zero based integers (to help with ImGui, hashing, serialization)
 
-## erhe::graphics namespace
+## erhe::graphics
 
-`erhe::graphics` namespace provides classes basic 3D rendering with modern OpenGL.
+`erhe::graphics` provides classes basic 3D rendering with modern OpenGL.
 
-Currently, erhe uses OpenGL as graphics API. The `erhe::graphics` builds a vulkan-like
+Currently, erhe uses OpenGL as graphics API. The `erhe::graphics` builds a Vulkan-like
 abstraction on top of OpenGL:
 
 -  `erhe::graphics::Pipeline` capsulates all relevant GL state.
 
-## erhe::log namespace
+## erhe::imgui
 
-`erhe::log` namespace provides helpers / wrappers for spdlog logging/
+`erhe::imgui` provides custom ImGui backend and helper classes to manage
+and implement ImGui Windows.
 
-## erhe::primitive namespace
+## erhe::log
 
-`erhe::primitive` namespace provides classes to convert `erhe::geometry::Geometry`
-to renderable vertex and index buffers.
+`erhe::log` provides helpers / wrappers for spdlog logging.
 
-## erhe::scene namespace
+## erhe::primitive
 
-`erhe::scene` namespace provides classes for basic 3D scene graph.
+`erhe::primitive` provides classes to convert `erhe::geometry::Geometry`
+to renderable (or raytraceable) vertex and index buffers.
 
-Warning: `erhe::scene` is in early, experimental stages.
+## erhe::renderer
 
-## erhe::toolkit namespace
+`erhe::renderer` provides classes to assist rendering generic 3D content.
 
-`erhe::toolkit` namespace provides windowing system abstraction, currently
-using GLFW3, and some small helper functions.
+-  `Buffer_writer` keeps track of range of graphics `Buffer` that is being written to.
+-  `Multi_buffer` keeps dedicated versions of a graphics buffer for each frame in flight.
+-  `Line_renderer` can be used to draw debug lines
+-  `Text_renderer` can be used to draw 2D text (labels) into 3D viewport
 
-Also included are macros `VERIFY(condition)` and `FATAL(format, ...)` which
-can be used in place of `assert()` and unrecoverable error.
 
-## erhe::physics namespace
+## erhe::item
 
-`erhe::physics` namespace provides minimal abstraction / wrappers for Bullet / Jolt.
-The Bullet physics backend is more complete. The Jolt physics backend is barely started.
-Both will need more work.
+`erhe::item` provides base object classes for "entities".
 
-Warning: `erhe::physics` is in early, experimental stages.
+-  `Item` has name, source asset path, flags, unique id
+-  `Hierarchy` extends `Item` by adding pointer to parent, and vector of children
+
+## erhe::scene
+
+`erhe::scene` provides classes for basic 3D scene graph.
+
+-  `Node` extends `Item` by adding 3D transformation and glTF-like attachment points for Camera, Light, Mesh
+-  `Camera` is like glTF Camera, which can be attached to `Node`
+-  `Light` is like glTF Light, which can be attached to `Node`
+-  `Mesh` is like glTF Mesh (containing a number of `Primitive`s), which can be attached to Node
+-  `Scene` is collection of `Node`s
+
+## erhe::rendergraph
+
+`erhe::rendergraph` provides classes for arranging rendering passes into a graph
+
+-   `Rendergraph_node` lists a number of inputs (dependencies) and outputs.
+    A `Rendergraph_node` can be executed as part of `Rendergraph`.
+
+-   `Rendergraph` is a collection of `Rendergraph_node`s.
+    `Rendergraph` can be executed, this will execute rendergraph nodes in order
+    that is based on connections between nodes in the graph.
+
+## erhe::scene_renderer
+
+`erhe::scene_renderer` provides classes for rendering `erhe::scene` content.
+It uses and extends functionality from `erhe::renderer`.
+
+## erhe::window namespace
+
+`erhe::toolkit` provides windowing system abstraction, currently
+using GLFW3.
+
+## erhe::verify
+
+`erhe::verify` provides a simple `VERIFY(condition)` and `FATAL(format, ...)` macros,
+which can be used in place of `assert()` and unrecoverable error.
+
+## erhe::physics
+
+`erhe::physics` provides minimal abstraction / wrappers for Jolt / Bullet physics libraries.
+The Jolt physics backend is more complete. The Bullet physics backend has been rotting for some time.
+
+## erhe
 
 ## SAST Tools
 

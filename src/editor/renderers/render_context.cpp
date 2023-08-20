@@ -1,7 +1,7 @@
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/scene/node.hpp"
+#include "erhe_scene/node.hpp"
 
 
 namespace editor

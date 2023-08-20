@@ -9,16 +9,15 @@
 #include "type_editors/unit_editor_window.hpp"
 #include "map_editor/terrain_palette_window.hpp"
 
-#include "erhe/imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
 
-#include <imgui.h>
-#include "etl/string.h"
-#include "etl/vector.h"
+#include <imgui/imgui.h>
+#include <etl/string.h>
+#include <etl/vector.h>
 
 #include <cstdint>
 
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_renderer;
     class Imgui_windows;
 }

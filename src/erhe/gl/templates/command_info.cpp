@@ -1,7 +1,7 @@
 {AUTOGENERATION_WARNING}
 
-#include "erhe/gl/command_info.hpp"
-#include "erhe/gl/gl.hpp"
+#include "erhe_gl/command_info.hpp"
+#include "erhe_gl/gl.hpp"
 #include <bitset>
 #include <cctype>
 #include <cstdio>

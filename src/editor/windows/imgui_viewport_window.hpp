@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe/rendergraph/texture_rendergraph_node.hpp"
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_rendergraph/texture_rendergraph_node.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 
@@ -54,14 +54,14 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
     // Overridden to source viewport size from ImGui window
     auto get_producer_output_viewport(
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
     // Public API
     [[nodiscard]] auto viewport_window() const -> std::shared_ptr<Viewport_window>;
@@ -69,7 +69,7 @@ public:
 
 private:
     std::weak_ptr<Viewport_window> m_viewport_window;
-    erhe::toolkit::Viewport        m_viewport;
+    erhe::math::Viewport           m_viewport;
 };
 
 } // namespace editor

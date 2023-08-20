@@ -2,7 +2,7 @@
 
 #include "map_editor/map_editor.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 
 namespace hextiles
 {

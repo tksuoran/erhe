@@ -1,8 +1,8 @@
 #pragma once
 
-#include "erhe/graphics/sampler.hpp"
-#include "erhe/graphics/shader_resource.hpp"
-#include "erhe/graphics/shader_stages.hpp"
+#include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/shader_stages.hpp"
 
 namespace erhe::graphics {
     class Instance;

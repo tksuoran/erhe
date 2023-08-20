@@ -24,7 +24,7 @@ namespace erhe::scene_renderer {
     class Forward_renderer;
     class Shadow_renderer;
 }
-namespace erhe::toolkit {
+namespace erhe::window {
     class Context_window;
 }
 
@@ -86,7 +86,7 @@ public:
     erhe::scene::Scene_message_bus*         scene_message_bus     {nullptr};
     erhe::scene_renderer::Forward_renderer* forward_renderer      {nullptr};
     erhe::scene_renderer::Shadow_renderer*  shadow_renderer       {nullptr};
-    erhe::toolkit::Context_window*          context_window        {nullptr};
+    erhe::window::Context_window*           context_window        {nullptr};
     Brush_tool*                             brush_tool            {nullptr};
     Content_library_window*                 content_library_window{nullptr};
     Create*                                 create                {nullptr};

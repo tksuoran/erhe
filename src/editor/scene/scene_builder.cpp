@@ -19,33 +19,33 @@
 
 #include "SkylineBinPack.h" // RectangleBinPack
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/geometry/shapes/box.hpp"
-#include "erhe/geometry/shapes/cone.hpp"
-#include "erhe/geometry/shapes/sphere.hpp"
-#include "erhe/geometry/shapes/torus.hpp"
-#include "erhe/geometry/shapes/regular_polyhedron.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/primitive/primitive.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-#include "erhe/physics/iworld.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/transform.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_geometry/shapes/box.hpp"
+#include "erhe_geometry/shapes/cone.hpp"
+#include "erhe_geometry/shapes/sphere.hpp"
+#include "erhe_geometry/shapes/torus.hpp"
+#include "erhe_geometry/shapes/regular_polyhedron.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/transform.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -178,7 +178,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
         rendertarget_node_1->set_parent(test_scene_root->get_scene().get_root_node());
 
         rendertarget_node_1->set_world_from_node(
-            erhe::toolkit::create_look_at(
+            erhe::math::create_look_at(
                 glm::vec3{-0.3f, 0.6f, -0.3f},
                 glm::vec3{ 0.0f, 0.7f,  0.0f},
                 glm::vec3{ 0.0f, 1.0f,  0.0f}
@@ -230,7 +230,7 @@ void Scene_builder::add_rendertarget_viewports(int count)
         rendertarget_node_2->set_parent(test_scene_root->get_scene().get_root_node());
 
         rendertarget_node_2->set_world_from_node(
-            erhe::toolkit::create_look_at(
+            erhe::math::create_look_at(
                 glm::vec3{0.3f, 0.6f, -0.3f},
                 glm::vec3{0.0f, 0.7f,  0.0f},
                 glm::vec3{0.0f, 1.0f,  0.0f}
@@ -271,7 +271,7 @@ auto Scene_builder::make_camera(
     node->attach(camera);
     node->set_parent(m_scene_root->get_scene().get_root_node());
 
-    const mat4 m = erhe::toolkit::create_look_at(
+    const mat4 m = erhe::math::create_look_at(
         position, // eye
         look_at,  // center
         vec3{0.0f, 1.0f,  0.0f}  // up
@@ -519,10 +519,10 @@ void Scene_builder::make_brushes(
                     for (auto& geometry : geometries) {
                         geometry->compute_polygon_normals();
                         // The real teapot is ~33% taller (ratio 4:3)
-                        //const mat4 scale_t = erhe::toolkit::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
+                        //const mat4 scale_t = erhe::math::create_scale(0.5f, 0.5f * 4.0f / 3.0f, 0.5f);
                         //geometry->transform(scale_t);
 
-                        const mat4 scale_t = erhe::toolkit::create_scale(0.01f);
+                        const mat4 scale_t = erhe::math::create_scale(0.01f);
                         geometry->transform(scale_t);
                         geometry->flip_reversed_polygons();
                         make_brush(
@@ -704,7 +704,7 @@ void Scene_builder::make_brushes(
                     9 * std::max(1, config.detail),
                     std::max(1, config.detail)
                 ); // always axis = x
-                cylinder_geometry.transform(erhe::toolkit::mat4_swap_xy);
+                cylinder_geometry.transform(erhe::math::mat4_swap_xy);
 
                 make_brush(
                     Brush_data{
@@ -741,7 +741,7 @@ void Scene_builder::make_brushes(
                     10 * std::max(1, config.detail),  // slice count
                      5 * std::max(1, config.detail)   // stack count
                 );
-                cone_geometry.transform(erhe::toolkit::mat4_swap_xy); // convert to axis = y
+                cone_geometry.transform(erhe::math::mat4_swap_xy); // convert to axis = y
 
                 make_brush(
                     Brush_data{
@@ -779,7 +779,7 @@ void Scene_builder::make_brushes(
             20 * std::max(1, config.detail),
              8 * std::max(1, config.detail)
         );
-        ring_geometry.transform(erhe::toolkit::mat4_swap_xy);
+        ring_geometry.transform(erhe::math::mat4_swap_xy);
         const auto ring_geometry_shared = std::make_shared<erhe::geometry::Geometry>(
             std::move(ring_geometry)
         );
@@ -811,7 +811,7 @@ void Scene_builder::make_brushes(
             node->set_parent          (m_scene_root->get_scene().get_root_node());
         };
 
-        using namespace erhe::toolkit;
+        using namespace erhe::math;
         make_mesh_node("X ring", Transform{} );
         make_mesh_node("Y ring", Transform{create_rotation<float>( glm::pi<float>() / 2.0f, glm::vec3{0.0f, 0.0f, 1.0f})});
         make_mesh_node("Z ring", Transform{create_rotation<float>(-glm::pi<float>() / 2.0f, glm::vec3{0.0f, 1.0f, 0.0f})});
@@ -880,7 +880,7 @@ void Scene_builder::add_room()
         .node_flags      = Item_flags::visible | Item_flags::content | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform,
         .mesh_flags      = Item_flags::visible | Item_flags::content | Item_flags::opaque | Item_flags::id | Item_flags::show_in_ui | Item_flags::lock_viewport_selection | Item_flags::lock_viewport_transform,
         .scene_root      = m_scene_root.get(),
-        .world_from_node = erhe::toolkit::create_translation<float>(0.0f, -0.51f, 0.0f),
+        .world_from_node = erhe::math::create_translation<float>(0.0f, -0.51f, 0.0f),
         .material        = floor_material,
         .scale           = 1.0f,
         .motion_mode     = erhe::physics::Motion_mode::e_static
@@ -1043,7 +1043,7 @@ void Scene_builder::make_mesh_nodes()
                     Item_flags::id         |
                     Item_flags::shadow_cast,
                 .scene_root      = m_scene_root.get(),
-                .world_from_node = erhe::toolkit::create_translation(x, y, z),
+                .world_from_node = erhe::math::create_translation(x, y, z),
                 .material        = materials.at(material_index),
                 .scale           = 1.0f
             };
@@ -1092,7 +1092,7 @@ void Scene_builder::make_cube_benchmark(Mesh_memory& mesh_memory)
                 mesh->mesh_data.layer_id = m_scene_root->layers().content()->id;
                 mesh->enable_flag_bits(Item_flags::content | Item_flags::shadow_cast | Item_flags::opaque);
                 node->attach(mesh);
-                node->set_world_from_node(erhe::toolkit::create_translation<float>(pos));
+                node->set_world_from_node(erhe::math::create_translation<float>(pos));
                 node->set_parent(m_scene_root->get_scene().get_root_node());
             }
         }
@@ -1120,7 +1120,7 @@ auto Scene_builder::make_directional_light(
     node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
-    const mat4 m = erhe::toolkit::create_look_at(
+    const mat4 m = erhe::math::create_look_at(
         position,                // eye
         vec3{0.0f, 0.0f, 0.0f},  // center
         vec3{0.0f, 1.0f, 0.0f}   // up
@@ -1153,7 +1153,7 @@ auto Scene_builder::make_spot_light(
     node->set_parent      (m_scene_root->get_scene().get_root_node());
     node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
 
-    const mat4 m = erhe::toolkit::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
+    const mat4 m = erhe::math::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
     node->set_parent_from_node(m);
 
     return light;
@@ -1204,7 +1204,7 @@ void Scene_builder::setup_lights()
         const float v   = 1.0f;
         float r, g, b;
 
-        erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
+        erhe::math::hsv_to_rgb(h, s, v, r, g, b);
 
         const vec3        color     = vec3{r, g, b};
         const float       intensity = config.directional_light_intensity / static_cast<float>(config.directional_light_count);
@@ -1224,7 +1224,7 @@ void Scene_builder::setup_lights()
         const float v     = 1.0f;
         float r, g, b;
 
-        erhe::toolkit::hsv_to_rgb(h, s, v, r, g, b);
+        erhe::math::hsv_to_rgb(h, s, v, r, g, b);
 
         const vec3        color           = vec3{r, g, b};
         const float       intensity       = config.spot_light_intensity;
@@ -1276,7 +1276,7 @@ void Scene_builder::animate_lights(const double time_d)
             r * std::cos(rel + t * 0.93f)
         };
 
-        const auto m = erhe::toolkit::create_look_at(
+        const auto m = erhe::math::create_look_at(
             eye,
             center,
             vec3{0.0f, 1.0f, 0.0f} // up

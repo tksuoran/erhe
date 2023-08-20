@@ -4,14 +4,14 @@
 #include "renderers/render_context.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #   include <imgui/misc/cpp/imgui_stdlib.h>
 #endif
 
@@ -23,7 +23,7 @@ namespace editor
 using glm::vec3;
 
 Grid::Grid()
-    : erhe::scene::Node_attachment{erhe::toolkit::Unique_id<Grid>{}.get_id()}
+    : erhe::scene::Node_attachment{erhe::Unique_id<Grid>{}.get_id()}
 {
 }
 
@@ -211,8 +211,8 @@ void Grid::imgui(Editor_context& context)
         const float     radians      = glm::radians(m_rotation);
         const glm::mat4 orientation  = get_plane_transform(m_plane_type);
         const glm::vec3 plane_normal = glm::vec3{0.0, 1.0, 0.0};
-        const glm::mat4 offset       = erhe::toolkit::create_translation<float>(m_center);
-        const glm::mat4 rotation     = erhe::toolkit::create_rotation<float>( radians, plane_normal);
+        const glm::mat4 offset       = erhe::math::create_translation<float>(m_center);
+        const glm::mat4 rotation     = erhe::math::create_rotation<float>( radians, plane_normal);
         m_world_from_grid = orientation * rotation * offset;
         m_grid_from_world = glm::inverse(m_world_from_grid); // orientation * inverse_rotation * inverse_offset;
     } else {
@@ -250,7 +250,7 @@ auto Grid::intersect_ray(
 
     const glm::vec3 ray_origin_in_grid    = glm::vec3{grid_from_world() * glm::vec4{ray_origin_in_world,    1.0f}};
     const glm::vec3 ray_direction_in_grid = glm::vec3{grid_from_world() * glm::vec4{ray_direction_in_world, 0.0f}};
-    const auto intersection = erhe::toolkit::intersect_plane<float>(
+    const auto intersection = erhe::math::intersect_plane<float>(
         glm::vec3{0.0f, 1.0f, 0.0f},
         glm::vec3{0.0f, 0.0f, 0.0f},
         ray_origin_in_grid,

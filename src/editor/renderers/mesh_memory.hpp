@@ -1,11 +1,11 @@
 #pragma once
 
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/state/vertex_input_state.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/primitive/build_info.hpp"
-#include "erhe/primitive/buffer_sink.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
+#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_primitive/build_info.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
 
 namespace erhe::graphics {
     class Buffer;

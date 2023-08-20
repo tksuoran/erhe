@@ -7,16 +7,16 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/gl/command_info.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_gl/command_info.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 
@@ -164,7 +164,7 @@ void Shadow_render_node::execute_rendergraph_node()
     const erhe::rendergraph::Resource_routing resource_routing,
     const int                                 key,
     const int                                 depth
-) const -> erhe::toolkit::Viewport
+) const -> erhe::math::Viewport
 {
     static_cast<void>(resource_routing); // TODO Validate
     static_cast<void>(depth);
@@ -192,7 +192,7 @@ auto Shadow_render_node::get_texture() const -> std::shared_ptr<erhe::graphics::
     return m_texture;
 }
 
-auto Shadow_render_node::get_viewport() const -> erhe::toolkit::Viewport
+auto Shadow_render_node::get_viewport() const -> erhe::math::Viewport
 {
     return m_viewport;
 }

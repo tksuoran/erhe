@@ -4,23 +4,23 @@
 #include "renderers/mesh_memory.hpp"
 #include "renderers/programs.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/gl/command_info.hpp"
-#include "erhe/gl/draw_indirect.hpp"
-#include "erhe/gl/enum_bit_mask_operators.hpp"
-#include "erhe/gl/enum_string_functions.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/gpu_timer.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/shader_stages.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_gl/command_info.hpp"
+#include "erhe_gl/draw_indirect.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_gl/enum_string_functions.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor
 {
@@ -161,7 +161,7 @@ void Id_renderer::next_frame()
     m_current_id_frame_resource_slot = (m_current_id_frame_resource_slot + 1) % s_frame_resources_count;
 }
 
-void Id_renderer::update_framebuffer(const erhe::toolkit::Viewport viewport)
+void Id_renderer::update_framebuffer(const erhe::math::Viewport viewport)
 {
     ERHE_PROFILE_FUNCTION();
 

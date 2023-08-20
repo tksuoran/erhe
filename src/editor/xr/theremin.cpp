@@ -6,11 +6,11 @@
 #include "xr/hand_tracker.hpp"
 #include "xr/headset_view.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_scene/node.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 namespace editor
 {

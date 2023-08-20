@@ -1,12 +1,12 @@
 #include "tools/transform/rotation_inspector.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/scene/trs_transform.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_scene/trs_transform.hpp"
 
 #include <glm/gtx/euler_angles.hpp>
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor

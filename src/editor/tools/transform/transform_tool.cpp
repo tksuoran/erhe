@@ -22,26 +22,26 @@
 #include "tools/transform/handle_enums.hpp"
 #include "tools/transform/rotate_tool.hpp"
 
-#include "erhe/configuration/configuration.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/physics/irigid_body.hpp"
-#include "erhe/raytrace/ray.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/message_bus/message_bus.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_configuration/configuration.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_message_bus/message_bus.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 #include <unordered_map>
@@ -140,7 +140,7 @@ Transform_tool::Transform_tool(
     tools.register_tool(this);
 
     commands.register_command(&m_drag_command);
-    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::toolkit::Mouse_button_left, true);
+    commands.bind_command_to_mouse_drag(&m_drag_command, erhe::window::Mouse_button_left, true);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     const auto* headset = headset_view.get_headset();
@@ -167,7 +167,7 @@ void Transform_tool::on_message(Editor_message& message)
 {
     Tool::on_message(message);
 
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_mesh)) {
         update_hover();
     }
@@ -330,7 +330,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+        const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
             node->get_flag_bits(),
             erhe::Item_flags::lock_viewport_transform
         );
@@ -365,7 +365,7 @@ void Transform_tool::adjust_translation(const vec3 translation)
         if (!node) {
             continue;
         }
-        const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+        const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
             node->get_flag_bits(),
             erhe::Item_flags::lock_viewport_transform
         );
@@ -393,7 +393,7 @@ void Transform_tool::adjust_rotation(
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+            const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
                 node->get_flag_bits(),
                 erhe::Item_flags::lock_viewport_transform
             );
@@ -407,8 +407,8 @@ void Transform_tool::adjust_rotation(
         }
         shared.world_from_anchor = erhe::scene::rotate(shared.world_from_anchor_initial_state, rotation);
     } else {
-        const mat4 translate   = erhe::toolkit::create_translation<float>(vec3{-center_of_rotation});
-        const mat4 untranslate = erhe::toolkit::create_translation<float>(vec3{ center_of_rotation});
+        const mat4 translate   = erhe::math::create_translation<float>(vec3{-center_of_rotation});
+        const mat4 untranslate = erhe::math::create_translation<float>(vec3{ center_of_rotation});
         adjust(
             untranslate * mat4_cast(rotation) * translate * shared.world_from_anchor_initial_state.get_matrix()
         );
@@ -428,7 +428,7 @@ void Transform_tool::adjust_scale(
             if (!node) {
                 continue;
             }
-            const bool node_lock_viewport_transform = erhe::toolkit::test_all_rhs_bits_set(
+            const bool node_lock_viewport_transform = erhe::bit::test_all_rhs_bits_set(
                 node->get_flag_bits(),
                 erhe::Item_flags::lock_viewport_transform
             );

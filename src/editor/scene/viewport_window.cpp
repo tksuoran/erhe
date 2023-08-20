@@ -20,26 +20,26 @@
 #include "tools/transform/transform_tool.hpp"
 #include "windows/viewport_config_window.hpp"
 
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/rendergraph/multisample_resolve.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/renderbuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_rendergraph/multisample_resolve.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/renderbuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
-#   include <imgui.h>
+#   include <imgui/imgui.h>
 #endif
 
 namespace editor
@@ -213,7 +213,7 @@ void Viewport_window::reconfigure(const int sample_count)
 }
 
 void Viewport_window::set_window_viewport(
-    erhe::toolkit::Viewport viewport
+    erhe::math::Viewport viewport
 )
 {
     m_window_viewport = viewport;
@@ -244,12 +244,12 @@ auto Viewport_window::is_hovered() const -> bool
     return m_scene_root.lock();
 }
 
-auto Viewport_window::window_viewport() const -> const erhe::toolkit::Viewport&
+auto Viewport_window::window_viewport() const -> const erhe::math::Viewport&
 {
     return m_window_viewport;
 }
 
-auto Viewport_window::projection_viewport() const -> const erhe::toolkit::Viewport&
+auto Viewport_window::projection_viewport() const -> const erhe::math::Viewport&
 {
     return m_projection_viewport;
 }
@@ -295,7 +295,7 @@ auto Viewport_window::project_to_viewport(
     const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
-    return erhe::toolkit::project_to_screen_space<float>(
+    return erhe::math::project_to_screen_space<float>(
         camera_projection_transforms.clip_from_world.get_matrix(),
         position_in_world,
         depth_range_near,
@@ -318,7 +318,7 @@ auto Viewport_window::unproject_to_world(
     const auto camera_projection_transforms = camera->projection_transforms(m_projection_viewport);
     constexpr float depth_range_near = 0.0f;
     constexpr float depth_range_far  = 1.0f;
-    return erhe::toolkit::unproject<float>(
+    return erhe::math::unproject<float>(
         camera_projection_transforms.clip_from_world.get_inverse_matrix(),
         position_in_window,
         depth_range_near,
@@ -428,7 +428,7 @@ void Viewport_window::update_hover_with_id_render()
         }
     }
 
-    using erhe::toolkit::test_all_rhs_bits_set;
+    using namespace erhe::bit;
 
     const uint64_t flags = (id_query.mesh != nullptr) ? entry.mesh->get_flag_bits() : 0;
 
@@ -481,7 +481,7 @@ auto Viewport_window::position_in_world_viewport_depth(
     const auto      projection_transforms = camera->projection_transforms(vp);
     const glm::mat4 world_from_clip       = projection_transforms.clip_from_world.get_inverse_matrix();
 
-    return erhe::toolkit::unproject<float>(
+    return erhe::math::unproject<float>(
         glm::mat4{world_from_clip},
         position_in_viewport,
         depth_range_near,
@@ -647,7 +647,7 @@ auto Viewport_window::get_closest_point_on_line(
 
     const vec3 ss_P0      = ss_P0_opt.value();
     const vec3 ss_P1      = ss_P1_opt.value();
-    const auto ss_closest = erhe::toolkit::closest_point<float>(
+    const auto ss_closest = erhe::math::closest_point<float>(
         vec2{ss_P0},
         vec2{ss_P1},
         vec2{position_in_viewport_opt.value()}
@@ -659,7 +659,7 @@ auto Viewport_window::get_closest_point_on_line(
         if (R0_opt.has_value() && R1_opt.has_value()) {
             const auto R0 = R0_opt.value();
             const auto R1 = R1_opt.value();
-            const auto closest_points_r = erhe::toolkit::closest_points<float>(P0, P1, R0, R1);
+            const auto closest_points_r = erhe::math::closest_points<float>(P0, P1, R0, R1);
             if (closest_points_r.has_value()) {
                 return closest_points_r.value().P;
             }
@@ -670,7 +670,7 @@ auto Viewport_window::get_closest_point_on_line(
         if (Q0_opt.has_value() && Q1_opt.has_value()) {
             const auto Q0 = Q0_opt.value();
             const auto Q1 = Q1_opt.value();
-            const auto closest_points_q = erhe::toolkit::closest_points<float>(P0, P1, Q0, Q1);
+            const auto closest_points_q = erhe::math::closest_points<float>(P0, P1, Q0, Q1);
             if (closest_points_q.has_value()) {
                 return closest_points_q.value().P;
             }
@@ -702,7 +702,7 @@ auto Viewport_window::get_closest_point_on_plane(
     const vec3 Q1 = Q1_opt.value();
     const vec3 v  = normalize(Q1 - Q0);
 
-    const auto intersection = erhe::toolkit::intersect_plane<float>(N, P, Q0, v);
+    const auto intersection = erhe::math::intersect_plane<float>(N, P, Q0, v);
     if (!intersection.has_value()) {
         return {};
     }

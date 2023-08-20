@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/geometry/geometry.hpp"
+#include "erhe_geometry/geometry.hpp"
 
 #include "rapidjson/document.h"
 

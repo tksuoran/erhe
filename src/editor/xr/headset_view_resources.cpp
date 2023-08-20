@@ -2,11 +2,11 @@
 #include "editor_log.hpp"
 #include "xr/headset_view.hpp"
 
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/framebuffer.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/node.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/framebuffer.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/node.hpp"
 
 namespace editor
 {

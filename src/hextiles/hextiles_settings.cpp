@@ -1,12 +1,12 @@
 #include "hextiles_settings.hpp"
-#include "erhe/configuration/configuration.hpp"
+#include "erhe_configuration/configuration.hpp"
 
-#include "erhe/toolkit/window.hpp"
+#include "erhe_window/window.hpp"
 
 namespace hextiles {
 
 Hextiles_settings::Hextiles_settings(
-    erhe::toolkit::Context_window& context_window
+    erhe::window::Context_window& context_window
 )
 {
     using namespace erhe::configuration;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/physics/idebug_draw.hpp"
+#include "erhe_physics/idebug_draw.hpp"
 
 namespace editor
 {

@@ -20,27 +20,27 @@
 #   include "xr/headset_view.hpp"
 #endif
 
-#include "erhe/commands/command.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/gpu_timer.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/imgui/window_imgui_viewport.hpp"
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene_renderer/forward_renderer.hpp"
-#include "erhe/scene_renderer/shadow_renderer.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/renderdoc_capture.hpp"
-#include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/window_event_handler.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/gpu_timer.hpp"
+#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_imgui/window_imgui_viewport.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_window/renderdoc_capture.hpp"
+#include "erhe_verify/verify.hpp"
+#include "erhe_window/window.hpp"
+#include "erhe_window/window_event_handler.hpp"
 
 namespace editor {
 
@@ -86,7 +86,7 @@ Editor_rendering::Editor_rendering(
     , m_tools_timer          {"tools"}
 {
     commands.register_command(&m_capture_frame_command);
-    commands.bind_command_to_key(&m_capture_frame_command, erhe::toolkit::Key_f10);
+    commands.bind_command_to_key(&m_capture_frame_command, erhe::window::Key_f10);
 
     using Item_filter = erhe::Item_filter;
     using Item_flags  = erhe::Item_flags;
@@ -250,7 +250,7 @@ Editor_rendering::Editor_rendering(
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
-            using namespace erhe::toolkit;
+            using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_graphics_settings)) {
                 handle_graphics_settings_changed(message.graphics_preset);
             }
@@ -697,7 +697,7 @@ void Editor_rendering::begin_frame()
     ERHE_PROFILE_FUNCTION();
 
     if (m_trigger_capture) {
-        erhe::toolkit::start_frame_capture(*m_context.context_window);
+        erhe::window::start_frame_capture(*m_context.context_window);
     }
 
     auto* imgui_viewport = m_context.imgui_windows->get_window_viewport().get();
@@ -723,7 +723,7 @@ void Editor_rendering::end_frame()
     m_context.id_renderer      ->next_frame();
 
     if (m_trigger_capture) {
-        erhe::toolkit::end_frame_capture(*m_context.context_window);
+        erhe::window::end_frame_capture(*m_context.context_window);
         m_trigger_capture = false;
     }
 }

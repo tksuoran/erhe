@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/physics/idebug_draw.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_physics/idebug_draw.hpp"
 
 namespace erhe::imgui {
     class Imgui_windows;

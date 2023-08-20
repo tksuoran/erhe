@@ -7,9 +7,9 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/primitive/enums.hpp"
+#include "erhe_primitive/enums.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 #include <imgui/imgui.h>
 

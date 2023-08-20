@@ -6,26 +6,21 @@
 #include "map_editor/map_editor.hpp"
 #include "type_editors/type_editor.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
-namespace erhe::commands
-{
+namespace erhe::commands {
     class Commands;
 }
-namespace erhe::graphics
-{
+namespace erhe::graphics {
     class Instance;
 }
-namespace erhe::imgui
-{
+namespace erhe::imgui {
     class Imgui_windows;
 }
-namespace erhe::renderer
-{
+namespace erhe::renderer {
     class Text_renderer;
 }
-namespace erhe::toolkit
-{
+namespace erhe::window {
     class Window_event_handler;
 }
 
@@ -41,13 +36,13 @@ class Menu_window
 {
 public:
     Menu_window(
-        erhe::commands::Commands&            commands,
-        erhe::imgui::Imgui_renderer&         imgui_renderer,
-        erhe::imgui::Imgui_windows&          imgui_windows,
-        erhe::toolkit::Window_event_handler& window_event_handler,
-        Map_window&                          map_window,
-        Tiles&                               tiles,
-        Tile_renderer&                       tile_renderer
+        erhe::commands::Commands&           commands,
+        erhe::imgui::Imgui_renderer&        imgui_renderer,
+        erhe::imgui::Imgui_windows&         imgui_windows,
+        erhe::window::Window_event_handler& window_event_handler,
+        Map_window&                         map_window,
+        Tiles&                              tiles,
+        Tile_renderer&                      tile_renderer
     );
 
     // Implements Imgui_window
@@ -56,14 +51,14 @@ public:
     void show_menu();
 
 private:
-    erhe::toolkit::Window_event_handler& m_window_event_handler;
-    Tiles&                               m_tiles;
-    Tile_renderer&                       m_tile_renderer;
-    Map_window&                          m_map_window;
-    Game                                 m_game;
-    Map_editor                           m_map_editor;
-    New_game_window                      m_new_game_window;
-    Type_editor                          m_type_editor;
+    erhe::window::Window_event_handler& m_window_event_handler;
+    Tiles&                              m_tiles;
+    Tile_renderer&                      m_tile_renderer;
+    Map_window&                         m_map_window;
+    Game                                m_game;
+    Map_editor                          m_map_editor;
+    New_game_window                     m_new_game_window;
+    Type_editor                         m_type_editor;
 };
 
 } // namespace hextiles

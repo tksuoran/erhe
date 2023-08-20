@@ -1,7 +1,7 @@
 #include "programs.hpp"
 
-#include "erhe/graphics/instance.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
 
 namespace example {
 

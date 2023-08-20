@@ -1,10 +1,10 @@
 #include "parsers/wavefront_obj.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_file/file.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <limits>
 #include <string>
@@ -128,7 +128,7 @@ auto parse_obj_geometry(
     log_parsers->trace("path = {}", path.generic_string());
 
     std::vector<std::shared_ptr<erhe::geometry::Geometry>> result;
-    const auto opt_text = erhe::toolkit::read("parse_obj_geometry", path);
+    const auto opt_text = erhe::file::read("parse_obj_geometry", path);
 
     // I dislike this big scope, I'd prefer just to
     // return {} but unfortunately having more than

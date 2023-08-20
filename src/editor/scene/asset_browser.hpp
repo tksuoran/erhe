@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/item/hierarchy.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_item/hierarchy.hpp"
 
 #include <glm/glm.hpp>
 

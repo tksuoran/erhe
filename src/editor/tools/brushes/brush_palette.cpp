@@ -1,8 +1,8 @@
 
 #include "brushes/brush_tool.hpp"
 
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_profile/profile.hpp"
 
 #if defined(ERHE_GUI_LIBRARY_IMGUI)
 #   include <imgui.h>

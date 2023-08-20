@@ -1,11 +1,8 @@
 set(_target "editor")
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(${_target})
-
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-
     graphics/gradients.cpp
     graphics/gradients.hpp
     graphics/icon_rasterization.cpp
@@ -14,7 +11,6 @@ erhe_target_sources_grouped(
     graphics/icon_set.hpp
     graphics/image_transfer.cpp
     graphics/image_transfer.hpp
-
     operations/compound_operation.cpp
     operations/compound_operation.hpp
     operations/geometry_operations.cpp
@@ -30,12 +26,10 @@ erhe_target_sources_grouped(
     operations/node_operation.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
-
     parsers/json_polyhedron.cpp
     parsers/json_polyhedron.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
-
     renderers/composer.cpp
     renderers/composer.hpp
     renderers/frustum_tiler.cpp
@@ -56,14 +50,12 @@ erhe_target_sources_grouped(
     renderers/renderpass.hpp
     renderers/viewport_config.cpp
     renderers/viewport_config.hpp
-
     rendergraph/basic_viewport_window.cpp
     rendergraph/basic_viewport_window.hpp
     rendergraph/post_processing.cpp
     rendergraph/post_processing.hpp
     rendergraph/shadow_render_node.cpp
     rendergraph/shadow_render_node.hpp
-
     scene/asset_browser.cpp
     scene/asset_browser.hpp
     scene/content_library.cpp
@@ -94,7 +86,6 @@ erhe_target_sources_grouped(
     scene/viewport_window.hpp
     scene/viewport_windows.cpp
     scene/viewport_windows.hpp
-
     tools/brushes/brush.cpp
     tools/brushes/brush.hpp
     tools/brushes/brush_tool.cpp
@@ -156,7 +147,6 @@ erhe_target_sources_grouped(
     tools/tool.hpp
     tools/tools.cpp
     tools/tools.hpp
-
     windows/animation_curve.cpp
     windows/animation_curve.hpp
     windows/animation_window.cpp
@@ -193,7 +183,6 @@ erhe_target_sources_grouped(
     windows/tool_properties_window.hpp
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
-
     editor.cpp
     editor.hpp
     editor_context.cpp
@@ -223,7 +212,6 @@ erhe_target_sources_grouped(
     task_queue.hpp
     time.cpp
     time.hpp
-
     res/icons/camera.svg
     res/icons/directional_light.svg
     res/icons/drag.svg
@@ -235,7 +223,6 @@ erhe_target_sources_grouped(
     res/icons/push.svg
     res/icons/rotate.svg
     res/icons/spot_light.svg
-
     res/shaders/anisotropic_engine_ready.frag
     res/shaders/anisotropic_engine_ready.vert
     res/shaders/anisotropic_slope.frag
@@ -286,14 +273,12 @@ erhe_target_sources_grouped(
     res/shaders/wide_lines.frag
     res/shaders/wide_lines.geom
     res/shaders/wide_lines.vert
-
     erhe.ini
     logging.ini
     presets.ini
-    #user.ini
+    settings.ini
     windows.ini
 )
-
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -301,8 +286,9 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
         parsers/gltf.hpp
     )
 endif ()
-
-
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+endif ()
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
@@ -324,61 +310,55 @@ else ()
         xr/null_headset_view.hpp
     )
 endif ()
-
 target_link_libraries(
     ${_target}
     PRIVATE
+    erhe::bit
     erhe::commands
     erhe::concurrency
     erhe::configuration
+    erhe::defer
+    erhe::file
     erhe::geometry
     erhe::gl
     erhe::gltf
     erhe::graphics
     erhe::imgui
     erhe::log
+    erhe::math
     erhe::net
     erhe::physics
     erhe::primitive
+    erhe::profile
     erhe::renderer
     erhe::rendergraph
     erhe::scene
     erhe::scene_renderer
-    erhe::toolkit
     erhe::ui
-    meshoptimizer
+    erhe::verify
+    #meshoptimizer
+    imgui
     mINI
     RectangleBinPack
     rapidjson
     Taskflow
 )
-
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     target_link_libraries(${_target} PRIVATE imgui)
 endif ()
-
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
     target_link_libraries(${_target} PRIVATE lunasvg)
 endif ()
-
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
 endif ()
-
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     target_link_libraries(${_target} PRIVATE erhe_xr openxr_loader)
 endif ()
-
-if (DEFINED ERHE_PROFILE_TARGET)
-    target_link_libraries(${_target} PRIVATE ${ERHE_PROFILE_TARGET})
-endif ()
-
 if (${ERHE_GLTF_LIBRARY} STREQUAL "cgltf")
     target_link_libraries(${_target} PRIVATE cgltf)
 endif ()
-
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
 set_target_properties(
     ${_target} PROPERTIES
     CXX_STANDARD                  20
@@ -386,9 +366,8 @@ set_target_properties(
     CXX_EXTENSIONS                NO
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-
 erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe-executables")
 
 ########
 
@@ -399,33 +378,23 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     net_test.cpp
 )
-
 target_link_libraries(
     ${_target}
     PRIVATE
-    erhe::log
-    erhe::net
-    erhe::toolkit
-    cxxopts
-    mINI
-    RectangleBinPack
-    rapidjson
+        erhe::log
+        erhe::net
+        cxxopts
+        mINI
+        RectangleBinPack
+        rapidjson
 )
-
 if (${ERHE_TERMINAL_LIBRARY} STREQUAL "cpp-terminal")
     target_link_libraries(${_target} PRIVATE cpp-terminal)
 endif ()
-
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
-set_target_properties(
-    ${_target} PROPERTIES
-    CXX_STANDARD                  20
-    CXX_STANDARD_REQUIRED         YES
-    CXX_EXTENSIONS                NO
-    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+endif ()
 erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe-executables")
 

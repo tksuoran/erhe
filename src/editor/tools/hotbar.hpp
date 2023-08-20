@@ -2,8 +2,8 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 

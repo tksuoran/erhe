@@ -1,7 +1,7 @@
 #include "tools/tool.hpp"
 #include "editor_log.hpp"
 #include "editor_message.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe_bit/bit_helpers.hpp"
 
 namespace editor
 {
@@ -13,7 +13,7 @@ Tool::Tool(Editor_context& editor_context)
 
 void Tool::on_message(Editor_message& message)
 {
-    using namespace erhe::toolkit;
+    using namespace erhe::bit;
     if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
         set_hover_scene_view(message.scene_view);
     }

@@ -14,10 +14,10 @@
 #include "scene/viewport_windows.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/light.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
 
 namespace editor
 {
@@ -82,9 +82,9 @@ Scene_commands::Scene_commands(
     commands.register_command   (&m_create_new_camera_command);
     commands.register_command   (&m_create_new_empty_node_command);
     commands.register_command   (&m_create_new_light_command);
-    commands.bind_command_to_key(&m_create_new_camera_command,     erhe::toolkit::Key_f2, true);
-    commands.bind_command_to_key(&m_create_new_empty_node_command, erhe::toolkit::Key_f3, true);
-    commands.bind_command_to_key(&m_create_new_light_command,      erhe::toolkit::Key_f4, true);
+    commands.bind_command_to_key(&m_create_new_camera_command,     erhe::window::Key_f2, true);
+    commands.bind_command_to_key(&m_create_new_empty_node_command, erhe::window::Key_f3, true);
+    commands.bind_command_to_key(&m_create_new_light_command,      erhe::window::Key_f4, true);
 }
 
 auto Scene_commands::get_scene_root(
@@ -240,7 +240,7 @@ auto Scene_commands::create_new_rendertarget(
 
     new_node = std::make_shared<erhe::scene::Node>("Hud RT node");
     new_node->set_parent_from_node(
-        erhe::toolkit::mat4_rotate_xz_180
+        erhe::math::mat4_rotate_xz_180
     );
     new_node->set_parent(scene_root->get_scene().get_root_node());
     new_node->attach(new_mesh);

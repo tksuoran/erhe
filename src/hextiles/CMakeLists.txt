@@ -1,8 +1,6 @@
 set(_target "hextiles")
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(${_target})
-
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe.ini
@@ -76,7 +74,6 @@ erhe_target_sources_grouped(
     type_editors/type_editor.hpp
     type_editors/unit_editor_window.cpp
     type_editors/unit_editor_window.hpp
-
     res/shaders/line.vert
     res/shaders/line.geom
     res/shaders/line.frag
@@ -87,46 +84,38 @@ erhe_target_sources_grouped(
     res/shaders/tile.vert
     res/shaders/tile.frag
 )
-
 target_link_libraries(
     ${_target}
     PRIVATE
     etl::etl
     erhe::commands
     erhe::concurrency
+    erhe::file
     erhe::geometry
     erhe::gl
     erhe::graphics
     erhe::imgui
     erhe::log
     erhe::net
+    erhe::profile
     erhe::renderer
     erhe::rendergraph
-    erhe::toolkit
     erhe::ui
+    erhe::verify
+    erhe::window
     imgui
     nlohmann_json::nlohmann_json
-    #taskflow
 )
-
 if (${ERHE_SVG_LIBRARY} STREQUAL "lunasvg")
     target_link_libraries(${_target} PRIVATE lunasvg)
 endif ()
-
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     target_link_libraries(${_target} PRIVATE miniaudio)
 endif ()
-
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
-    target_link_libraries(${_target} PRIVATE TracyClient)
-endif ()
-
-if (${ERHE_PROFILE_LIBRARY} STREQUAL "superluminal")
-    target_link_libraries(${_target} PRIVATE SuperluminalAPI)
-endif ()
-
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+endif ()
 set_target_properties(
     ${_target} PROPERTIES
     CXX_STANDARD                  20
@@ -134,6 +123,5 @@ set_target_properties(
     CXX_EXTENSIONS                NO
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-
 erhe_target_settings(${_target})
-set_property(TARGET ${_target} PROPERTY FOLDER "erhe")
+set_property(TARGET ${_target} PROPERTY FOLDER "erhe-executables")

@@ -3,7 +3,7 @@
 #include "renderers/render_context.hpp"
 #include "tools/brushes/create/create_preview_settings.hpp"
 
-#include "erhe/renderer/line_renderer.hpp"
+#include "erhe_renderer/line_renderer.hpp"
 
 #include "editor_context.hpp"
 

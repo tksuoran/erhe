@@ -1,5 +1,5 @@
 #include "hextiles_log.hpp"
-#include "erhe/log/log.hpp"
+#include "erhe_log/log.hpp"
 
 namespace hextiles {
 

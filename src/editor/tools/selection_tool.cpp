@@ -12,18 +12,18 @@
 #include "scene/scene_root.hpp"
 #include "tools/tools.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/imgui/imgui_helpers.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/xxhash.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_imgui/imgui_helpers.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_hash/xxhash.hpp"
+#include "erhe_verify/verify.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
-#   include "erhe/xr/xr_action.hpp"
-#   include "erhe/xr/headset.hpp"
+#   include "erhe_xr/xr_action.hpp"
+#   include "erhe_xr/headset.hpp"
 #endif
 
 namespace editor
@@ -245,12 +245,12 @@ Selection::Selection(
 {
     commands.register_command            (&m_viewport_select_command);
     commands.register_command            (&m_delete_command);
-    commands.bind_command_to_mouse_button(&m_viewport_select_command, erhe::toolkit::Mouse_button_left, false);
-    commands.bind_command_to_key         (&m_delete_command, erhe::toolkit::Key_delete,        true);
+    commands.bind_command_to_mouse_button(&m_viewport_select_command, erhe::window::Mouse_button_left, false);
+    commands.bind_command_to_key         (&m_delete_command,          erhe::window::Key_delete,        true);
 
     editor_message_bus.add_receiver(
         [&](Editor_message& message) {
-            using namespace erhe::toolkit;
+            using namespace erhe::bit;
             if (test_all_rhs_bits_set(message.update_flags, Message_flag_bit::c_flag_bit_hover_scene_view)) {
                 m_hover_scene_view = message.scene_view;
             }
@@ -562,7 +562,7 @@ void Selection::toggle_mesh_selection(
 {
     Scoped_selection_change selection_change{*this};
 
-    const bool mesh_lock_viewport_select = erhe::toolkit::test_all_rhs_bits_set(
+    const bool mesh_lock_viewport_select = erhe::bit::test_all_rhs_bits_set(
         mesh->get_flag_bits(),
         erhe::Item_flags::lock_viewport_selection
     );
@@ -575,7 +575,7 @@ void Selection::toggle_mesh_selection(
         return;
     }
 
-    const bool node_lock_viewport_select = erhe::toolkit::test_all_rhs_bits_set(
+    const bool node_lock_viewport_select = erhe::bit::test_all_rhs_bits_set(
         node->get_flag_bits(),
         erhe::Item_flags::lock_viewport_selection
     );

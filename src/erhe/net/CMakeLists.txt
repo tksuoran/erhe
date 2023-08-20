@@ -1,46 +1,44 @@
 set(_target "erhe_net")
 add_library(${_target})
 add_library(erhe::net ALIAS ${_target})
-
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-    client.cpp
-    client.hpp
-    net_log.cpp
-    net_log.hpp
-    net_common.cpp
-    net_os.hpp
-    ring_buffer.cpp
-    ring_buffer.hpp
-    select_sockets.cpp
-    select_sockets.hpp
-    server.cpp
-    server.hpp
-    socket.cpp
-    socket.hpp
+    erhe_net/client.cpp
+    erhe_net/client.hpp
+    erhe_net/net_log.cpp
+    erhe_net/net_log.hpp
+    erhe_net/net_common.cpp
+    erhe_net/net_os.hpp
+    erhe_net/ring_buffer.cpp
+    erhe_net/ring_buffer.hpp
+    erhe_net/select_sockets.cpp
+    erhe_net/select_sockets.hpp
+    erhe_net/server.cpp
+    erhe_net/server.hpp
+    erhe_net/socket.cpp
+    erhe_net/socket.hpp
 )
-
 if (ERHE_TARGET_OS_WINDOWS)
     target_link_libraries(${_target} PUBLIC ws2_32.lib)
     erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        net_windows.cpp
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}/erhe_net" FILES
+        erhe_net/net_windows.cpp
     )
 endif ()
-
 if (ERHE_TARGET_OS_LINUX)
     erhe_target_sources_grouped(
-        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
-        net_linux.cpp
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}/erhe_net" FILES
+        erhe_net/net_linux.cpp
     )
 endif ()
-
-target_include_directories(${_target} PUBLIC ${ERHE_INCLUDE_ROOT})
-
+target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    target_precompile_headers(${_target} REUSE_FROM erhe_pch)
+endif ()
 target_link_libraries(${_target}
     PUBLIC
-        #spdlog::spdlog
-        spdlog::spdlog_header_only
+        erhe::log
+        erhe::verify
         fmt::fmt
 )
 

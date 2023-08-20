@@ -3,8 +3,8 @@
 #include "editor_context.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/renderer/text_renderer.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_renderer/text_renderer.hpp"
 
 #include <glm/glm.hpp>
 

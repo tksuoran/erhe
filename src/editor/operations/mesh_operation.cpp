@@ -8,14 +8,9 @@
 #include "scene/scene_root.hpp"
 #include "tools/selection_tool.hpp"
 
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/physics/icollision_shape.hpp"
-//#include "erhe/physics/iconvex_hull_collision_shape.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/verify.hpp"
-
-#include <sstream>
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_scene/scene.hpp"
 
 namespace editor
 {

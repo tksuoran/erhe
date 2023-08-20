@@ -2,7 +2,7 @@
 
 #include "renderers/viewport_config.hpp"
 
-#include "erhe/imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_window.hpp"
 
 #include <glm/glm.hpp>
 

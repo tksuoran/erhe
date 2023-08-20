@@ -10,43 +10,43 @@
 #include "tiles.hpp"
 #include "type_editors/type_editor.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/commands/commands_log.hpp"
-#include "erhe/gl/enum_bit_mask_operators.hpp"
-#include "erhe/gl/gl_log.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/graphics/graphics_log.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/pipeline.hpp"
-#include "erhe/imgui/imgui_log.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
-#include "erhe/log/log.hpp"
-#include "erhe/renderer/pipeline_renderpass.hpp"
-#include "erhe/renderer/renderer_log.hpp"
-#include "erhe/renderer/text_renderer.hpp"
-#include "erhe/rendergraph/rendergraph.hpp"
-#include "erhe/rendergraph/rendergraph_log.hpp"
-#include "erhe/toolkit/renderdoc_capture.hpp"
-#include "erhe/toolkit/toolkit_log.hpp"
-#include "erhe/toolkit/verify.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/window.hpp"
-#include "erhe/toolkit/window_event_handler.hpp"
-#include "erhe/ui/ui_log.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/commands_log.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_gl/gl_log.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_graphics/graphics_log.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/pipeline.hpp"
+#include "erhe_imgui/imgui_log.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_log/log.hpp"
+#include "erhe_renderer/pipeline_renderpass.hpp"
+#include "erhe_renderer/renderer_log.hpp"
+#include "erhe_renderer/text_renderer.hpp"
+#include "erhe_rendergraph/rendergraph.hpp"
+#include "erhe_rendergraph/rendergraph_log.hpp"
+#include "erhe_window/renderdoc_capture.hpp"
+#include "erhe_window/window_log.hpp"
+#include "erhe_verify/verify.hpp"
+#include "erhe_window/window.hpp"
+#include "erhe_window/window.hpp"
+#include "erhe_window/window_event_handler.hpp"
+#include "erhe_ui/ui_log.hpp"
 
 namespace hextiles {
 
 class Hextiles
-    : public erhe::toolkit::Window_event_handler
+    : public erhe::window::Window_event_handler
 {
 public:
     virtual auto get_name() const -> const char* { return "Hextiles"; }
 
     Hextiles()
         : m_context_window{
-            erhe::toolkit::Window_configuration{
+            erhe::window::Window_configuration{
                 .gl_major          = 4,
                 .gl_minor          = 6,
                 .width             = 1920,
@@ -102,7 +102,7 @@ public:
         return true;
     }
 
-    erhe::toolkit::Context_window  m_context_window;
+    erhe::window::Context_window   m_context_window;
     Hextiles_settings              m_settings;
     erhe::commands::Commands       m_commands;
     erhe::graphics::Instance       m_graphics_instance;
@@ -126,9 +126,9 @@ void run_hextiles()
     erhe::imgui::initialize_logging();
     erhe::renderer::initialize_logging();
     erhe::rendergraph::initialize_logging();
-    erhe::toolkit::initialize_logging();
+    erhe::window::initialize_logging();
     erhe::ui::initialize_logging();
-    erhe::toolkit::initialize_frame_capture();
+    erhe::window::initialize_frame_capture();
     hextiles::initialize_logging();
 
     Hextiles hextiles{};

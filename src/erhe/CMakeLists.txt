@@ -4,30 +4,73 @@ set(CMAKE_CXX_STANDARD          20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS        NO)
 
+if (${ERHE_USE_PRECOMPILED_HEADERS})
+    add_library(erhe_pch)
+    target_sources(erhe_pch PRIVATE dummy.cpp)
+    target_precompile_headers(erhe_pch PUBLIC
+        <glm/glm.hpp>
+        <glm/gtc/packing.hpp>
+        <glm/gtc/quaternion.hpp>
+        <glm/gtc/quaternion.hpp>
+        <glm/gtc/type_ptr.hpp>
+        <gsl/span>
+        <fmt/format.h>
+        <spdlog/spdlog.h>
+        <algorithm>
+        <cassert>
+        <chrono>
+        <cmath>
+        <cstdint>
+        <filesystem>
+        <functional>
+        <limits>
+        <memory>
+        <mutex>
+        <optional>
+        <utility>
+        <sstream>
+        <string>
+        <string_view>
+        <thread>
+        <typeinfo>
+        <vector>
+    )
+    erhe_target_settings(erhe_pch)
+    set_property(TARGET erhe_pch PROPERTY FOLDER "erhe")
+    target_link_libraries(erhe_pch PRIVATE fmt::fmt glm::glm Microsoft.GSL::GSL spdlog::spdlog_header_only)
+endif()
+
+add_subdirectory(bit)
 add_subdirectory(commands)
 add_subdirectory(concurrency)
 add_subdirectory(configuration)
+add_subdirectory(defer)
+add_subdirectory(file)
 add_subdirectory(geometry)
 add_subdirectory(gl)
 add_subdirectory(gltf)
 add_subdirectory(graphics)
+add_subdirectory(hash)
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     add_subdirectory(imgui)
 endif ()
 add_subdirectory(item)
 add_subdirectory(log)
+add_subdirectory(math)
 add_subdirectory(message_bus)
 add_subdirectory(net)
 add_subdirectory(physics)
 add_subdirectory(primitive)
+add_subdirectory(profile)
 add_subdirectory(raytrace)
 add_subdirectory(renderer)
 add_subdirectory(rendergraph)
 add_subdirectory(scene)
 add_subdirectory(scene_renderer)
-add_subdirectory(toolkit)
+add_subdirectory(time)
 add_subdirectory(ui)
-
+add_subdirectory(verify)
+add_subdirectory(window)
 if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     add_subdirectory(xr)
 endif ()

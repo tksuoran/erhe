@@ -4,31 +4,31 @@
 #include "example_log.hpp"
 #include "image_transfer.hpp"
 
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/png_loader.hpp"
-#include "erhe/graphics/sampler.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/primitive/buffer_sink.hpp"
-#include "erhe/primitive/material.hpp"
-#include "erhe/raytrace/ibuffer.hpp"
-#include "erhe/raytrace/igeometry.hpp"
-#include "erhe/scene/animation.hpp"
-#include "erhe/scene/camera.hpp"
-#include "erhe/scene/projection.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/light.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/scene/skin.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/png_loader.hpp"
+#include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/vertex_attribute.hpp"
+#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_raytrace/ibuffer.hpp"
+#include "erhe_raytrace/igeometry.hpp"
+#include "erhe_scene/animation.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/projection.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 
-#include "erhe/toolkit/file.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_file/file.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 extern "C" {
     #include "cgltf.h"
@@ -606,7 +606,7 @@ private:
         const std::filesystem::path& path
     ) -> std::shared_ptr<erhe::graphics::Texture>
     {
-        const bool is_ok = erhe::toolkit::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
+        const bool is_ok = erhe::file::check_is_existing_non_empty_regular_file("Gltf_parser::load_image_file", path);
         if (!is_ok) {
             return {};
         }

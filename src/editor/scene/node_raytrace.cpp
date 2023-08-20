@@ -3,24 +3,24 @@
 #include "scene/scene_root.hpp"
 #include "editor_log.hpp"
 
-#include "erhe/renderer/line_renderer.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/geometry/geometry.hpp"
-#include "erhe/graphics/vertex_attribute.hpp"
-#include "erhe/primitive/buffer_sink.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/primitive/build_info.hpp"
-#include "erhe/raytrace/ibuffer.hpp"
-#include "erhe/raytrace/igeometry.hpp"
-#include "erhe/raytrace/iinstance.hpp"
-#include "erhe/raytrace/iscene.hpp"
-#include "erhe/raytrace/ray.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/scene/scene_host.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
-#include "erhe/toolkit/defer.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_renderer/line_renderer.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/vertex_attribute.hpp"
+#include "erhe_primitive/buffer_sink.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_primitive/build_info.hpp"
+#include "erhe_raytrace/ibuffer.hpp"
+#include "erhe_raytrace/igeometry.hpp"
+#include "erhe_raytrace/iinstance.hpp"
+#include "erhe_raytrace/iscene.hpp"
+#include "erhe_raytrace/ray.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene_host.hpp"
+#include "erhe_bit/bit_helpers.hpp"
+#include "erhe_defer/defer.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor
 {
@@ -227,8 +227,7 @@ auto is_raytrace(const erhe::Item* const scene_item) -> bool
     if (scene_item == nullptr) {
         return false;
     }
-    using namespace erhe::toolkit;
-    return test_all_rhs_bits_set(
+    return erhe::bit::test_all_rhs_bits_set(
         scene_item->get_type(),
         erhe::Item_type::raytrace
     );
@@ -360,8 +359,8 @@ void draw_ray_hit(
     const glm::vec3 local_normal    = local_normal_opt.value();
     const glm::mat4 world_from_node = node->world_from_node();
     const glm::vec3 N{world_from_node * glm::vec4{local_normal, 0.0f}};
-    const glm::vec3 T = erhe::toolkit::safe_normalize_cross<float>(N, ray.direction);
-    const glm::vec3 B = erhe::toolkit::safe_normalize_cross<float>(T, N);
+    const glm::vec3 T = erhe::math::safe_normalize_cross<float>(N, ray.direction);
+    const glm::vec3 B = erhe::math::safe_normalize_cross<float>(T, N);
 
     line_renderer.set_thickness(style.hit_thickness);
     line_renderer.add_lines(

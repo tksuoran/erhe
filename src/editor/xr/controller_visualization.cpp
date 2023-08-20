@@ -4,13 +4,13 @@
 #include "scene/scene_root.hpp"
 #include "renderers/mesh_memory.hpp"
 
-#include "erhe/graphics/buffer_transfer_queue.hpp"
-#include "erhe/geometry/shapes/torus.hpp"
-#include "erhe/primitive/primitive_builder.hpp"
-#include "erhe/scene/mesh.hpp"
-#include "erhe/scene/scene.hpp"
-#include "erhe/toolkit/profile.hpp"
-#include "erhe/xr/xr_action.hpp"
+#include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_geometry/shapes/torus.hpp"
+#include "erhe_primitive/primitive_builder.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_xr/xr_action.hpp"
 
 namespace editor
 {
@@ -31,7 +31,7 @@ Controller_visualization::Controller_visualization(
     //constexpr float length = 0.05f;
     //constexpr float radius = 0.02f;
     auto controller_geometry = erhe::geometry::shapes::make_torus(0.05f, 0.0025f, 40, 14);
-    controller_geometry.transform(erhe::toolkit::mat4_swap_yz);
+    controller_geometry.transform(erhe::math::mat4_swap_yz);
     controller_geometry.reverse_polygons();
 
     erhe::graphics::Buffer_transfer_queue buffer_transfer_queue;

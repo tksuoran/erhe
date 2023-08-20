@@ -5,11 +5,11 @@
 #include "tiles.hpp"
 #include "tile_renderer.hpp"
 
-#include "erhe/commands/commands.hpp"
-#include "erhe/commands/input_arguments.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/input_arguments.hpp"
+#include "erhe_verify/verify.hpp"
 
-#include <imgui.h>
+#include <imgui/imgui.h>
 
 #include <fmt/format.h>
 
@@ -103,7 +103,7 @@ Map_editor::Map_editor(
     commands.register_command(&m_map_hover_command);
     commands.register_command(&m_map_primary_brush_command);
     commands.bind_command_to_mouse_motion(&m_map_hover_command);
-    commands.bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::toolkit::Mouse_button_left, true);
+    commands.bind_command_to_mouse_drag  (&m_map_primary_brush_command, erhe::window::Mouse_button_left, true);
 
     m_map_hover_command.set_host(this);
     m_map_primary_brush_command.set_host(this);

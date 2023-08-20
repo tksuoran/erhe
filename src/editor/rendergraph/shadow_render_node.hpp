@@ -1,7 +1,7 @@
 #pragma once
 
-#include "erhe/rendergraph/rendergraph_node.hpp"
-#include "erhe/scene_renderer/light_buffer.hpp"
+#include "erhe_rendergraph/rendergraph_node.hpp"
+#include "erhe_scene_renderer/light_buffer.hpp"
 
 #include <glm/glm.hpp>
 
@@ -52,7 +52,7 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
     [[nodiscard]] auto inputs_allowed() const -> bool override;
 
@@ -67,7 +67,7 @@ public:
     [[nodiscard]] auto get_scene_view       () const -> const Scene_view&;
     [[nodiscard]] auto get_light_projections() -> erhe::scene_renderer::Light_projections&;
     [[nodiscard]] auto get_texture          () const -> std::shared_ptr<erhe::graphics::Texture>;
-    [[nodiscard]] auto get_viewport         () const -> erhe::toolkit::Viewport;
+    [[nodiscard]] auto get_viewport         () const -> erhe::math::Viewport;
 
     static void handle_graphics_settings_changed();
 
@@ -76,7 +76,7 @@ private:
     Scene_view&                                               m_scene_view;
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;
     std::vector<std::unique_ptr<erhe::graphics::Framebuffer>> m_framebuffers;
-    erhe::toolkit::Viewport                                   m_viewport{0, 0, 0, 0, true};
+    erhe::math::Viewport                                      m_viewport{0, 0, 0, 0, true};
     erhe::scene_renderer::Light_projections                   m_light_projections;
 };
 

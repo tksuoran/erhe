@@ -1,9 +1,9 @@
 #include "renderers/programs.hpp"
 
-#include "erhe/graphics/shader_monitor.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/scene_renderer/program_interface.hpp"
-#include "erhe/toolkit/profile.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_scene_renderer/program_interface.hpp"
+#include "erhe_profile/profile.hpp"
 
 namespace editor {
 

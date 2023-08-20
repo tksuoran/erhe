@@ -2,7 +2,7 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/scene/node_attachment.hpp"
+#include "erhe_scene/node_attachment.hpp"
 
 #include <glm/glm.hpp>
 

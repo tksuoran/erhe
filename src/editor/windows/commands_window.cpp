@@ -2,22 +2,22 @@
 
 #include "editor_context.hpp"
 
-#include "erhe/imgui/imgui_viewport.hpp"
-#include "erhe/imgui/imgui_windows.hpp"
+#include "erhe_imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 
-#include "erhe/commands/command.hpp"
-#include "erhe/commands/commands.hpp"
-#include "erhe/commands/key_binding.hpp"
-#include "erhe/commands/mouse_button_binding.hpp"
-#include "erhe/commands/mouse_drag_binding.hpp"
-#include "erhe/commands/mouse_wheel_binding.hpp"
-#include "erhe/commands/update_binding.hpp"
-#include "erhe/toolkit/window_event_handler.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
+#include "erhe_commands/key_binding.hpp"
+#include "erhe_commands/mouse_button_binding.hpp"
+#include "erhe_commands/mouse_drag_binding.hpp"
+#include "erhe_commands/mouse_wheel_binding.hpp"
+#include "erhe_commands/update_binding.hpp"
+#include "erhe_window/window_event_handler.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
-#   include "erhe/commands/xr_boolean_binding.hpp"
-#   include "erhe/commands/xr_float_binding.hpp"
-#   include "erhe/commands/xr_vector2f_binding.hpp"
-#   include "erhe/xr/xr_action.hpp"
+#   include "erhe_commands/xr_boolean_binding.hpp"
+#   include "erhe_commands/xr_float_binding.hpp"
+#   include "erhe_commands/xr_vector2f_binding.hpp"
+#   include "erhe_xr/xr_action.hpp"
 #endif
 
 #include <fmt/format.h>
@@ -96,7 +96,7 @@ void Commands_window::imgui()
                 binding.is_command_host_enabled() ? "Enabled" : "Disabled",
                 binding.get_command()->get_name(),
                 Command_binding::c_type_strings[static_cast<int>(binding.get_type())],
-                erhe::toolkit::c_str(binding.get_keycode()),
+                erhe::window::c_str(binding.get_keycode()),
                 binding.get_pressed()
                     ? "pressed"
                     : "released"

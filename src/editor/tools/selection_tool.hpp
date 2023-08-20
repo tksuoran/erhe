@@ -2,10 +2,10 @@
 
 #include "tools/tool.hpp"
 
-#include "erhe/commands/command.hpp"
-#include "erhe/imgui/imgui_window.hpp"
-#include "erhe/scene/node.hpp"
-#include "erhe/toolkit/bit_helpers.hpp"
+#include "erhe_commands/command.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_bit/bit_helpers.hpp"
 
 #include <memory>
 #include <vector>
@@ -151,9 +151,9 @@ public:
 #endif
 
     // Public API
-    [[nodiscard]] auto get_selection     () const -> const std::vector<std::shared_ptr<erhe::Item>>&;
-    [[nodiscard]] auto is_in_selection   (const std::shared_ptr<erhe::Item>& item) const -> bool;
-    [[nodiscard]] auto range_selection   () -> Range_selection&;
+    [[nodiscard]] auto get_selection  () const -> const std::vector<std::shared_ptr<erhe::Item>>&;
+    [[nodiscard]] auto is_in_selection(const std::shared_ptr<erhe::Item>& item) const -> bool;
+    [[nodiscard]] auto range_selection() -> Range_selection&;
 
     template <typename T>
     [[nodiscard]] auto get(std::size_t index = 0) -> std::shared_ptr<T>;
@@ -212,7 +212,7 @@ auto Selection::get(const std::size_t index) -> std::shared_ptr<T>
         if (!item) {
             continue;
         }
-        if (!erhe::toolkit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+        if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
             continue;
         }
         if (i == index) {
@@ -232,7 +232,7 @@ auto Selection::count() -> std::size_t
         if (!item) {
             continue;
         }
-        if (!erhe::toolkit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
+        if (!erhe::bit::test_all_rhs_bits_set(item->get_type(), T::get_static_type())) {
             continue;
         }
         ++i;

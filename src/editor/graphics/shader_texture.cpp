@@ -1,10 +1,10 @@
 #include "graphics/textures.hpp"
-#include "erhe/graphics/gl_context_provider.hpp"
+#include "erhe_graphics/gl_context_provider.hpp"
 #include "graphics/image_transfer.hpp"
 
-#include "erhe/graphics/png_loader.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_graphics/png_loader.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_verify/verify.hpp"
 
 namespace editor {
 

@@ -6,7 +6,7 @@ namespace editor
 {
 
 Composer::Composer(const std::string_view name)
-    : erhe::Item{name, erhe::toolkit::Unique_id<Composer>{}.get_id()}
+    : erhe::Item{name, erhe::Unique_id<Composer>{}.get_id()}
 {
 }
 

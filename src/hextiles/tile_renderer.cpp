@@ -4,26 +4,26 @@
 #include "hextiles.hpp"
 #include "hextiles_log.hpp"
 
-#include "erhe/graphics/gl_context_provider.hpp"
-#include "erhe/graphics/shader_monitor.hpp"
-#include "erhe/gl/command_info.hpp"
-#include "erhe/gl/enum_bit_mask_operators.hpp"
-#include "erhe/gl/wrapper_functions.hpp"
-#include "erhe/graphics/buffer.hpp"
-#include "erhe/graphics/debug.hpp"
-#include "erhe/graphics/instance.hpp"
-#include "erhe/graphics/opengl_state_tracker.hpp"
-#include "erhe/graphics/scoped_buffer_mapping.hpp"
-#include "erhe/graphics/shader_resource.hpp"
-#include "erhe/graphics/shader_stages.hpp"
-#include "erhe/graphics/texture.hpp"
-#include "erhe/graphics/vertex_attribute_mappings.hpp"
-#include "erhe/graphics/vertex_format.hpp"
-#include "erhe/imgui/imgui_renderer.hpp"
-#include "erhe/log/log_glm.hpp"
-#include "erhe/toolkit/viewport.hpp"
-#include "erhe/toolkit/math_util.hpp"
-#include "erhe/toolkit/verify.hpp"
+#include "erhe_graphics/gl_context_provider.hpp"
+#include "erhe_graphics/shader_monitor.hpp"
+#include "erhe_gl/command_info.hpp"
+#include "erhe_gl/enum_bit_mask_operators.hpp"
+#include "erhe_gl/wrapper_functions.hpp"
+#include "erhe_graphics/buffer.hpp"
+#include "erhe_graphics/debug.hpp"
+#include "erhe_graphics/instance.hpp"
+#include "erhe_graphics/opengl_state_tracker.hpp"
+#include "erhe_graphics/scoped_buffer_mapping.hpp"
+#include "erhe_graphics/shader_resource.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_graphics/vertex_attribute_mappings.hpp"
+#include "erhe_graphics/vertex_format.hpp"
+#include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_log/log_glm.hpp"
+#include "erhe_math/viewport.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -759,7 +759,7 @@ void Tile_renderer::end()
 
 static constexpr std::string_view c_tile_renderer_render{"Tile_renderer::render()"};
 
-void Tile_renderer::render(erhe::toolkit::Viewport viewport)
+void Tile_renderer::render(erhe::math::Viewport viewport)
 {
     if (m_index_count == 0) {
         return;
@@ -782,7 +782,7 @@ void Tile_renderer::render(erhe::toolkit::Viewport viewport)
     const gsl::span<float>    gpu_float_data {reinterpret_cast<float*   >(start), word_count};
     const gsl::span<uint32_t> gpu_uint32_data{reinterpret_cast<uint32_t*>(start), word_count};
 
-    const glm::mat4 clip_from_window = erhe::toolkit::create_orthographic(
+    const glm::mat4 clip_from_window = erhe::math::create_orthographic(
         static_cast<float>(viewport.x), static_cast<float>(viewport.width),
         static_cast<float>(viewport.y), static_cast<float>(viewport.height),
         0.0f,

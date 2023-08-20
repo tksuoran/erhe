@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe/imgui/imgui_viewport.hpp"
+#include "erhe_imgui/imgui_viewport.hpp"
 
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -59,7 +59,7 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
     [[nodiscard]] auto get_producer_output_texture(
         erhe::rendergraph::Resource_routing resource_routing,
@@ -71,7 +71,7 @@ public:
         erhe::rendergraph::Resource_routing resource_routing,
         int                                 key,
         int                                 depth = 0
-    ) const -> erhe::toolkit::Viewport override;
+    ) const -> erhe::math::Viewport override;
 
 private:
     Editor_context&    m_context;
