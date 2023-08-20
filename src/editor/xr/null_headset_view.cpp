@@ -3,9 +3,25 @@
 namespace editor
 {
 
-Headset_view::Headst_view(Editor_context& editor_context)
+Headset_view::Headset_view(
+    erhe::graphics::Instance&       graphics_instance,
+    erhe::rendergraph::Rendergraph& rendergraph,
+    erhe::window::Context_window&   context_window,
+    Editor_context&                 editor_context,
+    Editor_rendering&               editor_rendering,
+    Editor_settings&                editor_settings,
+    Mesh_memory&                    mesh_memory,
+    Scene_builder&                  scene_builder
+)
     : Scene_view{editor_context, Viewport_config{}}
 {
+    static_cast<void>(graphics_instance);
+    static_cast<void>(rendergraph);
+    static_cast<void>(context_window);
+    static_cast<void>(editor_rendering);
+    static_cast<void>(editor_settings);
+    static_cast<void>(mesh_memory);
+    static_cast<void>(scene_builder);
 }
 
 void Headset_view::render(const Render_context&)
