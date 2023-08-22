@@ -18,8 +18,6 @@ if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     add_subdirectory(imgui)
 endif ()
 
-add_subdirectory(mikktspace)
-
 if (${ERHE_AUDIO_LIBRARY} STREQUAL "miniaudio")
     add_subdirectory(miniaudio)
 endif ()

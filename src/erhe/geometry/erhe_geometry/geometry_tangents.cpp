@@ -5,9 +5,9 @@
 #include "erhe_log/log_glm.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_profile/profile.hpp"
+#include "mikktspace/mikktspace.hpp"
 
 #include <glm/glm.hpp>
-#include <mikktspace.h>
 
 namespace erhe::geometry
 {

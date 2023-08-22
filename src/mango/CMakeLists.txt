@@ -62,13 +62,13 @@ message(STATUS "Build: ${CMAKE_BUILD_TYPE}")
 
 OPTION(BUILD_SHARED_LIBS    "Build as shared library (so/dll/dylib)"    OFF)
 
-OPTION(ENABLE_FAST_MATH     "Use relaxed-precision floating point"      ON)
+OPTION(ENABLE_FAST_MATH     "Use relaxed-precision floating point"      OFF)
 OPTION(ENABLE_SSE2          "Enable SSE2 instructions"                  OFF)
-OPTION(ENABLE_SSE4          "Enable SSE4.1 and SSE4.2 instructions"     ON)
+OPTION(ENABLE_SSE4          "Enable SSE4.1 and SSE4.2 instructions"     OFF)
 OPTION(ENABLE_AVX           "Enable AVX instructions"                   OFF)
 OPTION(ENABLE_AVX2          "Enable AVX2 instructions"                  OFF)
 OPTION(ENABLE_AVX512        "Enable AVX-512 instructions"               OFF)
-OPTION(ENABLE_NEON          "Enable ARM NEON instructions"              ON)
+OPTION(ENABLE_NEON          "Enable ARM NEON instructions"              OFF)
 OPTION(ENABLE_F16C          "Enable F16C conversion instructions"       OFF)
 OPTION(ENABLE_BMI           "Enable BMI"                                OFF)
 OPTION(ENABLE_BMI2          "Enable BMI2"                               OFF)
@@ -202,10 +202,10 @@ else ()
 
     if (X86 OR X86_64)
         # enable AES (2008) by default
-        target_compile_options(mango PUBLIC "-maes")
+        ### target_compile_options(mango PUBLIC "-maes")
 
         # enable CLMUL (2008) by default
-        target_compile_options(mango PUBLIC "-mpclmul")
+        #### target_compile_options(mango PUBLIC "-mpclmul")
 
         # half conversion instructions
         if (ENABLE_F16C)

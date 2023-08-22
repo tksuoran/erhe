@@ -4,7 +4,5 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-empty-body>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")
 
-set(ERHE_USE_PRECOMPILED_HEADERS OFF CACHE INTERNAL "" FORCE)
-
 function (erhe_target_settings target)
 endfunction()

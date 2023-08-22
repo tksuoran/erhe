@@ -67,6 +67,8 @@ erhe_target_sources_grouped(
     erhe_geometry/shapes/torus.cpp
     erhe_geometry/shapes/torus.hpp
     erhe_geometry/types.hpp
+    mikktspace/mikktspace.cpp
+    mikktspace/mikktspace.hpp
 )
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (${ERHE_USE_PRECOMPILED_HEADERS})
@@ -82,7 +84,6 @@ target_link_libraries(${_target}
         erhe::profile
         erhe::verify
         Microsoft.GSL::GSL
-        mikktspace
 )
 erhe_target_settings(${_target})
 set_property(TARGET ${_target} PROPERTY FOLDER "erhe")

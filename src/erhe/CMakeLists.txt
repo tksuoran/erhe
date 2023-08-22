@@ -7,34 +7,7 @@ set(CMAKE_CXX_EXTENSIONS        NO)
 if (${ERHE_USE_PRECOMPILED_HEADERS})
     add_library(erhe_pch)
     target_sources(erhe_pch PRIVATE dummy.cpp)
-    target_precompile_headers(erhe_pch PUBLIC
-        <glm/glm.hpp>
-        <glm/gtc/packing.hpp>
-        <glm/gtc/quaternion.hpp>
-        <glm/gtc/quaternion.hpp>
-        <glm/gtc/type_ptr.hpp>
-        <gsl/span>
-        <fmt/format.h>
-        <spdlog/spdlog.h>
-        <algorithm>
-        <cassert>
-        <chrono>
-        <cmath>
-        <cstdint>
-        <filesystem>
-        <functional>
-        <limits>
-        <memory>
-        <mutex>
-        <optional>
-        <utility>
-        <sstream>
-        <string>
-        <string_view>
-        <thread>
-        <typeinfo>
-        <vector>
-    )
+    target_precompile_headers(erhe_pch PUBLIC [[erhe_pch.hpp]])
     erhe_target_settings(erhe_pch)
     set_property(TARGET erhe_pch PROPERTY FOLDER "erhe")
     target_link_libraries(erhe_pch PRIVATE fmt::fmt glm::glm Microsoft.GSL::GSL spdlog::spdlog_header_only)

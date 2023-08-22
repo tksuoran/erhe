@@ -11,10 +11,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     bvh
-    #GIT_REPOSITORY https://github.com/madmann91/bvh.git
-    #GIT_TAG        origin/master
-    GIT_REPOSITORY https://github.com/tksuoran/bvh.git
-    GIT_TAG        pch-workaround
+    GIT_REPOSITORY https://github.com/madmann91/bvh.git
+    GIT_TAG        origin/master
+    #GIT_REPOSITORY https://github.com/tksuoran/bvh.git
+    #GIT_TAG        pch-workaround
     GIT_SHALLOW    TRUE
     GIT_PROGRESS   TRUE
 )
@@ -178,10 +178,10 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     JoltPhysics
-    #GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
-    #GIT_TAG         origin/master
-    GIT_REPOSITORY   https://github.com/tksuoran/JoltPhysics.git
-    GIT_TAG          fix_vs2022_17_7_0_preview_3
+    GIT_REPOSITORY  https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG         origin/master
+    #GIT_REPOSITORY   https://github.com/tksuoran/JoltPhysics.git
+    #GIT_TAG          fix_vs2022_17_7_0_preview_3
     GIT_SHALLOW     TRUE
     GIT_PROGRESS    TRUE
 )

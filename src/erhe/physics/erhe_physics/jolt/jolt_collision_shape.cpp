@@ -172,6 +172,23 @@ static_cast<void>(inRenderer);
         static_cast<void>(inShapeFilter);
     }
 
+    void CollideSoftBodyVertices(
+        JPH::Mat44Arg                    inCenterOfMassTransform,
+        JPH::Vec3Arg                     inScale,
+        JPH::Array<JPH::SoftBodyVertex>& ioVertices,
+        float                            inDeltaTime,
+        JPH::Vec3Arg                     inDisplacementDueToGravity,
+        int                              inCollidingShapeIndex
+    ) const override
+    {
+        static_cast<void>(inCenterOfMassTransform);
+        static_cast<void>(inScale);
+        static_cast<void>(ioVertices);
+        static_cast<void>(inDeltaTime);
+        static_cast<void>(inDisplacementDueToGravity);
+        static_cast<void>(inCollidingShapeIndex);
+    }
+
     void GetTrianglesStart(
         GetTrianglesContext& ioContext,
         const JPH::AABox&    inBox,

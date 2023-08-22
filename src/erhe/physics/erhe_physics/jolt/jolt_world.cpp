@@ -237,12 +237,12 @@ void Jolt_world::update_fixed_step(const double dt)
 auto Jolt_world::describe() const -> std::vector<std::string>
 {
     std::vector<std::string> out;
-    const auto num_constraints   = m_physics_system.GetConstraints().size();
-    const auto num_active_bodies = m_physics_system.GetNumActiveBodies();
-    const auto num_bodies        = m_physics_system.GetNumBodies();
-    const auto body_stats        = m_physics_system.GetBodyStats();
+    const auto num_constraints         = m_physics_system.GetConstraints().size();
+    const auto num_active_rigid_bodies = m_physics_system.GetNumActiveBodies(JPH::EBodyType::RigidBody);
+    const auto num_bodies              = m_physics_system.GetNumBodies();
+    const auto body_stats              = m_physics_system.GetBodyStats();
     out.push_back(fmt::format("num constraints = {}",      num_constraints));
-    out.push_back(fmt::format("num active bodies = {}",    num_active_bodies));
+    out.push_back(fmt::format("num active bodies = {}",    num_active_rigid_bodies));
     out.push_back(fmt::format("num bodies = {}",           num_bodies));
     out.push_back(fmt::format("num active dynamic = {}",   body_stats.mNumActiveBodiesDynamic));
     out.push_back(fmt::format("num dynamic = {}",          body_stats.mNumBodiesDynamic));
@@ -401,11 +401,11 @@ void Jolt_world::set_on_body_deactivated(std::function<void(IRigid_body*)> callb
 
 void Jolt_world::for_each_active_body(std::function<void(IRigid_body*)> callback)
 {
-    const JPH::BodyID*  active_bodies     = m_physics_system.GetActiveBodiesUnsafe();
-    const JPH::uint32   active_body_count = m_physics_system.GetNumActiveBodies();
+    const JPH::BodyID*  active_rigid_bodies     = m_physics_system.GetActiveBodiesUnsafe(JPH::EBodyType::RigidBody);
+    const JPH::uint32   active_rigid_body_count = m_physics_system.GetNumActiveBodies(JPH::EBodyType::RigidBody);
     JPH::BodyInterface& body_interface    = m_physics_system.GetBodyInterfaceNoLock();
-    for (JPH::uint32 i = 0; i < active_body_count; ++i) {
-        JPH::BodyID      body_id         = active_bodies[i];
+    for (JPH::uint32 i = 0; i < active_rigid_body_count; ++i) {
+        JPH::BodyID      body_id         = active_rigid_bodies[i];
         JPH::uint64      user_data       = body_interface.GetUserData(body_id);
         Jolt_rigid_body* jolt_rigid_body = reinterpret_cast<Jolt_rigid_body*>(user_data);
         if (jolt_rigid_body == nullptr) {
